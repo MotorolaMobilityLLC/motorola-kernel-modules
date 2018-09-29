@@ -13,6 +13,9 @@ ifneq ($(filter m y,$(CONFIG_INPUT_EGISTEC_FPS_NAVI)),)
 	EXTRA_CFLAGS += -DCONFIG_INPUT_EGISTEC_FPS_NAVI
 	ets_fps_mmi-y += ets_navi_input.o
 endif
+ifneq ($(filter m y,$(CONFIG_INPUT_EGISTEC_FPS_NAVI_VERTICAL)),)
+	EXTRA_CFLAGS += -DCONFIG_INPUT_EGISTEC_FPS_NAVI_VERTICAL
+endif
 
 obj-m += ets_fps_mmi.o
 
