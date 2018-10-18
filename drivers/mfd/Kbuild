@@ -1,6 +1,8 @@
 # add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += -I$(TOP)/vendor/qcom/opensource/audio-kernel/include
+EXTRA_CFLAGS += -I$(TOP)/vendor/qcom/opensource/audio-kernel/include/uapi
 
 ifeq ($(CONFIG_ARCH_SDM450), y)
 EXTRA_CFLAGS += -DCONFIG_MFD_CS47L35
