@@ -1,20 +1,20 @@
 /*
- * Platform data for Madera codecs LDO1 regulator
+ * Platform data for Arizona LDO1 regulator
  *
- * Copyright 2016 Cirrus Logic
+ * Copyright 2017 Cirrus Logic
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
 
-#ifndef _MADERA_LDO1_H_
-#define _MADERA_LDO1_H_
+#ifndef ARIZONA_LDO1_H
+#define ARIZONA_LDO1_H
 
 struct regulator_init_data;
 
-struct madera_ldo1_pdata {
-	/** GPIO controlling LODENA, if any */
+struct arizona_ldo1_pdata {
+	/** GPIO controlling LDOENA, if any */
 	int ldoena;
 
 	/** Regulator configuration for LDO1 */
