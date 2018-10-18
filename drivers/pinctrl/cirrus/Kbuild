@@ -1,0 +1,9 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += -I$(TOP)/kernel/msm-4.14/include
+EXTRA_CFLAGS += -I$(TOP)/kernel/msm-4.14/drivers/pinctrl
+EXTRA_CFLAGS += -DCONFIG_PINCTRL_CS47L35
+
+madera-pinctrl-objs = pinctrl-madera.o pinctrl-cs47l35.o
+obj-m += madera-pinctrl.o
