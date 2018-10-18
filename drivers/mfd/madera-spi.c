@@ -1,19 +1,19 @@
 /*
  * SPI bus interface to Cirrus Logic Madera codecs
  *
- * Copyright 2015 Cirrus Logic
+ * Copyright 2015-2017 Cirrus Logic
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
 
+#include <linux/device.h>
 #include <linux/err.h>
-#include <linux/spi/spi.h>
 #include <linux/module.h>
 #include <linux/regmap.h>
-#include <linux/slab.h>
 #include <linux/of.h>
+#include <linux/spi/spi.h>
 
 #include <linux/mfd/madera/core.h>
 
@@ -28,13 +28,18 @@ static int madera_spi_probe(struct spi_device *spi)
 	unsigned long type;
 	int ret;
 
-	dev_info(&spi->dev, "***********%s***********\n", __func__);
 	if (spi->dev.of_node)
-		type = madera_of_get_type(&spi->dev);
+		type = madera_get_type_from_of(&spi->dev);
 	else
 		type = id->driver_data;
 
 	switch (type) {
+	case CS47L15:
+		if (IS_ENABLED(CONFIG_MFD_CS47L15)) {
+			regmap_16bit_config = &cs47l15_16bit_spi_regmap;
+			regmap_32bit_config = &cs47l15_32bit_spi_regmap;
+		}
+		break;
 	case CS47L35:
 		if (IS_ENABLED(CONFIG_MFD_CS47L35)) {
 			regmap_16bit_config = &cs47l35_16bit_spi_regmap;
@@ -53,6 +58,13 @@ static int madera_spi_probe(struct spi_device *spi)
 		if (IS_ENABLED(CONFIG_MFD_CS47L90)) {
 			regmap_16bit_config = &cs47l90_16bit_spi_regmap;
 			regmap_32bit_config = &cs47l90_32bit_spi_regmap;
+		}
+		break;
+	case CS47L92:
+	case CS47L93:
+		if (IS_ENABLED(CONFIG_MFD_CS47L92)) {
+			regmap_16bit_config = &cs47l92_16bit_spi_regmap;
+			regmap_32bit_config = &cs47l92_32bit_spi_regmap;
 		}
 		break;
 	default:
@@ -100,14 +112,18 @@ static int madera_spi_remove(struct spi_device *spi)
 	struct madera *madera = spi_get_drvdata(spi);
 
 	madera_dev_exit(madera);
+
 	return 0;
 }
 
 static const struct spi_device_id madera_spi_ids[] = {
+	{ "cs47l15", CS47L15 },
 	{ "cs47l35", CS47L35 },
 	{ "cs47l85", CS47L85 },
 	{ "cs47l90", CS47L90 },
 	{ "cs47l91", CS47L91 },
+	{ "cs47l92", CS47L92 },
+	{ "cs47l93", CS47L93 },
 	{ "wm1840", WM1840 },
 	{ },
 };
