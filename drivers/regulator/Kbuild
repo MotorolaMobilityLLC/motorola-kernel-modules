@@ -2,4 +2,4 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
-obj-m += madera-ldo1.o madera-micsupp.o
+obj-m += arizona-ldo1.o arizona-micsupp.o
