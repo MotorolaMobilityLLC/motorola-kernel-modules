@@ -50,114 +50,19 @@ static u32 crus_se_usecase_dt_index[MAX_TUNING_CONFIGS] = {0, 1, 2, 3};
 
 int crus_afe_callback(void *payload, int size);
 
-static void *crus_gen_afe_get_header(int length, int port, int module,
-				     int param)
-{
-	struct afe_custom_crus_get_config_t *config = NULL;
-	int size = sizeof(struct afe_custom_crus_get_config_t);
-	int index = afe_get_port_index(port);
-	uint16_t payload_size = sizeof(struct afe_port_param_data_v2) +
-				length;
-
-	/* Allocate memory for the message */
-	config = kzalloc(size, GFP_KERNEL);
-	if (!config)
-		return NULL;
-
-	/* Set header section */
-	config->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-					APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
-	config->hdr.pkt_size = size;
-	config->hdr.src_svc = APR_SVC_AFE;
-	config->hdr.src_domain = APR_DOMAIN_APPS;
-	config->hdr.src_port = 0;
-	config->hdr.dest_svc = APR_SVC_AFE;
-	config->hdr.dest_domain = APR_DOMAIN_ADSP;
-	config->hdr.dest_port = 0;
-	config->hdr.token = index;
-	config->hdr.opcode = AFE_PORT_CMD_GET_PARAM_V2;
-
-	/* Set param section */
-	config->param.port_id = (uint16_t) port;
-	config->param.payload_address_lsw = 0;
-	config->param.payload_address_msw = 0;
-	config->param.mem_map_handle = 0;
-	config->param.module_id = (uint32_t) module;
-	config->param.param_id = (uint32_t) param;
-	/* max data size of the param_ID/module_ID combination */
-	config->param.payload_size = payload_size;
-
-	/* Set data section */
-	config->data.module_id = (uint32_t) module;
-	config->data.param_id = (uint32_t) param;
-	config->data.reserved = 0; /* Must be set to 0 */
-	/* actual size of the data for the module_ID/param_ID pair */
-	config->data.param_size = length;
-
-	return (void *)config;
-}
-
-static void *crus_gen_afe_set_header(int length, int port, int module,
-				     int param)
-{
-	struct afe_custom_crus_set_config_t *config = NULL;
-	int size = sizeof(struct afe_custom_crus_set_config_t) + length;
-	int index = afe_get_port_index(port);
-	uint16_t payload_size = sizeof(struct afe_port_param_data_v2) +
-				length;
-
-	/* Allocate memory for the message */
-	config = kzalloc(size, GFP_KERNEL);
-	if (!config)
-		return NULL;
-
-	/* Set header section */
-	config->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-					APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
-	config->hdr.pkt_size = size;
-	config->hdr.src_svc = APR_SVC_AFE;
-	config->hdr.src_domain = APR_DOMAIN_APPS;
-	config->hdr.src_port = 0;
-	config->hdr.dest_svc = APR_SVC_AFE;
-	config->hdr.dest_domain = APR_DOMAIN_ADSP;
-	config->hdr.dest_port = 0;
-	config->hdr.token = index;
-	config->hdr.opcode = AFE_PORT_CMD_SET_PARAM_V2;
-
-	/* Set param section */
-	config->param.port_id = (uint16_t) port;
-	config->param.payload_address_lsw = 0;
-	config->param.payload_address_msw = 0;
-	config->param.mem_map_handle = 0;
-	/* max data size of the param_ID/module_ID combination */
-	config->param.payload_size = payload_size;
-
-	/* Set data section */
-	config->data.module_id = (uint32_t) module;
-	config->data.param_id = (uint32_t) param;
-	config->data.reserved = 0; /* Must be set to 0 */
-	/* actual size of the data for the module_ID/param_ID pair */
-	config->data.param_size = length;
-
-	return (void *)config;
-}
-
 static int crus_get_param(int port, int module, int param, int length,
 			      void *data)
 {
-	struct afe_custom_crus_get_config_t *config = NULL;
-	int index = afe_get_port_index(port);
 	int ret = 0, count = 0;
+	struct param_hdr_v3 param_hdr = {0};
 
 	pr_debug("%s: port = %d module = %d param = 0x%x length = %d\n",
 		__func__, port, module, param, length);
 
-	config = (struct afe_custom_crus_get_config_t *)
-		 crus_gen_afe_get_header(length, port, module, param);
-	if (config == NULL) {
-		pr_err("%s: Memory allocation failed!\n", __func__);
-		return -ENOMEM;
-	}
+	param_hdr.module_id = module;
+	param_hdr.param_id = param;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_size = length;
 
 	pr_debug("%s: Preparing to send apr packet\n", __func__);
 
@@ -173,7 +78,8 @@ static int crus_get_param(int port, int module, int param, int length,
 
 	crus_afe_set_callback(crus_afe_callback);
 
-	ret = afe_apr_send_pkt_crus(config, index);
+	ret = afe_get_crus_params(port, NULL, &param_hdr);
+
 	if (ret)
 		pr_err("%s: crus get_param for port %d failed with code %d\n",
 						__func__, port, ret);
@@ -199,32 +105,26 @@ static int crus_get_param(int port, int module, int param, int length,
 
 	mutex_unlock(&crus_se_get_param_lock);
 
-	kfree(config);
 	return ret;
 }
 
 static int crus_set_param(int port, int module, int param, int length,
 			  void *data_ptr)
 {
-	struct afe_custom_crus_set_config_t *config = NULL;
-	int index = afe_get_port_index(port);
 	int ret = 0;
+	struct param_hdr_v3 param_hdr = {0};
 
 	pr_debug("%s: port = %d module = %d param = 0x%x length = %d\n",
 		__func__, port, module, param, length);
 
-	config = crus_gen_afe_set_header(length, port, module, param);
-	if (config == NULL) {
-		pr_err("%s: Memory allocation failed!\n", __func__);
-		return -ENOMEM;
-	}
-
-	memcpy((u8 *)config + sizeof(struct afe_custom_crus_set_config_t),
-	       (u8 *) data_ptr, length);
+	param_hdr.module_id = module;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = param;
+	param_hdr.param_size = length;
 
 	pr_debug("%s: Preparing to send apr packet.\n", __func__);
 
-	ret = afe_apr_send_pkt_crus(config, index);
+	ret = afe_set_crus_params(port, param_hdr, (u8 *) data_ptr);
 	if (ret) {
 		pr_err("%s: crus set_param for port %d failed with code %d\n",
 						__func__, port, ret);
@@ -233,20 +133,17 @@ static int crus_set_param(int port, int module, int param, int length,
 			 __func__, param, module);
 	}
 
-	kfree(config);
 	return ret;
 }
 
 static int crus_send_config(const char *data, int32_t length,
 			    int32_t port, int32_t module)
 {
-	struct afe_custom_crus_set_config_t *config = NULL;
+	struct param_hdr_v3 param_hdr = {0};
 	struct crus_external_config_t *payload = NULL;
 	int size = sizeof(struct crus_external_config_t);
 	int ret = 0;
-	int index = afe_get_port_index(port);
 	uint32_t param = 0;
-	int mem_size = 0;
 	int sent = 0;
 	int chars_to_send = 0;
 
@@ -262,19 +159,20 @@ static int crus_send_config(const char *data, int32_t length,
 		return -EINVAL;
 	}
 
-	if (length > APR_CHUNK_SIZE)
-		mem_size = APR_CHUNK_SIZE;
-	else
-		mem_size = length;
+	/* Allocate memory for the message */
+	size = sizeof(struct crus_external_config_t);
 
-	config = crus_gen_afe_set_header(size, port, module, param);
-	if (config == NULL) {
+	payload = kzalloc(size, GFP_KERNEL);
+	if (!payload) {
 		pr_err("%s: Memory allocation failed!\n", __func__);
 		return -ENOMEM;
 	}
 
-	payload = (struct crus_external_config_t *)((u8 *)config +
-			sizeof(struct afe_custom_crus_set_config_t));
+	param_hdr.module_id = module;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = param;
+	param_hdr.param_size = size;
+
 	payload->total_size = (uint32_t)length;
 	payload->reserved = 0;
 	payload->config = PAYLOAD_FOLLOWS_CONFIG;
@@ -298,7 +196,7 @@ static int crus_send_config(const char *data, int32_t length,
 
 		/* Send the actual message */
 		pr_debug("%s: Preparing to send apr packet.\n", __func__);
-		ret = afe_apr_send_pkt_crus(config, index);
+		ret = afe_set_crus_params(port, param_hdr, (u8 *) payload);
 		if (ret)
 			pr_err("%s: crus set_param for port %d failed with code %d\n",
 			       __func__, port, ret);
@@ -309,40 +207,37 @@ static int crus_send_config(const char *data, int32_t length,
 		sent += chars_to_send;
 	}
 
-	kfree(config);
+	kfree(payload);
 	return ret;
 }
 
 static int crus_send_delta(const char *data, uint32_t length)
 {
-	struct afe_custom_crus_set_config_t *config = NULL;
+	struct param_hdr_v3 param_hdr = {0};
 	struct crus_delta_config_t *payload = NULL;
 	int size = sizeof(struct crus_delta_config_t);
 	int port = cirrus_ff_port;
 	int param = CRUS_PARAM_RX_SET_DELTA_CONFIG;
 	int module = CIRRUS_SE;
 	int ret = 0;
-	int index = afe_get_port_index(port);
-	int mem_size = 0;
 	int sent = 0;
 	int chars_to_send = 0;
 
 	pr_debug("%s: called with module_id = %x, string length = %d\n",
 						__func__, module, length);
 
-	if (length > APR_CHUNK_SIZE)
-		mem_size = APR_CHUNK_SIZE;
-	else
-		mem_size = length;
-
-	config = crus_gen_afe_set_header(size, port, module, param);
-	if (config == NULL) {
+	/* Allocate memory for the message */
+	payload = kzalloc(size, GFP_KERNEL);
+	if (!payload) {
 		pr_err("%s: Memory allocation failed!\n", __func__);
 		return -ENOMEM;
 	}
 
-	payload = (struct crus_delta_config_t *)((u8 *)config +
-			sizeof(struct afe_custom_crus_set_config_t));
+	param_hdr.module_id = module;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = param;
+	param_hdr.param_size = size;
+
 	payload->total_size = length;
 	payload->index = 0;
 	payload->reserved = 0;
@@ -366,7 +261,8 @@ static int crus_send_delta(const char *data, uint32_t length)
 
 		/* Send the actual message */
 		pr_debug("%s: Preparing to send apr packet.\n", __func__);
-		ret = afe_apr_send_pkt_crus(config, index);
+		ret = afe_set_crus_params(port, param_hdr, (u8 *) payload);
+
 		if (ret)
 			pr_err("%s: crus set_param for port %d failed with code %d\n",
 			       __func__, port, ret);
@@ -377,7 +273,7 @@ static int crus_send_delta(const char *data, uint32_t length)
 		sent += chars_to_send;
 	}
 
-	kfree(config);
+	kfree(payload);
 	return ret;
 }
 
@@ -457,6 +353,7 @@ static int msm_crus_se_enable_get(struct snd_kcontrol *kcontrol,
 static int msm_crus_se_usecase(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
+	int ret = 0;
 	struct crus_rx_run_case_ctrl_t case_ctrl;
 	const int crus_set = ucontrol->value.integer.value[0];
 	struct soc_enum *e = (struct soc_enum *)kcontrol->private_value;
@@ -470,21 +367,17 @@ static int msm_crus_se_usecase(struct snd_kcontrol *kcontrol,
 		return -EINVAL;
 	}
 
-	if (cirrus_se_usecase != crus_se_usecase_dt_index[crus_set]) {
+	case_ctrl.status_l = 0;
+	case_ctrl.status_r = 0;
+	case_ctrl.atemp = 0;
+	case_ctrl.value = crus_se_usecase_dt_index[crus_set];
+
+	ret = crus_set_param(cirrus_ff_port, CIRRUS_SE,
+			     CRUS_PARAM_RX_SET_USECASE, sizeof(case_ctrl),
+			     (void *)&case_ctrl);
+
+	if (ret == 0)
 		cirrus_se_usecase = crus_se_usecase_dt_index[crus_set];
-
-		case_ctrl.status_l = 0;
-		case_ctrl.status_r = 0;
-		case_ctrl.atemp = 0;
-		case_ctrl.value = cirrus_se_usecase;
-
-		/* TODO: remove below when QDSP/LPASS is ready for 8 slots */
-		case_ctrl.value -= crus_se_usecase_dt_index[0];
-
-		crus_set_param(cirrus_ff_port, CIRRUS_SE,
-			       CRUS_PARAM_RX_SET_USECASE, sizeof(case_ctrl),
-			       (void *)&case_ctrl);
-	}
 
 	return 0;
 }
@@ -499,10 +392,15 @@ static int msm_crus_se_usecase_get(struct snd_kcontrol *kcontrol,
 	crus_get_param(cirrus_ff_port, CIRRUS_SE, CRUS_PARAM_RX_GET_USECASE,
 			   sizeof(struct crus_single_data_t), (void *)&crus_usecase);
 
-	ucontrol->value.integer.value[0] = crus_usecase.value;
+	pr_debug("Usecase from qdsp returned as %d\n", crus_usecase.value);
 
-	/* TODO: uncomment this when QDSP/LPASS is ready for 8 slots */
-	//ucontrol->value.integer.value[0] -= crus_se_usecase_dt_index[0];
+	if (crus_usecase.value < 0) {
+		/* QDSP/LPASS default, module isn't running */
+		ucontrol->value.integer.value[0] = 0;
+	} else {
+		ucontrol->value.integer.value[0] =
+			crus_usecase.value - crus_se_usecase_dt_index[0];
+	}
 
 	return 0;
 }
