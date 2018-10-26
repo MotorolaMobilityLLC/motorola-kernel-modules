@@ -60,9 +60,8 @@ else
    cirrus_cs35l41-objs += cs35l41-i2c.o
 endif
 
-# MMI_STOPSHIP <audio>: foles bringup, qcom q6afe.c is 4.14 version,not same as kernel-4.9.
-# cirrus_playback-objs = msm-cirrus-playback.o
-# obj-m += cirrus_playback.o
+cirrus_playback-objs = msm-cirrus-playback.o
+obj-m += cirrus_playback.o
 
 snd_soc_tfa9874-objs += tfa98xx.o
 snd_soc_tfa9874-objs += tfa_container.o
