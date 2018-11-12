@@ -9,7 +9,6 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
@@ -2625,7 +2624,7 @@ out:
 
 static int wm_halo_setup_algs(struct wm_adsp *dsp)
 {
-	struct wmfw_halo_id_hdr halo_id;
+	struct wmfw_halo_id_hdr *halo_id;
 	struct wmfw_halo_alg_hdr *halo_alg;
 	struct wm_adsp_alg_region *alg_region;
 	const struct wm_adsp_region *mem;
@@ -2637,28 +2636,34 @@ static int wm_halo_setup_algs(struct wm_adsp *dsp)
 	if (WARN_ON(!mem))
 		return -EINVAL;
 
-	ret = regmap_raw_read(dsp->regmap, mem->base, &halo_id,
-			      sizeof(halo_id));
+	halo_id = kmalloc(sizeof(*halo_id), GFP_KERNEL | GFP_DMA);
+	if (!halo_id)
+		return -ENOMEM;
+
+	ret = regmap_raw_read(dsp->regmap, mem->base, halo_id,
+			      sizeof(*halo_id));
+
 	if (ret != 0) {
 		adsp_err(dsp, "Failed to read algorithm info: %d\n",
 			 ret);
-		return ret;
+		goto out_halo;
 	}
 
-	block_rev = be32_to_cpu(halo_id.fw.block_rev) >> 16;
+	block_rev = be32_to_cpu(halo_id->fw.block_rev) >> 16;
 	switch (block_rev) {
 	case 3:
 		break;
 	default:
 		adsp_err(dsp, "Unknown firmware ID block version 0x%x\n",
 			 block_rev);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out_halo;
 	}
 
-	n_algs = be32_to_cpu(halo_id.n_algs);
-	dsp->fw_id = be32_to_cpu(halo_id.fw.id);
-	dsp->fw_id_version = be32_to_cpu(halo_id.fw.ver);
-	dsp->fw_vendor_id = be32_to_cpu(halo_id.fw.vendor_id);
+	n_algs = be32_to_cpu(halo_id->n_algs);
+	dsp->fw_id = be32_to_cpu(halo_id->fw.id);
+	dsp->fw_id_version = be32_to_cpu(halo_id->fw.ver);
+	dsp->fw_vendor_id = be32_to_cpu(halo_id->fw.vendor_id);
 	adsp_info(dsp, "Firmware: %x vendor: 0x%x v%d.%d.%d, %zu algorithms\n",
 		  dsp->fw_id,
 		  dsp->fw_vendor_id,
@@ -2668,32 +2673,40 @@ static int wm_halo_setup_algs(struct wm_adsp *dsp)
 		  n_algs);
 
 	alg_region = wm_adsp_create_region(dsp, WMFW_ADSP2_XM,
-					   halo_id.fw.id, halo_id.xm_base);
-	if (IS_ERR(alg_region))
-		return PTR_ERR(alg_region);
+					   halo_id->fw.id, halo_id->xm_base);
+	if (IS_ERR(alg_region)) {
+		ret = PTR_ERR(alg_region);
+		goto out_halo;
+	}
 
 	alg_region = wm_adsp_create_region(dsp, WMFW_HALO_XM_PACKED,
-					   halo_id.fw.id, halo_id.xm_base);
-	if (IS_ERR(alg_region))
-		return PTR_ERR(alg_region);
+					   halo_id->fw.id, halo_id->xm_base);
+	if (IS_ERR(alg_region)) {
+		ret = PTR_ERR(alg_region);
+		goto out_halo;
+	}
 
 	alg_region = wm_adsp_create_region(dsp, WMFW_ADSP2_YM,
-					   halo_id.fw.id, halo_id.ym_base);
-	if (IS_ERR(alg_region))
-		return PTR_ERR(alg_region);
+					   halo_id->fw.id, halo_id->ym_base);
+	if (IS_ERR(alg_region)) {
+		ret = PTR_ERR(alg_region);
+		goto out_halo;
+	}
 
 	alg_region = wm_adsp_create_region(dsp, WMFW_HALO_YM_PACKED,
-					   halo_id.fw.id, halo_id.ym_base);
-	if (IS_ERR(alg_region))
-		return PTR_ERR(alg_region);
-
-	pos = sizeof(halo_id);
+					   halo_id->fw.id, halo_id->ym_base);
+	if (IS_ERR(alg_region)) {
+		ret = PTR_ERR(alg_region);
+		goto out_halo;
+	}
+	pos = sizeof(*halo_id);
 	len = (sizeof(*halo_alg) * n_algs);
 
 	halo_alg = wm_adsp_read_algs(dsp, n_algs, mem->base + pos, len);
-	if (IS_ERR(halo_alg))
-		return PTR_ERR(halo_alg);
-
+	if (IS_ERR(halo_alg)) {
+		ret = PTR_ERR(halo_alg);
+		goto out_halo;
+	}
 	for (i = 0; i < n_algs; i++) {
 		adsp_info(dsp,
 			  "%d: ID %x v%d.%d.%d XM@%x YM@%x\n",
@@ -2739,6 +2752,8 @@ static int wm_halo_setup_algs(struct wm_adsp *dsp)
 
 out:
 	kfree(halo_alg);
+out_halo:
+	kfree(halo_id);
 	return ret;
 }
 
