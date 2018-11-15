@@ -33,6 +33,11 @@
 
 #include "wm_adsp.h"
 
+/*
+ * Remove auto sync of RX and TX rate until implemented
+ */
+#define REMOVE_SYNC_SET_RATE
+
 #define adsp_crit(_dsp, fmt, ...) \
 	dev_crit(_dsp->dev, "DSP%d: " fmt, _dsp->num, ##__VA_ARGS__)
 #define adsp_err(_dsp, fmt, ...) \
@@ -3194,6 +3199,7 @@ err_mutex:
 	mutex_unlock(&dsp->pwr_lock);
 }
 
+#ifndef REMOVE_SYNC_SET_RATE
 static int wm_halo_set_rate_block(struct wm_adsp *dsp,
 				  unsigned int rate_base,
 				  unsigned int n_rates,
@@ -3226,6 +3232,7 @@ static int wm_halo_set_rate_block(struct wm_adsp *dsp,
 
 	return 0;
 }
+#endif
 
 static int wm_halo_clear_stream_arb(struct wm_adsp *dsp)
 {
@@ -3744,6 +3751,9 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 		if (ret != 0)
 			goto err;
 
+#ifdef REMOVE_SYNC_SET_RATE
+		adsp_dbg(dsp, "Setting RX and TX rates DISABLED.\n");
+#else
 		adsp_dbg(dsp, "Setting RX rates.\n");
 		ret = wm_halo_set_rate_block(dsp, HALO_SAMPLE_RATE_RX1,
 					     dsp->n_rx_channels,
@@ -3761,6 +3771,7 @@ int wm_halo_event(struct snd_soc_dapm_widget *w, struct snd_kcontrol *kcontrol,
 			adsp_err(dsp, "Failed to set TX rates.\n");
 			goto err;
 		}
+#endif
 
 		ret = wm_halo_clear_stream_arb(dsp);
 		if (ret != 0)
