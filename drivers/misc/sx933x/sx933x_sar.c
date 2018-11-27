@@ -395,6 +395,32 @@ static ssize_t manual_offset_calibration_store(struct class *class,
 	return count;
 }
 
+static ssize_t sx933x_dump_reg_show(struct class *class,
+		struct class_attribute *attr,
+		char *buf)
+{
+	u32 val=0;
+	u16 regist = 0;
+	char *p = buf;
+	int i;
+	psx93XX_t this = global_sx933x;
+	for (i = 0; i < ARRAY_SIZE(sx933x_i2c_reg_setup); i++) {
+		regist = (u16)(sx933x_i2c_reg_setup[i].reg);
+		sx933x_i2c_read_16bit(this, regist, &val);
+
+		if (regist == SX933X_AFEPHPH0_REG ||
+			regist == SX933X_AFEPHPH1_REG ||
+			regist == SX933X_AFEPHPH2_REG ||
+			regist == SX933X_AFEPHPH3_REG ||
+			regist == SX933X_AFEPHPH4_REG) {
+			val &= ~0x7FFF;
+		}
+
+		p += snprintf(p, PAGE_SIZE, "(reg,val) = (0x%X,0x%X)\n", regist,val);
+	}
+	return (p-buf);
+}
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
 static struct class_attribute class_attr_reset =
 	__ATTR(reset, 0660, NULL, capsense_reset_store);
@@ -407,6 +433,8 @@ static struct class_attribute class_attr_register_read =
 static struct class_attribute class_attr_manual_calibrate =
 	__ATTR(manual_calibrate, 0660, manual_offset_calibration_show,
 	manual_offset_calibration_store);
+static struct class_attribute class_attr_dump_reg =
+	__ATTR(dump_reg, 0440, sx933x_dump_reg_show, NULL);
 
 static struct attribute *capsense_class_attrs[] = {
 	&class_attr_reset.attr,
@@ -414,6 +442,7 @@ static struct attribute *capsense_class_attrs[] = {
 	&class_attr_register_write.attr,
 	&class_attr_register_read.attr,
 	&class_attr_manual_calibrate.attr,
+	&class_attr_dump_reg.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(capsense_class);
@@ -424,6 +453,7 @@ static struct class_attribute capsense_class_attributes[] = {
 	__ATTR(register_write,  0660, NULL,sx933x_register_write_store),
 	__ATTR(register_read,0660, NULL,sx933x_register_read_store),
 	__ATTR(manual_calibrate, 0660, manual_offset_calibration_show,manual_offset_calibration_store),
+	__ATTR(dump_reg, 0440, sx933x_dump_reg_show, NULL),
 	__ATTR_NULL,
 };
 #endif
