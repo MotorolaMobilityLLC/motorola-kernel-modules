@@ -269,7 +269,7 @@ static void read_rawData(psx93XX_t this)
 			sx933x_i2c_read_16bit(this, SX933X_OFFSETPH0_REG + index*2, &uData);
 			offset = (u16)(uData & 0x7FFF);
 			//state = psmtcButtons[csx].state;
-			LOG_DBG("[PH: %d] Useful = %d Average = %d, DIFF = %d Offset = %d \n",
+			LOG_INFO("[PH: %d] Useful = %d Average = %d, DIFF = %d Offset = %d \n",
 					csx,useful,average,diff,offset);
 		}
 	}
@@ -585,7 +585,7 @@ static void touchProcess(psx93XX_t this)
 	if (this && (pDevice = this->pDevice))
 	{
 		sx933x_i2c_read_16bit(this, SX933X_STAT0_REG, &i);
-		LOG_DBG("touchProcess STAT0_REG:0x%08x\n", i);
+		LOG_INFO("touchProcess STAT0_REG:0x%08x\n", i);
 
 		buttons = pDevice->pbuttonInformation->buttons;
 		numberOfButtons = pDevice->pbuttonInformation->buttonSize;
@@ -622,30 +622,30 @@ static void touchProcess(psx93XX_t this)
 			touchFlag = i & (pCurrentButton->ProxMask | pCurrentButton->BodyMask);
 			if (touchFlag == (pCurrentButton->ProxMask | pCurrentButton->BodyMask)) {
 				if (pCurrentButton->state == BODYACTIVE)
-					LOG_DBG(" %s already BODYACTIVE\n", pCurrentButton->name);
+					LOG_INFO(" %s already BODYACTIVE\n", pCurrentButton->name);
 				else {
 					input_report_abs(input, ABS_DISTANCE, 2);
 					input_sync(input);
 					pCurrentButton->state = BODYACTIVE;
-					LOG_DBG(" %s report 5mm BODYACTIVE\n", pCurrentButton->name);
+					LOG_INFO(" %s report 5mm BODYACTIVE\n", pCurrentButton->name);
 				}
 			} else if (touchFlag == pCurrentButton->ProxMask) {
 				if (pCurrentButton->state == PROXACTIVE)
-					LOG_DBG(" %s already PROXACTIVE\n", pCurrentButton->name);
+					LOG_INFO(" %s already PROXACTIVE\n", pCurrentButton->name);
 				else {
 					input_report_abs(input, ABS_DISTANCE, 1);
 					input_sync(input);
 					pCurrentButton->state = PROXACTIVE;
-					LOG_DBG(" %s report 15mm PROXACTIVE\n", pCurrentButton->name);
+					LOG_INFO(" %s report 15mm PROXACTIVE\n", pCurrentButton->name);
 				}
 			}else if (touchFlag == 0) {
 				if (pCurrentButton->state == IDLE)
-					LOG_DBG("%s already released.\n", pCurrentButton->name);
+					LOG_INFO("%s already released.\n", pCurrentButton->name);
 				else {
 					input_report_abs(input, ABS_DISTANCE, 0);
 					input_sync(input);
 					pCurrentButton->state = IDLE;
-					LOG_DBG("%s report  released.\n", pCurrentButton->name);
+					LOG_INFO("%s report  released.\n", pCurrentButton->name);
 				}
 			}
 		}
