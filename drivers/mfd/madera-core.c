@@ -31,7 +31,6 @@
 #include <linux/mfd/madera/registers.h>
 
 #include "madera.h"
-#include <dsp/q6core.h>
 
 #define CS47L15_SILICON_ID	0x6370
 #define CS47L35_SILICON_ID	0x6360
@@ -679,22 +678,6 @@ int madera_dev_init(struct madera *madera)
 		       sizeof(madera->pdata));
 	}
 
-/* #1, temporary solution for codec-reset, foles uses LPI_GPIO24 as codec
- * hardware reset pin. Per QC's opinion, LPI GPIO need wait ADSP start
- * success, then LPI GPIO can be controlled, so I add this condition.
- * I will delete it after I find the rootcause.
-*/
-	msleep(2000);
-	for (i = 0; i < 10; i++) {
-		if (q6core_is_adsp_ready())
-			break;
-		msleep(100);
-	}
-	if (i == 10)
-		dev_err(dev, "%s: try 1 seond, adsp is not ready!\n", __func__);
-	else
-		dev_err(dev, "%s: adsp stauts is ready!\n", __func__);
-
 	ret = madera_get_reset_gpio(madera);
 	if (ret)
 		goto err_pinctrl;
@@ -777,36 +760,6 @@ int madera_dev_init(struct madera *madera)
 	 * Verify that this is a chip we know about before we
 	 * starting doing any writes to its registers
 	 */
-
-/* #2, although q6core_is_adsp_ready() is true, but there still exist codec can
- * not be read out successfully. Give 10 times chance to retry.
- * Temporarily add for foles bringup, will delete it after find final solution.
- */
-#if 1
-	i = 0;
-	do {
-		ret = regmap_read(madera->regmap, MADERA_SOFTWARE_RESET, &hwid);
-		if (ret) {
-			dev_err(dev, "Failed to read ID register: %d\n", ret);
-			goto err_reset;
-		}
-		if (hwid != CS47L35_SILICON_ID) {
-			madera_enable_hard_reset(madera);
-			msleep(5);
-			madera_disable_hard_reset(madera);
-			msleep(5);
-			i++;
-		} else {
-			break;
-		}
-	}while (i < 10);
-	
-	if (i == 10) {
-		dev_err(madera->dev, "Unknown device ID: %x, i=%d\n", hwid, i);
-		ret = -EINVAL;
-		goto err_reset;
-	}
-#else
 	ret = regmap_read(madera->regmap, MADERA_SOFTWARE_RESET, &hwid);
 	if (ret) {
 		dev_err(dev, "Failed to read ID register: %d\n", ret);
@@ -825,7 +778,6 @@ int madera_dev_init(struct madera *madera)
 		ret = -EINVAL;
 		goto err_reset;
 	}
-#endif
 
 	/* If we don't have a reset GPIO use a soft reset */
 	if (!madera->reset_gpio) {
