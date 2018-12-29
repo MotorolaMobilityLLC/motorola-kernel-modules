@@ -144,6 +144,7 @@ struct aw869x {
     enum aw869x_haptic_mode  haptic_mode;
     bool factory_mode;
     bool debugfs_debug;
+    atomic_t reduce_pwr;
     unsigned char hwen_flag;
     unsigned char flags;
     unsigned char chipid;
