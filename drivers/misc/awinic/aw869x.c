@@ -1200,7 +1200,7 @@ static void aw869x_haptic_context(struct aw869x *aw869x, enum aw869x_haptic_mode
 	}
 
 	t_top = gpio_get_value(aw869x->haptic_context_gpio);
-	if (t_top) {
+	if (t_top && atomic_read(&aw869x->reduce_pwr)) {
 		switch (cmd) {
 		case HAPTIC_RTP:
 			aw869x->gain = 0x20;
@@ -2080,6 +2080,38 @@ static ssize_t aw869x_reset_store(struct device *dev,
 }
 #endif
 
+/* Attribute: reduce (RW) */
+static ssize_t aw869x_reduce_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+#ifdef TIMED_OUTPUT
+	struct timed_output_dev *to_dev = dev_get_drvdata(dev);
+	struct aw869x *aw869x = container_of(to_dev, struct aw869x, to_dev);
+#else
+	struct led_classdev *cdev = dev_get_drvdata(dev);
+	struct aw869x *aw869x = container_of(cdev, struct aw869x, cdev);
+#endif
+
+	atomic_set(&aw869x->reduce_pwr, (*buf == '0')?0:1);
+	pr_info("%s: reduce set to %d",
+		__func__, atomic_read(&aw869x->reduce_pwr));
+	return count;
+}
+
+static ssize_t aw869x_reduce_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+#ifdef TIMED_OUTPUT
+	struct timed_output_dev *to_dev = dev_get_drvdata(dev);
+	struct aw869x *aw869x = container_of(to_dev, struct aw869x, to_dev);
+#else
+	struct led_classdev *cdev = dev_get_drvdata(dev);
+	struct aw869x *aw869x = container_of(cdev, struct aw869x, cdev);
+#endif
+	int state = atomic_read(&aw869x->reduce_pwr);
+	return scnprintf(buf, PAGE_SIZE, "%d", state);
+}
+
 static DEVICE_ATTR(extra, S_IWUSR | S_IRUGO, aw869x_extra_show, aw869x_extra_store);
 static DEVICE_ATTR(state, S_IWUSR | S_IRUGO, aw869x_state_show, aw869x_state_store);
 static DEVICE_ATTR(duration, S_IWUSR | S_IRUGO, aw869x_duration_show, aw869x_duration_store);
@@ -2101,6 +2133,7 @@ static DEVICE_ATTR(voldown_n, S_IWUSR | S_IRUGO, aw869x_voldown_n_show, aw869x_v
 static DEVICE_ATTR(volup_n, S_IWUSR | S_IRUGO, aw869x_volup_n_show, aw869x_volup_n_store);/* Vol up key for trig3_n(0x12) */
 static DEVICE_ATTR(reset, S_IWUSR | S_IRUGO, aw869x_reset_show, aw869x_reset_store);/* Reset device */
 #endif
+static DEVICE_ATTR(reduce, S_IWUSR | S_IRUGO, aw869x_reduce_show, aw869x_reduce_store);
 
 static struct attribute *aw869x_vibrator_attributes[] = {
     &dev_attr_extra.attr,
@@ -2211,6 +2244,17 @@ static int aw869x_vibrator_init(struct aw869x *aw869x)
         dev_err(aw869x->dev, "%s error creating sysfs attr files\n", __func__);
         return ret;
      }
+
+    if (gpio_is_valid(aw869x->haptic_context_gpio)) {
+	/* init reduced force flag to "1" */
+	/* modservice will flip flag if MOD is attached */
+		atomic_set(&aw869x->reduce_pwr, 1);
+		ret = sysfs_create_file(&aw869x->cdev.dev->kobj, &dev_attr_reduce.attr);
+		if (ret < 0) {
+			dev_err(aw869x->dev, "%s error creating sysfs attr reduce files\n", __func__);
+			return ret;
+		}
+    }
 #endif
     hrtimer_init(&aw869x->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     aw869x->timer.function = aw869x_vibrator_timer_func;
@@ -2666,9 +2710,7 @@ static int aw869x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *
     aw869x->factory_mode = mmi_factory_check();
 
     aw869x_vibrator_init(aw869x);
-
     aw869x_haptic_init(aw869x);
-
     aw869x_ram_init(aw869x);
 
     pr_info("%s probe completed successfully!\n", __func__);
@@ -2690,6 +2732,10 @@ static int aw869x_i2c_remove(struct i2c_client *i2c)
     pr_info("%s enter\n", __func__);
 
     sysfs_remove_group(&i2c->dev.kobj, &aw869x_attribute_group);
+
+    if (gpio_is_valid(aw869x->haptic_context_gpio)) {
+	sysfs_remove_file(&aw869x->cdev.dev->kobj, &dev_attr_reduce.attr);
+    }
 
     misc_deregister(&aw869x_haptic_misc);
 
