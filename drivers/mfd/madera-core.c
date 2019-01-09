@@ -756,6 +756,19 @@ int madera_dev_init(struct madera *madera)
 	regcache_cache_only(madera->regmap, false);
 	regcache_cache_only(madera->regmap_32bit, false);
 
+	/* If we don't have a reset GPIO use a soft reset */
+	if (!madera->reset_gpio) {
+		ret = madera_soft_reset(madera);
+		if (ret)
+			goto err_reset;
+	}
+
+	ret = madera_wait_for_boot(madera);
+	if (ret) {
+		dev_err(madera->dev, "Device failed initial boot: %d\n", ret);
+		goto err_reset;
+	}
+
 	/*
 	 * Verify that this is a chip we know about before we
 	 * starting doing any writes to its registers
@@ -779,18 +792,6 @@ int madera_dev_init(struct madera *madera)
 		goto err_reset;
 	}
 
-	/* If we don't have a reset GPIO use a soft reset */
-	if (!madera->reset_gpio) {
-		ret = madera_soft_reset(madera);
-		if (ret)
-			goto err_reset;
-	}
-
-	ret = madera_wait_for_boot(madera);
-	if (ret) {
-		dev_err(madera->dev, "Device failed initial boot: %d\n", ret);
-		goto err_reset;
-	}
 
 	ret = regmap_read(madera->regmap, MADERA_HARDWARE_REVISION,
 			  &madera->rev);
