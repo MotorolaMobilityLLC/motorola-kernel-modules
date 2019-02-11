@@ -2634,7 +2634,6 @@ static int wm_halo_setup_algs(struct wm_adsp *dsp)
 	struct wm_adsp_alg_region *alg_region;
 	const struct wm_adsp_region *mem;
 	unsigned int pos, len, block_rev;
-	size_t n_algs;
 	int i, ret;
 
 	mem = wm_adsp_find_region(dsp, WMFW_ADSP2_XM);
@@ -2665,7 +2664,7 @@ static int wm_halo_setup_algs(struct wm_adsp *dsp)
 		goto out_halo;
 	}
 
-	n_algs = be32_to_cpu(halo_id->n_algs);
+	dsp->n_algs = be32_to_cpu(halo_id->n_algs);
 	dsp->fw_id = be32_to_cpu(halo_id->fw.id);
 	dsp->fw_id_version = be32_to_cpu(halo_id->fw.ver);
 	dsp->fw_vendor_id = be32_to_cpu(halo_id->fw.vendor_id);
@@ -2675,7 +2674,7 @@ static int wm_halo_setup_algs(struct wm_adsp *dsp)
 		  (dsp->fw_id_version & 0xff0000) >> 16,
 		  (dsp->fw_id_version & 0xff00) >> 8,
 		  dsp->fw_id_version & 0xff,
-		  n_algs);
+		  dsp->n_algs);
 
 	alg_region = wm_adsp_create_region(dsp, WMFW_ADSP2_XM,
 					   halo_id->fw.id, halo_id->xm_base);
@@ -2705,20 +2704,26 @@ static int wm_halo_setup_algs(struct wm_adsp *dsp)
 		goto out_halo;
 	}
 	pos = sizeof(*halo_id);
-	len = (sizeof(*halo_alg) * n_algs);
+	len = (sizeof(*halo_alg) * dsp->n_algs);
 
-	halo_alg = wm_adsp_read_algs(dsp, n_algs, mem->base + pos, len);
+	dsp->alg_ver = kmalloc_array(dsp->n_algs, sizeof(unsigned int),
+				     GFP_KERNEL);
+	if (!dsp->alg_ver)
+		return -ENOMEM;
+
+	halo_alg = wm_adsp_read_algs(dsp, dsp->n_algs, mem->base + pos, len);
 	if (IS_ERR(halo_alg)) {
 		ret = PTR_ERR(halo_alg);
 		goto out_halo;
 	}
-	for (i = 0; i < n_algs; i++) {
+	for (i = 0; i < dsp->n_algs; i++) {
+		dsp->alg_ver[i] = be32_to_cpu(halo_alg[i].alg.ver);
 		adsp_info(dsp,
 			  "%d: ID %x v%d.%d.%d XM@%x YM@%x\n",
 			  i, be32_to_cpu(halo_alg[i].alg.id),
-			  (be32_to_cpu(halo_alg[i].alg.ver) & 0xff0000) >> 16,
-			  (be32_to_cpu(halo_alg[i].alg.ver) & 0xff00) >> 8,
-			  be32_to_cpu(halo_alg[i].alg.ver) & 0xff,
+			  (dsp->alg_ver[i] & 0xff0000) >> 16,
+			  (dsp->alg_ver[i] & 0xff00) >> 8,
+			  dsp->alg_ver[i] & 0xff,
 			  be32_to_cpu(halo_alg[i].xm_base),
 			  be32_to_cpu(halo_alg[i].ym_base));
 
@@ -2762,6 +2767,23 @@ out_halo:
 	return ret;
 }
 
+static bool wm_adsp_verify_fw_ver(struct wm_adsp *dsp, unsigned int blk_ver)
+{
+	int i;
+
+	if (dsp->type != WMFW_HALO)
+		return true;
+
+	for (i = 0; i < dsp->n_algs; i++) {
+		if ((dsp->alg_ver[i] & 0xffffff) == (blk_ver & 0xffffff)) {
+			/* Version match */
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static int wm_adsp_load_coeff(struct wm_adsp *dsp)
 {
 	LIST_HEAD(buf_list);
@@ -2774,7 +2796,7 @@ static int wm_adsp_load_coeff(struct wm_adsp *dsp)
 	const char *region_name;
 	int ret, pos, blocks, type, offset, reg;
 	char *file;
-	unsigned int burst_multiple;
+	unsigned int burst_multiple, blk_ver;
 
 	if (dsp->firmwares[dsp->fw].binfile &&
 	    !(strcmp(dsp->firmwares[dsp->fw].binfile, "None")))
@@ -2839,12 +2861,13 @@ static int wm_adsp_load_coeff(struct wm_adsp *dsp)
 
 		type = le16_to_cpu(blk->type);
 		offset = le16_to_cpu(blk->offset);
+		blk_ver = (dsp->type == WMFW_HALO) ? blk->ver >> 8 : blk->ver;
 
 		adsp_dbg(dsp, "%s.%d: %x v%d.%d.%d\n",
 			 file, blocks, le32_to_cpu(blk->id),
-			 (le32_to_cpu(blk->ver) >> 16) & 0xff,
-			 (le32_to_cpu(blk->ver) >>  8) & 0xff,
-			 le32_to_cpu(blk->ver) & 0xff);
+			 (le32_to_cpu(blk_ver) >> 16) & 0xff,
+			 (le32_to_cpu(blk_ver) >>  8) & 0xff,
+			 le32_to_cpu(blk_ver) & 0xff);
 		adsp_dbg(dsp, "%s.%d: %d bytes at 0x%x in %x\n",
 			 file, blocks, le32_to_cpu(blk->len), offset, type);
 
@@ -2883,6 +2906,14 @@ static int wm_adsp_load_coeff(struct wm_adsp *dsp)
 		case WMFW_HALO_XM_PACKED:
 		case WMFW_HALO_YM_PACKED:
 		case WMFW_HALO_PM_PACKED:
+			if (!wm_adsp_verify_fw_ver(dsp,
+						   le32_to_cpu(blk_ver))) {
+				adsp_err(dsp,
+					 "ERROR: Firmware and tuning version mismatch\n");
+				ret = -EINVAL;
+				goto out_fw;
+			}
+
 			adsp_dbg(dsp, "%s.%d: %d bytes in %x for %x\n",
 				 file, blocks, le32_to_cpu(blk->len),
 				 type, le32_to_cpu(blk->id));
@@ -2957,6 +2988,9 @@ out_fw:
 	release_firmware(firmware);
 	wm_adsp_buf_free(&buf_list);
 out:
+	kfree(dsp->alg_ver);
+	dsp->alg_ver = NULL;
+	dsp->n_algs = 0;
 	kfree(file);
 	return ret;
 }
