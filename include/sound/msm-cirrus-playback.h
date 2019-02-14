@@ -24,6 +24,7 @@
  */
 struct crus_single_data_t {
 	int32_t	value;
+	int32_t reserved;
 };
 
 /* Payload struct for getting or setting two integer values from/to the DSP
