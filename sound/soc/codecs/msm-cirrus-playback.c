@@ -69,7 +69,7 @@ static int crus_get_param(int port, int module, int param, int length,
 	mutex_lock(&crus_se_get_param_lock);
 	atomic_set(&crus_se_get_param_flag, 0);
 
-	crus_se_get_buffer = kzalloc(length + 16, GFP_KERNEL);
+	crus_se_get_buffer = kzalloc(length + 24, GFP_KERNEL);
 	if (!crus_se_get_buffer) {
 		pr_err("%s: Memory allocation failed!\n", __func__);
 		mutex_unlock(&crus_se_get_param_lock);
@@ -99,7 +99,7 @@ static int crus_get_param(int port, int module, int param, int length,
 	}
 
 	/* Copy from dynamic buffer to return buffer */
-	memcpy((u8 *)data, &crus_se_get_buffer[4], length);
+	memcpy((u8 *)data, &crus_se_get_buffer[5], length);
 
 	kfree(crus_se_get_buffer);
 
