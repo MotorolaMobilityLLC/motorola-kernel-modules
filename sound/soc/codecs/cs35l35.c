@@ -897,7 +897,7 @@ static int cs35l35_codec_probe(struct snd_soc_codec *codec)
 	struct cs35l35_private *cs35l35 = snd_soc_codec_get_drvdata(codec);
 	struct classh_cfg *classh = &cs35l35->pdata.classh_algo;
 	struct monitor_cfg *monitor_config = &cs35l35->pdata.mon_cfg;
-	int ret;
+	int ret = 0;
 
 	/* Set Platform Data */
 	if (cs35l35->pdata.bst_vctl)
