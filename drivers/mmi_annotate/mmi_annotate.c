@@ -60,7 +60,7 @@ static int mmi_annotate_seq_show(struct seq_file *f, void *ptr)
 {
 	mutex_lock(&mem_lock);
 	if (mem_data.contents && mem_data.cur_off > 0) {
-		seq_printf(f, mem_data.contents);
+		seq_printf(f, "%s", mem_data.contents);
 	} else {
 		seq_printf(f, "No annotated data.\n");
 	}
