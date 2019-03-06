@@ -2395,6 +2395,9 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 		goto err;
 	}
 
+	regmap_write(cs35l41->regmap,
+			CS35L41_DSP1_CCM_CORE_CTRL, 0);
+
 	mutex_init(&cs35l41->rate_lock);
 
 	cs35l41_dsp_init(cs35l41);
