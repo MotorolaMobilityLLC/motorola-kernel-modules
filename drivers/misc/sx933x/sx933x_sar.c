@@ -191,20 +191,7 @@ static int sx933x_Hardware_Check(psx93XX_t this)
 {
 	int ret;
 	u32 idCode;
-	u8 loop = 0;
 	this->failStatusCode = 0;
-
-	//Check th IRQ Status
-	while(this->get_nirq_low && this->get_nirq_low())
-	{
-		read_regStat(this);
-		msleep(100);
-		if(++loop >10)
-		{
-			this->failStatusCode = SX933x_NIRQ_ERROR;
-			break;
-		}
-	}
 
 	//Check I2C Connection
 	ret = sx933x_i2c_read_16bit(this, SX933X_INFO_REG, &idCode);
@@ -213,7 +200,7 @@ static int sx933x_Hardware_Check(psx93XX_t this)
 		this->failStatusCode = SX933x_I2C_ERROR;
 	}
 
-	if(idCode!= SX933X_WHOAMI_VALUE)
+	if(idCode!= SX933X_WHOAMI_VALUE_1 && idCode!= SX933X_WHOAMI_VALUE_2)
 	{
 		this->failStatusCode = SX933x_ID_ERROR;
 	}
@@ -1093,7 +1080,7 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	}
 
 	global_sx933x = this;
-	LOG_INFO("sx933x_probe() Done\n");
+	LOG_DBG("sx933x_probe() Done\n");
 	return 0;
 }
 
