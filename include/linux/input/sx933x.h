@@ -247,7 +247,8 @@
 #define   SX933X_STAT0_BODYSTAT_PH0_FLAG      0x00000100
 
 /*      Chip ID 	*/
-#define SX933X_WHOAMI_VALUE                   0x00003113
+#define SX933X_WHOAMI_VALUE_1                   0x00003113
+#define SX933X_WHOAMI_VALUE_2                   0x00003114
 /*command*/
 #define SX933X_PHASE_CONTROL                  0x0000000F
 #define SX933X_COMPENSATION_CONTROL           0x0000000E
