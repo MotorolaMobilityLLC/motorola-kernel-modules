@@ -1783,11 +1783,9 @@ static int cs35l41_boost_config(struct cs35l41_private *cs35l41,
 	return 0;
 }
 
-static int cs35l41_codec_probe(struct snd_soc_codec *codec)
+static int cs35l41_set_pdata(struct cs35l41_private *cs35l41)
 {
-	struct cs35l41_private *cs35l41 = snd_soc_codec_get_drvdata(codec);
 	struct classh_cfg *classh = &cs35l41->pdata.classh_config;
-	struct snd_kcontrol_new	*kcontrol;
 	int ret;
 
 	/* Set Platform Data */
@@ -1919,6 +1917,17 @@ static int cs35l41_codec_probe(struct snd_soc_codec *codec)
 					CS35L41_CH_WKFET_THLD_SHIFT);
 	}
 
+	return 0;
+}
+
+static int cs35l41_codec_probe(struct snd_soc_codec *codec)
+{
+	struct cs35l41_private *cs35l41 = snd_soc_codec_get_drvdata(codec);
+	struct snd_kcontrol_new	*kcontrol;
+	int ret = 0;
+
+	cs35l41_set_pdata(cs35l41);
+
 	wm_adsp2_codec_probe(&cs35l41->dsp, codec);
 
 	/* Add run-time mixer control for fast use case switch */
@@ -1939,6 +1948,7 @@ static int cs35l41_codec_probe(struct snd_soc_codec *codec)
 		dev_err(cs35l41->dev,
 			"snd_soc_add_codec_controls failed (%d)\n", ret);
 	kfree(kcontrol);
+
 exit:
 	return ret;
 }
