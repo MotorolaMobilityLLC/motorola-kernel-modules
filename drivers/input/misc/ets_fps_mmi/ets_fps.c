@@ -825,7 +825,7 @@ static int etspi_create_sysfs(struct etspi_data *etspi, bool create) {
 			}
 		}
 		class_dev = device_create(fingerprint_class, NULL, MAJOR(dev_no),
-			etspi, etspi_driver.driver.name);
+			etspi, "%s", etspi_driver.driver.name);
 		if (IS_ERR(class_dev)) {
 			dev_err(dev, "%s create fingerprint class device failed.\n", __func__);
 			rc = PTR_ERR(class_dev);
