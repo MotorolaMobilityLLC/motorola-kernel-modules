@@ -63,6 +63,9 @@ struct cs35l41_private {
 	int extclk_cfg;
 	int sclk;
 	unsigned int gpi_glob_en;
+	int lrclk_fmt;
+	int sclk_fmt;
+	int amp_hibernate;
 	bool reload_tuning;
 	bool dspa_mode;
 	bool i2s_mode;
@@ -80,6 +83,9 @@ struct cs35l41_private {
 	const char **fast_switch_names;
 	struct mutex rate_lock;
 	struct mutex force_int_lock;
+	struct delayed_work hb_work;
+	struct workqueue_struct *wq;
+	struct mutex hb_lock;
 };
 
 int cs35l41_probe(struct cs35l41_private *cs35l41,
