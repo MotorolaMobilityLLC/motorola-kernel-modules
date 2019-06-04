@@ -2013,6 +2013,8 @@ static int cs35l41_handle_of_data(struct device *dev,
 					"cirrus,lrclk-force-output");
 	pdata->amp_gain_zc = of_property_read_bool(np,
 					"cirrus,amp-gain-zc");
+	pdata->tuning_has_prefix = of_property_read_bool(np,
+					"cirrus,tuning-has-prefix");
 
 	if (of_property_read_u32(np, "cirrus,temp-warn_threshold", &val) >= 0)
 		pdata->temp_warn_thld = val | CS35L41_VALID_PDATA;
@@ -2221,6 +2223,7 @@ static int cs35l41_dsp_init(struct cs35l41_private *cs35l41)
 	dsp->rev = 0;
 	dsp->dev = cs35l41->dev;
 	dsp->regmap = cs35l41->regmap;
+	dsp->tuning_has_prefix = cs35l41->pdata.tuning_has_prefix;
 	dsp->suffix = "";
 
 	dsp->base = CS35L41_DSP1_CTRL_BASE;
