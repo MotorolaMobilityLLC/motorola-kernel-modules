@@ -462,36 +462,43 @@ exit:
 }
 
 //Set VDD
-static int moto_aw8646_set_power(motor_device* md, unsigned power)
+static void moto_aw8646_set_power_en(motor_device* md)
 {
     motor_control* mc = &md->mc;
+
+    gpio_direction_output(mc->ptable[MOTOR_POWER_EN], md->power_en);
+    //Tpower 0.5ms
+    usleep_range(500, 1000);
+}
+
+//Power sequence: PowerEn On->nSleep On->nSleep Off->PowerEn Off
+static int moto_aw8646_set_power(motor_device* md, unsigned power)
+{
     unsigned long flags;
     int ret = 0;
-
-    spin_lock_irqsave(&md->mlock, flags);
 
     if(md->power_en == power) {
         dev_info(md->dev, "Unchanged the power status, ignore\n");
         ret = -EINVAL;
         goto exit;
     }
+
+    spin_lock_irqsave(&md->mlock, flags);
     md->power_en = !!power;
-    gpio_direction_output(mc->ptable[MOTOR_POWER_EN], md->power_en);
     spin_unlock_irqrestore(&md->mlock, flags);
-    //Tpower 0.5ms
-    usleep_range(500, 1000);
 
     ret =  moto_aw8646_set_opmode(md, md->power_en);
     if(ret < 0 ) {
-        goto failed_opmode;
+        goto exit;
     }
-    moto_aw8646_set_motor_opmode(md);
+    if(!md->power_en) {
+        moto_aw8646_set_motor_opmode(md);
+    }
+    moto_aw8646_set_power_en(md);
 
     return 0;
 
 exit:
-    spin_unlock_irqrestore(&md->mlock, flags);
-failed_opmode:
     return ret;
 }
 
@@ -516,6 +523,7 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
     moto_aw8646_set_motor_torque(md);
     moto_aw8646_set_motor_dir(md);
     moto_aw8646_set_motor_mode(md);
+    moto_aw8646_set_motor_opmode(md);
 
     if(atomic_read(&md->stepping)) {
         dev_info(md->dev, "advance the motor half of period %ld\n", half);
@@ -761,7 +769,6 @@ static ssize_t motor_enable_store(struct device *dev, struct device_attribute *a
     enable = !!enable;
 
     if(!moto_aw8646_set_power(md, enable)) {
-        dev_err(dev, "success set power\n");
         motor_set_enable(dev, enable);
     }
 
@@ -924,7 +931,7 @@ static ssize_t motor_time_out_show(struct device *dev, struct device_attribute *
 {
     motor_device* md = (motor_device*)dev_get_drvdata(dev);
 
-    return snprintf(buf, 20, "%d\n", md->torque);
+    return snprintf(buf, 20, "%d\n", md->time_out);
 }
 
 #define STEP_TIME_OUT 3000 //3s for stop motor
