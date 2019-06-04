@@ -113,8 +113,15 @@ Optional properties:
   14 = 60 s
   15 = 120 s
 
+  - cirrus,tuning-has-prefix : Add ALSA component name prefix to
+  DSP firmware tuning file name.
+  For example, if the AMP prefix is 'Left' and FW set to 'Protection'
+  the driver will look for a .bin file named 
+    Left-cs35l41-dsp1-spk-prot.bin
+
   - cirrus,fast-switch : Specify file names for Fast Use Case Switching DSP
     feature.  Files names are comma-separated strings.
+
 
 Optional H/G Algorithm sub-node:
 
