@@ -112,7 +112,8 @@ struct wm_adsp {
 
 	bool preloaded;
 	bool booted;
-	bool running;
+	bool running;	
+	bool tuning_has_prefix;
 
 	int num_firmwares;
 	struct wm_adsp_fw_defs *firmwares;
