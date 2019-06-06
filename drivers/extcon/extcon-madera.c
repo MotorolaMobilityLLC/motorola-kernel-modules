@@ -1609,6 +1609,31 @@ void madera_set_headphone_imp(struct madera_extcon *info, int ohms_x100)
 }
 EXPORT_SYMBOL_GPL(madera_set_headphone_imp);
 
+void madera_set_magic_bit(struct madera_extcon *info, bool on)
+{
+	int rate = 1;
+	struct madera *madera = info->madera;
+	if (on) {
+		regmap_update_bits(madera->regmap,
+				   MADERA_ACCESSORY_DETECT_MODE_1,
+				   MADERA_ACCDET_POLARITY_INV_ENA_MASK, 0);
+		regmap_update_bits(madera->regmap,
+				   MADERA_MIC_DETECT_1_CONTROL_1,
+				   MADERA_MICD_RATE_MASK, 0);
+	} else {
+		if (info->pdata->micd_rate)
+			rate = info->pdata->micd_rate;
+		regmap_update_bits(madera->regmap,
+				   MADERA_ACCESSORY_DETECT_MODE_1,
+				   MADERA_ACCDET_POLARITY_INV_ENA_MASK,
+				   MADERA_ACCDET_POLARITY_INV_ENA);
+		regmap_update_bits(madera->regmap,
+				   MADERA_ACCESSORY_DETECT_MODE_1,
+				   MADERA_MICD_RATE_MASK,
+				   rate << MADERA_MICD_RATE_SHIFT);
+	}
+}
+
 static void madera_hpdet_start_micd(struct madera_extcon *info)
 {
 	struct madera *madera = info->madera;
@@ -1826,6 +1851,8 @@ void madera_hpdet_stop(struct madera_extcon *info)
 
 	/* Reset back to starting range */
 	madera_hpdet_stop_micd(info);
+
+	madera_set_magic_bit(info, info->have_mic);
 
 	regmap_update_bits(madera->regmap, MADERA_HEADPHONE_DETECT_1,
 			   MADERA_HP_IMPEDANCE_RANGE_MASK | MADERA_HP_POLL,
@@ -2463,6 +2490,7 @@ static irqreturn_t madera_jackdet(int irq, void *data)
 		madera_set_headphone_imp(info, MADERA_HP_Z_OPEN);
 
 		madera_extcon_notify_micd(info, false, 0);
+		madera_set_magic_bit(info, false);
 	}
 
 out:
