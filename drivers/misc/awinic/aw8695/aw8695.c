@@ -1,7 +1,7 @@
 /*
  * aw8695.c   aw8695 haptic module
  *
- * Version: v1.3.4
+ * Version: v1.3.5
  *
  * Copyright (c) 2018 AWINIC Technology CO., LTD
  *
@@ -1536,6 +1536,17 @@ static int aw8695_haptic_f0_calibration(struct aw8695 *aw8695)
 	return ret;
 }
 
+static void aw8695_f0_cali_work(struct work_struct *work)
+{
+	struct aw8695 *aw8695 = container_of(work, struct aw8695, f0_cali_work);
+
+	pr_debug("%s enter\n", __func__);
+
+	mutex_lock(&aw8695->lock);
+	aw8695_haptic_f0_calibration(aw8695);
+	mutex_unlock(&aw8695->lock);
+}
+
 /*****************************************************
  *
  * haptic fops
@@ -1786,9 +1797,9 @@ static int aw8695_haptic_init(struct aw8695 *aw8695)
 	aw8695->cont_td = AW8695_HAPTIC_CONT_TD;
 	aw8695->cont_zc_thr = AW8695_HAPTIC_CONT_ZC_THR;
 	aw8695->cont_num_brk = AW8695_HAPTIC_CONT_NUM_BRK;
-	aw8695_haptic_f0_calibration(aw8695);
 	mutex_unlock(&aw8695->lock);
-
+	INIT_WORK(&aw8695->f0_cali_work, aw8695_f0_cali_work);
+	schedule_work(&aw8695->f0_cali_work);
 	return ret;
 }
 
@@ -3699,6 +3710,22 @@ static int aw8695_i2c_remove(struct i2c_client *i2c)
 
 	pr_info("%s enter\n", __func__);
 
+#ifdef AWINIC_RAM_UPDATE_DELAY
+	cancel_delayed_work_sync(&aw8695->ram_work);
+#endif
+	cancel_work_sync(&aw8695->f0_cali_work);
+	mutex_destroy(&aw8695->haptic_audio.lock);
+	cancel_work_sync(&aw8695->haptic_audio.work);
+	hrtimer_cancel(&aw8695->haptic_audio.timer);
+
+	misc_deregister(&aw8695_haptic_misc);
+
+	mutex_destroy(&aw8695->lock);
+	cancel_work_sync(&aw8695->rtp_work);
+	cancel_work_sync(&aw8695->vibrator_work);
+	hrtimer_cancel(&aw8695->timer);
+	sysfs_remove_group(&i2c->dev.kobj, &aw8695_vibrator_attribute_group);
+	devm_led_classdev_unregister(&aw8695->i2c->dev, &aw8695->cdev);
 	sysfs_remove_group(&i2c->dev.kobj, &aw8695_attribute_group);
 
 	devm_free_irq(&i2c->dev, gpio_to_irq(aw8695->irq_gpio), aw8695);
