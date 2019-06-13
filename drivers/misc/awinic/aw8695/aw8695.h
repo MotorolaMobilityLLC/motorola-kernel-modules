@@ -303,6 +303,7 @@ struct aw8695 {
 	struct delayed_work ram_work;
 	struct timeval current_time;
 	struct timeval pre_enter_time;
+	struct work_struct f0_cali_work;
 #ifdef TIMED_OUTPUT
 	struct timed_output_dev to_dev;
 #else
