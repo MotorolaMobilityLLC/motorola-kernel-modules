@@ -590,7 +590,7 @@ static int m1120_measure(m1120_data_t *p_data, short *raw)
     }
 
     if (m1120_get_debug(&client->dev)) {
-        printk("raw data (%d)\n", *raw);
+        mxinfo(&client->dev, "raw data (%d)\n", *raw);
     }
 
     return err;

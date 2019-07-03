@@ -15,6 +15,7 @@
 #include <linux/hrtimer.h>
 #include <linux/ktime.h>
 #include <linux/string.h>
+#include <linux/sysfs.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
 
@@ -446,7 +447,7 @@ static int moto_aw8646_set_opmode(motor_device* md, unsigned opmode)
     spin_lock_irqsave(&md->mlock, flags);
 
     if(md->nsleep == opmode) {
-        dev_info(md->dev, "Unchanged the power status, ignore\n");
+        dev_info(md->dev, "Unchanged the opmode status, ignore\n");
         ret = -EINVAL;
         goto exit;
     }
@@ -541,7 +542,9 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
             if(md->step_ceiling && atomic_read(&md->step_count) >= md->step_ceiling) {
                 atomic_set(&md->step_count, 0);
                 atomic_set(&md->stepping, 0);
-                dev_info(md->dev, "Stopped motor, count to ceiling\n");
+                moto_aw8646_set_power(md, 0);
+                //sysfs_notify(&md->sysfs_dev->kobj, NULL, "status");
+                dev_info(md->dev, "Stopped motor, count to ceiling %s\n", md->sysfs_dev->kobj.name);
                 break;
             }
         } while(atomic_read(&md->stepping));
