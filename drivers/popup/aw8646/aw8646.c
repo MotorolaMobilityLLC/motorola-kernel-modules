@@ -16,6 +16,10 @@
 #include <linux/ktime.h>
 #include <linux/string.h>
 #include <linux/sysfs.h>
+#include <linux/sched.h>
+#include <linux/kthread.h>
+#include <linux/wait.h>
+#include <uapi/linux/sched/types.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
 
@@ -122,8 +126,10 @@ typedef struct motor_device {
     struct device*  sysfs_dev;
     struct class*   aw8646_class;
     struct workqueue_struct* motor_wq;
-    struct work_struct motor_work;
+    //struct work_struct motor_work;
     struct work_struct motor_irq_work;
+    struct task_struct *motor_task;
+    wait_queue_head_t sync_complete;
     struct hrtimer step_timer;
     motor_control mc;
     spinlock_t mlock;
@@ -142,6 +148,7 @@ typedef struct motor_device {
     unsigned nsleep:1;
     unsigned nEN:1;
     unsigned dir:1;
+    unsigned user_sync_complete:1;
 }motor_device;
 
 void sleep_helper(unsigned usec)
@@ -524,6 +531,8 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
     moto_aw8646_set_motor_torque(md);
     moto_aw8646_set_motor_dir(md);
     moto_aw8646_set_motor_mode(md);
+
+    disable_irq(md->fault_irq);
     moto_aw8646_set_motor_opmode(md);
 
     if(atomic_read(&md->stepping)) {
@@ -544,20 +553,42 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
                 atomic_set(&md->stepping, 0);
                 moto_aw8646_set_power(md, 0);
                 //sysfs_notify(&md->sysfs_dev->kobj, NULL, "status");
-                dev_info(md->dev, "Stopped motor, count to ceiling %s\n", md->sysfs_dev->kobj.name);
                 break;
             }
         } while(atomic_read(&md->stepping));
     }
+    enable_irq(md->fault_irq);
 
     return 0;
 }
 
+#if 0
 static void advance_motor_work(struct work_struct *work)
 {
     motor_device* md = container_of(work, motor_device, motor_work);
 
     moto_aw8646_drive_sequencer(md);
+}
+#endif
+
+static __ref int motor_kthread(void *arg)
+{
+    motor_device* md = (motor_device*)arg;
+    struct sched_param param = {.sched_priority = MAX_USER_RT_PRIO - 1};
+    int ret = 0;
+
+    sched_setscheduler(current, SCHED_FIFO, &param);
+    while (!kthread_should_stop()) {
+        do {
+            ret = wait_event_interruptible(md->sync_complete,
+                        md->user_sync_complete);
+        } while (ret != 0);
+        md->user_sync_complete = false;
+
+        moto_aw8646_drive_sequencer(md);
+    }
+
+    return 0;
 }
 
 static int disable_motor(struct device* dev)
@@ -573,7 +604,7 @@ static int disable_motor(struct device* dev)
         }
         atomic_set(&md->stepping, 0);
         atomic_set(&md->step_count, 0);
-        ret = cancel_work_sync(&md->motor_work);
+        //ret = cancel_work_sync(&md->motor_work);
     }
 
     return ret;
@@ -592,7 +623,9 @@ static int motor_set_enable(struct device* dev, bool enable)
             ktime_t time_out = ms_to_ktime(md->time_out);
             hrtimer_start(&md->step_timer, time_out, HRTIMER_MODE_REL);
         }
-        queue_work(md->motor_wq, &md->motor_work);
+        md->user_sync_complete = true;
+        wake_up(&md->sync_complete);
+        //queue_work(md->motor_wq, &md->motor_work);
     }
 
     return 0;
@@ -627,8 +660,11 @@ static void motor_fault_work(struct work_struct *work)
 static irqreturn_t motor_fault_irq(int irq, void *pdata)
 {
     motor_device * md = (motor_device*) pdata;
+    int value = gpio_get_value(md->mc.ptable[MOTOR_FAULT_INT]);
 
-    dev_err(md->dev, "Motor fault irq is happened\n");
+    if(value) {
+        dev_info(md->dev, "dummy motor irq event\n");
+    }
 #if 0
     md->faulting = true;
     dev_err(md->dev, "Motor fault irq is happened\n");
@@ -1123,8 +1159,17 @@ static int moto_aw8646_probe(struct platform_device *pdev)
         dev_err(dev, "Out of memory for work queue\n");
         goto failed_mem;
     }
-    INIT_WORK(&md->motor_work, advance_motor_work);
+    //INIT_WORK(&md->motor_work, advance_motor_work);
     INIT_WORK(&md->motor_irq_work, motor_fault_work);
+
+    md->user_sync_complete = false;
+    init_waitqueue_head(&md->sync_complete);
+    md->motor_task = kthread_create(motor_kthread, md, "motor_task");
+    if (IS_ERR(md->motor_task)) {
+        ret = PTR_ERR(md->motor_task);
+        dev_err(dev, "Failed create motor kthread\n");
+        goto failed_work;
+    }
 
     hrtimer_init(&md->step_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     md->step_timer.function = motor_timer_action;
@@ -1153,6 +1198,8 @@ static int moto_aw8646_probe(struct platform_device *pdev)
         i++;
     } while (i < MOTOR_UNKNOWN);
 
+    wake_up_process(md->motor_task);
+
     if(!set_pinctrl_state(md, INT_DEFAULT)) {
         md->fault_irq = gpio_to_irq(md->mc.ptable[MOTOR_FAULT_INT]);
         ret = devm_request_threaded_irq(&pdev->dev, md->fault_irq, motor_fault_irq,
@@ -1162,6 +1209,7 @@ static int moto_aw8646_probe(struct platform_device *pdev)
             goto failed_gpio;
         }
     } else {
+        /*Here motor can work,  but have not irq*/
         dev_info(dev, "Failed to set device irq\n");
     }
 
@@ -1176,6 +1224,8 @@ failed_gpio:
 failed_sys_dev:
     class_destroy(md->aw8646_class);
 failed_sys:
+    kthread_stop(md->motor_task);
+failed_work:
     destroy_workqueue(md->motor_wq);
 failed_mem:
     kfree(md);
@@ -1193,6 +1243,7 @@ static int moto_aw8646_remove(struct platform_device *pdev)
     device_destroy(md->aw8646_class, MKDEV(0, 0));
     class_destroy(md->aw8646_class);
     disable_motor(md->dev);
+    kthread_stop(md->motor_task);
     destroy_workqueue(md->motor_wq);
     kfree(md);
 
