@@ -3,6 +3,7 @@
 
 #include <linux/ioctl.h>
 #include <linux/mutex.h>
+#include <linux/hrtimer.h>
 
 /* ********************************************************* */
 /* feature of ic revision */
@@ -293,6 +294,12 @@ typedef struct {
     bool                irq_first;
 
     struct delayed_work work;
+    struct work_struct  m1120_work;
+    struct workqueue_struct* m1120_wq;
+    struct hrtimer      sample_timer;
+    struct task_struct *m1120_task;
+    wait_queue_head_t   sync_complete;
+    bool                sync_flag;
 
     int                 power_vi2c;
     int                 power_vdd;

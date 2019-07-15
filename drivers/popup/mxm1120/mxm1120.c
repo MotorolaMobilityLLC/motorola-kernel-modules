@@ -16,20 +16,25 @@
 #include <linux/irq.h>
 #include <linux/interrupt.h>
 #include <linux/regulator/consumer.h>
+#include <linux/ktime.h>
+#include <linux/sched.h>
+#include <linux/kthread.h>
+#include <linux/wait.h>
+#include <uapi/linux/sched/types.h>
 #include "mxm1120.h"
 
-#define M1120_DETECTION_MODE                M1120_DETECTION_MODE_POLLING
-#define M1120_INTERRUPT_TYPE                M1120_VAL_INTSRS_INTTYPE_BESIDE
-#define M1120_SENSITIVITY_TYPE            M1120_VAL_INTSRS_SRS_10BIT_0_068mT
+#define M1120_DETECTION_MODE             M1120_DETECTION_MODE_POLLING
+#define M1120_INTERRUPT_TYPE             M1120_VAL_INTSRS_INTTYPE_BESIDE
+#define M1120_SENSITIVITY_TYPE           M1120_VAL_INTSRS_SRS_10BIT_0_068mT
 #define M1120_PERSISTENCE_COUNT          M1120_VAL_PERSINT_COUNT(4)
-#define M1120_OPERATION_FREQUENCY          M1120_VAL_OPF_FREQ_80HZ
-#define M1120_OPERATION_RESOLUTION        M1120_VAL_OPF_BIT_10
+#define M1120_OPERATION_FREQUENCY        M1120_VAL_OPF_FREQ_80HZ
+#define M1120_OPERATION_RESOLUTION       M1120_VAL_OPF_BIT_10
 #define M1120_DETECT_RANGE_HIGH          (60)/*Need change via test.*/
-#define M1120_DETECT_RANGE_LOW            (50)/*Need change via test.*/
-#define M1120_RESULT_STATUS_A              (0x01)  // result status A ----> ==180Degree.
-#define M1120_RESULT_STATUS_B              (0x02)  // result status B ----> != 180Degree.
-#define M1120_EVENT_TYPE                    EV_ABS  // EV_KEY
-#define M1120_EVENT_CODE                    ABS_X   // KEY_F1
+#define M1120_DETECT_RANGE_LOW           (50)/*Need change via test.*/
+#define M1120_RESULT_STATUS_A            (0x01)  // result status A ----> ==180Degree.
+#define M1120_RESULT_STATUS_B            (0x02)  // result status B ----> != 180Degree.
+#define M1120_EVENT_TYPE                 EV_ABS  // EV_KEY
+#define M1120_EVENT_CODE                 ABS_X   // KEY_F1
 #define M1120_EVENT_DATA_CAPABILITY_MIN  (-32768)
 #define M1120_EVENT_DATA_CAPABILITY_MAX  (32767)
 
@@ -139,7 +144,8 @@ static void m1120_set_enable(struct device *dev, int enable)
         }
     } else {                        /*disable if state will be changed*/
         if (atomic_cmpxchg(&p_data->atm.enable, 1, 0)) {
-            cancel_delayed_work_sync(&p_data->work);
+            //cancel_delayed_work_sync(&p_data->work);
+            hrtimer_cancel(&p_data->sample_timer);
             m1120_set_operation_mode(dev, OPERATION_MODE_POWERDOWN);
         }
     }
@@ -164,6 +170,7 @@ static void m1120_set_delay(struct device *dev, int delay)
 {
     struct i2c_client *client = to_i2c_client(dev);
     m1120_data_t *p_data = i2c_get_clientdata(client);
+    ktime_t time_out;
 
     if (delay < M1120_DELAY_MIN)
         delay = M1120_DELAY_MIN;
@@ -173,8 +180,11 @@ static void m1120_set_delay(struct device *dev, int delay)
 
     if (m1120_get_enable(dev)) {
         if (!(p_data->reg.map.intsrs & M1120_DETECTION_MODE_INTERRUPT)) {
-            cancel_delayed_work_sync(&p_data->work);
-            schedule_delayed_work(&p_data->work, msecs_to_jiffies(delay));
+            //cancel_delayed_work_sync(&p_data->work);
+            hrtimer_cancel(&p_data->sample_timer);
+            //schedule_delayed_work(&p_data->work, msecs_to_jiffies(delay));
+            time_out = ms_to_ktime(delay);
+            hrtimer_start(&p_data->sample_timer, time_out, HRTIMER_MODE_REL);
         }
     }
 
@@ -202,7 +212,8 @@ static irqreturn_t m1120_irq_handler(int irq, void *dev_id)
     struct i2c_client *client = (struct i2c_client *)dev_id;
     m1120_data_t *p_data = i2c_get_clientdata(client);
 
-    schedule_delayed_work(&p_data->work, 0);
+    queue_work(p_data->m1120_wq, &p_data->m1120_work);
+    //schedule_delayed_work(&p_data->work, 0);
 
     return IRQ_HANDLED;
 }
@@ -596,10 +607,10 @@ static int m1120_measure(m1120_data_t *p_data, short *raw)
     return err;
 }
 
-static void m1120_work_func(struct work_struct *work)
+static void m1120_func(m1120_data_t *p_data)
 {
-    m1120_data_t *p_data = container_of((struct delayed_work *)work, m1120_data_t, work);
-    unsigned long delay = msecs_to_jiffies(m1120_get_delay(&p_data->client->dev));
+    ktime_t time_out = ms_to_ktime(m1120_get_delay(&p_data->client->dev));
+    //unsigned long delay = msecs_to_jiffies(m1120_get_delay(&p_data->client->dev));
     short raw = 0;
     int err = 0;
 
@@ -629,9 +640,18 @@ static void m1120_work_func(struct work_struct *work)
     if (p_data->reg.map.intsrs & M1120_DETECTION_MODE_INTERRUPT) {
         m1120_update_interrupt_threshold(&p_data->client->dev, raw);
     } else {
-        schedule_delayed_work(&p_data->work, delay);
+        if(atomic_read(&p_data->atm.enable))
+            hrtimer_start(&p_data->sample_timer, time_out, HRTIMER_MODE_REL);
+        //schedule_delayed_work(&p_data->work, delay);
         dbg("run schedule_delayed_work");
     }
+}
+
+static void m1120_work_func(struct work_struct *work)
+{
+    //m1120_data_t *p_data = container_of((struct delayed_work *)work, m1120_data_t, work);
+    m1120_data_t *p_data = container_of(work, m1120_data_t, m1120_work);
+    m1120_func(p_data);
 }
 
 static int m1120_reset_device(struct device *dev)
@@ -925,6 +945,37 @@ static ssize_t m1120_data_show(struct device *dev,
     return snprintf(buf, 10, "%d\n", raw);
 }
 
+static enum hrtimer_restart mx1120_timer_action(struct hrtimer *h)
+{
+    m1120_data_t * p_data = container_of(h, m1120_data_t, sample_timer);
+
+    //queue_work(p_data->m1120_wq, &p_data->m1120_work);
+    //schedule_delayed_work(&p_data->work, 0);
+
+    p_data->sync_flag = true;
+    wake_up(&p_data->sync_complete);
+
+    return HRTIMER_NORESTART;
+}
+
+static __ref int m1120_thread(void *arg)
+{
+    m1120_data_t * p_data = (m1120_data_t*)arg;
+    int ret = 0;
+
+    while (!kthread_should_stop()) {
+        do {
+            ret = wait_event_interruptible(p_data->sync_complete,
+                        p_data->sync_flag);
+        } while (ret != 0);
+        p_data->sync_flag = false;
+
+        m1120_func(p_data);
+    }
+
+    return 0;
+}
+
 static ssize_t m1120_dump_show(struct device *dev,
                  struct device_attribute *attr, char *buf)
 {
@@ -1023,12 +1074,29 @@ static int m1120_probe(struct i2c_client *client, const struct i2c_device_id *id
 
     /*(7) config work function*/
     INIT_DELAYED_WORK(&p_data->work, m1120_work_func);
+    INIT_WORK(&p_data->m1120_work, m1120_work_func);
+    p_data->m1120_wq = alloc_workqueue("mx1120_wq", WQ_HIGHPRI, 0);
+    if(!p_data->m1120_wq) {
+        mxerr(&client->dev, "failed alloc wq");
+        goto err_nodev;
+    }
+    p_data->sync_flag = false;
+    init_waitqueue_head(&p_data->sync_complete);
+    p_data->m1120_task = kthread_create(m1120_thread, p_data, "%s_task", p_data->type);
+    if (IS_ERR(p_data->m1120_task)) {
+        mxerr(&client->dev, "failed create %s task", p_data->type);
+        goto err_wk;
+    }
+    wake_up_process(p_data->m1120_task);
+
+    hrtimer_init(&p_data->sample_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    p_data->sample_timer.function = mx1120_timer_action;
 
     /*(8) init input device*/
     err = m1120_input_dev_init(p_data);
     if (err) {
         mxerr(&client->dev, "%s: Failed to create input dev(%d)", p_data->type, err);
-        goto err_nodev;
+        goto err_task;
     }
     mxinfo(&client->dev, "%s was initialized", p_data->type);
 
@@ -1043,7 +1111,10 @@ static int m1120_probe(struct i2c_client *client, const struct i2c_device_id *id
 
 err_group:
     m1120_input_dev_terminate(p_data);
-
+err_task:
+    kthread_stop(p_data->m1120_task);
+err_wk:
+    destroy_workqueue(p_data->m1120_wq);
 err_nodev:
     kfree(p_data);
 
@@ -1057,6 +1128,8 @@ static int m1120_remove(struct i2c_client *client)
     m1120_data_t *p_data = i2c_get_clientdata(client);
 
     m1120_set_enable(&client->dev, 0);
+    destroy_workqueue(p_data->m1120_wq);
+    kthread_stop(p_data->m1120_task);
     regulator_put(p_data->vdd);
     regulator_put(p_data->vio);
     sysfs_remove_group(&p_data->input_dev->dev.kobj, &m1120_attribute_group);
