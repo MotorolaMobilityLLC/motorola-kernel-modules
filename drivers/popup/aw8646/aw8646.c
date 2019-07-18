@@ -581,8 +581,13 @@ static __ref int motor_kthread(void *arg)
     while (!kthread_should_stop()) {
         do {
             ret = wait_event_interruptible(md->sync_complete,
-                        md->user_sync_complete);
+                        md->user_sync_complete || kthread_should_stop());
         } while (ret != 0);
+
+        if(kthread_should_stop()) {
+            break;
+        }
+
         md->user_sync_complete = false;
 
         moto_aw8646_drive_sequencer(md);
