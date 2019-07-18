@@ -43,6 +43,7 @@
 #define M1120_VDD_MAX_UV       3600000
 #define M1120_VIO_MIN_UV       1650000
 #define M1120_VIO_MAX_UV       3600000
+#define M1120_CONTROL          "control"
 
 /***********************************************************/
 /*debug macro*/
@@ -966,8 +967,13 @@ static __ref int m1120_thread(void *arg)
     while (!kthread_should_stop()) {
         do {
             ret = wait_event_interruptible(p_data->sync_complete,
-                        p_data->sync_flag);
+                        p_data->sync_flag || kthread_should_stop());
         } while (ret != 0);
+
+        if(kthread_should_stop()) {
+            break;
+        }
+
         p_data->sync_flag = false;
 
         m1120_func(p_data);
@@ -1022,6 +1028,11 @@ static struct attribute *m1120_attributes[] = {
 
 static struct attribute_group m1120_attribute_group = {
     .attrs = m1120_attributes
+};
+
+static const struct attribute_group * m1120_attr_groups[] = {
+    &m1120_attribute_group,
+    NULL
 };
 
 static int m1120_probe(struct i2c_client *client, const struct i2c_device_id *id)
@@ -1101,14 +1112,31 @@ static int m1120_probe(struct i2c_client *client, const struct i2c_device_id *id
     mxinfo(&client->dev, "%s was initialized", p_data->type);
 
     /*(9) create sysfs group*/
+#if 0
     err = sysfs_create_group(&p_data->input_dev->dev.kobj, &m1120_attribute_group);
     if (err) {
         mxerr(&client->dev, "sysfs_create_group was failed(%d)", err);
         goto err_group;
     }
+#endif
 
+    p_data->m1120_class = class_create(THIS_MODULE, p_data->type);
+    if(IS_ERR(p_data->m1120_class)) {
+        mxerr(&client->dev, "Failed to create class\n");
+        goto err_group;
+    }
+
+    p_data->sysfs_dev = device_create_with_groups(p_data->m1120_class,
+                 &client->dev, MKDEV(0, 0), p_data, m1120_attr_groups,
+                 "%s", M1120_CONTROL);
+    if(IS_ERR(p_data->sysfs_dev)) {
+        mxerr(&client->dev, "Failed to create device\n");
+        goto err_groups;
+    }
     return 0;
 
+err_groups:
+    class_destroy(p_data->m1120_class);
 err_group:
     m1120_input_dev_terminate(p_data);
 err_task:
@@ -1117,7 +1145,6 @@ err_wk:
     destroy_workqueue(p_data->m1120_wq);
 err_nodev:
     kfree(p_data);
-
 err_nomem:
     p_data = NULL;
     return err;
@@ -1132,7 +1159,11 @@ static int m1120_remove(struct i2c_client *client)
     kthread_stop(p_data->m1120_task);
     regulator_put(p_data->vdd);
     regulator_put(p_data->vio);
+    device_destroy(p_data->m1120_class, MKDEV(0, 0));
+    class_destroy(p_data->m1120_class);
+#if 0
     sysfs_remove_group(&p_data->input_dev->dev.kobj, &m1120_attribute_group);
+#endif
     m1120_input_dev_terminate(p_data);
     if (p_data->igpio != -1) {
         gpio_free(p_data->igpio);

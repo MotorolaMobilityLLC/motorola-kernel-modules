@@ -281,6 +281,8 @@ typedef struct {
 typedef struct {
     struct i2c_client   *client;
     struct input_dev    *input_dev;
+    struct class        *m1120_class;
+    struct device       *sysfs_dev;
     struct miscdevice   misc_dev;
     const char*         type;
     m1120_mutex_t       mtx;
