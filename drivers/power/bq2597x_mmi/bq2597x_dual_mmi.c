@@ -69,7 +69,7 @@ static int bq2597x_role_data[] = {
 	[BQ25970_SLAVE] = BQ25970_ROLE_SLAVE,
 };
 
-
+#define	BUS_UCP_ALARM		BIT(4)
 #define	BAT_OVP_ALARM		BIT(7)
 #define BAT_OCP_ALARM		BIT(6)
 #define	BUS_OVP_ALARM		BIT(5)
@@ -111,11 +111,12 @@ static int bq2597x_role_data[] = {
 #define	SS_TIMEOUT_FAULT_MASK		(1 << SS_TIMEOUT_FAULT_SHIFT)
 #define	TS_SHUT_FAULT_MASK		(1 << TS_SHUT_FAULT_SHIFT)
 
+
 #define	BAT_OVP_ALARM_SHIFT			0
 #define	BAT_OCP_ALARM_SHIFT			1
 #define	BUS_OVP_ALARM_SHIFT			2
 #define	BUS_OCP_ALARM_SHIFT			3
-#define	BAT_THERM_ALARM_SHIFT			4
+#define	BUS_UCP_FAULT_SHIFT			4
 #define	BUS_THERM_ALARM_SHIFT			5
 #define	DIE_THERM_ALARM_SHIFT			6
 #define	BAT_UCP_ALARM_SHIFT			7
@@ -124,7 +125,7 @@ static int bq2597x_role_data[] = {
 #define	BAT_OCP_ALARM_MASK		(1 << BAT_OCP_ALARM_SHIFT)
 #define	BUS_OVP_ALARM_MASK		(1 << BUS_OVP_ALARM_SHIFT)
 #define	BUS_OCP_ALARM_MASK		(1 << BUS_OCP_ALARM_SHIFT)
-#define	BAT_THERM_ALARM_MASK		(1 << BAT_THERM_ALARM_SHIFT)
+#define	BUS_UCP_FAULT_MASK		(1 << BUS_UCP_FAULT_SHIFT)
 #define	BUS_THERM_ALARM_MASK		(1 << BUS_THERM_ALARM_SHIFT)
 #define	DIE_THERM_ALARM_MASK		(1 << DIE_THERM_ALARM_SHIFT)
 #define	BAT_UCP_ALARM_MASK		(1 << BAT_UCP_ALARM_SHIFT)
@@ -259,6 +260,7 @@ struct bq2597x {
 	bool bat_ocp_alarm;
 	bool bus_ovp_alarm;
 	bool bus_ocp_alarm;
+	bool bus_ucp_alarm;
 
 	bool bat_ucp_alarm;
 
@@ -1860,7 +1862,6 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 			| (bq->bat_ucp_alarm << BAT_UCP_ALARM_SHIFT)
 			| (bq->bus_ovp_alarm << BUS_OVP_ALARM_SHIFT)
 			| (bq->bus_ocp_alarm << BUS_OCP_ALARM_SHIFT)
-			| (bq->bat_therm_alarm << BAT_THERM_ALARM_SHIFT)
 			| (bq->bus_therm_alarm << BUS_THERM_ALARM_SHIFT)
 			| (bq->die_therm_alarm << DIE_THERM_ALARM_SHIFT)
 			| (bq->bat_ovp_fault << BAT_OVP_FAULT_SHIFT)
@@ -1872,7 +1873,8 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 			| (bq->die_therm_fault << DIE_THERM_FAULT_SHIFT)
 			| (bq->conv_ocp_fault << CONV_OCP_FAULT_SHIFT)
 			| (bq->ss_timeout_fault << SS_TIMEOUT_FAULT_SHIFT)
-			| (bq->ts_shut_fault << TS_SHUT_FAULT_SHIFT));
+			| (bq->ts_shut_fault << TS_SHUT_FAULT_SHIFT)
+			| (bq->bus_ucp_alarm <<BUS_UCP_FAULT_SHIFT));
 		break;
 	default:
 		return -EINVAL;
@@ -1901,6 +1903,27 @@ static int bq2597x_charger_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_PRESENT:
 		bq2597x_set_present(bq, !!val->intval);
 		bq_info("set present :%d\n", val->intval);
+		break;
+	case POWER_SUPPLY_PROP_UPDATE_NOW:
+		bq->bat_ovp_alarm = false;
+		bq->bat_ocp_alarm = false;
+		bq->bat_ucp_alarm = false;
+		bq->bus_ovp_alarm = false;
+		bq->bus_ocp_alarm = false;
+		bq->bat_therm_alarm = false;
+		bq->bus_therm_alarm = false;
+		bq->die_therm_alarm = false;
+		bq->bat_ovp_fault = false;
+		bq->bat_ocp_fault = false;
+		bq->bus_ovp_fault = false;
+		bq->bus_ocp_fault = false;
+		bq->bat_therm_fault = false;
+		bq->bus_therm_fault = false;
+		bq->die_therm_fault = false;
+		bq->conv_ocp_fault = false;
+		bq->ss_timeout_fault = false;
+		bq->ts_shut_fault = false;
+		bq->bus_ucp_alarm = false;
 		break;
 	default:
 		return -EINVAL;
@@ -2038,10 +2061,13 @@ static void bq2597x_check_alarm_status(struct bq2597x *bq)
 
 	mutex_lock(&bq->data_lock);
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_08, &flag);
-	if (!ret && (flag & BQ2597X_IBUS_UCP_FALL_FLAG_MASK))
+	if (!ret && (flag & BQ2597X_IBUS_UCP_FALL_FLAG_MASK)) {
 		bq_err("UCP_FLAG =0x%02X\n",
 			!!(flag & BQ2597X_IBUS_UCP_FALL_FLAG_MASK));
+		bq->bus_ucp_alarm =
+				!!(flag & BUS_UCP_ALARM);
 
+	}
 
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_2D, &flag);
 	if (!ret && (flag & BQ2597X_VDROP_OVP_FLAG_MASK))
@@ -2072,8 +2098,11 @@ static void bq2597x_check_alarm_status(struct bq2597x *bq)
 		bq_err("Reg[05]BUS_UCPOVP = 0x%02X\n", stat);
 
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_0A, &stat);
-	if (!ret && (stat & 0x02))
+	if (!ret && (stat & 0x02)) {
 		bq_err("Reg[0A]CONV_OCP = 0x%02X\n", stat);
+		bq->bus_ocp_alarm = true;
+
+	}
 
 	mutex_unlock(&bq->data_lock);
 
@@ -2170,7 +2199,6 @@ if (1) {
 
 	bq_err("report alarm stat=0x%02X, fault flag =0x%02X\n",
 		bq->prev_alarm, bq->prev_fault);
-		power_supply_changed(bq->fc2_psy);
 	return IRQ_HANDLED;
 }
 
