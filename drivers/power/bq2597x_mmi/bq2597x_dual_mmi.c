@@ -2445,7 +2445,7 @@ static int bq2597x_charger_remove(struct i2c_client *client)
 {
 	struct bq2597x *bq = i2c_get_clientdata(client);
 
-	printk("-----------lxuser remove ----00-----\n");
+
 	bq2597x_enable_adc(bq, false);
 
 	power_supply_unregister(bq->fc2_psy);
@@ -2465,7 +2465,9 @@ static int bq2597x_charger_remove(struct i2c_client *client)
 
 static void bq2597x_charger_shutdown(struct i2c_client *client)
 {
-	printk("-----------lxuser shutdown ----00-----\n");
+	struct bq2597x *bq = i2c_get_clientdata(client);
+	bq2597x_enable_adc(bq, false);
+	pr_info("Shutdown Successfully\n");
 }
 
 static const struct dev_pm_ops bq2597x_pm_ops = {
