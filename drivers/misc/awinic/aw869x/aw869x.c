@@ -1156,7 +1156,7 @@ static int aw869x_haptic_init(struct aw869x *aw869x)
 
     aw869x_i2c_write_bits(aw869x, AW869X_REG_SYSCTRL, 
             AW869X_BIT_SYSCTRL_WORK_MODE_MASK, AW869X_BIT_SYSCTRL_STANDBY);
-    aw869x_i2c_write(aw869x, AW869X_REG_ANACTRL, 0x01);
+    aw869x_i2c_write(aw869x, AW869X_REG_ANACTRL, 0x21);
     //aw869x_i2c_write_bits(aw869x, AW869X_REG_PWMDBG,
     //        AW869X_BIT_PWMDBG_PWMCLK_MODE_MASK, AW869X_BIT_PWMDBG_PWMCLK_MODE_24KB);
     return ret;
