@@ -574,10 +574,10 @@ static void advance_motor_work(struct work_struct *work)
 static __ref int motor_kthread(void *arg)
 {
     motor_device* md = (motor_device*)arg;
-    struct sched_param param = {.sched_priority = MAX_USER_RT_PRIO - 1};
+    //struct sched_param param = {.sched_priority = MAX_USER_RT_PRIO - 1};
     int ret = 0;
 
-    sched_setscheduler(current, SCHED_FIFO, &param);
+    //sched_setscheduler(current, SCHED_FIFO, &param);
     while (!kthread_should_stop()) {
         do {
             ret = wait_event_interruptible(md->sync_complete,
