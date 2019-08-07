@@ -74,10 +74,6 @@ static DEFINE_MUTEX(device_list_lock);
 static struct gf_dev gf;
 
 static struct gf_key_map maps[] = {
-	{ EV_KEY, GF_KEY_INPUT_HOME },
-	{ EV_KEY, GF_KEY_INPUT_MENU },
-	{ EV_KEY, GF_KEY_INPUT_BACK },
-	{ EV_KEY, GF_KEY_INPUT_POWER },
 #if defined(SUPPORT_NAV_EVENT)
 	{ EV_KEY, GF_NAV_INPUT_UP },
 	{ EV_KEY, GF_NAV_INPUT_DOWN },
