@@ -690,6 +690,7 @@ info_retry:
 		ret = 0;
 	}
 
+	NVT_LOG("fw_ver=%d, x_num=%d, y_num=%d, abs_xmax=%d, abs_y_max=%d, max_button_num=%d!\n", ts->fw_ver, ts->x_num, ts->y_num, ts->abs_x_max, ts->abs_y_max, ts->max_button_num);
 	NVT_LOG("FW type is 0x%02X\n", buf[14]);
 
 	//---Get Novatek PID---
