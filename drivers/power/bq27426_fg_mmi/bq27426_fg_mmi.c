@@ -46,6 +46,8 @@
 #include <linux/regulator/machine.h>
 #include <linux/gpio.h>
 #include <linux/of.h>
+#include <linux/delay.h>
+#include <linux/workqueue.h>
 
 #ifdef ATL_4000MAH_8A_BATTERY_PROFILE
 #include "lenovo_atl_df1_gmfs.h"
@@ -62,10 +64,38 @@
 #undef dev_dbg
 #define dev_dbg dev_err
 
+#define mmi_fg_err(chip, fmt, ...)		\
+	pr_err("%s: %s: " fmt, chip->name,	\
+		__func__, ##__VA_ARGS__)	\
+
+#define mmi_fg_info(chip, fmt, ...)		\
+	pr_info("%s: %s: " fmt, chip->name,	\
+		__func__, ##__VA_ARGS__)	\
+
+#define mmi_fg_dbg(chip, reason, fmt, ...)			\
+	do {							\
+		if (*chip->debug_mask & (reason))		\
+			pr_info("%s: %s: " fmt, chip->name,	\
+				__func__, ##__VA_ARGS__);	\
+		else						\
+			pr_debug("%s: %s: " fmt, chip->name,	\
+				__func__, ##__VA_ARGS__);	\
+	} while (0)
+
+enum print_reason {
+	PR_INTERRUPT    = BIT(0),
+	PR_MISC         = BIT(2),
+	PR_MOTO         = BIT(7),
+};
+
+static int __debug_mask = 0x85;
+module_param_named(
+	debug_mask, __debug_mask, int, S_IRUSR | S_IWUSR
+);
+
 #define	MONITOR_ALARM_CHECK_NS	5000000000
 #define	INVALID_REG_ADDR	0xFF
 #define BQFS_UPDATE_KEY		0x8F91
-
 
 #define	FG_FLAGS_OT					BIT(15)
 #define	FG_FLAGS_UT					BIT(14)
@@ -78,7 +108,6 @@
 #define	FG_FLAGS_SOC1				BIT(2)
 #define	FG_FLAGS_SOCF				BIT(1)
 #define	FG_FLAGS_DSG				BIT(0)
-
 
 enum bq_fg_reg_idx {
 	BQ_FG_REG_CTRL = 0,
@@ -134,8 +163,9 @@ enum {
 
 struct fg_batt_profile {
 	const bqfs_cmd_t * bqfs_image;
-	u32				   array_size;
-	u32				   chem_id;
+	u32	 array_size;
+	u32	 chem_id;
+	u8	dm_ver;
 };
 
 struct batt_chem_id {
@@ -152,11 +182,11 @@ static struct batt_chem_id batt_chem_id_arr[] = {
 static const struct fg_batt_profile bqfs_image[] = {
 
 #ifdef ATL_4000MAH_8A_BATTERY_PROFILE
-	{ atl_bqfs_image, ARRAY_SIZE(atl_bqfs_image), 48},
+	{ atl_bqfs_image, ARRAY_SIZE(atl_bqfs_image), 2542, 0},
 #endif
 
 #ifdef SCUD_4000MAH_8A_BATTERY_PROFILE
-	{ bqfs_coslight, ARRAY_SIZE(bqfs_coslight), 5},
+	{ bqfs_coslight, ARRAY_SIZE(bqfs_coslight), 5, 0},
 #endif
 
 };
@@ -208,7 +238,8 @@ struct bq_fg_battery_info {
 struct bq_fg_chip {
 	struct device		*dev;
 	struct i2c_client	*client;
-
+	const char	*name;
+	int *debug_mask;
 
 	struct mutex i2c_rw_lock;
 	struct mutex data_lock;
@@ -277,6 +308,8 @@ struct bq_fg_chip {
 //	struct qpnp_vadc_chip	*vadc_dev;
 	struct regulator		*vdd;
 	u32	connected_rid;
+
+	struct delayed_work	heartbeat_work;	/*cycle trig heartbeat work*/
 };
 
 
@@ -900,11 +933,17 @@ static int fg_dm_write_block(struct bq_fg_chip *bq, u8 classid,
 	if (ret < 0)
 		return ret;
 	msleep(5);
+
 	ret = fg_write_byte(bq, DM_ACCESS_BLOCK_DATA_CLASS, classid);
 	if (ret < 0)
 		return ret;
 	msleep(5);
 
+	ret = fg_write_byte(bq, DM_ACCESS_DATA_BLOCK, blk_offset);
+	if (ret < 0)
+		return ret;
+
+	msleep(5);
 	ret = fg_write_block(bq, DM_ACCESS_BLOCK_DATA, data, 32);
 	msleep(10);
 	fg_print_buf(__func__, data, 32);
@@ -924,7 +963,8 @@ static int fg_dm_write_block(struct bq_fg_chip *bq, u8 classid,
 	ret = fg_read_block(bq, DM_ACCESS_BLOCK_DATA, buf, 32);
 	if (ret < 0)
 		return ret;
-	if (memcpy(data, buf, 32)) {
+	fg_print_buf(__func__, buf, 32);
+	if (memcmp(data, buf, 32)) {
 		pr_err("Error updating subclass %d offset %d\n",
 				classid, offset);
 		return 1;
@@ -1437,7 +1477,7 @@ static int fg_read_chem_id(struct bq_fg_chip *bq, u16 *chem_id)
 
 	ret = fg_read_word(bq, bq->regs[BQ_FG_REG_CTRL], &chem_code);
 	if (!ret)
-		*chem_id = chem_code & 0xFF;
+		*chem_id = chem_code;
 	return ret;
 }
 
@@ -1514,16 +1554,30 @@ static int fg_check_update_necessary(struct bq_fg_chip *bq)
 {
 	int ret;
 	u16 chem_id = 0xFF;
+	u8 dm_ver = 0xFF;
 	ret = fg_check_itpor(bq);
 	if (!ret && bq->itpor)
 		return UPDATE_REASON_FG_RESET;
 
 	ret = fg_read_chem_id(bq, &chem_id);
 	pr_info("chem id is  %d\n", chem_id);
-	if (!ret && chem_id != bqfs_image[bq->batt_id].chem_id)
+	if (!ret && chem_id != bqfs_image[bq->batt_id].chem_id) {
+		pr_info("dm chem id %d, different from bqfs_image chem id %d\n",
+			chem_id,
+			bqfs_image[bq->batt_id].chem_id);
 		return UPDATE_REASON_NEW_VERSION;
-	else
-		return 0;
+	}
+
+	ret = fg_read_dm_version(bq, &dm_ver);
+	pr_info("dm ver is  %d\n", dm_ver);
+	if (!ret && dm_ver < bqfs_image[bq->batt_id].dm_ver) {
+		pr_info("dm ver: %d is less than bqfs_image dm ver %d\n",
+			dm_ver,
+			bqfs_image[bq->batt_id].dm_ver);
+		return UPDATE_REASON_NEW_VERSION;
+	}
+
+	return 0;
 }
 
 static bool fg_update_bqfs_execute_cmd(struct bq_fg_chip *bq,
@@ -1698,6 +1752,13 @@ static const u8 fg_dump_regs[] = {
 	0x70,
 };
 
+static const u8 debug_fg_dump_regs[] = {
+	0x02, 0x04, 0x08, 0x0A,
+	0x0C, 0x0E, 0x10, 0x18,
+	0x1C, 0x1E, 0x20, 0x28,
+	0x2A, 0x2C, 0x30,
+};
+
 static int show_registers(struct seq_file *m, void *data)
 {
 	struct bq_fg_chip *bq = m->private;
@@ -1820,7 +1881,7 @@ static ssize_t fg_attr_show_qmax_ratable(struct device *dev,
 		return idx;
 	}
 
-	len = sprintf(&buf[idx], "V at Chg Term:%d\n", rd_buf[0] << 8 | rd_buf[1]);
+	len = sprintf(&buf[idx], "V at Chg Term:%d\n", rd_buf[6] << 8 | rd_buf[7]);
 	idx += len;
 
 	fg_dm_post_access(bq);
@@ -1877,8 +1938,6 @@ static const struct attribute_group fg_attr_group = {
 	.attrs = fg_attributes,
 };
 
-
-
 static int fg_enable_sleep(struct bq_fg_chip *bq, bool enable)
 {
 
@@ -1916,6 +1975,90 @@ static int fg_enable_sleep(struct bq_fg_chip *bq, bool enable)
 }
 EXPORT_SYMBOL_GPL(fg_enable_sleep);
 
+static int fg_set_term_voltage(struct bq_fg_chip *bq, int volt)
+{
+	int ret;
+	u8 rd_buf[64];
+
+	memset(rd_buf, 0, 64);
+	mutex_lock(&bq->update_lock);
+	ret = fg_dm_enter_cfg_mode(bq);
+	if (ret) {
+	        mutex_unlock(&bq->update_lock);
+	        return ret;
+	}
+
+	ret = fg_dm_read_block(bq, 82, 10, rd_buf);
+	if (ret) {
+	        fg_dm_exit_cfg_mode(bq);
+	        mutex_unlock(&bq->update_lock);
+	        return ret;
+	}
+
+	rd_buf[10] = (volt >> 8) & 0xFF;
+	rd_buf[11] = volt & 0xFF;
+
+	ret = fg_dm_write_block(bq, 82, 10, rd_buf);
+
+	fg_dm_exit_cfg_mode(bq);
+
+	mutex_unlock(&bq->update_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(fg_set_term_voltage);
+
+static int fg_set_term_curr(struct bq_fg_chip *bq, int val)
+{
+	int ret = -1, curr = 0;
+	u8 rd_buf[64];
+
+	switch (val) {
+	case 500:
+		curr = 80;
+	break;
+	case 400:
+		curr = 100;
+	break;
+	case 300:
+		curr = 140;
+	break;
+	case 200:
+		curr = 200;
+	break;
+	default:
+		pr_err("Unsupported curr setting %d\n", val);
+		return ret;
+	}
+
+	pr_info("set term curr %dmA\n", val);
+	memset(rd_buf, 0, 64);
+	mutex_lock(&bq->update_lock);
+	ret = fg_dm_enter_cfg_mode(bq);
+	if (ret) {
+	        mutex_unlock(&bq->update_lock);
+	        return ret;
+	}
+
+	ret = fg_dm_read_block(bq, 82, 21, rd_buf);
+	if (ret) {
+	        fg_dm_exit_cfg_mode(bq);
+	        mutex_unlock(&bq->update_lock);
+	        return ret;
+	}
+
+	rd_buf[21] = (curr >> 8) & 0xFF;
+	rd_buf[22] = curr & 0xFF;
+
+	ret = fg_dm_write_block(bq, 82, 21, rd_buf);
+
+	fg_dm_exit_cfg_mode(bq);
+
+	mutex_unlock(&bq->update_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(fg_set_term_curr);
+
 static int fg_select_external_temp(struct bq_fg_chip *bq)
 {
 	int ret;
@@ -1935,19 +2078,17 @@ static int fg_select_external_temp(struct bq_fg_chip *bq)
 		mutex_unlock(&bq->update_lock);
 		return ret;
 	}
+
 	rd_buf[1] |=0x01;	// set external temp source
 
 	ret = fg_dm_write_block(bq, 64, 0, rd_buf);
 
-	memset(rd_buf, 0, 64);
-	ret = fg_dm_read_block(bq, 64, 0, rd_buf);	//OpConfig
-	
-	pr_info("check fg sram buf %d\n", rd_buf[1]);
 	fg_dm_exit_cfg_mode(bq);
 
 	mutex_unlock(&bq->update_lock);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(fg_select_external_temp);
 
 static void fg_update_bqfs_workfunc(struct work_struct *work)
 {
@@ -1967,8 +2108,28 @@ static void fg_dump_registers(struct bq_fg_chip *bq)
 		msleep(5);
 		ret = fg_read_word(bq, fg_dump_regs[i], &val);
 		if (!ret)
-			pr_err("Reg[%02X] = 0x%04X\n", fg_dump_regs[i], val);
+			mmi_fg_dbg(bq, PR_MOTO, "Reg[%02X] = 0x%04X\n",
+			fg_dump_regs[i], val);
+
 	}
+}
+
+static void debug_fg_dump_registers(struct bq_fg_chip *bq)
+{
+	int i, ret;
+	u16 val;
+	char buf[1024];
+	int desc = 0;
+
+	for (i = 0; i < ARRAY_SIZE(debug_fg_dump_regs); i++) {
+		msleep(5);
+		ret = fg_read_word(bq, debug_fg_dump_regs[i], &val);
+		if (!ret) {
+			desc +=
+			sprintf(buf + desc, "Reg[%02X] = %d, ", debug_fg_dump_regs[i], val);
+		}
+	}
+	mmi_fg_dbg(bq, PR_MOTO, "%s\n", buf);	
 }
 
 static irqreturn_t fg_irq_thread(int irq, void *dev_id)
@@ -1995,8 +2156,8 @@ static irqreturn_t fg_irq_thread(int irq, void *dev_id)
 	fg_read_status(bq);
 	mutex_unlock(&bq->update_lock);
 
-//	fg_dump_registers(bq);
-
+	fg_dump_registers(bq);
+	debug_fg_dump_registers(bq);
 	pr_info("itpor=%d, cfg_mode = %d, "
 			"seal_state=%d, batt_present=%d",
 			bq->itpor, bq->cfg_update_mode,
@@ -2168,6 +2329,16 @@ static const struct regmap_config bq27426_regmap_config = {
 	.max_register = 0xFFFF,
 };
 
+static void bq_heartbeat_work(struct work_struct *work)
+{
+	struct bq_fg_chip *chip = container_of(work,
+				struct bq_fg_chip, heartbeat_work.work);
+
+	debug_fg_dump_registers(chip);
+	schedule_delayed_work(&chip->heartbeat_work,
+			      msecs_to_jiffies(1000));
+}
+
 static int bq_fg_probe(struct i2c_client *client,
 							const struct i2c_device_id *id)
 {
@@ -2205,6 +2376,9 @@ static int bq_fg_probe(struct i2c_client *client,
 		regs = bq27426_regs;
 	}
 
+	bq->name = "bq27426_bms";
+	bq->debug_mask = &__debug_mask;
+
 	memcpy(bq->regs, regs, NUM_REGS);
 
 	i2c_set_clientdata(client, bq);
@@ -2234,6 +2408,7 @@ static int bq_fg_probe(struct i2c_client *client,
 
 	fg_update_bqfs(bq);
 	fg_select_external_temp(bq);
+	fg_set_term_curr(bq, 500);
 
 	if (client->irq) {
 		ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
@@ -2248,9 +2423,7 @@ static int bq_fg_probe(struct i2c_client *client,
 	}
 
 	device_init_wakeup(bq->dev, 1);
-
 	bq->fw_ver = fg_read_fw_version(bq);
-
 	fg_psy_register(bq);
 
 	create_debugfs_entry(bq);
@@ -2260,6 +2433,7 @@ static int bq_fg_probe(struct i2c_client *client,
 		goto free_psy;
 	}
 
+	INIT_DELAYED_WORK(&bq->heartbeat_work, bq_heartbeat_work);
 	determine_initial_status(bq);
 	power_supply_changed(bq->fg_psy);
 	pr_err("bq fuel gauge probe successfully, %s FW ver:%d\n",
