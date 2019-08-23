@@ -537,6 +537,7 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
 
     if(atomic_read(&md->stepping)) {
         dev_info(md->dev, "advance the motor half of period %ld\n", half);
+        sysfs_notify(&md->dev->kobj, NULL, "status");
         do {
             gpio_direction_output(mc->ptable[MOTOR_STEP], 1);
             sleep_helper(half);
@@ -552,10 +553,10 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
                 atomic_set(&md->step_count, 0);
                 atomic_set(&md->stepping, 0);
                 moto_aw8646_set_power(md, 0);
-                //sysfs_notify(&md->sysfs_dev->kobj, NULL, "status");
                 break;
             }
         } while(atomic_read(&md->stepping));
+        sysfs_notify(&md->dev->kobj, NULL, "status");
     }
     enable_irq(md->fault_irq);
 
@@ -1061,6 +1062,29 @@ static const struct attribute_group * motor_attr_groups[] = {
     NULL
 };
 
+static ssize_t motor_status_show(struct device *dev, struct device_attribute *attr,
+        char *buf)
+{
+    motor_device* md = (motor_device*)dev_get_drvdata(dev);
+    unsigned long flags;
+    int power = 0;
+
+    spin_lock_irqsave(&md->mlock, flags);
+    power = md->power_en;
+    spin_unlock_irqrestore(&md->mlock, flags);
+
+    return snprintf(buf, 20, "%d\n", power);
+}
+static DEVICE_ATTR(status, S_IRUGO|S_IWUSR|S_IWGRP, motor_status_show, NULL);
+
+static struct attribute *status_attributes[] = {
+    &dev_attr_status.attr,
+    NULL
+};
+static struct attribute_group status_attribute_group = {
+    .attrs = status_attributes
+};
+
 static int moto_aw8646_init_from_dt(motor_device* md)
 {
     struct device* pdev = md->dev;
@@ -1193,6 +1217,11 @@ static int moto_aw8646_probe(struct platform_device *pdev)
         goto failed_sys_dev;
     }
 
+    if(sysfs_create_group(&md->dev->kobj, &status_attribute_group)) {
+        dev_err(dev, "Failed to create status attribute");
+        goto failed_device;
+    }
+
     do {
         ret = devm_gpio_request(dev, md->mc.ptable[i], gpios_labels[i]);
         if(ret < 0) {
@@ -1225,6 +1254,8 @@ failed_gpio:
     while(i >= MOTOR_POWER_EN) {
         devm_gpio_free(dev, md->mc.ptable[i--]);
     }
+    sysfs_remove_group(&md->dev->kobj, &status_attribute_group);
+failed_device:
     device_destroy(md->aw8646_class, MKDEV(0, 0));
 failed_sys_dev:
     class_destroy(md->aw8646_class);
@@ -1247,6 +1278,7 @@ static int moto_aw8646_remove(struct platform_device *pdev)
     moto_aw8646_set_regulator_power(md, false);
     device_destroy(md->aw8646_class, MKDEV(0, 0));
     class_destroy(md->aw8646_class);
+    sysfs_remove_group(&md->dev->kobj, &status_attribute_group);
     disable_motor(md->dev);
     kthread_stop(md->motor_task);
     destroy_workqueue(md->motor_wq);
