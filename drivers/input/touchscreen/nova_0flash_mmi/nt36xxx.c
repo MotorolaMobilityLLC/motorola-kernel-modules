@@ -1537,6 +1537,7 @@ static int nvt_sensor_set_enable(struct sensors_classdev *sensors_cdev,
 		buf[1] = 0x13;
 		CTP_SPI_WRITE(ts->client, buf, 2);
 
+		nvt_irq_enable(true);
 		enable_irq_wake(ts->client->irq);
 		ts->gesture_enabled = true;
 		NVT_LOG("Set IC in doze mode");
@@ -1638,7 +1639,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 
 	NVT_LOG("start\n");
 
-	ts = kmalloc(sizeof(struct nvt_ts_data), GFP_KERNEL);
+	ts = kzalloc(sizeof(struct nvt_ts_data), GFP_KERNEL);
 	if (ts == NULL) {
 		NVT_ERR("failed to allocated memory for nvt ts data\n");
 		return -ENOMEM;
