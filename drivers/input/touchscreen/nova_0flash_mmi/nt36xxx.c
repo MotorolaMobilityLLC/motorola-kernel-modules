@@ -1620,6 +1620,115 @@ int nvt_sensor_remove(struct nvt_ts_data *data)
 }
 #endif
 
+#include <linux/slab.h>
+#include <linux/major.h>
+#include <linux/kdev_t.h>
+
+/* Attribute: path (RO) */
+static ssize_t path_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t blen;
+	const char *path;
+
+	path = kobject_get_path(&ts->client->dev.kobj, GFP_KERNEL);
+	blen = scnprintf(buf, PAGE_SIZE, "%s", path ? path : "na");
+	kfree(path);
+	return blen;
+}
+
+/* Attribute: vendor (RO) */
+static ssize_t vendor_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "novatek_ts");
+}
+
+static struct device_attribute touchscreen_attributes[] = {
+	__ATTR_RO(path),
+	__ATTR_RO(vendor),
+	__ATTR_NULL
+};
+
+#define TSDEV_MINOR_BASE 128
+#define TSDEV_MINOR_MAX 32
+
+/*******************************************************
+Description:
+	Novatek touchscreen FW function class. file node
+	initial function.
+
+return:
+	Executive outcomes. 0---succeed. -1---failed.
+*******************************************************/
+int32_t nvt_fw_class_init(bool create)
+{
+	struct device_attribute *attrs = touchscreen_attributes;
+	int i, error = 0;
+	static struct class *touchscreen_class;
+	static struct device *ts_class_dev;
+	static int minor;
+
+	if (create) {
+		minor = input_get_new_minor(ts->client->chip_select,
+						1, false);
+		if (minor < 0)
+			minor = input_get_new_minor(TSDEV_MINOR_BASE,
+					TSDEV_MINOR_MAX, true);
+		NVT_LOG("assigned minor %d\n", minor);
+
+		touchscreen_class = class_create(THIS_MODULE, "touchscreen");
+		if (IS_ERR(touchscreen_class)) {
+			error = PTR_ERR(touchscreen_class);
+			touchscreen_class = NULL;
+			return error;
+		}
+
+		ts_class_dev = device_create(touchscreen_class, NULL,
+				MKDEV(INPUT_MAJOR, minor),
+				ts, NVT_SPI_NAME);
+		if (IS_ERR(ts_class_dev)) {
+			error = PTR_ERR(ts_class_dev);
+			ts_class_dev = NULL;
+			return error;
+		}
+
+		for (i = 0; attrs[i].attr.name != NULL; ++i) {
+			error = device_create_file(ts_class_dev, &attrs[i]);
+			if (error)
+				break;
+		}
+
+		if (error)
+			goto device_destroy;
+		else
+			NVT_LOG("create /sys/class/touchscreen/%s Succeeded!\n", NVT_SPI_NAME);
+	} else {
+		if (!touchscreen_class || !ts_class_dev)
+			return -ENODEV;
+
+		for (i = 0; attrs[i].attr.name != NULL; ++i)
+			device_remove_file(ts_class_dev, &attrs[i]);
+
+		device_unregister(ts_class_dev);
+		class_unregister(touchscreen_class);
+	}
+
+	return 0;
+
+device_destroy:
+	for (--i; i >= 0; --i)
+		device_remove_file(ts_class_dev, &attrs[i]);
+	device_destroy(touchscreen_class, MKDEV(INPUT_MAJOR, minor));
+	ts_class_dev = NULL;
+	class_unregister(touchscreen_class);
+	NVT_ERR("error creating touchscreen class\n");
+
+	return -ENODEV;
+}
+
+
+
 /*******************************************************
 Description:
 	Novatek touchscreen driver probe function.
@@ -1903,13 +2012,19 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	}
 #endif
 
+	ret = nvt_fw_class_init(true);
+	if (ret) {
+		NVT_ERR("Create touchscreen class failed. ret=%d\n", ret);
+		goto err_create_touchscreen_class_failed;
+	}
+
 	bTouchIsAwake = 1;
 	NVT_LOG("end\n");
 
 	nvt_irq_enable(true);
 
 	return 0;
-
+err_create_touchscreen_class_failed:
 #if defined(CONFIG_FB)
 #ifdef _MSM_DRM_NOTIFY_H_
 	if (msm_drm_unregister_client(&ts->drm_notif))
@@ -1991,6 +2106,7 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 {
 	NVT_LOG("Removing driver...\n");
 
+	nvt_fw_class_init(false);
 #if defined(CONFIG_FB)
 #ifdef _MSM_DRM_NOTIFY_H_
 	if (msm_drm_unregister_client(&ts->drm_notif))
