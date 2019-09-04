@@ -1348,6 +1348,12 @@ int drm_notifier_callback(struct notifier_block *self,
         if (MSM_DRM_EARLY_EVENT_BLANK == event) {
             cancel_work_sync(&fts_data->resume_work);
             fts_ts_suspend(ts_data->dev);
+#ifdef FOCALTECH_SENSOR_EN
+            if (fts_data->should_enable_gesture) {
+                FTS_INFO("double tap gesture suspend\n");
+                return 1;
+            }
+#endif
         } else if (MSM_DRM_EVENT_BLANK == event) {
             FTS_INFO("suspend: event = %lu, not care\n", event);
         }
