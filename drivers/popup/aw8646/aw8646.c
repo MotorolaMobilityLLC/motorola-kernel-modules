@@ -130,7 +130,7 @@ typedef struct motor_device {
     struct work_struct motor_irq_work;
     struct task_struct *motor_task;
     wait_queue_head_t sync_complete;
-    struct hrtimer step_timer;
+    struct hrtimer step_timer, stepping_timer;
     motor_control mc;
     spinlock_t mlock;
     struct mutex mx_lock;
@@ -144,12 +144,30 @@ typedef struct motor_device {
     unsigned mode;
     unsigned torque;
     unsigned time_out;
+    unsigned half;
+    bool     double_edge;
+    int      level:1;
     unsigned power_en:1;
     unsigned nsleep:1;
     unsigned nEN:1;
     unsigned dir:1;
     unsigned user_sync_complete:1;
 }motor_device;
+
+ktime_t adapt_time_helper(ktime_t usec)
+{
+    ktime_t ret;
+
+    if(usec < 1000) {
+        ret = ns_to_ktime(usec * 1000);
+    } else if(usec < 1000000){
+        ret = ms_to_ktime(usec);
+    } else { //Should not to be here.
+        ret = ms_to_ktime(usec * 1000);
+    }
+
+    return ret;
+}
 
 void sleep_helper(unsigned usec)
 {
@@ -476,7 +494,7 @@ static void moto_aw8646_set_power_en(motor_device* md)
 
     gpio_direction_output(mc->ptable[MOTOR_POWER_EN], md->power_en);
     //Tpower 0.5ms
-    usleep_range(500, 1000);
+    //usleep_range(500, 1000);
 }
 
 //Power sequence: PowerEn On->nSleep On->nSleep Off->PowerEn Off
@@ -513,18 +531,19 @@ exit:
 static int moto_aw8646_drive_sequencer(motor_device* md)
 {
     motor_control* mc = &md->mc;
-    unsigned long half = md->step_period >> 1;
-    bool double_edge = false;
     unsigned long flags;
 
     atomic_set(&md->stepping, 1);
     atomic_set(&md->step_count, 0);
 
     spin_lock_irqsave(&md->mlock, flags);
+    md->double_edge = false;
+    md->half = md->step_period >> 1;
+    md->level = 1;
     if(md->mode == STEP_8_BOTH_EDEG
         || md->mode == STEP_16_BOTH_EDGE
         || md->mode == STEP_32_BOTH_EDEG) {
-            double_edge = true;
+            md->double_edge = true;
     }
     spin_unlock_irqrestore(&md->mlock, flags);
 
@@ -532,9 +551,17 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
     moto_aw8646_set_motor_dir(md);
     moto_aw8646_set_motor_mode(md);
 
-    disable_irq(md->fault_irq);
     moto_aw8646_set_motor_opmode(md);
 
+    if(atomic_read(&md->stepping)) {
+        sysfs_notify(&md->dev->kobj, NULL, "status");
+        gpio_direction_output(mc->ptable[MOTOR_STEP], md->level);
+        atomic_inc(&md->step_count);
+        dev_info(md->dev, "advance the motor half of period %d, %lld\n", md->half, adapt_time_helper(md->half));
+        hrtimer_start(&md->stepping_timer, adapt_time_helper(md->half), HRTIMER_MODE_REL);
+    }
+#if 0
+    //disable_irq(md->fault_irq);
     if(atomic_read(&md->stepping)) {
         dev_info(md->dev, "advance the motor half of period %ld\n", half);
         sysfs_notify(&md->dev->kobj, NULL, "status");
@@ -558,7 +585,8 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
         } while(atomic_read(&md->stepping));
         sysfs_notify(&md->dev->kobj, NULL, "status");
     }
-    enable_irq(md->fault_irq);
+    //enable_irq(md->fault_irq);
+#endif
 
     return 0;
 }
@@ -575,10 +603,10 @@ static void advance_motor_work(struct work_struct *work)
 static __ref int motor_kthread(void *arg)
 {
     motor_device* md = (motor_device*)arg;
-    //struct sched_param param = {.sched_priority = MAX_USER_RT_PRIO - 1};
+    struct sched_param param = {.sched_priority = MAX_USER_RT_PRIO - 1};
     int ret = 0;
 
-    //sched_setscheduler(current, SCHED_FIFO, &param);
+    sched_setscheduler(current, SCHED_FIFO, &param);
     while (!kthread_should_stop()) {
         do {
             ret = wait_event_interruptible(md->sync_complete,
@@ -590,8 +618,10 @@ static __ref int motor_kthread(void *arg)
         }
 
         md->user_sync_complete = false;
+        moto_aw8646_set_power(md, 0);
+        sysfs_notify(&md->dev->kobj, NULL, "status");
 
-        moto_aw8646_drive_sequencer(md);
+        //moto_aw8646_drive_sequencer(md);
     }
 
     return 0;
@@ -604,12 +634,18 @@ static int disable_motor(struct device* dev)
     int ret = 0;
 
     if(atomic_read(&md->stepping)) {
+        atomic_set(&md->stepping, 0);
+        atomic_set(&md->step_count, 0);
+
         time_rem = hrtimer_get_remaining(&md->step_timer);
         if(ktime_to_us(time_rem) > 0) {
             hrtimer_try_to_cancel(&md->step_timer);
         }
-        atomic_set(&md->stepping, 0);
-        atomic_set(&md->step_count, 0);
+
+        time_rem = hrtimer_get_remaining(&md->stepping_timer);
+        if(ktime_to_us(time_rem) > 0) {
+            hrtimer_try_to_cancel(&md->stepping_timer);
+        }
         //ret = cancel_work_sync(&md->motor_work);
     }
 
@@ -629,8 +665,10 @@ static int motor_set_enable(struct device* dev, bool enable)
             ktime_t time_out = ms_to_ktime(md->time_out);
             hrtimer_start(&md->step_timer, time_out, HRTIMER_MODE_REL);
         }
-        md->user_sync_complete = true;
-        wake_up(&md->sync_complete);
+        //md->user_sync_complete = true;
+
+        moto_aw8646_drive_sequencer(md);
+        //wake_up(&md->sync_complete);
         //queue_work(md->motor_wq, &md->motor_work);
     }
 
@@ -645,6 +683,48 @@ static enum hrtimer_restart motor_timer_action(struct hrtimer *h)
     dev_info(md->dev, "Stop motor, timer is out\n");
 
     return HRTIMER_NORESTART;
+}
+
+static enum hrtimer_restart motor_stepping_timer_action(struct hrtimer *h)
+{
+    motor_device * md = container_of(h, motor_device, stepping_timer);
+    unsigned long flags;
+    enum hrtimer_restart ret = HRTIMER_RESTART;
+
+    spin_lock_irqsave(&md->mlock, flags);
+
+    if(!atomic_read(&md->stepping)) {
+        if(md->power_en) {
+            md->user_sync_complete = true;
+            wake_up(&md->sync_complete);
+        }
+        gpio_direction_output(md->mc.ptable[MOTOR_STEP], 0);
+        spin_unlock_irqrestore(&md->mlock, flags);
+        return HRTIMER_NORESTART;;
+    }
+
+    md->level = !md->level;
+    gpio_direction_output(md->mc.ptable[MOTOR_STEP], md->level);
+
+    if(md->double_edge) {
+        atomic_inc(&md->step_count);
+    } else if(md->level) {
+        atomic_inc(&md->step_count);
+    }
+
+    if(md->step_ceiling && atomic_read(&md->step_count) >= md->step_ceiling) {
+        atomic_set(&md->step_count, 0);
+        atomic_set(&md->stepping, 0);
+        md->user_sync_complete = true;
+        wake_up(&md->sync_complete);
+        ret = HRTIMER_NORESTART;;
+    } else {
+        hrtimer_forward_now(h, adapt_time_helper(md->half));
+    }
+
+    spin_unlock_irqrestore(&md->mlock, flags);
+
+    return ret;
 }
 
 #define RESET_TIME 1000
@@ -1202,6 +1282,8 @@ static int moto_aw8646_probe(struct platform_device *pdev)
 
     hrtimer_init(&md->step_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     md->step_timer.function = motor_timer_action;
+    hrtimer_init(&md->stepping_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+    md->stepping_timer.function = motor_stepping_timer_action;
 
     md->aw8646_class = class_create(THIS_MODULE, MOTOR_CLASS_NAME);
     if(IS_ERR(md->aw8646_class)) {
