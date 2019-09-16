@@ -85,6 +85,7 @@
 enum print_reason {
 	PR_INTERRUPT    = BIT(0),
 	PR_MISC         = BIT(2),
+	PR_DEBUG         = BIT(3),
 	PR_MOTO         = BIT(7),
 };
 
@@ -271,6 +272,7 @@ struct bq_fg_chip {
 	bool allow_chg;
 	bool cfg_update_mode;
 	bool itpor;
+	bool device_initial;
 
 	int	seal_state; /* 0 - Full Access, 1 - Unsealed, 2 - Sealed */
 	int batt_tte;
@@ -2092,10 +2094,10 @@ EXPORT_SYMBOL_GPL(fg_select_external_temp);
 
 static void fg_update_bqfs_workfunc(struct work_struct *work)
 {
-		struct bq_fg_chip *bq = container_of(work,
-							struct bq_fg_chip, update_work);
+	struct bq_fg_chip *bq = container_of(work,
+						struct bq_fg_chip, update_work);
 
-		fg_update_bqfs(bq);
+	fg_update_bqfs(bq);
 }
 
 static void fg_dump_registers(struct bq_fg_chip *bq)
@@ -2121,6 +2123,9 @@ static void debug_fg_dump_registers(struct bq_fg_chip *bq)
 	char buf[1024];
 	int desc = 0;
 
+	if (!(*bq->debug_mask & PR_DEBUG))
+		return;
+
 	for (i = 0; i < ARRAY_SIZE(debug_fg_dump_regs); i++) {
 		msleep(5);
 		ret = fg_read_word(bq, debug_fg_dump_regs[i], &val);
@@ -2129,7 +2134,7 @@ static void debug_fg_dump_registers(struct bq_fg_chip *bq)
 			sprintf(buf + desc, "Reg[%02X] = %d, ", debug_fg_dump_regs[i], val);
 		}
 	}
-	mmi_fg_dbg(bq, PR_MOTO, "%s\n", buf);	
+	mmi_fg_dbg(bq, PR_DEBUG, "%s\n", buf);	
 }
 
 static irqreturn_t fg_irq_thread(int irq, void *dev_id)
@@ -2202,7 +2207,15 @@ static irqreturn_t fg_irq_thread(int irq, void *dev_id)
 
 static void determine_initial_status(struct bq_fg_chip *bq)
 {
+	if (bq->device_initial)
+		return;
+
+	fg_update_bqfs(bq);
+	fg_select_external_temp(bq);
+	fg_set_term_curr(bq, 500);
 	fg_irq_thread(bq->client->irq, bq);
+	bq->device_initial = true;
+	pr_info("Device initialization successfully completed!\n");
 }
 
 #define SMB_VTG_MIN_UV		1800000
@@ -2334,6 +2347,7 @@ static void bq_heartbeat_work(struct work_struct *work)
 	struct bq_fg_chip *chip = container_of(work,
 				struct bq_fg_chip, heartbeat_work.work);
 
+	determine_initial_status(chip);
 	debug_fg_dump_registers(chip);
 	schedule_delayed_work(&chip->heartbeat_work,
 			      msecs_to_jiffies(1000));
@@ -2406,10 +2420,6 @@ static int bq_fg_probe(struct i2c_client *client,
 
 	INIT_WORK(&bq->update_work, fg_update_bqfs_workfunc);
 
-	fg_update_bqfs(bq);
-	fg_select_external_temp(bq);
-	fg_set_term_curr(bq, 500);
-
 	if (client->irq) {
 		ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
 			fg_irq_thread,
@@ -2434,7 +2444,8 @@ static int bq_fg_probe(struct i2c_client *client,
 	}
 
 	INIT_DELAYED_WORK(&bq->heartbeat_work, bq_heartbeat_work);
-	determine_initial_status(bq);
+	schedule_delayed_work(&bq->heartbeat_work,
+			      msecs_to_jiffies(1000));
 	power_supply_changed(bq->fg_psy);
 	pr_err("bq fuel gauge probe successfully, %s FW ver:%d\n",
 			device2str[bq->chip], bq->fw_ver);
