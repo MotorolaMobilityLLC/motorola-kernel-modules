@@ -1273,6 +1273,10 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     if (pdata->share_reset_gpio)
         FTS_INFO("TP reset pin is shared with LCD");
 
+    pdata->always_on_vio = of_property_read_bool(np, "focaltech,always_on_vio");
+    if (pdata->always_on_vio)
+        FTS_INFO("TP VIO always on.");
+
     pdata->irq_gpio = of_get_named_gpio_flags(np, "focaltech,irq-gpio",
                       0, &pdata->irq_gpio_flags);
     if (pdata->irq_gpio < 0)
@@ -1805,6 +1809,11 @@ static int fts_ts_suspend(struct device *dev)
 #endif
     }
 
+    if (!ts_data->pdata->always_on_vio) {
+        FTS_INFO("Set reset pin to 0 in suspend.");
+        gpio_direction_output(ts_data->pdata->reset_gpio, 0);
+    }
+
     fts_release_all_finger();
     ts_data->suspended = true;
     FTS_FUNC_EXIT();
@@ -1839,6 +1848,11 @@ static int fts_ts_resume(struct device *dev)
         fts_power_source_resume(ts_data);
 #endif
         //fts_reset_proc(200);
+    }
+
+    if (!ts_data->pdata->always_on_vio) {
+        FTS_INFO("Reset IC in resume");
+        fts_reset_proc(200);
     }
 
     fts_tp_state_recovery(ts_data);
