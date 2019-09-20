@@ -183,7 +183,7 @@ static struct batt_chem_id batt_chem_id_arr[] = {
 static const struct fg_batt_profile bqfs_image[] = {
 
 #ifdef ATL_4000MAH_8A_BATTERY_PROFILE
-	{ atl_bqfs_image, ARRAY_SIZE(atl_bqfs_image), 2542, 1},
+	{ atl_bqfs_image, ARRAY_SIZE(atl_bqfs_image), 2542, 2},
 #endif
 
 #ifdef SCUD_4000MAH_8A_BATTERY_PROFILE
