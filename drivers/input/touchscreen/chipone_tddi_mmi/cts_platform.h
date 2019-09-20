@@ -252,3 +252,4 @@ extern u8 *cts_plat_get_fw_log_buf(struct cts_platform_data *pdata,
 #endif
 
 extern int cts_plat_set_reset(struct cts_platform_data *pdata, int val);
+extern int cts_plat_get_int_pin(struct cts_platform_data *pdata);
