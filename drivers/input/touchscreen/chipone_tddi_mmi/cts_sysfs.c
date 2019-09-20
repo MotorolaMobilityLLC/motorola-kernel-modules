@@ -30,7 +30,7 @@ static char *argv[MAX_ARG_NUM];
 static int jitter_test_frame = 10;
 static s16 *manualdiff_base;
 
-u16 speed = 6000;
+u16 speed = 1000;
 
 static int parse_arg(const char *buf, size_t count)
 {

@@ -446,9 +446,12 @@ static irqreturn_t cts_plat_irq_handler(int irq, void *dev_id)
 	cts_data =
 	    container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
 
-	cts_plat_disable_irq(pdata);
-
-	queue_work(cts_data->workqueue, &pdata->ts_irq_work);
+	if (queue_work(cts_data->workqueue, &pdata->ts_irq_work)) {
+        cts_dbg("IRQ queue work");
+        cts_plat_disable_irq(pdata);
+    } else {
+        cts_warn("IRQ handler queue work failed as already on the queue");
+    }
 #endif /* CONFIG_GENERIC_HARDIRQS */
 
 	return IRQ_HANDLED;
@@ -825,7 +828,7 @@ int cts_plat_reset_device(struct cts_platform_data *pdata)
 
 int cts_plat_set_reset(struct cts_platform_data *pdata, int val)
 {
-	cts_info("Set Reset");
+	cts_info("Set Reset to %s", val ? "HIGH" : "LOW");
 	if (val) {
 		gpio_set_value(pdata->rst_gpio, 1);
 	} else {
@@ -834,6 +837,11 @@ int cts_plat_set_reset(struct cts_platform_data *pdata, int val)
 	return 0;
 }
 #endif /* CFG_CTS_HAS_RESET_PIN */
+
+int cts_plat_get_int_pin(struct cts_platform_data *pdata)
+{
+	return gpio_get_value(pdata->int_gpio);
+}
 
 int cts_plat_power_up_device(struct cts_platform_data *pdata)
 {

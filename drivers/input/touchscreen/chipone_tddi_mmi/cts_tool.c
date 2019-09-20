@@ -4,6 +4,7 @@
 #include "cts_platform.h"
 #include "cts_core.h"
 #include "cts_firmware.h"
+#include "cts_test.h"
 
 #ifdef CONFIG_CTS_LEGACY_TOOL
 
@@ -49,10 +50,58 @@ enum cts_tool_cmd_code {
 
 };
 
+struct cts_test_rawdata_ioctl_data {
+	int frames;
+	int min;
+	int max;
+};
+
+struct cts_test_noise_ioctl_data {
+	int frames;
+	int max;
+};
+
+struct cts_test_open_ioctl_data {
+	int min;
+	int max;
+};
+
+struct cts_test_short_ioctl_data {
+	int min;
+	int max;
+	bool display_on;
+	bool disable_gas;
+};
+
+struct cts_test_comp_cap_ioctl_data {
+	int min;
+	int max;
+};
+
+#define CTS_TOOL_IOCTL_GET_DRIVER_VERSION	_IOR('C', 0x00, unsigned int)
+#define CTS_TOOL_IOCTL_GET_DEVICE_TYPE		_IOR('C', 0x01, unsigned int)
+#define CTS_TOOL_IOCTL_GET_FW_VERSION		_IOR('C', 0x02, unsigned short)
+
+#define CTS_TOOL_IOCTL_TEST_RESET_PIN		_IO('C',  0x11)
+#define CTS_TOOL_IOCTL_TEST_INT_PIN		_IO('C',  0x12)
+#define CTS_TOOL_IOCTL_TEST_DEVICE_TYPE		_IOW('C', 0x13, unsigned int)
+#define CTS_TOOL_IOCTL_TEST_FW_VERSION		_IOW('C', 0x14, unsigned short)
+#define CTS_TOOL_IOCTL_TEST_RAWDATA		_IOW('C', 0x15, struct cts_test_rawdata_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_NOISE		_IOW('C', 0x16, struct cts_test_noise_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_OPEN		_IOW('C', 0x17, struct cts_test_open_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_SHORT		_IOW('C', 0x18, struct cts_test_short_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_COMP_CAP		_IOW('C', 0x19, struct cts_test_comp_cap_ioctl_data *)
+
+#define CTS_DRIVER_VERSION_CODE     ((CFG_CTS_DRIVER_MAJOR_VERSION << 16) | \
+					(CFG_CTS_DRIVER_MINOR_VERSION << 8) | \
+					(CFG_CTS_DRIVER_PATCH_VERSION << 0))
+
 static struct cts_tool_cmd cts_tool_cmd;
 static char cts_tool_firmware_filepath[PATH_MAX];
 /* If CFG_CTS_MAX_I2C_XFER_SIZE < 58(PC tool length), this is neccessary */
+#ifdef CONFIG_CTS_I2C_HOST
 //static u32 cts_tool_direct_access_addr = 0;
+#endif /* CONFIG_CTS_I2C_HOST */
 
 static int cts_tool_open(struct inode *inode, struct file *file)
 {
@@ -460,8 +509,7 @@ static ssize_t cts_tool_write(struct file *file,
 		}
 
 		ret = cts_sram_writesb(cts_dev,
-				       (cmd->flag << 16) | (cmd->
-							    addr[1] << 8) |
+				       (cmd->flag << 16) | (cmd->addr[1] << 8) |
 				       cmd->addr[0], cmd->data, cmd->data_len);
 		if (ret) {
 			cts_err("Write program mode multibyte failed %d", ret);
@@ -564,11 +612,117 @@ static ssize_t cts_tool_write(struct file *file,
 	return ret ? 0 : cmd->data_len + CTS_TOOL_CMD_HEADER_LENGTH;
 }
 
+static long cts_tool_ioctl(struct file *file, unsigned int cmd,
+			   unsigned long arg)
+{
+	struct chipone_ts_data *cts_data;
+	struct cts_device *cts_dev;
+
+	cts_info("ioctl, cmd=0x%04x, arg=0x%02lx", cmd, arg);
+
+	cts_data = file->private_data;
+	if (cts_data == NULL) {
+		cts_err("IOCTL with private data = NULL");
+		return -EFAULT;
+	}
+
+	cts_dev = &cts_data->cts_dev;
+
+	switch (cmd) {
+	case CTS_TOOL_IOCTL_GET_DRIVER_VERSION:
+		return put_user(CTS_DRIVER_VERSION_CODE,
+				(unsigned int __user *)arg);
+	case CTS_TOOL_IOCTL_GET_DEVICE_TYPE:
+		return put_user(cts_dev->hwdata->hwid,
+				(unsigned int __user *)arg);
+	case CTS_TOOL_IOCTL_GET_FW_VERSION:
+		return put_user(cts_dev->fwdata.version,
+				(unsigned short __user *)arg);
+
+	case CTS_TOOL_IOCTL_TEST_RESET_PIN:{
+			return cts_reset_test(cts_dev);
+		}
+	case CTS_TOOL_IOCTL_TEST_INT_PIN:{
+			return cts_test_int_pin(cts_dev);
+		}
+	case CTS_TOOL_IOCTL_TEST_DEVICE_TYPE:{
+			if (cts_dev->hwdata->hwid == (u32) arg) {
+				return 0;
+			}
+			return -EINVAL;
+		}
+	case CTS_TOOL_IOCTL_TEST_FW_VERSION:{
+			if (cts_dev->fwdata.version == (u16) arg) {
+				return 0;
+			}
+			return -EINVAL;
+		}
+	case CTS_TOOL_IOCTL_TEST_RAWDATA:{
+			struct cts_test_rawdata_ioctl_data param;
+
+			if (copy_from_user(&param,
+					   (struct cts_test_rawdata_ioctl_data
+					    __user *)arg, sizeof(param)))
+				return -EFAULT;
+
+			return cts_rawdata_test(cts_dev, param.min, param.max);
+		}
+	case CTS_TOOL_IOCTL_TEST_NOISE:{
+			struct cts_test_noise_ioctl_data param;
+
+			if (copy_from_user(&param,
+					   (struct cts_test_noise_ioctl_data
+					    __user *)arg, sizeof(param)))
+				return -EFAULT;
+
+			return cts_noise_test(cts_dev, param.frames, param.max);
+		}
+	case CTS_TOOL_IOCTL_TEST_OPEN:{
+			struct cts_test_open_ioctl_data param;
+
+			if (copy_from_user(&param,
+					   (struct cts_test_open_ioctl_data
+					    __user *)arg, sizeof(param)))
+				return -EFAULT;
+
+			return cts_open_test(cts_dev, param.max);
+		}
+	case CTS_TOOL_IOCTL_TEST_SHORT:{
+			struct cts_test_short_ioctl_data param;
+
+			if (copy_from_user(&param,
+					   (struct cts_test_short_ioctl_data
+					    __user *)arg, sizeof(param)))
+				return -EFAULT;
+
+			return cts_short_test(cts_dev, param.max);
+		}
+	case CTS_TOOL_IOCTL_TEST_COMP_CAP:{
+			struct cts_test_comp_cap_ioctl_data param;
+
+			if (copy_from_user(&param,
+					   (struct cts_test_comp_cap_ioctl_data
+					    __user *)arg, sizeof(param)))
+				return -EFAULT;
+
+			return cts_compensate_cap_test(cts_dev, param.min,
+						       param.max);
+		}
+
+	default:
+		break;
+	}
+
+	return -ENOTSUPP;
+}
+
 static struct file_operations cts_tool_fops = {
 	.owner = THIS_MODULE,
+	.llseek = no_llseek,
 	.open = cts_tool_open,
 	.read = cts_tool_read,
 	.write = cts_tool_write,
+	.unlocked_ioctl = cts_tool_ioctl,
 };
 
 int cts_tool_init(struct chipone_ts_data *cts_data)
@@ -576,7 +730,7 @@ int cts_tool_init(struct chipone_ts_data *cts_data)
 	cts_info("Init");
 
 	cts_data->procfs_entry = proc_create_data(CFG_CTS_TOOL_PROC_FILENAME,
-						  0660, NULL, &cts_tool_fops,
+						  0666, NULL, &cts_tool_fops,
 						  cts_data);
 	if (cts_data->procfs_entry == NULL) {
 		cts_err("Create proc entry failed");

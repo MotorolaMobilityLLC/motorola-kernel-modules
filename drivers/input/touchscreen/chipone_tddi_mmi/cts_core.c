@@ -1321,14 +1321,14 @@ int cts_get_rawdata(const struct cts_device *cts_dev, void *buf)
 		ret = cts_get_data_ready_flag(cts_dev, &ready);
 		if (ret) {
 			cts_err("Get data ready flag failed %d", ret);
-			goto get_raw_exit;
+			continue;
 		}
 		if (ready) {
 			break;
 		}
 	}
 	if (i == 1000) {
-		ret = -ENODEV;
+		ret = -EIO;
 		goto get_raw_exit;
 	}
 	do {
@@ -1343,10 +1343,25 @@ int cts_get_rawdata(const struct cts_device *cts_dev, void *buf)
 		}
 	} while (--retries > 0 && ret != 0);
 
-	if (cts_clr_data_ready_flag(cts_dev)) {
+    for (i = 0; i < 5; i++) {
+	int r;
+	r = cts_clr_data_ready_flag(cts_dev);
+	if (r != 0) {
 		cts_err("Clear data ready flag failed");
-		ret = -ENODEV;
+		ret = -EIO;
+		continue;
 	}
+	r = cts_get_data_ready_flag(cts_dev, &ready);
+	if (r != 0) {
+		cts_err("Clear data ready flag failed");
+		ret = -EIO;
+		continue;
+	}
+	if (ready == 0) {
+		break;
+	}
+    }
+
 get_raw_exit:
 	return ret;
 }
@@ -1847,6 +1862,10 @@ int cts_suspend_device(struct cts_device *cts_dev)
 		return ret;
 	}
 
+#ifdef CFG_CTS_HAS_RESET_PIN
+	//cts_plat_set_reset(cts_dev->pdata, 0);
+#endif
+
 	cts_info("Device suspended ...");
 	cts_dev->rtdata.suspended = true;
 
@@ -2169,6 +2188,14 @@ int cts_stop_device(struct cts_device *cts_dev)
 	cts_disable_esd_protection(cts_data);
 #endif /* CONFIG_CTS_ESD_PROTECTION */
 
+    if (work_pending(&cts_data->pdata->ts_irq_work)) {
+	cts_warn("IRQ work is pending .... flush it");
+	flush_work(&cts_data->pdata->ts_irq_work);
+    } else {
+	cts_info("None IRQ work is pending");
+    }
+
+    cts_info("Flush workqueue...");
 	flush_workqueue(cts_data->workqueue);
 
 	ret = cts_plat_release_all_touch(cts_dev->pdata);
