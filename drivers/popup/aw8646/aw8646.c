@@ -22,15 +22,21 @@
 #include <uapi/linux/sched/types.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
+#include <linux/clk.h>
+#include <linux/clk-provider.h>
 
 #define DEFAULT_STEP_FREQ 2400
 #define MOTOR_CLASS_NAME  "aw8646"
 #define MOTOR_CONTROL  "control"
+#define MOTOR_DEFAULT_EXPIRE 750 //750ms clock time.
+#define MOTOR_HW_CLK         9600 //9.6KHz clock
+#define MOTOR_HW_CLK_NAME "gcc_gp3"
 
 enum gpios_index {
     MOTOR_POWER_EN = 0,
     MOTOR_FAULT_INT,
     MOTOR_STEP,
+    MOTOR_HW_STEP,
     MOTOR_DIR,
     MOTOR_MODE1,
     MOTOR_MODE2,
@@ -45,6 +51,7 @@ static const char* const gpios_labels[] = {
     "MOTOR_POWER_EN",
     "MOTOR_FAULT_INT",
     "MOTOR_STEP",
+    "MOTOR_HW_STEP",
     "MOTOR_DIR",
     "MOTOR_MODE1",
     "MOTOR_MODE2",
@@ -57,6 +64,18 @@ static const char* const gpios_labels[] = {
 
 static const int def_gpios_table[] = {
     116, 41, 122, 37, 47, 49, 26, 85, 36, 27
+};
+
+static const unsigned long hw_clocks[] = {
+    DEFAULT_STEP_FREQ,      //0,0        software clock
+    4800,                   //0,Z        2*2400
+    9600,                   //0,1        4*2400
+    19200,                  //Z,0        8*2400
+    9600,                   //Z,Z        4*2400
+    38400,                  //Z,1        16*2400
+    19200,                  //1,0        8*2400
+    76800,                  //1,Z        32*2400
+    38400,                  //1,1        16*2400
 };
 
 enum motor_step_mode {
@@ -98,6 +117,8 @@ enum motor_pins_mode {
     T1_HIGH,
     T1_DISABLE,
     INT_DEFAULT,
+    CLK_ACTIVE,
+    CLK_SLEEP,
     PINS_END
 };
 
@@ -108,6 +129,7 @@ static const char* const pins_state[] = {
     "t0_low", "t0_high", "t0_disable",
     "t1_low", "t1_high", "t1_disable",
     "aw8646_int_default",
+    "aw8646_clk_active", "aw8646_clk_sleep",
     NULL
 };
 
@@ -126,11 +148,11 @@ typedef struct motor_device {
     struct device*  sysfs_dev;
     struct class*   aw8646_class;
     struct workqueue_struct* motor_wq;
-    //struct work_struct motor_work;
+    struct clk * pwm_clk;
     struct work_struct motor_irq_work;
     struct task_struct *motor_task;
     wait_queue_head_t sync_complete;
-    struct hrtimer step_timer, stepping_timer;
+    struct hrtimer stepping_timer;
     motor_control mc;
     spinlock_t mlock;
     struct mutex mx_lock;
@@ -139,13 +161,15 @@ typedef struct motor_device {
     unsigned step_freq;
     unsigned long step_period;
     unsigned long step_ceiling;
+    unsigned long cur_clk;
     atomic_t step_count;
     atomic_t stepping;
-    unsigned mode;
+    unsigned mode, cur_mode;
     unsigned torque;
     unsigned time_out;
     unsigned half;
     bool     double_edge;
+    bool     hw_clock;
     int      level:1;
     unsigned power_en:1;
     unsigned nsleep:1;
@@ -154,7 +178,7 @@ typedef struct motor_device {
     unsigned user_sync_complete:1;
 }motor_device;
 
-ktime_t adapt_time_helper(ktime_t usec)
+static ktime_t adapt_time_helper(ktime_t usec)
 {
     ktime_t ret;
 
@@ -167,6 +191,11 @@ ktime_t adapt_time_helper(ktime_t usec)
     }
 
     return ret;
+}
+
+static inline bool is_hw_clk(motor_device* md)
+{
+    return (md->hw_clock && (md->cur_clk != hw_clocks[0]));
 }
 
 void sleep_helper(unsigned usec)
@@ -238,6 +267,52 @@ exit:
     return err;
 }
 
+static int set_motor_clk(motor_device* md, unsigned long clk)
+{
+    int ret = 0;
+
+    if(clk == md->cur_clk) {
+        return 0;
+    }
+
+    ret = clk_set_rate(md->pwm_clk, clk);
+    if(ret < 0) {
+        dev_err(md->dev, "Failed to set clk rate to %ld\n", clk);
+        ret = -ENODEV;
+        goto soft_clk;
+    }
+    ret = clk_prepare_enable(md->pwm_clk);
+    if(ret < 0) {
+        dev_err(md->dev, "Failed to clk_prepare_enable\n");
+        ret = -ENODEV;
+        goto soft_clk;
+    }
+
+    md->cur_clk = clk;
+
+    return 0;
+
+soft_clk:
+    md->hw_clock = false;
+    return ret;
+}
+
+static int init_motor_clk(motor_device* md)
+{
+    int ret = 0;
+
+    md->pwm_clk = devm_clk_get(md->dev, MOTOR_HW_CLK_NAME);
+    if(IS_ERR(md->pwm_clk)) {
+        dev_err(md->dev, "Get clk error, motor is not drived\n");
+        ret = -ENODEV;
+        goto soft_clk;
+    }
+
+    return 0;
+soft_clk:
+    md->hw_clock = false;
+    return ret;
+}
 
 static int set_pinctrl_state(motor_device* md, unsigned state_index)
 {
@@ -357,84 +432,64 @@ static void moto_aw8646_set_motor_torque(motor_device* md)
 
 static void moto_aw8646_set_motor_mode(motor_device* md)
 {
-    //motor_control* mc = &md->mc;
-
     switch(md->mode) {
         case FULL_STEP:
             set_pinctrl_state(md, MODE0_LOW);
             set_pinctrl_state(md, MODE1_LOW);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_LOW]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_LOW]);
-            //gpio_direction_output(md->mc.ptable[MOTOR_MODE1], 0);
-            //gpio_direction_output(md->mc.ptable[MOTOR_MODE2], 0);
             break;
         case STEP_2_RISING:
             set_pinctrl_state(md, MODE0_DISABLE);
             set_pinctrl_state(md, MODE1_LOW);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_LOW]);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE1], 0);
-            //gpio_direction_input(mc->ptable[MOTOR_MODE2]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_DISABLE]);
             break;
         case STEP_4_RISING:
             set_pinctrl_state(md, MODE0_HIGH);
             set_pinctrl_state(md, MODE1_LOW);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_LOW]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_HIGH]);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE1], 0);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE2], 1);
             break;
         case STEP_8_RISING:
             set_pinctrl_state(md, MODE0_LOW);
             set_pinctrl_state(md, MODE1_DISABLE);
-            //gpio_direction_input(mc->ptable[MOTOR_MODE1]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_DISABLE]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_LOW]);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE2], 0);
             break;
         case STEP_8_BOTH_EDEG:
             set_pinctrl_state(md, MODE0_DISABLE);
             set_pinctrl_state(md, MODE1_DISABLE);
-            //gpio_direction_input(mc->ptable[MOTOR_MODE1]);
-            //gpio_direction_input(mc->ptable[MOTOR_MODE2]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_DISABLE]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_DISABLE]);
             break;
         case STEP_16_RISING:
             set_pinctrl_state(md, MODE0_HIGH);
             set_pinctrl_state(md, MODE1_DISABLE);
-            //gpio_direction_input(mc->ptable[MOTOR_MODE1]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_DISABLE]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_HIGH]);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE2], 1);
             break;
         case STEP_16_BOTH_EDGE:
             set_pinctrl_state(md, MODE0_LOW);
             set_pinctrl_state(md, MODE1_HIGH);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_HIGH]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_LOW]);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE1], 1);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE2], 0);
             break;
         case STEP_32_RISING:
             set_pinctrl_state(md, MODE0_DISABLE);
             set_pinctrl_state(md, MODE1_HIGH);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_LOW]);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE1], 0);
-            //gpio_direction_input(mc->ptable[MOTOR_MODE2]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_DISABLE]);
             break;
         case STEP_32_BOTH_EDEG:
             set_pinctrl_state(md, MODE0_HIGH);
             set_pinctrl_state(md, MODE1_HIGH);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE0_HIGH]);
-            //pinctrl_select_state(mc->pins, mc->pin_state[MODE1_HIGH]);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE1], 1);
-            //gpio_direction_output(mc->ptable[MOTOR_MODE2], 1);
             break;
         default:
             pr_err("Don't supported mode\n");
             return;
+    }
+
+    if(md->cur_mode != md->mode) {
+        if(md->hw_clock) {
+            if(__clk_is_enabled(md->pwm_clk)) {
+                clk_disable_unprepare(md->pwm_clk);
+                dev_info(md->dev, "disable clock");
+            }
+
+            if(md->mode == FULL_STEP) {
+                md->cur_clk = hw_clocks[md->mode];
+                //gpio_direction_output(md->mc.ptable[MOTOR_HW_STEP], 0);
+            } else {
+                gpio_direction_output(md->mc.ptable[MOTOR_STEP], 0);
+                set_motor_clk(md, hw_clocks[md->mode]);
+            }
+        }
+        md->cur_mode = md->mode;
     }
     usleep_range(800, 900);
 }
@@ -494,7 +549,7 @@ static void moto_aw8646_set_power_en(motor_device* md)
 
     gpio_direction_output(mc->ptable[MOTOR_POWER_EN], md->power_en);
     //Tpower 0.5ms
-    //usleep_range(500, 1000);
+    usleep_range(500, 1000);
 }
 
 //Power sequence: PowerEn On->nSleep On->nSleep Off->PowerEn Off
@@ -528,9 +583,13 @@ exit:
     return ret;
 }
 
+static int moto_aw8646_enable_clk(motor_device* md, bool en)
+{
+    return set_pinctrl_state(md, en ? CLK_ACTIVE : CLK_SLEEP);
+}
+
 static int moto_aw8646_drive_sequencer(motor_device* md)
 {
-    motor_control* mc = &md->mc;
     unsigned long flags;
 
     atomic_set(&md->stepping, 1);
@@ -550,55 +609,26 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
     moto_aw8646_set_motor_torque(md);
     moto_aw8646_set_motor_dir(md);
     moto_aw8646_set_motor_mode(md);
-
     moto_aw8646_set_motor_opmode(md);
 
     if(atomic_read(&md->stepping)) {
         sysfs_notify(&md->dev->kobj, NULL, "status");
-        gpio_direction_output(mc->ptable[MOTOR_STEP], md->level);
-        atomic_inc(&md->step_count);
-        dev_info(md->dev, "advance the motor half of period %d, %lld\n", md->half, adapt_time_helper(md->half));
-        hrtimer_start(&md->stepping_timer, adapt_time_helper(md->half), HRTIMER_MODE_REL);
-    }
-#if 0
-    //disable_irq(md->fault_irq);
-    if(atomic_read(&md->stepping)) {
-        dev_info(md->dev, "advance the motor half of period %ld\n", half);
-        sysfs_notify(&md->dev->kobj, NULL, "status");
-        do {
-            gpio_direction_output(mc->ptable[MOTOR_STEP], 1);
-            sleep_helper(half);
+        if(is_hw_clk(md)) {
+            moto_aw8646_enable_clk(md, true);
+            hrtimer_start(&md->stepping_timer, ms_to_ktime(md->time_out), HRTIMER_MODE_REL);
+            dev_info(md->dev, "driver hw clock\n");
+        } else {
+            motor_control* mc = &md->mc;
+            gpio_direction_output(mc->ptable[MOTOR_STEP], md->level);
             atomic_inc(&md->step_count);
-            gpio_direction_output(mc->ptable[MOTOR_STEP], 0);
-            sleep_helper(half);
-
-            if(double_edge) {
-                atomic_inc(&md->step_count);
-            }
-
-            if(md->step_ceiling && atomic_read(&md->step_count) >= md->step_ceiling) {
-                atomic_set(&md->step_count, 0);
-                atomic_set(&md->stepping, 0);
-                moto_aw8646_set_power(md, 0);
-                break;
-            }
-        } while(atomic_read(&md->stepping));
-        sysfs_notify(&md->dev->kobj, NULL, "status");
+            hrtimer_start(&md->stepping_timer, adapt_time_helper(md->half), HRTIMER_MODE_REL);
+            dev_info(md->dev, "advance the motor half of period %d, %lld\n",
+                md->half, adapt_time_helper(md->half));
+        }
     }
-    //enable_irq(md->fault_irq);
-#endif
 
     return 0;
 }
-
-#if 0
-static void advance_motor_work(struct work_struct *work)
-{
-    motor_device* md = container_of(work, motor_device, motor_work);
-
-    moto_aw8646_drive_sequencer(md);
-}
-#endif
 
 static __ref int motor_kthread(void *arg)
 {
@@ -618,10 +648,11 @@ static __ref int motor_kthread(void *arg)
         }
 
         md->user_sync_complete = false;
+        if(is_hw_clk(md)) {
+            moto_aw8646_enable_clk(md, false);
+        }
         moto_aw8646_set_power(md, 0);
         sysfs_notify(&md->dev->kobj, NULL, "status");
-
-        //moto_aw8646_drive_sequencer(md);
     }
 
     return 0;
@@ -637,16 +668,14 @@ static int disable_motor(struct device* dev)
         atomic_set(&md->stepping, 0);
         atomic_set(&md->step_count, 0);
 
-        time_rem = hrtimer_get_remaining(&md->step_timer);
-        if(ktime_to_us(time_rem) > 0) {
-            hrtimer_try_to_cancel(&md->step_timer);
-        }
-
         time_rem = hrtimer_get_remaining(&md->stepping_timer);
         if(ktime_to_us(time_rem) > 0) {
             hrtimer_try_to_cancel(&md->stepping_timer);
         }
-        //ret = cancel_work_sync(&md->motor_work);
+
+        if(is_hw_clk(md)) {
+            moto_aw8646_enable_clk(md, false);
+        }
     }
 
     return ret;
@@ -661,69 +690,56 @@ static int motor_set_enable(struct device* dev, bool enable)
     }
 
     if(enable) {
-        if(md->time_out) {
-            ktime_t time_out = ms_to_ktime(md->time_out);
-            hrtimer_start(&md->step_timer, time_out, HRTIMER_MODE_REL);
-        }
-        //md->user_sync_complete = true;
-
-        moto_aw8646_drive_sequencer(md);
-        //wake_up(&md->sync_complete);
-        //queue_work(md->motor_wq, &md->motor_work);
+       moto_aw8646_drive_sequencer(md);
     }
 
     return 0;
-}
-
-static enum hrtimer_restart motor_timer_action(struct hrtimer *h)
-{
-    motor_device * md = container_of(h, motor_device, step_timer);
-
-    disable_motor(md->dev);
-    dev_info(md->dev, "Stop motor, timer is out\n");
-
-    return HRTIMER_NORESTART;
 }
 
 static enum hrtimer_restart motor_stepping_timer_action(struct hrtimer *h)
 {
     motor_device * md = container_of(h, motor_device, stepping_timer);
     unsigned long flags;
-    enum hrtimer_restart ret = HRTIMER_RESTART;
+    enum hrtimer_restart ret;
 
     spin_lock_irqsave(&md->mlock, flags);
-
-    if(!atomic_read(&md->stepping)) {
-        if(md->power_en) {
-            md->user_sync_complete = true;
-            wake_up(&md->sync_complete);
-        }
-        gpio_direction_output(md->mc.ptable[MOTOR_STEP], 0);
-        spin_unlock_irqrestore(&md->mlock, flags);
-        return HRTIMER_NORESTART;;
-    }
-
-    md->level = !md->level;
-    gpio_direction_output(md->mc.ptable[MOTOR_STEP], md->level);
-
-    if(md->double_edge) {
-        atomic_inc(&md->step_count);
-    } else if(md->level) {
-        atomic_inc(&md->step_count);
-    }
-
-    if(md->step_ceiling && atomic_read(&md->step_count) >= md->step_ceiling) {
-        atomic_set(&md->step_count, 0);
-        atomic_set(&md->stepping, 0);
+    if(is_hw_clk(md)) {
+        ret = HRTIMER_NORESTART;
         md->user_sync_complete = true;
         wake_up(&md->sync_complete);
-        ret = HRTIMER_NORESTART;;
+        atomic_set(&md->stepping, 0);
     } else {
-        hrtimer_forward_now(h, adapt_time_helper(md->half));
+        ret = HRTIMER_RESTART;
+        if(!atomic_read(&md->stepping)) {
+            if(md->power_en) {
+                md->user_sync_complete = true;
+                wake_up(&md->sync_complete);
+            }
+            gpio_direction_output(md->mc.ptable[MOTOR_STEP], 0);
+            spin_unlock_irqrestore(&md->mlock, flags);
+            return HRTIMER_NORESTART;;
+        }
+
+        md->level = !md->level;
+        gpio_direction_output(md->mc.ptable[MOTOR_STEP], md->level);
+
+        if(md->double_edge) {
+            atomic_inc(&md->step_count);
+        } else if(md->level) {
+            atomic_inc(&md->step_count);
+        }
+
+        if(md->step_ceiling && atomic_read(&md->step_count) >= md->step_ceiling) {
+            atomic_set(&md->step_count, 0);
+            atomic_set(&md->stepping, 0);
+            md->user_sync_complete = true;
+            wake_up(&md->sync_complete);
+            ret = HRTIMER_NORESTART;;
+        } else {
+            hrtimer_forward_now(h, adapt_time_helper(md->half));
+        }
     }
-
     spin_unlock_irqrestore(&md->mlock, flags);
-
     return ret;
 }
 
@@ -1191,6 +1207,9 @@ static int moto_aw8646_init_from_dt(motor_device* md)
         goto exit;
     }
 
+    md->hw_clock = of_property_read_bool(np, "enable-hw-clock");
+    dev_info(pdev, "Enable hw clock %d\n", md->hw_clock);
+
 exit:
     return rc;
 }
@@ -1245,6 +1264,7 @@ static int moto_aw8646_probe(struct platform_device *pdev)
     mutex_init(&md->mx_lock);
     platform_set_drvdata(pdev, md);
     moto_aw8646_set_step_freq(md, DEFAULT_STEP_FREQ);
+    md->time_out = MOTOR_DEFAULT_EXPIRE;
 
     if(moto_aw8646_init_from_dt(md)) {
         memcpy((void*)md->mc.ptable, def_gpios_table, sizeof(def_gpios_table));
@@ -1268,7 +1288,6 @@ static int moto_aw8646_probe(struct platform_device *pdev)
         dev_err(dev, "Out of memory for work queue\n");
         goto failed_mem;
     }
-    //INIT_WORK(&md->motor_work, advance_motor_work);
     INIT_WORK(&md->motor_irq_work, motor_fault_work);
 
     md->user_sync_complete = false;
@@ -1280,8 +1299,6 @@ static int moto_aw8646_probe(struct platform_device *pdev)
         goto failed_work;
     }
 
-    hrtimer_init(&md->step_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-    md->step_timer.function = motor_timer_action;
     hrtimer_init(&md->stepping_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
     md->stepping_timer.function = motor_stepping_timer_action;
 
@@ -1302,6 +1319,16 @@ static int moto_aw8646_probe(struct platform_device *pdev)
     if(sysfs_create_group(&md->dev->kobj, &status_attribute_group)) {
         dev_err(dev, "Failed to create status attribute");
         goto failed_device;
+    }
+
+    if(md->hw_clock) {
+        if(init_motor_clk(md) < 0) {
+            //Should get this gpio from DTB
+            dev_err(dev, "HW clock is not setup\n");
+        } else {
+            md->cur_clk = hw_clocks[0];
+            dev_info(dev, "HW clock is setup\n");
+        }
     }
 
     do {
@@ -1363,6 +1390,9 @@ static int moto_aw8646_remove(struct platform_device *pdev)
     sysfs_remove_group(&md->dev->kobj, &status_attribute_group);
     disable_motor(md->dev);
     kthread_stop(md->motor_task);
+    if(is_hw_clk(md) && __clk_is_enabled(md->pwm_clk)) {
+        clk_disable_unprepare(md->pwm_clk);
+    }
     destroy_workqueue(md->motor_wq);
     kfree(md);
 
