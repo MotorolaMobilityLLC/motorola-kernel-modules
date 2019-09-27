@@ -2092,6 +2092,38 @@ static int fg_select_external_temp(struct bq_fg_chip *bq)
 }
 EXPORT_SYMBOL_GPL(fg_select_external_temp);
 
+static int fg_dodateoc_delta_t(struct bq_fg_chip *bq)
+{
+	int ret;
+	u8 rd_buf[64];
+
+	memset(rd_buf, 0, 64);
+	mutex_lock(&bq->update_lock);
+	ret = fg_dm_enter_cfg_mode(bq);
+	if (ret) {
+		mutex_unlock(&bq->update_lock);
+		return ret;
+	}
+
+	ret = fg_dm_read_block(bq, 36, 7, rd_buf);
+	if (ret) {
+		fg_dm_exit_cfg_mode(bq);
+		mutex_unlock(&bq->update_lock);
+		return ret;
+	}
+
+	rd_buf[7] = 0x00;
+	rd_buf[8] = 0x0A;
+
+	ret = fg_dm_write_block(bq, 36, 7, rd_buf);
+
+	fg_dm_exit_cfg_mode(bq);
+
+	mutex_unlock(&bq->update_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(fg_dodateoc_delta_t);
+
 static void fg_update_bqfs_workfunc(struct work_struct *work)
 {
 	struct bq_fg_chip *bq = container_of(work,
@@ -2213,6 +2245,7 @@ static void determine_initial_status(struct bq_fg_chip *bq)
 	fg_update_bqfs(bq);
 	fg_select_external_temp(bq);
 	fg_set_term_curr(bq, 500);
+	fg_dodateoc_delta_t(bq);
 	fg_irq_thread(bq->client->irq, bq);
 	bq->device_initial = true;
 	pr_info("Device initialization successfully completed!\n");
