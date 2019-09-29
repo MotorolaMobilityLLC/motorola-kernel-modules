@@ -119,6 +119,8 @@ enum motor_pins_mode {
     INT_DEFAULT,
     CLK_ACTIVE,
     CLK_SLEEP,
+    SW_CLK_ACTIVE,
+    SW_CLK_DISABLE,
     PINS_END
 };
 
@@ -130,6 +132,7 @@ static const char* const pins_state[] = {
     "t1_low", "t1_high", "t1_disable",
     "aw8646_int_default",
     "aw8646_clk_active", "aw8646_clk_sleep",
+    "aw8646_sw_clk_active", "aw8646_sw_clk_disable",
     NULL
 };
 
@@ -177,6 +180,8 @@ typedef struct motor_device {
     unsigned dir:1;
     unsigned user_sync_complete:1;
 }motor_device;
+
+static int set_pinctrl_state(motor_device* md, unsigned state_index);
 
 static ktime_t adapt_time_helper(ktime_t usec)
 {
@@ -267,28 +272,29 @@ exit:
     return err;
 }
 
-static int set_motor_clk(motor_device* md, unsigned long clk)
+static int set_motor_clk(motor_device* md, bool en)
 {
     int ret = 0;
 
-    if(clk == md->cur_clk) {
-        return 0;
+    if(en) {
+        set_pinctrl_state(md, CLK_ACTIVE);
+        ret = clk_set_rate(md->pwm_clk, md->cur_clk);
+        if(ret < 0) {
+            dev_err(md->dev, "Failed to set clk rate to %ld\n", md->cur_clk);
+            ret = -ENODEV;
+            goto soft_clk;
+        }
+        ret = clk_prepare_enable(md->pwm_clk);
+        if(ret < 0) {
+            dev_err(md->dev, "Failed to clk_prepare_enable\n");
+            ret = -ENODEV;
+            goto soft_clk;
+        }
+    } else {
+        clk_disable_unprepare(md->pwm_clk);
+        dev_info(md->dev, "disable clock");
+        set_pinctrl_state(md, CLK_SLEEP);
     }
-
-    ret = clk_set_rate(md->pwm_clk, clk);
-    if(ret < 0) {
-        dev_err(md->dev, "Failed to set clk rate to %ld\n", clk);
-        ret = -ENODEV;
-        goto soft_clk;
-    }
-    ret = clk_prepare_enable(md->pwm_clk);
-    if(ret < 0) {
-        dev_err(md->dev, "Failed to clk_prepare_enable\n");
-        ret = -ENODEV;
-        goto soft_clk;
-    }
-
-    md->cur_clk = clk;
 
     return 0;
 
@@ -476,17 +482,18 @@ static void moto_aw8646_set_motor_mode(motor_device* md)
 
     if(md->cur_mode != md->mode) {
         if(md->hw_clock) {
-            if(__clk_is_enabled(md->pwm_clk)) {
-                clk_disable_unprepare(md->pwm_clk);
-                dev_info(md->dev, "disable clock");
-            }
-
             if(md->mode == FULL_STEP) {
                 md->cur_clk = hw_clocks[md->mode];
-                //gpio_direction_output(md->mc.ptable[MOTOR_HW_STEP], 0);
+                set_pinctrl_state(md, CLK_SLEEP);
+                set_pinctrl_state(md, SW_CLK_ACTIVE);
+                dev_info(md->dev, "md->mode is FULL_STEP\n");
             } else {
-                gpio_direction_output(md->mc.ptable[MOTOR_STEP], 0);
-                set_motor_clk(md, hw_clocks[md->mode]);
+                //Only set software clk once.
+                if(md->cur_mode == FULL_STEP) {
+                    set_pinctrl_state(md, SW_CLK_DISABLE);
+                }
+                md->cur_clk = hw_clocks[md->mode];
+                dev_info(md->dev, "Switch hw clock\n");
             }
         }
         md->cur_mode = md->mode;
@@ -585,7 +592,7 @@ exit:
 
 static int moto_aw8646_enable_clk(motor_device* md, bool en)
 {
-    return set_pinctrl_state(md, en ? CLK_ACTIVE : CLK_SLEEP);
+    return set_motor_clk(md, en);
 }
 
 static int moto_aw8646_drive_sequencer(motor_device* md)
@@ -1330,6 +1337,9 @@ static int moto_aw8646_probe(struct platform_device *pdev)
             dev_info(dev, "HW clock is setup\n");
         }
     }
+    //Init software clock pin.
+    set_pinctrl_state(md, CLK_SLEEP);
+    set_pinctrl_state(md, SW_CLK_ACTIVE);
 
     do {
         ret = devm_gpio_request(dev, md->mc.ptable[i], gpios_labels[i]);
