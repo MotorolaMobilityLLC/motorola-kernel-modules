@@ -171,6 +171,7 @@ typedef struct motor_device {
     unsigned torque;
     unsigned time_out;
     unsigned half;
+    unsigned position;
     bool     double_edge;
     bool     hw_clock;
     int      level:1;
@@ -1135,6 +1136,25 @@ exit:
     return len;
 }
 
+static ssize_t motor_position_store(struct device *dev, struct device_attribute *attr,
+        const char *buf, size_t len)
+{
+    motor_device* md = (motor_device*)dev_get_drvdata(dev);
+    unsigned long flags;
+    unsigned value = 0;
+
+    spin_lock_irqsave(&md->mlock, flags);
+    if(kstrtouint(buf, 10, &value)) {
+        dev_err(dev, "Error value: %s\n", buf);
+        goto exit;
+    }
+    md->position = !!value;
+exit:
+    spin_unlock_irqrestore(&md->mlock, flags);
+
+    return len;
+}
+
 static DEVICE_ATTR(enable, S_IRUGO|S_IWUSR|S_IWGRP, motor_enable_show, motor_enable_store);
 static DEVICE_ATTR(dir,    S_IRUGO|S_IWUSR|S_IWGRP, motor_dir_show, motor_dir_store);
 static DEVICE_ATTR(step,   S_IRUGO|S_IWUSR|S_IWGRP, motor_step_show, motor_step_store);
@@ -1143,6 +1163,7 @@ static DEVICE_ATTR(mode,   S_IRUGO|S_IWUSR|S_IWGRP, motor_mode_show, motor_mode_
 static DEVICE_ATTR(torque, S_IRUGO|S_IWUSR|S_IWGRP, motor_torque_show, motor_torque_store);
 static DEVICE_ATTR(time_out, S_IRUGO|S_IWUSR|S_IWGRP, motor_time_out_show, motor_time_out_store);
 static DEVICE_ATTR(reset,  S_IRUGO|S_IWUSR|S_IWGRP, NULL, motor_reset_store);
+static DEVICE_ATTR(position,  S_IRUGO|S_IWUSR|S_IWGRP, NULL, motor_position_store);
 
 static struct attribute *motor_attributes[] = {
     &dev_attr_dir.attr,
@@ -1153,6 +1174,7 @@ static struct attribute *motor_attributes[] = {
     &dev_attr_torque.attr,
     &dev_attr_time_out.attr,
     &dev_attr_reset.attr,
+    &dev_attr_position.attr,
     NULL
 };
 
@@ -1409,6 +1431,20 @@ static int moto_aw8646_remove(struct platform_device *pdev)
     return 0;
 }
 
+void moto_aw8646_platform_shutdown(struct platform_device *pdev)
+{
+    motor_device* md = (motor_device*)platform_get_drvdata(pdev);
+
+    if(md->position) {
+        md->dir = 1;
+        moto_aw8646_set_motor_dir(md);
+        md->power_en = 0;
+        moto_aw8646_set_power(md, 1);
+        motor_set_enable(md->dev, true);
+    }
+    msleep(800);
+}
+
 static const struct of_device_id moto_aw8646_match_table[] = {
 	{.compatible = "moto,aw8646"},
 	{},
@@ -1418,6 +1454,7 @@ MODULE_DEVICE_TABLE(of, moto_aw8646_match_table);
 static struct platform_driver moto_aw8646_driver = {
 	.probe = moto_aw8646_probe,
 	.remove = moto_aw8646_remove,
+	.shutdown = moto_aw8646_platform_shutdown,
 	.driver = {
 		.name = "moto,aw8646",
 		.owner = THIS_MODULE,
