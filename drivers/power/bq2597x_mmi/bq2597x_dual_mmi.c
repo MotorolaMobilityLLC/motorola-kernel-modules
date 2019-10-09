@@ -230,6 +230,7 @@ struct bq2597x {
 	bool irq_waiting;
 	bool irq_disabled;
 	bool resume_completed;
+	int irq_counts;
 
 	bool batt_present;
 	bool vbus_present;
@@ -1804,6 +1805,7 @@ static enum power_supply_property bq2597x_charger_props[] = {
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
+	POWER_SUPPLY_PROP_CP_IRQ_STATUS,
 };
 
 static void bq2597x_check_alarm_status(struct bq2597x *bq);
@@ -1853,6 +1855,9 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 			bq->ibus_curr = result;
 
 		val->intval = bq->ibus_curr;
+		break;
+	case POWER_SUPPLY_PROP_CP_IRQ_STATUS:
+		val->intval = bq->irq_counts;
 		break;
 	case POWER_SUPPLY_PROP_STATUS:
 //		bq2597x_check_alarm_status(bq);
@@ -2185,6 +2190,10 @@ static irqreturn_t bq2597x_charger_interrupt(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 	bq->irq_waiting = false;
+	if (bq->irq_counts > INT_MAX -1)
+		bq->irq_counts = 0;
+	else
+		bq->irq_counts++;
 
 	mdelay(5);
 if (1) {
