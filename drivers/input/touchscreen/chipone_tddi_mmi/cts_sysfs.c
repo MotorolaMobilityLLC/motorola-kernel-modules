@@ -2175,6 +2175,128 @@ static const struct attribute_group *cts_dev_attr_groups[] = {
 	NULL
 };
 
+#include <linux/major.h>
+#include <linux/kdev_t.h>
+
+/* Attribute: path (RO) */
+static ssize_t path_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct chipone_ts_data *data = dev_get_drvdata(dev);
+	ssize_t blen;
+	const char *path;
+
+	if (!data) {
+		pr_err("cannot get chipone_ts_data pointer\n");
+		return (ssize_t)0;
+	}
+#ifdef CONFIG_CTS_I2C_HOST
+	path = kobject_get_path(&data->i2c_client->dev.kobj, GFP_KERNEL);
+#else
+	path = kobject_get_path(&data->spi_client->dev.kobj, GFP_KERNEL);
+#endif
+	blen = scnprintf(buf, PAGE_SIZE, "%s", path ? path : "na");
+	kfree(path);
+	return blen;
+}
+
+/* Attribute: vendor (RO) */
+static ssize_t vendor_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "chipone");
+}
+
+static struct device_attribute touchscreen_attributes[] = {
+	__ATTR_RO(path),
+	__ATTR_RO(vendor),
+	__ATTR_NULL
+};
+
+#define TSDEV_MINOR_BASE 128
+#define TSDEV_MINOR_MAX 32
+
+/*******************************************************
+Description:
+	Chipone touchscreen FW function class. file node
+	initial function.
+
+return:
+	Executive outcomes. 0---succeed. -1---failed.
+*******************************************************/
+static int cts_fw_class_init(void *_data, bool create)
+{
+	struct chipone_ts_data *data = _data;
+	struct device_attribute *attrs = touchscreen_attributes;
+	int i, error = 0;
+	static struct class *touchscreen_class;
+	static struct device *ts_class_dev;
+	static int minor;
+
+	if (create) {
+#ifdef CONFIG_CTS_I2C_HOST
+		minor = input_get_new_minor(data->i2c_client->addr,
+						1, false);
+#else
+		minor = input_get_new_minor(data->spi_client->chip_select,
+						1, false);
+#endif
+		if (minor < 0)
+			minor = input_get_new_minor(TSDEV_MINOR_BASE,
+					TSDEV_MINOR_MAX, true);
+		pr_info("assigned minor %d\n", minor);
+
+		touchscreen_class = class_create(THIS_MODULE, "touchscreen");
+		if (IS_ERR(touchscreen_class)) {
+			error = PTR_ERR(touchscreen_class);
+			touchscreen_class = NULL;
+			return error;
+		}
+
+		ts_class_dev = device_create(touchscreen_class, NULL,
+				MKDEV(INPUT_MAJOR, minor),
+				data, CFG_CTS_DEVICE_NAME);
+		if (IS_ERR(ts_class_dev)) {
+			error = PTR_ERR(ts_class_dev);
+			ts_class_dev = NULL;
+			return error;
+		}
+
+		for (i = 0; attrs[i].attr.name != NULL; ++i) {
+			error = device_create_file(ts_class_dev, &attrs[i]);
+			if (error)
+				break;
+		}
+
+		if (error)
+			goto device_destroy;
+		else
+			pr_info("create /sys/class/touchscreen/%s Succeeded!\n", CFG_CTS_DEVICE_NAME);
+	} else {
+		if (!touchscreen_class || !ts_class_dev)
+			return -ENODEV;
+
+		for (i = 0; attrs[i].attr.name != NULL; ++i)
+			device_remove_file(ts_class_dev, &attrs[i]);
+
+		device_unregister(ts_class_dev);
+		class_unregister(touchscreen_class);
+	}
+
+	return 0;
+
+device_destroy:
+	for (--i; i >= 0; --i)
+		device_remove_file(ts_class_dev, &attrs[i]);
+	device_destroy(touchscreen_class, MKDEV(INPUT_MAJOR, minor));
+	ts_class_dev = NULL;
+	class_unregister(touchscreen_class);
+	pr_err("error creating touchscreen class\n");
+
+	return -ENODEV;
+}
+
+
 int cts_sysfs_add_device(struct device *dev)
 {
 	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
@@ -2211,11 +2333,19 @@ int cts_sysfs_add_device(struct device *dev)
 	if (ret) {
 		cts_err("Create sysfs link error:%d", ret);
 	}
+
+	ret = cts_fw_class_init(cts_data, true);
+	if (ret) {
+		cts_err("Create touchscreen class failed. ret=%d\n", ret);
+		return ret;
+	}
+
 	return 0;
 }
 
 void cts_sysfs_remove_device(struct device *dev)
 {
+	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
 	int i;
 
 	cts_info("Remove device attr groups");
@@ -2230,6 +2360,7 @@ void cts_sysfs_remove_device(struct device *dev)
 	for (i = 0; cts_dev_attr_groups[i]; i++) {
 		sysfs_remove_group(&dev->kobj, cts_dev_attr_groups[i]);
 	}
+	cts_fw_class_init(cts_data, false);
 }
 
 #undef SPLIT_LINE_STR

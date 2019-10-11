@@ -35,7 +35,7 @@
 #define CFG_CTS_FIRMWARE_IN_FS
 #ifdef CFG_CTS_FIRMWARE_IN_FS
 #define CFG_CTS_FIRMWARE_FILENAME       "ICNL9911.bin"
-#define CFG_CTS_FIRMWARE_FILEPATH       "/etc/firmware/ICNL9911.bin"
+#define CFG_CTS_FIRMWARE_FILEPATH       "/vendor/firmware/ICNL9911.bin"
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
 #ifdef CONFIG_PROC_FS
