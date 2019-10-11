@@ -1290,10 +1290,7 @@ static int fg_get_property(struct power_supply *psy,
 			val->intval = bq->fake_soc;
 			break;
 		}
-		ret = fg_read_rsoc(bq);
 		mutex_lock(&bq->data_lock);
-		if (ret >= 0)
-			bq->batt_soc = ret;
 		val->intval = bq->batt_soc;
 		mutex_unlock(&bq->data_lock);
 		break;
@@ -2172,6 +2169,7 @@ static void debug_fg_dump_registers(struct bq_fg_chip *bq)
 static irqreturn_t fg_irq_thread(int irq, void *dev_id)
 {
 	struct bq_fg_chip *bq = dev_id;
+	int ret = 0;
 	bool last_batt_present;
 	pr_info("------ bq27426 IRQ triggered ------\n");
 	mutex_lock(&bq->irq_complete);
@@ -2216,7 +2214,9 @@ static irqreturn_t fg_irq_thread(int irq, void *dev_id)
 	if (bq->batt_present) {
 		mutex_lock(&bq->update_lock);
 
-		bq->batt_soc = fg_read_rsoc(bq);
+		ret = fg_read_rsoc(bq);
+		if (ret >= 0)
+			bq->batt_soc = ret;
 		bq->batt_volt = fg_read_volt(bq);
 		fg_read_current(bq, &bq->batt_curr);
 		bq->batt_temp = fg_read_temperature(bq);
@@ -2476,6 +2476,7 @@ static int bq_fg_probe(struct i2c_client *client,
 		goto free_psy;
 	}
 
+	fg_irq_thread(bq->client->irq, bq);
 	INIT_DELAYED_WORK(&bq->heartbeat_work, bq_heartbeat_work);
 	schedule_delayed_work(&bq->heartbeat_work,
 			      msecs_to_jiffies(1000));
