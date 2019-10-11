@@ -1781,6 +1781,7 @@ static int fts_ts_suspend(struct device *dev)
             ts_data->suspended = true;
 #ifdef FOCALTECH_SENSOR_EN
             ts_data->screen_state = SCREEN_OFF;
+            ts_data->wakeable = true;
             mutex_unlock(&ts_data->state_mutex);
             FTS_INFO("Enter gesture suspend mode.");
 #endif
@@ -1865,12 +1866,13 @@ static int fts_ts_resume(struct device *dev)
 #if FTS_GESTURE_EN
 
 #ifdef FOCALTECH_SENSOR_EN
-    if (ts_data->should_enable_gesture) {
+    if (ts_data->wakeable) {
 #endif
         if (fts_gesture_resume(ts_data) == 0) {
             ts_data->suspended = false;
 #ifdef FOCALTECH_SENSOR_EN
             ts_data->screen_state = SCREEN_ON;
+            ts_data->wakeable = false;
             mutex_unlock(&ts_data->state_mutex);
             FTS_INFO("Exit from gesture suspend mode.");
 #endif
