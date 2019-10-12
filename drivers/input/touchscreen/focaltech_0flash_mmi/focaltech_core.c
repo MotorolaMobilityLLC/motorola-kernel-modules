@@ -1791,7 +1791,7 @@ static int fts_ts_suspend(struct device *dev)
 #endif
 #endif
 
-
+    fts_irq_disable();
     /* TP enter sleep mode */
     ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP_VALUE);
     if (ret < 0)
@@ -1855,6 +1855,7 @@ static int fts_ts_resume(struct device *dev)
         fts_reset_proc(200);
     }
 
+    fts_irq_enable();
     fts_tp_state_recovery(ts_data);
 
 #if FTS_ESDCHECK_EN
