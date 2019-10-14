@@ -60,6 +60,14 @@ struct upgrade_module module_list[] = {
     {FTS_MODULE3_ID, FTS_MODULE3_NAME, fw_file3, sizeof(fw_file3)},
 };
 
+struct upgrade_setting_nf upgrade_setting_list[] = {
+	{0x87, 0x19, 0, (64 * 1024), (128 * 1024), 0x00, 0x02, 8, 1, 0, 1, 0},
+	{0x86, 0x22, 0, (64 * 1024), (128 * 1024), 0x00, 0x02, 8, 1, 0, 0, 0},
+	{0x87, 0x56, 0, (88 * 1024), 32766, 0xA5, 0x01, 8, 0, 1, 0, 1},
+	{0x80, 0x09, 0, (88 * 1024), 32766, 0xA5, 0x01, 8, 0, 1, 0, 1},
+	{0x86, 0x32, 0, (64 * 1024), (128 * 1024), 0xA5, 0x01, 12, 0, 0, 0, 0},
+};
+
 struct fts_upgrade *fwupgrade;
 
 int fts_check_bootid(void)
@@ -183,8 +191,8 @@ int fts_upgrade_bin(char *fw_name, bool force)
     struct fts_upgrade *upg = fwupgrade;
 
     FTS_INFO("start upgrade with fw bin");
-    if (NULL == upg) {
-        FTS_ERROR("upgrade/func is null");
+    if (NULL == upg || !upg->setting_nf) {
+        FTS_ERROR("upgrade_bin: upg/func/setting_nf is null");
         return -EINVAL;
     }
 
@@ -222,11 +230,12 @@ int fts_enter_test_environment(bool test_state)
 {
     int ret = 0;
     u8 detach_flag = 0;
+    u32 app_offset = 0;
     struct fts_upgrade *upg = fwupgrade;
 
     FTS_INFO("fw test download function");
-    if (!upg) {
-        FTS_ERROR("upg is null");
+    if (!upg || !upg->setting_nf) {
+        FTS_ERROR("upg/setting_nf is null");
         return -EINVAL;
     }
 
@@ -235,26 +244,17 @@ int fts_enter_test_environment(bool test_state)
         return -EINVAL;
     }
 
-#if defined(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756) || \
-	defined (CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009)
-    if (!upg->fw || (upg->fw_length <= FTS_MAX_LEN_APP_FT8756)) {
-#else
-    if (!upg->fw || (upg->fw_length <= FTS_MAX_LEN_APP)) {
-#endif
+	if (!upg->fw || (upg->fw_length <= upg->setting_nf->app2_offset)) {
         FTS_INFO("not multi-app");
         return 0;
     }
 
     if (test_state) {
-#if defined(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756) || \
-	defined (CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009)
-        ret = fts_fw_download(upg->fw + FTS_MAX_LEN_APP_FT8756, upg->fw_length, true);
-#else
-        ret = fts_fw_download(upg->fw + FTS_MAX_LEN_APP, upg->fw_length, true);
-#endif
-    } else {
-        ret = fts_fw_download(upg->fw, upg->fw_length, true);
+        app_offset = upg->setting_nf->app2_offset;
     }
+
+    ret = fts_fw_download(upg->fw + app_offset, upg->fw_length, true);
+
     if (ret < 0) {
         FTS_ERROR("fw(app2) download fail");
         return ret;
@@ -339,8 +339,8 @@ int fts_fw_recovery(void)
     struct fts_upgrade *upg = fwupgrade;
 
     FTS_INFO("check if boot recovery");
-    if (!upg || !upg->ts_data) {
-        FTS_ERROR("upg/ts_data is null");
+    if (!upg || !upg->ts_data || !upg->setting_nf) {
+        FTS_ERROR("upg/ts_data/setting_nf is null");
         return -EINVAL;
     }
 
@@ -365,12 +365,7 @@ int fts_fw_recovery(void)
             return ret;
         }
 
-#if defined(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8756) || \
-	defined (CONFIG_INPUT_FOCALTECH_0FLASH_MMI_IC_NAME_FT8009)
-        if (boot_state != 0x01) {
-#else
-        if (boot_state != 0x02) {
-#endif
+        if (boot_state != upg->setting_nf->upgsts_boot) {
             FTS_INFO("not in boot mode(0x%x),exit", boot_state);
             upg->ts_data->fw_is_running = true;
             return -EIO;
@@ -592,6 +587,11 @@ static void fts_fwupg_work(struct work_struct *work)
 
 int fts_fwupg_init(struct fts_ts_data *ts_data)
 {
+    int i = 0;
+    struct upgrade_setting_nf *setting = &upgrade_setting_list[0];
+    int setting_count =
+    sizeof(upgrade_setting_list) / sizeof(upgrade_setting_list[0]);
+
     FTS_INFO("fw upgrade init function");
 
     if (!ts_data || !ts_data->ts_workqueue) {
@@ -599,10 +599,38 @@ int fts_fwupg_init(struct fts_ts_data *ts_data)
         return -EINVAL;
     }
 
+    if (0 == setting_count) {
+        FTS_ERROR("no upgrade settings in tp driver, init fail");
+        return -ENODATA;
+    }
+
     fwupgrade = (struct fts_upgrade *)kzalloc(sizeof(*fwupgrade), GFP_KERNEL);
     if (NULL == fwupgrade) {
         FTS_ERROR("malloc memory for upgrade fail");
         return -ENOMEM;
+    }
+
+    if (1 == setting_count) {
+        fwupgrade->setting_nf = setting;
+    } else {
+        for (i = 0; i < setting_count; i++) {
+            setting = &upgrade_setting_list[i];
+            if ((setting->rom_idh == ts_data->ic_info.ids.rom_idh)
+                && (setting->rom_idl ==
+                ts_data->ic_info.ids.rom_idl)) {
+                FTS_INFO
+                    ("match upgrade setting,type(ID):0x%02x%02x",
+                     setting->rom_idh, setting->rom_idl);
+                fwupgrade->setting_nf = setting;
+            }
+        }
+    }
+
+    if (NULL == fwupgrade->setting_nf) {
+        FTS_ERROR("no upgrade settings match, can't upgrade");
+        kfree(fwupgrade);
+        fwupgrade = NULL;
+        return -ENODATA;
     }
 
 #if FTS_ESDCHECK_EN
