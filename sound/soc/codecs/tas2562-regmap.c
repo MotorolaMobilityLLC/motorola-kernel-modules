@@ -591,7 +591,7 @@ static void irq_work_routine(struct work_struct *work)
 		goto reload;
 
 	dev_dbg(p_tas2562->dev, "IRQ status : 0x%x, 0x%x, 0x%x, 0x%x\n",
-			nDevInt3Status, nDevInt4Status,
+			nDevInt1Status, nDevInt2Status,
 			nDevInt3Status, nDevInt4Status);
 
 	if (((nDevInt1Status & 0x7) != 0)
