@@ -49,6 +49,8 @@ struct i2c_data {
 	/*!< if null no regulator use for power ctrl */
 	struct regulator *vdd;
 
+	struct regulator *vio;
+
 	/*!< power enable gpio number
 	 *
 	 * if -1 no gpio if vdd not avl pwr is not controllable

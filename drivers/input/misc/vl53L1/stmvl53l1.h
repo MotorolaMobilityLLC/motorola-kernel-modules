@@ -85,7 +85,7 @@
 /** @ingroup vl53l1_mod_dbg
  * @{
  */
-#if 0
+#if 1
 #define DEBUG	1
 #endif
 #if 0
@@ -103,7 +103,7 @@ extern int stmvl53l1_enable_debug;
 #	else
 #define vl53l1_dbgmsg(str, ...) do { \
 	if (stmvl53l1_enable_debug) \
-		pr_debug("%s: " str, __func__, ##__VA_ARGS__); \
+		pr_err("%s: " str, __func__, ##__VA_ARGS__); \
 } while (0)
 #	endif
 #else
@@ -122,7 +122,7 @@ extern int stmvl53l1_enable_debug;
 #endif
 
 #define vl53l1_info(str, args...) \
-	pr_info("%s: " str, __func__, ##args)
+	pr_err("%s: " str, __func__, ##args)
 
 #define vl53l1_errmsg(str, args...) \
 	pr_err("%s: " str, __func__, ##args)
@@ -245,6 +245,7 @@ struct stmvl53l1_data {
 	int16_t xtalk_y; /*!< crosstalk compensation y plane gradient kcps */
 	int16_t inner_offset; /*!< inner offset mm */
 	int16_t outer_offset; /*!< outer offset mm */
+	VL53L1_CalibrationData_t *cali_data; /*!< full calibration data */
 
 	/* Range Data and stat */
 	struct range_t {
