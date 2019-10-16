@@ -182,7 +182,7 @@ static long stmvl53l1_compat_ioctl(struct file *file,
 // Turn off force_device_on flag and let ToF power supplies power down when ToF
 // sensor ToF sensor powers down.
 // If flag is set to true then VDD regulator will never turn down.
-static bool force_device_on_en_default = false;
+static bool force_device_on_en_default = true;
 
 module_param(force_device_on_en_default, bool, 0444);
 MODULE_PARM_DESC(force_device_on_en_default,
@@ -773,11 +773,15 @@ static int stmvl53l1_sendparams(struct stmvl53l1_data *data)
 			sizeof(VL53L1_RangingMeasurementData_t));
 
 	memset(&cali, 0, sizeof(cali));
-	rc = VL53L1_GetCalibrationData(&data->stdev, &cali);
-	if (rc) {
-		vl53l1_errmsg("VL53L1_GetCalibrationData fail\n");
-		rc = store_last_error(data, rc);
-		goto done;
+	if (!data->cali_data) {
+		rc = VL53L1_GetCalibrationData(&data->stdev, &cali);
+		if (rc) {
+			vl53l1_errmsg("VL53L1_GetCalibrationData fail\n");
+			rc = store_last_error(data, rc);
+			goto done;
+		}
+	} else {
+		memcpy(&cali, data->cali_data, sizeof(VL53L1_CalibrationData_t));
 	}
 
 	/* set autonomous mode configuration */
@@ -1166,7 +1170,6 @@ static ssize_t stmvl53l1_show_roi(struct device *dev,
 }
 
 
-static const char str_roi_ranging[] = "ERROR can't set roi while ranging\n";
 
 static ssize_t stmvl53l1_store_roi(struct device *dev,
 					struct device_attribute *attr,
@@ -2184,10 +2187,36 @@ static DEVICE_ATTR(enable_sar, 0660/*S_IWUGO | S_IRUGO*/,
 static ssize_t stmvl53l1_show_offset(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
+	int rc;
 	struct stmvl53l1_data *data = dev_get_drvdata(dev);
+	VL53L1_CalibrationData_t cali_data;
 
-	return scnprintf(buf, PAGE_SIZE, "%d,%d\n",
-			data->inner_offset, data->outer_offset);
+	mutex_lock(&data->work_mutex);
+	memset(&cali_data, 0, sizeof(cali_data));
+	rc = VL53L1_GetCalibrationData(&data->stdev, &cali_data);
+	if (rc) {
+		mutex_unlock(&data->work_mutex);
+		vl53l1_errmsg("VL53L1_GetCalibrationData fail\n");
+		return -EINVAL;
+	}
+	mutex_unlock(&data->work_mutex);
+
+	return scnprintf(buf, PAGE_SIZE, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+		cali_data.customer.mm_config__inner_offset_mm,
+		cali_data.customer.mm_config__outer_offset_mm,
+		cali_data.customer.global_config__spad_enables_ref_0,
+		cali_data.customer.global_config__spad_enables_ref_1,
+		cali_data.customer.global_config__spad_enables_ref_2,
+		cali_data.customer.global_config__spad_enables_ref_3,
+		cali_data.customer.global_config__spad_enables_ref_4,
+		cali_data.customer.global_config__spad_enables_ref_5,
+		cali_data.customer.ref_spad_man__num_requested_ref_spads,
+		cali_data.customer.ref_spad_man__ref_location,
+		cali_data.cust_dmax_cal.ref__actual_effective_spads,
+		cali_data.cust_dmax_cal.ref__peak_signal_count_rate_mcps,
+		cali_data.cust_dmax_cal.ref__distance_mm,
+		cali_data.cust_dmax_cal.ref_reflectance_pc,
+		cali_data.cust_dmax_cal.coverglass_transmission);
 }
 
 static ssize_t stmvl53l1_store_offset(struct device *dev,
@@ -2200,7 +2229,19 @@ static ssize_t stmvl53l1_store_offset(struct device *dev,
 	int n = 0;
 	int inner = 0;
 	int outer = 0;
-
+	int refspad_0 = 0;
+	int refspad_1 = 0;
+	int refspad_2 = 0;
+	int refspad_3 = 0;
+	int refspad_4 = 0;
+	int refspad_5 = 0;
+	int refspad_num = 0;
+	int refspad_location = 0;
+	int ref__actual_effective_spads = 0;
+	int ref__peak_signal_count_rate_mcps = 0;
+	int ref__distance_mm = 0;
+	int ref_reflectance_pc = 0;
+	int coverglass_transmission = 0;
 	mutex_lock(&data->work_mutex);
 
 	if (data->enable_sensor) {
@@ -2209,8 +2250,12 @@ static ssize_t stmvl53l1_store_offset(struct device *dev,
 		goto finish;
 	}
 
-	n = sscanf(buf, "%d,%d", &inner, &outer);
-	if(n != 2) {
+	n = sscanf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d",
+		&inner, &outer,&refspad_0,&refspad_1,&refspad_2,&refspad_3,
+		&refspad_4, &refspad_5,&refspad_num,&refspad_location,
+		&ref__actual_effective_spads,&ref__peak_signal_count_rate_mcps,
+		&ref__distance_mm,&ref_reflectance_pc,&coverglass_transmission);
+	if(n != 15) {
 		vl53l1_errmsg("wrong offset syntax around %s\n", buf);
 		rc = -EINVAL;
 		goto finish;
@@ -2230,6 +2275,19 @@ static ssize_t stmvl53l1_store_offset(struct device *dev,
 			cali_data.customer.mm_config__outer_offset_mm);
 	cali_data.customer.mm_config__inner_offset_mm = inner;
 	cali_data.customer.mm_config__outer_offset_mm = outer;
+	cali_data.customer.global_config__spad_enables_ref_0 = refspad_0;
+	cali_data.customer.global_config__spad_enables_ref_1 = refspad_1;
+	cali_data.customer.global_config__spad_enables_ref_2 = refspad_2;
+	cali_data.customer.global_config__spad_enables_ref_3 = refspad_3;
+	cali_data.customer.global_config__spad_enables_ref_4 = refspad_4;
+	cali_data.customer.global_config__spad_enables_ref_5 = refspad_5;
+	cali_data.customer.ref_spad_man__num_requested_ref_spads = refspad_num;
+	cali_data.customer.ref_spad_man__ref_location = ref_reflectance_pc;
+	cali_data.cust_dmax_cal.ref__actual_effective_spads = ref__actual_effective_spads;
+	cali_data.cust_dmax_cal.ref__peak_signal_count_rate_mcps = ref__peak_signal_count_rate_mcps;
+	cali_data.cust_dmax_cal.ref__distance_mm = ref__distance_mm;
+	cali_data.cust_dmax_cal.ref_reflectance_pc = ref_reflectance_pc;
+	cali_data.cust_dmax_cal.coverglass_transmission = coverglass_transmission;
 
 	rc = VL53L1_SetCalibrationData(&data->stdev, &cali_data);
 	if (rc) {
@@ -2247,17 +2305,109 @@ finish:
 }
 
 /**
- * sysfs attribute "enable_sar" [rd/wr]
+ * sysfs attribute "offset" [rd/wr]
  *
- * To enable/disable the sar mode
- * @li 0 disable sar mode
- * @li 1 enable sar mode
+ * To read/write offset calibration data
  *
  * @ingroup sysfs_attrib
  */
 static DEVICE_ATTR(offset, 0660/*S_IWUGO | S_IRUGO*/,
 				stmvl53l1_show_offset,
 				stmvl53l1_store_offset);
+
+static ssize_t stmvl53l1_show_xtalk(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	int rc;
+	struct stmvl53l1_data *data = dev_get_drvdata(dev);
+	VL53L1_CalibrationData_t cali_data;
+
+	mutex_lock(&data->work_mutex);
+	memset(&cali_data, 0, sizeof(cali_data));
+	rc = VL53L1_GetCalibrationData(&data->stdev, &cali_data);
+	if (rc) {
+		mutex_unlock(&data->work_mutex);
+		vl53l1_errmsg("VL53L1_GetCalibrationData fail\n");
+		return -EINVAL;
+	}
+	mutex_unlock(&data->work_mutex);
+
+	return scnprintf(buf, PAGE_SIZE, "%d,%d,%d",
+		cali_data.customer.algo__crosstalk_compensation_plane_offset_kcps,
+		cali_data.customer.algo__crosstalk_compensation_x_plane_gradient_kcps,
+		cali_data.customer.algo__crosstalk_compensation_y_plane_gradient_kcps);
+}
+
+static ssize_t stmvl53l1_store_xtalk(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct stmvl53l1_data *data = dev_get_drvdata(dev);
+	VL53L1_CalibrationData_t cali_data;
+	int rc = 0;
+	int n = 0;
+	int xtalk_offset = 0;
+	int xtalk_x = 0;
+	int xtalk_y = 0;
+
+	mutex_lock(&data->work_mutex);
+	if (data->enable_sensor) {
+		vl53l1_errmsg("can't set offset while ranging\n");
+		rc = -EBUSY;
+		goto finish;
+	}
+
+	n = sscanf(buf, "%d,%d,%d", &xtalk_offset, &xtalk_x, &xtalk_y);
+	if(n != 3) {
+		vl53l1_errmsg("wrong xtalk syntax around %s\n", buf);
+		rc = -EINVAL;
+		goto finish;
+	}
+
+	memset(&cali_data, 0, sizeof(cali_data));
+	rc = VL53L1_GetCalibrationData(&data->stdev, &cali_data);
+	if (rc) {
+		vl53l1_errmsg("VL53L1_GetCalibrationData fail\n");
+		rc = -EINVAL;
+		goto finish;
+	}
+
+	/* update xtalk values */
+	vl53l1_info("previous xtalk is %d,%d,%d\n",
+			cali_data.customer.algo__crosstalk_compensation_plane_offset_kcps,
+			cali_data.customer.algo__crosstalk_compensation_x_plane_gradient_kcps,
+			cali_data.customer.algo__crosstalk_compensation_y_plane_gradient_kcps);
+
+	cali_data.customer.algo__crosstalk_compensation_plane_offset_kcps = xtalk_offset;
+	cali_data.customer.algo__crosstalk_compensation_x_plane_gradient_kcps = xtalk_x;
+	cali_data.customer.algo__crosstalk_compensation_y_plane_gradient_kcps = xtalk_y;
+	rc = VL53L1_SetCalibrationData(&data->stdev, &cali_data);
+	if (rc) {
+		vl53l1_errmsg("VL53L1_SetCalibrationData fail\n");
+		rc = -EINVAL;
+		goto finish;
+	}
+
+	data->xtalk_offset = xtalk_offset;
+	data->xtalk_x = xtalk_x;
+	data->xtalk_y = xtalk_y;
+
+	vl53l1_info("xtalk is set to %d,%d,%d\n", xtalk_offset, xtalk_x, xtalk_y);
+finish:
+	mutex_unlock(&data->work_mutex);
+	return rc ? rc : count;
+}
+
+/**
+ * sysfs attribute "xtalk" [rd/wr]
+ *
+ * To read/write xtalk calibration data
+ *
+ * @ingroup sysfs_attrib
+ */
+static DEVICE_ATTR(xtalk, 0660/*S_IWUGO | S_IRUGO*/,
+				stmvl53l1_show_xtalk,
+				stmvl53l1_store_xtalk);
 
 static struct attribute *stmvl53l1_attributes[] = {
 	&dev_attr_enable_ps_sensor.attr,
@@ -2283,6 +2433,7 @@ static struct attribute *stmvl53l1_attributes[] = {
 	&dev_attr_is_xtalk_value_changed.attr,
 	&dev_attr_enable_sar.attr,
 	&dev_attr_offset.attr,
+	&dev_attr_xtalk.attr,
 	NULL
 };
 
@@ -2343,6 +2494,7 @@ static ssize_t stmvl53l1_calib_data_write(struct file *filp,
 {
 	struct device *dev = container_of(kobj, struct device, kobj);
 	struct stmvl53l1_data *data = dev_get_drvdata(dev);
+	VL53L1_CalibrationData_t *cali_data = (VL53L1_CalibrationData_t *)buf;
 	int rc;
 
 	mutex_lock(&data->work_mutex);
@@ -2356,16 +2508,26 @@ static ssize_t stmvl53l1_calib_data_write(struct file *filp,
 	}
 
 	/* we only support one time write */
-	if (off != 0 || count != sizeof(VL53L1_CalibrationData_t))
+	if (off != 0 || count != sizeof(VL53L1_CalibrationData_t)) {
+		vl53l1_errmsg("calib data size not match: count=%lu\n", count);
 		goto invalid;
+	}
 
-	rc = VL53L1_SetCalibrationData(&data->stdev,
-		(VL53L1_CalibrationData_t *) buf);
+	rc = VL53L1_SetCalibrationData(&data->stdev, cali_data);
 	if (rc) {
 		vl53l1_errmsg("VL53L1_SetCalibrationData fail %d", rc);
 		rc = store_last_error(data, rc);
 		goto error;
 	}
+
+	if (!data->cali_data)
+		data->cali_data = kmalloc(sizeof(VL53L1_CalibrationData_t), GFP_KERNEL);
+	if (data->cali_data)
+		memcpy(data->cali_data, cali_data, sizeof(VL53L1_CalibrationData_t));
+
+	data->xtalk_offset = cali_data->customer.algo__crosstalk_compensation_plane_offset_kcps;
+	data->xtalk_x = cali_data->customer.algo__crosstalk_compensation_x_plane_gradient_kcps;
+	data->xtalk_y = cali_data->customer.algo__crosstalk_compensation_y_plane_gradient_kcps;
 
 	mutex_unlock(&data->work_mutex);
 
@@ -4387,6 +4549,8 @@ int stmvl53l1_setup(struct stmvl53l1_data *data)
 		goto exit_unregister_dev_ps;
 	}
 
+	kobject_uevent_env(&data->input_dev_ps->dev.kobj, KOBJ_CHANGE, NULL);
+
 	data->enable_sensor = 0;
 
 	data->poll_delay_ms = STMVL53L1_CFG_POLL_DELAY_MS;
@@ -4603,10 +4767,20 @@ int stmvl53l1_sysfs_laser(struct stmvl53l1_data *data, bool create)
 				&laser_name_attributes);
 		if (error)
 			goto device_destroy;
+
+		error = sysfs_create_bin_file(&laser_class_dev->kobj,
+					&stmvl53l1_calib_data_attr);
+		if (error) {
+			device_remove_file(laser_class_dev,
+					&laser_name_attributes);
+			goto device_destroy;
+		}
 	} else {
 		if (!laser_class || !laser_class_dev)
 			return -ENODEV;
 
+		sysfs_remove_bin_file(&laser_class_dev->kobj,
+					&stmvl53l1_calib_data_attr);
 		device_remove_file(laser_class_dev,
 				&laser_name_attributes);
 		for (i = 0; stmvl53l1_attributes[i] != NULL; ++i)
@@ -4667,6 +4841,10 @@ void stmvl53l1_cleanup(struct stmvl53l1_data *data)
 	vl53l1_dbgmsg("done\n");
 	deallocate_dev_id(data->id);
 	data->is_device_remove = true;
+	if (data->cali_data) {
+		kfree(data->cali_data);
+		data->cali_data = NULL;
+	}
 }
 
 #ifdef CONFIG_PM_SLEEP

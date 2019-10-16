@@ -385,6 +385,7 @@ static int stmvl53l1_parse_tree(struct device *dev, struct i2c_data *i2c_data)
 		i2c_data->intr_gpio = intr_gpio_nb;
 	} else if (dev->of_node) {
 		/* power : either vdd or pwren_gpio. try reulator first */
+		i2c_data->vio = regulator_get_optional(dev, "vio");
 		i2c_data->vdd = regulator_get_optional(dev, "vdd-vl53l1");
 		if (IS_ERR(i2c_data->vdd) || i2c_data->vdd == NULL) {
 			i2c_data->vdd = NULL;
@@ -496,13 +497,13 @@ static int stmvl53l1_probe(struct i2c_client *client,
 		rc = -ENOMEM;
 		return rc;
 	}
-	if (vl53l1_data) {
-		vl53l1_data->client_object =
-				kzalloc(sizeof(struct i2c_data), GFP_KERNEL);
-		if (!vl53l1_data)
-			goto done_freemem;
-		i2c_data = (struct i2c_data *)vl53l1_data->client_object;
-	}
+
+	vl53l1_data->client_object =
+			kzalloc(sizeof(struct i2c_data), GFP_KERNEL);
+	if (!vl53l1_data->client_object)
+		goto done_freemem;
+	i2c_data = (struct i2c_data *)vl53l1_data->client_object;
+
 	i2c_data->client = client;
 	i2c_data->vl53l1_data = vl53l1_data;
 	i2c_data->irq = -1 ; /* init to no irq */
@@ -650,6 +651,14 @@ int stmvl53l1_power_up_i2c(void *object)
 
 	vl53l1_dbgmsg("Enter\n");
 
+	if (data->vio) {
+		rc = regulator_enable(data->vio);
+		if (rc) {
+			vl53l1_errmsg("fail to turn on regulator");
+			return rc;
+		}
+	}
+
 	/* turn on power */
 	if (data->vdd) {
 		rc = regulator_enable(data->vdd);
@@ -688,6 +697,14 @@ int stmvl53l1_power_down_i2c(void *i2c_object)
 	} else if (data->pwren_gpio != -1) {
 		gpio_set_value(data->pwren_gpio, 0);
 	}
+
+	if (data->vio) {
+		rc = regulator_disable(data->vio);
+		if (rc)
+			vl53l1_errmsg("reg disable failed. rc=%d\n",
+				rc);
+	}
+
 	vl53l1_dbgmsg("power off");
 
 	vl53l1_dbgmsg("End\n");
