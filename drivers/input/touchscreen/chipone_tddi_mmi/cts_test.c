@@ -628,6 +628,33 @@ static int test_short_between_rows(struct cts_device *cts_dev,
 	return ret;
 }
 
+static int wait_fw_to_normal_work(struct cts_device *cts_dev)
+{
+	int i = 0;
+	int ret;
+
+	cts_info ("Wait fw to normal work");
+
+	do {
+		u8 work_mode;
+
+		ret = cts_fw_reg_readb(cts_dev,
+			CTS_DEVICE_FW_REG_GET_WORK_MODE, &work_mode);
+		if (ret) {
+			cts_err("Get fw curr work mode failed %d", work_mode);
+			continue;
+		} else {
+			if (work_mode == CTS_FIRMWARE_WORK_MODE_NORMAL) {
+				return 0;
+			}
+		}
+
+		mdelay (10);
+	} while (++i < 100);
+
+	return ret ? ret : -ETIMEDOUT;
+}
+
 static int prepare_test(struct cts_device *cts_dev)
 {
 	int ret;
@@ -635,6 +662,12 @@ static int prepare_test(struct cts_device *cts_dev)
 	cts_info("Prepare test");
 
 	cts_plat_reset_device(cts_dev->pdata);
+
+	ret = wait_fw_to_normal_work(cts_dev);
+	if (ret) {
+		cts_err("Wait fw to normal work failed %d", ret);
+		return ret;
+	}
 
 	ret = disable_fw_esd_protection(cts_dev);
 	if (ret) {
@@ -680,6 +713,12 @@ static void post_test(struct cts_device *cts_dev)
 			ret);
 	}
 
+	ret = wait_fw_to_normal_work(cts_dev);
+	if (ret) {
+		cts_err("Wait fw to normal work failed %d", ret);
+		//return ret;
+	}
+
 	cts_dev->rtdata.testing = false;
 }
 
@@ -701,6 +740,12 @@ int cts_short_test(struct cts_device *cts_dev, u16 threshold)
 	if (test_result == NULL) {
 		cts_err("Allocate test result buffer failed");
 		return -ENOMEM;
+	}
+
+	ret = cts_stop_device(cts_dev);
+	if (ret) {
+		cts_err("Stop device failed %d", ret);
+		return ret;
 	}
 
 	cts_lock_device(cts_dev);
@@ -774,6 +819,8 @@ err_free_test_result:
 
 	cts_info("Short test %s", ret ? "FAILED" : "PASSED");
 
+	cts_start_device(cts_dev);
+
 	return ret;
 }
 
@@ -794,6 +841,12 @@ int cts_open_test(struct cts_device *cts_dev, u16 threshold)
 	if (test_result == NULL) {
 		cts_err("Allocate memory for test result faild");
 		return -ENOMEM;
+	}
+
+	ret = cts_stop_device(cts_dev);
+	if (ret) {
+		cts_err("Stop device failed %d", ret);
+		return ret;
 	}
 
 	cts_lock_device(cts_dev);
@@ -869,6 +922,8 @@ err_free_test_result:
 	cts_unlock_device(cts_dev);
 	cts_info("Open test %s", ret ? "FAILED" : "PASSED");
 
+	cts_start_device(cts_dev);
+
 	return ret;
 }
 
@@ -903,6 +958,12 @@ int cts_reset_test(struct cts_device *cts_dev)
 	}
 	cts_plat_set_reset(cts_dev->pdata, 1);
 	mdelay(50);
+
+	ret = wait_fw_to_normal_work(cts_dev);
+	if (ret) {
+		cts_err("Wait fw to normal work failed %d", ret);
+	}
+
 #ifdef CONFIG_CTS_I2C_HOST
 	/* Check whether device is in normal mode */
 	if (cts_plat_is_i2c_online(cts_dev->pdata, CTS_DEV_NORMAL_MODE_I2CADDR)) {
@@ -945,7 +1006,8 @@ int cts_reset_test(struct cts_device *cts_dev)
 		}
 		return 0;
 	}
-	return -EPERM;
+
+	return -EFAULT;
 }
 #endif
 
@@ -1200,21 +1262,12 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 min, u16 max)
 		ret = -EIO;
 	}
 
-	for (i = 0; i < 5; i++) {
-		int r;
-		u8 val;
-		r = cts_disable_get_rawdata(cts_dev);
-		if (r) {
-			cts_err("Disable get rawdata failed %d", r);
-			continue;
-		}
-		mdelay(1);
-		r = cts_fw_reg_readb(cts_dev, 0x12, &val);
-		if (r) {
-			cts_err("Read enable get ts data failed %d", r);
-			continue;
-		}
-		if (val == 0) {
+    for (i = 0; i < 5; i++) {
+	int r = cts_disable_get_rawdata(cts_dev);
+	if (r) {
+		cts_err("Disable get rawdata failed %d", r);
+		continue;
+	} else {
 			break;
 		}
 	}
@@ -1341,20 +1394,11 @@ int cts_noise_test(struct cts_device *cts_dev, u32 frames, u16 max)
 
 disable_get_tsdata:
 	for (i = 0; i < 5; i++) {
-		int r;
-		u8 val;
-		r = cts_disable_get_rawdata(cts_dev);
-		if (r) {
-			cts_err("Disable get rawdata failed %d", r);
-			continue;
-		}
-		mdelay(1);
-		r = cts_fw_reg_readb(cts_dev, 0x12, &val);
-		if (r) {
-			cts_err("Read enable get ts data failed %d", r);
-			continue;
-		}
-		if (val == 0) {
+	int r = cts_disable_get_rawdata(cts_dev);
+	if (r) {
+		cts_err("Disable get rawdata failed %d", r);
+		continue;
+	} else {
 			break;
 		}
 	}

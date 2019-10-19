@@ -1315,22 +1315,25 @@ int cts_get_rawdata(const struct cts_device *cts_dev, void *buf)
 	u8 retries = 5;
 
 	cts_info("Get rawdata");
+
     /** - Wait data ready flag set */
-	for (i = 0; i < 1000; i++) {
-		mdelay(1);
+	for (i = 0; i < 100; i++) {
+		mdelay(10);
 		ret = cts_get_data_ready_flag(cts_dev, &ready);
 		if (ret) {
 			cts_err("Get data ready flag failed %d", ret);
 			continue;
 		}
 		if (ready) {
-			break;
+			goto read_rawdata;
 		}
 	}
-	if (i == 1000) {
-		ret = -EIO;
-		goto get_raw_exit;
-	}
+
+	cts_err("Wait data ready timeout");
+	return -ETIMEDOUT;
+
+	/* Read rawdata */
+read_rawdata:
 	do {
 		ret =
 		    cts_fw_reg_readsb_delay_idle(cts_dev,
@@ -1340,29 +1343,20 @@ int cts_get_rawdata(const struct cts_device *cts_dev, void *buf)
 						 cts_dev->fwdata.cols * 2, 500);
 		if (ret) {
 			cts_err("Read rawdata failed %d", ret);
+		} else {
+			break;
 		}
-	} while (--retries > 0 && ret != 0);
+	} while (--retries > 0);
 
     for (i = 0; i < 5; i++) {
-	int r;
-	r = cts_clr_data_ready_flag(cts_dev);
-	if (r != 0) {
-		cts_err("Clear data ready flag failed");
-		ret = -EIO;
-		continue;
-	}
-	r = cts_get_data_ready_flag(cts_dev, &ready);
-	if (r != 0) {
-		cts_err("Clear data ready flag failed");
-		ret = -EIO;
-		continue;
-	}
-	if (ready == 0) {
-		break;
-	}
+		int r = cts_clr_data_ready_flag(cts_dev);
+		if (r) {
+			cts_err("Clear data ready flag failed %d", r);
+		} else {
+			break;
+		}
     }
 
-get_raw_exit:
 	return ret;
 }
 
@@ -1394,7 +1388,7 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
 		}
 	}
 	if (i == 1000) {
-		ret = -ENODEV;
+		ret = -ETIMEDOUT;
 		goto get_diff_free_buf;
 	}
 	do {
@@ -1407,26 +1401,35 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
 							2) * 2, 500);
 		if (ret) {
 			cts_err("Read diffdata failed %d", ret);
+		} else {
+			break;
 		}
-	} while (--retries > 0 && ret != 0);
+	} while (--retries > 0);
 
-	for (i = 0; i < cts_dev->fwdata.rows; i++) {
-		for (j = 0; j < cts_dev->fwdata.cols; j++) {
-			((u8 *) buf)[2 * (i * cts_dev->fwdata.cols + j)] =
-			    cache_buf[2 *
-				      ((i + 1) * (cts_dev->fwdata.cols + 2) +
-				       j + 1)];
-			((u8 *) buf)[2 * (i * cts_dev->fwdata.cols + j) + 1] =
-			    cache_buf[2 *
-				      ((i + 1) * (cts_dev->fwdata.cols + 2) +
-				       j + 1) + 1];
+	if (ret == 0) {
+		for (i = 0; i < cts_dev->fwdata.rows; i++) {
+			for (j = 0; j < cts_dev->fwdata.cols; j++) {
+				((u8 *) buf)[2 * (i * cts_dev->fwdata.cols + j)] =
+				    cache_buf[2 *
+					      ((i + 1) * (cts_dev->fwdata.cols + 2) +
+					       j + 1)];
+				((u8 *) buf)[2 * (i * cts_dev->fwdata.cols + j) + 1] =
+				    cache_buf[2 *
+					      ((i + 1) * (cts_dev->fwdata.cols + 2) +
+					       j + 1) + 1];
+			}
 		}
 	}
 
-	if (cts_clr_data_ready_flag(cts_dev)) {
-		cts_err("Clear data ready flag failed");
-		ret = -ENODEV;
-	}
+    for (i = 0; i < 5; i++) {
+		int r = cts_clr_data_ready_flag(cts_dev);
+		if (r) {
+			cts_err("Clear data ready flag failed %d", r);
+		} else {
+			break;
+		}
+    }
+
 get_diff_free_buf:
 	kfree(cache_buf);
 get_diff_exit:
