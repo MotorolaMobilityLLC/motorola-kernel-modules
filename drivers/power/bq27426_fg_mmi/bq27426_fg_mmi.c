@@ -163,6 +163,7 @@ enum {
 };
 
 struct fg_batt_profile {
+	const char * batt_type_str;
 	const bqfs_cmd_t * bqfs_image;
 	u32	 array_size;
 	u32	 chem_id;
@@ -183,11 +184,11 @@ static struct batt_chem_id batt_chem_id_arr[] = {
 static const struct fg_batt_profile bqfs_image[] = {
 
 #ifdef ATL_4000MAH_8A_BATTERY_PROFILE
-	{ atl_bqfs_image, ARRAY_SIZE(atl_bqfs_image), 2542, 2},
+	{"KG50_ATL_4000MAH",  atl_bqfs_image, ARRAY_SIZE(atl_bqfs_image), 2542, 2},
 #endif
 
 #ifdef SCUD_4000MAH_8A_BATTERY_PROFILE
-	{ bqfs_coslight, ARRAY_SIZE(bqfs_coslight), 5, 0},
+	{"KG50_SCUD_4000MAH",bqfs_coslight, ARRAY_SIZE(bqfs_coslight), 5, 0},
 #endif
 
 };
@@ -280,6 +281,7 @@ struct bq_fg_chip {
 	int batt_fcc;	/* Full charge capacity */
 	int batt_rm;	/* Remaining capacity */
 	int	batt_dc;	/* Design Capacity */
+	int	batt_dc_conf;	/* Design Capacity */
 	int	batt_volt;
 	int	batt_temp;
 	int	batt_curr;
@@ -1246,12 +1248,13 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 //	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
-//	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 //	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_RESISTANCE_ID,
 	POWER_SUPPLY_PROP_UPDATE_NOW,
+	POWER_SUPPLY_PROP_BATTERY_TYPE,
 };
 
 static int fg_get_property(struct power_supply *psy,
@@ -1332,12 +1335,17 @@ static int fg_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		ret = fg_read_dc(bq);
-		mutex_lock(&bq->data_lock);
-		if (ret > 0)
-			bq->batt_dc = ret;
-		val->intval = bq->batt_dc * 1000;
-		mutex_unlock(&bq->data_lock);
+
+		if (bq->batt_dc_conf > 0) {
+			val->intval = bq->batt_dc_conf  * 1000;
+		} else {
+			ret = fg_read_dc(bq);
+			mutex_lock(&bq->data_lock);
+			if (ret > 0)
+				bq->batt_dc = ret;
+			val->intval = bq->batt_dc * 1000;
+			mutex_unlock(&bq->data_lock);
+		}
 		break;
 
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
@@ -1363,7 +1371,11 @@ static int fg_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_UPDATE_NOW:
 		val->intval = 0;
 		break;
-
+	case POWER_SUPPLY_PROP_BATTERY_TYPE:
+		if (bqfs_image[bq->batt_id].batt_type_str)
+			val->strval = bqfs_image[bq->batt_id].batt_type_str;
+		else val->strval = "No battery type";
+		break;
 	default:
 		mutex_unlock(&bq->update_lock);
 		return -EINVAL;
@@ -2288,6 +2300,12 @@ static int bq_parse_dt(struct bq_fg_chip *bq)
 
 	if (!node)
 		return -1;
+
+
+	rc = of_property_read_u32(node,	"design-capacity",
+				&bq->batt_dc_conf);
+	if (rc < 0)
+		bq->batt_dc_conf = 0;;
 
 	bq->dev_serialnum= NULL;
 	bq->df_serialnum= NULL;
