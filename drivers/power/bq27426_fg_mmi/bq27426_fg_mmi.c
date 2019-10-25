@@ -316,6 +316,7 @@ struct bq_fg_chip {
 	struct delayed_work	heartbeat_work;	/*cycle trig heartbeat work*/
 };
 
+static void fg_check_soc(struct bq_fg_chip *bq);
 
 static int __fg_read_byte(struct i2c_client *client, u8 reg, u8 *val)
 {
@@ -1194,20 +1195,26 @@ static int fg_read_tte(struct bq_fg_chip *bq)
 
 static int fg_get_batt_status(struct bq_fg_chip *bq)
 {
+	int batt_status = 0;
 
 	fg_read_status(bq);
 
 	if (!bq->batt_present)
-		return POWER_SUPPLY_STATUS_UNKNOWN;
+		batt_status = POWER_SUPPLY_STATUS_UNKNOWN;
 	else if (bq->batt_fc)
-		return POWER_SUPPLY_STATUS_FULL;
+		batt_status = POWER_SUPPLY_STATUS_FULL;
 	else if (bq->batt_dsg)
-		return POWER_SUPPLY_STATUS_DISCHARGING;
+		batt_status = POWER_SUPPLY_STATUS_DISCHARGING;
 	else if (bq->batt_curr > 0)
-		return POWER_SUPPLY_STATUS_CHARGING;
+		batt_status = POWER_SUPPLY_STATUS_CHARGING;
 	else
-		return POWER_SUPPLY_STATUS_NOT_CHARGING;
+		batt_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
 
+	if (bq->batt_soc == 100
+		&& batt_status == POWER_SUPPLY_STATUS_NOT_CHARGING)
+		batt_status = POWER_SUPPLY_STATUS_FULL;
+
+	return batt_status;
 }
 
 static int fg_get_batt_capacity_level(struct bq_fg_chip *bq)
@@ -1293,6 +1300,7 @@ static int fg_get_property(struct power_supply *psy,
 			val->intval = bq->fake_soc;
 			break;
 		}
+		fg_check_soc(bq);
 		mutex_lock(&bq->data_lock);
 		val->intval = bq->batt_soc;
 		mutex_unlock(&bq->data_lock);
@@ -2175,7 +2183,35 @@ static void debug_fg_dump_registers(struct bq_fg_chip *bq)
 			sprintf(buf + desc, "Reg[%02X] = %d, ", debug_fg_dump_regs[i], val);
 		}
 	}
-	mmi_fg_dbg(bq, PR_DEBUG, "%s\n", buf);	
+	mmi_fg_dbg(bq, PR_DEBUG, "%s\n", buf);
+}
+
+#define ITERM 200
+static void fg_check_soc(struct bq_fg_chip *bq)
+{
+	int batt_status = 0;
+	fg_read_status(bq);
+
+	if (!bq->batt_present)
+		batt_status = POWER_SUPPLY_STATUS_UNKNOWN;
+	else if (bq->batt_fc)
+		batt_status = POWER_SUPPLY_STATUS_FULL;
+	else if (bq->batt_dsg)
+		batt_status = POWER_SUPPLY_STATUS_DISCHARGING;
+	else if (bq->batt_curr > 0)
+		batt_status = POWER_SUPPLY_STATUS_CHARGING;
+	else
+		batt_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+
+	if (bq->batt_soc == 99
+		&& bq->batt_curr >= 0
+		&& bq->batt_curr < ITERM
+		&& (batt_status == POWER_SUPPLY_STATUS_NOT_CHARGING
+			|| batt_status == POWER_SUPPLY_STATUS_CHARGING)) {
+		pr_err("Force report soc 100, batt curr %d, batt status %d\n",
+				bq->batt_curr, batt_status);
+		bq->batt_soc = 100;
+	}
 }
 
 static irqreturn_t fg_irq_thread(int irq, void *dev_id)
@@ -2397,7 +2433,6 @@ static void bq_heartbeat_work(struct work_struct *work)
 {
 	struct bq_fg_chip *chip = container_of(work,
 				struct bq_fg_chip, heartbeat_work.work);
-
 	determine_initial_status(chip);
 	debug_fg_dump_registers(chip);
 	schedule_delayed_work(&chip->heartbeat_work,
