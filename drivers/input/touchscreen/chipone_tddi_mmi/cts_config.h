@@ -31,11 +31,19 @@
 
 /** Use build in firmware or firmware file in fs*/
 #define CFG_CTS_DRIVER_BUILTIN_FIRMWARE
-#define CFG_CTS_KERNEL_BUILTIN_FIRMWARE
 #define CFG_CTS_FIRMWARE_IN_FS
 #ifdef CFG_CTS_FIRMWARE_IN_FS
-#define CFG_CTS_FIRMWARE_FILENAME       "ICNL9911.bin"
-#define CFG_CTS_FIRMWARE_FILEPATH       "/vendor/firmware/ICNL9911.bin"
+#define CFG_CTS_FW_UPDATE_SYS	// Add FW custom process.
+#define CFG_CTS_FW_UPDATE_FILE_LOAD	// Load config fw bin as default.
+#ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
+#define CFG_CTS_FW_FILE_NAME_MAX_LEN        128
+#define CFG_CTS_FW_FILE_PATH                "/vendor/firmware/"
+#define CFG_CTS_FW_FILE_NAME_VENDOR         "chipone"
+#define CFG_CTS_FW_FILE_NAME_PANEL_SUPPLIER "tianma"
+#endif /*CFG_CTS_FW_UPDATE_FILE_LOAD*/
+
+#define CFG_CTS_FIRMWARE_FILENAME           "ICNL9911.bin"
+#define CFG_CTS_FIRMWARE_FILEPATH           "/vendor/firmware/ICNL9911.bin"
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
 #ifdef CONFIG_PROC_FS

@@ -141,7 +141,7 @@ int cts_spi_send_recv(struct cts_platform_data *pdata, size_t len,
 		//.rx_dma = 0,
 		.bits_per_word = 8,
 	};
-	int error = 0;
+	int ret = 0;
 	cts_data =
 	    container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
 
@@ -150,17 +150,16 @@ int cts_spi_send_recv(struct cts_platform_data *pdata, size_t len,
 #ifdef CFG_CTS_MANUAL_CS
 	cts_plat_set_cs(pdata, 0);
 #endif
-	//fpsensor_spi_set_mode(fpsensor->spi, (u32)fpsensor->spi_freq_khz, 0);
 	spi_message_init(&msg);
 	spi_message_add_tail(&cmd, &msg);
-	error = spi_sync(cts_data->spi_client, &msg);
-	if (error) {
-		cts_err("spi_sync failed.\n");
+	ret = spi_sync(cts_data->spi_client, &msg);
+	if (ret) {
+		cts_err("spi sync failed %d", ret);
 	}
-#if 0				// FPSENSOR_MANUAL_CS
+#ifdef CFG_CTS_MANUAL_CS
 	cts_plat_set_cs(pdata, 1);
 #endif
-	return error;
+	return ret;
 }
 
 size_t cts_plat_get_max_spi_xfer_size(struct cts_platform_data *pdata)
@@ -182,7 +181,7 @@ int cts_plat_spi_write(struct cts_platform_data *pdata, u8 dev_addr,
 	size_t data_len;
 
 	if (len > CFG_CTS_MAX_SPI_XFER_SIZE) {
-		cts_err("write too much data:wlen=%zd\n", len);
+		cts_err("write too much data:wlen=%zu\n", len);
 		return -EIO;
 	}
 
@@ -195,6 +194,7 @@ int cts_plat_spi_write(struct cts_platform_data *pdata, u8 dev_addr,
 			    cts_spi_send_recv(pdata, len + 1, pdata->spi_tx_buf,
 					      pdata->spi_rx_buf);
 			if (ret) {
+				cts_err("SPI write failed %d", ret);
 				if (delay) {
 					mdelay(delay);
 				}
@@ -217,7 +217,9 @@ int cts_plat_spi_write(struct cts_platform_data *pdata, u8 dev_addr,
 			ret =
 			    cts_spi_send_recv(pdata, len + 7, pdata->spi_tx_buf,
 					      pdata->spi_rx_buf);
+			udelay(10 * data_len);
 			if (ret) {
+				cts_err("SPI write failed %d", ret);
 				if (delay) {
 					mdelay(delay);
 				}
@@ -252,6 +254,7 @@ int cts_plat_spi_read(struct cts_platform_data *pdata, u8 dev_addr,
 					      pdata->spi_tx_buf,
 					      pdata->spi_rx_buf);
 			if (ret) {
+				cts_err("SPI read failed %d", ret);
 				if (delay) {
 					mdelay(delay);
 				}
@@ -274,6 +277,7 @@ int cts_plat_spi_read(struct cts_platform_data *pdata, u8 dev_addr,
 						      pdata->spi_tx_buf,
 						      pdata->spi_rx_buf);
 				if (ret) {
+					cts_err("SPI read failed %d", ret);
 					if (delay) {
 						mdelay(delay);
 					}
@@ -288,6 +292,7 @@ int cts_plat_spi_read(struct cts_platform_data *pdata, u8 dev_addr,
 					      pdata->spi_tx_buf,
 					      pdata->spi_rx_buf);
 			if (ret) {
+				cts_err("SPI read failed %d", ret);
 				if (delay) {
 					mdelay(delay);
 				}
@@ -296,16 +301,18 @@ int cts_plat_spi_read(struct cts_platform_data *pdata, u8 dev_addr,
 			memcpy(rbuf, pdata->spi_rx_buf, rlen);
 			crc = (u16) crc32(pdata->spi_rx_buf, rlen);
 			if (get_unaligned_le16(&pdata->spi_rx_buf[rlen]) != crc) {
+				cts_err("SPI RX CRC error: rx_crc %04x != %04x",
+					get_unaligned_le16(&pdata->spi_rx_buf[rlen]), crc);
 				continue;
 			}
 			return 0;
 		} while (++retries < retry);
 	}
 	if (retries >= retry) {
-		cts_err("cts_plat_spi_read error");
+		cts_err("SPI read too much retry");
 	}
 
-	return -ENODEV;
+	return -EIO;
 }
 
 int cts_plat_spi_read_delay_idle(struct cts_platform_data *pdata, u8 dev_addr,
@@ -315,11 +322,11 @@ int cts_plat_spi_read_delay_idle(struct cts_platform_data *pdata, u8 dev_addr,
 	int ret = 0, retries = 0;
 	u16 crc;
 
-	if (wlen > CFG_CTS_MAX_SPI_XFER_SIZE
-	    || rlen > CFG_CTS_MAX_SPI_XFER_SIZE) {
-		cts_err("write/read too much data:wlen=%zd, rlen=%zd", wlen,
+	if (wlen > CFG_CTS_MAX_SPI_XFER_SIZE ||
+		rlen > CFG_CTS_MAX_SPI_XFER_SIZE) {
+		cts_err("write/read too much data:wlen=%zu, rlen=%zu", wlen,
 			rlen);
-		return -EIO;
+		return -E2BIG;
 	}
 
 	if (pdata->cts_dev->rtdata.program_mode) {
@@ -331,6 +338,7 @@ int cts_plat_spi_read_delay_idle(struct cts_platform_data *pdata, u8 dev_addr,
 					      pdata->spi_tx_buf,
 					      pdata->spi_rx_buf);
 			if (ret) {
+				cts_err("SPI read failed %d", ret);
 				if (delay) {
 					mdelay(delay);
 				}
@@ -353,6 +361,7 @@ int cts_plat_spi_read_delay_idle(struct cts_platform_data *pdata, u8 dev_addr,
 						      pdata->spi_tx_buf,
 						      pdata->spi_rx_buf);
 				if (ret) {
+					cts_err("SPI read failed %d", ret);
 					if (delay) {
 						mdelay(delay);
 					}
@@ -384,7 +393,7 @@ int cts_plat_spi_read_delay_idle(struct cts_platform_data *pdata, u8 dev_addr,
 		cts_err("cts_plat_spi_read error");
 	}
 
-	return -ENODEV;
+	return -EIO;
 }
 
 int cts_plat_is_normal_mode(struct cts_platform_data *pdata)
@@ -447,11 +456,11 @@ static irqreturn_t cts_plat_irq_handler(int irq, void *dev_id)
 	    container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
 
 	if (queue_work(cts_data->workqueue, &pdata->ts_irq_work)) {
-        cts_dbg("IRQ queue work");
-        cts_plat_disable_irq(pdata);
-    } else {
-        cts_warn("IRQ handler queue work failed as already on the queue");
-    }
+		cts_dbg("IRQ queue work");
+		cts_plat_disable_irq(pdata);
+	} else {
+		cts_warn("IRQ handler queue work failed as already on the queue");
+	}
 #endif /* CONFIG_GENERIC_HARDIRQS */
 
 	return IRQ_HANDLED;
@@ -718,38 +727,19 @@ void cts_plat_free_resource(struct cts_platform_data *pdata)
 int cts_plat_request_irq(struct cts_platform_data *pdata)
 {
 	int ret;
-	struct cts_device *cts_dev = pdata->cts_dev;
-	struct cts_device_fwdata *fwdata = &cts_dev->fwdata;
-	u8 int_mode;
 
 	cts_info("Request IRQ");
-	int_mode = fwdata->int_mode;
-	cts_info("Get fw int mode:%d, request %s IRQ", int_mode,
-		 int_mode == 0 ? "falling" : "rising");
+
 #ifdef CONFIG_GENERIC_HARDIRQS
-	if (int_mode) {
-		ret = request_threaded_irq(pdata->irq, NULL,
-					   cts_plat_irq_handler,
-					   IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-					   CFG_CTS_DRIVER_NAME, pdata);
-	} else {
-		ret = request_threaded_irq(pdata->irq, NULL,
-					   cts_plat_irq_handler,
-					   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-					   CFG_CTS_DRIVER_NAME, pdata);
-	}
+	ret = request_threaded_irq(pdata->irq, NULL,
+				   cts_plat_irq_handler,
+				   IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+				   CFG_CTS_DRIVER_NAME, pdata);
 #else /* CONFIG_GENERIC_HARDIRQS */
-	if (int_mode) {
-		ret = request_irq(pdata->irq,
-				  cts_plat_irq_handler,
-				  IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-				  CFG_CTS_DRIVER_NAME, pdata);
-	} else {
-		ret = request_irq(pdata->irq,
-				  cts_plat_irq_handler,
-				  IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-				  CFG_CTS_DRIVER_NAME, pdata);
-	}
+	ret = request_irq(pdata->irq,
+			  cts_plat_irq_handler,
+			  IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+			  CFG_CTS_DRIVER_NAME, pdata);
 #endif /* CONFIG_GENERIC_HARDIRQS */
 	if (ret) {
 		cts_err("Request IRQ failed %d", ret);

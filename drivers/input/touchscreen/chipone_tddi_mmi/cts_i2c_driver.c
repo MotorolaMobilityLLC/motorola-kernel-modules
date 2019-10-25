@@ -6,7 +6,7 @@
 #include "cts_sysfs.h"
 
 
-bool cts_show_debug_log = true;
+bool cts_show_debug_log = false;
 
 module_param_named(debug_log, cts_show_debug_log, bool, 0660);
 MODULE_PARM_DESC(debug_log, "Show debug log control");
@@ -76,7 +76,9 @@ static int cts_resume(struct chipone_ts_data *cts_data)
 	}
 #endif /* CFG_CTS_GESTURE */
 
+	cts_lock_device(&cts_data->cts_dev);
 	ret = cts_resume_device(&cts_data->cts_dev);
+	cts_unlock_device(&cts_data->cts_dev);
 	if (ret) {
 		cts_warn("Resume device failed %d", ret);
 		return ret;
@@ -299,6 +301,7 @@ static int cts_driver_probe(struct spi_device *client)
 	if (ret < 0) {
 		cts_warn("Add sysfs entry for device failed %d", ret);
 	}
+
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
 	ret = cts_init_pm_fb_notifier(cts_data);
 	if (ret) {

@@ -64,7 +64,7 @@ extern bool cts_show_debug_log;
     printk("<I>CTS-" LOG_TAG " " fmt"\n", ##__VA_ARGS__)
 #define cts_dbg(fmt, ...)   \
     do {                                                    \
-	if (!cts_show_debug_log)                                     \
+	if (cts_show_debug_log)                                     \
 		printk("<D>CTS-" LOG_TAG " "fmt"\n", ##__VA_ARGS__);   \
 	} while (0)
 
@@ -243,8 +243,6 @@ static inline void cts_plat_deinit_gesture(struct cts_platform_data *pdata)
 }
 #endif /* CFG_CTS_GESTURE */
 
-#endif /* CTS_PLATFORM_H */
-
 #ifdef CFG_CTS_FW_LOG_REDIRECT
 extern size_t cts_plat_get_max_fw_log_size(struct cts_platform_data *pdata);
 extern u8 *cts_plat_get_fw_log_buf(struct cts_platform_data *pdata,
@@ -253,3 +251,6 @@ extern u8 *cts_plat_get_fw_log_buf(struct cts_platform_data *pdata,
 
 extern int cts_plat_set_reset(struct cts_platform_data *pdata, int val);
 extern int cts_plat_get_int_pin(struct cts_platform_data *pdata);
+
+#endif /* CTS_PLATFORM_H */
+
