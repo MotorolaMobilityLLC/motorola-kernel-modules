@@ -37,7 +37,7 @@ enum cts_device_fw_reg {
 	CTS_DEVICE_FW_REG_FW_LIB_MAIN_VERSION = 0x09,
 	CTS_DEVICE_FW_REG_DDI_VERSION = 0x0010,
 	CTS_DEVICE_FW_REG_GET_WORK_MODE = 0x003F,
-	CTS_DEVICE_FW_REG_FW_LIB_SUB_VERSION = 0x47,
+	CTS_DEVICE_FW_REG_FW_LIB_SUB_VERSION = 0x0047,
 
 	CTS_DEVICE_FW_REG_TOUCH_INFO = 0x1000,
 	CTS_DEVICE_FW_REG_RAW_DATA = 0x2000,
@@ -227,7 +227,7 @@ struct cts_device {
 	struct cts_device_rtdata rtdata;
 	const struct cts_flash *flash;
 	bool enabled;
-
+	char config_fw_name[CFG_CTS_FW_FILE_NAME_MAX_LEN + 1];
 };
 
 struct cts_platform_data;
@@ -255,6 +255,8 @@ struct chipone_ts_data {
 #ifdef CONFIG_CTS_LEGACY_TOOL
 	struct proc_dir_entry *procfs_entry;
 #endif				/* CONFIG_CTS_LEGACY_TOOL */
+
+	bool force_reflash;
 
 };
 

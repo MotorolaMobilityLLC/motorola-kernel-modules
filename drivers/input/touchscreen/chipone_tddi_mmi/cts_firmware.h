@@ -2,6 +2,7 @@
 #define CTS_FIRMWARE_H
 
 #include "cts_config.h"
+#include <linux/firmware.h>
 
 struct cts_firmware {
 	const char *name;	/* MUST set to non-NULL if driver builtin firmware */
@@ -10,7 +11,7 @@ struct cts_firmware {
 
 	u8 *data;
 	size_t size;
-
+    const struct firmware *fw;
 };
 
 #define FIRMWARE_VERSION_OFFSET     0x100
@@ -19,8 +20,9 @@ struct cts_firmware {
 
 struct cts_device;
 
-extern const struct cts_firmware *cts_request_firmware(u32 hwid, u16 fwid,
-						       u16 device_fw_ver);
+extern const struct cts_firmware *cts_request_firmware(
+	const struct cts_device *cts_dev,
+	u32 hwid, u16 fwid, u16 device_fw_ver);
 extern void cts_release_firmware(const struct cts_firmware *firmware);
 
 #ifdef CFG_CTS_DRIVER_BUILTIN_FIRMWARE
@@ -54,10 +56,11 @@ extern int cts_update_firmware(struct cts_device *cts_dev,
 			       bool to_flash);
 
 #ifdef CFG_CTS_FIRMWARE_IN_FS
-extern const struct cts_firmware *cts_request_firmware_from_fs(const char
-							       *filepath);
+extern const struct cts_firmware *cts_request_firmware_from_fs(
+	const struct cts_device *cts_dev,	const char *filepath);
 extern int cts_update_firmware_from_file(struct cts_device *cts_dev,
-					 const char *filepath, bool to_flash);
+	const char *filepath, bool to_flash);
+
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
 extern u32 crc32(const u8 *data, size_t len);

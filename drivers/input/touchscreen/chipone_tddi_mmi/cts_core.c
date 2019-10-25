@@ -5,6 +5,7 @@
 #include "cts_core.h"
 #include "cts_sfctrl.h"
 #include "cts_spi_flash.h"
+#include "cts_sysfs.h"
 #include "cts_firmware.h"
 
 #ifdef CONFIG_CTS_I2C_HOST
@@ -1900,13 +1901,21 @@ int cts_resume_device(struct cts_device *cts_dev)
 	}
 
 	if (retries < 0) {
-		const struct cts_firmware *firmware;
+		const struct cts_firmware *firmware = NULL;
 
 		cts_info("Need update firmware when resume");
-		firmware = cts_request_firmware(cts_dev->hwdata->hwid,
-						cts_dev->hwdata->fwid, 0);
+
+#ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
+	if (cts_dev->config_fw_name[0] != '\0') {
+		firmware = cts_request_firmware_from_fs(cts_dev,
+			cts_dev->config_fw_name);
+	}
+#else
+		firmware = cts_request_firmware(cts_dev,
+			cts_dev->hwdata->hwid, cts_dev->hwdata->fwid, 0);
+#endif
 		if (firmware) {
-			ret = cts_update_firmware(cts_dev, firmware, true);
+			ret = cts_update_firmware(cts_dev, firmware, false);
 			cts_release_firmware(firmware);
 
 			if (ret) {
@@ -2192,10 +2201,10 @@ int cts_stop_device(struct cts_device *cts_dev)
 #endif /* CONFIG_CTS_ESD_PROTECTION */
 
     if (work_pending(&cts_data->pdata->ts_irq_work)) {
-	cts_warn("IRQ work is pending .... flush it");
-	flush_work(&cts_data->pdata->ts_irq_work);
+		cts_warn("IRQ work is pending .... flush it");
+		flush_work(&cts_data->pdata->ts_irq_work);
     } else {
-	cts_info("None IRQ work is pending");
+		cts_info("None IRQ work is pending");
     }
 
     cts_info("Flush workqueue...");
@@ -2410,8 +2419,7 @@ int cts_probe_device(struct cts_device *cts_dev)
 	u16 fwid = CTS_DEV_FWID_INVALID;
 	u32 hwid = CTS_DEV_HWID_INVALID;
 	u16 device_fw_ver = 0;
-	const struct cts_firmware *firmware = NULL;
-
+	const struct cts_firmware *firmware;
 	cts_info("Probe device");
 
 read_fwid:
@@ -2470,11 +2478,13 @@ init_hwdata:
 		cts_err("Device hwid: %06x fwid: %04x not found", hwid, fwid);
 		return -ENODEV;
 	}
+
 #ifdef CFG_CTS_FIRMWARE_FORCE_UPDATE
 	cts_warn("Force update firmware");
-	firmware = cts_request_firmware(CTS_DEV_HWID_ANY, CTS_DEV_FWID_ANY, 0);
+	firmware = cts_request_firmware(cts_dev,
+		CTS_DEV_HWID_ANY, CTS_DEV_FWID_ANY, 0);
 #else /* CFG_CTS_FIRMWARE_FORCE_UPDATE */
-	firmware = cts_request_firmware(hwid, fwid, device_fw_ver);
+	firmware = cts_request_firmware(cts_dev, hwid, fwid, device_fw_ver);
 #endif /* CFG_CTS_FIRMWARE_FORCE_UPDATE */
 
 	retries = 0;
@@ -2489,23 +2499,14 @@ update_firmware:
 			if (retries < 3) {
 				cts_plat_reset_device(cts_dev->pdata);
 				goto update_firmware;
-			} else {
-				cts_release_firmware(firmware);
-				return ret;
 			}
-		} else {
-			cts_release_firmware(firmware);
 		}
+		cts_release_firmware(firmware);
 	} else {
-		if (fwid == CTS_DEV_FWID_INVALID) {
-			/* Device without firmware running && no updatable firmware found */
-			return -ENODEV;
-		} else {
+		if (fwid != CTS_DEV_FWID_INVALID) {
 			ret = cts_init_fwdata(cts_dev);
 			if (ret) {
-				cts_err("Device init firmware data failed %d",
-					ret);
-				return ret;
+				cts_err("Device init firmware data failed %d", ret);
 			}
 		}
 	}
@@ -2614,9 +2615,10 @@ static void cts_esd_protection_work(struct work_struct *work)
 
 		cts_warn("ESD protection check failed, update firmware!!!");
 		cts_stop_device_esdrecover(&cts_data->cts_dev);
-		firmware = cts_request_firmware(cts_data->cts_dev.hwdata->hwid,
-						cts_data->cts_dev.hwdata->fwid,
-						0);
+		firmware = cts_request_firmware(&cts_data->cts_dev,
+			cts_data->cts_dev.hwdata->hwid,
+			cts_data->cts_dev.hwdata->fwid,
+			0);
 		if (firmware) {
 			cts_unlock_device(&cts_data->cts_dev);
 			ret =

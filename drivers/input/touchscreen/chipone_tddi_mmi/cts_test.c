@@ -633,13 +633,14 @@ static int wait_fw_to_normal_work(struct cts_device *cts_dev)
 	int i = 0;
 	int ret;
 
-	cts_info ("Wait fw to normal work");
+	cts_info("Wait fw to normal work");
 
 	do {
 		u8 work_mode;
 
 		ret = cts_fw_reg_readb(cts_dev,
-			CTS_DEVICE_FW_REG_GET_WORK_MODE, &work_mode);
+				       CTS_DEVICE_FW_REG_GET_WORK_MODE,
+				       &work_mode);
 		if (ret) {
 			cts_err("Get fw curr work mode failed %d", work_mode);
 			continue;
@@ -649,7 +650,7 @@ static int wait_fw_to_normal_work(struct cts_device *cts_dev)
 			}
 		}
 
-		mdelay (10);
+		mdelay(10);
 	} while (++i < 100);
 
 	return ret ? ret : -ETIMEDOUT;
@@ -963,7 +964,6 @@ int cts_reset_test(struct cts_device *cts_dev)
 	if (ret) {
 		cts_err("Wait fw to normal work failed %d", ret);
 	}
-
 #ifdef CONFIG_CTS_I2C_HOST
 	/* Check whether device is in normal mode */
 	if (cts_plat_is_i2c_online(cts_dev->pdata, CTS_DEV_NORMAL_MODE_I2CADDR)) {
@@ -1206,7 +1206,8 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 min, u16 max)
 	u16 *rawdata;
 	int i;
 
-	cts_info("RAWDATA, threshold[%u, %u]", min, max);
+	cts_info("Rawdata, threshold[%u, %u]", min, max);
+
 	rawdata = (u16 *) kmalloc(RAWDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
 	if (rawdata == NULL) {
 		cts_err("Allocate memory for rawdata failed");
@@ -1214,6 +1215,7 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 min, u16 max)
 	}
 
 	cts_lock_device(cts_dev);
+
 	for (i = 0; i < 5; i++) {
 		int r;
 		u8 val;
@@ -1262,12 +1264,12 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 min, u16 max)
 		ret = -EIO;
 	}
 
-    for (i = 0; i < 5; i++) {
-	int r = cts_disable_get_rawdata(cts_dev);
-	if (r) {
-		cts_err("Disable get rawdata failed %d", r);
-		continue;
-	} else {
+	for (i = 0; i < 5; i++) {
+		int r = cts_disable_get_rawdata(cts_dev);
+		if (r) {
+			cts_err("Disable get rawdata failed %d", r);
+			continue;
+		} else {
 			break;
 		}
 	}
@@ -1276,7 +1278,7 @@ unlock_device:
 	cts_unlock_device(cts_dev);
 
 	if (data_valid) {
-		dump_test_data(cts_dev, "RAWDATA", rawdata);
+		dump_test_data(cts_dev, "Rawdata", rawdata);
 		ret = validate_test_result(cts_dev, "Rawdata",
 					   rawdata, min, max);
 	}
@@ -1394,11 +1396,11 @@ int cts_noise_test(struct cts_device *cts_dev, u32 frames, u16 max)
 
 disable_get_tsdata:
 	for (i = 0; i < 5; i++) {
-	int r = cts_disable_get_rawdata(cts_dev);
-	if (r) {
-		cts_err("Disable get rawdata failed %d", r);
-		continue;
-	} else {
+		int r = cts_disable_get_rawdata(cts_dev);
+		if (r) {
+			cts_err("Disable get rawdata failed %d", r);
+			continue;
+		} else {
 			break;
 		}
 	}
