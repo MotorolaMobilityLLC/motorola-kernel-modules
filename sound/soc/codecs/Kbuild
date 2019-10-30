@@ -20,7 +20,8 @@ EXTRA_CFLAGS += -DCONFIG_TAS2560_REGMAP -DCONFIG_TAS2560_CODEC -DCONFIG_TAS2560_
 endif
 
 ifneq (,$(filter ginna%, $(TARGET_PRODUCT)))
-EXTRA_CFLAGS += -DCONFIG_TAS2562_REGMAP -DCONFIG_TAS2562_CODEC -DCONFIG_SND_SOC_TAS2562 -DTAS2558_CODEC -DCONFIG_TAS25XX_ALGO -DCONFIG_TAS25XX_CALIB
+EXTRA_CFLAGS += -DCONFIG_AW882XX_CODEC
+#-DCONFIG_AW882XX_DSP
 endif
 
 ifeq ($(KDIR),)
@@ -56,3 +57,6 @@ obj-m += tas2560_calib.o
 
 tas2562-objs = tas2562-codec.o tas2562-regmap.o tas25xx-algo.o tas25xx-calib.o
 obj-m += tas2562.o
+
+snd_smartpa_aw882xx-objs = aw882xx.o
+obj-m += snd_smartpa_aw882xx.o
