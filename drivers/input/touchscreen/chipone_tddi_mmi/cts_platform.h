@@ -88,6 +88,10 @@ struct cts_platform_data {
 	u8 vkey_keycodes[CFG_CTS_MAX_VKEY_NUM];
 #endif				/* CONFIG_CTS_VIRTUALKEY */
 
+#ifdef CFG_CTS_FW_UPDATE_SYS
+	const char *panel_supplier;
+#endif
+
 	struct cts_device *cts_dev;
 
 	struct input_dev *ts_input_dev;

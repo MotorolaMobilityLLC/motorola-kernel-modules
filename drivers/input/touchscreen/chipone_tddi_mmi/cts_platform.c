@@ -529,6 +529,17 @@ static int cts_plat_parse_dt(struct cts_platform_data *pdata,
 	}
 	cts_info("  %-12s: %d", "Y resolution", pdata->res_y);
 
+#ifdef CFG_CTS_FW_UPDATE_SYS
+	ret = of_property_read_string(dev_node, CFG_CTS_OF_PANEL_SUPPLIER,
+			&pdata->panel_supplier);
+	if (ret) {
+		pdata->panel_supplier = NULL;
+		cts_warn("read panel supplier failed, ret=%d\n", ret);
+	} else {
+		cts_info("panel supplier=%s", (char *)pdata->panel_supplier);
+	}
+#endif
+
 	return 0;
 }
 #endif /* CONFIG_CTS_OF */

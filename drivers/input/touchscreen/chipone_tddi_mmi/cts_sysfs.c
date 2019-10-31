@@ -154,19 +154,19 @@ static ssize_t reset_store(
 
 	return count;
 }
+*/
 
 static ssize_t cts_panel_supplier_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct chipone_ts_data *data = dev_get_drvdata(dev);
 
-	if (data->panel_supplier) {
+	if (data->pdata && data->pdata->panel_supplier) {
 		return scnprintf(buf, PAGE_SIZE, "%s\n",
-			data->panel_supplier);
+			data->pdata->panel_supplier);
 	}
 	return 0;
 }
-*/
 
 static ssize_t buildid_show(struct device *dev, struct device_attribute *attr,
 			    char *buf)
@@ -189,7 +189,7 @@ static ssize_t forcereflash_store(struct device *dev,
 
 	cts_data->force_reflash = (input == 0) ? false : true;
 
-	cts_dbg("forcereflash_store force_reflash=%d, count=%zu",
+	cts_info("forcereflash_store force_reflash=%d, count=%zu",
 		cts_data->force_reflash, count);
 	return count;
 }
@@ -208,11 +208,20 @@ static bool is_reflash_filename_valid(const struct chipone_ts_data *cts_data,
 {
 	char prefix[CFG_CTS_FW_FILE_NAME_MAX_LEN];
 
-	snprintf(prefix, sizeof(prefix), "%s-%s-%s-",
-		 CFG_CTS_FW_FILE_NAME_VENDOR,
-		 CFG_CTS_FW_FILE_NAME_PANEL_SUPPLIER,
-		 cts_data->cts_dev.hwdata->name);
+	if(NULL  != cts_data->pdata->panel_supplier) {
+		snprintf(prefix, sizeof(prefix), "%s-%s-%s-",
+			 CFG_CTS_FW_FILE_NAME_VENDOR,
+			 cts_data->pdata->panel_supplier,
+			 cts_data->cts_dev.hwdata->name);
+	} else {
+		// panel supplier not set, just check vendor.
+		snprintf(prefix, sizeof(prefix), "%s",
+			 CFG_CTS_FW_FILE_NAME_VENDOR);
+	}
+
+	cts_info("is_reflash_filename_valid: prefix=%s", prefix);
 	if (strncmp(filename, prefix, strlen(prefix))) {
+		cts_err("is_reflash_filename_valid: invalid FW file.");
 		return false;
 	}
 
@@ -305,7 +314,7 @@ static ssize_t cts_productinfo_show(struct device *dev,
 //add sys entries for FW update
 //static DEVICE_ATTR(drv_irq, S_IRUGO | S_IWUSR, drv_irq_show, drv_irq_store);
 //static DEVICE_ATTR(reset, S_IWUSR | S_IWGRP, NULL, reset_store);
-//static DEVICE_ATTR(panel_supplier, 0444, cts_panel_supplier_show, NULL);
+static DEVICE_ATTR(panel_supplier, 0444, cts_panel_supplier_show, NULL);
 static DEVICE_ATTR(buildid, S_IRUGO, buildid_show, NULL);
 static DEVICE_ATTR(forcereflash, S_IWUSR | S_IWGRP, NULL, forcereflash_store);
 static DEVICE_ATTR(flashprog, S_IRUGO, flashprog_show, NULL);
@@ -2500,6 +2509,7 @@ static struct attribute *cts_dev_fw_up_atts[] = {
 	&dev_attr_doreflash.attr,
 	&dev_attr_poweron.attr,
 	&dev_attr_productinfo.attr,
+	&dev_attr_panel_supplier.attr,
 	NULL
 };
 

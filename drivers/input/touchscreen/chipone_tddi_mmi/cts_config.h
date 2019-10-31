@@ -39,7 +39,6 @@
 #define CFG_CTS_FW_FILE_NAME_MAX_LEN        128
 #define CFG_CTS_FW_FILE_PATH                "/vendor/firmware/"
 #define CFG_CTS_FW_FILE_NAME_VENDOR         "chipone"
-#define CFG_CTS_FW_FILE_NAME_PANEL_SUPPLIER "tianma"
 #endif /*CFG_CTS_FW_UPDATE_FILE_LOAD*/
 
 #define CFG_CTS_FIRMWARE_FILENAME           "ICNL9911.bin"
