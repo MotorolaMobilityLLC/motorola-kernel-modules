@@ -42,6 +42,7 @@
 
 
 #define MAX_BUFFER_SIZE 260
+#define WAKEUP_SRC_TIMEOUT		(2000)
 
 #define DRIVER_VERSION "2.0.4"
 
@@ -73,6 +74,7 @@ struct st21nfc_dev {
 	wait_queue_head_t read_wq;
 	struct miscdevice st21nfc_device;
 	bool irq_enabled;
+	bool irq_wake_up;
 	struct st21nfc_platform platform_data;
 	spinlock_t irq_enabled_lock;
 	/* CLK control */
@@ -133,6 +135,8 @@ static int st_clock_deselect(struct st21nfc_dev *st21nfc_dev)
 	return r;
 }
 
+static void st21nfc_disable_irq(struct st21nfc_dev *st21nfc_dev);
+
 static int st21nfc_loc_set_polaritymode(struct st21nfc_dev *st21nfc_dev,
 					int mode)
 {
@@ -169,14 +173,15 @@ static int st21nfc_loc_set_polaritymode(struct st21nfc_dev *st21nfc_dev,
 	st21nfc_dev->irq_enabled = true;
 
 	ret = request_irq(client->irq, st21nfc_dev_irq_handler,
-			  st21nfc_dev->platform_data.polarity_mode,
+			  st21nfc_dev->platform_data.polarity_mode|IRQF_NO_SUSPEND,
 			  client->name, st21nfc_dev);
-	if (!ret)
+	if (!ret) {
 		irqIsAttached = true;
+		st21nfc_disable_irq(st21nfc_dev);
+	}
 
 	return ret;
 }
-
 
 static void st21nfc_disable_irq(struct st21nfc_dev *st21nfc_dev)
 {
@@ -192,11 +197,28 @@ static void st21nfc_disable_irq(struct st21nfc_dev *st21nfc_dev)
 	spin_unlock_irqrestore(&st21nfc_dev->irq_enabled_lock, flags);
 }
 
+static void st21nfc_enable_irq(struct st21nfc_dev *st21nfc_dev)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&st21nfc_dev->irq_enabled_lock, flags);
+	if (!st21nfc_dev->irq_enabled) {
+		st21nfc_dev->irq_enabled = true;
+		enable_irq(st21nfc_dev->platform_data.client->irq);
+
+	}
+	spin_unlock_irqrestore(&st21nfc_dev->irq_enabled_lock, flags);
+}
+
+
 static irqreturn_t st21nfc_dev_irq_handler(int irq, void *dev_id)
 {
 	struct st21nfc_dev *st21nfc_dev = dev_id;
 
 	pr_debug("enter\n");
+	if (device_may_wakeup(&st21nfc_dev->platform_data.client->dev))
+		pm_wakeup_event(&st21nfc_dev->platform_data.client->dev,
+			WAKEUP_SRC_TIMEOUT);
 	st21nfc_disable_irq(st21nfc_dev);
 
 	/* Wake up waiting readers */
@@ -204,6 +226,7 @@ static irqreturn_t st21nfc_dev_irq_handler(int irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
+
 
 static ssize_t st21nfc_dev_read(struct file *filp, char __user *buf,
 				size_t count, loff_t *offset)
@@ -504,8 +527,7 @@ static unsigned int st21nfc_poll(struct file *file, poll_table *wait)
 		/* Wake_up_pin is low. Activate ISR  */
 		if (!st21nfc_dev->irq_enabled) {
 			pr_debug("enable irq\n");
-			st21nfc_dev->irq_enabled = true;
-			enable_irq(st21nfc_dev->platform_data.client->irq);
+			st21nfc_enable_irq(st21nfc_dev);
 		} else {
 			pr_debug("irq already enabled\n");
 		}
@@ -754,7 +776,6 @@ static int st21nfc_probe(struct i2c_client *client,
 
 	client->irq = gpio_to_irq(platform_data->irq_gpio);
 
-	enable_irq_wake(client->irq);
 	/* init mutex and queues */
 	init_waitqueue_head(&st21nfc_dev->read_wq);
 	mutex_init(&st21nfc_dev->platform_data.read_mutex);
@@ -777,6 +798,10 @@ static int st21nfc_probe(struct i2c_client *client,
 		goto err_request_irq_failed;
 	}
 	st21nfc_disable_irq(st21nfc_dev);
+
+	device_init_wakeup(&client->dev, true);
+	device_set_wakeup_capable(&client->dev, true);
+	st21nfc_dev->irq_wake_up = false;
 
 	ret = st_clock_select(st21nfc_dev);
 	if (ret < 0) {
@@ -832,6 +857,33 @@ static int st21nfc_remove(struct i2c_client *client)
 	return 0;
 }
 
+static int st21nfc_suspend(struct device *device)
+{
+	struct i2c_client *client = to_i2c_client(device);
+	struct st21nfc_dev *st21nfc_dev = i2c_get_clientdata(client);
+
+	if (device_may_wakeup(&client->dev) && st21nfc_dev->irq_enabled) {
+		if (!enable_irq_wake(client->irq))
+			st21nfc_dev->irq_wake_up = true;
+	}
+
+	return 0;
+}
+
+static int st21nfc_resume(struct device *device)
+{
+	struct i2c_client *client = to_i2c_client(device);
+	struct st21nfc_dev *st21nfc_dev = i2c_get_clientdata(client);
+
+	if (device_may_wakeup(&client->dev) && st21nfc_dev->irq_wake_up) {
+		if (!disable_irq_wake(client->irq))
+			st21nfc_dev->irq_wake_up = false;
+	}
+
+	return 0;
+}
+
+
 static const struct i2c_device_id st21nfc_id[] = {
 	{"st21nfc", 0},
 	{}
@@ -842,12 +894,17 @@ static const struct of_device_id st21nfc_of_match[] = {
 	{}
 };
 
+static const struct dev_pm_ops st21nfc_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(st21nfc_suspend, st21nfc_resume)
+};
+
 static struct i2c_driver st21nfc_driver = {
 	.id_table = st21nfc_id,
 	.driver = {
 		.name	= "st21nfc",
 		.owner	= THIS_MODULE,
 		.of_match_table	= st21nfc_of_match,
+		.pm = &st21nfc_pm_ops,
 	},
 	.probe		= st21nfc_probe,
 	.remove		= st21nfc_remove,
