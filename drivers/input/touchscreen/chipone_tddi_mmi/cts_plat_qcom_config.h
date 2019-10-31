@@ -44,6 +44,10 @@
 #define CFG_CTS_OF_RST_GPIO_NAME		"chipone,rst-gpio"
 #define CFG_CTS_OF_X_RESOLUTION_NAME	"chipone,x-res"
 #define CFG_CTS_OF_Y_RESOLUTION_NAME	"chipone,y-res"
+
+#ifdef CFG_CTS_FW_UPDATE_SYS
+#define CFG_CTS_OF_PANEL_SUPPLIER		"chipone,panel-supplier"
+#endif
 #endif /* CONFIG_CTS_OF */
 
 #endif /* CTS_PLAT_QCOM_CONFIG_H */
