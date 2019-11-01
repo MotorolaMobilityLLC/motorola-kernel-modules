@@ -1628,7 +1628,7 @@ void madera_set_magic_bit(struct madera_extcon *info, bool on)
 				   MADERA_ACCDET_POLARITY_INV_ENA_MASK,
 				   MADERA_ACCDET_POLARITY_INV_ENA);
 		regmap_update_bits(madera->regmap,
-				   MADERA_ACCESSORY_DETECT_MODE_1,
+				   MADERA_MIC_DETECT_1_CONTROL_1,
 				   MADERA_MICD_RATE_MASK,
 				   rate << MADERA_MICD_RATE_SHIFT);
 	}
