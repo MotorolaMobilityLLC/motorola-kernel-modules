@@ -2616,12 +2616,19 @@ static int cts_fw_class_init(void *_data, bool create)
 			return error;
 		}
 
-		cts_info("Create device '" CFG_CTS_DEVICE_NAME "'");
-		ts_class_dev = device_create(touchscreen_class, NULL,
+		if(NULL != data->cts_dev.hwdata->name) {
+			ts_class_dev = device_create(touchscreen_class, NULL,
 					     MKDEV(INPUT_MAJOR, minor),
-					     data, CFG_CTS_DEVICE_NAME);
+					     data, data->cts_dev.hwdata->name);
+			cts_info("Create device for IC: %s", data->cts_dev.hwdata->name);
+		} else {
+			ts_class_dev = device_create(touchscreen_class, NULL,
+					     MKDEV(INPUT_MAJOR, minor),
+					     data, CFG_CTS_CHIP_NAME);
+			cts_info("Create device '" CFG_CTS_CHIP_NAME "'");
+		}
 		if (IS_ERR(ts_class_dev)) {
-			cts_err("Create device '" CFG_CTS_DEVICE_NAME
+			cts_err("Create device '" CFG_CTS_CHIP_NAME
 				"'failed %ld", PTR_ERR(ts_class_dev));
 			error = PTR_ERR(ts_class_dev);
 			ts_class_dev = NULL;
@@ -2642,8 +2649,7 @@ static int cts_fw_class_init(void *_data, bool create)
 		if (error) {
 			goto device_destroy;
 		} else {
-			cts_info("Create /sys/class/touchscreen/%s Succeeded",
-				 CFG_CTS_DEVICE_NAME);
+			cts_info("Create /sys/class/touchscreen/ Succeeded");
 		}
 	} else {
 		if (!touchscreen_class || !ts_class_dev)

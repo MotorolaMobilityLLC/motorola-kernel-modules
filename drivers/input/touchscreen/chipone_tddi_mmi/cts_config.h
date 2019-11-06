@@ -45,6 +45,9 @@
 #define CFG_CTS_FIRMWARE_FILEPATH           "/vendor/firmware/ICNL9911.bin"
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
+/* IC type support */
+#define CFG_CTS_CHIP_NAME      "ICNL9911S"
+
 #ifdef CONFIG_PROC_FS
     /* Proc FS for backward compatibility for APK tool com.ICN85xx */
 #define CONFIG_CTS_LEGACY_TOOL
