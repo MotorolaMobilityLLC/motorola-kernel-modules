@@ -1,7 +1,7 @@
 /*
  * aw882xx.c   aw882xx codec module
  *
- * Version: v0.1.3
+ * Version: v0.1.6
  *
  * keep same with AW882XX_VERSION
  *
@@ -47,7 +47,7 @@
  ******************************************************/
 #define AW882XX_I2C_NAME "aw882xx_smartpa"
 
-#define AW882XX_VERSION "v0.1.5"
+#define AW882XX_VERSION "v0.1.6"
 
 #define AW882XX_RATES SNDRV_PCM_RATE_8000_48000
 #define AW882XX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
@@ -470,16 +470,15 @@ static int aw882xx_get_cali_re_form_nv(int32_t *cali_re)
 	loff_t pos = 0;
 	mm_segment_t fs;
 
-	/*set fs kernel*/
-	fs = get_fs();
-	set_fs(get_ds());
-
 	/*open cali file*/
 	fp = filp_open(AWINIC_CALI_FILE, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
 		pr_err("%s: open %s failed!", __func__, AWINIC_CALI_FILE);
 		return -EINVAL;
 	}
+	/*set fs kernel*/
+	fs = get_fs();
+	set_fs(get_ds());
 
 	/*read file*/
 	vfs_read(fp, buf, CALI_BUF_MAX - 1, &pos);
@@ -487,16 +486,17 @@ static int aw882xx_get_cali_re_form_nv(int32_t *cali_re)
 	/*get cali re value*/
 	if(sscanf(buf, "%d", &read_re) != 1) {
 		pr_err("%s: file read error", __func__);
+		set_fs(fs);
         filp_close(fp, NULL);
 		return -EINVAL;
 	}
 	set_fs(fs);
-	pr_info("%s: %d", __func__, read_re);
 
 	/*close file*/
 	filp_close(fp, NULL);
 
 	*cali_re = read_re;
+	pr_info("%s: %d", __func__, read_re);
 	return  0;
 }
 
