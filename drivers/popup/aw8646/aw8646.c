@@ -35,7 +35,9 @@
 enum gpios_index {
     MOTOR_POWER_EN = 0,
     MOTOR_FAULT_INT,
+#ifndef CONFIG_USE_HW_CLK
     MOTOR_STEP,
+#endif
     MOTOR_HW_STEP,
     MOTOR_DIR,
     MOTOR_MODE1,
@@ -50,7 +52,9 @@ enum gpios_index {
 static const char* const gpios_labels[] = {
     "MOTOR_POWER_EN",
     "MOTOR_FAULT_INT",
+#ifndef CONFIG_USE_HW_CLK
     "MOTOR_STEP",
+#endif
     "MOTOR_HW_STEP",
     "MOTOR_DIR",
     "MOTOR_MODE1",
@@ -62,9 +66,15 @@ static const char* const gpios_labels[] = {
     "MOTOR_UNKNOWN"
 };
 
+#ifndef CONFIG_USE_HW_CLK
 static const int def_gpios_table[] = {
-    116, 41, 122, 37, 47, 49, 26, 85, 36, 27
+    116, 41, 122, 59, 37, 47, 49, 26, 85, 36, 27
 };
+#else
+static const int def_gpios_table[] = {
+    52, 57, 21, 32, 30, 51, 29, 50, 49, 33
+};
+#endif
 
 static const unsigned long hw_clocks[] = {
     DEFAULT_STEP_FREQ,      //0,0        software clock
@@ -119,8 +129,10 @@ enum motor_pins_mode {
     INT_DEFAULT,
     CLK_ACTIVE,
     CLK_SLEEP,
+#ifndef CONFIG_USE_HW_CLK
     SW_CLK_ACTIVE,
     SW_CLK_DISABLE,
+#endif
     PINS_END
 };
 
@@ -132,7 +144,9 @@ static const char* const pins_state[] = {
     "t1_low", "t1_high", "t1_disable",
     "aw8646_int_default",
     "aw8646_clk_active", "aw8646_clk_sleep",
+#ifndef CONFIG_USE_HW_CLK
     "aw8646_sw_clk_active", "aw8646_sw_clk_disable",
+#endif
     NULL
 };
 
@@ -146,7 +160,9 @@ typedef struct motor_control {
     const char* const * plabels;
 }motor_control;
 
+#define CLOCK_NAME_LEN 16
 typedef struct motor_device {
+    char clock_name[CLOCK_NAME_LEN];
     struct device*  dev;
     struct device*  sysfs_dev;
     struct class*   aw8646_class;
@@ -308,7 +324,7 @@ static int init_motor_clk(motor_device* md)
 {
     int ret = 0;
 
-    md->pwm_clk = devm_clk_get(md->dev, MOTOR_HW_CLK_NAME);
+    md->pwm_clk = devm_clk_get(md->dev, md->clock_name);
     if(IS_ERR(md->pwm_clk)) {
         dev_err(md->dev, "Get clk error, motor is not drived\n");
         ret = -ENODEV;
@@ -486,13 +502,17 @@ static void moto_aw8646_set_motor_mode(motor_device* md)
             if(md->mode == FULL_STEP) {
                 md->cur_clk = hw_clocks[md->mode];
                 set_pinctrl_state(md, CLK_SLEEP);
+#ifndef CONFIG_USE_HW_CLK
                 set_pinctrl_state(md, SW_CLK_ACTIVE);
+#endif
                 dev_info(md->dev, "md->mode is FULL_STEP\n");
             } else {
+#ifndef CONFIG_USE_HW_CLK
                 //Only set software clk once.
                 if(md->cur_mode == FULL_STEP) {
                     set_pinctrl_state(md, SW_CLK_DISABLE);
                 }
+#endif
                 md->cur_clk = hw_clocks[md->mode];
                 dev_info(md->dev, "Switch hw clock\n");
             }
@@ -626,8 +646,10 @@ static int moto_aw8646_drive_sequencer(motor_device* md)
             hrtimer_start(&md->stepping_timer, ms_to_ktime(md->time_out), HRTIMER_MODE_REL);
             dev_info(md->dev, "driver hw clock\n");
         } else {
+#ifndef CONFIG_USE_HW_CLK
             motor_control* mc = &md->mc;
             gpio_direction_output(mc->ptable[MOTOR_STEP], md->level);
+#endif
             atomic_inc(&md->step_count);
             hrtimer_start(&md->stepping_timer, adapt_time_helper(md->half), HRTIMER_MODE_REL);
             dev_info(md->dev, "advance the motor half of period %d, %lld\n",
@@ -723,14 +745,17 @@ static enum hrtimer_restart motor_stepping_timer_action(struct hrtimer *h)
                 md->user_sync_complete = true;
                 wake_up(&md->sync_complete);
             }
+#ifndef CONFIG_USE_HW_CLK
             gpio_direction_output(md->mc.ptable[MOTOR_STEP], 0);
+#endif
             spin_unlock_irqrestore(&md->mlock, flags);
             return HRTIMER_NORESTART;;
         }
 
         md->level = !md->level;
+#ifndef CONFIG_USE_HW_CLK
         gpio_direction_output(md->mc.ptable[MOTOR_STEP], md->level);
-
+#endif
         if(md->double_edge) {
             atomic_inc(&md->step_count);
         } else if(md->level) {
@@ -1217,6 +1242,7 @@ static int moto_aw8646_init_from_dt(motor_device* md)
     motor_control* mc = &md->mc;
     uint32_t temp_value;
     int rc = 0;
+    const char *clock_name;
 
     rc = of_property_read_u32(np, "aw8646-gpios-cells", &temp_value);
     if (rc) {
@@ -1235,6 +1261,12 @@ static int moto_aw8646_init_from_dt(motor_device* md)
         dev_err(pdev, "%d:Failed to get gpios list\n", rc);
         goto exit;
     }
+
+    if (!of_property_read_string(np, "clock-names", &clock_name))
+        strlcpy(md->clock_name, clock_name, CLOCK_NAME_LEN);
+    else
+        strlcpy(md->clock_name, MOTOR_HW_CLK_NAME, CLOCK_NAME_LEN);
+    dev_info(pdev, "hw clock name: %s\n", md->clock_name);
 
     md->hw_clock = of_property_read_bool(np, "enable-hw-clock");
     dev_info(pdev, "Enable hw clock %d\n", md->hw_clock);
@@ -1359,10 +1391,12 @@ static int moto_aw8646_probe(struct platform_device *pdev)
             dev_info(dev, "HW clock is setup\n");
         }
     }
+
     //Init software clock pin.
     set_pinctrl_state(md, CLK_SLEEP);
+#ifndef CONFIG_USE_HW_CLK
     set_pinctrl_state(md, SW_CLK_ACTIVE);
-
+#endif
     do {
         ret = devm_gpio_request(dev, md->mc.ptable[i], gpios_labels[i]);
         if(ret < 0) {
