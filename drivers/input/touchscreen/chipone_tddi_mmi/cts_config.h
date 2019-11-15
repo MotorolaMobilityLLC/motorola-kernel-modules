@@ -58,7 +58,7 @@
 #define CONFIG_CTS_SYSFS
 #endif /* CONFIG_SYSFS */
 
-#define CFG_CTS_MAX_TOUCH_NUM               (5)
+#define CFG_CTS_MAX_TOUCH_NUM               (10) // 5
 
 /* Virtual key support */
 //#define CONFIG_CTS_VIRTUALKEY

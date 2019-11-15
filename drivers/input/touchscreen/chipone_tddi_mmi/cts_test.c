@@ -688,9 +688,9 @@ static int prepare_test(struct cts_device *cts_dev)
 		return ret;
 	}
 
-	ret = set_fw_work_mode(cts_dev, CTS_FIRMWARE_WORK_MODE_FACTORY);
+	ret = set_fw_work_mode(cts_dev, CTS_FIRMWARE_WORK_MODE_CONFIG);
 	if (ret) {
-		cts_err("Set firmware work mode to WORK_MODE_FACTORY failed %d",
+		cts_err("Set firmware work mode to WORK_MODE_CONFIG failed %d",
 			ret);
 		return ret;
 	}
