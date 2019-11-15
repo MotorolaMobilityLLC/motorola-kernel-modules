@@ -2,4 +2,8 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
+ifeq ($(CONFIG_LIBER_DTB), y)
+EXTRA_CFLAGS += -DCONFIG_USE_HW_CLK
+endif
+
 obj-m += aw8646.o
