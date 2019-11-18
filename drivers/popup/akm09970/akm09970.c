@@ -69,6 +69,8 @@
 #define make_s16(u8h, u8l) \
 	((int16_t)(((uint16_t)(u8h) << 8) | (uint16_t)(u8l)))
 
+#define akm09970_adc_overflow(st1) ((0x0100 & (st1)) >> 8)
+
 static int64_t akm09970_get_delay(struct device *dev);
 
 /* select mode by delay */
@@ -76,7 +78,7 @@ static uint8_t akm09970_select_mode(int64_t delay)
 {
 	uint8_t mode;
 
-	if (delay <= AKM09970_DELAY_025HZ)
+	if (delay >= AKM09970_DELAY_025HZ)
 		mode = AKM09970_MODE_CONT_MEASURE_MODE1;
 	else if (delay >= AKM09970_DELAY_05HZ)
 		mode = AKM09970_MODE_CONT_MEASURE_MODE2;
@@ -155,13 +157,17 @@ static void akm09970_set_enable(struct device *dev, int32_t enable)
 	uint8_t mode;
 	int64_t delay;
 
+	mxinfo(&client->dev, " %s: enable = 0x%x\n", __func__, enable);
+
 	mutex_lock(&p_data->mtx.enable);
 
 	if (enable) { /*enable if state will be changed*/
 		if (!atomic_cmpxchg(&p_data->atm.enable, 0, 1)) {
+			hrtimer_cancel(&p_data->sample_timer);
 			delay = akm09970_get_delay(dev);
 			mode = akm09970_select_mode(delay);
 			akm09970_set_operation_mode(dev, mode);
+			hrtimer_start(&p_data->sample_timer, ns_to_ktime(delay), HRTIMER_MODE_REL);
 		}
 	} else { /*disable if state will be changed*/
 		if (atomic_cmpxchg(&p_data->atm.enable, 1, 0)) {
@@ -190,14 +196,17 @@ static void akm09970_set_delay(struct device *dev, int64_t delay)
 	struct i2c_client *client = to_i2c_client(dev);
 	akm09970_i2c_data *p_data = i2c_get_clientdata(client);
 	ktime_t time_out;
+	uint8_t mode;
 
 	atomic64_set(&p_data->atm.delay, delay);
-
+	mxinfo(&client->dev, " %s: update delay = 0x%lld\n", __func__, delay);
 	mutex_lock(&p_data->mtx.enable);
 
 	if (akm09970_get_enable(dev)) {
 		hrtimer_cancel(&p_data->sample_timer);
-		time_out = ms_to_ktime(delay);
+		time_out = ns_to_ktime(delay);
+		mode = akm09970_select_mode(delay);
+		akm09970_set_operation_mode(dev, mode);
 		hrtimer_start(&p_data->sample_timer, time_out, HRTIMER_MODE_REL);
 	}
 
@@ -250,27 +259,27 @@ static int32_t akm09970_measure(akm09970_i2c_data *p_data, struct mag_data_type 
 		return err;
 	}
 
-	/* check st1 DRDY bit. */
-	st1 = make_s16(reg_data[0], reg_data[1]);
-	if (st1 != AKM09970_ST1_IS_DRDY_VALUE) {
-		mxerr(&client->dev, "%s: ST1 NO_DRDY check failed\n", __func__);
+	/* check st1 ERRADCEN bit. */
+	st1 = make_u16(reg_data[0], reg_data[1]);
+	if (akm09970_adc_overflow(st1)) {
+		mxerr(&client->dev, "%s: sensor data overflow\n", __func__);
 	}
 
+	mutex_lock(&p_data->mtx.data);
 	mag_data->x = make_s16(reg_data[6], reg_data[7]);
 	mag_data->y = make_s16(reg_data[4], reg_data[5]);
 	mag_data->z = make_s16(reg_data[2], reg_data[3]);
-
+	mutex_unlock(&p_data->mtx.data);
 	if (akm09970_get_debug(&client->dev)) {
 		mxinfo(&client->dev, "state: %d,raw data x = %d,y = %d,z = %d\n",
 			st1, mag_data->x, mag_data->y, mag_data->z);
 	}
 
-	return err;
+	return 0;
 }
 
 static void akm09970_func(akm09970_i2c_data *p_data)
 {
-	ktime_t time_out = ms_to_ktime(akm09970_get_delay(&p_data->client->dev));
 	struct mag_data_type raw;
 	int32_t err = 0;
 
@@ -278,15 +287,13 @@ static void akm09970_func(akm09970_i2c_data *p_data)
 	err = akm09970_measure(p_data, &raw);
 
 	if (!err) {
+		mutex_lock(&p_data->mtx.data);
 		input_report_abs(p_data->input_dev, ABS_X, raw.x);
 		input_report_abs(p_data->input_dev, ABS_Y, raw.y);
 		input_report_abs(p_data->input_dev, ABS_Z, raw.z);
 		input_sync(p_data->input_dev);
+		mutex_unlock(&p_data->mtx.data);
 	}
-
-	if (atomic_read(&p_data->atm.enable))
-		hrtimer_start(&p_data->sample_timer, time_out, HRTIMER_MODE_REL);
-	dbg("run schedule_delayed_work");
 }
 
 static void akm09970_work_func(struct work_struct *work)
@@ -298,11 +305,12 @@ static void akm09970_work_func(struct work_struct *work)
 static enum hrtimer_restart akm09970_timer_action(struct hrtimer *h)
 {
 	akm09970_i2c_data *p_data = container_of(h, akm09970_i2c_data, sample_timer);
-
 	p_data->sync_flag = true;
 	wake_up(&p_data->sync_complete);
 
-	return HRTIMER_NORESTART;
+	hrtimer_forward_now(&p_data->sample_timer, ns_to_ktime(akm09970_get_delay(&p_data->client->dev)));
+
+	return HRTIMER_RESTART;
 }
 
 static __ref int32_t akm09970_thread(void *arg)
@@ -466,7 +474,7 @@ static int32_t akm09970_init_device(struct i2c_client *client)
 	atomic_set(&p_data->atm.debug, 0);
 #endif
 
-	akm09970_set_delay(pdev, AKM09970_MAX_DELAY_NS);
+	akm09970_set_delay(pdev, AKM09970_MIN_DELAY_NS);
 	akm09970_set_debug(pdev, 0);
 
 	err = devm_gpio_request(pdev, p_data->gpio_rst, "gpio_rst");
