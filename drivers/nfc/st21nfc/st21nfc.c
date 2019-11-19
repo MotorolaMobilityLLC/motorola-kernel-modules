@@ -42,7 +42,7 @@
 
 
 #define MAX_BUFFER_SIZE 260
-#define WAKEUP_SRC_TIMEOUT		(2000)
+#define WAKEUP_SRC_TIMEOUT	(8000)
 
 #define DRIVER_VERSION "2.0.4"
 
