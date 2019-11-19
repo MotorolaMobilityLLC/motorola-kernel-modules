@@ -20,6 +20,10 @@ ifneq (,$(filter channel%, $(TARGET_PRODUCT)))
 EXTRA_CFLAGS += -DCONFIG_TAS2560_REGMAP -DCONFIG_TAS2560_CODEC -DCONFIG_TAS2560_MISC -DCONFIG_SND_SOC_TAS2560
 endif
 
+ifneq (,$(filter liber%, $(TARGET_PRODUCT)))
+EXTRA_CFLAGS += -DCONFIG_AW882XX_CODEC
+endif
+
 ifeq ($(KDIR),)
 PLMA_HOSTSW_DIR=$(realpath -f $(srctree)/$(src))
 else
@@ -81,3 +85,6 @@ obj-m += tas2560_algo.o
 
 tas2560_calib-objs = tas2560-calib.o
 obj-m += tas2560_calib.o
+
+snd_smartpa_aw882xx-objs = aw882xx.o
+obj-m += snd_smartpa_aw882xx.o
