@@ -657,14 +657,169 @@ err:
 	return count;
 }
 
+static int64_t akm09970_check_var(const int16_t buf[], int32_t size, int16_t *ave_data)
+{
+	int32_t i;
+	int64_t sum = 0, var_sum = 0, ave = 0, var = 0;
+
+	for (i = 0; i < size; i++)
+		sum = sum +buf[i];
+
+	ave = (int64_t)(sum/size);
+	*ave_data = (int16_t)ave;
+
+	for (i = 0; i < size; i++)
+		var_sum = var_sum + (buf[i] -ave)*(buf[i] -ave);
+	var = (int64_t)(var_sum/size);
+	return var;
+}
+
+static int64_t akm09970_check_diff(const int16_t buf[], int32_t size)
+{
+	int32_t i, ret = AKM09970_CHECK_ERR;
+	int64_t val;
+
+	val = buf[0];
+	for (i = 0; i < size; i++) {
+		if (val != buf[i]) {
+			ret = 0;
+			break;
+		}
+		val = buf[i];
+	}
+
+	return ret;
+}
+
+static int32_t akm09970_check_axis_data(const int16_t buf_data[], int32_t size, int16_t *ave_data)
+{
+	int64_t buf_var;
+	int32_t ret;
+
+	buf_var = akm09970_check_var(buf_data, size, ave_data);
+	dbg("var[%d, %d] = %lld\n", AKM09970_VAR_LIMIT_LOW, AKM09970_VAR_LIMIT_HIGH, buf_var);
+	if (buf_var <= AKM09970_VAR_LIMIT_LOW) {
+		ret = akm09970_check_diff(buf_data, size);
+		if (ret != 0) {
+			dbg("check diff failed, too low, ret = %d\n", ret);
+			return ret;
+		}
+	}
+
+	if (buf_var >= AKM09970_VAR_LIMIT_HIGH) {
+		dbg("check diff failed, too high\n");
+		return AKM09970_CHECK_ERR;
+	}
+
+	return 0;
+}
+
+static int32_t akm09970_get_onedata(akm09970_i2c_data *p_data, struct mag_data_type *mag_data)
+{
+	struct i2c_client *client = p_data->client;
+	struct device *cdev = &client->dev;
+	int32_t ret;
+	int32_t st1_retry_cnt = AKM09970_DRAY_RETRY_MAX;
+	uint8_t st1_reg[AKM09970_ST1_SIZE];
+	uint8_t reg_data[AKM09970_REG_ST1_XYZ];
+	uint16_t st1;
+	bool st1_rdy = false;
+
+	akm09970_set_operation_mode(cdev, AKM09970_MODE_SNG_MEASURE);
+	mdelay(AKM09970_DRDY_DELAY_MS);
+
+	while (st1_retry_cnt > 0) {
+		ret = i2c_smbus_read_i2c_block_data(client,
+			AKM09970_REG_ST1, AKM09970_ST1_SIZE, st1_reg);
+		if (ret < 0) {
+			mxerr(cdev, "read st1 reg data for DRDY fail\n");
+			return ret;
+		}
+		st1 = make_u16(st1_reg[0], st1_reg[1]);
+		if (st1 == AKM09970_ST1_IS_DRDY_VALUE) {
+			st1_rdy = true;
+			break;
+		} else
+			mdelay(AKM09970_DRDY_DELAY_MS);
+		mxerr(cdev, "ST1 not ready retry,cnt= %d, st1 = 0x%x\n",
+			st1_retry_cnt, st1);
+		st1_retry_cnt--;
+	}
+
+	if (st1_rdy) {
+		ret = i2c_smbus_read_i2c_block_data(client, AKM09970_REG_ST1_XYZ,
+			AKM09970_BDATA_SIZE, reg_data);
+		if (ret < 0) {
+			mxerr(cdev, "read XYZ reg data fail\n");
+			return ret;
+		}
+
+		mag_data->x = make_s16(reg_data[6], reg_data[7]);
+		mag_data->y = make_s16(reg_data[4], reg_data[5]);
+		mag_data->z = make_s16(reg_data[2], reg_data[3]);
+
+		ret = i2c_smbus_read_i2c_block_data(client,
+			AKM09970_REG_ST1, AKM09970_ST1_SIZE, st1_reg);
+		if (ret < 0) {
+			mxerr(cdev, "read reg data for NO_DRAY fail\n");
+			return ret;
+		}
+
+		st1 = make_u16(st1_reg[0], st1_reg[1]);
+		if (st1 != AKM09970_ST1_NO_DRDY_VALUE) {
+			mxerr(cdev, "ST1 NO_DRDY check failed\n");
+			return AKM09970_CHECK_ERR;
+		}
+	} else {
+		mxerr(cdev, "read onedata err\n");
+		return AKM09970_CHECK_ERR;
+	}
+
+	return 0;
+}
+
+#define MEASURE_CNTS 10
 static ssize_t akm09970_data_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	akm09970_i2c_data *p_data = (akm09970_i2c_data *)dev_get_drvdata(dev);
 	struct mag_data_type raw;
+	struct mag_data_type data_buf[MEASURE_CNTS];
+	uint32_t i, ret;
+	int16_t buf_tmp[MEASURE_CNTS], axis_val;
 
-	akm09970_measure(p_data, &raw);
+	memset(data_buf, 0, sizeof(data_buf));
+
+	for (i = 0; i < MEASURE_CNTS; i++) {
+		ret = akm09970_get_onedata(p_data, &data_buf[i]);
+		if (ret != 0)
+			goto err;
+	}
+
+	for (i = 0; i < MEASURE_CNTS; i++)
+		buf_tmp[i] = data_buf[i].x;
+	ret = akm09970_check_axis_data(buf_tmp, MEASURE_CNTS, &axis_val);
+	if (ret != 0)
+		goto  err;
+	raw.x = axis_val;
+
+	for (i = 0; i < MEASURE_CNTS; i++)
+		buf_tmp[i] = data_buf[i].y;
+	ret = akm09970_check_axis_data(buf_tmp, MEASURE_CNTS, &axis_val);
+	if (ret != 0)
+		goto  err;
+	raw.y = axis_val;
+
+	for (i = 0; i < MEASURE_CNTS; i++)
+		buf_tmp[i] = data_buf[i].z;
+	ret = akm09970_check_axis_data(buf_tmp, MEASURE_CNTS, &axis_val);
+	if (ret != 0)
+		goto  err;
+	raw.z = axis_val;
+
 	return snprintf(buf, 20, "%d %d %d\n", raw.x, raw.y, raw.z);
+err:
+	return snprintf(buf, 20, "%d %d %d\n", 0, 0, 0);
 }
 
 static ssize_t akm09970_dump_show(struct device *dev,
@@ -679,7 +834,7 @@ static ssize_t akm09970_dump_show(struct device *dev,
 					  "CNTL1", "CNTL2", "SRST"};
 	int32_t reg[DUMP_SIZE] = {AKM09970_REG_WIA, AKM09970_REG_ST1, AKM09970_REG_ST1_XYZ,
 				  AKM09970_REG_CNTL1, AKM09970_REG_CNTL2, AKM09970_REG_SRST};
-	int32_t reg_data_size[DUMP_SIZE] = {AKM09970_WIA_SIZE, AKM09970_WIA_ST1_SIZE,
+	int32_t reg_data_size[DUMP_SIZE] = {AKM09970_WIA_SIZE, AKM09970_ST1_SIZE,
 					    AKM09970_BDATA_SIZE, AKM09970_CNTL1_SIZE,
 					    AKM09970_CNTL2_SIZE, AKM09970_SRST_SIZE};
 	uint8_t reg_data[AKM09970_BDATA_SIZE] = { 0 };
