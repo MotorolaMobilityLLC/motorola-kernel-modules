@@ -30,9 +30,13 @@
 #ifdef AKM09970_WIDE_RANGE
 #define AKM09970_SET_SMR     (0x20)
 #define AKM09970_SENS_Q14    ((int32_t)(50790)) /* 3.1uT in Q14 format, 3.1 * 16384 */
+#define AKM09970_VAR_LIMIT_HIGH 260
+#define AKM09970_VAR_LIMIT_LOW  0
 #else // AKM09970_WIDE_RANGE
 #define AKM09970_SET_SMR     (0x00)
 #define AKM09970_SENS_Q14    ((int32_t)(18022))  /* 1.1uT in Q14 format, 1.1 * 16384 */
+#define AKM09970_VAR_LIMIT_HIGH 2066
+#define AKM09970_VAR_LIMIT_LOW  0
 #endif // AKM09970_WIDE_RANGE
 
 #define AKM09970_SET_MODE(ctrl2)  (AKM09970_SET_SDR | AKM09970_SET_SMR | ctrl2)
@@ -63,7 +67,7 @@
 #define AKM09970_REG_SRST                        0x30
 
 #define AKM09970_WIA_SIZE 		2
-#define AKM09970_WIA_ST1_SIZE		2
+#define AKM09970_ST1_SIZE		2
 #define AKM09970_BDATA_SIZE		8
 #define AKM09970_CNTL1_SIZE		2
 #define AKM09970_CNTL2_SIZE		1
@@ -95,10 +99,15 @@
 #define AKM09970_CONTROL			"control"
 
 #define AKM09970_RESET_DELAY_MS		1
+#define AKM09970_DRDY_DELAY_MS		2
+#define AKM09970_DRAY_RETRY_MAX		3
 #define AKM09970_SOFT_RESET_VALUE	0x01
 
 #define AKM09970_WIA_VALUE		0xC048
 #define AKM09970_ST1_IS_DRDY_VALUE	0xFC01
+#define AKM09970_ST1_NO_DRDY_VALUE	0xFC00
+
+#define AKM09970_CHECK_ERR (-1)
 
 typedef struct {
     struct mutex enable;
