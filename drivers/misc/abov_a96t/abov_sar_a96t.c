@@ -578,6 +578,26 @@ static ssize_t reset_store(struct class *class,
 
 static CLASS_ATTR_RW(reset);
 
+static ssize_t int_state_show(struct class *class,
+		struct class_attribute *attr,
+		char *buf)
+{
+	pabovXX_t this = abov_sar_ptr;
+	LOG_DBG("Reading INT line state\n");
+	return snprintf(buf, 8, "%d\n", this->int_state);
+}
+static CLASS_ATTR_RO(int_state);
+
+static ssize_t fw_download_status_show(struct class *class,
+                struct class_attribute *attr,
+                char *buf)
+{
+	pabovXX_t this = abov_sar_ptr;
+	LOG_DBG("Reading fw download state\n");
+        return snprintf(buf, 8, "%d", this->fw_dl_status);
+}
+static CLASS_ATTR_RO(fw_download_status);
+
 static ssize_t enable_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
@@ -1163,11 +1183,13 @@ static int abov_fw_update(bool force)
 	} else {
 		LOG_INFO("Firmware is latest,exiting fw upgrade...\n");
 		fw_upgrade = false;
+		this->fw_dl_status = 0;
 		rc = -EIO;
 		goto rel_fw;
 	}
 
 	if (fw_upgrade) {
+		this->fw_dl_status = 2;
 		for (update_loop = 0; update_loop < 10; update_loop++) {
 			rc = _abov_fw_update(client, &fw->data[32], fw->size-32);
 			if (rc < 0)
@@ -1179,8 +1201,11 @@ static int abov_fw_update(bool force)
 				break;
 			}
 		}
-		if (update_loop >= 10)
+		if (update_loop >= 10) {
+			this->fw_dl_status = 1;
 			rc = -EIO;
+		}
+		this->fw_dl_status = 0;
 	}
 
 rel_fw:
@@ -1551,6 +1576,18 @@ static int abov_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			return ret;
 		}
 
+		ret = class_create_file(&capsense_class, &class_attr_int_state);
+                if (ret < 0) {
+                        LOG_DBG("Create int_state file failed (%d)\n", ret);
+                        return ret;
+                }
+
+		ret = class_create_file(&capsense_class, &class_attr_fw_download_status);
+		if (ret < 0) {
+			LOG_DBG("Create fw_download_status file failed (%d)\n", ret);
+			return ret;
+		}
+
 		ret = class_create_file(&capsense_class, &class_attr_enable);
 		if (ret < 0) {
 			LOG_DBG("Create enable file failed (%d)\n", ret);
@@ -1621,6 +1658,7 @@ static int abov_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		}
 
 		this->loading_fw = false;
+		this->fw_dl_status = 1;
 		if (isForceUpdate == true) {
 		    INIT_WORK(&this->fw_update_work, capsense_fore_update_work);
 		} else {
@@ -1801,6 +1839,7 @@ static irqreturn_t abovXX_interrupt_thread(int irq, void *data)
 
 	mutex_lock(&this->mutex);
 	LOG_INFO("abovXX_irq\n");
+	this->int_state = 1;
 	if ((!this->get_nirq_low) || this->get_nirq_low(this->board->irq_gpio))
 		abovXX_process_interrupt(this, 1);
 	else
@@ -1834,6 +1873,7 @@ static irqreturn_t abovXX_irq(int irq, void *pvoid)
 	if (pvoid) {
 		this = (pabovXX_t)pvoid;
 		LOG_INFO("abovXX_irq\n");
+		this->int_state = 1;
 		if ((!this->get_nirq_low) || this->get_nirq_low(this->board->irq_gpio)) {
 			LOG_INFO("abovXX_irq - Schedule Work\n");
 			abovXX_schedule_work(this, 0);
@@ -1937,6 +1977,7 @@ int abovXX_sar_init(pabovXX_t this)
 			LOG_DBG("irq %d busy?\n", this->irq);
 			return err;
 		}
+		this->int_state = 0;
 #ifdef USE_THREADED_IRQ
 		LOG_DBG("registered with threaded irq (%d)\n", this->irq);
 #else
