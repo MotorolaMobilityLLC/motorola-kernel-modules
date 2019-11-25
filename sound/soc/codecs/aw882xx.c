@@ -175,6 +175,12 @@ static int aw882xx_i2c_write(struct aw882xx *aw882xx,
 	unsigned char cnt = 0;
 	unsigned char buf[2];
 
+	/* for now, we force codec to be mono mode
+	   this should be removed after pa algo enabled */
+	if (reg_addr == 0x06){
+		reg_data |= 0x0c00;
+	}
+
 	buf[0] = (reg_data&0xff00)>>8;
 	buf[1] = (reg_data&0x00ff)>>0;
 
