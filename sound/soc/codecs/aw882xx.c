@@ -1071,8 +1071,10 @@ static struct snd_soc_dai_driver aw882xx_dai[] = {
 		 },
 		.ops = &aw882xx_dai_ops,
 		.symmetric_rates = 1,
+#if 0
 		.symmetric_channels = 1,
 		.symmetric_samplebits = 1,
+#endif
 	},
 };
 
