@@ -1455,6 +1455,53 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 }
 #endif
 
+static int fts_reboot(struct notifier_block *nb,
+			unsigned long event,
+			void *unused)
+{
+	struct fts_ts_data *ts_data = container_of(nb, struct fts_ts_data, fts_reboot);
+
+	FTS_FUNC_ENTER();
+
+#if FTS_ESDCHECK_EN
+	fts_esdcheck_suspend();
+#endif
+
+#if FTS_USB_DETECT_EN
+	if (ts_data->charger_notif.notifier_call)
+		power_supply_unreg_notifier(&ts_data->charger_notif);
+#endif
+
+#ifdef CONFIG_DRM
+	if (msm_drm_unregister_client(&ts_data->fb_notif))
+		FTS_ERROR("Error occurred while unregistering fb_notifier.\n");
+#elif defined(CONFIG_FB)
+	if (fb_unregister_client(&ts_data->fb_notif))
+		FTS_ERROR("Error occurred while unregistering fb_notifier.\n");
+#elif defined(CONFIG_HAS_EARLYSUSPEND)
+	unregister_early_suspend(&ts_data->early_suspend);
+#endif
+
+	fts_irq_disable();
+	free_irq(ts_data->irq, ts_data);
+
+	if (gpio_is_valid(ts_data->pdata->reset_gpio)) {
+		gpio_direction_output(ts_data->pdata->reset_gpio, 0);
+		msleep(20);
+		gpio_free(ts_data->pdata->reset_gpio);
+	}
+	if (gpio_is_valid(ts_data->pdata->irq_gpio))
+		gpio_free(ts_data->pdata->irq_gpio);
+
+#if FTS_POWER_SOURCE_CUST_EN
+	fts_power_source_exit(ts_data);
+#endif
+
+	FTS_FUNC_EXIT();
+
+	return NOTIFY_DONE;
+}
+
 static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 {
     int ret = 0;
@@ -1631,9 +1678,19 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 	}
 #endif
 
+	ts_data->fts_reboot.notifier_call = fts_reboot;
+	ts_data->fts_reboot.next = NULL;
+	ts_data->fts_reboot.priority = 1;
+	ret = register_reboot_notifier(&ts_data->fts_reboot);
+	if (ret) {
+		FTS_ERROR("register for reboot failed\n");
+		goto reboot_register_err;
+	}
+
     FTS_FUNC_EXIT();
     return 0;
 
+reboot_register_err:
 #if FTS_USB_DETECT_EN
 err_register_charger_notify_failed:
 if (ts_data->charger_notif.notifier_call)
@@ -1669,6 +1726,8 @@ err_bus_init:
 static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 {
     FTS_FUNC_ENTER();
+
+	unregister_reboot_notifier(&ts_data->fts_reboot);
 
 #if FTS_USB_DETECT_EN
 	if (ts_data->charger_notif.notifier_call)
