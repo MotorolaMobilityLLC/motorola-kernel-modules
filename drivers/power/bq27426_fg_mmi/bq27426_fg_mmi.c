@@ -54,7 +54,7 @@
 #endif
 
 #ifdef SCUD_4000MAH_8A_BATTERY_PROFILE
-#include "bq27426_gmfs_coslight.h"
+#include "lenovo_scud_df1_gmfs.h"
 #endif
 
 #undef pr_debug
@@ -188,7 +188,7 @@ static const struct fg_batt_profile bqfs_image[] = {
 #endif
 
 #ifdef SCUD_4000MAH_8A_BATTERY_PROFILE
-	{"KG50_SCUD_4000MAH",bqfs_coslight, ARRAY_SIZE(bqfs_coslight), 5, 0},
+	{"KG50_SCUD_4000MAH",scud_bqfs_image, ARRAY_SIZE(scud_bqfs_image), 9824, 1},
 #endif
 
 };
