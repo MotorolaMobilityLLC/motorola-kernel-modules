@@ -68,6 +68,7 @@
 #ifdef FOCALTECH_SENSOR_EN
 #include <linux/sensors.h>
 #endif
+#include <linux/reboot.h>
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -224,6 +225,7 @@ struct fts_ts_data {
 	uint8_t usb_connected;
 	struct notifier_block charger_notif;
 #endif
+	struct notifier_block fts_reboot;
 
 #ifdef FOCALTECH_SENSOR_EN
     bool wakeable;
