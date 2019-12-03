@@ -19,6 +19,10 @@
 
 #define AW882XX_MODE_SHIFT_MAX				2
 
+#define AFE_RX_PROT_ID  0x1016							/*AFE_PORT_ID_QUINARY_MI2S_RX*/
+#define AW_MODULE_ID_COPP (0X10013D20)					/*SKT module id*/
+#define AW_MODULE_PARAMS_ID_COPP_ENABLE (0X10013D15)	/*SKT enable param id*/
+
 
 #define DEFAULT_CALI_VALUE (7)
 #define AFE_PARAM_ID_AWDSP_RX_SET_ENABLE        (0x10013D11)
@@ -159,7 +163,7 @@ struct aw882xx_monitor{
 	int16_t pre_temp;
 #ifdef AW_DEBUG
 	uint16_t test_vol;
-	int16_t test_temp;	
+	int16_t test_temp;
 #endif
 };
 
@@ -193,6 +197,4 @@ struct aw882xx_container {
 	int len;
 	unsigned char data[];
 };
-
-
 #endif
