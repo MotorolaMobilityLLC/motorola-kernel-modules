@@ -22,8 +22,6 @@
  * 0x10 : Low power drive */
 #define AKM09970_SET_SDR     (0x00)
 
-#define AKM09970_WIDE_RANGE
-
 /* AKM09970_REG_SMR (spec 12.3.6)
  * 0x00 : High sensitivity
  * 0x20 : Wide measurement range */
