@@ -334,6 +334,12 @@ static int sec_mmi_dt(struct sec_mmi_data *data)
 		data->usb_detection = true;
 	}
 
+	if (of_property_read_bool(np, "sec,force-calibration")) {
+		struct sec_ts_data *ts = data->ts_ptr;
+		dev_info(DEV_MMI, "%s: using force calibration\n", __func__);
+		ts->force_calibration = true;
+	}
+
 	if (!of_property_read_u32(np, "sec,reset-on-resume", &data->reset))
 		dev_info(DEV_MMI, "%s: using %u reset on resume\n",
 				__func__, data->reset);
@@ -535,8 +541,6 @@ static void sec_mmi_enable_touch(struct sec_mmi_data *data)
 	struct sec_ts_data *ts = data->ts_ptr;
 
 	sec_mmi_fw_read_id(data);
-	sec_ts_integrity_check(ts);
-
 	if (data->usb_detection) {
 		struct power_supply *psy;
 
@@ -553,6 +557,7 @@ static void sec_mmi_enable_touch(struct sec_mmi_data *data)
 		}
 	}
 
+	sec_ts_integrity_check(ts);
 	sec_ts_sense_on(ts);
 	dev_dbg(DEV_MMI, "%s: touch sensing ready\n", __func__);
 }
