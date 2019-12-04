@@ -59,9 +59,9 @@
 #define dbg_func_out()    dbg("[akm09970-DBG-F.OUT] %s", __func__)
 #define dbg_line()        dbg("[LINE] %d(%s)", __LINE__, __func__)
 
-#define mxerr(pdev, fmt, args...)          \
+#define log_err(pdev, fmt, args...)          \
 	dev_err(pdev, "[ERR] %s(L%04d) : " fmt "\n", __func__, __LINE__, ##args)
-#define mxinfo(pdev, fmt, args...)        \
+#define log_info(pdev, fmt, args...)        \
 	dev_info(pdev, "[INFO] %s(L%04d) : " fmt "\n", __func__, __LINE__, ##args)
 
 #define make_u16(u8h, u8l) \
@@ -103,12 +103,12 @@ static int16_t akm09970_set_operation_mode(struct device *dev, const uint8_t mod
 	uint16_t ctrl1_data = AKM09970_SET_CNTL1;
 	int16_t ret;
 
-	mxinfo(&client->dev, "%s: mode = 0x%x\n", __func__, mode);
+	log_info(&client->dev, "%s: mode = 0x%x\n", __func__, mode);
 
 	ret = i2c_smbus_write_i2c_block_data(client,
 		AKM09970_REG_CNTL1, 2, (uint8_t *)&ctrl1_data);
 	if (ret < 0) {
-		mxerr(&client->dev, "%s: i2c ctrl1 write fail\n", __func__);
+		log_err(&client->dev, "%s: i2c ctrl1 write fail\n", __func__);
 		return ret;
 	}
 
@@ -119,7 +119,7 @@ static int16_t akm09970_set_operation_mode(struct device *dev, const uint8_t mod
 
 	ret = i2c_smbus_write_i2c_block_data(client, AKM09970_REG_CNTL2, 1, &i2c_data);
 	if (ret < 0) {
-		mxerr(&client->dev, "%s: i2c cntrl2 write fail\n", __func__);
+		log_err(&client->dev, "%s: i2c cntrl2 write fail\n", __func__);
 		return ret;
 	}
 
@@ -157,7 +157,7 @@ static void akm09970_set_enable(struct device *dev, int32_t enable)
 	uint8_t mode;
 	int64_t delay;
 
-	mxinfo(&client->dev, " %s: enable = 0x%x\n", __func__, enable);
+	log_info(&client->dev, " %s: enable = 0x%x\n", __func__, enable);
 
 	mutex_lock(&p_data->mtx.enable);
 
@@ -199,7 +199,7 @@ static void akm09970_set_delay(struct device *dev, int64_t delay)
 	uint8_t mode;
 
 	atomic64_set(&p_data->atm.delay, delay);
-	mxinfo(&client->dev, " %s: update delay = 0x%lld\n", __func__, delay);
+	log_info(&client->dev, " %s: update delay = 0x%lld\n", __func__, delay);
 	mutex_lock(&p_data->mtx.enable);
 
 	if (akm09970_get_enable(dev)) {
@@ -222,7 +222,7 @@ static int32_t akm09970_power_init(struct i2c_client *client)
 	p_data->vdd = regulator_get(pdev, "vdd");
 	if (IS_ERR(p_data->vdd)) {
 		ret = PTR_ERR(p_data->vdd);
-		mxerr(pdev, "Failed to get %s VDD ret=%d\n", p_data->type, ret);
+		log_err(pdev, "Failed to get %s VDD ret=%d\n", p_data->type, ret);
 		goto exit;
 	}
 
@@ -230,11 +230,11 @@ static int32_t akm09970_power_init(struct i2c_client *client)
 		ret = regulator_set_voltage(p_data->vdd,
 			AKM09970_VDD_MIN_UV, AKM09970_VDD_MAX_UV);
 		if (ret) {
-			mxerr(pdev, "Failed to set %s vdd range ret=%d\n", p_data->type, ret);
+			log_err(pdev, "Failed to set %s vdd range ret=%d\n", p_data->type, ret);
 			goto err_put_vdd;
 		}
 	} else
-		mxinfo(pdev, "WARING: No VDD range set, default\n");
+		log_info(pdev, "WARING: No VDD range set, default\n");
 
 	return 0;
 
@@ -255,14 +255,14 @@ static int32_t akm09970_measure(akm09970_i2c_data *p_data, struct mag_data_type 
 	err = i2c_smbus_read_i2c_block_data(client, AKM09970_REG_ST1_XYZ,
 						AKM09970_BDATA_SIZE, reg_data);
 	if (err < 0) {
-		mxerr(&client->dev, "%s: read reg data fail\n", __func__);
+		log_err(&client->dev, "%s: read reg data fail\n", __func__);
 		return err;
 	}
 
 	/* check st1 ERRADCEN bit. */
 	st1 = make_u16(reg_data[0], reg_data[1]);
 	if (akm09970_adc_overflow(st1)) {
-		mxerr(&client->dev, "%s: sensor data overflow\n", __func__);
+		log_err(&client->dev, "%s: sensor data overflow\n", __func__);
 	}
 
 	mutex_lock(&p_data->mtx.data);
@@ -271,7 +271,7 @@ static int32_t akm09970_measure(akm09970_i2c_data *p_data, struct mag_data_type 
 	mag_data->z = make_s16(reg_data[2], reg_data[3]);
 	mutex_unlock(&p_data->mtx.data);
 	if (akm09970_get_debug(&client->dev)) {
-		mxinfo(&client->dev, "state: %d,raw data x = %d,y = %d,z = %d\n",
+		log_info(&client->dev, "state: %d,raw data x = %d,y = %d,z = %d\n",
 			st1, mag_data->x, mag_data->y, mag_data->z);
 	}
 
@@ -283,7 +283,6 @@ static void akm09970_func(akm09970_i2c_data *p_data)
 	struct mag_data_type raw;
 	int32_t err = 0;
 
-	dbg_func_in();
 	err = akm09970_measure(p_data, &raw);
 
 	if (!err) {
@@ -377,7 +376,7 @@ reset_failed:
 	i2c_data = AKM09970_SOFT_RESET_VALUE;
 	ret = i2c_smbus_write_i2c_block_data(client, AKM09970_REG_SRST, 1, &i2c_data);
 	if (ret < 0) {
-		mxerr(&client->dev, "i2c_transfer was failed (%d),reset failed.", ret);
+		log_err(&client->dev, "i2c_transfer was failed (%d),reset failed.", ret);
 		return ret;
 	}
 
@@ -398,13 +397,13 @@ static int32_t akm09970_parse_dt(struct i2c_client *client)
 
 	ret = of_property_read_string(np, "label", &p_data->type);
 	if (ret) {
-		mxerr(pdev, "Failed to get lable\n");
+		log_err(pdev, "Failed to get lable\n");
 		goto exit;
 	}
 
 	ret = of_property_read_u32(np, "magnachip,init-freq", &init_freq);
 	if (ret && (ret != -EINVAL)) {
-		mxerr(pdev, "Failed to get init-freq\n");
+		log_err(pdev, "Failed to get init-freq\n");
 		goto exit;
 	}
 
@@ -446,13 +445,13 @@ static int32_t akm09970_check_chip_id(struct device *dev)
 	ret = i2c_smbus_read_i2c_block_data(client,
 		AKM09970_REG_WIA, AKM09970_WIA_SIZE, reg_wia);
 	if (ret < 0) {
-		mxerr(&client->dev, "read chip_id fail\n");
+		log_err(&client->dev, "read chip_id fail\n");
 		return ret;
 	}
 
 	chip_id = make_u16(reg_wia[1], reg_wia[0]);
 	if (chip_id != AKM09970_WIA_VALUE) {
-		mxerr(&client->dev, "%s: invalid device id, chip_id = 0x%x\n",
+		log_err(&client->dev, "%s: invalid device id, chip_id = 0x%x\n",
 			__func__, chip_id);
 		return -ENODEV;
 	}
@@ -479,22 +478,22 @@ static int32_t akm09970_init_device(struct i2c_client *client)
 
 	err = devm_gpio_request(pdev, p_data->gpio_rst, "gpio_rst");
 	if (err != 0) {
-		mxerr(pdev, "Failed to request reset gpio %s (%d)", p_data->type, err);
+		log_err(pdev, "Failed to request reset gpio %s (%d)", p_data->type, err);
 		return err;
 	}
 
 	err = akm09970_hard_reset(p_data->gpio_rst);
 	if (err) {
-		mxerr(pdev, "Failed to reset %s (%d)", p_data->type, err);
+		log_err(pdev, "Failed to reset %s (%d)", p_data->type, err);
 		return err;
 	}
 
 	err = akm09970_check_chip_id(pdev);
 	if (err < 0) {
-		mxerr(pdev, "akm09970_check_chip_id fail\n");
+		log_err(pdev, "akm09970_check_chip_id fail\n");
 		return err;
 	}
-	mxinfo(pdev, "%s initializing device was success", p_data->type);
+	log_info(pdev, "%s initializing device was success", p_data->type);
 
 	return 0;
 }
@@ -560,14 +559,14 @@ static ssize_t akm09970_enable_store(struct device *dev,
 	uint32_t enable = 0;
 
 	if (kstrtouint(buf, 10, &enable)) {
-		mxerr(dev, "Error value: %s\n", buf);
+		log_err(dev, "Error value: %s\n", buf);
 		goto err;
 	}
 
 	enable = !!enable;
 
 	if (enable == atomic_read(&p_data->atm.enable)) {
-		mxinfo(cdev, "ignore duplicate set\n");
+		log_info(cdev, "ignore duplicate set\n");
 		goto err;
 	}
 
@@ -596,7 +595,7 @@ static ssize_t akm09970_delay_store(struct device *dev,
 	int64_t delay;
 
 	if (kstrtouint(buf, 10, &freq)) {
-		mxerr(dev, "Error value: %s\n", buf);
+		log_err(dev, "Error value: %s\n", buf);
 		goto err;
 	}
 
@@ -611,7 +610,7 @@ static ssize_t akm09970_delay_store(struct device *dev,
 
 	delay = 1000000000LL / freq;
 	if (delay == atomic_read(&p_data->atm.delay)) {
-		mxinfo(cdev, "ignore duplicate set\n");
+		log_info(cdev, "ignore duplicate set\n");
 		goto err;
 	}
 
@@ -640,14 +639,14 @@ static ssize_t akm09970_debug_store(struct device *dev,
 	uint32_t debug = 0;
 
 	if (kstrtouint(buf, 10, &debug)) {
-		mxerr(dev, "Error value: %s\n", buf);
+		log_err(dev, "Error value: %s\n", buf);
 		goto err;
 	}
 
 	debug = !!debug;
 
 	if (debug == atomic_read(&p_data->atm.debug)) {
-		mxinfo(cdev, "ignore duplicate set\n");
+		log_info(cdev, "ignore duplicate set\n");
 		goto err;
 	}
 
@@ -732,7 +731,7 @@ static int32_t akm09970_get_onedata(akm09970_i2c_data *p_data, struct mag_data_t
 		ret = i2c_smbus_read_i2c_block_data(client,
 			AKM09970_REG_ST1, AKM09970_ST1_SIZE, st1_reg);
 		if (ret < 0) {
-			mxerr(cdev, "read st1 reg data for DRDY fail\n");
+			log_err(cdev, "read st1 reg data for DRDY fail\n");
 			return ret;
 		}
 		st1 = make_u16(st1_reg[0], st1_reg[1]);
@@ -741,7 +740,7 @@ static int32_t akm09970_get_onedata(akm09970_i2c_data *p_data, struct mag_data_t
 			break;
 		} else
 			mdelay(AKM09970_DRDY_DELAY_MS);
-		mxerr(cdev, "ST1 not ready retry,cnt= %d, st1 = 0x%x\n",
+		log_err(cdev, "ST1 not ready retry,cnt= %d, st1 = 0x%x\n",
 			st1_retry_cnt, st1);
 		st1_retry_cnt--;
 	}
@@ -750,7 +749,7 @@ static int32_t akm09970_get_onedata(akm09970_i2c_data *p_data, struct mag_data_t
 		ret = i2c_smbus_read_i2c_block_data(client, AKM09970_REG_ST1_XYZ,
 			AKM09970_BDATA_SIZE, reg_data);
 		if (ret < 0) {
-			mxerr(cdev, "read XYZ reg data fail\n");
+			log_err(cdev, "read XYZ reg data fail\n");
 			return ret;
 		}
 
@@ -761,17 +760,17 @@ static int32_t akm09970_get_onedata(akm09970_i2c_data *p_data, struct mag_data_t
 		ret = i2c_smbus_read_i2c_block_data(client,
 			AKM09970_REG_ST1, AKM09970_ST1_SIZE, st1_reg);
 		if (ret < 0) {
-			mxerr(cdev, "read reg data for NO_DRAY fail\n");
+			log_err(cdev, "read reg data for NO_DRAY fail\n");
 			return ret;
 		}
 
 		st1 = make_u16(st1_reg[0], st1_reg[1]);
 		if (st1 != AKM09970_ST1_NO_DRDY_VALUE) {
-			mxerr(cdev, "ST1 NO_DRDY check failed\n");
+			log_err(cdev, "ST1 NO_DRDY check failed\n");
 			return AKM09970_CHECK_ERR;
 		}
 	} else {
-		mxerr(cdev, "read onedata err\n");
+		log_err(cdev, "read onedata err\n");
 		return AKM09970_CHECK_ERR;
 	}
 
@@ -842,7 +841,7 @@ static ssize_t akm09970_dump_show(struct device *dev,
 	for (i = 0; i < DUMP_SIZE; i++) {
 		err = i2c_smbus_read_i2c_block_data(client, reg[i], reg_data_size[i], reg_data);
 		if (err < 0) {
-			mxerr(&client->dev, "%s: read reg data fail\n", __func__);
+			log_err(&client->dev, "%s: read reg data fail\n", __func__);
 			return err;
 		}
 		p += snprintf(p, PAGE_SIZE, "%s: ", reg_name[i]);
@@ -850,7 +849,7 @@ static ssize_t akm09970_dump_show(struct device *dev,
 			p += snprintf(p, PAGE_SIZE, "0x%02x ", reg_data[j]);
 		p += snprintf(p, PAGE_SIZE, "\n");
 
-		mxinfo(&client->dev, " %s value: 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",
+		log_info(&client->dev, " %s value: 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",
 			reg_name[i], reg_data[0], reg_data[1], reg_data[2], reg_data[3],
 			reg_data[4], reg_data[5], reg_data[6], reg_data[7]);
 		memset(reg_data, 0, sizeof(reg_data));
@@ -892,13 +891,13 @@ static int32_t akm09970_i2c_probe(struct i2c_client *client, const struct i2c_de
 
 	p_data = kzalloc(sizeof(akm09970_i2c_data), GFP_KERNEL);
 	if (!p_data) {
-		mxerr(&client->dev, "kernel memory alocation was failed");
+		log_err(&client->dev, "kernel memory alocation was failed");
 		err = -ENOMEM;
 		goto err_nomem;
 	}
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		mxerr(&client->dev, "i2c_check_functionality was failed");
+		log_err(&client->dev, "i2c_check_functionality was failed");
 		err = -ENODEV;
 		goto err_nodev;
 	}
@@ -912,7 +911,7 @@ static int32_t akm09970_i2c_probe(struct i2c_client *client, const struct i2c_de
 
 	err = akm09970_parse_dt(client);
 	if (err) {
-		mxerr(&client->dev, "Failed to parse device tree\n");
+		log_err(&client->dev, "Failed to parse device tree\n");
 		err = -ENODEV;
 		goto err_nodev;
 	}
@@ -920,7 +919,7 @@ static int32_t akm09970_i2c_probe(struct i2c_client *client, const struct i2c_de
 	if (!p_data->power_always_on) {
 		err = akm09970_power_init(client);
 		if (err) {
-			mxerr(&client->dev, "Failed to get sensor regulators\n");
+			log_err(&client->dev, "Failed to get sensor regulators\n");
 			err = -EINVAL;
 			goto err_nodev;
 		}
@@ -929,22 +928,22 @@ static int32_t akm09970_i2c_probe(struct i2c_client *client, const struct i2c_de
 
 	err = akm09970_init_device(client);
 	if (err) {
-		mxerr(&client->dev, "akm09970_init_device was failed(%d)", err);
+		log_err(&client->dev, "akm09970_init_device was failed(%d)", err);
 		goto err_nodev;
 	}
-	mxinfo(&client->dev, "%s was found", p_data->type);
+	log_info(&client->dev, "%s was found", p_data->type);
 
 	INIT_WORK(&p_data->akm09970_work, akm09970_work_func);
 	p_data->akm09970_wq = alloc_workqueue("akm09970_wq", WQ_HIGHPRI, 0);
 	if (!p_data->akm09970_wq) {
-		mxerr(&client->dev, "failed alloc wq");
+		log_err(&client->dev, "failed alloc wq");
 		goto err_nodev;
 	}
 	p_data->sync_flag = false;
 	init_waitqueue_head(&p_data->sync_complete);
 	p_data->akm09970_task = kthread_create(akm09970_thread, p_data, "%s_task", p_data->type);
 	if (IS_ERR(p_data->akm09970_task)) {
-		mxerr(&client->dev, "failed create %s task", p_data->type);
+		log_err(&client->dev, "failed create %s task", p_data->type);
 		goto err_wk;
 	}
 	wake_up_process(p_data->akm09970_task);
@@ -955,15 +954,15 @@ static int32_t akm09970_i2c_probe(struct i2c_client *client, const struct i2c_de
 	/* init input device */
 	err = akm09970_input_dev_init(p_data);
 	if (err) {
-		mxerr(&client->dev, "%s: Failed to create input dev(%d)", p_data->type, err);
+		log_err(&client->dev, "%s: Failed to create input dev(%d)", p_data->type, err);
 		goto err_task;
 	}
-	mxinfo(&client->dev, "%s was initialized", p_data->type);
+	log_info(&client->dev, "%s was initialized", p_data->type);
 
 	/* create sysfs group */
 	p_data->akm09970_class = class_create(THIS_MODULE, p_data->type);
 	if (IS_ERR(p_data->akm09970_class)) {
-		mxerr(&client->dev, "Failed to create class\n");
+		log_err(&client->dev, "Failed to create class\n");
 		goto err_group;
 	}
 
@@ -971,7 +970,7 @@ static int32_t akm09970_i2c_probe(struct i2c_client *client, const struct i2c_de
 		&client->dev, MKDEV(0, 0), p_data, akm09970_attr_groups,
 		"%s", AKM09970_CONTROL);
 	if (IS_ERR(p_data->sysfs_dev)) {
-		mxerr(&client->dev, "Failed to create device\n");
+		log_err(&client->dev, "Failed to create device\n");
 		goto err_groups;
 	}
 
