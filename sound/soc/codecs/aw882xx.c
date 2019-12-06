@@ -484,6 +484,7 @@ static int aw882xx_get_cali_re_form_nv(int32_t *cali_re)
 	loff_t pos = 0;
 	mm_segment_t fs;
 
+	memset(buf, 0, CALI_BUF_MAX);
 	/*open cali file*/
 	fp = filp_open(AWINIC_CALI_FILE, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
