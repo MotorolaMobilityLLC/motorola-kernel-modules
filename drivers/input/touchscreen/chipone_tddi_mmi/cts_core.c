@@ -2620,11 +2620,9 @@ static void cts_esd_protection_work(struct work_struct *work)
 			cts_data->cts_dev.hwdata->fwid,
 			0);
 		if (firmware) {
-			cts_unlock_device(&cts_data->cts_dev);
 			ret =
 			    cts_update_firmware(&cts_data->cts_dev, firmware,
 						true);
-			cts_lock_device(&cts_data->cts_dev);
 			cts_release_firmware(firmware);
 
 			if (ret) {
