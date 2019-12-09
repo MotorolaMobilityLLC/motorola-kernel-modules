@@ -942,8 +942,6 @@ int cts_update_firmware(struct cts_device *cts_dev,
 		return -EINVAL;
 	}
 
-	cts_lock_device(cts_dev);
-
 	cts_dev->rtdata.updating = true;
 
 	ret = cts_enter_program_mode(cts_dev);
@@ -1066,7 +1064,7 @@ out:
 			}
 		}
 	}
-	cts_unlock_device(cts_dev);
+
 #ifdef CONFIG_CTS_CHARGER_DETECT
 	if (cts_is_charger_exist(cts_dev)) {
 		cts_charger_plugin(cts_dev);

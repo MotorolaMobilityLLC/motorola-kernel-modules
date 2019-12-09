@@ -454,7 +454,6 @@ static ssize_t cts_tool_write(struct file *file,
 			break;
 		}
 		// TODO:  Use async mode such as thread, otherwise, host can not get update status.
-		cts_unlock_device(cts_dev);
 		ret =
 		    cts_update_firmware_from_file(cts_dev,
 						  cts_tool_firmware_filepath,
@@ -463,7 +462,6 @@ static ssize_t cts_tool_write(struct file *file,
 			cts_err("Updata firmware failed %d", ret);
 			//break;
 		}
-		cts_lock_device(cts_dev);
 
 		ret = cts_start_device(cts_dev);
 		if (ret) {

@@ -274,9 +274,12 @@ static ssize_t doreflash_store(struct device *dev,
 
 	cts_stop_device(&cts_data->cts_dev);
 
+	cts_lock_device(&cts_data->cts_dev);
 	ret = cts_update_firmware_from_file(&cts_data->cts_dev,
 					    cts_data->cts_dev.config_fw_name,
 					    false);
+	cts_unlock_device(&cts_data->cts_dev);
+
 	if (ret) {
 		cts_err("Update firmware from file '%s' failed %d",
 			cts_data->cts_dev.config_fw_name, ret);
@@ -851,7 +854,10 @@ static ssize_t driver_builtin_firmware_store(struct device *dev,
 			return ret;
 		}
 
+		cts_lock_device(cts_dev);
 		ret = cts_update_firmware(cts_dev, firmware, to_flash);
+		cts_unlock_device(cts_dev);
+
 		if (ret) {
 			cts_err("Update firmware failed %d", ret);
 			goto err_start_device;
@@ -926,7 +932,10 @@ static ssize_t update_firmware_from_file_store(struct device *dev,
 		goto err_release_firmware;
 	}
 
+	cts_lock_device(cts_dev);
 	ret = cts_update_firmware(cts_dev, firmware, to_flash);
+	cts_unlock_device(cts_dev);
+
 	if (ret) {
 		cts_err("Update firmware failed %d", ret);
 		goto err_release_firmware;
