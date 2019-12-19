@@ -162,7 +162,7 @@ struct aw882xx_monitor{
 	int16_t pre_temp;
 #ifdef AW_DEBUG
 	uint16_t test_vol;
-	int16_t test_temp;	
+	int16_t test_temp;
 #endif
 };
 
