@@ -51,7 +51,7 @@
  ******************************************************/
 #define AW882XX_I2C_NAME "aw882xx_smartpa"
 
-#define AW882XX_VERSION "v0.1.7"
+#define AW882XX_VERSION "v0.1.9"
 
 #define AW882XX_RATES SNDRV_PCM_RATE_8000_48000
 #define AW882XX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
@@ -129,7 +129,7 @@ static int aw_adm_param_enable(int port_id, int copp_idx, int module_id, int par
 #endif
 static int aw882xx_get_cali_re_form_nv(int32_t *cali_re);
 static int aw882xx_set_cali_re(struct aw882xx *aw882xx, int32_t cali_re);
-static void aw882xx_skt_set_dsp(int value);
+static int aw882xx_skt_set_dsp(int value);
 
 /*monitor  voltage and temperature table*/
 static struct aw882xx_low_vol vol_down_table[] = {
@@ -165,6 +165,9 @@ static int aw882xx_monitor_stop(struct aw882xx_monitor *monitor);
 static int aw882xx_spk_control;
 static int aw882xx_rcv_control;
 
+#ifdef AW882XX_RUNIN_TEST
+static atomic_t g_runin_test;
+#endif
 static atomic_t g_algo_rx_enable;
 static atomic_t g_algo_tx_enable;
 static atomic_t g_skt_disable;
@@ -499,6 +502,9 @@ static void aw882xx_start(struct aw882xx *aw882xx)
 		(aw882xx->spk_rcv_mode == AW882XX_SPEAKER_MODE)) {
 		aw882xx_monitor_start(&aw882xx->monitor);
 	}
+#ifdef AW882XX_RUNIN_TEST
+	schedule_delayed_work(&aw882xx->adsp_status, msecs_to_jiffies(50));
+#endif
 	mutex_unlock(&aw882xx->lock);
 }
 
@@ -528,6 +534,7 @@ static int aw882xx_get_cali_re_form_nv(int32_t *cali_re)
 	loff_t pos = 0;
 	mm_segment_t fs;
 
+	memset(buf, 0, CALI_BUF_MAX);
 	/*open cali file*/
 	fp = filp_open(AWINIC_CALI_FILE, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
@@ -755,7 +762,7 @@ static int aw882xx_volume_put(struct snd_kcontrol *kcontrol,
 	}
 
 	/* cal real value */
-	value = (value << mc->shift) & AW882XX_VOL_MASK;
+	value = (value << mc->shift) & (~AW882XX_VOL_MASK);
 	aw882xx_i2c_read(aw882xx, AW882XX_HAGCCFG4_REG, &reg_value);
 	value = value | (reg_value & 0x00ff);
 
@@ -904,7 +911,7 @@ static int aw882xx_skt_disable_get(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
-static void aw882xx_skt_set_dsp(int value)
+static int aw882xx_skt_set_dsp(int value)
 {
         int ret;
 	int port_id = AFE_RX_PROT_ID;
@@ -913,11 +920,11 @@ static void aw882xx_skt_set_dsp(int value)
 
 	ret = aw_adm_param_enable(port_id, module_id, param_id, value);
 	if (ret) {
-		pr_err("%s: set skt %d failed \n", __func__, value);
-		return;
+		return -EINVAL;
 	}
 
 	pr_info("%s: set skt %s", __func__, value == 1 ? "enable" : "disable");
+	return 0;
 }
 
 
@@ -933,6 +940,60 @@ static int aw882xx_skt_disable_set(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
+#ifdef AW882XX_RUNIN_TEST
+static int aw882xx_runin_test_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s: aw882xx_runin test %d\n",
+		__func__, atomic_read(&g_runin_test));
+
+	ucontrol->value.integer.value[0] = atomic_read(&g_runin_test);
+
+	return 0;
+}
+
+static int aw882xx_runin_test_set(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int value = ucontrol->value.integer.value[0];
+
+	pr_debug("%s: aw882xx_runin_test %d \n", __func__, value);
+
+	if (value > 1 ) {
+		value = 0;
+	}
+
+	atomic_set(&g_runin_test, value);
+
+	return 0;
+}
+
+static void aw882xx_set_adsp_module_status(struct work_struct *work)
+{
+	int ret = 0;
+	int32_t set_value;
+
+	/*no test reg set default value*/
+	if (!atomic_read(&g_runin_test)) {
+		return;
+	}
+	set_value = 0;
+	/*set afe rx module*/
+	ret = aw_send_afe_rx_module_enable(&set_value, sizeof(uint32_t));
+	if (ret) {
+		pr_debug("%s: disable afe rx module  %d falied , ret=%d\n",
+				__func__, set_value, ret);
+	}
+
+	/*set skt module*/
+	ret = aw882xx_skt_set_dsp(false);
+	if (ret) {
+		 pr_err("%s: disable skt failed !\n", __func__);
+	}
+
+	pr_debug("%s: disable skt and  afe module \n", __func__);
+}
+#endif
 static const struct soc_enum aw882xx_snd_enum[] = {
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(spk_function), spk_function),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(rcv_function), rcv_function),
@@ -950,6 +1011,10 @@ static struct snd_kcontrol_new aw882xx_controls[] = {
 		aw882xx_tx_get, aw882xx_tx_set),
 	SOC_ENUM_EXT("aw882xx_skt_disable", aw882xx_snd_enum[0],
 		aw882xx_skt_disable_get, aw882xx_skt_disable_set),
+#ifdef AW882XX_RUNIN_TEST
+	SOC_ENUM_EXT("aw882xx_runin_test", aw882xx_snd_enum[0],
+		aw882xx_runin_test_get, aw882xx_runin_test_set),
+#endif
 };
 
 static void aw882xx_add_codec_controls(struct aw882xx *aw882xx)
@@ -2444,6 +2509,15 @@ static int aw882xx_i2c_probe(struct i2c_client *i2c,
 
 	init_aw882xx_misc_driver(aw882xx);
 	g_aw882xx = aw882xx;
+
+	/*global init*/
+	atomic_set(&g_algo_rx_enable, 0);
+	atomic_set(&g_algo_tx_enable, 0);
+	atomic_set(&g_skt_disable, 0);
+#ifdef AW882XX_RUNIN_TEST
+	atomic_set(&g_runin_test, 0);
+	INIT_DELAYED_WORK(&aw882xx->adsp_status, aw882xx_set_adsp_module_status);
+#endif
 	pr_info("%s: probe completed successfully!\n", __func__);
 
 	return 0;
