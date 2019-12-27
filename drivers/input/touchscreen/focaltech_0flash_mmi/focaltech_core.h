@@ -65,8 +65,9 @@
 #ifdef FTS_USB_DETECT_EN
 #include <linux/power_supply.h>
 #endif
-#ifdef FOCALTECH_SENSOR_EN
+#if defined(FOCALTECH_SENSOR_EN) || defined(FOCALTECH_PALM_SENSOR_EN)
 #include <linux/sensors.h>
+#define SENSOR_TYPE_MOTO_TOUCH_PALM	(SENSOR_TYPE_DEVICE_PRIVATE_BASE + 31)
 #endif
 #include <linux/reboot.h>
 
@@ -136,6 +137,7 @@ struct fts_ts_platform_data {
     u32 reset_gpio;
     u32 reset_gpio_flags;
     bool always_on_vio;
+    bool report_gesture_key;
     bool share_reset_gpio;
     bool have_key;
     u32 key_number;
@@ -158,13 +160,21 @@ struct ts_event {
     int area;
 };
 
-#ifdef FOCALTECH_SENSOR_EN
+#if defined(FOCALTECH_SENSOR_EN) || defined(FOCALTECH_PALM_SENSOR_EN)
 struct focaltech_sensor_platform_data {
     struct input_dev *input_sensor_dev;
     struct sensors_classdev ps_cdev;
     int sensor_opened;
     char sensor_data; /* 0 near, 1 far */
     struct fts_ts_data *data;
+};
+#endif
+
+#ifdef FOCALTECH_PALM_SENSOR_EN
+enum palm_sensor_lazy_set {
+    PALM_SENSOR_LAZY_SET_NONE = 0,
+    PALM_SENSOR_LAZY_SET_ENABLE,
+    PALM_SENSOR_LAZY_SET_DISABLE,
 };
 #endif
 
@@ -180,6 +190,7 @@ struct fts_ts_data {
     struct delayed_work esdcheck_work;
     struct delayed_work prc_work;
     struct work_struct resume_work;
+    struct mutex suspend_resume_mutex;
     struct ftxxxx_proc proc;
     spinlock_t irq_lock;
     struct mutex report_mutex;
@@ -233,6 +244,24 @@ struct fts_ts_data {
     enum display_state screen_state;
     struct mutex state_mutex;
     struct focaltech_sensor_platform_data *sensor_pdata;
+#endif
+
+#ifdef FOCALTECH_PALM_SENSOR_EN
+    bool palm_detection_enabled;
+    enum palm_sensor_lazy_set palm_detection_lazy_set;
+    struct focaltech_sensor_platform_data *palm_sensor_pdata;
+    struct timer_list palm_release_fimer;
+    unsigned int palm_release_delay_ms;
+#ifdef CONFIG_HAS_WAKELOCK
+    struct wake_lock palm_gesture_wakelock;
+#else
+    struct wakeup_source palm_gesture_wakelock;
+#endif
+#ifdef CONFIG_HAS_WAKELOCK
+    struct wake_lock palm_gesture_read_wakelock;
+#else
+    struct wakeup_source palm_gesture_read_wakelock;
+#endif
 #endif
 };
 
