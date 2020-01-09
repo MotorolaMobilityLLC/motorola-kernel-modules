@@ -190,6 +190,7 @@ typedef struct motor_device {
     unsigned position;
     bool     double_edge;
     bool     hw_clock;
+    bool     power_default_off;
     int      level:1;
     unsigned power_en:1;
     unsigned nsleep:1;
@@ -682,6 +683,10 @@ static __ref int motor_kthread(void *arg)
             moto_aw8646_enable_clk(md, false);
         }
         moto_aw8646_set_power(md, 0);
+        if (md->power_default_off) {
+            dev_info(md->dev, "vdd power off\n");
+            moto_aw8646_set_regulator_power(md, false);
+        }
         sysfs_notify(&md->dev->kobj, NULL, "status");
     }
 
@@ -941,6 +946,12 @@ static ssize_t motor_enable_store(struct device *dev, struct device_attribute *a
     }
 
     enable = !!enable;
+
+    if (md->power_default_off) {
+        dev_info(md->dev, "vdd power on\n");
+        moto_aw8646_set_regulator_power(md, true);
+        msleep(5);
+    }
 
     if(!moto_aw8646_set_power(md, enable)) {
         motor_set_enable(dev, enable);
@@ -1271,6 +1282,9 @@ static int moto_aw8646_init_from_dt(motor_device* md)
     md->hw_clock = of_property_read_bool(np, "enable-hw-clock");
     dev_info(pdev, "Enable hw clock %d\n", md->hw_clock);
 
+    md->power_default_off = of_property_read_bool(np, "power-default-off");
+    dev_info(pdev, "power is default off:  %d\n", md->power_default_off);
+
 exit:
     return rc;
 }
@@ -1337,11 +1351,13 @@ static int moto_aw8646_probe(struct platform_device *pdev)
         goto failed_mem;
     }
 
-    ret = moto_aw8646_set_regulator_power(md, true);
-    if(ret) {
-        regulator_put(md->mc.vdd);
-        dev_err(dev, "Failed enable regulator\n");
-        goto failed_mem;
+    if (!md->power_default_off) {
+        ret = moto_aw8646_set_regulator_power(md, true);
+        if(ret) {
+            regulator_put(md->mc.vdd);
+            dev_err(dev, "Failed enable regulator\n");
+            goto failed_mem;
+        }
     }
 
     md->motor_wq = alloc_workqueue("motor_wq", WQ_HIGHPRI, 0);
