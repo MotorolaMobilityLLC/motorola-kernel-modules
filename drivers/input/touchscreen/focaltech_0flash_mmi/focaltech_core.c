@@ -2108,6 +2108,9 @@ static int _fts_ts_suspend(struct device *dev)
         }
         fts_release_all_finger();
         ts_data->suspended = true;
+#ifdef FOCALTECH_SENSOR_EN
+        mutex_unlock(&ts_data->state_mutex);
+#endif
         FTS_INFO("Enter from palm detect suspend mode.");
         return 0;
     }
@@ -2221,8 +2224,11 @@ static int _fts_ts_resume(struct device *dev)
         if (ret) {
             FTS_DEBUG("disable_irq_wake(irq:%d) fail", ts_data->irq);
         }
-        FTS_INFO("Exit from palm detect suspend mode.");
         ts_data->suspended = false;
+#ifdef FOCALTECH_SENSOR_EN
+        mutex_unlock(&ts_data->state_mutex);
+#endif
+        FTS_INFO("Exit from palm detect suspend mode.");
         goto CHECK_LAZY_SET;
     }
 #endif
