@@ -777,7 +777,7 @@ static int32_t akm09970_get_onedata(akm09970_i2c_data *p_data, struct mag_data_t
 	return 0;
 }
 
-#define MEASURE_CNTS 10
+#define MEASURE_CNTS 3
 static ssize_t akm09970_data_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
