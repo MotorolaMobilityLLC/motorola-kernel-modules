@@ -947,10 +947,10 @@ static ssize_t motor_enable_store(struct device *dev, struct device_attribute *a
 
     enable = !!enable;
 
-    if (md->power_default_off) {
+    if (md->power_default_off && (enable != 0)) {
         dev_info(md->dev, "vdd power on\n");
         moto_aw8646_set_regulator_power(md, true);
-        msleep(5);
+        msleep(1);
     }
 
     if(!moto_aw8646_set_power(md, enable)) {
