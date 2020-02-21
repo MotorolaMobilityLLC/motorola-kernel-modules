@@ -1282,6 +1282,10 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     if (pdata->always_on_vio)
         FTS_INFO("TP VIO always on.");
 
+    pdata->dlfw_in_resume = of_property_read_bool(np, "focaltech,dlfw_in_resume");
+    if (pdata->dlfw_in_resume)
+        FTS_INFO("Reset touch when firmware abnormal in resume.");
+
     pdata->irq_gpio = of_get_named_gpio_flags(np, "focaltech,irq-gpio",
                       0, &pdata->irq_gpio_flags);
     if (pdata->irq_gpio < 0)
@@ -1832,6 +1836,7 @@ static int fts_ts_suspend(struct device *dev)
 
 static int fts_ts_resume(struct device *dev)
 {
+    int ret = 0;
     struct fts_ts_data *ts_data = fts_data;
 
 #ifdef FOCALTECH_SENSOR_EN
@@ -1862,6 +1867,15 @@ static int fts_ts_resume(struct device *dev)
     }
 
     fts_irq_enable();
+
+    if (ts_data->pdata->dlfw_in_resume) {
+        ret = fts_wait_tp_to_valid();
+        if(ret){
+            FTS_INFO("wait tp to valid abnormal,need download fw");
+            fts_fw_resume(true);
+            msleep(10);
+        }
+    }
     fts_tp_state_recovery(ts_data);
 
 #if FTS_ESDCHECK_EN
