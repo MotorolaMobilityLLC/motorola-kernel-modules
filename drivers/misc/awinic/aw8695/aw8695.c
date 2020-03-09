@@ -1154,6 +1154,7 @@ static unsigned char aw8695_haptic_rtp_get_fifo_afi(struct aw8695 *aw8695)
 static int aw8695_haptic_rtp_init(struct aw8695 *aw8695)
 {
 	unsigned int buf_len = 0;
+	unsigned char reg_val = 0;
 
 	pr_info("%s enter\n", __func__);
 	pm_qos_add_request(&pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY, PM_QOS_VALUE_VB);
@@ -1163,6 +1164,10 @@ static int aw8695_haptic_rtp_init(struct aw8695 *aw8695)
 	while ((!aw8695_haptic_rtp_get_fifo_afi(aw8695)) &&
 	       (aw8695->play_mode == AW8695_HAPTIC_RTP_MODE)) {
 		pr_info("%s rtp cnt = %d\n", __func__, aw8695->rtp_cnt);
+		if (!aw8695_rtp) {
+			pr_info("%s:aw8695_rtp is null break\n", __func__);
+			break;
+		}
 
 		if ((aw8695->rtp_cnt < aw8695->ram.base_addr)) {
 			if((aw8695_rtp->len-aw8695->rtp_cnt) < (aw8695->ram.base_addr)){
@@ -1178,7 +1183,9 @@ static int aw8695_haptic_rtp_init(struct aw8695 *aw8695)
 		aw8695_i2c_writes(aw8695, AW8695_REG_RTP_DATA,
 				  &aw8695_rtp->data[aw8695->rtp_cnt], buf_len);
 		aw8695->rtp_cnt += buf_len;
-		if (aw8695->rtp_cnt == aw8695_rtp->len) {
+
+		aw8695_i2c_read(aw8695, AW8695_REG_GLB_STATE, &reg_val);
+		if ((aw8695->rtp_cnt == aw8695_rtp->len) || ((reg_val & 0x0f) == 0x00)) {
 			pr_info("%s: rtp update complete\n", __func__);
 			aw8695->rtp_cnt = 0;
 			pm_qos_remove_request(&pm_qos_req_vb);
@@ -1226,6 +1233,8 @@ static void aw8695_rtp_work_routine(struct work_struct *work)
 	memcpy(aw8695_rtp->data, rtp_file->data, rtp_file->size);
 	release_firmware(rtp_file);
 
+	mutex_lock(&aw8695->lock);
+
 	aw8695->rtp_init = 1;
 
 	/* gain */
@@ -1236,6 +1245,8 @@ static void aw8695_rtp_work_routine(struct work_struct *work)
 
 	/* haptic start */
 	aw8695_haptic_start(aw8695);
+
+	mutex_unlock(&aw8695->lock);
 
 	aw8695_haptic_rtp_init(aw8695);
 }
@@ -3357,6 +3368,7 @@ static irqreturn_t aw8695_irq(int irq, void *data)
 	unsigned char reg_val = 0;
 	unsigned char dbg_val = 0;
 	unsigned int buf_len = 0;
+	unsigned char glb_state = 0;
 
 	pr_debug("%s enter\n", __func__);
 
@@ -3396,7 +3408,8 @@ static irqreturn_t aw8695_irq(int irq, void *data)
 				aw8695_i2c_writes(aw8695, AW8695_REG_RTP_DATA,
 						  &aw8695_rtp->data[aw8695->rtp_cnt], buf_len);
 				aw8695->rtp_cnt += buf_len;
-				if (aw8695->rtp_cnt == aw8695_rtp->len) {
+				aw8695_i2c_read(aw8695, AW8695_REG_GLB_STATE, &glb_state);
+				if ((aw8695->rtp_cnt == aw8695_rtp->len) || ((glb_state & 0x0f) == 0x00)) {
 					pr_info("%s: rtp update complete\n", __func__);
 					aw8695_haptic_set_rtp_aei(aw8695, false);
 					aw8695->rtp_cnt = 0;
