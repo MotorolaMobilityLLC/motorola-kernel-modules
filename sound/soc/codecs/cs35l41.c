@@ -2194,7 +2194,8 @@ static int cs35l41_handle_of_data(struct device *dev,
 	struct classh_cfg *classh_config = &pdata->classh_config;
 	struct irq_cfg *irq_gpio1_config = &pdata->irq_config1;
 	struct irq_cfg *irq_gpio2_config = &pdata->irq_config2;
-	unsigned int i;
+	unsigned int i, regs_len;
+	const unsigned int *regs_arr;
 
 	if (!np)
 		return 0;
@@ -2370,6 +2371,29 @@ static int cs35l41_handle_of_data(struct device *dev,
 
 	pdata->hibernate_enable = of_property_read_bool(np,
 					"cirrus,hibernate-enable");
+
+	regs_arr = of_get_property(np, "cirrus,regs-patch", &regs_len);
+
+	if (regs_arr && !(regs_len & 1)) {
+		regs_len /= 2 * sizeof(u32);
+		pdata->regs_patch = devm_kzalloc(dev,
+				sizeof(struct reg_sequence) * regs_len,
+				GFP_KERNEL);
+		if (!pdata->regs_patch) {
+			dev_err(dev, "can't allocate regs patch\n");
+			return(-ENOMEM);
+		}
+		for (i = 0; i < regs_len; i++) {
+			pdata->regs_patch[i].reg =
+					be32_to_cpu(regs_arr[i*2]);
+			pdata->regs_patch[i].def =
+					be32_to_cpu(regs_arr[i*2 + 1]);
+			dev_info(dev, "regs: 0x%x=0x%x\n",
+				 pdata->regs_patch[i].reg,
+				 pdata->regs_patch[i].def);
+		}
+		pdata->regs_patch_size = i;
+	}
 
 	return 0;
 }
@@ -3007,6 +3031,15 @@ int cs35l41_probe(struct cs35l41_private *cs35l41,
 	if (ret < 0) {
 		dev_err(cs35l41->dev, "OTP Unpack failed\n");
 		goto err;
+	}
+
+	if (cs35l41->pdata.regs_patch_size) {
+		ret = regmap_multi_reg_write(cs35l41->regmap,
+					cs35l41->pdata.regs_patch,
+					cs35l41->pdata.regs_patch_size);
+		if (ret < 0)
+			dev_err(cs35l41->dev,
+				"Failed to apply regs patch %d\n", ret);
 	}
 
 	regmap_write(cs35l41->regmap,

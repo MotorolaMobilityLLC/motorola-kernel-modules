@@ -48,6 +48,8 @@ struct cs35l41_platform_data {
 	struct irq_cfg irq_config1;
 	struct irq_cfg irq_config2;
 	struct classh_cfg classh_config;
+	int regs_patch_size;
+	struct reg_sequence *regs_patch;
 };
 
 struct cs35l41_rst_cache {
