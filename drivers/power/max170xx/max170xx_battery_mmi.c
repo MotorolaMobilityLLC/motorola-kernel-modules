@@ -1070,10 +1070,15 @@ static void max17042_set_temp_threshold(struct max17042_chip *chip,
 	if (chip->pdata->use_external_temp)
 		return;
 
-	max = (s8)max17042_find_temp_threshold(chip->pdata->tcnv, max_c,
-					       false);
-	min = (s8)max17042_find_temp_threshold(chip->pdata->tcnv, min_c,
-					       true);
+	if (chip->pdata->tcnv) {
+		max = (s8)max17042_find_temp_threshold(chip->pdata->tcnv, max_c,
+						       false);
+		min = (s8)max17042_find_temp_threshold(chip->pdata->tcnv, min_c,
+						       true);
+	} else {
+		max = max_c;
+		min = min_c;
+	}
 
 	temp_tr = 0;
 	temp_tr |= min;
