@@ -24,6 +24,10 @@ ifneq (,$(filter liber%, $(TARGET_PRODUCT)))
 EXTRA_CFLAGS += -DCONFIG_AW882XX_CODEC -DCONFIG_AW882XX_DSP
 endif
 
+ifneq (,$(filter odessa%, $(TARGET_PRODUCT)))
+EXTRA_CFLAGS += -DCONFIG_AW882XX_CODEC -DCONFIG_AW882XX_DSP
+endif
+
 ifeq ($(KDIR),)
 PLMA_HOSTSW_DIR=$(realpath -f $(srctree)/$(src))
 else
