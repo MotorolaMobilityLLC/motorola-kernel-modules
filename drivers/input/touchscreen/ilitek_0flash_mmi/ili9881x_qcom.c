@@ -481,6 +481,10 @@ static int ilitek_plat_probe(void)
 	if (ili_tddi_init() < 0) {
 		ILI_ERR("ILITEK Driver probe failed\n");
 		ili_irq_unregister();
+		if (gpio_is_valid(ilits->tp_int))
+			gpio_free(ilits->tp_int);
+		if (gpio_is_valid(ilits->tp_rst))
+			gpio_free(ilits->tp_rst);
 		return -ENODEV;
 	}
 
