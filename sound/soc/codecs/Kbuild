@@ -28,6 +28,10 @@ ifneq (,$(filter odessa%, $(TARGET_PRODUCT)))
 EXTRA_CFLAGS += -DCONFIG_AW882XX_CODEC -DCONFIG_AW882XX_DSP
 endif
 
+ifneq (,$(filter bornr%, $(TARGET_PRODUCT)))
+EXTRA_CFLAGS += -DCONFIG_TAS2562_REGMAP -DCONFIG_TAS2562_CODEC -DCONFIG_SND_SOC_TAS2562 -DTAS2558_CODEC
+endif
+
 ifeq ($(KDIR),)
 PLMA_HOSTSW_DIR=$(realpath -f $(srctree)/$(src))
 else
@@ -89,6 +93,9 @@ obj-m += tas2560_algo.o
 
 tas2560_calib-objs = tas2560-calib.o
 obj-m += tas2560_calib.o
+
+tas2562-objs = tas2562-codec.o tas2562-regmap.o
+obj-m += tas2562.o
 
 snd_smartpa_aw882xx-objs = aw882xx.o
 obj-m += snd_smartpa_aw882xx.o
