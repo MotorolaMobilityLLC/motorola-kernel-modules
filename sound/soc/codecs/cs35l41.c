@@ -879,6 +879,7 @@ static const struct snd_kcontrol_new cs35l41_aud_controls[] = {
 	SOC_SINGLE("Boost Class-H Tracking Enable",
 					CS35L41_BSTCVRT_VCTRL2, 0, 1, 0),
 	SOC_SINGLE("Boost Target Voltage", CS35L41_BSTCVRT_VCTRL1, 0, 0xAA, 0),
+	SOC_SINGLE("Boost BST Limit Enable",CS35L41_BSTCVRT_VCTRL2, 2, 1, 0),
 	WM_ADSP2_PRELOAD_SWITCH("DSP1", 1),
 };
 
