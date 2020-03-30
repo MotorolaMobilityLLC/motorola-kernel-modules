@@ -341,20 +341,6 @@ out:
 	return ret;
 }
 
-/*static int dev_mkdir(char *name, umode_t mode)
-{
-	int err;
-	mm_segment_t fs;
-
-	ILI_INFO("mkdir: %s\n", name);
-	fs = get_fs();
-	set_fs(KERNEL_DS);
-	err = sys_mkdir(name, mode);
-	set_fs(fs);
-
-	return err;
-}*/
-
 static ssize_t ilitek_proc_get_delta_data_read(struct file *pFile, char __user *buf, size_t size, loff_t *pos)
 {
 	s16 *delta = NULL;
@@ -917,10 +903,6 @@ static ssize_t ilitek_node_mp_lcm_on_test_read(struct file *filp, char __user *b
 
 	mutex_lock(&ilits->touch_mutex);
 
-	/* Create the directory for mp_test result */
-	//if ((dev_mkdir(CSV_LCM_ON_PATH, S_IRUGO | S_IWUSR)) != 0)
-	//	ILI_ERR("Failed to create directory for mp_test\n");
-
 	if (esd_en)
 		ili_wq_ctrl(WQ_ESD, DISABLE);
 	if (bat_en)
@@ -977,10 +959,6 @@ static ssize_t ilitek_node_mp_lcm_off_test_read(struct file *filp, char __user *
 	ILI_INFO("Run MP test with LCM off\n");
 
 	mutex_lock(&ilits->touch_mutex);
-
-	/* Create the directory for mp_test result */
-	//if ((dev_mkdir(CSV_LCM_OFF_PATH, S_IRUGO | S_IWUSR)) != 0)
-	//	ILI_ERR("Failed to create directory for mp_test\n");
 
 	if (esd_en)
 		ili_wq_ctrl(WQ_ESD, DISABLE);
