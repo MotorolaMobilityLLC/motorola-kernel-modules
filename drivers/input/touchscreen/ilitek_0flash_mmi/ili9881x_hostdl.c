@@ -52,7 +52,6 @@ static struct flash_block_info {
 } fbi[FW_BLOCK_INFO_NUM];
 
 static u8 *pfw;
-static u8 *CTPM_FW;
 
 static u32 HexToDec(char *phex, s32 len)
 {
@@ -526,79 +525,6 @@ static int ilitek_tddi_fw_update_block_info(u8 *pfw)
 	return 0;
 }
 
-static int ilitek_tddi_fw_ili_convert(u8 *pfw)
-{
-	int i, size, blk_num = 0, blk_map = 0, num;
-	int b0_addr = 0, b0_num = 0;
-
-	if (ERR_ALLOC_MEM(ilits->md_fw_ili))
-		return -ENOMEM;
-
-	CTPM_FW = ilits->md_fw_ili;
-	size = ilits->md_fw_ili_size;
-
-	if (size < ILI_FILE_HEADER || size > MAX_HEX_FILE_SIZE) {
-		ILI_ERR("size of ILI file is invalid\n");
-		return -EINVAL;
-	}
-
-	/* Check if it's old version of ILI format. */
-	if (CTPM_FW[22] == 0xFF && CTPM_FW[23] == 0xFF &&
-		CTPM_FW[24] == 0xFF && CTPM_FW[25] == 0xFF) {
-		ILI_ERR("Invaild ILI format, abort!\n");
-		return -EINVAL;
-	}
-
-	blk_num = CTPM_FW[131];
-	blk_map = (CTPM_FW[129] << 8) | CTPM_FW[130];
-	ILI_INFO("Parsing ILI file, block num = %d, block mapping = %x\n", blk_num, blk_map);
-
-	if (blk_num > (FW_BLOCK_INFO_NUM - 1) || !blk_num || !blk_map) {
-		ILI_ERR("Number of block or block mapping is invalid, abort!\n");
-		return -EINVAL;
-	}
-
-	memset(fbi, 0x0, sizeof(fbi));
-
-	tfd.start_addr = 0;
-	tfd.end_addr = 0;
-	tfd.hex_tag = BLOCK_TAG_AF;
-
-	/* Parsing block info */
-	for (i = 0; i < FW_BLOCK_INFO_NUM; i++) {
-		/* B0 tag */
-		b0_addr = (CTPM_FW[4 + i * 4] << 16) | (CTPM_FW[5 + i * 4] << 8) | (CTPM_FW[6 + i * 4]);
-		b0_num = CTPM_FW[7 + i * 4];
-		if ((b0_num != 0) && (b0_addr != 0x000000))
-			fbi[b0_num].fix_mem_start = b0_addr;
-
-		/* AF tag */
-		num = i + 1;
-		if (((blk_map >> i) & 0x01) == 0x01) {
-			fbi[num].start = (CTPM_FW[132 + i * 6] << 16) | (CTPM_FW[133 + i * 6] << 8) | CTPM_FW[134 + i * 6];
-			fbi[num].end = (CTPM_FW[135 + i * 6] << 16) | (CTPM_FW[136 + i * 6] << 8) |  CTPM_FW[137 + i * 6];
-
-			if (fbi[num].fix_mem_start == 0)
-				fbi[num].fix_mem_start = INT_MAX;
-
-			fbi[num].len = fbi[num].end - fbi[num].start + 1;
-			ILI_DBG("Block[%d]: start_addr = %x, end = %x, fix_mem_start = 0x%x\n", num, fbi[num].start,
-								fbi[num].end, fbi[num].fix_mem_start);
-			if (num == GESTURE)
-				ilits->gesture_load_code = true;
-		}
-	}
-
-	memcpy(pfw, CTPM_FW + ILI_FILE_HEADER, size - ILI_FILE_HEADER);
-
-	if (ilitek_fw_calc_file_crc(pfw) < 0)
-		return -1;
-
-	tfd.block_number = blk_num;
-	tfd.end_addr = size - ILI_FILE_HEADER;
-	return 0;
-}
-
 static int ilitek_tddi_fw_hex_convert(u8 *phex, int size, u8 *pfw)
 {
 	int block = 0;
@@ -822,26 +748,8 @@ int ili_fw_upgrade(int op)
 		for (i = 0; i < MAX_HEX_FILE_SIZE; i++)
 			pfw[i] = 0xFF;
 
-		if (ilitek_tdd_fw_hex_open(op, pfw) < 0) {
-			ILI_ERR("Open hex file fail, try upgrade from ILI file\n");
-
-			/*
-			 * Users might not be aware of a broken hex file when recovering
-			 * fw from ILI file. We should force them to check
-			 * hex files if they attempt to update via device node.
-			 */
-			if (ilits->node_update) {
-				ILI_ERR("Ignore update from ILI file\n");
-				ipio_vfree((void **)&pfw);
-				return -EFW_CONVERT_FILE;
-			}
-
-			if (ilitek_tddi_fw_ili_convert(pfw) < 0) {
-				ILI_ERR("Convert ILI file error\n");
-				ret = -EFW_CONVERT_FILE;
-				goto out;
-			}
-		}
+		if (ilitek_tdd_fw_hex_open(op, pfw) < 0)
+			ILI_ERR("Open firmware file fail \n");
 
 		if (ilitek_tddi_fw_update_block_info(pfw) < 0) {
 			ret = -EFW_CONVERT_FILE;
