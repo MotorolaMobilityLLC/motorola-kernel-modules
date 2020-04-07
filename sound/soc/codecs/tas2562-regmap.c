@@ -590,7 +590,7 @@ static void irq_work_routine(struct work_struct *work)
 		goto reload;
 
 	dev_dbg(p_tas2562->dev, "IRQ status : 0x%x, 0x%x, 0x%x, 0x%x\n",
-			nDevInt3Status, nDevInt4Status,
+			nDevInt1Status, nDevInt2Status,
 			nDevInt3Status, nDevInt4Status);
 
 	if (((nDevInt1Status & 0x7) != 0)
@@ -1004,7 +1004,7 @@ static int tas2562_i2c_probe(struct i2c_client *p_client,
 		}
 		gpio_direction_input(p_tas2562->mn_irq_gpio);
 		tas2562_dev_write(p_tas2562, channel_both,
-			TAS2562_MISCCONFIGURATIONREG0, 0xce);
+			TAS2562_MISCCONFIGURATIONREG0, 0xc6);
 
 		p_tas2562->mn_irq = gpio_to_irq(p_tas2562->mn_irq_gpio);
 		dev_info(p_tas2562->dev, "irq = %d\n", p_tas2562->mn_irq);
@@ -1031,7 +1031,7 @@ static int tas2562_i2c_probe(struct i2c_client *p_client,
 		}
 		gpio_direction_input(p_tas2562->mn_irq_gpio2);
 		tas2562_dev_write(p_tas2562, channel_both,
-				TAS2562_MISCCONFIGURATIONREG0, 0xce);
+				TAS2562_MISCCONFIGURATIONREG0, 0xc6);
 
 		p_tas2562->mn_irq2 = gpio_to_irq(p_tas2562->mn_irq_gpio2);
 		dev_info(p_tas2562->dev, "irq = %d\n", p_tas2562->mn_irq2);
@@ -1116,7 +1116,6 @@ static const struct of_device_id tas2562_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, tas2562_of_match);
 #endif
-
 
 static struct i2c_driver tas2562_i2c_driver = {
 	.driver = {
