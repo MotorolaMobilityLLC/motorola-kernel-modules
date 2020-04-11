@@ -55,6 +55,7 @@
 #define FTS_DRIVER_NAME                     "fts_ts"
 #define INTERVAL_READ_REG                   200  /* unit:ms */
 #define TIMEOUT_READ_REG                    1000 /* unit:ms */
+#define FTS_PALM_SENSOR 2
 #if FTS_USB_DETECT_EN
 bool 	FTS_USB_detect_flag;
 #endif
@@ -1610,7 +1611,7 @@ int drm_notifier_callback(struct notifier_block *self,
 #ifdef FOCALTECH_PALM_SENSOR_EN
             if (ts_data->palm_detection_enabled) {
                 FTS_INFO("palm detection is enabled");
-                return 1;
+                return FTS_PALM_SENSOR;
             }
 #endif
 #ifdef FOCALTECH_SENSOR_EN
