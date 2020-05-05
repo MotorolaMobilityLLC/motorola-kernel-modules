@@ -40,7 +40,7 @@
 #define AW869X_I2C_NAME "aw869x_haptic"
 #define AW869X_HAPTIC_NAME "aw869x_haptic"
 
-#define AW869X_VERSION "v1.4.0"
+#define AW869X_VERSION "v1.4.1"
 
 
 //#define AWINIC_I2C_REGMAP
@@ -783,6 +783,10 @@ static int aw869x_haptic_rtp_init(struct aw869x *aw869x)
     while((!aw869x_haptic_rtp_get_fifo_afi(aw869x)) && 
             (aw869x->play_mode == AW869X_HAPTIC_RTP_MODE)) {
         pr_debug("%s rtp cnt = %d\n", __func__, aw869x->rtp_cnt);
+	if (!aw869x_rtp) {
+		pr_info("%s:aw869x_rtp is null break\n", __func__);
+		break;
+	}
         if((aw869x_rtp->len-aw869x->rtp_cnt) < (aw869x->ram.base_addr>>3)) {
             buf_len = aw869x_rtp->len-aw869x->rtp_cnt;
         } else {
@@ -847,6 +851,7 @@ static void aw869x_rtp_work_routine(struct work_struct *work)
     memcpy(aw869x_rtp->data, rtp_file->data, rtp_file->size);
     release_firmware(rtp_file);
 
+    mutex_lock(&aw869x->lock);
     aw869x->rtp_init = 1;
 
     /* rtp mode config */
@@ -867,6 +872,7 @@ static void aw869x_rtp_work_routine(struct work_struct *work)
         }
     }
 #endif
+    mutex_unlock(&aw869x->lock);
     aw869x_haptic_rtp_init(aw869x);
 }
 
