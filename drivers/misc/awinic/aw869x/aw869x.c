@@ -244,7 +244,7 @@ static void aw869x_rtp_loaded(const struct firmware *cont, void *context)
                     cont ? cont->size : 0);
 
     /* aw869x rtp update */
-    aw869x_rtp = kzalloc(cont->size+sizeof(int), GFP_KERNEL);
+    aw869x_rtp = vzalloc(cont->size + sizeof(int));
     if (!aw869x_rtp) {
         release_firmware(cont);
         pr_err("%s: Error allocating memory\n", __func__);
@@ -834,8 +834,8 @@ static void aw869x_rtp_work_routine(struct work_struct *work)
         return ;
     }
     aw869x->rtp_init = 0;
-    kfree(aw869x_rtp);
-    aw869x_rtp = kzalloc(rtp_file->size+sizeof(int), GFP_KERNEL);
+    vfree(aw869x_rtp);
+    aw869x_rtp = vzalloc(rtp_file->size + sizeof(int));
     if (!aw869x_rtp) {
         release_firmware(rtp_file);
         pr_err("%s: error allocating memory\n", __func__);
