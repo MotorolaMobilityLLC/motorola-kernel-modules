@@ -7,6 +7,7 @@
  * (See Linux kernel documentation: Documentation/i2c/writing-clients)
 */
 #define MAX_I2C_BUFFER_SIZE					65536
+#define AW882XX_I2C_READ_MSG_NUM		2
 
 #define AW882XX_FLAG_START_ON_MUTE			(1 << 0)
 #define AW882XX_FLAG_SKIP_INTERRUPTS		(1 << 1)
@@ -24,6 +25,7 @@
 #define AW_MODULE_PARAMS_ID_COPP_ENABLE (0X10013D14)	/*SKT enable param id*/
 
 #define DEFAULT_CALI_VALUE (7)
+#define ERRO_CALI_VALUE (0)
 #define AFE_PARAM_ID_AWDSP_RX_SET_ENABLE        (0x10013D11)
 #define AFE_PARAM_ID_AWDSP_RX_PARAMS            (0x10013D12)
 #define AFE_PARAM_ID_AWDSP_TX_SET_ENABLE        (0x10013D13)
@@ -87,6 +89,12 @@ enum aw882xx_init {
 	AW882XX_INIT_ST = 0,
 	AW882XX_INIT_OK = 1,
 	AW882XX_INIT_NG = 2,
+};
+
+enum aw882xx_power_status {
+	AW882XX_POWER_DOWN = 0,
+	AW882XX_POWER_ING = 1,
+	AW882XX_POWER_UP = 2,
 };
 
 enum aw882xx_chipid {
@@ -168,6 +176,39 @@ struct aw882xx_monitor{
 
 /*control runin test function*/
 #define AW882XX_RUNIN_TEST
+enum AWINIC_PROFILE{
+	AW_PROFILE_MUSIC = 0,
+	AW_PROFILE_RINGTONE,
+	AW_PROFILE_NOTIFICATION,
+	AW_PROFILE_VOICE,
+	AW_PROFILE_MAX,
+};
+
+#define VERSION_MAX 4
+#define PROJECT_NAME_MAX 24
+#define VOLUME_STEP_DB  (6)
+#define VOLUME_MIN_NEG_90_DB  (90)
+#define FADE_STEP_DB   (6)
+
+
+typedef struct awinic_afe_param_header{
+	uint8_t fw[VERSION_MAX];
+	uint8_t cfg[VERSION_MAX];
+	uint8_t project[PROJECT_NAME_MAX];
+	uint32_t start;
+	uint32_t params_len;
+	uint8_t check_sum;
+	uint8_t profile_num;
+	uint8_t reserve[2];
+}aw_afe_params_hdr_t;
+
+struct  profile_info {
+	struct mutex lock;
+	int cur_profile;
+	int status;
+	int len;
+	char* data[AW_PROFILE_MAX];
+};
 
 struct aw882xx {
 	struct regmap *regmap;
@@ -187,6 +228,7 @@ struct aw882xx {
 
 	int reset_gpio;
 	int irq_gpio;
+	int power_flag;
 
 	unsigned char reg_addr;
 
@@ -196,6 +238,8 @@ struct aw882xx {
 	unsigned int spk_rcv_mode;
 	int32_t cali_re;
 	unsigned int cfg_num;
+	unsigned int afe_profile;
+	struct  profile_info profile;
 };
 
 struct aw882xx_container {
