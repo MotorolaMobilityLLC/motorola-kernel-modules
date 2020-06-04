@@ -933,8 +933,15 @@ return:
 *******************************************************/
 void Boot_Update_Firmware(struct work_struct *work)
 {
+	int32_t ret = 0;
+
 	mutex_lock(&ts->lock);
-	if (nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME)) {
+
+	if(nvt_boot_firmware_name)
+		ret = nvt_update_firmware(nvt_boot_firmware_name);
+	else
+		ret = nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+	if (ret) {
 		NVT_ERR("download firmware failed, ignore check fw state\n");
 	} else {
 		nvt_check_fw_reset_state(RESET_STATE_REK);
