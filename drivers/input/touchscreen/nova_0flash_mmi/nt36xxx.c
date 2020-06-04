@@ -115,6 +115,9 @@ static int nvt_set_charger(uint8_t charger_on_off);
 static void nvt_charger_notify_work(struct work_struct *work);
 static int usb_detect_flag = 0;
 
+char *nvt_boot_firmware_name = NULL;
+char *nvt_mp_firmware_name = NULL;
+
 #if TOUCH_KEY_NUM > 0
 const uint16_t touch_key_array[TOUCH_KEY_NUM] = {
 	KEY_BACK,
@@ -1108,6 +1111,29 @@ static int32_t nvt_parse_dt(struct device *dev)
 		NVT_LOG("SWRST_N8_ADDR=0x%06X\n", SWRST_N8_ADDR);
 	}
 
+	ret = of_property_read_string(np, "novatek,panel-supplier",
+		&ts->panel_supplier);
+	if (ret < 0) {
+		NVT_LOG("Unable to read panel supplier\n");
+	} else {
+		NVT_LOG("panel supplier is %s", (char *)ts->panel_supplier);
+		nvt_boot_firmware_name = kzalloc(NVT_FILE_NAME_LENGTH, GFP_KERNEL);
+		if (!nvt_boot_firmware_name) {
+			NVT_LOG("%s: alloc nvt_boot_firmware_name failed\n", __func__);
+			goto nvt_boot_firmware_name_alloc_failed;
+		}
+		nvt_mp_firmware_name = kzalloc(NVT_FILE_NAME_LENGTH, GFP_KERNEL);
+		if (!nvt_boot_firmware_name) {
+			NVT_LOG("%s: alloc nvt_boot_firmware_name failed\n", __func__);
+			goto nvt_mp_firmware_name_alloc_failed;
+		}
+		snprintf(nvt_boot_firmware_name, NVT_FILE_NAME_LENGTH, "%s_novatek_ts_fw.bin",
+			ts->panel_supplier);
+		snprintf(nvt_mp_firmware_name, NVT_FILE_NAME_LENGTH, "%s_novatek_ts_mp.bin",
+			ts->panel_supplier);
+	}
+	NVT_LOG("boot firmware %s, mp firmware %s", nvt_boot_firmware_name, nvt_mp_firmware_name);
+
 	ret = nvt_get_dt_def_coords(dev, "novatek,def-max-resolution");
 	if (ret) {
 		ts->abs_x_max = TOUCH_DEFAULT_MAX_WIDTH;
@@ -1136,6 +1162,13 @@ static int32_t nvt_parse_dt(struct device *dev)
 	} else {
 		ts->report_gesture_key = 0;
 	}
+
+	return ret;
+
+nvt_mp_firmware_name_alloc_failed:
+	kfree(nvt_boot_firmware_name);
+	nvt_boot_firmware_name = NULL;
+nvt_boot_firmware_name_alloc_failed:
 	return ret;
 }
 #else
@@ -1244,7 +1277,10 @@ static void nvt_esd_check_func(struct work_struct *work)
 		mutex_lock(&ts->lock);
 		NVT_ERR("do ESD recovery, timer = %d, retry = %d\n", timer, esd_retry);
 		/* do esd recovery, reload fw */
-		nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+		if(nvt_boot_firmware_name)
+			nvt_update_firmware(nvt_boot_firmware_name);
+		else
+			nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
 		mutex_unlock(&ts->lock);
 		/* update interrupt timer */
 		irq_timer = jiffies;
@@ -1363,10 +1399,13 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 
 #if NVT_TOUCH_WDT_RECOVERY
    /* ESD protect by WDT */
-   if (nvt_wdt_fw_recovery(point_data)) {
-       NVT_ERR("Recover for fw reset, %02X\n", point_data[1]);
-       nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
-       goto XFER_ERROR;
+	if (nvt_wdt_fw_recovery(point_data)) {
+		NVT_ERR("Recover for fw reset, %02X\n", point_data[1]);
+		if(nvt_boot_firmware_name)
+			nvt_update_firmware(nvt_boot_firmware_name);
+		else
+			nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+		goto XFER_ERROR;
    }
 #endif /* #if NVT_TOUCH_WDT_RECOVERY */
 
@@ -1655,6 +1694,14 @@ int nvt_sensor_remove(struct nvt_ts_data *data)
 	data->sensor_pdata = NULL;
 	data->wakeable = false;
 	data->should_enable_gesture = false;
+	if (!nvt_boot_firmware_name) {
+		kfree(nvt_boot_firmware_name);
+		nvt_boot_firmware_name = NULL;
+	}
+	if (!nvt_mp_firmware_name) {
+		kfree(nvt_mp_firmware_name);
+		nvt_mp_firmware_name = NULL;
+	}
 	return 0;
 }
 #endif
