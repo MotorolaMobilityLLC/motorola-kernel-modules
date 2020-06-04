@@ -69,6 +69,9 @@ static int bq2597x_role_data[] = {
 	[BQ25970_SLAVE] = BQ25970_ROLE_SLAVE,
 };
 
+#define BQ2597X_PART_NO	0x10
+#define SC8551_PART_NO	0x00
+
 #define	BUS_UCP_ALARM		BIT(4)
 #define	BAT_OVP_ALARM		BIT(7)
 #define BAT_OCP_ALARM		BIT(6)
@@ -139,31 +142,40 @@ static int bq2597x_role_data[] = {
 #define bq_err(fmt, ...)								\
 do {											\
 	if (bq->role == BQ25970_ROLE_MASTER)						\
-		printk(KERN_ERR "[bq2597x-MASTER]:%s:" fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_ERR "[CP-MASTER %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);			\
 	else if (bq->role == BQ25970_ROLE_SLAVE)					\
-		printk(KERN_ERR "[bq2597x-SLAVE]:%s:" fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_ERR "[CP-SLAVE %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);			\
 	else										\
-		printk(KERN_ERR "[bq2597x-STANDALONE]:%s:" fmt, __func__, ##__VA_ARGS__);\
+		printk(KERN_ERR "[CP-STANDALONE %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);\
 } while(0);
 
 #define bq_info(fmt, ...)								\
 do {											\
 	if (bq->role == BQ25970_ROLE_MASTER)						\
-		printk(KERN_INFO "[bq2597x-MASTER]:%s:" fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_INFO "[CP-MASTER %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);	\
 	else if (bq->role == BQ25970_ROLE_SLAVE)					\
-		printk(KERN_INFO "[bq2597x-SLAVE]:%s:" fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_INFO "[CP-SLAVE %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);	\
 	else										\
-		printk(KERN_INFO "[bq2597x-STANDALONE]:%s:" fmt, __func__, ##__VA_ARGS__);\
+		printk(KERN_INFO "[CP-STANDALONE %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);\
 } while(0);
 
 #define bq_debug(fmt, ...)								\
 do {											\
 	if (bq->role == BQ25970_ROLE_MASTER)						\
-		printk(KERN_DEBUG "[bq2597x-MASTER]:%s:" fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_DEBUG "[CP-MASTER %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);	\
 	else if (bq->role == BQ25970_ROLE_SLAVE)					\
-		printk(KERN_DEBUG "[bq2597x-SLAVE]:%s:" fmt, __func__, ##__VA_ARGS__);	\
+		printk(KERN_DEBUG "[CP-SLAVE %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);	\
 	else										\
-		printk(KERN_DEBUG "[bq2597x-STANDALONE]:%s:" fmt, __func__, ##__VA_ARGS__);\
+		printk(KERN_DEBUG "[CP-STANDALONE %02x]:%s:" \
+			fmt, bq->part_no, __func__, ##__VA_ARGS__);\
 } while(0);
 
 
@@ -215,6 +227,7 @@ struct bq2597x {
 	struct device *dev;
 	struct i2c_client *client;
 
+	int device_id;
 	int part_no;
 	int revision;
 	int int_gpio;
@@ -1087,6 +1100,22 @@ static int bq2597x_get_adc_data(struct bq2597x *bq, int channel,  int *result)
 	t = val & 0xFF;
 	t <<= 8;
 	t |= (val >> 8) & 0xFF;
+
+	if (bq->part_no == SC8551_PART_NO) {
+		if (channel == ADC_IBUS)
+			t *= SC8551_IBUS_ADC_LSB;
+		else if (channel == ADC_VBUS)
+			t *= SC8551_VBUS_ADC_LSB;
+		else if (channel == ADC_VAC)
+			t *= SC8551_VAC_ADC_LSB;
+		else if (channel == ADC_VOUT)
+			t *= SC8551_VOUT_ADC_LSB;
+		else if (channel == ADC_VBAT)
+			t *= SC8551_VBAT_ADC_LSB;
+		else if (channel == ADC_IBAT)
+			t *= SC8551_IBAT_ADC_LSB;
+	}
+
 	*result = t;
 
 	return 0;
@@ -1413,8 +1442,14 @@ static int bq2597x_detect_device(struct bq2597x *bq)
 
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_13, &data);
 	if (ret == 0) {
-		bq->part_no = (data & BQ2597X_DEV_ID_MASK);
-		bq->part_no >>= BQ2597X_DEV_ID_SHIFT;
+		bq->part_no = data;
+		bq->device_id = (data & BQ2597X_DEV_ID_MASK);
+		bq->device_id >>= BQ2597X_DEV_ID_SHIFT;
+		bq->revision = (data & BQ2597X_DEV_REV_MASK);
+		bq->revision >>= BQ2597X_DEV_REV_SHIFT;
+
+		bq_info("detect device PN:%x, ID:%x, REV:%x \n!",
+				bq->part_no, bq->device_id, bq->revision);
 	}
 
 	return ret;
@@ -1702,6 +1737,34 @@ static int bq2597x_init_int_src(struct bq2597x *bq)
 	return ret;
 }
 
+static int sc8551_init_adc_trim(struct bq2597x *bq)
+{
+	int ret;
+
+	ret = bq2597x_update_bits(bq, SC8551_REG_34,
+				SC8551_ADC_TRIM_MASK, SC8551_ADC_TRIM_VAL);
+	return ret;
+}
+
+static int sc8551_set_ibus_low_dg(struct bq2597x *bq, int low_dg)
+{
+	int ret;
+	u8 val;
+
+	if (low_dg == 10)
+		val = BQ2597X_IBUS_LOW_DG_10US;
+	else
+		val = BQ2597X_IBUS_LOW_DG_5MS;
+
+	val <<= BQ2597X_IBUS_LOW_DG_SHIFT;
+
+	ret = bq2597x_update_bits(bq, BQ2597X_REG_2E,
+				BQ2597X_IBUS_LOW_DG_MASK,
+				val);
+
+	return ret;
+}
+
 static int bq2597x_init_regulation(struct bq2597x *bq)
 {
 	bq2597x_set_ibat_reg_th(bq, 300);
@@ -1730,6 +1793,11 @@ static int bq2597x_init_device(struct bq2597x *bq)
 	bq2597x_init_regulation(bq);
 
 	bq2597x_enable_vout(bq, false);
+
+	if (bq->part_no == SC8551_PART_NO) {
+		sc8551_init_adc_trim(bq);
+		sc8551_set_ibus_low_dg(bq, 5000);
+	}
 
 	return 0;
 }
@@ -1806,6 +1874,7 @@ static enum power_supply_property bq2597x_charger_props[] = {
 	POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CP_IRQ_STATUS,
+	POWER_SUPPLY_PROP_CHIP_VERSION,
 };
 
 static void bq2597x_check_alarm_status(struct bq2597x *bq);
@@ -1858,6 +1927,9 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CP_IRQ_STATUS:
 		val->intval = bq->irq_counts;
+		break;
+	case POWER_SUPPLY_PROP_CHIP_VERSION:
+		val->intval = bq->part_no;
 		break;
 	case POWER_SUPPLY_PROP_CP_STATUS1:
 //		bq2597x_check_alarm_status(bq);
