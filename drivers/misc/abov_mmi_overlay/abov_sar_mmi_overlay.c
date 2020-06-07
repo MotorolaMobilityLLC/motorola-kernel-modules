@@ -881,6 +881,44 @@ static ssize_t reg_store(struct class *class,
 
 static CLASS_ATTR_RW(reg);
 
+#ifdef CONFIG_CAPSENSE_HEADSET_STATE
+static ssize_t headset_show(struct class *class,
+		struct class_attribute *attr,
+		char *buf)
+{
+	u8 capsense_mode = 0;
+	pabovXX_t this = abov_sar_ptr;
+
+	read_register(this, ABOV_CTRL_MODE_REG, &capsense_mode);
+	LOG_DBG("Reading capsense status\n");
+	return snprintf(buf, 37, "ABOV CapSensor mode:0x%02x\n", capsense_mode);
+}
+static ssize_t headset_store(struct class *class,
+		struct class_attribute *attr,
+		const char *buf, size_t count)
+{
+	pabovXX_t this = abov_sar_ptr;
+
+	if (!count )
+		return -EINVAL;
+
+	if (!strncmp(buf, "1", 1)) {
+		LOG_INFO("headset in update sleep mode\n");
+		if (mEnabled)
+			write_register(this, ABOV_CTRL_MODE_REG, 0x01);
+	}
+
+	if (!strncmp(buf, "0", 1)) {
+		LOG_INFO("headset out back active mode\n");
+		if (mEnabled)
+			write_register(this, ABOV_CTRL_MODE_REG, 0x00);
+	}
+	return count;
+}
+
+static CLASS_ATTR_RW(headset);
+#endif
+
 static struct class capsense_class = {
 	.name			= "capsense",
 	.owner			= THIS_MODULE,
@@ -1756,6 +1794,14 @@ static int abov_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			LOG_ERR("Create update_fw file failed (%d)\n", ret);
 			return ret;
 		}
+
+#ifdef CONFIG_CAPSENSE_HEADSET_STATE
+		ret = class_create_file(&capsense_class, &class_attr_headset);
+		if (ret < 0) {
+			LOG_ERR("Create headset file failed (%d)\n", ret);
+			return ret;
+		}
+#endif
 		/*restore sys/class/capsense label*/
 		kobject_uevent(&capsense_class.p->subsys.kobj, KOBJ_CHANGE);
 
