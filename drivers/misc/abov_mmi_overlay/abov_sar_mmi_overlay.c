@@ -898,6 +898,19 @@ static ssize_t headset_store(struct class *class,
 		const char *buf, size_t count)
 {
 	pabovXX_t this = abov_sar_ptr;
+	pabov_t pDevice = NULL;
+	struct input_dev *input_ch0 = NULL;
+	struct input_dev *input_ch1 = NULL;
+	struct input_dev *input_ch2 = NULL;
+
+	pDevice = this->pDevice;
+	input_ch0 = pDevice->pbuttonInformation->input_ch0;
+	if (abov_channel_number == ABOV_CHANNEL_NUMBER_TWO)
+		input_ch1 = pDevice->pbuttonInformation->input_ch1;
+	else {
+		input_ch1 = pDevice->pbuttonInformation->input_ch1;
+		input_ch2 = pDevice->pbuttonInformation->input_ch2;
+	}
 
 	if (!count )
 		return -EINVAL;
@@ -912,6 +925,17 @@ static ssize_t headset_store(struct class *class,
 		LOG_INFO("headset out back active mode\n");
 		if (mEnabled)
 			write_register(this, ABOV_CTRL_MODE_REG, 0x00);
+	}
+
+	write_register(this, ABOV_SOFTRESET_REG, 0x10);
+
+	input_report_abs(input_ch0, ABS_DISTANCE, 0);
+	input_sync(input_ch0);
+	input_report_abs(input_ch1, ABS_DISTANCE, 0);
+	input_sync(input_ch1);
+	if (abov_channel_number > ABOV_CHANNEL_NUMBER_TWO) {
+		input_report_abs(input_ch2, ABS_DISTANCE, 0);
+		input_sync(input_ch2);
 	}
 	return count;
 }
