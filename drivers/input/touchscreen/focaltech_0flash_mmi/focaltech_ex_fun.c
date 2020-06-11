@@ -1374,9 +1374,35 @@ static ssize_t vendor_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "focaltech");
 }
 
+static ssize_t ic_ver_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+    struct fts_ts_data *ts_data = fts_data;
+    struct input_dev *input_dev = ts_data->input_dev;
+    u8 fwver = 0;
+
+    mutex_lock(&input_dev->mutex);
+
+#if FTS_ESDCHECK_EN
+    fts_esdcheck_proc_busy(1);
+#endif
+    fts_read_reg(FTS_REG_FW_VER, &fwver);
+#if FTS_ESDCHECK_EN
+    fts_esdcheck_proc_busy(0);
+#endif
+    mutex_unlock(&input_dev->mutex);
+    if ((fwver == 0xFF) || (fwver == 0x00))
+        fwver = 0xFF;
+    return scnprintf(buf, PAGE_SIZE, "%s%s\n%s0000-%02x\n%s%02x\n",
+        "Product ID: ", FTS_CHIP_NAME,
+        "Build ID: ", fwver,
+        "Config ID: ", fwver);
+}
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
+	__ATTR_RO(ic_ver),
 	__ATTR_NULL
 };
 
