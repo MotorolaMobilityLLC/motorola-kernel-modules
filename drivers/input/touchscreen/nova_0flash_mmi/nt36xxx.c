@@ -96,6 +96,10 @@ static struct workqueue_struct *nvt_fwu_wq;
 extern void Boot_Update_Firmware(struct work_struct *work);
 #endif
 
+#ifdef NOVATECH_PEN_NOTIFIER
+int nvt_mcu_pen_detect_set(uint8_t pen_detect);
+#endif
+
 #if defined(CONFIG_FB)
 #ifdef _MSM_DRM_NOTIFY_H_
 static int nvt_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
@@ -1844,7 +1848,30 @@ device_destroy:
 	return -ENODEV;
 }
 
+#ifdef NOVATECH_PEN_NOTIFIER
+static int pen_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+    int ret = 0;
+    NVT_LOG("Received event(%lu) for pen detection\n", event);
 
+    if (event == PEN_DETECTION_INSERT)
+        ts->nvt_pen_detect_flag = PEN_DETECTION_INSERT;
+    else if (event == PEN_DETECTION_PULL)
+        ts->nvt_pen_detect_flag = PEN_DETECTION_PULL;
+
+    if (!bTouchIsAwake || !ts->fw_ready_flag) {
+        NVT_LOG("touch in suspend or no firmware, so store.");
+    } else {
+        ret = nvt_mcu_pen_detect_set(ts->nvt_pen_detect_flag);
+        if (ret < 0) {
+            NVT_ERR("write pen state fail");
+        }
+    }
+
+    return 0;
+}
+#endif
 
 /*******************************************************
 Description:
@@ -2152,6 +2179,17 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	}
 #endif
 
+#ifdef NOVATECH_PEN_NOTIFIER
+	ts->fw_ready_flag = false;
+	ts->nvt_pen_detect_flag = PEN_DETECTION_INSERT;
+	ts->pen_notif.notifier_call = pen_notifier_callback;
+	ret = pen_detection_register_client(&ts->pen_notif);
+	if (ret) {
+		NVT_ERR("[PEN]Unable to register pen_notifier: %d\n", ret);
+		goto err_register_pen_notif_failed;
+    }
+#endif
+
 #if defined(CONFIG_FB)
 #ifdef _MSM_DRM_NOTIFY_H_
 	ts->drm_notif.notifier_call = nvt_drm_notifier_callback;
@@ -2205,6 +2243,11 @@ err_register_fb_notif_failed:
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	unregister_early_suspend(&ts->early_suspend);
 err_register_early_suspend_failed:
+#endif
+#ifdef NOVATECH_PEN_NOTIFIER
+    if (pen_detection_unregister_client(&ts->pen_notif))
+        NVT_ERR("Error occurred while unregistering pen_notifier.\n");
+err_register_pen_notif_failed:
 #endif
 #if NVT_TOUCH_MP
 nvt_mp_proc_deinit();
@@ -2294,6 +2337,11 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 #endif
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	unregister_early_suspend(&ts->early_suspend);
+#endif
+
+#ifdef NOVATECH_PEN_NOTIFIER
+    if (pen_detection_unregister_client(&ts->pen_notif))
+        NVT_ERR("Error occurred while unregistering pen_notifier.\n");
 #endif
 
 #if NVT_TOUCH_MP
