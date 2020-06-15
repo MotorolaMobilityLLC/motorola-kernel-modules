@@ -26,7 +26,9 @@
 #ifdef NVT_SENSOR_EN
 #include <linux/sensors.h>
 #endif
-
+#ifdef NOVATECH_PEN_NOTIFIER
+#include <linux/pen_detection_notify.h>
+#endif
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
@@ -186,6 +188,11 @@ struct nvt_ts_data {
 	bool wakeable;
 	bool should_enable_gesture;
 	bool gesture_enabled;
+#ifdef NOVATECH_PEN_NOTIFIER
+	bool fw_ready_flag;
+	int nvt_pen_detect_flag;
+	struct notifier_block pen_notif;
+#endif
 	enum display_state screen_state;
 	struct mutex state_mutex;
 	struct nvt_sensor_platform_data *sensor_pdata;
@@ -256,5 +263,8 @@ int32_t nvt_write_addr(uint32_t addr, uint8_t data);
 #if NVT_TOUCH_ESD_PROTECT
 extern void nvt_esd_check_enable(uint8_t enable);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
+#ifdef NOVATECH_PEN_NOTIFIER
+extern int nvt_mcu_pen_detect_set(uint8_t pen_detect);
+#endif
 
 #endif /* _LINUX_NVT_TOUCH_H */
