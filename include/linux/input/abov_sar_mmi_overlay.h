@@ -250,7 +250,6 @@ struct abovXX {
 	 * or does not work properly */
 	u8 useIrqTimer;
 	u8 read_reg;
-
 	// sensors enable flag
 	capsensor_enable_flag_t enable_flag;
 
@@ -258,6 +257,9 @@ struct abovXX {
 	struct notifier_block ps_notif;
 	bool ps_is_present;
 	bool loading_fw;
+#ifdef CONFIG_CAPSENSE_HEADSET_STATE
+	bool headset_status;
+#endif
 	int fw_dl_status;
 
 	struct work_struct fw_update_work;
