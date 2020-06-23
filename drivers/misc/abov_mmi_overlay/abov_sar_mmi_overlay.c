@@ -710,7 +710,10 @@ static ssize_t enable_store(struct class *class,
 	if (!strncmp(buf, "1", 1)) {
 		LOG_INFO("enable cap sensor\n");
 		initialize(this);
-
+#ifdef CONFIG_CAPSENSE_HEADSET_STATE
+		if (this->headset_status)
+			write_register(this, ABOV_CTRL_MODE_REG, 0x01);
+#endif
 		input_report_abs(input_ch0, ABS_DISTANCE, 0);
 		input_sync(input_ch0);
 		input_report_abs(input_ch1, ABS_DISTANCE, 0);
@@ -760,6 +763,10 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned 
 		LOG_INFO("enable cap sensor: %s\n",sensors_cdev->name);
 		if(mEnabled == 0){
 			initialize(this);
+#ifdef CONFIG_CAPSENSE_HEADSET_STATE
+			if (this->headset_status)
+				write_register(this, ABOV_CTRL_MODE_REG, 0x01);
+#endif
 			mEnabled = 1;
 		}
 		if (abov_channel_number == ABOV_CHANNEL_NUMBER_TWO) {
@@ -917,12 +924,14 @@ static ssize_t headset_store(struct class *class,
 
 	if (!strncmp(buf, "1", 1)) {
 		LOG_INFO("headset in update sleep mode\n");
+		this->headset_status = true;
 		if (mEnabled)
 			write_register(this, ABOV_CTRL_MODE_REG, 0x01);
 	}
 
 	if (!strncmp(buf, "0", 1)) {
 		LOG_INFO("headset out back active mode\n");
+		this->headset_status = false;
 		if (mEnabled)
 			write_register(this, ABOV_CTRL_MODE_REG, 0x00);
 	}
@@ -1881,6 +1890,9 @@ static int abov_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 		this->loading_fw = false;
 		this->fw_dl_status = 1;
+#ifdef CONFIG_CAPSENSE_HEADSET_STATE
+		this->headset_status = false;
+#endif
 		if (isForceUpdate == true) {
 		    INIT_WORK(&this->fw_update_work, capsense_fore_update_work);
 		} else {
@@ -2162,8 +2174,16 @@ void abovXX_resume(pabovXX_t this)
 	if (this) {
 		LOG_DBG("ABOV resume[%d]: enable irq!\n",mEnabled);
 		/* we should let capsensor enter active in resume*/
-		if (mEnabled)
+		if (mEnabled) {
+#ifdef CONFIG_CAPSENSE_HEADSET_STATE
+			if (this->headset_status)
+				write_register(this, ABOV_CTRL_MODE_REG, 0x01);
+			else
+				write_register(this, ABOV_CTRL_MODE_REG, 0x00);
+#else
 			write_register(this, ABOV_CTRL_MODE_REG, 0x00);
+#endif
+		}
 		enable_irq(this->irq);
 	}
 }
