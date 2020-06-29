@@ -1879,31 +1879,13 @@ int cts_suspend_device(struct cts_device *cts_dev)
 int cts_resume_device(struct cts_device *cts_dev)
 {
 	int ret = 0;
-	int retries = 3;
 
-	cts_info("Resume device");
 
 	/* Check whether device is in normal mode */
-	while (--retries >= 0) {
-#ifdef CFG_CTS_HAS_RESET_PIN
-		cts_plat_reset_device(cts_dev->pdata);
-#endif
-		cts_set_normal_addr(cts_dev);
-#ifdef CONFIG_CTS_I2C_HOST
-		if (cts_plat_is_i2c_online
-		    (cts_dev->pdata, CTS_DEV_NORMAL_MODE_I2CADDR))
-#else
-		if (cts_plat_is_normal_mode(cts_dev->pdata))
-#endif
-		{
-			break;
-		}
-	}
 
-	if (retries < 0) {
 		const struct cts_firmware *firmware = NULL;
 
-		cts_info("Need update firmware when resume");
+	cts_info("Resume device");
 
 #ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
 	if (cts_dev->config_fw_name[0] != '\0') {
@@ -1928,7 +1910,6 @@ int cts_resume_device(struct cts_device *cts_dev)
 				"please update manually!!", ret);
 
 			goto err_set_program_mode;
-		}
 	}
 #ifdef CONFIG_CTS_CHARGER_DETECT
 	if (cts_is_charger_exist(cts_dev)) {
