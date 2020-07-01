@@ -188,8 +188,9 @@ static unsigned int prev_keycode;
  *   KEY_PRESS_RELEASE : Combined action of press-then-release
  */
 #define LONGTOUCH_INTERVAL          400
-#define SINGLECLICK_INTERVAL        200
-#define DOUBLECLICK_INTERVAL        500
+#define SINGLECLICK_INTERVAL        150
+#define SINGLECLICK_INTERVAL_MIN    5
+#define DOUBLECLICK_INTERVAL        300
 
 
 #define	KEYEVENT_CLICK              KEY_FPS_TAP /* 0x232 */
@@ -401,7 +402,8 @@ void translated_command_converter(char cmd, struct etspi_data *etspi)
 				g_SingleClick, jiffies_to_msecs(jiffies - g_SingleClickJiffies),
 				jiffies_to_msecs(jiffies - g_DoubleClickJiffies), jiffies_to_msecs(jiffies));
 #if ENABLE_TRANSLATED_SINGLE_CLICK || ENABLE_TRANSLATED_DOUBLE_CLICK
-			if ((jiffies - g_SingleClickJiffies) < (HZ * SINGLECLICK_INTERVAL / 1000)) {
+			if ((jiffies - g_SingleClickJiffies) < (HZ * SINGLECLICK_INTERVAL / 1000)
+			        && (jiffies - g_SingleClickJiffies) > (HZ * SINGLECLICK_INTERVAL_MIN / 1000)) {
 				/* Click event */
 #if ENABLE_TRANSLATED_SINGLE_CLICK
 				send_key_event(etspi, KEYEVENT_CLICK, KEYEVENT_CLICK_ACTION);
@@ -712,6 +714,8 @@ void uinput_egis_init(struct etspi_data *etspi)
 
 
 	etspi->input_dev->name = "uinput-egis";
+	etspi->input_dev->id.vendor = 0x1f; //common vendorid
+
 
 	init_event_enable(etspi);
 
