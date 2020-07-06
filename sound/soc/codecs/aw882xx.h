@@ -20,7 +20,7 @@
 
 #define AW882XX_MODE_SHIFT_MAX				2
 
-#define AFE_RX_PROT_ID  0x1004				/*AFE_PORT_ID_TERTIAY_MI2S_RX*/
+//#define AFE_RX_PROT_ID  0x1004				/*AFE_PORT_ID_TERTIAY_MI2S_RX*/
 #define AW_MODULE_ID_COPP (0X10013D02)			/*SKT module id*/
 #define AW_MODULE_PARAMS_ID_COPP_ENABLE (0X10013D14)	/*SKT enable param id*/
 
@@ -41,7 +41,6 @@
 #define AFE_PARAM_ID_AWDSP_RX_F0_R              (0X10013D20)
 #define AFE_PARAM_ID_AWDSP_RX_REAL_DATA_L       (0X10013D21)
 #define AFE_PARAM_ID_AWDSP_RX_REAL_DATA_R       (0X10013D22)
-
 
 enum AWINIC_CALI_CMD{
 	AW_CALI_CMD_NONE = 0,
@@ -168,6 +167,18 @@ struct aw882xx_monitor{
 	uint32_t is_enable;
 	uint16_t pre_vol;
 	int16_t pre_temp;
+
+	struct aw882xx_low_vol vol_cfg;
+	struct aw882xx_low_temp temp_cfg;
+	int vol_up_num;
+	int vol_down_num;
+	int temp_up_num;
+	int temp_down_num;
+	struct aw882xx_low_vol *vol_up_table;
+	struct aw882xx_low_vol *vol_down_table;
+	struct aw882xx_low_temp *temp_up_table;
+	struct aw882xx_low_temp *temp_down_table;
+
 #ifdef AW_DEBUG
 	uint16_t test_vol;
 	int16_t test_temp;
@@ -189,7 +200,6 @@ enum AWINIC_PROFILE{
 #define VOLUME_STEP_DB  (6)
 #define VOLUME_MIN_NEG_90_DB  (90)
 #define FADE_STEP_DB   (6)
-
 
 typedef struct awinic_afe_param_header{
 	uint8_t fw[VERSION_MAX];
@@ -236,8 +246,12 @@ struct aw882xx {
 	unsigned int chipid;
 	unsigned int init;
 	unsigned int spk_rcv_mode;
-	int32_t cali_re;
+	uint32_t cali_re;
+	uint32_t default_re;
+	uint8_t cur_gain;
 	unsigned int cfg_num;
+	unsigned int afe_rx_portid;
+	unsigned int afe_tx_portid;
 	unsigned int afe_profile;
 	struct  profile_info profile;
 };
@@ -246,6 +260,4 @@ struct aw882xx_container {
 	int len;
 	unsigned char data[];
 };
-
-
 #endif
