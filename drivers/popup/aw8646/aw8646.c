@@ -203,17 +203,7 @@ static int set_pinctrl_state(motor_device* md, unsigned state_index);
 
 static ktime_t adapt_time_helper(ktime_t usec)
 {
-    ktime_t ret;
-
-    if(usec < 1000) {
-        ret = ns_to_ktime(usec * 1000);
-    } else if(usec < 1000000){
-        ret = ms_to_ktime(usec);
-    } else { //Should not to be here.
-        ret = ms_to_ktime(usec * 1000);
-    }
-
-    return ret;
+    return ns_to_ktime(usec * 1000);
 }
 
 static inline bool is_hw_clk(motor_device* md)
@@ -883,18 +873,18 @@ static void moto_aw8646_set_step_freq(motor_device* md, unsigned freq)
     if(md->step_freq == freq) {
         dev_err(md->dev, "Unchanged the freq, ignore\n");
         goto exit;
+    } else if(freq == 0) {
+        dev_err(md->dev, "Invalid frequency, ignore\n");
+        goto exit;
     }
+
     if(freq > STEP_MAX_FREQ)
         freq = STEP_MAX_FREQ;
     md->step_freq = freq;
-    if(md->step_freq <= 1000) { //ms
-        md->step_period = 1000 / md->step_freq;
-        md->step_period *= 1000; //us
-    } else { //us
-        md->step_period = 1000000 / md->step_freq;
-    }
 
-    dev_info(md->dev, "freq %d period %ld\n", md->step_freq, md->step_period);
+    md->step_period = 1000000 / md->step_freq;
+
+    dev_info(md->dev, "freq %d period %ldus\n", md->step_freq, md->step_period);
 exit:
     spin_unlock_irqrestore(&md->mlock, flags);
 }
