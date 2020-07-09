@@ -81,6 +81,16 @@
 extern const uint16_t touch_key_array[TOUCH_KEY_NUM];
 #endif
 #define TOUCH_FORCE_NUM 1000
+#ifdef PALM_GESTURE
+#define PALM_HAND_HOLDE 900
+#define PALM_HANG 1000
+#ifdef PALM_GESTURE_RANGE
+#define TOUCH_ORIENTATION_MIN 0
+#define TOUCH_ORIENTATION_MAX 90
+#define PANEL_REAL_WIDTH 7096
+#define PANEL_REAL_HEIGHT 15768
+#endif
+#endif
 
 /* Enable only when module have tp reset pin and connected to host */
 #define NVT_TOUCH_SUPPORT_HW_RST 0
