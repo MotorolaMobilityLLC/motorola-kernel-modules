@@ -1372,7 +1372,14 @@ static int32_t nvt_ts_point_data_checksum(uint8_t *buf, uint8_t length)
 }
 #endif /* POINT_DATA_CHECKSUM */
 
+#ifdef PALM_GESTURE
+#define POINT_DATA_LEN 120
+#define MINOR_DATA_OFFSET 70
+#define ORIENT_DATA_OFFSET 110
+#else
 #define POINT_DATA_LEN 65
+#endif
+
 /*******************************************************
 Description:
 	Novatek touchscreen work function.
@@ -1387,7 +1394,11 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	uint32_t position = 0;
 	uint32_t input_x = 0;
 	uint32_t input_y = 0;
-	uint32_t input_w = 0;
+	uint32_t input_major = 0;
+#ifdef PALM_GESTURE
+	uint32_t input_minor = 0;
+	int32_t input_orient = 0;
+#endif
 	uint32_t input_p = 0;
 	uint8_t input_id = 0;
 #if MT_PROTOCOL_B
@@ -1463,8 +1474,13 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 		input_id = (uint8_t)(point_data[position + 0] >> 3);
 		if ((input_id == 0) || (input_id > ts->max_touch_num))
 			continue;
-
+#ifdef PALM_GESTURE
+		if (((point_data[position] & 0x07) == 0x01)
+			|| ((point_data[position] & 0x07) == 0x02)
+			|| ((point_data[position] & 0x07) == 0x03)) {	//finger down (enter & moving) or palm
+#else
 		if (((point_data[position] & 0x07) == 0x01) || ((point_data[position] & 0x07) == 0x02)) {	//finger down (enter & moving)
+#endif
 #if NVT_TOUCH_ESD_PROTECT
 			/* update interrupt timer */
 			irq_timer = jiffies;
@@ -1475,15 +1491,43 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 				continue;
 			if ((input_x > ts->abs_x_max) || (input_y > ts->abs_y_max))
 				continue;
-			input_w = (uint32_t)(point_data[position + 4]);
-			if (input_w == 0)
-				input_w = 1;
-			if (i < 2) {
-				input_p = (uint32_t)(point_data[position + 5]) + (uint32_t)(point_data[i + 63] << 8);
-				if (input_p > TOUCH_FORCE_NUM)
-					input_p = TOUCH_FORCE_NUM;
-			} else {
+
+#ifdef PALM_GESTURE_RANGE
+			if((point_data[position] & 0x07) == 0x03) { //palm
+				input_minor = (uint32_t)(point_data[1 + MINOR_DATA_OFFSET + i]);
+				if (input_minor == 0)
+					input_minor = 1;
+
+				input_orient = (int8_t)(point_data[1 + ORIENT_DATA_OFFSET + i]);
+			}
+#endif
+			input_major = (uint32_t)(point_data[position + 4]);
+			if (input_major == 0)
+				input_major = 1;
+
+#ifdef PALM_GESTURE
+			if ((point_data[position] & 0x07) == 0x03) { //palm
 				input_p = (uint32_t)(point_data[position + 5]);
+				if(input_p == 255)
+					input_p = PALM_HANG;
+				else if (input_p == 254)
+					input_p = PALM_HAND_HOLDE;
+
+#ifdef PALM_GESTURE_RANGE
+				//dimension-to-pixel
+				input_minor = input_minor * TOUCH_DEFAULT_MAX_WIDTH / PANEL_REAL_WIDTH * 100;
+				input_major = input_major * TOUCH_DEFAULT_MAX_HEIGHT / PANEL_REAL_HEIGHT * 100;
+#endif
+			} else
+#endif
+			{
+				if (i < 2) {
+					input_p = (uint32_t)(point_data[position + 5]) + (uint32_t)(point_data[i + 63] << 8);
+					if (input_p > TOUCH_FORCE_NUM)
+						input_p = TOUCH_FORCE_NUM;
+				} else {
+					input_p = (uint32_t)(point_data[position + 5]);
+				}
 			}
 			if (input_p == 0)
 				input_p = 1;
@@ -1497,11 +1541,28 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 			input_report_key(ts->input_dev, BTN_TOUCH, 1);
 #endif /* MT_PROTOCOL_B */
 
-			input_report_abs(ts->input_dev, ABS_MT_POSITION_X, input_x);
-			input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, input_y);
-			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, input_w);
-			input_report_abs(ts->input_dev, ABS_MT_PRESSURE, input_p);
-
+#ifdef PALM_GESTURE
+			if((point_data[position] & 0x07) == 0x03) { //palm
+				NVT_LOG("id=%d, pressure=%d, (%d,%d), major=%d, minor=%d, orient=%d\n",
+					input_id, input_p, input_x, input_y, input_major, input_minor, input_orient);
+#ifdef PALM_GESTURE_RANGE
+				input_report_abs(ts->input_dev, ABS_MT_POSITION_X, input_x);
+				input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, input_y);
+				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, input_major);
+				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, input_minor);
+				input_report_abs(ts->input_dev, ABS_MT_ORIENTATION, input_orient);
+#endif
+				input_report_abs(ts->input_dev, ABS_MT_PRESSURE, input_p);
+			} else
+#endif
+			{
+				dev_dbg(&ts->client->dev, "id=%d, pressure=%d, (%d,%d), major=%d\n",
+					input_id, input_p, input_x, input_y, input_major);
+				input_report_abs(ts->input_dev, ABS_MT_POSITION_X, input_x);
+				input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, input_y);
+				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, input_major);
+				input_report_abs(ts->input_dev, ABS_MT_PRESSURE, input_p);
+			}
 #if MT_PROTOCOL_B
 #else /* MT_PROTOCOL_B */
 			input_mt_sync(ts->input_dev);
@@ -1515,6 +1576,10 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	for (i = 0; i < ts->max_touch_num; i++) {
 		if (press_id[i] != 1) {
 			input_mt_slot(ts->input_dev, i);
+#ifdef PALM_GESTURE_RANGE
+			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, 0);
+			input_report_abs(ts->input_dev, ABS_MT_ORIENTATION, 0);
+#endif
 			input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
 			input_report_abs(ts->input_dev, ABS_MT_PRESSURE, 0);
 			input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, false);
@@ -2010,8 +2075,13 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	input_set_abs_params(ts->input_dev, ABS_MT_PRESSURE, 0, TOUCH_FORCE_NUM, 0, 0);    //pressure = TOUCH_FORCE_NUM
 
 #if TOUCH_MAX_FINGER_NUM > 1
+#ifdef PALM_GESTURE_RANGE
+	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0, TOUCH_DEFAULT_MAX_HEIGHT, 0, 0);
+	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MINOR, 0, TOUCH_DEFAULT_MAX_HEIGHT, 0, 0);
+	input_set_abs_params(ts->input_dev, ABS_MT_ORIENTATION, TOUCH_ORIENTATION_MIN, TOUCH_ORIENTATION_MAX, 0, 0);
+#else
 	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);    //area = 255
-
+#endif
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, 0, ts->abs_x_max, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0, ts->abs_y_max, 0, 0);
 #if MT_PROTOCOL_B
@@ -2538,6 +2608,10 @@ static int32_t nvt_ts_suspend(struct device *dev)
 #if MT_PROTOCOL_B
 	for (i = 0; i < ts->max_touch_num; i++) {
 		input_mt_slot(ts->input_dev, i);
+#ifdef PALM_GESTURE_RANGE
+		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, 0);
+		input_report_abs(ts->input_dev, ABS_MT_ORIENTATION, 0);
+#endif
 		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
 		input_report_abs(ts->input_dev, ABS_MT_PRESSURE, 0);
 		input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
