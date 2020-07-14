@@ -20,7 +20,8 @@
 
 #define AW882XX_MODE_SHIFT_MAX				2
 
-//#define AFE_RX_PROT_ID  0x1004				/*AFE_PORT_ID_TERTIAY_MI2S_RX*/
+#define AW882XX_DEFAULT_AFE_RX_PROT_ID  0x1000		/*AFE_PORT_ID_PRIMARY_MI2S_RX*/
+#define AW882XX_DEFAULT_AFE_TX_PROT_ID  0x1001		/*AFE_PORT_ID_PRIMARY_MI2S_TX*/
 #define AW_MODULE_ID_COPP (0X10013D02)			/*SKT module id*/
 #define AW_MODULE_PARAMS_ID_COPP_ENABLE (0X10013D14)	/*SKT enable param id*/
 
@@ -249,6 +250,7 @@ struct aw882xx {
 	uint32_t cali_re;
 	uint32_t default_re;
 	uint8_t cur_gain;
+	uint8_t need_fade;
 	unsigned int cfg_num;
 	unsigned int afe_rx_portid;
 	unsigned int afe_tx_portid;

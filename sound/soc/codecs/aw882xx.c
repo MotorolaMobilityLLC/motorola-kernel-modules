@@ -1,7 +1,7 @@
 /*
  * aw882xx.c   aw882xx codec module
  *
- * Version: v0.1.10
+ * Version: v0.1.11
  *
  * keep same with AW882XX_VERSION
  *
@@ -50,7 +50,7 @@
  ******************************************************/
 #define AW882XX_I2C_NAME "aw882xx_smartpa"
 
-#define AW882XX_VERSION "v0.1.10"
+#define AW882XX_VERSION "v0.1.11"
 
 #define AW882XX_RATES SNDRV_PCM_RATE_8000_48000
 #define AW882XX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
@@ -332,8 +332,8 @@ static void aw882xx_run_mute(struct aw882xx *aw882xx, bool mute)
 	pr_debug("%s: enter\n", __func__);
 
 	if (mute) {
-	if (aw882xx->afe_profile)
-		aw882xx_fade_in_out(aw882xx, false);
+		if (aw882xx->need_fade)
+			aw882xx_fade_in_out(aw882xx, false);
 		aw882xx_i2c_write_bits(aw882xx, AW882XX_SYSCTRL2_REG,
 				AW882XX_HMUTE_MASK,
 				AW882XX_HMUTE_ENABLE_VALUE);
@@ -341,8 +341,8 @@ static void aw882xx_run_mute(struct aw882xx *aw882xx, bool mute)
 		aw882xx_i2c_write_bits(aw882xx, AW882XX_SYSCTRL2_REG,
 				AW882XX_HMUTE_MASK,
 				AW882XX_HMUTE_DISABLE_VALUE);
-	if (aw882xx->afe_profile)
-		aw882xx_fade_in_out(aw882xx, true);
+		if (aw882xx->need_fade)
+			aw882xx_fade_in_out(aw882xx, true);
 	}
 }
 
@@ -667,7 +667,6 @@ static void aw882xx_reg_loaded(const struct firmware *cont, void *context)
 {
 	struct aw882xx *aw882xx = context;
 	struct aw882xx_container *aw882xx_cfg;
-	bool afe_profile_reload = false;
 	int ret = -1;
 
 	if (!cont) {
@@ -703,13 +702,12 @@ static void aw882xx_reg_loaded(const struct firmware *cont, void *context)
 	kfree(aw882xx_cfg);
 	if (aw882xx->afe_profile) {
 		aw882xx_load_profile_params(aw882xx);
-		afe_profile_reload = true;
-		aw882xx->afe_profile = 0;
+		aw882xx->need_fade = 0;
 	}
 	aw882xx_start(aw882xx);
 
-	if (afe_profile_reload) {
-		aw882xx->afe_profile = 1;
+	if (aw882xx->afe_profile) {
+		aw882xx->need_fade = 1;
 	}
 }
 
@@ -1331,7 +1329,7 @@ static void aw882xx_set_adsp_module_status(struct work_struct *work)
 	/*set afe rx module*/
 	ret = aw_send_afe_rx_module_enable(g_aw882xx->afe_rx_portid, &set_value, sizeof(uint32_t));
 	if (ret) {
-		pr_debug("%s: disable afe rx module  %d falied , ret=%d\n",
+		pr_info("%s: disable afe rx module  %d falied , ret=%d\n",
 				__func__, set_value, ret);
 	}
 
@@ -1341,7 +1339,7 @@ static void aw882xx_set_adsp_module_status(struct work_struct *work)
 		 pr_err("%s: disable skt failed !\n", __func__);
 	}
 
-	pr_debug("%s: disable skt and  afe module \n", __func__);
+	pr_info("%s: disable skt and  afe module \n", __func__);
 }
 #endif
 static const struct soc_enum aw882xx_snd_enum[] = {
@@ -1925,19 +1923,21 @@ static int aw882xx_parse_dt(struct device *dev, struct aw882xx *aw882xx,
 
 	ret = of_property_read_u32(np, "afe-rx-portid", &aw882xx->afe_rx_portid);
 	if (ret) {
-		aw882xx->afe_rx_portid = 0x1000;
-		dev_err(dev, "%s: afe_rx_portid get failed,use 0x1000!\n", __func__);
+		aw882xx->afe_rx_portid = AW882XX_DEFAULT_AFE_RX_PROT_ID;
+		dev_err(dev, "%s: afe_rx_portid get failed,use default port: 0x%x!\n",
+			__func__, aw882xx->afe_rx_portid);
 	} else {
-		dev_info(dev, "%s: afe_rx_portid = %d\n",
+		dev_info(dev, "%s: afe_rx_portid = 0x%x\n",
 			__func__, aw882xx->afe_rx_portid);
 	}
 
 	ret = of_property_read_u32(np, "afe-tx-portid", &aw882xx->afe_tx_portid);
 	if (ret) {
-		aw882xx->afe_tx_portid = 0x1001;
-		dev_err(dev, "%s: afe_tx_portid get failed,use 0x1001!\n", __func__);
+		aw882xx->afe_tx_portid = AW882XX_DEFAULT_AFE_TX_PROT_ID;
+		dev_err(dev, "%s: afe_tx_portid get failed,use default port: 0x%x!\n",
+			__func__, aw882xx->afe_tx_portid);
 	} else {
-		dev_info(dev, "%s: afe_tx_portid = %d\n",
+		dev_info(dev, "%s: afe_tx_portid = 0x%x\n",
 			__func__, aw882xx->afe_tx_portid);
 	}
 
@@ -3170,6 +3170,7 @@ static int aw882xx_i2c_probe(struct i2c_client *i2c,
 	g_aw882xx = aw882xx;
 
 	aw882xx->default_re = 0;
+	aw882xx->need_fade = 0;
 	/*init profile*/
 	mutex_init(&aw882xx->profile.lock);
 	aw882xx->profile.cur_profile = 0;
