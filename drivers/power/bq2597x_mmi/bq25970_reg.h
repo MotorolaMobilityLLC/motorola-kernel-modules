@@ -790,12 +790,18 @@
 #define BQ2597X_IBUS_LOW_DG_5MS				1
 
 
-#define SC8551_IBUS_ADC_LSB				1.5625
-#define SC8551_VBUS_ADC_LSB				3.75
+#define SC8551_IBUS_ADC_LSB_MUL				15625
+#define SC8551_IBUS_ADC_LSB_DIV				10000
+#define SC8551_VBUS_ADC_LSB_MUL				375
+#define SC8551_VBUS_ADC_LSB_DIV				100
 #define SC8551_VAC_ADC_LSB				5
-#define SC8551_VOUT_ADC_LSB				1.25
-#define SC8551_VBAT_ADC_LSB				1.25
-#define SC8551_IBAT_ADC_LSB				3.125
+#define SC8551_VOUT_ADC_LSB_MUL				125
+#define SC8551_VOUT_ADC_LSB_DIV				100
+#define SC8551_VBAT_ADC_LSB_MUL				125
+#define SC8551_VBAT_ADC_LSB_DIV				100
+#define SC8551_IBAT_ADC_LSB_MUL				3125
+#define SC8551_IBAT_ADC_LSB_DIV				1000
+
 #define SC8551_REG_34                                   0x34
 #define SC8551_ADC_TRIM_MASK                            0x01
 #define SC8551_ADC_TRIM_VAL                             1
