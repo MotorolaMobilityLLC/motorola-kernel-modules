@@ -1090,6 +1090,7 @@ static int bq2597x_get_adc_data(struct bq2597x *bq, int channel,  int *result)
 	int ret;
 	u16 val;
 	s16 t;
+	int tmp;
 
 	if (channel > ADC_MAX_NUM)
 		return -EINVAL;
@@ -1102,18 +1103,24 @@ static int bq2597x_get_adc_data(struct bq2597x *bq, int channel,  int *result)
 	t |= (val >> 8) & 0xFF;
 
 	if (bq->part_no == SC8551_PART_NO) {
-		if (channel == ADC_IBUS)
-			t *= SC8551_IBUS_ADC_LSB;
-		else if (channel == ADC_VBUS)
-			t *= SC8551_VBUS_ADC_LSB;
-		else if (channel == ADC_VAC)
+		if (channel == ADC_IBUS) {
+			tmp = t * SC8551_IBUS_ADC_LSB_MUL;
+			t = tmp /SC8551_IBUS_ADC_LSB_DIV;
+		} else if (channel == ADC_VBUS) {
+			tmp = t * SC8551_VBUS_ADC_LSB_MUL;
+			t = tmp /SC8551_VBUS_ADC_LSB_DIV;
+		} else if (channel == ADC_VAC)
 			t *= SC8551_VAC_ADC_LSB;
-		else if (channel == ADC_VOUT)
-			t *= SC8551_VOUT_ADC_LSB;
-		else if (channel == ADC_VBAT)
-			t *= SC8551_VBAT_ADC_LSB;
-		else if (channel == ADC_IBAT)
-			t *= SC8551_IBAT_ADC_LSB;
+		else if (channel == ADC_VOUT) {
+			tmp = t * SC8551_VOUT_ADC_LSB_MUL;
+			t = tmp /SC8551_VOUT_ADC_LSB_DIV;
+		} else if (channel == ADC_VBAT) {
+			tmp = t * SC8551_VBAT_ADC_LSB_MUL;
+			t = tmp /SC8551_VBAT_ADC_LSB_DIV;
+		} else if (channel == ADC_IBAT) {
+			tmp = t * SC8551_IBAT_ADC_LSB_MUL;
+			t = tmp /SC8551_IBAT_ADC_LSB_DIV;
+		}
 	}
 
 	*result = t;
