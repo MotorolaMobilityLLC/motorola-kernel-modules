@@ -1,7 +1,7 @@
 /*
  * aw882xx.c   aw882xx codec module
  *
- * Version: v0.1.11
+ * Version: v0.1.12
  *
  * keep same with AW882XX_VERSION
  *
@@ -50,7 +50,7 @@
  ******************************************************/
 #define AW882XX_I2C_NAME "aw882xx_smartpa"
 
-#define AW882XX_VERSION "v0.1.11"
+#define AW882XX_VERSION "v0.1.12"
 
 #define AW882XX_RATES SNDRV_PCM_RATE_8000_48000
 #define AW882XX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
@@ -536,6 +536,9 @@ static void aw882xx_start(struct aw882xx *aw882xx)
 		__func__, aw882xx->monitor.is_enable, aw882xx->spk_rcv_mode);
 	if (aw882xx->monitor.is_enable &&
 		(aw882xx->spk_rcv_mode == AW882XX_SPEAKER_MODE)) {
+		aw882xx->monitor.first_entry = AW_FIRST_ENTRY;
+		aw882xx->monitor.pre_vol = 0;
+		aw882xx->monitor.vol_count = 0;
 		schedule_work(&aw882xx->monitor.work);
 	}
 	if (aw882xx->afe_profile) {
@@ -1973,6 +1976,33 @@ static int aw882xx_parse_dt(struct device *dev, struct aw882xx *aw882xx,
 			monitor->vol_down_table[i].ipeak,
 			monitor->vol_down_table[i].gain);
 
+	for(i = 0; i < monitor->vol_down_num; i++) {
+		if(monitor->vol_down_table[i].vol >=
+			monitor->vol_up_table[monitor->vol_up_num - 1 -i].vol) {
+			dev_err(aw882xx->dev,"%s: use default table\n", __func__);
+			monitor->vol_up_table = vol_up_table;
+			monitor->vol_up_num= sizeof(vol_up_table) /
+								sizeof(struct aw882xx_low_vol);
+			monitor->vol_down_table = vol_down_table;
+			monitor->vol_down_num = sizeof(vol_down_table) /
+								sizeof(struct aw882xx_low_vol);
+			break;
+		}
+	}
+
+	for(i = 1; i < monitor->vol_down_num; i++) {
+		if(monitor->vol_up_table[monitor->vol_up_num - i].vol >=
+		   monitor->vol_down_table[i].vol) {
+			dev_err(aw882xx->dev,"%s: use default table\n", __func__);
+			monitor->vol_up_table = vol_up_table;
+			monitor->vol_up_num= sizeof(vol_up_table) /
+								sizeof(struct aw882xx_low_vol);
+			monitor->vol_down_table = vol_down_table;
+			monitor->vol_down_num = sizeof(vol_down_table) /
+								sizeof(struct aw882xx_low_vol);
+			break;
+		}
+	}
 	/*get low temp table cfg*/
 	ret = aw882xx_parse_low_temp_cfg(dev, aw882xx, np, "up",
 			&monitor->temp_up_table, &monitor->temp_up_num);
@@ -1996,6 +2026,33 @@ static int aw882xx_parse_dt(struct device *dev, struct aw882xx *aw882xx,
 			monitor->temp_down_table[i].gain,
 			monitor->temp_down_table[i].vmax);
 
+	for(i = 0; i < monitor->temp_down_num; i++) {
+		if(monitor->temp_down_table[i].temp >=
+		   monitor->temp_up_table[monitor->temp_up_num - 1 -i].temp) {
+			dev_err(aw882xx->dev,"%s: use default table\n", __func__);
+			monitor->temp_up_table = temp_up_table;
+			monitor->temp_up_num= sizeof(temp_up_table) /
+								sizeof(struct aw882xx_low_temp);
+			monitor->temp_down_table = temp_down_table;
+			monitor->temp_down_num = sizeof(temp_down_table) /
+								sizeof(struct aw882xx_low_temp);
+			break;
+		}
+	}
+
+	for(i = 1; i < monitor->temp_down_num; i++) {
+		if(monitor->temp_up_table[monitor->temp_up_num - i].temp >=
+		   monitor->temp_down_table[i].temp) {
+			dev_err(aw882xx->dev,"%s: use default table\n", __func__);
+			monitor->temp_up_table = temp_up_table;
+			monitor->temp_up_num= sizeof(temp_up_table) /
+								sizeof(struct aw882xx_low_temp);
+			monitor->temp_down_table = temp_down_table;
+			monitor->temp_down_num = sizeof(temp_down_table) /
+								sizeof(struct aw882xx_low_temp);
+			break;
+		}
+	}
 	return 0;
 }
 
@@ -2708,8 +2765,20 @@ static int aw882xx_monitor_get_voltage(struct aw882xx *aw882xx,
 	local_vol = (*vol) * AW882XX_MONITOR_VBAT_RANGE
 				 / AW882XX_MONITOR_INT_10BIT;
 
-	*vol = local_vol;
-	pr_debug("%s: chip voltage is %d\n", __func__, local_vol);
+	if(aw882xx->monitor.vol_count < AW_VOL_COUNT) {
+		aw882xx->monitor.vol_count++;
+		if(aw882xx->monitor.pre_vol == 0) {
+			*vol = local_vol;
+		} else {
+			*vol = (aw882xx->monitor.pre_vol * (AW_VOL_COUNT -1 ) +
+					local_vol) / AW_VOL_COUNT;
+		}
+	} else {
+		*vol = (aw882xx->monitor.pre_vol * (AW_VOL_COUNT -1 ) +
+					local_vol) / AW_VOL_COUNT;
+	}
+	aw882xx->monitor.pre_vol = *vol;
+	pr_debug("%s: cur voltage is %d, vol is %d\n", __func__, local_vol, *vol);
 	return 0;
 }
 static int aw882xx_monitor_voltage(struct aw882xx *aw882xx,
@@ -2738,27 +2807,37 @@ static int aw882xx_monitor_voltage(struct aw882xx *aw882xx,
 	if (ret < 0)
 		return ret;
 #endif
-	if (monitor->pre_vol > voltage) {
-		/* vol down*/
+
+	if (monitor->first_entry == AW_FIRST_ENTRY) {
 		for (i = 0; i < monitor->vol_down_num; i++) {
 			if (voltage < monitor->vol_down_table[i].vol) {
-			    *vol_cfg = monitor->vol_down_table[i];
-			    break;
+				*vol_cfg = monitor->vol_down_table[i];
+				return 0;
 			}
 		}
-	} else if (monitor->pre_vol < voltage) {
-		/*vol up*/
-		for (i = 0; i < monitor->vol_up_num; i++) {
-			if (voltage > monitor->vol_up_table[i].vol) {
-				*vol_cfg = monitor->vol_up_table[i];
-				break;
-			}
-		}
-	} else {
-		/*vol no change*/
-		pr_debug("%s: voltage no change\n", __func__);
+
+		*vol_cfg = monitor->vol_up_table[0];
+		return 0;
 	}
-	monitor->pre_vol = voltage;
+
+	if (voltage < monitor->vol_down_table[0].vol) {
+		*vol_cfg = monitor->vol_down_table[0];
+		return 0;
+	}
+
+	for (i = 1; i < monitor->vol_down_num; i++) {
+		if ((monitor->vol_up_table[monitor->vol_down_num - i].vol < voltage) &&
+			(voltage < monitor->vol_down_table[i].vol)) {
+			*vol_cfg = monitor->vol_down_table[i];
+			return 0;
+		}
+	}
+
+	if (voltage > monitor->vol_up_table[0].vol) {
+		*vol_cfg = monitor->vol_up_table[0];
+		return 0;
+	}
+
 	return 0;
 }
 static int aw882xx_monitor_get_temperature(struct aw882xx *aw882xx,  int *temp)
@@ -2804,31 +2883,48 @@ static int aw882xx_monitor_temperature(struct aw882xx *aw882xx,
 	if (ret < 0)
 		return ret;
 #endif
-	if (monitor->pre_temp > current_temp) {
-		/*temp down*/
+
+	if (monitor->first_entry == AW_FIRST_ENTRY) {
+		monitor->first_entry = AW_NOT_FIRST_ENTRY;
 		for (i = 0; i < monitor->temp_down_num; i++) {
 			if (current_temp < monitor->temp_down_table[i].temp) {
 				temp_cfg->ipeak = monitor->temp_down_table[i].ipeak;
 				temp_cfg->gain = monitor->temp_down_table[i].gain;
 				temp_cfg->vmax = monitor->temp_down_table[i].vmax;
-				break;
+				return 0;
 			}
 		}
-	} else if (monitor->pre_temp < current_temp) {
-		/*temp up*/
-		for (i = 0; i < monitor->temp_up_num; i++) {
-			if (current_temp > monitor->temp_up_table[i].temp) {
-				temp_cfg->ipeak = monitor->temp_up_table[i].ipeak;
-				temp_cfg->gain  = monitor->temp_up_table[i].gain;
-				temp_cfg->vmax  = monitor->temp_up_table[i].vmax;
-				break;
-			}
-		}
-	} else {
-		/*temp no change*/
-		pr_debug("%s: temperature no change\n", __func__);
+
+		temp_cfg->ipeak = monitor->temp_up_table[0].ipeak;
+		temp_cfg->gain = monitor->temp_up_table[0].gain;
+		temp_cfg->vmax = monitor->temp_up_table[0].vmax;
+		return 0;
 	}
-	monitor->pre_temp = current_temp;
+
+	if (current_temp < monitor->temp_down_table[0].temp) {
+		temp_cfg->ipeak = monitor->temp_down_table[0].ipeak;
+		temp_cfg->gain = monitor->temp_down_table[0].gain;
+		temp_cfg->vmax = monitor->temp_down_table[0].vmax;
+		return 0;
+	}
+
+	for (i = 1; i < monitor->temp_down_num; i++) {
+		if ((monitor->temp_up_table[monitor->temp_down_num - i].temp < current_temp)
+			 && (current_temp < monitor->temp_down_table[i].temp)) {
+			temp_cfg->ipeak = monitor->temp_down_table[i].ipeak;
+			temp_cfg->gain  = monitor->temp_down_table[i].gain;
+			temp_cfg->vmax  = monitor->temp_down_table[i].vmax;
+			return 0;
+		}
+	}
+
+	if (current_temp > monitor->temp_up_table[0].temp) {
+		temp_cfg->ipeak = monitor->temp_up_table[0].ipeak;
+		temp_cfg->gain  = monitor->temp_up_table[0].gain;
+		temp_cfg->vmax  = monitor->temp_up_table[0].vmax;
+		return 0;
+	}
+
 	return 0;
 }
 
@@ -3019,9 +3115,8 @@ void init_aw882xx_monitor(struct aw882xx_monitor *monitor)
 	hrtimer_init(&monitor->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	monitor->timer.function = aw882xx_monitor_timer_func;
 	INIT_WORK(&monitor->work, aw882xx_monitor_work_func);
-	monitor->pre_vol = 5000;
-	monitor->pre_temp = 100;
-
+	monitor->pre_vol = 0;
+	monitor->vol_count = 0;
 	monitor->vol_cfg.ipeak = monitor->vol_up_table[0].ipeak;
 	monitor->vol_cfg.gain = monitor->vol_up_table[0].gain;
 	monitor->temp_cfg.ipeak = monitor->temp_up_table[0].ipeak;
