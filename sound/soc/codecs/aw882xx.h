@@ -9,6 +9,7 @@
 #define MAX_I2C_BUFFER_SIZE					65536
 #define AW882XX_I2C_READ_MSG_NUM		2
 
+#define AW_VOL_COUNT				(3)
 #define AW882XX_FLAG_START_ON_MUTE			(1 << 0)
 #define AW882XX_FLAG_SKIP_INTERRUPTS		(1 << 1)
 #define AW882XX_FLAG_SAAM_AVAILABLE			(1 << 2)
@@ -42,6 +43,11 @@
 #define AFE_PARAM_ID_AWDSP_RX_F0_R              (0X10013D20)
 #define AFE_PARAM_ID_AWDSP_RX_REAL_DATA_L       (0X10013D21)
 #define AFE_PARAM_ID_AWDSP_RX_REAL_DATA_R       (0X10013D22)
+
+enum {
+	AW_FIRST_ENTRY = 0,
+	AW_NOT_FIRST_ENTRY = 1,
+};
 
 enum AWINIC_CALI_CMD{
 	AW_CALI_CMD_NONE = 0,
@@ -167,7 +173,8 @@ struct aw882xx_monitor{
 	struct work_struct work;
 	uint32_t is_enable;
 	uint16_t pre_vol;
-	int16_t pre_temp;
+	uint16_t vol_count;
+	uint8_t first_entry;
 
 	struct aw882xx_low_vol vol_cfg;
 	struct aw882xx_low_temp temp_cfg;
