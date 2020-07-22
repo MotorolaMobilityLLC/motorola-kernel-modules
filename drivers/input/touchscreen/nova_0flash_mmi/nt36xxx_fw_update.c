@@ -958,6 +958,8 @@ void Boot_Update_Firmware(struct work_struct *work)
 		ts->fw_ready_flag = true;
 	nvt_mcu_pen_detect_set(ts->nvt_pen_detect_flag);
 #endif
-
+#ifdef PALM_GESTURE
+	nvt_palm_set(ts->palm_enabled);
+#endif
 }
 #endif /* BOOT_UPDATE_FIRMWARE */

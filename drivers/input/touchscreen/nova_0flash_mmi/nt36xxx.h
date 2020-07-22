@@ -59,6 +59,7 @@
 
 //---SPI driver info.---
 #define NVT_SPI_NAME "NVT-ts"
+#define NVT_PRIMARY_NAME "primary"
 
 #if NVT_DEBUG
 #define NVT_LOG(fmt, args...)    pr_err("[%s] %s %d: " fmt, NVT_SPI_NAME, __func__, __LINE__, ##args)
@@ -207,6 +208,9 @@ struct nvt_ts_data {
 	struct mutex state_mutex;
 	struct nvt_sensor_platform_data *sensor_pdata;
 #endif
+#ifdef PALM_GESTURE
+	bool palm_enabled;
+#endif
 	char product_id[10];
 	uint8_t fw_type;
 	uint32_t build_id;
@@ -276,5 +280,7 @@ extern void nvt_esd_check_enable(uint8_t enable);
 #ifdef NOVATECH_PEN_NOTIFIER
 extern int nvt_mcu_pen_detect_set(uint8_t pen_detect);
 #endif
-
+#ifdef PALM_GESTURE
+extern int nvt_palm_set(bool enabled);
+#endif
 #endif /* _LINUX_NVT_TOUCH_H */
