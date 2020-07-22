@@ -41,6 +41,9 @@
 
 #define ENABLE_PASSIVE_PEN_MODE_CMD 0x73
 #define DISABLE_PASSIVE_PEN_MODE_CMD 0x74
+#define ENABLE_PALM_GESTURE_MODE_CMD 0x75
+#define DISABLE_PALM_GESTURE_MODE_CMD 0x76
+
 #define ENABLE_DOZE_MODE_CMD 0xB7
 #define DISABLE_DOZE_MODE_CMD 0xB8
 
@@ -653,6 +656,20 @@ int nvt_mcu_pen_detect_set(uint8_t pen_detect) {
 		ret = nvt_cmd_store(ENABLE_PASSIVE_PEN_MODE_CMD);
 	} else if (pen_detect == PEN_DETECTION_INSERT) {
 		ret = nvt_cmd_store(DISABLE_PASSIVE_PEN_MODE_CMD);
+	}
+
+	return ret;
+}
+#endif
+
+#ifdef PALM_GESTURE
+int nvt_palm_set(bool enabled) {
+	int ret = 0;
+
+	if (enabled) {
+		ret = nvt_cmd_store(ENABLE_PALM_GESTURE_MODE_CMD);
+	} else if (!enabled) {
+		ret = nvt_cmd_store(DISABLE_PALM_GESTURE_MODE_CMD);
 	}
 
 	return ret;

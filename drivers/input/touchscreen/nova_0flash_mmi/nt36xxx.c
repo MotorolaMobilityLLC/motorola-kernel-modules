@@ -1545,10 +1545,10 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 			if((point_data[position] & 0x07) == 0x03) { //palm
 				NVT_LOG("id=%d, pressure=%d, (%d,%d), major=%d, minor=%d, orient=%d\n",
 					input_id, input_p, input_x, input_y, input_major, input_minor, input_orient);
-#ifdef PALM_GESTURE_RANGE
 				input_report_abs(ts->input_dev, ABS_MT_POSITION_X, input_x);
 				input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, input_y);
 				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, input_major);
+#ifdef PALM_GESTURE_RANGE
 				input_report_abs(ts->input_dev, ABS_MT_TOUCH_MINOR, input_minor);
 				input_report_abs(ts->input_dev, ABS_MT_ORIENTATION, input_orient);
 #endif
@@ -1829,10 +1829,55 @@ static ssize_t ic_ver_show(struct device *dev,
 			"Config ID: ", ts->nvt_pid ? ts->nvt_pid : ts->config_id);
 }
 
+#ifdef PALM_GESTURE
+static ssize_t nvt_palm_settings_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d", ts->palm_enabled);
+}
+
+static ssize_t nvt_palm_settings_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+
+{
+	int value;
+	int err = 0;
+
+	if (count > 2)
+		return -EINVAL;
+
+	if (sscanf(buf, "%d", &value) != 1)
+		return -EINVAL;
+
+	err = count;
+
+	switch (value) {
+		case 0:
+			ts->palm_enabled = false;
+			break;
+		case 1:
+			ts->palm_enabled = true;
+			break;
+		default:
+			err = -EINVAL;
+			ts->palm_enabled = false;
+			NVT_ERR("Invalid Value! %d\n", value);
+			break;
+	}
+
+	nvt_palm_set(ts->palm_enabled);
+
+	return err;
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
+#ifdef PALM_GESTURE
+	__ATTR(palm_settings, S_IRUGO | S_IWUSR | S_IWGRP, nvt_palm_settings_show, nvt_palm_settings_store),
+#endif
 	__ATTR_NULL
 };
 
@@ -1869,10 +1914,13 @@ int32_t nvt_fw_class_init(bool create)
 			touchscreen_class = NULL;
 			return error;
 		}
-
 		ts_class_dev = device_create(touchscreen_class, NULL,
 				MKDEV(INPUT_MAJOR, minor),
+#ifdef PALM_GESTURE
+				ts, NVT_PRIMARY_NAME);
+#else
 				ts, NVT_SPI_NAME);
+#endif
 		if (IS_ERR(ts_class_dev)) {
 			error = PTR_ERR(ts_class_dev);
 			ts_class_dev = NULL;
@@ -1888,7 +1936,11 @@ int32_t nvt_fw_class_init(bool create)
 		if (error)
 			goto device_destroy;
 		else
+#ifdef PALM_GESTURE
+			NVT_LOG("create /sys/class/touchscreen/%s Succeeded!\n", NVT_PRIMARY_NAME);
+#else
 			NVT_LOG("create /sys/class/touchscreen/%s Succeeded!\n", NVT_SPI_NAME);
+#endif
 	} else {
 		if (!touchscreen_class || !ts_class_dev)
 			return -ENODEV;
