@@ -21,8 +21,8 @@
 
 #define AW882XX_MODE_SHIFT_MAX				2
 
-#define AW882XX_DEFAULT_AFE_RX_PROT_ID  0x1000		/*AFE_PORT_ID_PRIMARY_MI2S_RX*/
-#define AW882XX_DEFAULT_AFE_TX_PROT_ID  0x1001		/*AFE_PORT_ID_PRIMARY_MI2S_TX*/
+#define AW882XX_DEFAULT_AFE_RX_PROT_ID  0x1000				/*AFE_PORT_ID_PRIMARY_MI2S_RX*/
+#define AW882XX_DEFAULT_AFE_TX_PROT_ID  0x1001				/*AFE_PORT_ID_PRIMARY_MI2S_TX*/
 #define AW_MODULE_ID_COPP (0X10013D02)			/*SKT module id*/
 #define AW_MODULE_PARAMS_ID_COPP_ENABLE (0X10013D14)	/*SKT enable param id*/
 
@@ -77,6 +77,11 @@ struct cali_data{
 struct params_data{
 	int32_t data[AW882XX_PARAMS_NUM];
 };
+struct ptr_params_data {
+	int len;
+	int32_t *data;
+};
+
 
 #define AW882XX_IOCTL_MAGIC                'a'
 #define AW882XX_IOCTL_SET_CALI_CFG         _IOWR(AW882XX_IOCTL_MAGIC, 1, struct cali_cfg)
@@ -90,6 +95,8 @@ struct params_data{
 #define AW882XX_IOCTL_GET_VMAX             _IOWR(AW882XX_IOCTL_MAGIC, 9, int32_t)
 #define AW882XX_IOCTL_SET_PARAM            _IOWR(AW882XX_IOCTL_MAGIC, 10,struct params_data)
 #define AW882XX_IOCTL_ENABLE_CALI          _IOWR(AW882XX_IOCTL_MAGIC, 11,int8_t)
+#define AW882XX_IOCTL_SET_PTR_PARAM_NUM    _IOWR(AW882XX_IOCTL_MAGIC, 12, struct ptr_params_data)
+
 
 enum aw882xx_init {
 	AW882XX_INIT_ST = 0,
