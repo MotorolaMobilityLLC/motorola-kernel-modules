@@ -1,7 +1,7 @@
 /*
  * aw882xx.c   aw882xx codec module
  *
- * Version: v0.1.12
+ * Version: v0.1.13
  *
  * keep same with AW882XX_VERSION
  *
@@ -50,7 +50,7 @@
  ******************************************************/
 #define AW882XX_I2C_NAME "aw882xx_smartpa"
 
-#define AW882XX_VERSION "v0.1.12"
+#define AW882XX_VERSION "v0.1.13"
 
 #define AW882XX_RATES SNDRV_PCM_RATE_8000_48000
 #define AW882XX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
@@ -2413,6 +2413,8 @@ static int aw882xx_cali_operation(struct aw882xx *aw882xx,
 	int16_t data_len  = _IOC_SIZE(cmd);
 	int ret = 0;
 	char *data_ptr = NULL;
+	struct ptr_params_data *p_params;
+	int32_t *p_data;
 
 
 	data_ptr = kmalloc(data_len, GFP_KERNEL);
@@ -2603,6 +2605,47 @@ static int aw882xx_cali_operation(struct aw882xx *aw882xx,
 				goto exit;
 			}
 			pr_debug("%s: set params done", __func__);
+		} break;
+		case AW882XX_IOCTL_SET_PTR_PARAM_NUM: {
+			if (copy_from_user(data_ptr, (void __user *)arg, data_len)) {
+				ret = -EFAULT;
+				goto exit;
+			}
+			p_params = (struct ptr_params_data *)data_ptr;
+			if (p_params->data == NULL || (!p_params->len)) {
+				pr_err("%s: p_params error\n", __func__);
+				ret = -EFAULT;
+				goto exit;
+			}
+			p_data = kzalloc(p_params->len, GFP_KERNEL);
+			if (!p_data) {
+				pr_err("%s: error allocating memory\n", __func__);
+				ret = -ENOMEM;
+				goto exit;
+			}
+
+			if (copy_from_user(p_data, (void __user *)p_params->data,
+					p_params->len)) {
+				kfree(p_data);
+				p_data = NULL;
+				ret = -EFAULT;
+				goto exit;
+			}
+
+			ret = aw_send_afe_cal_apr(aw882xx->afe_rx_portid,
+			            aw882xx->afe_tx_portid,
+			            AFE_PARAM_ID_AWDSP_RX_PARAMS,
+			            p_data, p_params->len, true);
+			if (ret) {
+				pr_err("%s: dsp_msg_write error: 0x%x\n",
+				      __func__, AFE_PARAM_ID_AWDSP_RX_PARAMS);
+				kfree(p_data);
+				p_data = NULL;
+				ret =-EFAULT;
+				goto exit;
+			}
+			kfree(p_data);
+			p_data = NULL;
 		} break;
 		default: {
 			pr_err("%s : cmd %d\n", __func__, cmd);
