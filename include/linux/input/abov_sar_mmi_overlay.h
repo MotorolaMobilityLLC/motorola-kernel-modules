@@ -198,9 +198,9 @@ static struct sensors_classdev sensors_capsensor_ch2_cdev = {
 
 
 typedef enum{
-	CAPSENSOR_ENABLE_FLAG_CH0,
-	CAPSENSOR_ENABLE_FLAG_CH1,
-	CAPSENSOR_ENABLE_FLAG_CH2,
+	CAPSENSOR_ENABLE_FLAG_CH0=1,
+	CAPSENSOR_ENABLE_FLAG_CH1=2,
+	CAPSENSOR_ENABLE_FLAG_CH2=4,
 	CAPSENSOR_ENABLE_FLAG_MAX
 }capsensor_enable_flag_t;
 /***************************************

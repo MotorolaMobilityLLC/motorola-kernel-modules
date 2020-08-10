@@ -196,9 +196,9 @@ static struct sensors_classdev sensors_capsensor_bottom_right_cdev = {
 
 
 typedef enum{
-	CAPSENSOR_ENABLE_FLAG_TOP,
-	CAPSENSOR_ENABLE_FLAG_BOTTOM_LEFT,
-	CAPSENSOR_ENABLE_FLAG_BOTTOM_RIGHT,
+	CAPSENSOR_ENABLE_FLAG_TOP=1,
+	CAPSENSOR_ENABLE_FLAG_BOTTOM_LEFT=2,
+	CAPSENSOR_ENABLE_FLAG_BOTTOM_RIGHT=4,
 	CAPSENSOR_ENABLE_FLAG_MAX
 }capsensor_enable_flag_t;
 /***************************************
