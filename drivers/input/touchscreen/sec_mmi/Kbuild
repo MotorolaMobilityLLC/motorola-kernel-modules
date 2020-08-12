@@ -15,6 +15,5 @@ ifneq ($(filter m y,$(CONFIG_INPUT_TOUCHSCREEN_MMI)),)
                     -DCONFIG_PM
     sec_mmi-objs += sec_ts_mmi_class.o
 else
-    EXTRA_CFLAGS += -DUSE_STUBS
     sec_mmi-objs += sec_ts_mmi.o
 endif
