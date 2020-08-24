@@ -1109,7 +1109,20 @@ const static struct cts_device_hwdata cts_device_hwdatas[] = {
 	 .program_addr_width = 3,
 
 	 .sfctrl = &icnl9911s_sfctrl,
+	 },
+	{
+	 .name = "ICNL9911C",
+	 .hwid = CTS_DEV_HWID_ICNL9911C,
+	 .fwid = CTS_DEV_FWID_ICNL9911C,
+	 .num_row = 32,
+	 .num_col = 18,
+	 .sram_size = 64 * 1024,
+
+	 .program_addr_width = 3,
+
+	 .sfctrl = &icnl9911s_sfctrl,
 	 }
+
 };
 
 static int cts_init_device_hwdata(struct cts_device *cts_dev,
@@ -2052,7 +2065,8 @@ int cts_enter_normal_mode(struct cts_device *cts_dev)
 		auto_boot = 1;
 	}
 #ifdef CFG_CTS_UPDATE_CRCCHECK
-	if (cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911S) {
+	if (cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911S ||
+		cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911C) {
 		auto_boot = 1;
 	}
 #endif
@@ -2094,7 +2108,8 @@ int cts_enter_normal_mode(struct cts_device *cts_dev)
 				retries);
 		} else {
 			if (fwid == CTS_DEV_FWID_ICNL9911
-			    || fwid == CTS_DEV_FWID_ICNL9911S) {
+			    || fwid == CTS_DEV_FWID_ICNL9911S
+			    || fwid == CTS_DEV_FWID_ICNL9911C) {
 				cts_info("Get firmware id successful 0x%02x",
 					 fwid);
 				break;
