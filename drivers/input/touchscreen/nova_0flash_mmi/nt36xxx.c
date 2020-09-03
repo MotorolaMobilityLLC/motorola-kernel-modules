@@ -1372,7 +1372,10 @@ static int32_t nvt_ts_point_data_checksum(uint8_t *buf, uint8_t length)
 }
 #endif /* POINT_DATA_CHECKSUM */
 
+#define FINGER_ENTER 0x01
+#define FINGER_MOVING 0x02
 #ifdef PALM_GESTURE
+#define PALM_TOUCH 0x05
 #define POINT_DATA_LEN 120
 #define MINOR_DATA_OFFSET 70
 #define ORIENT_DATA_OFFSET 110
@@ -1475,11 +1478,11 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 		if ((input_id == 0) || (input_id > ts->max_touch_num))
 			continue;
 #ifdef PALM_GESTURE
-		if (((point_data[position] & 0x07) == 0x01)
-			|| ((point_data[position] & 0x07) == 0x02)
-			|| ((point_data[position] & 0x07) == 0x03)) {	//finger down (enter & moving) or palm
+		if (((point_data[position] & 0x07) == FINGER_ENTER)
+			|| ((point_data[position] & 0x07) == FINGER_MOVING)
+			|| ((point_data[position] & 0x07) == PALM_TOUCH)) {	//finger down (enter & moving) or palm
 #else
-		if (((point_data[position] & 0x07) == 0x01) || ((point_data[position] & 0x07) == 0x02)) {	//finger down (enter & moving)
+		if (((point_data[position] & 0x07) == FINGER_ENTER) || ((point_data[position] & 0x07) == FINGER_MOVING)) {	//finger down (enter & moving)
 #endif
 #if NVT_TOUCH_ESD_PROTECT
 			/* update interrupt timer */
@@ -1493,7 +1496,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 				continue;
 
 #ifdef PALM_GESTURE_RANGE
-			if((point_data[position] & 0x07) == 0x03) { //palm
+			if((point_data[position] & 0x07) == PALM_TOUCH) { //palm
 				input_minor = (uint32_t)(point_data[1 + MINOR_DATA_OFFSET + i]);
 				if (input_minor == 0)
 					input_minor = 1;
@@ -1506,7 +1509,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 				input_major = 1;
 
 #ifdef PALM_GESTURE
-			if ((point_data[position] & 0x07) == 0x03) { //palm
+			if ((point_data[position] & 0x07) == PALM_TOUCH) { //palm
 				input_p = (uint32_t)(point_data[position + 5]);
 				if(input_p == 255)
 					input_p = PALM_HANG;
@@ -1542,8 +1545,8 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 #endif /* MT_PROTOCOL_B */
 
 #ifdef PALM_GESTURE
-			if((point_data[position] & 0x07) == 0x03) { //palm
-				NVT_LOG("id=%d, pressure=%d, (%d,%d), major=%d, minor=%d, orient=%d\n",
+			if((point_data[position] & 0x07) == PALM_TOUCH) { //palm
+				dev_dbg(&ts->client->dev, "id=%d, pressure=%d, (%d,%d), major=%d, minor=%d, orient=%d\n",
 					input_id, input_p, input_x, input_y, input_major, input_minor, input_orient);
 				input_report_abs(ts->input_dev, ABS_MT_POSITION_X, input_x);
 				input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, input_y);
@@ -2153,6 +2156,10 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	for (retry = 0; retry < (sizeof(gesture_key_array) / sizeof(gesture_key_array[0])); retry++) {
 		input_set_capability(ts->input_dev, EV_KEY, gesture_key_array[retry]);
 	}
+#endif
+
+#ifdef PALM_GESTURE
+	ts->palm_enabled = false;
 #endif
 
 	sprintf(ts->phys, "input/ts");
