@@ -117,7 +117,7 @@ static inline int smc_fastcall(void *fc_generic, size_t size)
  */
 //#define MC_CRYPTO_CLOCK_MANAGEMENT
 /*
- * This should be defined only on SDM845
+ * This should be defined only on platforms without ICE clock e.g SDM845, SM6150
  * #define TT_CRYPTO_NO_CLOCK_SUPPORT_FEATURE "qcom,no-clock-support"
  */
 #define MC_CRYPTO_CLOCK_CORESRC_PROPNAME "qcom,ce-opp-freq"
@@ -135,17 +135,23 @@ static inline int smc_fastcall(void *fc_generic, size_t size)
 /* All TZBSPv4 targets are using AARCH32_FC flag */
 #define MC_AARCH32_FC
 
-/* This should be defined only on SM8150
- * Gold cores do not support TEE interfaces
- * CPU_IDS should list only silver cores
+/* This should be defined only on some platforms e.g SM8150, SM6150
+ * from which the Gold cores do not support TEE interfaces
+ * so that CPU_IDS should list only Silver cores.
  */
+#define CPU_SELECTION
+#if defined CPU_SELECTION
+#define NB_CPU 4
+#define CPU_IDS {0x0, 0x1, 0x2, 0x3}
+#endif
+
 /* Enforce/restrict statically CPUs potentially running TEE
  * (Customize to match platform CPU layout... 0xF0 for big cores only for ex).
  * If not defined TEE dynamically using all platform CPUs (recommended)
  * Warning: Both PLAT_DEFAULT_TEE_AFFINITY_MASK and
  * BIG_CORE_SWITCH_AFFINITY_MASK have to be defined
  */
-#define PLAT_DEFAULT_TEE_AFFINITY_MASK (0xF)
-#define BIG_CORE_SWITCH_AFFINITY_MASK (0xF)
+//#define PLAT_DEFAULT_TEE_AFFINITY_MASK (0xF)
+//#define BIG_CORE_SWITCH_AFFINITY_MASK (0xF)
 
 #endif /* _MC_PLATFORM_H_ */
