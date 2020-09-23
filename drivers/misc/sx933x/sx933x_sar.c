@@ -36,15 +36,11 @@
 #include "../../../include/linux/input/sx933x.h"	/* main struct, interrupt,init,pointers */
 #include "base.h"
 
-#define SX933x_DEBUG 0
 #define LOG_TAG "[sar SX933x]: "
 
-#if SX933x_DEBUG
-#define LOG_INFO(fmt, args...)    pr_info(LOG_TAG fmt, ##args)
-#else
-#define LOG_INFO(fmt, args...)
-#endif
-#define LOG_DBG(fmt, args...)   pr_info(LOG_TAG fmt, ##args) 
+#define LOG_INFO(fmt, args...)    pr_info(LOG_TAG "[INFO]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
+#define LOG_DBG(fmt, args...)     pr_debug(LOG_TAG "[DBG]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
+#define LOG_ERR(fmt, args...)	   pr_err(LOG_TAG "[ERR]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
 
 #define USE_DTS_REG
 
@@ -115,7 +111,7 @@ static int sx933x_i2c_write_16bit(psx93XX_t this, u16 reg_addr, u32 buf)
 
 		ret = i2c_transfer(i2c->adapter, &msg, 1);
 		if (ret < 0)
-			LOG_DBG("%s - i2c write reg 0x%x error %d\n", __func__, reg_addr, ret);
+			LOG_ERR("%s - i2c write reg 0x%x error %d\n", __func__, reg_addr, ret);
 
 	}
 	return ret;
@@ -155,7 +151,7 @@ static int sx933x_i2c_read_16bit(psx93XX_t this, u16 reg_addr, u32 *data32)
 
 		ret = i2c_transfer(i2c->adapter, msg, 2);
 		if (ret < 0)
-			LOG_DBG("%s - i2c read reg 0x%x error %d\n", __func__, reg_addr, ret);
+			LOG_ERR("%s - i2c read reg 0x%x error %d\n", __func__, reg_addr, ret);
 
 		data32[0] = ((u32)buf[0]<<24) | ((u32)buf[1]<<16) | ((u32)buf[2]<<8) | ((u32)buf[3]);
 
@@ -205,7 +201,7 @@ static int sx933x_Hardware_Check(psx93XX_t this)
 		this->failStatusCode = SX933x_ID_ERROR;
 	}
 
-	LOG_DBG("sx933x idcode = 0x%x, failcode = 0x%x\n", idCode, this->failStatusCode);
+	LOG_INFO("sx933x idcode = 0x%x, failcode = 0x%x\n", idCode, this->failStatusCode);
 	return (int)this->failStatusCode;
 }
 
@@ -257,7 +253,7 @@ static void read_rawData(psx93XX_t this)
 			sx933x_i2c_read_16bit(this, SX933X_OFFSETPH0_REG + index*2, &uData);
 			offset = (u16)(uData & 0x7FFF);
 			//state = psmtcButtons[csx].state;
-			LOG_INFO("[PH: %d] Useful = %d Average = %d, DIFF = %d Offset = %d \n",
+			LOG_DBG("[PH: %d] Useful = %d Average = %d, DIFF = %d Offset = %d \n",
 					csx,useful,average,diff,offset);
 		}
 	}
@@ -319,7 +315,7 @@ static ssize_t sx933x_register_write_store(struct class *class,
 
 	if (sscanf(buf, "%x,%x", &reg_address, &val) != 2)
 	{
-		LOG_DBG("%s - The number of data are wrong\n",__func__);
+		LOG_ERR("%s - The number of data are wrong\n",__func__);
 		return -EINVAL;
 	}
 
@@ -340,7 +336,7 @@ static ssize_t sx933x_register_read_store(struct class *class,
 
 	if (sscanf(buf, "%x", &regist) != 1)
 	{
-		LOG_DBG("%s - The number of data are wrong\n",__func__);
+		LOG_ERR("%s - The number of data are wrong\n",__func__);
 		return -EINVAL;
 	}
 
@@ -373,7 +369,7 @@ static ssize_t manual_offset_calibration_store(struct class *class,
 
 	if (kstrtoul(buf, 10, &val))                //(strict_strtoul(buf, 10, &val)) {
 	{
-		LOG_DBG(" %s - Invalid Argument\n", __func__);
+		LOG_ERR(" %s - Invalid Argument\n", __func__);
 		return -EINVAL;
 	}
 
@@ -520,7 +516,7 @@ static void sx933x_reg_init(psx93XX_t this)
 		sx933x_i2c_write_16bit(this, SX933X_CMD_REG,SX933X_PHASE_CONTROL);  //enable phase control
 	}
 	else {
-		LOG_DBG("ERROR! platform data 0x%p\n",pDevice->hw);
+		LOG_ERR("ERROR! platform data 0x%p\n",pDevice->hw);
 	}
 
 }
@@ -536,7 +532,7 @@ static int initialize(psx93XX_t this)
 	int ret, retry;
 	if (this)
 	{
-		LOG_DBG("SX933x income initialize\n");
+		LOG_INFO("SX933x income initialize\n");
 		/* prepare reset by disabling any irq handling */
 		this->irq_disabled = 1;
 		disable_irq(this->irq);
@@ -544,11 +540,11 @@ static int initialize(psx93XX_t this)
 		for ( retry = 10; retry > 0; retry-- ) {
 			if (sx933x_i2c_write_16bit(this, SX933X_RESET_REG, I2C_SOFTRESET_VALUE) >= 0)
 				break;
-			LOG_DBG("SX933x write SX933X_RESET_REG retry:%d\n", 11 - retry);
+			LOG_INFO("SX933x write SX933X_RESET_REG retry:%d\n", 11 - retry);
 			msleep(10);
 		}
 		/* wait until the reset has finished by monitoring NIRQ */
-		LOG_DBG("Sent Software Reset. Waiting until device is back from reset to continue.\n");
+		LOG_INFO("Sent Software Reset. Waiting until device is back from reset to continue.\n");
 		/* just sleep for awhile instead of using a loop with reading irq status */
 		msleep(100);
 		ret = sx933x_global_variable_init(this);
@@ -586,71 +582,71 @@ static void touchProcess(psx93XX_t this)
 	if (this && (pDevice = this->pDevice))
 	{
 		sx933x_i2c_read_16bit(this, SX933X_STAT0_REG, &i);
-		LOG_INFO("touchProcess STAT0_REG:0x%08x\n", i);
+		LOG_DBG("touchProcess STAT0_REG:0x%08x\n", i);
 
 		buttons = pDevice->pbuttonInformation->buttons;
 		numberOfButtons = pDevice->pbuttonInformation->buttonSize;
 
 		if (unlikely( buttons==NULL ))
 		{
-			LOG_DBG(":ERROR!! buttons NULL!!!\n");
+			LOG_ERR(":ERROR!! buttons NULL!!!\n");
 			return;
 		}
 
 		for (counter = 0; counter < numberOfButtons; counter++)
 		{
 			if (buttons[counter].enabled == false) {
-				LOG_INFO("touchProcess %s disabled, ignor this\n", buttons[counter].name);
+				LOG_DBG("touchProcess %s disabled, ignor this\n", buttons[counter].name);
 				continue;
 			}
 			if (buttons[counter].used== false) {
-				LOG_INFO("touchProcess %s unused, ignor this\n", buttons[counter].name);
+				LOG_DBG("touchProcess %s unused, ignor this\n", buttons[counter].name);
 				continue;
 			}
 			pCurrentButton = &buttons[counter];
 			if (pCurrentButton==NULL)
 			{
-				LOG_DBG("ERROR!! current button at index: %d NULL!!!\n", counter);
+				LOG_ERR("ERROR!! current button at index: %d NULL!!!\n", counter);
 				return; // ERRORR!!!!
 			}
 			input = pCurrentButton->input_dev;
 			if (input==NULL)
 			{
-				LOG_DBG("ERROR!! current button input at index: %d NULL!!!\n", counter);
+				LOG_ERR("ERROR!! current button input at index: %d NULL!!!\n", counter);
 				return; // ERRORR!!!!
 			}
 
 			touchFlag = i & (pCurrentButton->ProxMask | pCurrentButton->BodyMask);
 			if (touchFlag == (pCurrentButton->ProxMask | pCurrentButton->BodyMask)) {
 				if (pCurrentButton->state == BODYACTIVE)
-					LOG_INFO(" %s already BODYACTIVE\n", pCurrentButton->name);
+					LOG_DBG(" %s already BODYACTIVE\n", pCurrentButton->name);
 				else {
 					input_report_abs(input, ABS_DISTANCE, 2);
 					input_sync(input);
 					pCurrentButton->state = BODYACTIVE;
-					LOG_INFO(" %s report 5mm BODYACTIVE\n", pCurrentButton->name);
+					LOG_DBG(" %s report 5mm BODYACTIVE\n", pCurrentButton->name);
 				}
 			} else if (touchFlag == pCurrentButton->ProxMask) {
 				if (pCurrentButton->state == PROXACTIVE)
-					LOG_INFO(" %s already PROXACTIVE\n", pCurrentButton->name);
+					LOG_DBG(" %s already PROXACTIVE\n", pCurrentButton->name);
 				else {
 					input_report_abs(input, ABS_DISTANCE, 1);
 					input_sync(input);
 					pCurrentButton->state = PROXACTIVE;
-					LOG_INFO(" %s report 15mm PROXACTIVE\n", pCurrentButton->name);
+					LOG_DBG(" %s report 15mm PROXACTIVE\n", pCurrentButton->name);
 				}
 			}else if (touchFlag == 0) {
 				if (pCurrentButton->state == IDLE)
-					LOG_INFO("%s already released.\n", pCurrentButton->name);
+					LOG_DBG("%s already released.\n", pCurrentButton->name);
 				else {
 					input_report_abs(input, ABS_DISTANCE, 0);
 					input_sync(input);
 					pCurrentButton->state = IDLE;
-					LOG_INFO("%s report  released.\n", pCurrentButton->name);
+					LOG_DBG("%s report  released.\n", pCurrentButton->name);
 				}
 			}
 		}
-		LOG_INFO("Leaving touchProcess()\n");
+		LOG_DBG("Leaving touchProcess()\n");
 	}
 }
 
@@ -667,7 +663,7 @@ static int sx933x_parse_dt(struct sx933x_platform_data *pdata, struct device *de
 	irq_gpio_num = pdata->irq_gpio;
 	if (pdata->irq_gpio < 0)
 	{
-		LOG_DBG("%s - get irq_gpio error\n", __func__);
+		LOG_ERR("%s - get irq_gpio error\n", __func__);
 		return -ENODEV;
 	}
 
@@ -687,7 +683,7 @@ static int sx933x_parse_dt(struct sx933x_platform_data *pdata, struct device *de
 		pdata->pi2c_reg = devm_kzalloc(dev,sizeof(struct smtc_reg_data)*pdata->i2c_reg_num, GFP_KERNEL);
 		if (unlikely(pdata->pi2c_reg == NULL))
 		{
-			LOG_DBG("%s -  size of elements %d alloc error\n", __func__,pdata->i2c_reg_num);
+			LOG_ERR("%s -  size of elements %d alloc error\n", __func__,pdata->i2c_reg_num);
 			return -ENOMEM;
 		}
 
@@ -718,25 +714,25 @@ static int sx933x_init_platform_hw(struct i2c_client *client)
 			rc = gpio_request(pdata->irq_gpio, "sx933x_irq_gpio");
 			if (rc < 0)
 			{
-				LOG_DBG("SX933x Request gpio. Fail![%d]\n", rc);
+				LOG_ERR("SX933x Request gpio. Fail![%d]\n", rc);
 				return rc;
 			}
 			rc = gpio_direction_input(pdata->irq_gpio);
 			if (rc < 0)
 			{
-				LOG_DBG("SX933x Set gpio direction. Fail![%d]\n", rc);
+				LOG_ERR("SX933x Set gpio direction. Fail![%d]\n", rc);
 				return rc;
 			}
 			this->irq = client->irq = gpio_to_irq(pdata->irq_gpio);
 		}
 		else
 		{
-			LOG_DBG("SX933x Invalid irq gpio num.(init)\n");
+			LOG_ERR("SX933x Invalid irq gpio num.(init)\n");
 		}
 	}
 	else
 	{
-		LOG_DBG("%s - Do not init platform HW", __func__);
+		LOG_ERR("%s - Do not init platform HW", __func__);
 	}
 	return rc;
 }
@@ -755,7 +751,7 @@ static void sx933x_exit_platform_hw(struct i2c_client *client)
 		}
 		else
 		{
-			LOG_DBG("Invalid irq gpio num.(exit)\n");
+			LOG_ERR("Invalid irq gpio num.(exit)\n");
 		}
 	}
 	return;
@@ -771,10 +767,10 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 	for (i = 0; i < ARRAY_SIZE(psmtcButtons); i++) {
 		if (strcmp(sensors_cdev->name, psmtcButtons[i].name) == 0) {
 			if (enable == 1) {
-				LOG_DBG("enable cap sensor : %s\n", sensors_cdev->name);
+				LOG_INFO("enable cap sensor : %s\n", sensors_cdev->name);
 				sx933x_i2c_read_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, &temp);
 				temp = temp | 0x0000001F;
-				LOG_INFO("set reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
+				LOG_DBG("set reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
 				sx933x_i2c_write_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, temp);
 				psmtcButtons[i].enabled = true;
 				input_report_abs(psmtcButtons[i].input_dev, ABS_DISTANCE, 0);
@@ -782,12 +778,12 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 
 				manual_offset_calibration(global_sx933x);
 			} else if (enable == 0) {
-				LOG_DBG("disable cap sensor : %s\n", sensors_cdev->name);
+				LOG_INFO("disable cap sensor : %s\n", sensors_cdev->name);
 				psmtcButtons[i].enabled = false;
 				input_report_abs(psmtcButtons[i].input_dev, ABS_DISTANCE, -1);
 				input_sync(psmtcButtons[i].input_dev);
 			} else {
-				LOG_DBG("unknown enable symbol\n");
+				LOG_ERR("unknown enable symbol\n");
 			}
 		}
 	}
@@ -800,11 +796,11 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 		}
 	}
 	if (disableFlag) {
-		LOG_DBG("disable all chs\n");
+		LOG_INFO("disable all chs\n");
 		sx933x_i2c_read_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, &temp);
-		LOG_INFO("read reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
+		LOG_DBG("read reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
 		temp = temp & 0xFFFFFFE0;
-		LOG_INFO("set reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
+		LOG_DBG("set reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
 		sx933x_i2c_write_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, temp);
 	}
 	return 0;
@@ -833,7 +829,7 @@ static int ps_get_state(struct power_supply *psy, bool *present)
 		return retval;
 	}
 	*present = (pval.intval) ? true : false;
-	LOG_INFO("%s is %s\n", psy->desc->name,
+	LOG_DBG("%s is %s\n", psy->desc->name,
 			(*present) ? "present" : "not present");
 	return 0;
 }
@@ -850,7 +846,7 @@ static int ps_notify_callback(struct notifier_block *self,
 	if ((event == PSY_EVENT_PROP_ADDED || event == PSY_EVENT_PROP_CHANGED)
 			&& psy && psy->desc->get_property && psy->desc->name &&
 			!strncmp(psy->desc->name, "usb", sizeof("usb")) && data) {
-		LOG_INFO("ps notification: event = %lu\n", event);
+		LOG_DBG("ps notification: event = %lu\n", event);
 		retval = ps_get_state(psy, &present);
 		if (retval) {
 			return retval;
@@ -858,7 +854,7 @@ static int ps_notify_callback(struct notifier_block *self,
 
 		if (event == PSY_EVENT_PROP_CHANGED) {
 			if (data->ps_is_present == present) {
-				LOG_INFO("ps present state not change\n");
+				LOG_DBG("ps present state not change\n");
 				return 0;
 			}
 		}
@@ -890,11 +886,11 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	struct totalButtonInformation *pButtonInformationData = NULL;
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 
-	LOG_DBG("sx933x_probe()\n");
+	LOG_INFO("sx933x_probe()\n");
 
 	if (!i2c_check_functionality(adapter, I2C_FUNC_SMBUS_READ_WORD_DATA))
 	{
-		LOG_DBG("Check i2c functionality.Fail!\n");
+		LOG_ERR("Check i2c functionality.Fail!\n");
 		err = -EIO;
 		return err;
 	}
@@ -905,7 +901,7 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	pButtonInformationData = devm_kzalloc(&client->dev , sizeof(struct totalButtonInformation), GFP_KERNEL);
 	if (!pButtonInformationData)
 	{
-		LOG_DBG("Failed to allocate memory(totalButtonInformation)\n");
+		LOG_ERR("Failed to allocate memory(totalButtonInformation)\n");
 		err = -ENOMEM;
 		return err;
 	}
@@ -915,7 +911,7 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	pplatData = devm_kzalloc(&client->dev,sizeof(struct sx933x_platform_data), GFP_KERNEL);
 	if (!pplatData)
 	{
-		LOG_DBG("platform data is required!\n");
+		LOG_ERR("platform data is required!\n");
 		return -EINVAL;
 	}
 	pplatData->get_is_nirq_low = sx933x_get_nirq_state;
@@ -925,7 +921,7 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	err = sx933x_parse_dt(pplatData, &client->dev);
 	if (err)
 	{
-		LOG_DBG("could not setup pin\n");
+		LOG_ERR("could not setup pin\n");
 		return ENODEV;
 	}
 
@@ -970,14 +966,14 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 
 		/* create memory for device specific struct */
 		this->pDevice = pDevice = devm_kzalloc(&client->dev,sizeof(sx933x_t), GFP_KERNEL);
-		LOG_INFO("initialized Device Specific Memory: 0x%p\n",pDevice);
+		LOG_DBG("initialized Device Specific Memory: 0x%p\n",pDevice);
 
 		if (pDevice)
 		{
 			/* for accessing items in user data (e.g. calibrate) */
 			err = class_register(&capsense_class);
 			if (err < 0) {
-				LOG_DBG("Create fsys class failed (%d)\n", err);
+				LOG_ERR("Create fsys class failed (%d)\n", err);
 				return err;
 			}
 
@@ -1030,7 +1026,7 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 
 					err = sensors_classdev_register(&pButtonInformationData->buttons[i].input_dev->dev, &pButtonInformationData->buttons[i].sensors_capsensor_cdev);
 					if (err < 0)
-						LOG_DBG("create %d cap sensor_class  file failed (%d)\n", i, err);
+						LOG_ERR("create %d cap sensor_class  file failed (%d)\n", i, err);
 				}
 			}
 		}
@@ -1041,18 +1037,18 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 				err = PTR_ERR(pplatData->cap_vdd);
 				return err;
 			}
-			LOG_DBG("%s: Failed to get regulator\n",
+			LOG_INFO("%s: Failed to get regulator\n",
 					__func__);
 		} else {
 			err = regulator_enable(pplatData->cap_vdd);
 			if (err) {
 				regulator_put(pplatData->cap_vdd);
-				LOG_DBG("%s: Error %d enable regulator\n",
+				LOG_ERR("%s: Error %d enable regulator\n",
 						__func__, err);
 				return err;
 			}
 			pplatData->cap_vdd_en = true;
-			LOG_DBG("cap_vdd regulator is %s\n",
+			LOG_INFO("cap_vdd regulator is %s\n",
 					regulator_is_enabled(pplatData->cap_vdd) ?
 					"on" : "off");
 		}
@@ -1063,13 +1059,13 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 		pplatData->ps_notif.notifier_call = ps_notify_callback;
 		err = power_supply_reg_notifier(&pplatData->ps_notif);
 		if (err)
-			LOG_DBG("Unable to register ps_notifier: %d\n", err);
+			LOG_ERR("Unable to register ps_notifier: %d\n", err);
 
 		psy = power_supply_get_by_name("usb");
 		if (psy) {
 			err = ps_get_state(psy, &pplatData->ps_is_present);
 			if (err) {
-				LOG_DBG("psy get property failed rc=%d\n", err);
+				LOG_ERR("psy get property failed rc=%d\n", err);
 				power_supply_unreg_notifier(&pplatData->ps_notif);
 			}
 		}
@@ -1081,7 +1077,7 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 			this->init(this);
 		}
 		else {
-			LOG_DBG("No init function!!!!\n");
+			LOG_ERR("No init function!!!!\n");
 			return -ENOMEM;
 		}
 	}	else	{
@@ -1091,12 +1087,12 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	pplatData->exit_platform_hw = sx933x_exit_platform_hw;
 
 	if (sx933x_Hardware_Check(this) != 0) {
-		LOG_DBG("sx933x_Hardware_CheckFail!\n");
+		LOG_ERR("sx933x_Hardware_CheckFail!\n");
 		//return -1;
 	}
 
 	global_sx933x = this;
-	LOG_DBG("sx933x_probe() Done\n");
+	LOG_INFO("sx933x_probe() Done\n");
 	return 0;
 }
 
@@ -1151,6 +1147,7 @@ static int sx933x_suspend(struct device *dev)
 	psx93XX_t this = dev_get_drvdata(dev);
 	if (this) {
 		sx933x_i2c_write_16bit(this,SX933X_CMD_REG,0xD);//make sx933x in Sleep mode
+		LOG_DBG(LOG_TAG "sx933x suspend:disable irq!\n");
 		disable_irq(this->irq);
 	}
 	return 0;
@@ -1160,6 +1157,7 @@ static int sx933x_resume(struct device *dev)
 {
 	psx93XX_t this = dev_get_drvdata(dev);
 	if (this) {
+		LOG_DBG(LOG_TAG "sx933x resume:enable irq!\n");
 		sx93XX_schedule_work(this,0);
 		enable_irq(this->irq);
 		sx933x_i2c_write_16bit(this,SX933X_CMD_REG,0xC);//Exit from Sleep mode
@@ -1226,7 +1224,7 @@ static void sx93XX_schedule_work(psx93XX_t this, unsigned long delay)
 	unsigned long flags;
 	if (this)
 	{
-		LOG_INFO("sx93XX_schedule_work()\n");
+		LOG_DBG("sx93XX_schedule_work()\n");
 		spin_lock_irqsave(&this->lock,flags);
 		/* Stop any pending penup queues */
 		cancel_delayed_work(&this->dworker);
@@ -1235,7 +1233,7 @@ static void sx93XX_schedule_work(psx93XX_t this, unsigned long delay)
 		spin_unlock_irqrestore(&this->lock,flags);
 	}
 	else
-		LOG_DBG("sx93XX_schedule_work, NULL psx93XX_t\n");
+		LOG_ERR("sx93XX_schedule_work, NULL psx93XX_t\n");
 }
 
 static irqreturn_t sx93XX_irq(int irq, void *pvoid)
@@ -1246,7 +1244,7 @@ static irqreturn_t sx93XX_irq(int irq, void *pvoid)
 		this = (psx93XX_t)pvoid;
 		if ((!this->get_nirq_low) || this->get_nirq_low())
 		{
-			LOG_INFO("sx93XX_irq - call sx93XX_schedule_work\n");
+			LOG_DBG("sx93XX_irq - call sx93XX_schedule_work\n");
 			sx93XX_schedule_work(this,0);
 			this->int_state = 1;
 		}
@@ -1257,7 +1255,7 @@ static irqreturn_t sx93XX_irq(int irq, void *pvoid)
 	}
 	else
 	{
-		LOG_DBG("sx93XX_irq, NULL pvoid\n");
+		LOG_ERR("sx93XX_irq, NULL pvoid\n");
 	}
 	return IRQ_HANDLED;
 }
@@ -1274,7 +1272,7 @@ static void sx93XX_worker_func(struct work_struct *work)
 
 		if (!this)
 		{
-			LOG_DBG("sx93XX_worker_func, NULL sx93XX_t\n");
+			LOG_ERR("sx93XX_worker_func, NULL sx93XX_t\n");
 			return;
 		}
 		if (unlikely(this->useIrqTimer))
@@ -1287,13 +1285,13 @@ static void sx93XX_worker_func(struct work_struct *work)
 		/* since we are not in an interrupt don't need to disable irq. */
 		status = this->refreshStatus(this);
 		counter = -1;
-		LOG_INFO("Worker_func - Refresh Status %d, use_timer_in_irq:%d\n", status, this->useIrqTimer);
+		LOG_DBG("Worker_func - Refresh Status %d, use_timer_in_irq:%d\n", status, this->useIrqTimer);
 
 		while((++counter) < MAX_NUM_STATUS_BITS)   /* counter start from MSB */
 		{
 			if (((status>>counter) & 0x01) && (this->statusFunc[counter]))
 			{
-				LOG_INFO("SX933x Function Pointer Found. Calling\n");
+				LOG_DBG("SX933x Function Pointer Found. Calling\n");
 				this->statusFunc[counter](this);
 			}
 		}
@@ -1306,7 +1304,7 @@ static void sx93XX_worker_func(struct work_struct *work)
 	}
 	else
 	{
-		LOG_DBG("sx93XX_worker_func, NULL work_struct\n");
+		LOG_ERR("sx93XX_worker_func, NULL work_struct\n");
 	}
 }
 
@@ -1326,10 +1324,10 @@ int sx93XX_IRQ_init(psx93XX_t this)
 				this->pdev->driver->name, this);
 		if (err)
 		{
-			LOG_DBG("irq %d busy?\n", this->irq);
+			LOG_ERR("irq %d busy?\n", this->irq);
 			return err;
 		}
-		LOG_DBG("registered with irq (%d)\n", this->irq);
+		LOG_INFO("registered with irq (%d)\n", this->irq);
 	}
 	return -ENOMEM;
 }
