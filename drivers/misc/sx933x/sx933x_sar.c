@@ -39,8 +39,8 @@
 #define LOG_TAG "[sar SX933x]: "
 
 #define LOG_INFO(fmt, args...)    pr_info(LOG_TAG "[INFO]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
-#define LOG_DBG(fmt, args...)     pr_debug(LOG_TAG "[DBG]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
-#define LOG_ERR(fmt, args...)	   pr_err(LOG_TAG "[ERR]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
+#define LOG_DBG(fmt, args...)    pr_debug(LOG_TAG "[DBG]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
+#define LOG_ERR(fmt, args...)    pr_err(LOG_TAG "[ERR]" "<%s><%d>"fmt, __func__, __LINE__, ##args)
 
 #define USE_DTS_REG
 
@@ -72,12 +72,22 @@ typedef struct sx933x
 static int irq_gpio_num;
 static psx93XX_t global_sx933x;
 
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+#define SX93XX_FAILURE_CHECK_PERIOD 10000   /* ms */
+
+static bool recovery_on_failure = false;
+static struct delayed_work sx93xx_failure_check_work;
+static struct workqueue_struct *sx93xx_failure_check_wq;
+static void sx93xx_failure_check_func(struct work_struct *work);
+#endif /* #if SX93XX_RECOVERY_ON_FAILURE */
+static bool sensor_enable_flag = false;
+
+
 static void sx93XX_schedule_work(psx93XX_t this, unsigned long delay);
 static int sx933x_get_nirq_state(void)
 {
 	return  !gpio_get_value(irq_gpio_num);
 }
-
 
 /*! \fn static int sx933x_i2c_write_16bit(psx93XX_t this, u8 address, u8 value)
  * \brief Sends a write register to the device
@@ -773,6 +783,7 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 				LOG_DBG("set reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
 				sx933x_i2c_write_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, temp);
 				psmtcButtons[i].enabled = true;
+				sensor_enable_flag = true;
 				input_report_abs(psmtcButtons[i].input_dev, ABS_DISTANCE, 0);
 				input_sync(psmtcButtons[i].input_dev);
 
@@ -796,6 +807,7 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 		}
 	}
 	if (disableFlag) {
+		sensor_enable_flag = false;
 		LOG_INFO("disable all chs\n");
 		sx933x_i2c_read_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, &temp);
 		LOG_DBG("read reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
@@ -803,6 +815,18 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 		LOG_DBG("set reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
 		sx933x_i2c_write_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, temp);
 	}
+
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+	if (sensor_enable_flag) {
+		LOG_INFO("start sx93xx_failure_check_work \n");
+		queue_delayed_work(sx93xx_failure_check_wq, &sx93xx_failure_check_work,
+			msecs_to_jiffies(SX93XX_FAILURE_CHECK_PERIOD));
+	} else {
+		LOG_INFO("cancel sx93xx_failure_check_work \n");
+		cancel_delayed_work_sync(&sx93xx_failure_check_work);
+	}
+#endif
+
 	return 0;
 }
 
@@ -1071,6 +1095,16 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 		}
 #endif
 
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+		INIT_DELAYED_WORK(&sx93xx_failure_check_work, sx93xx_failure_check_func);
+		sx93xx_failure_check_wq = alloc_workqueue("sx93xx_failure_check_wq", WQ_MEM_RECLAIM, 1);
+		if (!sx93xx_failure_check_wq) {
+			LOG_ERR("sx93xx_failure_check_wq create workqueue failed\n");
+			err = -ENOMEM;
+			goto err_create_sx93xx_failure_check_wq_failed;
+		}
+#endif /* #if SX93XX_RECOVERY_ON_FAILURE */
+
 		sx93XX_IRQ_init(this);
 		/* call init function pointer (this should initialize all registers */
 		if (this->init) {
@@ -1078,7 +1112,8 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 		}
 		else {
 			LOG_ERR("No init function!!!!\n");
-			return -ENOMEM;
+			err = -ENOMEM;
+			goto err_init_function_failed;
 		}
 	}	else	{
 		return -1;
@@ -1094,6 +1129,17 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	global_sx933x = this;
 	LOG_INFO("sx933x_probe() Done\n");
 	return 0;
+
+err_init_function_failed:
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+	if (sx93xx_failure_check_wq) {
+		cancel_delayed_work_sync(&sx93xx_failure_check_work);
+		destroy_workqueue(sx93xx_failure_check_wq);
+		sx93xx_failure_check_wq = NULL;
+	}
+err_create_sx93xx_failure_check_wq_failed:
+#endif
+	return err;
 }
 
 /*! \fn static int sx933x_remove(struct i2c_client *client)
@@ -1146,17 +1192,31 @@ static int sx933x_suspend(struct device *dev)
 {
 	psx93XX_t this = dev_get_drvdata(dev);
 	if (this) {
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+		if (sensor_enable_flag) {
+			LOG_INFO("cancel delayed work sync\n");
+			cancel_delayed_work_sync(&sx93xx_failure_check_work);
+		}
+#endif /* #if SX93XX_RECOVERY_ON_FAILURE */
 		sx933x_i2c_write_16bit(this,SX933X_CMD_REG,0xD);//make sx933x in Sleep mode
 		LOG_DBG(LOG_TAG "sx933x suspend:disable irq!\n");
 		disable_irq(this->irq);
 	}
 	return 0;
 }
+
 /***** Kernel Resume *****/
 static int sx933x_resume(struct device *dev)
 {
 	psx93XX_t this = dev_get_drvdata(dev);
 	if (this) {
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+		if (sensor_enable_flag) {
+			LOG_INFO("start sx93xx_failure_check_work when resume\n");
+			queue_delayed_work(sx93xx_failure_check_wq, &sx93xx_failure_check_work,
+				msecs_to_jiffies(SX93XX_FAILURE_CHECK_PERIOD));
+		}
+#endif /* #if SX93XX_FAILURE_ON_RECOVERY */
 		LOG_DBG(LOG_TAG "sx933x resume:enable irq!\n");
 		sx93XX_schedule_work(this,0);
 		enable_irq(this->irq);
@@ -1250,7 +1310,12 @@ static irqreturn_t sx93XX_irq(int irq, void *pvoid)
 		}
 		else
 		{
-			LOG_DBG("sx93XX_irq - nirq read high\n");
+			LOG_ERR("sx93XX_irq - nirq read high\n");
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+			recovery_on_failure = true;
+			queue_delayed_work(sx93xx_failure_check_wq, &sx93xx_failure_check_work,
+				msecs_to_jiffies(SX93XX_FAILURE_CHECK_PERIOD / 10));
+#endif
 		}
 	}
 	else
@@ -1331,3 +1396,33 @@ int sx93XX_IRQ_init(psx93XX_t this)
 	}
 	return -ENOMEM;
 }
+
+#ifdef SX93XX_RECOVERY_ON_FAILURE
+static void sx93xx_failure_check_func(struct work_struct *work)
+{
+	psx93XX_t this = global_sx933x;
+	u32 temp = 0x0;
+	u32 ch_en = 0x0;
+
+	sx933x_i2c_read_16bit(this,SX933X_AFEPHPH0_REG,&temp);
+	LOG_DBG("zbtest read reg 0x%x val 0x%x\n", SX933X_AFEPHPH0_REG, temp);
+
+	if ((temp == 0) || (recovery_on_failure == true)) {
+		sx933x_i2c_write_16bit(this,SX933X_RESET_REG, 0xDE);
+		msleep(100);
+		this->init(this);
+		msleep(100);
+
+		sx933x_i2c_read_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, &temp);
+		LOG_ERR("zbtest read reg 0x%x val 0x%x\n", SX933X_GNRLCTRL2_REG, temp);
+		ch_en = temp | 0x0000001F;
+		sx933x_i2c_write_16bit(global_sx933x, SX933X_GNRLCTRL2_REG, ch_en);
+
+		manual_offset_calibration(global_sx933x);
+		recovery_on_failure =false;
+	}
+
+	queue_delayed_work(sx93xx_failure_check_wq, &sx93xx_failure_check_work,
+			msecs_to_jiffies(SX93XX_FAILURE_CHECK_PERIOD));
+}
+#endif

@@ -10,3 +10,7 @@ include $(DLKM_DIR)/AndroidKernelModule.mk
 ifeq ($(SX933X_USB_CAL),true)
 	KERNEL_CFLAGS += CONFIG_SX933X_USB_CAL=y
 endif
+
+ifeq ($(SX93XX_RECOVERY_ON_FAILURE),true)
+	KERNEL_CFLAGS += CONFIG_SX93XX_RECOVERY=y
+endif
