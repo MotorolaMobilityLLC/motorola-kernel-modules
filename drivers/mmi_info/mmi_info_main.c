@@ -40,8 +40,8 @@ int mmi_get_bootarg(char *key, char **value)
 		 * version of bootargs
 		 */
 		bootargs_str = kzalloc(strlen(bootargs_tmp) + 1, GFP_KERNEL);
-		if (!bootargs_str)
-			goto putnode;
+	if (!bootargs_str)
+		goto putnode;
 
 	strlcpy(bootargs_str, bootargs_tmp, strlen(bootargs_tmp) + 1);
 
