@@ -979,7 +979,7 @@ void ili_report_ap_mode(u8 *buf, int len)
 		else
 			touch_info[ilits->finger].pressure = 1;
 
-		ILI_INFO("original x = %d, y = %d\n", xop, yop);
+		ILI_DBG("original x = %d, y = %d\n", xop, yop);
 		ilits->finger++;
 		if (MT_B_TYPE)
 			ilits->curt_touch[i] = 1;
