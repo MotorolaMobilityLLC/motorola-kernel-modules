@@ -235,6 +235,124 @@ static int manual_offset_calibration(psx93XX_t this)
 
 }
 
+static void read_dbg_raw(psx93XX_t this)
+{
+	int ph, state;
+	u32 uData, ph_sel;
+	s32 ant_use, ant_raw;
+	s32 avg, diff;
+	u16 off;
+	s32 adc_min, adc_max, use_flt_dlt_var;
+	s32 ref_a_use=0, ref_b_use=0;
+	int ref_ph_a, ref_ph_b;
+
+	psx933x_t pDevice = NULL;
+	psx933x_platform_data_t pdata = NULL;
+
+	pDevice = this->pDevice;
+	pdata = pDevice->hw;
+	ref_ph_a = pdata->ref_phase_a;
+	ref_ph_b = pdata->ref_phase_b;
+	LOG_DBG("[SX933x] ref_ph_a= %d ref_ph_b= %d\n", ref_ph_a, ref_ph_b);
+
+	sx933x_i2c_read_16bit(this, SX933X_STAT0_REG, &uData);
+	LOG_DBG("SX933X_STAT0_REG= 0x%X\n", uData);
+
+	if(ref_ph_a != 0xFF)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_USEPH0_REG + ref_ph_a*4, &uData);
+		ref_a_use = (s32)uData >> 10;
+	}
+	if(ref_ph_b != 0xFF)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_USEPH0_REG + ref_ph_b*4, &uData);
+		ref_b_use = (s32)uData >> 10;
+	}
+
+	sx933x_i2c_read_16bit(this, SX933X_REG_DBG_PHASE_SEL, &ph_sel);
+
+	sx933x_i2c_read_16bit(this, SX933X_REG_PROX_ADC_MIN, &uData);
+	adc_min = (s32)uData>>10;
+	sx933x_i2c_read_16bit(this, SX933X_REG_PROX_ADC_MAX, &uData);
+	adc_max = (s32)uData>>10;
+	sx933x_i2c_read_16bit(this, SX933X_REG_PROX_RAW, &uData);
+	ant_raw = (s32)uData>>10;
+	sx933x_i2c_read_16bit(this, SX933X_REG_DLT_VAR, &uData);
+	use_flt_dlt_var = (s32)uData>>3;
+
+	if (((ph_sel >> 3) & 0x7) == 0)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_USEPH0_REG, &uData);
+		ant_use = (s32)uData>>10;
+		ph = 0;
+	}
+	else if (((ph_sel >> 3) & 0x7) == 1)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_USEPH1_REG, &uData);
+		ant_use = (s32)uData>>10;
+		ph = 1;
+	}
+	else if (((ph_sel >> 3) & 0x7) == 2)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_USEPH2_REG, &uData);
+		ant_use = (s32)uData>>10;
+		ph = 2;
+	}
+	else if (((ph_sel >> 3) & 0x7) == 3)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_USEPH3_REG, &uData);
+		ant_use = (s32)uData>>10;
+		ph = 3;
+	}
+	else if (((ph_sel >> 3) & 0x7) == 4)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_USEPH4_REG, &uData);
+		ant_use = (s32)uData>>10;
+		ph = 4;
+	}
+	else
+	{
+		LOG_DBG("read_dbg_raw(): invalid reg_val= 0x%X\n", ph_sel);
+		ph = -1;
+	}
+
+	if(ph != -1)
+	{
+		sx933x_i2c_read_16bit(this, SX933X_AVGPH0_REG + ph*4, &uData);
+		avg = (s32)uData>>10;
+		sx933x_i2c_read_16bit(this, SX933X_DIFFPH0_REG + ph*4, &uData);
+		diff = (s32)uData>>10;
+		sx933x_i2c_read_16bit(this, SX933X_OFFSETPH0_REG + ph*4*2, &uData);
+		off = (u16)(uData & 0x7FFF);
+		state = psmtcButtons[ph].state;
+
+		if(ref_ph_a != 0xFF && ref_ph_b != 0xFF)
+		{
+			LOG_DBG(
+			"SMTC_DBG PH= %d USE= %d RAW= %d PH%d_USE= %d PH%d_USE= %d STATE= %d AVG= %d DIFF= %d OFF= %d ADC_MIN= %d ADC_MAX= %d DLT= %d SMTC_END\n",
+			ph,    ant_use, ant_raw, ref_ph_a, ref_a_use,  ref_ph_b, ref_b_use,    state,    avg,    diff,    off,    adc_min,   adc_max,    use_flt_dlt_var);
+		}
+		else if(ref_ph_a != 0xFF)
+		{
+			LOG_DBG(
+			"SMTC_DBG PH= %d USE= %d RAW= %d PH%d_USE= %d STATE= %d AVG= %d DIFF= %d OFF= %d ADC_MIN= %d ADC_MAX= %d DLT= %d SMTC_END\n",
+			ph,    ant_use, ant_raw, ref_ph_a, ref_a_use,  state,    avg,    diff,    off,    adc_min,   adc_max,    use_flt_dlt_var);
+		}
+		else if(ref_ph_b != 0xFF)
+		{
+			LOG_DBG(
+			"SMTC_DBG PH= %d USE= %d RAW= %d PH%d_USE= %d STATE= %d AVG= %d DIFF= %d OFF= %d ADC_MIN= %d ADC_MAX= %d DLT= %d SMTC_END\n",
+			ph,    ant_use, ant_raw, ref_ph_b, ref_b_use,  state,    avg,    diff,    off,    adc_min,   adc_max,    use_flt_dlt_var);
+		}
+		else
+		{
+			LOG_DBG(
+			"SMTC_DBG PH= %d USE= %d RAW= %d STATE= %d AVG= %d DIFF= %d OFF= %d ADC_MIN= %d ADC_MAX= %d DLT= %d SMTC_END\n",
+			ph,    ant_use, ant_raw, state,    avg,    diff,    off,    adc_min,   adc_max,    use_flt_dlt_var);
+		}
+	}
+}
+
 /****************************************************************************/
 /*! \brief sysfs show function for manual calibration which currently just
  * returns register value.
@@ -242,15 +360,37 @@ static int manual_offset_calibration(psx93XX_t this)
 static void read_rawData(psx93XX_t this)
 {
 	u8 csx, index;
-	s32 useful;
-	s32 average;
-	s32 diff;
+	s32 useful, average, diff;
+	s32 ref_a_use=0, ref_b_use=0;
 	u32 uData;
 	u16 offset;
-	//s32 state = 0;
+	int state;
+	psx933x_t pDevice = NULL;
+	psx933x_platform_data_t pdata = NULL;
+	int ref_ph_a, ref_ph_b;
 
 	if(this)
 	{
+		pDevice = this->pDevice;
+		pdata = pDevice->hw;
+		ref_ph_a = pdata->ref_phase_a;
+		ref_ph_b = pdata->ref_phase_b;
+		LOG_DBG("[SX933x] ref_ph_a= %d ref_ph_b= %d\n", ref_ph_a, ref_ph_b);
+
+		sx933x_i2c_read_16bit(this, SX933X_STAT0_REG, &uData);
+		LOG_DBG("SX933X_STAT0_REG= 0x%X\n", uData);
+
+		if(ref_ph_a != 0xFF)
+		{
+			sx933x_i2c_read_16bit(this, SX933X_USEPH0_REG + ref_ph_a*4, &uData);
+			ref_a_use = (s32)uData >> 10;
+		}
+		if(ref_ph_b != 0xFF)
+		{
+			sx933x_i2c_read_16bit(this, SX933X_USEPH0_REG + ref_ph_b*4, &uData);
+			ref_b_use = (s32)uData >> 10;
+		}
+
 		for(csx =0; csx<5; csx++)
 		{
 			index = csx*4;
@@ -262,10 +402,36 @@ static void read_rawData(psx93XX_t this)
 			diff = (s32)uData>>10;
 			sx933x_i2c_read_16bit(this, SX933X_OFFSETPH0_REG + index*2, &uData);
 			offset = (u16)(uData & 0x7FFF);
-			//state = psmtcButtons[csx].state;
-			LOG_DBG("[PH: %d] Useful = %d Average = %d, DIFF = %d Offset = %d \n",
-					csx,useful,average,diff,offset);
+
+			state = psmtcButtons[csx].state;
+
+			if(ref_ph_a != 0xFF && ref_ph_b != 0xFF)
+			{
+				LOG_DBG(
+				"SMTC_DAT PH= %d DIFF= %d USE= %d PH%d_USE= %d PH%d_USE= %d STATE= %d OFF= %d AVG= %d SMTC_END\n",
+				csx, diff, useful, ref_ph_a, ref_a_use, ref_ph_b, ref_b_use, state, offset, average);
+			}
+			else if(ref_ph_a != 0xFF)
+			{
+				LOG_DBG(
+				"SMTC_DAT PH= %d DIFF= %d USE= %d PH%d_USE= %d STATE= %d OFF= %d AVG= %d SMTC_END\n",
+				csx, diff, useful, ref_ph_a, ref_a_use, state, offset, average);
+			}
+			else if(ref_ph_b != 0xFF)
+			{
+				LOG_DBG(
+				"SMTC_DAT PH= %d DIFF= %d USE= %d PH%d_USE= %d STATE= %d OFF= %d AVG= %d SMTC_END\n",
+				csx, diff, useful, ref_ph_b, ref_b_use, state, offset, average);
+			}
+			else
+			{
+				LOG_DBG(
+				"SMTC_DAT PH= %d DIFF= %d USE= %d STATE= %d OFF= %d AVG= %d SMTC_END\n",
+				csx, diff, useful, state, offset, average);
+			}
 		}
+
+		read_dbg_raw(this);
 	}
 }
 
@@ -680,6 +846,19 @@ static int sx933x_parse_dt(struct sx933x_platform_data *pdata, struct device *de
 	pdata->button_used_flag = 0;
 	of_property_read_u32(dNode,"Semtech,button-flag",&pdata->button_used_flag);
 	LOG_INFO("%s -  used button 0x%x \n", __func__, pdata->button_used_flag);
+
+	pdata->ref_phase_a = -1;
+	pdata->ref_phase_b = -1;
+	if ( of_property_read_u32(dNode,"Semtech,ref-phases-a",&pdata->ref_phase_a) )
+	{
+		LOG_ERR("[SX933x]: %s - get ref-phases error\n", __func__);
+	}
+	if ( of_property_read_u32(dNode,"Semtech,ref-phases-b",&pdata->ref_phase_b) )
+	{
+		LOG_ERR("[SX933x]: %s - get ref-phases-b error\n", __func__);
+	}
+	LOG_INFO("[SX933x]: %s ref_phase_a= %d ref_phase_b= %d\n",
+		__func__, pdata->ref_phase_a, pdata->ref_phase_b);
 
 #ifdef USE_DTS_REG
 	// load in registers from device tree
