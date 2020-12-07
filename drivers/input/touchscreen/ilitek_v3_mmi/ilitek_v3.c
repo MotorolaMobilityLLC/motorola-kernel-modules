@@ -497,6 +497,18 @@ int ili_sleep_handler(int mode)
 				ILI_ERR("Check busy timeout during deep suspend\n");
 		}
 
+#ifdef  ILI_SENSOR_EN
+		if (ilits->should_enable_gesture) {
+			ili_switch_tp_mode(P5_X_FW_GESTURE_MODE);
+			enable_irq_wake(ilits->irq_num);
+			ili_irq_enable();
+			ilits->wakeable = true;
+		} else {
+			if (ili_ic_func_ctrl("sleep", DEEP_SLEEP_IN) < 0)
+				ILI_ERR("Write deep sleep in cmd failed\n");
+			ilits->wakeable = false;
+		}
+#else
 		if ((ilits->gesture) || (ilits->prox_face_mode == true)) {
 			ili_switch_tp_mode(P5_X_FW_GESTURE_MODE);
 			enable_irq_wake(ilits->irq_num);
@@ -505,6 +517,7 @@ int ili_sleep_handler(int mode)
 			if (ili_ic_func_ctrl("sleep", DEEP_SLEEP_IN) < 0)
 				ILI_ERR("Write deep sleep in cmd failed\n");
 		}
+#endif
 		ILI_INFO("TP deep suspend end\n");
 		break;
 	case TP_RESUME:
@@ -536,6 +549,14 @@ int ili_sleep_handler(int mode)
 #if PROXIMITY_BY_FW
 		ilits->proxmity_face = false;
 #endif
+#ifdef ILI_SENSOR_EN
+	if (ilits->wakeable) {
+		disable_irq_wake(ilits->irq_num);
+		ilits->gesture_enabled = false;
+		ilits->wakeable = false;
+	}
+#endif
+
 		ILI_INFO("TP resume end\n");
 #endif
 		ili_wq_ctrl(WQ_ESD, ENABLE);
