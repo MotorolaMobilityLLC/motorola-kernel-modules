@@ -101,6 +101,13 @@
 #include "mt_spi.h"
 #include "sync_write.h"
 #endif
+#ifdef ILI_SENSOR_EN
+#include <linux/sensors.h>
+#endif
+#ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
+#include <linux/panel_notifier.h>
+#endif
+#include <linux/mmi_wake_lock.h>
 
 #define DRIVER_VERSION			"3.0.4.0.200731"
 
@@ -789,6 +796,22 @@ struct report_info_block {
 #define TDDI_CHIP_RESET_ADDR				0x40050
 #define RAWDATA_NO_BK_SHIFT				8192
 
+#ifdef ILI_SENSOR_EN
+/* display state */
+enum display_state {
+	SCREEN_UNKNOWN,
+	SCREEN_OFF,
+	SCREEN_ON,
+};
+struct ili_sensor_platform_data {
+	struct input_dev *input_sensor_dev;
+	struct sensors_classdev ps_cdev;
+	int sensor_opened;
+	char sensor_data; /* 0 near, 1 far */
+	struct ilitek_ts_data *data;
+};
+#define REPORT_MAX_COUNT 10000
+#endif
 /* Edge Palm */
 #define ZONE_A_W					6
 #define ZONE_B_W					32
@@ -823,6 +846,10 @@ struct ilitek_ts_data {
 #else
 	struct early_suspend early_suspend;
 #endif
+#ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
+	struct notifier_block panel_notif;
+#endif
+
 #if CHARGER_NOTIFIER_CALLBACK
 #if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
 /* add_for_charger_start */
@@ -965,6 +992,21 @@ struct ilitek_ts_data {
 	atomic_t tp_sw_mode;
 	atomic_t cmd_int_check;
 	atomic_t esd_stat;
+
+#ifdef ILI_SENSOR_EN
+	bool wakeable;
+	bool should_enable_gesture;
+	bool gesture_enabled;
+	uint32_t report_gesture_key;
+	enum display_state screen_state;
+	struct mutex state_mutex;
+	struct ili_sensor_platform_data *sensor_pdata;
+#ifdef CONFIG_HAS_WAKELOCK
+	struct wake_lock gesture_wakelock;
+#else
+	struct wakeup_source gesture_wakelock;
+#endif
+#endif
 
 	/* Event for driver test */
 	struct completion esd_done;
@@ -1192,6 +1234,9 @@ extern int ili_get_tp_recore_ctrl(int data);
 extern int ili_get_tp_recore_data(bool mcu);
 extern void ili_demo_debug_info_mode(u8 *buf, size_t rlen);
 extern void ili_demo_debug_info_id0(u8 *buf, size_t len);
+#ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
+extern void ilitek_panel_notifier_unregister(void);
+#endif
 
 static inline void ipio_kfree(void **mem)
 {

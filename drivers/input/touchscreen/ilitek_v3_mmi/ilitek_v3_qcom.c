@@ -22,6 +22,45 @@
 
 #include "ilitek_v3.h"
 
+#ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
+#define register_panel_notifier panel_register_notifier
+#define unregister_panel_notifier panel_unregister_notifier
+enum touch_state {
+	TOUCH_DEEP_SLEEP_STATE = 0,
+	TOUCH_LOW_POWER_STATE,
+};
+#else
+#define register_panel_notifier(...) rc
+#define unregister_panel_notifier(...) rc
+#endif
+
+#ifdef ILI_SENSOR_EN
+static struct sensors_classdev __maybe_unused sensors_touch_cdev = {
+
+	.name = "dt-gesture",
+	.vendor = "ilitek",
+	.version = 1,
+	.type = SENSOR_TYPE_MOTO_DOUBLE_TAP,
+	.max_range = "5.0",
+	.resolution = "5.0",
+	.sensor_power = "1",
+	.min_delay = 0,
+	.max_delay = 0,
+	/* WAKE_UP & SPECIAL_REPORT */
+	.flags = 1 | 6,
+	.fifo_reserved_event_count = 0,
+	.fifo_max_event_count = 0,
+	.enabled = 0,
+	.delay_msec = 200,
+	.sensors_enable = NULL,
+	.sensors_poll_delay = NULL,
+};
+#endif
+
+#ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
+static int ili_panel_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
+#endif
+
 #define DTS_INT_GPIO	"touch,irq-gpio"
 #define DTS_RESET_GPIO	"touch,reset-gpio"
 #define DTS_OF_NAME	"tchip,ilitek"
@@ -178,6 +217,14 @@ static int ilitek_plat_gpio_register(void)
 	int ret = 0;
 	u32 flag;
 	struct device_node *dev_node = ilits->dev->of_node;
+#ifdef ILI_SENSOR_EN
+	if (of_property_read_bool(dev_node, "ilitek,report_gesture_key")) {
+		ILI_INFO("ilitek,report_gesture_key set");
+		ilits->report_gesture_key = 1;
+	} else {
+		ilits->report_gesture_key = 0;
+	}
+#endif
 
 	ilits->tp_int = of_get_named_gpio_flags(dev_node, DTS_INT_GPIO, 0, &flag);
 	ilits->tp_rst = of_get_named_gpio_flags(dev_node, DTS_RESET_GPIO, 0, &flag);
@@ -497,6 +544,148 @@ static void ilitek_plat_late_resume(struct early_suspend *h)
 }
 #endif
 
+#ifdef ILI_SENSOR_EN
+static int ili_sensor_set_enable(struct sensors_classdev *sensors_cdev,
+		unsigned int enable)
+{
+	ILI_INFO("Gesture set enable %d!", enable);
+	mutex_lock(&ilits->state_mutex);
+	if (enable == 1) {
+		ilits->should_enable_gesture = true;
+	} else if (enable == 0) {
+		ilits->should_enable_gesture = false;
+	} else {
+		ILI_INFO("unknown enable symbol\n");
+	}
+	mutex_unlock(&ilits->state_mutex);
+	return 0;
+}
+
+static int ili_sensor_init(struct ilitek_ts_data *data)
+{
+	struct ili_sensor_platform_data *sensor_pdata;
+	struct input_dev *sensor_input_dev;
+	int err;
+
+	sensor_input_dev = input_allocate_device();
+	if (!sensor_input_dev) {
+		ILI_ERR("Failed to allocate device");
+		goto exit;
+	}
+
+	sensor_pdata = devm_kzalloc(&sensor_input_dev->dev,
+			sizeof(struct ili_sensor_platform_data),
+			GFP_KERNEL);
+	if (!sensor_pdata) {
+		ILI_ERR("Failed to allocate memory");
+		goto free_sensor_pdata;
+	}
+	data->sensor_pdata = sensor_pdata;
+
+	if (data->report_gesture_key) {
+		__set_bit(EV_KEY, sensor_input_dev->evbit);
+		__set_bit(KEY_F1, sensor_input_dev->keybit);
+	} else {
+		__set_bit(EV_ABS, sensor_input_dev->evbit);
+		input_set_abs_params(sensor_input_dev, ABS_DISTANCE,
+				0, REPORT_MAX_COUNT, 0, 0);
+	}
+	__set_bit(EV_SYN, sensor_input_dev->evbit);
+
+	sensor_input_dev->name = "double-tap";
+	data->sensor_pdata->input_sensor_dev = sensor_input_dev;
+
+	err = input_register_device(sensor_input_dev);
+	if (err) {
+		ILI_ERR("Unable to register device, err=%d", err);
+		goto free_sensor_input_dev;
+	}
+
+	sensor_pdata->ps_cdev = sensors_touch_cdev;
+	sensor_pdata->ps_cdev.sensors_enable = ili_sensor_set_enable;
+	sensor_pdata->data = data;
+
+	err = sensors_classdev_register(&sensor_input_dev->dev,
+				&sensor_pdata->ps_cdev);
+	if (err)
+		goto unregister_sensor_input_device;
+
+	return 0;
+
+unregister_sensor_input_device:
+	input_unregister_device(data->sensor_pdata->input_sensor_dev);
+free_sensor_input_dev:
+	input_free_device(data->sensor_pdata->input_sensor_dev);
+free_sensor_pdata:
+	devm_kfree(&sensor_input_dev->dev, sensor_pdata);
+	data->sensor_pdata = NULL;
+exit:
+	return 1;
+}
+
+int ili_sensor_remove(struct ilitek_ts_data *data)
+{
+	sensors_classdev_unregister(&data->sensor_pdata->ps_cdev);
+	input_unregister_device(data->sensor_pdata->input_sensor_dev);
+	devm_kfree(&data->sensor_pdata->input_sensor_dev->dev,
+		data->sensor_pdata);
+	data->sensor_pdata = NULL;
+	data->wakeable = false;
+	data->should_enable_gesture = false;
+	return 0;
+}
+#endif
+
+#ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
+static int ili_panel_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
+{
+#ifdef ILI_SENSOR_EN
+	struct ilitek_ts_data *ts =
+		container_of(self, struct ilitek_ts_data, panel_notif);
+#endif
+
+	switch (event) {
+	case PANEL_EVENT_PRE_DISPLAY_OFF:
+			ILI_INFO("event=%lu\n", event);
+			if (ili_sleep_handler(TP_SUSPEND) < 0)
+				ILI_ERR("TP suspend failed\n");
+#ifdef ILI_SENSOR_EN
+			if (ts->should_enable_gesture) {
+				ILI_INFO("double tap gesture suspend\n");
+				touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
+			} else {
+				touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
+			}
+#endif
+			break;
+
+	case PANEL_EVENT_DISPLAY_ON:
+			ILI_INFO("event=%lu\n", event);
+			if (ili_sleep_handler(TP_RESUME) < 0)
+				ILI_ERR("TP resume failed\n");
+			break;
+	case PANEL_EVENT_DISPLAY_ON_PREPARE:
+			ILI_INFO("event=%lu\n", event);
+#if RESUME_BY_DDI
+			ili_resume_by_ddi();
+#endif
+			break;
+	default:	/* use DEV_TS here to avoid unused variable */
+			ILI_INFO("%s: function not implemented event %lu\n", __func__, event);
+			break;
+	}
+
+	return 0;
+}
+
+void ilitek_panel_notifier_unregister(void)
+{
+	if (register_panel_notifier(&ilits->panel_notif)) {
+		ILI_ERR("unregister panel_notifier failed\n");
+	}
+}
+#endif
+
 static void ilitek_plat_sleep_init(void)
 {
 #if defined(CONFIG_FB) || defined(CONFIG_DRM_MSM)
@@ -515,6 +704,13 @@ static void ilitek_plat_sleep_init(void)
 		ILI_ERR("Unable to register notifier_fb\n");
 #endif /* CONFIG_PLAT_SPRD */
 #endif /* CONFIG_DRM_MSM */
+#ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
+	ilits->panel_notif.notifier_call = ili_panel_notifier_callback;
+	ret = register_panel_notifier(&ilits->panel_notif);
+	if(ret) {
+		ILI_ERR("register panel_notifier failed. ret=%d\n", ret);
+	}
+#endif
 #else
 	ILI_INFO("Init eqarly_suspend struct\n");
 	ilits->early_suspend.suspend = ilitek_plat_early_suspend;
@@ -592,6 +788,9 @@ void ilitek_plat_charger_init(void)
 #endif
 static int ilitek_plat_probe(void)
 {
+#ifdef ILI_SENSOR_EN
+	static bool initialized_sensor;
+#endif
 	ILI_INFO("platform probe\n");
 
 #if REGULATOR_POWER
@@ -618,6 +817,20 @@ static int ilitek_plat_probe(void)
 #endif
 	ilits->pm_suspend = false;
 	init_completion(&ilits->pm_completion);
+#ifdef ILI_SENSOR_EN
+	mutex_init(&ilits->state_mutex);
+	//unknown screen state
+	ilits->screen_state = SCREEN_UNKNOWN;
+	if (!initialized_sensor) {
+#ifdef CONFIG_HAS_WAKELOCK
+		wake_lock_init(&(ilits->gesture_wakelock), WAKE_LOCK_SUSPEND, "dt-wake-lock");
+#else
+		wakeup_source_init(&(ilits->gesture_wakelock), "dt-wake-lock");
+#endif
+		if (!ili_sensor_init(ilits))
+			initialized_sensor = true;
+	}
+#endif
 #if CHARGER_NOTIFIER_CALLBACK
 #if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
 	/* add_for_charger_start */
