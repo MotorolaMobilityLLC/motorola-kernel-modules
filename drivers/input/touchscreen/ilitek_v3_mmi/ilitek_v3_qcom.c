@@ -500,6 +500,12 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 			}
 			if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
 				ILI_ERR("TP suspend failed\n");
+#ifdef ILI_SENSOR_EN
+			if (ilits->should_enable_gesture) {
+				ILI_INFO("double tap gesture suspend\n");
+				return 1;
+			}
+#endif
 			break;
 #ifdef CONFIG_DRM_MSM
 		case MSM_DRM_BLANK_UNBLANK:
@@ -528,7 +534,7 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 			break;
 		}
 	}
-	return NOTIFY_OK;
+	return 0;
 }
 #else
 static void ilitek_plat_early_suspend(struct early_suspend *h)
