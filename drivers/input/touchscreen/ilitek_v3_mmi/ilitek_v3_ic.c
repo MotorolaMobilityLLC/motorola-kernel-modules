@@ -387,7 +387,7 @@ int ili_ic_func_ctrl(const char *name, int ctrl)
 		}
 	}
 
-	func_ctrl[i].cmd[2] = ctrl;
+	func_ctrl[i].cmd[2] = (u8)ctrl;
 
 	ILI_INFO("func = %s, len = %d, cmd = 0x%x, 0%x, 0x%x\n", func_ctrl[i].name, func_ctrl[i].len,
 		func_ctrl[i].cmd[0], func_ctrl[i].cmd[1], func_ctrl[i].cmd[2]);
@@ -1115,7 +1115,7 @@ int ili_ic_dummy_check(void)
 
 	if (rdata != wdata){
 		ILI_ERR("Dummy check incorrect, rdata = %x wdata = %x \n", rdata, wdata);
-		//return -1;
+		return -1;
 	}
 	ILI_INFO("Ilitek IC check successe\n");
 
