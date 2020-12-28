@@ -9,7 +9,6 @@
 * GNU General Public License for more details.
 */
 
-
 #include <linux/firmware.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
@@ -33,6 +32,7 @@ static struct crus_single_data_t crus_enable;
 
 static struct crus_se_ioctl_header crus_se_hdr;
 static uint32_t *crus_se_get_buffer;
+static uint32_t crus_se_buffer_size;
 static atomic_t crus_se_get_param_flag;
 struct mutex crus_se_get_param_lock;
 struct mutex crus_se_lock;
@@ -69,7 +69,8 @@ static int crus_get_param(int port, int module, int param, int length,
 	mutex_lock(&crus_se_get_param_lock);
 	atomic_set(&crus_se_get_param_flag, 0);
 
-	crus_se_get_buffer = kzalloc(length + 24, GFP_KERNEL);
+	crus_se_buffer_size = length + 24;
+	crus_se_get_buffer = kzalloc(crus_se_buffer_size, GFP_KERNEL);
 	if (!crus_se_get_buffer) {
 		pr_err("%s: Memory allocation failed!\n", __func__);
 		mutex_unlock(&crus_se_get_param_lock);
@@ -102,6 +103,7 @@ static int crus_get_param(int port, int module, int param, int length,
 	memcpy((u8 *)data, &crus_se_get_buffer[5], length);
 
 	kfree(crus_se_get_buffer);
+	crus_se_get_buffer = NULL;
 
 	mutex_unlock(&crus_se_get_param_lock);
 
@@ -285,8 +287,11 @@ int crus_afe_callback(void *payload, int size)
 
 	switch (payload32[1]) {
 	case CIRRUS_SE:
-		memcpy(crus_se_get_buffer, payload32, size);
-		atomic_set(&crus_se_get_param_flag, 1);
+		if (crus_se_get_buffer && crus_se_buffer_size > 0) {
+			memcpy(crus_se_get_buffer, payload32,
+				size < crus_se_buffer_size ? size : crus_se_buffer_size);
+			atomic_set(&crus_se_get_param_flag, 1);
+		}
 		break;
 	default:
 		return -EINVAL;
