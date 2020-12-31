@@ -414,8 +414,8 @@ static int ilitek_tddi_fw_iram_upgrade(u8 *pfw, bool mcu)
 	}
 
 	/* Waiting for fw ready sending first cmd */
-	if (!ilits->info_from_hex || (ilits->chip->core_ver < CORE_VER_1410))
-		mdelay(100);
+	//if (!ilits->info_from_hex || (ilits->chip->core_ver < CORE_VER_1410))
+		mdelay(20);
 
 	return ret;
 }
