@@ -32,6 +32,15 @@ struct mmi_storage_info {
 	char firmware_version[32];
 };
 
+struct mmi_ddr_info{
+	unsigned int mr5;
+	unsigned int mr6;
+	unsigned int mr7;
+	unsigned int mr8;
+	unsigned int type;
+	unsigned int ramsize;
+};
+
 /* set of data provided to the modem over SMEM */
 #define SERIALNO_MAX_LEN 64
 #define ANDROIDBOOT_DEVICE_MAX_LEN 32
