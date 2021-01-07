@@ -29,7 +29,6 @@
 #include <asm/setup.h>
 #include <linux/seq_file.h>
 #include <soc/qcom/mmi_boot_info.h>
-#include <linux/mmi_annotate.h>
 #include "mmi_info.h"
 
 /*
@@ -298,17 +297,13 @@ int mmi_boot_info_init(void)
 	for (i = 0; i < bl_build_sig_count; i++) {
 		bl_build_sigs[i].item[MAX_BLD_SIG_ITEM - 1] = 0;
 		bl_build_sigs[i].value[MAX_BLD_SIG_VALUE - 1] = 0;
-		mmi_annotate_persist(bl_build_sigs[i].item);
-		mmi_annotate_persist("=");
-		mmi_annotate_persist(bl_build_sigs[i].value);
-		mmi_annotate_persist("\n");
 	}
-	mmi_annotate_persist("MBM_VERSION: 0x%08x\n", bi_mbm_version());
-	mmi_annotate_persist("SERIAL: 0x%llx\n", bi_serial());
-	mmi_annotate_persist("HW_REV: 0x%04x\n", bi_hwrev());
-	mmi_annotate_persist("BOOT_SEQ: %d\n", bi_boot_seq());
-	mmi_annotate("POWERUPREASON: 0x%08x\n", bi_powerup_reason());
-	mmi_annotate("Last boot reason: %s\n\n", bi_bootreason());
+	pr_info("MBM_VERSION: 0x%08x\n", bi_mbm_version());
+	pr_info("SERIAL: 0x%llx\n", bi_serial());
+	pr_info("HW_REV: 0x%04x\n", bi_hwrev());
+	pr_info("BOOT_SEQ: %d\n", bi_boot_seq());
+	pr_info("POWERUPREASON: 0x%08x\n", bi_powerup_reason());
+	pr_info("Last boot reason: %s\n\n", bi_bootreason());
 
 	pr_info("BOOT_SEQ: %d\n", bi_boot_seq());
 	return 0;

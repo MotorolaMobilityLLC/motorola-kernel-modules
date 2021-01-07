@@ -21,20 +21,10 @@
 #include <asm/system_misc.h>
 #include "mmi_info.h"
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
-#include <linux/soc/qcom/smem.h>
-/* Match to
- * vendor/qcom/nonhlos/boot_images/QcomPkg/SDMPkg/Include/smem_type.h
- */
-#define SMEM_ID_VENDOR0 134
-#else
-#include <soc/qcom/smem.h>
-#endif
 
-#define SMEM_KERNEL_RESERVE SMEM_ID_VENDOR0
+
 
 static struct proc_dir_entry *unitinfo_procfs_file;
-static struct mmi_unit_info *mui;
 static char serialno[SERIALNO_MAX_LEN];
 static char carrier[CARRIER_MAX_LEN];
 static char baseband[BASEBAND_MAX_LEN];
@@ -85,84 +75,6 @@ static int unitinfo_seq_show(struct seq_file *f, void *ptr)
 	return 0;
 }
 
-static int mmi_unit_smem_setup(void)
-{
-	int ret = 0;
-	struct mmi_unit_info *mui_copy;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
-	ssize_t mui_size;
-#endif
-
-	#define SMEM_KERNEL_RESERVE_SIZE 1024
-	mui_copy = kzalloc(SMEM_KERNEL_RESERVE_SIZE, GFP_KERNEL);
-	if (!mui_copy) {
-		pr_err("%s: failed to allocate space for mmi_unit_info\n",
-			__func__);
-		ret = 1;
-		goto err;
-	}
-
-	mui_copy->version = MMI_UNIT_INFO_VER;
-	mui_copy->system_rev = mmi_chosen_data.system_rev;
-	mui_copy->system_serial_low = mmi_chosen_data.system_serial_low;
-	mui_copy->system_serial_high = mmi_chosen_data.system_serial_high;
-	strlcpy(mui_copy->machine, "", MACHINE_MAX_LEN);
-	strlcpy(mui_copy->barcode, serialno, BARCODE_MAX_LEN);
-	strlcpy(mui_copy->baseband, mmi_chosen_data.baseband, BASEBAND_MAX_LEN);
-	strlcpy(mui_copy->carrier, carrier, CARRIER_MAX_LEN);
-	strlcpy(mui_copy->device, androidboot_device, DEVICE_MAX_LEN);
-	mui_copy->radio = androidboot_radio;
-	strlcpy(mui_copy->radio_str, androidboot_radio_str, RADIO_MAX_LEN);
-	mui_copy->powerup_reason = mmi_chosen_data.powerup_reason;
-
-	pr_info("mmi_unit_info (SMEM) for modem: version = 0x%02x,"
-		" device = '%s', radio = 0x%x, radio_str = '%s',"
-		" system_rev = 0x%04x, system_serial = 0x%08x%08x,"
-		" machine = '%s', barcode = '%s', baseband = '%s',"
-		" carrier = '%s', pu_reason = 0x%08x\n",
-		mui_copy->version,
-		mui_copy->device,
-		mui_copy->radio,
-		mui_copy->radio_str,
-		mui_copy->system_rev,
-		mui_copy->system_serial_high, mui_copy->system_serial_low,
-		mui_copy->machine, mui_copy->barcode,
-		mui_copy->baseband, mui_copy->carrier,
-		mui_copy->powerup_reason);
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
-	if(!qcom_smem_alloc(QCOM_SMEM_HOST_ANY,
-		SMEM_KERNEL_RESERVE,
-		SMEM_KERNEL_RESERVE_SIZE))
-		mui = qcom_smem_get(QCOM_SMEM_HOST_ANY,
-			SMEM_KERNEL_RESERVE,
-			&mui_size);
-
-	if (!mui || mui_size != SMEM_KERNEL_RESERVE_SIZE) {
-#else
-	mui = (struct mmi_unit_info *) smem_alloc(SMEM_KERNEL_RESERVE,
-		SMEM_KERNEL_RESERVE_SIZE, 0, SMEM_ANY_HOST_FLAG);
-
-	if (!mui) {
-#endif
-		pr_err("%s: failed to allocate mmi_unit_info in SMEM\n",
-			__func__);
-		ret = 1;
-		goto err_free;
-	} else if (PTR_ERR(mui_copy) == -EPROBE_DEFER) {
-		pr_err("%s: SMEM not yet initialized\n", __func__);
-		ret = 1;
-		goto err_free;
-	}
-
-	memcpy(mui, mui_copy, SMEM_KERNEL_RESERVE_SIZE);
-
-err_free:
-	kfree(mui_copy);
-err:
-	return ret;
-}
-
 static int unitinfo_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, unitinfo_seq_show, inode->i_private);
@@ -178,7 +90,6 @@ static const struct file_operations unitinfo_operations = {
 int mmi_unit_info_init(void)
 {
 	mmi_bootarg_setup();
-	mmi_unit_smem_setup();
 
 	/* /proc/unitinfo */
 	unitinfo_procfs_file = proc_create("unitinfo",

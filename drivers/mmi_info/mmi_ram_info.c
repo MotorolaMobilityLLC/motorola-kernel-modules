@@ -14,7 +14,6 @@
 
 #include <linux/module.h>
 #include <linux/version.h>
-#include <linux/mmi_annotate.h>
 #include "mmi_info.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
@@ -187,26 +186,6 @@ int mmi_ram_info_init(void)
 		"Intel"
 	};
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
-	ssize_t ddr_info_size = 0;
-	smem_ddr_info = qcom_smem_get(QCOM_SMEM_HOST_ANY,
-		SMEM_SDRAM_INFO,
-		&ddr_info_size);
-
-	if(smem_ddr_info) {
-		if(ddr_info_size < sizeof(*smem_ddr_info)) {
-			pr_err("%s: Invalid SMEM size, cannot get RAM info\n", __func__);
-			goto err;
-		}
-
-		/* v2 has an extra field */
-		if(ddr_info_size == sizeof(struct smem_ddr_info_v2))
-			is_v2 = 1;
-	}
-#else
-	smem_ddr_info = smem_alloc(SMEM_SDRAM_INFO, sizeof(*smem_ddr_info), 0,
-			SMEM_ANY_HOST_FLAG);
-#endif
 	if (smem_ddr_info == NULL) {
 		pr_err("%s: failed to access RAM info in SMEM\n", __func__);
 		goto err;
@@ -232,7 +211,7 @@ int mmi_ram_info_init(void)
 	/* extract size */
 	sysfsram_ramsize = smem_ddr_info->ramsize;
 
-	mmi_annotate_persist(
+	pr_info(
 		"RAM: %s, %s, %u MB, MR5:0x%02X, MR6:0x%02X, "
 		"MR7:0x%02X, MR8:0x%02X\n",
 		vname, sysfsram_type_name, smem_ddr_info->ramsize,
