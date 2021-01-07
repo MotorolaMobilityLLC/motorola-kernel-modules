@@ -70,7 +70,7 @@ static int unitinfo_seq_show(struct seq_file *f, void *ptr)
 	if (strnlen(androidboot_radio_str, RADIO_MAX_LEN))
 		seq_printf(f, "Radio\t\t: %s\n", androidboot_radio_str);
 
-	seq_printf(f, "MSM Hardware\t: %s\n", mmi_chosen_data.msm_hw);
+	seq_printf(f, "SOC Hardware\t: %s\n", mmi_chosen_data.system_hw);
 
 	return 0;
 }

@@ -156,8 +156,8 @@ static void mmi_of_populate_setup(void)
 		&mmi_chosen_data.system_serial_high);
 	if (of_property_read_string(n, "mmi,baseband", &temp) == 0)
 		strlcpy(mmi_chosen_data.baseband, temp, BASEBAND_MAX_LEN);
-	if (of_property_read_string(n, "mmi,msm_hw", &temp) == 0)
-		strlcpy(mmi_chosen_data.msm_hw, temp, MSMHW_MAX_LEN);
+	if (of_property_read_string(n, "linux,hardware", &temp) == 0)
+		strlcpy(mmi_chosen_data.system_hw, temp, SYSHW_MAX_LEN);
 
 	of_node_put(n);
 }
