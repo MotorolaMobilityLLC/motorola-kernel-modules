@@ -6,6 +6,7 @@
 #include <linux/wait.h>
 #include <linux/fb.h>
 #include <linux/notifier.h>
+#include "fpsensor_wakelock.h"
 
 #define FPSENSOR_DEV_NAME           "fpsensor"
 #define FPSENSOR_CLASS_NAME         "fpsensor"
@@ -16,9 +17,11 @@
 #define ERR_LOG     (0)
 #define INFO_LOG    (1)
 #define DEBUG_LOG   (2)
+/* debug log setting */
+static u8 fpsensor_debug_level =DEBUG_LOG ;
 #define fpsensor_debug(level, fmt, args...) do { \
         if (fpsensor_debug_level >= level) {\
-            printk("[fpCoreDriver][SN=%d] " fmt, g_cmd_sn, ##args); \
+            printk("[fpsensor][SN=%d] " fmt, g_cmd_sn, ##args); \
         } \
     } while (0)
 #define FUNC_ENTRY()  fpsensor_debug(DEBUG_LOG, "%s, %d, entry\n", __func__, __LINE__)
@@ -26,6 +29,11 @@
 
 /**********************IO Magic**********************/
 #define FPSENSOR_IOC_MAGIC    0xf0    //CHIP
+
+/**************** Custom device : platfotm  or spi **************/
+#define  USE_PLATFORM_BUS     1
+//#define  USE_SPI_BUS  1
+/**************************************************************/
 
 /* define commands */
 #define FPSENSOR_IOC_INIT                       _IOWR(FPSENSOR_IOC_MAGIC,0,uint32_t)
@@ -49,21 +57,31 @@ typedef struct {
     dev_t devno;
     struct class *class;
     struct cdev cdev;
+#if defined(USE_SPI_BUS)
+    struct spi_device *spi;
+#elif defined(USE_PLATFORM_BUS)
     struct platform_device *spi;
+#endif
     unsigned int users;
     u8 device_available;    /* changed during fingerprint chip sleep and wakeup phase */
     u8 irq_enabled;
     volatile unsigned int RcvIRQ;
     int irq;
     int irq_gpio;
-    int reset_gpio;
-    int power_gpio;
+    struct wake_lock ttw_wl;
     wait_queue_head_t wq_irq_return;
     int cancel;
+    struct pinctrl *pinctrl1;
+    struct pinctrl_state  *eint_as_int, *fp_rst_low, *fp_rst_high, *fp_cs_low, *fp_mo_low,
+            *fp_mi_low,  *fp_ck_low;
     struct notifier_block notifier;
     u8 fb_status;
     int enable_report_blankon;
     int free_flag;
 } fpsensor_data_t;
-
+#define     FPSENSOR_RST_PIN      1  // not gpio, only macro,not need modified!!
+#define     FPSENSOR_SPI_CS_PIN   2  // not gpio, only macro,not need modified!!
+#define     FPSENSOR_SPI_MO_PIN   3  // not gpio, only macro,not need modified!!
+#define     FPSENSOR_SPI_MI_PIN   4  // not gpio, only macro,not need modified!!
+#define     FPSENSOR_SPI_CK_PIN   5  // not gpio, only macro,not need modified!!
 #endif    /* __FPSENSOR_SPI_TEE_H */
