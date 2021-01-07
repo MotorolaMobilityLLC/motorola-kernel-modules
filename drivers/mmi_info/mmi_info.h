@@ -40,7 +40,7 @@ struct mmi_storage_info {
 #define MACHINE_MAX_LEN 33
 #define CARRIER_MAX_LEN 65
 #define BASEBAND_MAX_LEN 97
-#define MSMHW_MAX_LEN 32
+#define SYSHW_MAX_LEN 32
 #define DEVICE_MAX_LEN 33
 #define RADIO_MAX_LEN 33
 struct mmi_unit_info {
@@ -68,7 +68,7 @@ struct mmi_chosen_info {
 	unsigned int mbmversion;
 	unsigned int boot_seq;
 	char baseband[BASEBAND_MAX_LEN];
-	char msm_hw[MSMHW_MAX_LEN];
+	char system_hw[SYSHW_MAX_LEN];
 };
 
 extern struct mmi_chosen_info mmi_chosen_data;
