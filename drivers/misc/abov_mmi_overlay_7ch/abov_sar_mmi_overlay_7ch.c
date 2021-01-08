@@ -51,6 +51,11 @@ static u8 checksum_l_bin;
 static u32 abov_channel_number = 0;
 static u32 abov_flash_erase_time = 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+#define USB_POWER_SUPPLY_NAME   "mtk_charger_type"
+#else
+#define USB_POWER_SUPPLY_NAME   "usb"
+#endif
 
 #define IDLE 0
 #define ACTIVE 1
@@ -844,8 +849,10 @@ static void abov_platform_data_of_init(struct i2c_client *client,
 	u32 cap_channel_ch0,cap_channel_ch1,cap_channel_ch2,cap_channel_ch3,cap_channel_ch4;
 	int ret;
 
-	client->irq = of_get_gpio(np, 0);
+	client->irq = of_get_named_gpio_flags(np, "abov,irq-gpio-std", 0, NULL);
+	//client->irq = of_get_gpio(np, 0);
 	pplatData->irq_gpio = client->irq;
+	LOG_INFO("irq_gpio = %d\n", pplatData->irq_gpio);
 
 	ret = of_property_read_u32(np, "cap,channel_number", &abov_channel_number);
 	if (ret < 0) {
@@ -1517,7 +1524,7 @@ static int ps_notify_callback(struct notifier_block *self,
 	if ((event == PSY_EVENT_PROP_ADDED || event == PSY_EVENT_PROP_CHANGED)
 #endif
 			&& psy && psy->desc->get_property && psy->desc->name &&
-			!strncmp(psy->desc->name, "usb", sizeof("usb"))){
+			!strncmp(psy->desc->name, USB_POWER_SUPPLY_NAME, sizeof(USB_POWER_SUPPLY_NAME))){
 		LOG_INFO("ps notification: event = %lu\n", event);
 		retval = ps_get_state(psy, &present);
 		if (retval) {
@@ -2610,7 +2617,7 @@ static int abov_probe(struct i2c_client *client, const struct i2c_device_id *id)
 			goto free_ps_notifier;
 		}
 
-		psy = power_supply_get_by_name("usb");
+		psy = power_supply_get_by_name(USB_POWER_SUPPLY_NAME);
 		if (psy) {
 			ret = ps_get_state(psy, &this->ps_is_present);
 			if (ret) {
