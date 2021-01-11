@@ -317,6 +317,7 @@ struct abovXX {
 	 * or does not work properly */
 	u8 useIrqTimer;
 	u8 read_reg;
+	u8 read_len;	//add to read serial multi-reg
 
 	// sensors enable flag
 	capsensor_enable_flag_t enable_flag;

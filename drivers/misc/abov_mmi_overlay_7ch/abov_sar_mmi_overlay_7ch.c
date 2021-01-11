@@ -71,6 +71,7 @@ static u32 abov_flash_erase_time = 0;
 static int last_val;
 static int mEnabled;
 static int programming_done;
+static bool user_debug = false;
 pabovXX_t abov_sar_ptr;
 
 /**
@@ -1368,30 +1369,45 @@ static ssize_t reg_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
 {
-	u8 reg_value = 0, i;
-	pabovXX_t this = abov_sar_ptr;
-	char *p = buf;
+	if(!user_debug) {
+		u8 reg_value = 0, i;
+		pabovXX_t this = abov_sar_ptr;
+		if(this->read_flag){
+			this->read_flag = 0;
+			for(i = 0 ; i < this->read_len ; i++){
+				read_register(this,(this->read_reg+i),&reg_value);
+				buf[i] = reg_value;
+				LOG_INFO("%s : buf[%d] = 0x%x\n",__func__,i,buf[i]);
+			}
+			return i;
+		}
+		return -1;
+	} else {
+		u8 reg_value = 0, i;
+		pabovXX_t this = abov_sar_ptr;
+		char *p = buf;
 
-	if (this->read_flag) {
-		this->read_flag = 0;
-		read_register(this, this->read_reg, &reg_value);
-		p += snprintf(p, PAGE_SIZE, "(0x%02x)=0x%02x\n", this->read_reg, reg_value);
+		if (this->read_flag) {
+			this->read_flag = 0;
+			read_register(this, this->read_reg, &reg_value);
+			p += snprintf(p, PAGE_SIZE, "(0x%02x)=0x%02x\n", this->read_reg, reg_value);
+			return (p-buf);
+		}
+
+		for (i = 0; i < 0x56; i++) {
+			read_register(this, i, &reg_value);
+			p += snprintf(p, PAGE_SIZE, "(0x%02x)=0x%02x\n",
+					i, reg_value);
+		}
+
+		for (i = 0x80; i < 0xB0; i++) {
+			read_register(this, i, &reg_value);
+			p += snprintf(p, PAGE_SIZE, "(0x%02x)=0x%02x\n",
+					i, reg_value);
+		}
+
 		return (p-buf);
 	}
-
-	for (i = 0; i < 0x56; i++) {
-		read_register(this, i, &reg_value);
-		p += snprintf(p, PAGE_SIZE, "(0x%02x)=0x%02x\n",
-				i, reg_value);
-	}
-
-	for (i = 0x80; i < 0xB0; i++) {
-		read_register(this, i, &reg_value);
-		p += snprintf(p, PAGE_SIZE, "(0x%02x)=0x%02x\n",
-				i, reg_value);
-	}
-
-	return (p-buf);
 }
 
 static ssize_t reg_store(struct class *class,
@@ -1399,22 +1415,72 @@ static ssize_t reg_store(struct class *class,
 		const char *buf, size_t count)
 {
 	pabovXX_t this = abov_sar_ptr;
-	unsigned int val, reg, opt;
-    if (sscanf(buf, "%x,%x,%x", &reg, &val, &opt) == 3) {
-		LOG_DBG("%s, read reg = 0x%02x\n", __func__, *(u8 *)&reg);
-		this->read_reg = *((u8 *)&reg);
-		this->read_flag = 1;
-	} else if (sscanf(buf, "%x,%x", &reg, &val) == 2) {
-		LOG_DBG("%s,reg = 0x%02x, val = 0x%02x\n",
-				__func__, *(u8 *)&reg, *(u8 *)&val);
-		write_register(this, *((u8 *)&reg), *((u8 *)&val));
-	}
+	if(!user_debug) {
+		u8 regaddr,val;
+		int i = 0;
 
+		if( count != 3){
+			LOG_ERR("%s :params error[ count == %d !=2]\n",__func__,count);
+			return -1;
+		}
+		for(i = 0 ; i < count ; i++)
+			LOG_INFO("%s : buf[%d] = 0x%x\n",__func__,i,buf[i]);
+		if(buf[2] == 0){
+			regaddr = buf[0];
+			val= buf[1];
+			write_register(this,regaddr,val);
+		} else if(buf[2] == 1) {
+			this->read_reg = buf[0];
+			this->read_len = buf[1];
+			this->read_flag = 1;
+			LOG_ERR("-----------%d\n",this->read_len);
+		}
+	} else {
+		unsigned int val, reg, opt;
+		if (sscanf(buf, "%x,%x,%x", &reg, &val, &opt) == 3) {
+			LOG_DBG("%s, read reg = 0x%02x\n", __func__, *(u8 *)&reg);
+			this->read_reg = *((u8 *)&reg);
+			this->read_flag = 1;
+		} else if (sscanf(buf, "%x,%x", &reg, &val) == 2) {
+			LOG_DBG("%s,reg = 0x%02x, val = 0x%02x\n",
+					__func__, *(u8 *)&reg, *(u8 *)&val);
+			write_register(this, *((u8 *)&reg), *((u8 *)&val));
+		}
+	}
 	return count;
 }
 
 
 static CLASS_ATTR_RW(reg);
+
+static ssize_t user_debug_status_store(struct class *class,
+		struct class_attribute *attr,
+		const char *buf, size_t count)
+{
+	if (!count )
+		return -EINVAL;
+
+	if (!strncmp(buf, "1", 1)) {
+		LOG_DBG("enable cap user debug\n");
+		user_debug = true;
+	} else if (!strncmp(buf, "0", 1)) {
+		LOG_DBG("disable cap user debug\n");
+		user_debug = false;
+	} else {
+		LOG_DBG("unknown enable symbol\n");
+	}
+
+	return count;
+}
+
+static ssize_t user_debug_status_show(struct class *class,
+		struct class_attribute *attr,
+		char *buf)
+{
+	return snprintf(buf,8,"%d\n",user_debug);
+}
+
+static CLASS_ATTR_RW(user_debug_status);
 
 static struct class capsense_class = {
 	.name			= "capsense",
@@ -2496,6 +2562,12 @@ static int abov_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		ret = class_create_file(&capsense_class, &class_attr_force_update_fw);
 		if (ret < 0) {
 			LOG_ERR("Create update_fw file failed (%d)\n", ret);
+			return ret;
+		}
+
+		ret = class_create_file(&capsense_class, &class_attr_user_debug_status);
+		if (ret < 0) {
+			LOG_DBG("Create user_debug_status file failed (%d)\n", ret);
 			return ret;
 		}
 		/*restore sys/class/capsense label*/
