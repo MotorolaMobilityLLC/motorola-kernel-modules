@@ -4,9 +4,9 @@
 #define CONFIG_CTS_PM_FB_NOTIFIER
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
-#ifdef CONFIG_DRM
-#define CFG_CTS_DRM_NOTIFIER
-#endif /*CONFIG_DRM_MSM */
+//#ifdef CONFIG_DRM
+//#define CFG_CTS_DRM_NOTIFIER
+//#endif /*CONFIG_DRM_MSM */
 #else /*CONFIG_CTS_PM_FB_NOTIFIER */
 #if defined(CONFIG_PM_SLEEP) && defined(CONFIG_PM_SUSPEND)
     //#define CONFIG_CTS_PM_GENERIC

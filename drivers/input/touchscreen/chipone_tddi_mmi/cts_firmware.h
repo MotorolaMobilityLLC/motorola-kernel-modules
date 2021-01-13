@@ -63,6 +63,6 @@ extern int cts_update_firmware_from_file(struct cts_device *cts_dev,
 
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
-extern u32 crc32(const u8 *data, size_t len);
+extern u32 cts_crc32(const u8 *data, size_t len);
 
 #endif /* CTS_FIRMWARE_H */

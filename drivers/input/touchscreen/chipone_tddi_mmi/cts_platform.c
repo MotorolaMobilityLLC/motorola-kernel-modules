@@ -132,8 +132,7 @@ int cts_spi_send_recv(struct cts_platform_data *pdata, size_t len,
 	struct spi_transfer cmd = {
 		.cs_change = 0,
 		.delay_usecs = 0,
-		//.speed_hz = pdata->spi_speed * 1000u,
-		.speed_hz = speed * 1000u,
+		.speed_hz = pdata->spi_speed * 1000u,
 		.tx_buf = tx_buffer,
 		.rx_buf = rx_buffer,
 		.len = len,
@@ -147,10 +146,8 @@ int cts_spi_send_recv(struct cts_platform_data *pdata, size_t len,
 
 	//cts_info("spi_speed=%d", speed);
 
-#if 1
-//#ifdef CFG_CTS_MANUAL_CS
-//	cts_plat_set_cs(pdata, 0);
-	cts_data->spi_client->chip_select = 0;
+#ifdef CFG_CTS_MANUAL_CS
+    cts_plat_set_cs(pdata, 0);
 #endif
 	spi_message_init(&msg);
 	spi_message_add_tail(&cmd, &msg);
@@ -210,10 +207,10 @@ int cts_plat_spi_write(struct cts_platform_data *pdata, u8 dev_addr,
 		pdata->spi_tx_buf[1] = *((u8 *) src + 1);
 		pdata->spi_tx_buf[2] = *((u8 *) src);
 		put_unaligned_le16(data_len, &pdata->spi_tx_buf[3]);
-		crc = (u16) crc32(pdata->spi_tx_buf, 5);
+		crc = (u16) cts_crc32(pdata->spi_tx_buf, 5);
 		put_unaligned_le16(crc, &pdata->spi_tx_buf[5]);
 		memcpy(&pdata->spi_tx_buf[7], (char *)src + 2, data_len);
-		crc = (u16) crc32((char *)src + 2, data_len);
+		crc = (u16) cts_crc32((char *)src + 2, data_len);
 		put_unaligned_le16(crc, &pdata->spi_tx_buf[7 + data_len]);
 		do {
 			ret =
@@ -272,7 +269,7 @@ int cts_plat_spi_read(struct cts_platform_data *pdata, u8 dev_addr,
 				pdata->spi_tx_buf[1] = wbuf[1];
 				pdata->spi_tx_buf[2] = wbuf[0];
 				put_unaligned_le16(rlen, &pdata->spi_tx_buf[3]);
-				crc = (u16) crc32(pdata->spi_tx_buf, 5);
+				crc = (u16) cts_crc32(pdata->spi_tx_buf, 5);
 				put_unaligned_le16(crc, &pdata->spi_tx_buf[5]);
 				ret =
 				    cts_spi_send_recv(pdata, 7,
@@ -301,7 +298,7 @@ int cts_plat_spi_read(struct cts_platform_data *pdata, u8 dev_addr,
 				continue;
 			}
 			memcpy(rbuf, pdata->spi_rx_buf, rlen);
-			crc = (u16) crc32(pdata->spi_rx_buf, rlen);
+			crc = (u16) cts_crc32(pdata->spi_rx_buf, rlen);
 			if (get_unaligned_le16(&pdata->spi_rx_buf[rlen]) != crc) {
 				cts_err("SPI RX CRC error: rx_crc %04x != %04x",
 					get_unaligned_le16(&pdata->spi_rx_buf[rlen]), crc);
@@ -356,7 +353,7 @@ int cts_plat_spi_read_delay_idle(struct cts_platform_data *pdata, u8 dev_addr,
 				pdata->spi_tx_buf[1] = wbuf[1];
 				pdata->spi_tx_buf[2] = wbuf[0];
 				put_unaligned_le16(rlen, &pdata->spi_tx_buf[3]);
-				crc = (u16) crc32(pdata->spi_tx_buf, 5);
+				crc = (u16) cts_crc32(pdata->spi_tx_buf, 5);
 				put_unaligned_le16(crc, &pdata->spi_tx_buf[5]);
 				ret =
 				    cts_spi_send_recv(pdata, 7,
@@ -384,7 +381,7 @@ int cts_plat_spi_read_delay_idle(struct cts_platform_data *pdata, u8 dev_addr,
 				continue;
 			}
 			memcpy(rbuf, pdata->spi_rx_buf, rlen);
-			crc = (u16) crc32(pdata->spi_rx_buf, rlen);
+			crc = (u16) cts_crc32(pdata->spi_rx_buf, rlen);
 			if (get_unaligned_le16(&pdata->spi_rx_buf[rlen]) != crc) {
 				continue;
 			}
@@ -572,6 +569,22 @@ static void cts_plat_touch_event_timeout_work(struct work_struct *work)
 }
 #endif
 
+int cts_plat_spi_setup(struct cts_platform_data *pdata)
+{
+    int ret;
+    pdata->spi_client->mode = SPI_MODE_0;
+    pdata->spi_client->bits_per_word = 8;
+    if(pdata->spi_client->max_speed_hz > 6000000)
+    {
+        pdata->spi_client->max_speed_hz = 6000000;
+    }
+    ret = spi_setup(pdata->spi_client);
+    if (ret) {
+        cts_err("spi_setup err!");
+    }
+    return 0;
+}
+
 #ifdef CONFIG_CTS_I2C_HOST
 int cts_init_platform_data(struct cts_platform_data *pdata,
 			   struct i2c_client *i2c_client)
@@ -691,6 +704,7 @@ int cts_init_platform_data(struct cts_platform_data *pdata,
 
 #ifndef CONFIG_CTS_I2C_HOST
 	pdata->spi_speed = CFG_CTS_SPI_SPEED_KHZ;
+	cts_plat_spi_setup(pdata);
 #endif
 	return 0;
 }
