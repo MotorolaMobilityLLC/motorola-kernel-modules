@@ -69,7 +69,7 @@ struct cts_firmware_sect_info {
     (get_unaligned_le32(DDIPARAM_CRC_SECTION(firmware) + 12))
 #define DDIPARAM_CRC_SECTION_SIZE   (17)
 
-u32 crc32(const u8 *data, size_t len)
+u32 cts_crc32(const u8 *data, size_t len)
 {
 	const static u32 crc32_table[] = {
 		0x00000000, 0x04C11DB7, 0x09823B6E, 0x0D4326D9, 0x130476DC,
@@ -199,7 +199,7 @@ static bool is_multi_section_firmware_valid(const struct cts_firmware *firmware)
 	u32 crc;
 
 	crc =
-	    crc32(FIRMWARE_SECTION(firmware), FIRMWARE_SECTION_SIZE(firmware));
+	    cts_crc32(FIRMWARE_SECTION(firmware), FIRMWARE_SECTION_SIZE(firmware));
 	if (crc != FIRMWARE_SECTION_CRC(firmware)) {
 		cts_err("Firmware-section crc mismatch crc-section %08x != %08x"
 			", File maybe broken!!!",
@@ -209,7 +209,7 @@ static bool is_multi_section_firmware_valid(const struct cts_firmware *firmware)
 
 	if (DDIPARAM_SECTION_ENABLE(firmware) == CTS_SECTION_ENABLE_FLAG) {
 		crc =
-		    crc32(DDIPARAM_SECTION(firmware),
+		    cts_crc32(DDIPARAM_SECTION(firmware),
 			  DDIPARAM_SECTION_SIZE(firmware));
 		if (crc != DDIPARAM_SECTION_CRC(firmware)) {
 			cts_err
@@ -244,7 +244,7 @@ static void parse_single_section_firmware(const struct cts_firmware *firmware,
 
 	info->firmware_sect = firmware->data;
 	info->firmware_sect_size = firmware->size;
-	info->firmware_sect_crc = crc32(firmware->data, firmware->size);
+	info->firmware_sect_crc = cts_crc32(firmware->data, firmware->size);
 
 	put_unaligned_le32(info->firmware_sect_crc, crc_sect);
 	put_unaligned_le32(info->firmware_sect_size, crc_sect + 4);
