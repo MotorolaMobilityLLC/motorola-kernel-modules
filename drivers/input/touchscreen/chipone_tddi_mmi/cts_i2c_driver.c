@@ -6,11 +6,11 @@
 #include "cts_sysfs.h"
 #include "cts_charger_detect.h"
 
+static void cts_resume_work_func(struct work_struct *work);
 #ifdef CFG_CTS_DRM_NOTIFIER
 #include <drm/drm_panel.h>
 static struct drm_panel *active_panel;
 static int check_dt(struct device_node *np);
-static void cts_resume_work_func(struct work_struct *work);
 #endif
 bool cts_show_debug_log = false;
 
@@ -99,8 +99,6 @@ static int cts_resume(struct chipone_ts_data *cts_data)
 	return 0;
 }
 
-#ifdef CONFIG_CTS_PM_FB_NOTIFIER
-#ifdef CFG_CTS_DRM_NOTIFIER
 static void cts_resume_work_func(struct work_struct *work)
 {
 	struct chipone_ts_data *cts_data =
@@ -108,6 +106,9 @@ static void cts_resume_work_func(struct work_struct *work)
 	cts_info("%s", __func__);
 	cts_resume(cts_data);
 }
+
+#ifdef CONFIG_CTS_PM_FB_NOTIFIER
+#ifdef CFG_CTS_DRM_NOTIFIER
 static int fb_notifier_callback(struct notifier_block *nb,
 				unsigned long action, void *data)
 {
@@ -158,7 +159,8 @@ static int fb_notifier_callback(struct notifier_block *nb,
 		if (action == FB_EVENT_BLANK) {
 			blank = *(int *)evdata->data;
 			if (blank == FB_BLANK_UNBLANK) {
-				cts_resume(cts_data);
+				//cts_resume(cts_data);
+				queue_work(cts_data->workqueue, &cts_data->ts_resume_work);
 				return NOTIFY_OK;
 			}
 		} else if (action == FB_EARLY_EVENT_BLANK) {
@@ -215,6 +217,7 @@ static int cts_deinit_pm_fb_notifier(struct chipone_ts_data *cts_data)
 }
 #endif /* CONFIG_CTS_PM_FB_NOTIFIER */
 
+#ifdef CFG_CTS_DRM_NOTIFIER
 static int check_dt(struct device_node *np)
 {
 	int i;
@@ -269,6 +272,7 @@ static int check_default_tp(struct device_node *dt, const char *prop)
 
 	return ret;
 }
+#endif
 
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_driver_probe(struct i2c_client *client,
@@ -280,6 +284,7 @@ static int cts_driver_probe(struct spi_device *client)
 	struct chipone_ts_data *cts_data = NULL;
 	int ret = 0;
 
+#ifdef CFG_CTS_DRM_NOTIFIER
 {
 	struct device_node *dp = client->dev.of_node;
 	if (check_dt(dp)) {
@@ -292,6 +297,8 @@ static int cts_driver_probe(struct spi_device *client)
     return ret;
 	}
 }
+#endif
+
 #ifdef CONFIG_CTS_I2C_HOST
 	cts_info("Probe i2c client: name='%s' addr=0x%02x flags=0x%02x irq=%d",
 		 client->name, client->addr, client->flags, client->irq);
