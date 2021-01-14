@@ -31,8 +31,8 @@ static u8 fpsensor_debug_level =DEBUG_LOG ;
 #define FPSENSOR_IOC_MAGIC    0xf0    //CHIP
 
 /**************** Custom device : platfotm  or spi **************/
-#define  USE_PLATFORM_BUS     1
-//#define  USE_SPI_BUS  1
+//#define  USE_PLATFORM_BUS     1
+#define  USE_SPI_BUS  1
 /**************************************************************/
 
 /* define commands */

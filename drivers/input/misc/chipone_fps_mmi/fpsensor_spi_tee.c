@@ -39,6 +39,9 @@
 #include "fpsensor_spi_tee.h"
 //#include "mach/mt_clkmgr.h" //kernel 3.18
 
+extern void mt_spi_enable_master_clk(struct spi_device *spidev);
+extern void mt_spi_disable_master_clk(struct spi_device *spidev);
+
 #define FPSENSOR_SPI_VERSION              "fpsensor_spi_tee_mtk_v1.23.1"
 #define FP_NOTIFY                         1
 
@@ -728,16 +731,7 @@ static int fpsensor_remove(struct platform_device *spi)
     return 0;
 }
 
-#if defined(USE_SPI_BUS)
-static int fpsensor_suspend(struct device *dev, pm_message_t state)
-{
-    return 0;
-}
-static int fpsensor_resume( struct device *dev)
-{
-    return 0;
-}
-#elif defined(USE_PLATFORM_BUS)
+#if defined(USE_PLATFORM_BUS)
 static int fpsensor_suspend(struct  platform_device *spi, pm_message_t state)
 {
     return 0;
@@ -750,7 +744,7 @@ static int fpsensor_resume(struct platform_device *spi)
 
 #ifdef CONFIG_OF
 static struct of_device_id fpsensor_of_match[] = {
-    { .compatible = "mediatek,chipone-fingerprint", },
+    { .compatible = "mediatek,fingerprintchipone", },
     {}
 };
 MODULE_DEVICE_TABLE(of, fpsensor_of_match);
@@ -768,8 +762,6 @@ static struct spi_driver fpsensor_spi_driver = {
     },
     .probe = fpsensor_probe,
     .remove = fpsensor_remove,
-    .suspend = fpsensor_suspend,
-    .resume = fpsensor_resume,
 };
 #elif defined(USE_PLATFORM_BUS)
 static struct platform_driver fpsensor_plat_driver = {
