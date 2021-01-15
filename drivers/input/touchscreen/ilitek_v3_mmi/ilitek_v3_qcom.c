@@ -25,14 +25,14 @@
 #ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
 #define register_panel_notifier panel_register_notifier
 #define unregister_panel_notifier panel_unregister_notifier
-enum touch_state {
-	TOUCH_DEEP_SLEEP_STATE = 0,
-	TOUCH_LOW_POWER_STATE,
-};
 #else
 #define register_panel_notifier(...) rc
 #define unregister_panel_notifier(...) rc
 #endif
+enum touch_state {
+	TOUCH_DEEP_SLEEP_STATE = 0,
+	TOUCH_LOW_POWER_STATE,
+};
 
 #ifdef ILI_SENSOR_EN
 static struct sensors_classdev __maybe_unused sensors_touch_cdev = {
@@ -503,7 +503,10 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 #ifdef ILI_SENSOR_EN
 			if (ilits->should_enable_gesture) {
 				ILI_INFO("double tap gesture suspend\n");
+				touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
 				return 1;
+			} else {
+				touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
 			}
 #endif
 			break;
