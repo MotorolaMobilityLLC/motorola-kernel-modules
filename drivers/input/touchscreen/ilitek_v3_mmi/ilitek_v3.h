@@ -103,6 +103,7 @@
 #endif
 #ifdef ILI_SENSOR_EN
 #include <linux/sensors.h>
+#include <linux/panel_notifier.h>
 #endif
 #ifdef ILI_CONFIG_PANEL_NOTIFICATIONS
 #include <linux/panel_notifier.h>
