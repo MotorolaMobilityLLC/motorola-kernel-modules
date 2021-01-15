@@ -1065,6 +1065,7 @@ void clear_chg_manager(struct mmi_charger_manager *chip)
 	chip->sys_therm_force_pmic_chrg = false;
 	chip->batt_therm_cooling = false;
 	chip->batt_therm_cooling_cnt = 0;
+	chip->pd_busy_cnt= 0;
 
 	memset(chip->mmi_pdo_info, 0,
 			sizeof(struct usbpd_pdo_info) * PD_MAX_PDO_NUM);

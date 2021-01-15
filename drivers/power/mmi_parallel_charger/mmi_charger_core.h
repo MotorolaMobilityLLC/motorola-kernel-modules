@@ -233,6 +233,7 @@ struct mmi_charger_manager {
 
 	int mmi_chrg_dev_num;
 	struct mmi_charger_device **chrg_list;	/*charger device list*/
+	int pd_busy_cnt;
 };
 
 extern bool mmi_get_pps_result_history(struct mmi_charger_manager *chip);

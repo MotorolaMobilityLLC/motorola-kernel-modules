@@ -379,6 +379,69 @@ void mmi_chrg_policy_clear(struct mmi_charger_manager *chip) {
 	return;
 }
 
+#define REV_BST_THRESH 4400000
+#define REV_BST_DROP 150000
+#define CP_IBUS_THRESH 20
+#define IBAT_THRESH 10000
+#define VBUS_THRESH 5600000
+#define PD_ERR_CNT 3
+static bool is_cable_plugout(struct mmi_charger_manager *chip)
+{
+	struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
+	union power_supply_propval prop = {0,};
+	enum power_supply_typec_mode typec_mode = POWER_SUPPLY_TYPEC_NONE;
+	int rc, vbus_volt, ibatt_curr, ibus_curr, vbatt_volt;
+	bool pd_active = 0;
+
+	if (chip->extrn_sense) {
+		ibatt_curr = chrg_list->chrg_dev[CP_MASTER]->charger_data.ibatt_curr;
+		ibatt_curr *= 1000;
+		vbatt_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbatt_volt;
+		vbatt_volt *= 1000;
+	} else {
+		ibatt_curr= chrg_list->chrg_dev[PMIC_SW]->charger_data.ibatt_curr;
+		vbatt_volt = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbatt_volt;
+	}
+	vbus_volt= chrg_list->chrg_dev[PMIC_SW]->charger_data.vbus_volt;
+	ibus_curr = chrg_list->chrg_dev[CP_MASTER]->charger_data.ibus_curr;
+	mmi_chrg_info(chip, "ibat:%d, vbat:%d, vbus:%d, ibus:%d\n",
+		ibatt_curr, vbatt_volt, vbus_volt, ibus_curr);
+
+	if (ibus_curr > CP_IBUS_THRESH || ibatt_curr > IBAT_THRESH)
+		return false;
+
+	if  (vbatt_volt >= vbus_volt
+		&& vbus_volt < REV_BST_THRESH) {
+			mmi_chrg_info(chip, "cable plug out: cp reverse\n");
+			return true;
+	}
+
+
+	rc = power_supply_get_property(chip->usb_psy,
+				POWER_SUPPLY_PROP_PD_ACTIVE, &prop);
+	if (!rc)
+		pd_active = prop.intval;
+	if (!pd_active){
+		mmi_chrg_info(chip, "cable plug out: pd inactive\n");
+		return true;
+	}
+
+	rc = power_supply_get_property(chip->usb_psy,
+				POWER_SUPPLY_PROP_TYPEC_MODE, &prop);
+	if (!rc)
+		typec_mode = prop.intval;
+
+	if (POWER_SUPPLY_TYPEC_SOURCE_DEFAULT == typec_mode
+		&& vbus_volt > VBUS_THRESH
+		&& chip->pd_busy_cnt > PD_ERR_CNT) {
+		mmi_chrg_info(chip, "cable plug out: cp double reverse\n");
+		chip->pd_busy_cnt = 0;
+		return true;
+	}
+
+	return false;
+}
+
 static void mmi_chrg_sm_work_func(struct work_struct *work)
 {
 	struct mmi_charger_manager *chip = container_of(work,
@@ -472,6 +535,9 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 	mmi_chrg_info(chip, "battery voltage %d\n", vbatt_volt);
 	mmi_chrg_info(chip, "battery temp %d\n", batt_temp);
 	mmi_chrg_info(chip, "battery capacity %d\n", batt_soc);
+
+	if (vbus_pres && is_cable_plugout(chip))
+		vbus_pres = 0;
 
 	if (vbus_pres &&
 		(sm_state == PM_STATE_PPS_TUNNING_CURR
@@ -1567,6 +1633,10 @@ schedule:
 								chip->mmi_pd_pdo_idx,
 								chip->pd_target_volt,
 								chip->pd_target_curr);
+	if (chip->pps_result == -EBUSY)
+		chip->pd_busy_cnt++;
+	else
+		chip->pd_busy_cnt = 0;
 	mmi_set_pps_result_history(chip, chip->pps_result);
 	if (!chip->pps_result) {
 		chip->pd_request_volt_prev = chip->pd_target_volt;
