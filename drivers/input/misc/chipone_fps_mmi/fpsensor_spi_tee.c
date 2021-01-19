@@ -5,76 +5,151 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/platform_device.h>
-//#include <linux/wakelock.h>
 #include <net/sock.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
 #include <linux/of_gpio.h>
 #include <linux/of_platform.h>
+#include <linux/ioctl.h>
+#include <linux/poll.h>
+#include <linux/workqueue.h>
+#include <linux/irq.h>
+#include <linux/spi/spi.h>
+#include <linux/spi/spidev.h>
 
-/* MTK header */
-//#include "mt_spi.h"
-//#include "mt_spi_hal.h"
-//#include "mt_gpio.h"
-//#include "mach/gpio_const.h"
+#include "fpsensor_spi_tee.h"
 
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
 
-#include <linux/ioctl.h>
-#include <linux/poll.h>
-#include <linux/workqueue.h>
+#ifdef CONFIG_MTK_CLKMGR
+#include "mach/mt_clkmgr.h"
+#endif
+#if !defined(CONFIG_MTK_CLKMGR)
+#include <linux/clk.h>
+#endif
 
-#include <linux/irq.h>
-
-#include <linux/spi/spi.h>
-#include <linux/spi/spidev.h>
-
-#if defined(USE_PLATFORM_BUS)
+#if USE_PLATFORM_BUS
 #include <linux/platform_device.h>
 #endif
 
-#include "fpsensor_spi_tee.h"
-//#include "mach/mt_clkmgr.h" //kernel 3.18
 
-extern void mt_spi_enable_master_clk(struct spi_device *spidev);
-extern void mt_spi_disable_master_clk(struct spi_device *spidev);
+#if FPSENSOR_WAKEUP_SOURCE
+#include <linux/pm_wakeup.h>
+#else
+#include <linux/wakelock.h>
+#endif
 
-#define FPSENSOR_SPI_VERSION              "fpsensor_spi_tee_mtk_v1.23.1"
-#define FP_NOTIFY                         1
+#if FPSENSOR_TKCORE_COMPATIBLE
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,0,0)
+#include "mt_spi.h"
+#include "mt_spi_hal.h"
+#include "mt_gpio.h"
+#include "mach/gpio_const.h"
+#else
+#include "fpsensor_spi_def.h"
+#endif
+//#include <tee_fp.h>
+//#include "../../../tee/tkcore/include/linux/tee_fp.h"
+#endif
 
-/* global variables */
+/*************************** global variables************************** */
 static fpsensor_data_t *g_fpsensor = NULL;
-uint32_t g_cmd_sn = 0;
+volatile static int fpsensor_balance_spi_clk = 0;
+
+/* regulator VDD select */
+#define FPSENSOR_VDD_NAME                 "fp_vdd"
+#define FPSENSOR_VDD_MIN_UV               3300000
+#define FPSENSOR_VDD_MAX_UV               3300000
+
+#if FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_MASTER_CLK
+extern void mt_spi_enable_master_clk(struct spi_device *spi);
+extern void mt_spi_disable_master_clk(struct spi_device *spi);
+
+#elif  FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_CLK
+struct mt_spi_t *mt_spi = NULL;
+extern void mt_spi_enable_clk(struct mt_spi_t *ms);
+extern void mt_spi_disable_clk(struct mt_spi_t *ms);
+
+#elif  FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_CLKMER
+extern void enable_clock(MT_CG_PERI_SPI0, "spi");
+extern void disable_clock(MT_CG_PERI_SPI0, "spi");
+#endif
+
+#if FPSENSOR_WAKEUP_SOURCE
+#if 0
+static inline void wakeup_source_prepare(struct wakeup_source *ws, const char *name)
+{
+    if (ws) {
+        memset(ws, 0, sizeof(*ws));
+        ws->name = name;
+    }
+}
+
+static inline void wakeup_source_drop(struct wakeup_source *ws)
+{
+    if (!ws)
+        return;
+
+    __pm_relax(ws);
+}
+
+static inline void wakeup_source_init(struct wakeup_source *ws,
+                      const char *name)
+{
+    wakeup_source_prepare(ws, name);
+    wakeup_source_add(ws);
+}
+
+static inline void wakeup_source_trash(struct wakeup_source *ws)
+{
+    wakeup_source_remove(ws);
+    wakeup_source_drop(ws);
+}
+#endif
+#endif
+
+#if FPSENSOR_TKCORE_COMPATIBLE
+static int tee_spi_transfer(const char *txbuf, char *rxbuf, int len)
+{
+    struct spi_transfer t;
+    struct spi_message m;
+    memset(&t, 0, sizeof(t));
+    spi_message_init(&m);
+    t.tx_buf = txbuf;
+    t.rx_buf = rxbuf;
+    t.bits_per_word = 8;
+    t.len = len;
+    t.speed_hz = 1*1000000;
+    spi_message_add_tail(&t, &m);
+    return spi_sync(g_fpsensor->spi, &m);
+}
+#endif
 
 /* -------------------------------------------------------------------- */
 /* fingerprint chip hardware configuration                              */
 /* -------------------------------------------------------------------- */
+
 static DEFINE_MUTEX(spidev_set_gpio_mutex);
-static void fpsensor_hw_reset(int delay);
 static void spidev_gpio_as_int(fpsensor_data_t *fpsensor)
 {
-    fpsensor_debug(DEBUG_LOG, "[fpsensor]----%s---\n", __func__);
+    FUNC_ENTRY();
     mutex_lock(&spidev_set_gpio_mutex);
-    fpsensor_debug(DEBUG_LOG,"[fpsensor]spidev_gpio_as_int\n");
-    pinctrl_select_state(fpsensor->pinctrl1, fpsensor->eint_as_int);
+    pinctrl_select_state(fpsensor->pinctrl, fpsensor->eint_as_int);
     mutex_unlock(&spidev_set_gpio_mutex);
+    FUNC_EXIT();
 }
 static int fpsensor_irq_gpio_cfg(fpsensor_data_t *fpsensor)
 {
     struct device_node *node;
-    //fpsensor_data_t *fpsensor;
     u32 ints[2] = {0, 0};
-    fpsensor_debug(DEBUG_LOG,"%s\n", __func__);
-
-    //fpsensor = g_fpsensor;
+    int status = 0;
 
     spidev_gpio_as_int(fpsensor);
 
-    node = of_find_compatible_node(NULL, NULL, "mediatek,chipone-fingerprint");
-    if ( node) {
+    node = of_find_compatible_node(NULL, NULL, FPSENSOR_DTS_NODE);
+    if (node) {
         of_property_read_u32_array( node, "debounce", ints, ARRAY_SIZE(ints));
         // gpio_request(ints[0], "fpsensor-irq");
         // gpio_set_debounce(ints[0], ints[1]);
@@ -83,16 +158,15 @@ static int fpsensor_irq_gpio_cfg(fpsensor_data_t *fpsensor)
         fpsensor->irq = irq_of_parse_and_map(node, 0);  // get irq number
         if (!fpsensor->irq) {
             fpsensor_debug(ERR_LOG,"fpsensor irq_of_parse_and_map fail!!\n");
-            return -EINVAL;
+            status = -EINVAL;
         }
         fpsensor_debug(DEBUG_LOG," [fpsensor]fpsensor->irq= %d,fpsensor>irq_gpio = %d\n", fpsensor->irq,
                        fpsensor->irq_gpio);
     } else {
-        fpsensor_debug(ERR_LOG,"fpsensor null irq node!!\n");
-        return -EINVAL;
+        fpsensor_debug(ERR_LOG,"fpsensor node null !!\n");
+        status = -EINVAL;
     }
-
-    return 0 ;
+    return status ;
 }
 
 void fpsensor_gpio_output_dts(int gpio, int level)
@@ -101,21 +175,34 @@ void fpsensor_gpio_output_dts(int gpio, int level)
     fpsensor_debug(DEBUG_LOG, "[fpsensor]fpsensor_gpio_output_dts: gpio= %d, level = %d\n", gpio, level);
     if (gpio == FPSENSOR_RST_PIN) {
         if (level) {
-            pinctrl_select_state(g_fpsensor->pinctrl1, g_fpsensor->fp_rst_high);
+            pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_rst_high);
         } else {
-            pinctrl_select_state(g_fpsensor->pinctrl1, g_fpsensor->fp_rst_low);
+            pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_rst_low);
         }
-    } else if (gpio == FPSENSOR_SPI_CS_PIN) {
-        pinctrl_select_state(g_fpsensor->pinctrl1, g_fpsensor->fp_cs_low);
-    } else if (gpio == FPSENSOR_SPI_MO_PIN) {
-        pinctrl_select_state(g_fpsensor->pinctrl1, g_fpsensor->fp_mo_low);
-    } else if (gpio == FPSENSOR_SPI_CK_PIN) {
-        pinctrl_select_state(g_fpsensor->pinctrl1, g_fpsensor->fp_ck_low);
-    } else if (gpio == FPSENSOR_SPI_MI_PIN) {
-        pinctrl_select_state(g_fpsensor->pinctrl1, g_fpsensor->fp_mi_low);
     }
+#if FPSENSOR_SPI_PIN_SET
+    else if (gpio == FPSENSOR_SPI_CS_PIN) {
+        pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_cs_set);
+    } else if (gpio == FPSENSOR_SPI_MO_PIN) {
+        pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_mo_set);
+    } else if (gpio == FPSENSOR_SPI_CK_PIN) {
+        pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_clk_set);
+    } else if (gpio == FPSENSOR_SPI_MI_PIN) {
+        pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_mi_set);
+    }
+#endif
+#if FPSENSOR_USE_POWER_GPIO
+     else if (gpio == FPSENSOR_POWER_PIN) {
+        if (level) {
+            pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_power_on);
+        } else {
+            pinctrl_select_state(g_fpsensor->pinctrl, g_fpsensor->fp_power_off);
+        }
+    }
+#endif
     mutex_unlock(&spidev_set_gpio_mutex);
 }
+
 int fpsensor_gpio_wirte(int gpio, int value)
 {
     fpsensor_gpio_output_dts(gpio, value);
@@ -131,66 +218,75 @@ int fpsensor_spidev_dts_init(fpsensor_data_t *fpsensor)
     struct device_node *node = NULL;
     struct platform_device *pdev = NULL;
     int ret = 0;
-    fpsensor_debug(DEBUG_LOG, "%s\n", __func__);
-
-    node = of_find_compatible_node(NULL, NULL, "mediatek,chipone-fingerprint");
+    fpsensor_debug(ERR_LOG,"fpsensor_spidev_dts_init Enter.\n");
+    node = of_find_compatible_node(NULL, NULL, FPSENSOR_DTS_NODE);
     if (node) {
         pdev = of_find_device_by_node(node);
         if(pdev) {
-            fpsensor->pinctrl1 = devm_pinctrl_get(&pdev->dev);
-            if (IS_ERR(fpsensor->pinctrl1)) {
-                ret = PTR_ERR(fpsensor->pinctrl1);
-                fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl1.\n");
+            #if FPSENSOR_PMIC_LDO
+            fpsensor->fp_regulator = regulator_get(&pdev->dev, "vdd");
+            if (IS_ERR(fpsensor->fp_regulator)) {
+                ret = PTR_ERR(fpsensor->fp_regulator);
+                fpsensor_debug(ERR_LOG, "fpsensor Regulator get failed vdd err\n");
+                return ret;
+            }
+            #endif
+
+            fpsensor->pinctrl = devm_pinctrl_get(&pdev->dev);
+            if (IS_ERR(fpsensor->pinctrl)) {
+                ret = PTR_ERR(fpsensor->pinctrl);
+                fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl.\n");
                 return ret;
             }
         } else {
             fpsensor_debug(ERR_LOG,"fpsensor Cannot find device.\n");
             return -ENODEV;
         }
-        fpsensor->eint_as_int = pinctrl_lookup_state(fpsensor->pinctrl1, "fpsensor_eint_as_int");
+        fpsensor->eint_as_int = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_INT_SET);
         if (IS_ERR(fpsensor->eint_as_int)) {
             ret = PTR_ERR(fpsensor->eint_as_int);
             fpsensor_debug(ERR_LOG, "fpsensor Cannot find fp pinctrl eint_as_int!\n");
             return ret;
         }
-        fpsensor->fp_rst_low = pinctrl_lookup_state(fpsensor->pinctrl1, "fpsensor_finger_rst_low");
+        fpsensor->fp_rst_low = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_RESET_LOW);
         if (IS_ERR(fpsensor->fp_rst_low)) {
             ret = PTR_ERR(fpsensor->fp_rst_low);
             fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_rst_low!\n");
             return ret;
         }
-        fpsensor->fp_rst_high = pinctrl_lookup_state(fpsensor->pinctrl1, "fpsensor_finger_rst_high");
+        fpsensor->fp_rst_high = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_RESET_HIGH);
         if (IS_ERR(fpsensor->fp_rst_high)) {
             ret = PTR_ERR(fpsensor->fp_rst_high);
-            fpsensor_debug(ERR_LOG, "fpsensor Cannot find fp pinctrl fp_rst_high!\n");
+            fpsensor_debug(ERR_LOG, "fpsensor Cannot find fp pinctr fp_rst_high!\n");
             return ret;
         }
 
-        fpsensor->fp_cs_low = pinctrl_lookup_state(fpsensor->pinctrl1, "fpsensor_spi_cs_low");
-        if (IS_ERR(fpsensor->fp_cs_low)) {
-            ret = PTR_ERR(fpsensor->fp_cs_low);
-            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_cs_low!\n");
+#if FPSENSOR_SPI_PIN_SET
+        fpsensor->fp_cs_set = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_CS_SET);
+        if (IS_ERR(fpsensor->fp_cs_set)) {
+            ret = PTR_ERR(fpsensor->fp_cs_set);
+            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_cs_set!\n");
             return ret;
         }
 
-        fpsensor->fp_mo_low = pinctrl_lookup_state(fpsensor->pinctrl1, "fpsensor_spi_mo_low");
-        if (IS_ERR(fpsensor->fp_mo_low)) {
-            ret = PTR_ERR(fpsensor->fp_mo_low);
-            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_mo_low!\n");
+        fpsensor->fp_mo_set = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_MO_SET);
+        if (IS_ERR(fpsensor->fp_mo_set)) {
+            ret = PTR_ERR(fpsensor->fp_mo_set);
+            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_mo_set!\n");
             return ret;
         }
 
-        fpsensor->fp_mi_low = pinctrl_lookup_state(fpsensor->pinctrl1, "fpsensor_spi_mi_low");
-        if (IS_ERR(fpsensor->fp_mi_low)) {
-            ret = PTR_ERR(fpsensor->fp_mi_low);
-            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_mi_low!\n");
+        fpsensor->fp_mi_set = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_MI_SET);
+        if (IS_ERR(fpsensor->fp_mi_set)) {
+            ret = PTR_ERR(fpsensor->fp_mi_set);
+            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_mi_set!\n");
             return ret;
         }
 
-        fpsensor->fp_ck_low = pinctrl_lookup_state(fpsensor->pinctrl1, "fpsensor_spi_mclk_low");
-        if (IS_ERR(fpsensor->fp_ck_low)) {
-            ret = PTR_ERR(fpsensor->fp_ck_low);
-            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_ck_low!\n");
+        fpsensor->fp_clk_set = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_CLK_SET);
+        if (IS_ERR(fpsensor->fp_clk_set)) {
+            ret = PTR_ERR(fpsensor->fp_clk_set);
+            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_clk_set!\n");
             return ret;
         }
 
@@ -199,6 +295,24 @@ int fpsensor_spidev_dts_init(fpsensor_data_t *fpsensor)
         fpsensor_gpio_output_dts(FPSENSOR_SPI_CK_PIN, 0);
         fpsensor_gpio_output_dts(FPSENSOR_SPI_CS_PIN, 0);
 
+#endif
+
+#if FPSENSOR_USE_POWER_GPIO
+       fpsensor->fp_power_on = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_POWER_ON);
+        if (IS_ERR(fpsensor->fp_power_on)) {
+            ret = PTR_ERR(fpsensor->fp_power_on);
+            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_power_on!\n");
+            return ret;
+        }
+
+        fpsensor->fp_power_off = pinctrl_lookup_state(fpsensor->pinctrl, FPSENSOR_POWER_OFF);
+        if (IS_ERR(fpsensor->fp_power_off)) {
+            ret = PTR_ERR(fpsensor->fp_power_off);
+            fpsensor_debug(ERR_LOG,"fpsensor Cannot find fp pinctrl fp_clk_set!\n");
+            return ret;
+        }
+        fpsensor_gpio_output_dts(FPSENSOR_POWER_PIN, 1);
+#endif
     } else {
         fpsensor_debug(ERR_LOG,"fpsensor Cannot find node!\n");
         return -ENODEV;
@@ -209,8 +323,7 @@ int fpsensor_spidev_dts_init(fpsensor_data_t *fpsensor)
 static void fpsensor_hw_reset(int delay)
 {
     FUNC_ENTRY();
-
-    fpsensor_gpio_wirte(FPSENSOR_RST_PIN,    1);
+    fpsensor_gpio_wirte(FPSENSOR_RST_PIN,  1);
     udelay(100);
     fpsensor_gpio_wirte(FPSENSOR_RST_PIN,  0);
     udelay(1000);
@@ -219,25 +332,36 @@ static void fpsensor_hw_reset(int delay)
         /* delay is configurable */
         udelay(delay);
     }
-
     FUNC_EXIT();
     return;
 }
+
+
+
 static void fpsensor_spi_clk_enable(u8 bonoff)
 {
-#if defined(USE_SPI_BUS)
-    if (bonoff == 0) {
-        mt_spi_disable_master_clk(g_fpsensor->spi);
-    } else {
-        mt_spi_enable_master_clk(g_fpsensor->spi);
-    }
-#elif defined(USE_PLATFORM_BUS)
-    if (bonoff == 0) {
-        //enable_clock(MT_CG_PERI_SPI0, "spi");
-    } else {
-        //disable_clock(MT_CG_PERI_SPI0, "spi");
-    }
-#endif
+	if (bonoff == 0 &&(fpsensor_balance_spi_clk == 1)) {
+	#if FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_MASTER_CLKs
+		mt_spi_disable_master_clk(g_fpsensor->spi);
+	#elif  FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_CLK
+		mt_spi = spi_master_get_devdata(g_fpsensor->spi->master);
+		mt_spi_disable_clk(mt_spi);
+	#elif  FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_CLKMER
+		disable_clock(MT_CG_PERI_SPI0, "spi");
+	#endif
+		fpsensor_balance_spi_clk = 0;
+	}
+	else if(bonoff == 1&& (fpsensor_balance_spi_clk == 0)) {
+	#if FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_MASTER_CLK
+		mt_spi_enable_master_clk(g_fpsensor->spi);
+	#elif  FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_CLK
+		mt_spi = spi_master_get_devdata(g_fpsensor->spi->master);
+		mt_spi_disable_clk(mt_spi);
+	#elif  FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_CLKMER
+		enable_clock(MT_CG_PERI_SPI0, "spi");
+	#endif
+		fpsensor_balance_spi_clk = 1;
+	}
 }
 
 static void setRcvIRQ(int val)
@@ -292,7 +416,11 @@ static irqreturn_t fpsensor_irq(int irq, void *handle)
     /* Make sure 'wakeup_enabled' is updated before using it
     ** since this is interrupt context (other thread...) */
     smp_rmb();
+#if FPSENSOR_WAKEUP_SOURCE
+	__pm_wakeup_event(&fpsensor_dev->ttw_wl, msecs_to_jiffies(1000));
+#else
     wake_lock_timeout(&fpsensor_dev->ttw_wl, msecs_to_jiffies(1000));
+#endif
     setRcvIRQ(1);
     wake_up_interruptible(&fpsensor_dev->wq_irq_return);
 
@@ -316,7 +444,7 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 {
     fpsensor_data_t *fpsensor_dev = NULL;
     int retval = 0;
-    uint32_t val = 0;
+    unsigned int val = 0;
     int irqf;
 
     fpsensor_debug(INFO_LOG, "[rickon]: fpsensor ioctl cmd : 0x%x \n", cmd );
@@ -325,14 +453,12 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     switch (cmd) {
     case FPSENSOR_IOC_INIT:
         fpsensor_debug(INFO_LOG, "%s: fpsensor init started======\n", __func__);
-        retval = fpsensor_spidev_dts_init(fpsensor_dev);
-        if (retval) {
-            break;
-        }
+
         if(fpsensor_irq_gpio_cfg(fpsensor_dev) != 0) {
-            break;
+	retval = -1;
+	break;
         }
-        //regist irq
+
         irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
         retval = request_threaded_irq(fpsensor_dev->irq, fpsensor_irq, NULL,
                                       irqf, FPSENSOR_DEV_NAME, fpsensor_dev);
@@ -344,7 +470,6 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         }
         enable_irq_wake(g_fpsensor->irq);
         fpsensor_dev->device_available = 1;
-        // fix Unbalanced enable for IRQ, disable irq at first
         fpsensor_dev->irq_enabled = 1;
         fpsensor_disable_irq(fpsensor_dev);
         fpsensor_debug(INFO_LOG, "%s: fpsensor init finished======\n", __func__);
@@ -376,7 +501,7 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         break;
     case FPSENSOR_IOC_GET_INT_VAL:
         val = gpio_get_value(fpsensor_dev->irq_gpio);
-        if (copy_to_user((void __user *)arg, (void *)&val, sizeof(uint32_t))) {
+        if (copy_to_user((void __user *)arg, (void *)&val, sizeof(unsigned int))) {
             fpsensor_debug(ERR_LOG, "Failed to copy data to user\n");
             retval = -EFAULT;
             break;
@@ -420,7 +545,7 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     case FPSENSOR_IOC_GET_FP_STATUS :
         val = fpsensor_dev->fb_status;
         fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_GET_FP_STATUS  %d \n",__func__, fpsensor_dev->fb_status);
-        if (copy_to_user((void __user *)arg, (void *)&val, sizeof(uint32_t))) {
+        if (copy_to_user((void __user *)arg, (void *)&val, sizeof(unsigned int))) {
             fpsensor_debug(ERR_LOG, "Failed to copy data to user\n");
             retval = -EFAULT;
             break;
@@ -429,23 +554,21 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         break;
 #endif
     case FPSENSOR_IOC_ENABLE_REPORT_BLANKON:
-        if (copy_from_user(&val, (void __user *)arg, sizeof(uint32_t))) {
+        if (copy_from_user(&val, (void __user *)arg, 4)) {
             retval = -EFAULT;
             break;
         }
         fpsensor_dev->enable_report_blankon = val;
-        fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_ENABLE_REPORT_BLANKON: %d\n", __func__, val);
         break;
     case FPSENSOR_IOC_UPDATE_DRIVER_SN:
-        if (copy_from_user(&g_cmd_sn, (void __user *)arg, sizeof(uint32_t))) {
+        if (copy_from_user(&g_cmd_sn, (unsigned int *)arg, sizeof(unsigned int))) {
             fpsensor_debug(ERR_LOG, "Failed to copy g_cmd_sn from user to kernel\n");
             retval = -EFAULT;
             break;
         }
-        //fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_UPDATE_DRIVER_SN: %d\n", __func__, g_cmd_sn);
         break;
     default:
-        fpsensor_debug(ERR_LOG, "fpsensor doesn't support this command(0x%x)\n", cmd);
+        fpsensor_debug(ERR_LOG, "fpsensor doesn't support this command(%d)\n", cmd);
         break;
     }
 
@@ -509,7 +632,7 @@ static int fpsensor_release(struct inode *inode, struct file *filp)
 
     /*last close??*/
     fpsensor_dev->users--;
-    if (fpsensor_dev->users <= 0) {
+    if (fpsensor_dev->users == 0) {
         fpsensor_debug(INFO_LOG, "%s, disble_irq. irq = %d\n", __func__, fpsensor_dev->irq);
         fpsensor_disable_irq(fpsensor_dev);
     }
@@ -554,16 +677,16 @@ static int fpsensor_dev_setup(fpsensor_data_t *fpsensor)
 
     FUNC_ENTRY();
 
-    if (fpsensor_dev_major) {
-        dev_no = MKDEV(fpsensor_dev_major, fpsensor_dev_minor);
-        ret = register_chrdev_region(dev_no, FPSENSOR_NR_DEVS, FPSENSOR_DEV_NAME);
-    } else {
+    //if (fpsensor_dev_major) {
+    //    dev_no = MKDEV(fpsensor_dev_major, fpsensor_dev_minor);
+    //    ret = register_chrdev_region(dev_no, FPSENSOR_NR_DEVS, FPSENSOR_DEV_NAME);
+    //} else {
         ret = alloc_chrdev_region(&dev_no, fpsensor_dev_minor, FPSENSOR_NR_DEVS, FPSENSOR_DEV_NAME);
         fpsensor_dev_major = MAJOR(dev_no);
         fpsensor_dev_minor = MINOR(dev_no);
         fpsensor_debug(INFO_LOG, "fpsensor device major is %d, minor is %d\n",
                        fpsensor_dev_major, fpsensor_dev_minor);
-    }
+    //}
 
     if (ret < 0) {
         fpsensor_debug(ERR_LOG, "can not get device major number %d\n", fpsensor_dev_major);
@@ -652,18 +775,168 @@ static int fpsensor_fb_notifier_callback(struct notifier_block* self, unsigned l
 }
 #endif
 
+#if FPSENSOR_TKCORE_COMPATIBLE
+static struct mt_chip_conf fpsensor_spi_conf_mt65xx = {
+    .setuptime = 15,
+    .holdtime = 15,
+    .high_time = 21,
+    .low_time = 21,
+    .cs_idletime = 20,
+    .ulthgh_thrsh = 0,
 
-#if defined(USE_SPI_BUS)
+    .cpol = 0,
+    .cpha = 0,
+
+    .rx_mlsb = 1,
+    .tx_mlsb = 1,
+
+    .tx_endian = 0,
+    .rx_endian = 0,
+
+    .com_mod = FIFO_TRANSFER,
+    .pause = 1,
+    .finish_intr = 1,
+    .deassert = 0,
+    .ulthigh = 0,
+    .tckdly = 0,
+};
+
+typedef enum {
+    SPEED_500KHZ = 500,
+    SPEED_1MHZ = 1000,
+    SPEED_2MHZ = 2000,
+    SPEED_3MHZ = 3000,
+    SPEED_4MHZ = 4000,
+    SPEED_6MHZ = 6000,
+    SPEED_8MHZ = 8000,
+    SPEED_KEEP,
+    SPEED_UNSUPPORTED
+} SPI_SPEED;
+
+void fpsensor_spi_set_mode(struct spi_device *spi, SPI_SPEED speed, int flag)
+{
+    struct mt_chip_conf *mcc = &fpsensor_spi_conf_mt65xx;
+
+    if (flag == 0) {
+        mcc->com_mod = FIFO_TRANSFER;
+    } else {
+        mcc->com_mod = DMA_TRANSFER;
+    }
+
+    switch (speed) {
+    case SPEED_500KHZ:
+        mcc->high_time = 120;
+        mcc->low_time = 120;
+        break;
+    case SPEED_1MHZ:
+        mcc->high_time = 60;
+        mcc->low_time = 60;
+        break;
+    case SPEED_2MHZ:
+        mcc->high_time = 30;
+        mcc->low_time = 30;
+        break;
+    case SPEED_3MHZ:
+        mcc->high_time = 20;
+        mcc->low_time = 20;
+        break;
+    case SPEED_4MHZ:
+        mcc->high_time = 15;
+        mcc->low_time = 15;
+        break;
+    case SPEED_6MHZ:
+        mcc->high_time = 10;
+        mcc->low_time = 10;
+        break;
+    case SPEED_8MHZ:
+        mcc->high_time = 8;
+        mcc->low_time = 8;
+        break;
+    case SPEED_KEEP:
+    case SPEED_UNSUPPORTED:
+        break;
+    }
+
+    if (spi_setup(spi) < 0) {
+        fpsensor_debug(ERR_LOG, "fpsensor:Failed to set spi.\n");
+    }
+}
+
+/* -------------------------------------------------------------------- */
+int fpsensor_spi_setup(fpsensor_data_t *fpsensor)
+{
+    int ret = 0;
+
+    FUNC_ENTRY();
+    fpsensor->spi->mode = SPI_MODE_0;
+    fpsensor->spi->bits_per_word = 8;
+//    fpsensor->spi->chip_select = 0;
+    fpsensor->spi->controller_data = (void *)&fpsensor_spi_conf_mt65xx;
+    ret = spi_setup(fpsensor->spi);
+    if (ret < 0) {
+        fpsensor_debug(ERR_LOG, "spi_setup failed\n");
+        return ret;
+    }
+    fpsensor_spi_set_mode(fpsensor->spi, fpsensor->spi_freq_khz, 0);
+
+    return ret;
+}
+
+int fpsensor_detect_hwid(fpsensor_data_t *fpsensor_dev)
+{
+    unsigned int hwid = 0, status = 0, match= 0, retry = 2;
+    unsigned char chipid_tx[4] = {0};
+    unsigned char chipid_rx[4] = {0};
+
+    fpsensor_hw_reset(1250);
+	fpsensor_dev->spi_freq_khz = 6000u;
+    fpsensor_spi_setup(fpsensor_dev);
+
+    do {
+	    chipid_tx[0] = 0x08;
+	    chipid_tx[1] = 0x55;
+	    //status = tee_spi_transfer((void*)&fpsensor_spi_conf_mt65xx, sizeof(fpsensor_spi_conf_mt65xx), chipid_tx, chipid_rx, 2);
+               status = tee_spi_transfer(chipid_tx, chipid_rx, 2);
+	    if (status != 0) {
+		fpsensor_debug(ERR_LOG, "%s, tee spi transfer failed, status=0x%x .\n", __func__,status);
+		return status;
+	    }
+
+	    chipid_tx[0] = 0x00;
+	    chipid_rx[1] = 0x00;
+	    chipid_rx[2] = 0x00;
+		//status = tee_spi_transfer((void*)&fpsensor_spi_conf_mt65xx, sizeof(fpsensor_spi_conf_mt65xx), chipid_tx, chipid_rx, 3);
+               status = tee_spi_transfer(chipid_tx, chipid_rx, 3);
+	    if (status == 0) {
+	        fpsensor_debug(DEBUG_LOG, "chipid_rx : %x  %x  %x  %x \n",chipid_rx[0],chipid_rx[1],chipid_rx[2],chipid_rx[3]);
+	        hwid = (chipid_rx[1] << 8) | (chipid_rx[2]);
+	        if ((hwid == 0x7332) || (hwid == 0x7153) || (hwid == 0x7230) ||(hwid == 0x7222)||(hwid == 0x7312)){
+	            fpsensor_debug(DEBUG_LOG,"get HWID == 0x%x, is fpsensor.\n",hwid);
+	            match = 0;
+	        }
+	else{
+		match = -1;
+	}
+	return match;
+	}
+	else{
+		return status;
+	    }
+    }
+    while (retry--);
+}
+#endif
+
+
+#if USE_SPI_BUS
 static int fpsensor_probe(struct spi_device *spi)
-#elif defined(USE_PLATFORM_BUS)
+#elif USE_PLATFORM_BUS
 static int fpsensor_probe(struct platform_device *spi)
 #endif
 {
     int status = 0;
     fpsensor_data_t *fpsensor_dev = NULL;
-
     FUNC_ENTRY();
-
     /* Allocate driver data */
     fpsensor_dev = kzalloc(sizeof(*fpsensor_dev), GFP_KERNEL);
     if (!fpsensor_dev) {
@@ -674,42 +947,93 @@ static int fpsensor_probe(struct platform_device *spi)
 
     /* Initialize the driver data */
     g_fpsensor = fpsensor_dev;
-    fpsensor_dev->spi               = spi ;
+    spi->chip_select                = 0;
+    fpsensor_dev->spi               = spi;
     fpsensor_dev->device_available  = 0;
     fpsensor_dev->users             = 0;
     fpsensor_dev->irq               = 0;
     fpsensor_dev->irq_gpio          = 0;
     fpsensor_dev->irq_enabled       = 0;
     fpsensor_dev->free_flag         = 0;
+
+    status = fpsensor_spidev_dts_init(fpsensor_dev);
+    if (status < 0)
+    {
+	fpsensor_debug(ERR_LOG, "%s, fpsensor_spidev_dts_init failed.\n", __func__);
+	goto err0;
+    }
+    #if FPSENSOR_PMIC_LDO
+    if (regulator_count_voltages(fpsensor_dev->fp_regulator) > 0) {
+        status = regulator_set_voltage(fpsensor_dev->fp_regulator, FPSENSOR_VDD_MIN_UV,FPSENSOR_VDD_MAX_UV);
+        if (status) {
+	fpsensor_debug(ERR_LOG, "fpsensor Regulator set_vtg failed vdd err \n");
+	goto err0;
+        }
+    }
+
+    status = regulator_enable(fpsensor_dev->fp_regulator);
+    if (status) {
+        fpsensor_debug(ERR_LOG, "Regulator vdd enable failed status = %d\n", status);
+        goto err0;
+    }
+    #endif
+#if FPSENSOR_TKCORE_COMPATIBLE
+    fpsensor_spi_clk_enable(1);
+    status = fpsensor_detect_hwid(fpsensor_dev);
+    fpsensor_spi_clk_enable(0);
+    if (0 != status)
+    {
+	fpsensor_debug(ERR_LOG, " get chip id error.\n");
+	goto err2;
+    }
+#endif
     /* setup a char device for fpsensor */
     status = fpsensor_dev_setup(fpsensor_dev);
     if (status) {
         fpsensor_debug(ERR_LOG, "fpsensor setup char device failed, %d", status);
-        goto release_drv_data;
+        goto err2;
     }
-    fpsensor_spi_clk_enable(1);
     init_waitqueue_head(&fpsensor_dev->wq_irq_return);
+#if FPSENSOR_WAKEUP_SOURCE
+    wakeup_source_init(&g_fpsensor->ttw_wl , "fpsensor_ttw_wl");
+#else
     wake_lock_init(&g_fpsensor->ttw_wl, WAKE_LOCK_SUSPEND, "fpsensor_ttw_wl");
+#endif
     fpsensor_dev->device_available = 1;
 #if FP_NOTIFY
     fpsensor_dev->notifier.notifier_call = fpsensor_fb_notifier_callback;
     fb_register_client(&fpsensor_dev->notifier);
 #endif
 
+    fpsensor_spi_clk_enable(1);
+
     fpsensor_debug(INFO_LOG, "%s finished, driver version: %s\n", __func__, FPSENSOR_SPI_VERSION);
     goto out;
 
-release_drv_data:
-    kfree(fpsensor_dev);
-    fpsensor_dev = NULL;
+err2:
+	 if(fpsensor_dev->pinctrl != NULL)
+	    devm_pinctrl_put(fpsensor_dev->pinctrl);
+
+err0:
+    #if FPSENSOR_PMIC_LDO
+    if (fpsensor_dev->fp_regulator != NULL) {
+        regulator_put(fpsensor_dev->fp_regulator);
+        fpsensor_dev->fp_regulator = NULL;
+    }
+    #endif
+    if(fpsensor_dev != NULL){
+        kfree(fpsensor_dev);
+        fpsensor_dev = NULL;
+    }
+
 out:
     FUNC_EXIT();
     return status;
 }
 
-#if defined(USE_SPI_BUS)
+#if USE_SPI_BUS
 static int fpsensor_remove(struct spi_device *spi)
-#elif defined(USE_PLATFORM_BUS)
+#elif USE_PLATFORM_BUS
 static int fpsensor_remove(struct platform_device *spi)
 #endif
 {
@@ -723,34 +1047,40 @@ static int fpsensor_remove(struct platform_device *spi)
     fb_unregister_client(&fpsensor_dev->notifier);
 #endif
     fpsensor_dev_cleanup(fpsensor_dev);
+#if FPSENSOR_WAKEUP_SOURCE
+    wakeup_source_trash(&fpsensor_dev->ttw_wl);
+#else
     wake_lock_destroy(&fpsensor_dev->ttw_wl);
-    kfree(fpsensor_dev);
-    g_fpsensor = NULL;
+#endif
+
+     if(fpsensor_dev!=NULL){
+		  kfree(fpsensor_dev);
+      fpsensor_dev = NULL;
+		}
 
     FUNC_EXIT();
     return 0;
 }
-
-#if defined(USE_PLATFORM_BUS)
-static int fpsensor_suspend(struct  platform_device *spi, pm_message_t state)
+#if 0
+static int fpsensor_suspend(struct device *dev, pm_message_t state)
 {
     return 0;
 }
-static int fpsensor_resume(struct platform_device *spi)
+
+static int fpsensor_resume( struct device *dev)
 {
     return 0;
 }
 #endif
-
 #ifdef CONFIG_OF
 static struct of_device_id fpsensor_of_match[] = {
-    { .compatible = "mediatek,fingerprintchipone", },
+    { .compatible = FPSENSOR_COMPATIBLE_NODE, },
     {}
 };
 MODULE_DEVICE_TABLE(of, fpsensor_of_match);
 #endif
 
-#if defined(USE_SPI_BUS)
+#if USE_SPI_BUS
 static struct spi_driver fpsensor_spi_driver = {
     .driver = {
         .name = FPSENSOR_DEV_NAME,
@@ -762,8 +1092,10 @@ static struct spi_driver fpsensor_spi_driver = {
     },
     .probe = fpsensor_probe,
     .remove = fpsensor_remove,
+    //.suspend = fpsensor_suspend,
+    //.resume = fpsensor_resume,
 };
-#elif defined(USE_PLATFORM_BUS)
+#elif USE_PLATFORM_BUS
 static struct platform_driver fpsensor_plat_driver = {
     .driver = {
         .name = FPSENSOR_DEV_NAME,
@@ -784,10 +1116,9 @@ static struct platform_driver fpsensor_plat_driver = {
 static int __init fpsensor_init(void)
 {
     int status;
-    FUNC_ENTRY();
-#if defined(USE_PLATFORM_BUS)
+#if USE_PLATFORM_BUS
     status = platform_driver_register(&fpsensor_plat_driver);
-#elif defined(USE_SPI_BUS)
+#elif USE_SPI_BUS
     status = spi_register_driver(&fpsensor_spi_driver);
 #endif
     if (status < 0) {
@@ -800,9 +1131,9 @@ module_init(fpsensor_init);
 
 static void __exit fpsensor_exit(void)
 {
-#if defined(USE_PLATFORM_BUS)
+#if USE_PLATFORM_BUS
     platform_driver_unregister(&fpsensor_plat_driver);
-#elif defined(USE_SPI_BUS)
+#elif USE_SPI_BUS
     spi_unregister_driver(&fpsensor_spi_driver);
 #endif
 }
