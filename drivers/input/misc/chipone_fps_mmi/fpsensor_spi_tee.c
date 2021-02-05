@@ -432,10 +432,10 @@ static void fpsensor_dev_cleanup(fpsensor_data_t *fpsensor)
 {
     FUNC_ENTRY();
 
-    cdev_del(&fpsensor->cdev);
-    unregister_chrdev_region(fpsensor->devno, FPSENSOR_NR_DEVS);
     device_destroy(fpsensor->class, fpsensor->devno);
     class_destroy(fpsensor->class);
+    cdev_del(&fpsensor->cdev);
+    unregister_chrdev_region(fpsensor->devno, FPSENSOR_NR_DEVS);
 
     FUNC_EXIT();
 }
@@ -526,10 +526,10 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         fpsensor_disable_irq(fpsensor_dev);
         if (fpsensor_dev->irq) {
             free_irq(fpsensor_dev->irq, fpsensor_dev);
+            fpsensor_dev->irq = 0;
             fpsensor_dev->irq_enabled = 0;
         }
         fpsensor_dev->device_available = 0;
-        fpsensor_dev_cleanup(fpsensor_dev);
 #if FP_NOTIFY
         fb_unregister_client(&fpsensor_dev->notifier);
 #endif
