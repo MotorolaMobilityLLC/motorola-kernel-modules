@@ -36,22 +36,13 @@
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
 #include <linux/of_gpio.h>
+#include <linux/spi/spi.h>
+#include <linux/spi/spidev.h>
 #include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/pm_wakeup.h>
 #include <linux/regulator/consumer.h>
 #include <linux/clk.h>
-
-//#define  AP_CONTROL_CLK       1
-//#define  USE_PLATFORM_BUS     1
-#define  USE_SPI_BUS 1
-
-#if defined(USE_SPI_BUS)
-#include <linux/spi/spi.h>
-#include <linux/spi/spidev.h>
-#elif defined(USE_PLATFORM_BUS)
-#include <linux/platform_device.h>
-#endif
 
 #define FPC_RESET_LOW_US 5000
 #define FPC_RESET_HIGH1_US 100
@@ -65,17 +56,10 @@ static const char * const pctl_names[] = {
 
 struct fpc_data {
 	struct device *dev;
-#if defined(USE_SPI_BUS)
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+	struct device *class_dev;
+#endif
 	struct spi_device *spidev;
-#elif defined(USE_PLATFORM_BUS)
-	struct platform_device *spidev;
-#endif
-#ifdef AP_CONTROL_CLK
-	struct clk *parent-clk;
-	struct clk *sel-clk;
-	struct clk *spi-clk;
-#endif
-
 	struct pinctrl *pinctrl_fpc;
 	struct pinctrl_state *pinctrl_state[ARRAY_SIZE(pctl_names)];
 	int irq_gpio;
@@ -86,7 +70,6 @@ struct fpc_data {
 	bool request_irq;
 	bool init;
 	struct wakeup_source ttw_wl;
-	bool clocks_enabled;
 };
 
 static DEFINE_MUTEX(spidev_set_gpio_mutex);
@@ -95,152 +78,6 @@ extern void mt_spi_disable_master_clk(struct spi_device *spidev);
 extern void mt_spi_enable_master_clk(struct spi_device *spidev);
 
 static irqreturn_t fpc_irq_handler(int irq, void *handle);
-
-#ifdef AP_CONTROL_CLK
-static long ap_spi_clk_max_rate(struct clk *clk, unsigned long rate)
-{
-	long lowest_available, nearest_low, step_size, cur;
-	long step_direction = -1;
-	long guess = rate;
-	int max_steps = 10;
-
-	cur = clk_round_rate(clk, rate);
-	if (cur == rate)
-		return rate;
-
-	/* if we got here then: cur > rate */
-	lowest_available = clk_round_rate(clk, 0);
-	if (lowest_available > rate)
-		return -EINVAL;
-
-	step_size = (rate - lowest_available) >> 1;
-	nearest_low = lowest_available;
-
-	while (max_steps-- && step_size) {
-		guess += step_size * step_direction;
-		cur = clk_round_rate(clk, guess);
-
-		if ((cur < rate) && (cur > nearest_low))
-			nearest_low = cur;
-		/*
-		 * if we stepped too far, then start stepping in the other
-		 * direction with half the step size
-		 */
-		if (((cur > rate) && (step_direction > 0))
-				|| ((cur < rate) && (step_direction < 0))) {
-			step_direction = -step_direction;
-			step_size >>= 1;
-		}
-	}
-	return nearest_low;
-}
-
-static void ap_spi_clock_set(struct fpc_data *fpc, int speed)
-{
-	long rate ;
-	int rc;
-
-	rate = ap_spi_clk_max_rate(fpc->core_clk, speed);
-	pr_info("%s: requested clock frequency:%d sys matched clock is %d",
-				__func__, speed,rate);
-	if (rate < 0) {
-			pr_info("%s: no match found for requested clock frequency:%d",
-				__func__, speed);
-		//return;
-		rate = speed ;
-	}
-	rc = clk_set_rate(fpc->core_clk, rate);
-	rc = clk_set_rate(fpc->iface_clk, rate);
-
-	if (rc < 0){
-		pr_info("SPI clk set failed\n");
-	} else {
-		fpc->clk_speed = speed;
-	}
-}
-
-static int fpc_spi_clk_init(struct fpc_data *fpc)
-{
-	pr_debug("%s: enter\n", __func__);
-
-	fpc->clk_enabled = 0;
-	fpc->core_clk = clk_get(&data->spi->dev, "spi1");
-	if (IS_ERR_OR_NULL(data->core_clk)) {
-		pr_err("%s: fail to get core_clk\n", __func__);
-		return -EPERM;
-	}
-	fpc->iface_clk = clk_get(&fpc->spi->dev, "gate_spi1_clk");
-	if (IS_ERR_OR_NULL(fpc->iface_clk)) {
-		pr_err("%s: fail to get iface_clk\n", __func__);
-		clk_put(data->core_clk);
-		data->core_clk = NULL;
-		return -ENOENT;
-	}
-	return 0;
-}
-
-static int fpc_spi_clk_enable(struct fpc_data *fpc)
-{
-	int err;
-
-	pr_debug("%s: enter\n", __func__);
-
-	if (fpc->clocks_enabled)
-		return 0;
-
-	err = clk_prepare_enable(fpc->core_clk);
-	if (err) {
-		pr_err("%s: fail to enable core_clk\n", __func__);
-		return -EPERM;
-	}
-
-	err = clk_prepare_enable(fpc->iface_clk);
-	if (err) {
-		pr_err("%s: fail to enable iface_clk\n", __func__);
-		clk_disable_unprepare(fpc->core_clk);
-		return -ENOENT;
-	}
-	pr_info("%s spi_clock enable done",__func__);
-	fpc->clocks_enabled = true;
-
-	return 0;
-}
-
-static int fpc_spi_clk_disable(struct fpc_data *fpc)
-{
-	pr_debug("%s: enter\n", __func__);
-
-	if (!fpc->clocks_enabled)
-		return 0;
-
-	clk_disable_unprepare(fpc->core_clk);
-	clk_disable_unprepare(fpc->iface_clk);
-	fpc->clocks_enabled = false;
-	pr_info("%s spi_clock disable done",__func__);
-	return 0;
-}
-
-static int fpc_spi_clk_uninit(struct fpc_data *fpc)
-{
-	pr_debug("%s: enter\n", __func__);
-
-	if (fpc->clk_enabled)
-		fpc_spi_clk_disable(fpc);
-
-	if (!IS_ERR_OR_NULL(fpc->core_clk)) {
-		clk_put(fpc->core_clk);
-		fpc->core_clk = NULL;
-	}
-
-	if (!IS_ERR_OR_NULL(fpc->iface_clk)) {
-		clk_put(fpc->iface_clk);
-		fpc->iface_clk = NULL;
-	}
-
-	return 0;
-}
-#endif /* AP_CONTROL_CLK */
-
 
 static int select_pin_ctl(struct fpc_data *fpc, const char *name)
 {
@@ -271,22 +108,12 @@ exit:
 static int set_clks(struct fpc_data *fpc, bool enable)
 {
 	int rc = 0;
+
 	if (enable) {
-#ifdef AP_CONTROL_CLK
-		fpc_spi_clk_enable(gf_dev);
-		pr_info("enable ap clock\n");
-#else
 		mt_spi_enable_master_clk(fpc->spidev);
-#endif
-		fpc->clocks_enabled = true;
 		rc = 1;
 	} else {
-#ifdef AP_CONTROL_CLK
-		fpc_spi_clk_disable(gf_dev);
-		pr_info("disable ap clock\n");
-#else
 		mt_spi_disable_master_clk(fpc->spidev);
-#endif
 		rc = 0;
 	}
 
@@ -439,13 +266,13 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 	}
 
 	if (!fpc->request_irq) {
+
 		fpc->irq_gpio = of_get_named_gpio(dev->of_node, "fpc,irq", 0);
 		dev_info(dev, "Using GPIO#%d as IRQ.\n", fpc->irq_gpio);
 		if (!gpio_is_valid(fpc->irq_gpio)){
 			dev_err(dev, "invalid irq gpio!");
 			return -EINVAL;
 		}
-
 		gpio_direction_input(fpc->irq_gpio);
 		irq_num = gpio_to_irq(fpc->irq_gpio);
 		dev_info(dev, "requested irq gpio %d\n", irq_num);
@@ -491,11 +318,10 @@ exit:
 
 static int fpc_hw_res_release(struct fpc_data *fpc)
 {
-	struct spi_device *spidev = fpc->spidev;
-	struct device *dev = &spidev->dev;
+	struct device *dev = &fpc->spidev->dev;
 	if (fpc->request_irq) {
-		//disable_irq_wake(fpc->irq_num);
-		//disable_irq(fpc->irq_num);
+		disable_irq_wake(fpc->irq_num);
+		disable_irq(fpc->irq_num);
 		devm_free_irq(fpc->dev, fpc->irq_num, fpc);
 		fpc->request_irq = false;
 	}
@@ -533,7 +359,6 @@ static ssize_t hw_enable_set(struct device *dev,
 }
 
 static DEVICE_ATTR(hw_enable, S_IWUSR, NULL, hw_enable_set);
-
 /**
  * sysf node to check the interrupt status of the sensor, the interrupt
  * handler should perform sysf_notify to allow userland to poll the node.
@@ -570,7 +395,22 @@ static ssize_t clk_enable_set(struct device *device,
 	return set_clks(fpc, (*buf == '1')) ? : count;
 }
 static DEVICE_ATTR(clk_enable, S_IWUSR, NULL, clk_enable_set);
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+/* Attribute: vendor (RO) */
+static ssize_t vendor_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "fpc");
+}
+static DEVICE_ATTR_RO(vendor);
 
+static ssize_t modalias_show(struct device *dev, struct device_attribute *a,
+			     char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "fpc_spi");
+}
+static DEVICE_ATTR_RO(modalias);
+#endif
 static struct attribute *fpc_attributes[] = {
 	&dev_attr_hw_reset.attr,
 	&dev_attr_wakeup_enable.attr,
@@ -578,6 +418,10 @@ static struct attribute *fpc_attributes[] = {
 	&dev_attr_irq.attr,
 	&dev_attr_active.attr,
 	&dev_attr_hw_enable.attr,
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+	&dev_attr_vendor.attr,
+	&dev_attr_modalias.attr,
+#endif
 	NULL
 };
 
@@ -585,6 +429,12 @@ static const struct attribute_group const fpc_attribute_group = {
 	.attrs = fpc_attributes,
 };
 
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+static const struct attribute_group *attribute_groups[] = {
+	&fpc_attribute_group,
+	NULL
+};
+#endif
 static irqreturn_t fpc_irq_handler(int irq, void *handle)
 {
 	struct fpc_data *fpc = handle;
@@ -605,25 +455,69 @@ static irqreturn_t fpc_irq_handler(int irq, void *handle)
 	smp_rmb();
 	if (fpc->wakeup_enabled)
 		__pm_wakeup_event(&fpc->ttw_wl, FPC_TTW_HOLD_TIME);
-
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+	sysfs_notify(&fpc->class_dev->kobj, NULL, dev_attr_irq.attr.name);
+#else
 	sysfs_notify(&fpc->dev->kobj, NULL, dev_attr_irq.attr.name);
+#endif
 
 	return IRQ_HANDLED;
 }
-#define FINGERPRINT_INT_COMPATIBLE "mediatek,fingerprint-fpc"
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+#define MAX_INSTANCE	5
+#define MAJOR_BASE	32
+static int fpc1020_create_sysfs(struct fpc_data *fpc1020, bool create) {
+	struct device *dev = fpc1020->dev;
+	static struct class *fingerprint_class;
+	static dev_t dev_no;
+	int rc = 0;
 
-#if defined(USE_SPI_BUS)
-static int fpc_tee_probe(struct spi_device *spidev)
-#elif defined(USE_PLATFORM_BUS)
-static int fpc_tee_probe(struct platform_device *spidev)
+	if (create) {
+		rc = alloc_chrdev_region(&dev_no, MAJOR_BASE, MAX_INSTANCE, "fpc");
+		if (rc < 0) {
+			dev_err(dev, "%s alloc fingerprint class device MAJOR failed.\n", __func__);
+			goto ALLOC_REGION;
+		}
+		if (!fingerprint_class) {
+			fingerprint_class = class_create(THIS_MODULE, "fingerprint");
+			if (IS_ERR(fingerprint_class)) {
+				dev_err(dev, "%s create fingerprint class failed.\n", __func__);
+				rc = PTR_ERR(fingerprint_class);
+				fingerprint_class = NULL;
+				goto CLASS_CREATE_ERR;
+			}
+		}
+		fpc1020->class_dev = device_create_with_groups(fingerprint_class, NULL,
+				MAJOR(dev_no), fpc1020, attribute_groups, "fpc_spi");
+		if (IS_ERR(fpc1020->class_dev)) {
+			dev_err(dev, "%s create fingerprint class device failed.\n", __func__);
+			rc = PTR_ERR(fpc1020->class_dev);
+			fpc1020->class_dev = NULL;
+			goto DEVICE_CREATE_ERR;
+		}
+		return 0;
+	}
+
+	device_destroy(fingerprint_class, MAJOR(dev_no));
+	fpc1020->class_dev = NULL;
+DEVICE_CREATE_ERR:
+	class_destroy(fingerprint_class);
+	fingerprint_class = NULL;
+CLASS_CREATE_ERR:
+	unregister_chrdev_region(dev_no, 1);
+ALLOC_REGION:
+	return rc;
+}
 #endif
 
+#define FINGERPRINT_INT_COMPATIBLE "mediatek,fingerprint-fpc"
+
+static int fpc_tee_probe(struct spi_device *spidev)
 {
-	struct device *dev = NULL;
+	struct device *dev = &spidev->dev;
 	struct fpc_data *fpc;
 	int rc = 0;
-#if defined(USE_SPI_BUS)
-	dev = &spidev->dev;
+
 	spidev->dev.of_node = of_find_compatible_node(NULL,
 						NULL, FINGERPRINT_INT_COMPATIBLE);
 	if (!spidev->dev.of_node) {
@@ -631,9 +525,7 @@ static int fpc_tee_probe(struct platform_device *spidev)
 		rc = -EINVAL;
 		goto exit;
 	}
-#elif defined(USE_PLATFORM_BUS)
-	dev = &spidev->dev;
-#endif
+
 
 	dev_info(dev, "%s\n", __func__);
 	fpc = devm_kzalloc(dev, sizeof(*fpc), GFP_KERNEL);
@@ -648,95 +540,73 @@ static int fpc_tee_probe(struct platform_device *spidev)
 	fpc->spidev = spidev;
 	fpc->spidev->irq = 0; /*SPI_MODE_0*/
 
-#ifndef USER_SPACE_SPI_INIT
-	dev_info(dev, "%s: enable\n", __func__);
-	fpc_dts_request(fpc);
-	fpc_hw_res_request(fpc);
-#endif
 	wakeup_source_init(&fpc->ttw_wl, "fpc_ttw_wl");
-
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+	rc = fpc1020_create_sysfs(fpc, true);
+#else
 	rc = sysfs_create_group(&dev->kobj, &fpc_attribute_group);
+#endif
 	if (rc) {
 		dev_err(dev, "could not create sysfs\n");
 		goto exit;
 	}
-#ifdef AP_CONTROL_CLK
-	pr_info("Get the clk resource.\n");
-	/* Enable spi clock */
-	if (fpc_spi_clk_init(fpc))
-		goto spi_probe_clk_init_failed;
-
-	if (fpc_spi_clk_enable(fpc))
-		goto spi_probe_clk_enable_failed;
-	/* Initialize spi clock to 25M for FOD  */
-	spi_clock_set(fpc, 1000000*25*4);
-	dev_info(dev, "%s spi_clock enable done",__func__);
+#ifndef USER_SPACE_SPI_INIT
+	dev_info(dev, "%s: enable\n", __func__);
+	fpc_dts_request(fpc);
+	fpc_hw_res_request(fpc);
+	hw_reset(fpc);
 #endif
 	fpc->init = true;
-	hw_reset(fpc);
+
 	dev_info(dev, "%s: ok\n", __func__);
-#ifdef AP_CONTROL_CLK
-spi_probe_clk_enable_failed:
-	gfspi_ioctl_clk_uninit(gf_dev);
-spi_probe_clk_init_failed:
-#endif
+
 exit:
 	return rc;
 }
-#if defined(USE_SPI_BUS)
+
 static int fpc_tee_remove(struct spi_device *spidev)
-#elif defined(USE_PLATFORM_BUS)
-static int fpc_tee_remove(struct platform_device *spidev)
-#endif
 {
 	struct  fpc_data *fpc = dev_get_drvdata(&spidev->dev);
-	dev_info(&spidev->dev, "%s: disable\n", __func__);
+
+	dev_info(&spidev->dev, "%s: start\n", __func__);
 #ifndef USER_SPACE_SPI_INIT
 	fpc_hw_res_release(fpc);
 	fpc_dts_release(fpc);
 #endif
-	sysfs_remove_group(&spidev->dev.kobj, &fpc_attribute_group);
-	wakeup_source_trash(&fpc->ttw_wl);
-	dev_info(&spidev->dev, "%s\n", __func__);
 
+#ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
+	fpc1020_create_sysfs(fpc, false);
+#else
+	sysfs_remove_group(&spidev->dev.kobj, &fpc_attribute_group);
+#endif
+	wakeup_source_trash(&fpc->ttw_wl);
+	devm_kfree( &spidev->dev,fpc);
+	pr_info("%s end\n", __func__);
 	return 0;
 }
 
-static struct of_device_id mt6797_of_match[] = {
+static struct of_device_id fpc_of_match[] = {
 	{ .compatible = "fpc,fpc_spi", },
 	{}
 };
-MODULE_DEVICE_TABLE(of, mt6797_of_match);
+MODULE_DEVICE_TABLE(of, fpc_of_match);
 
-#if defined(USE_SPI_BUS)
 static struct spi_driver fpc_tee_driver = {
-#elif defined(USE_PLATFORM_BUS)
-static struct platform_driver fpc_tee_driver = {
-#endif
-
 	.driver = {
 		.name	= "fpc_spi",
 		.bus = &spi_bus_type,
 		.owner	= THIS_MODULE,
-		.of_match_table = mt6797_of_match,
+		.of_match_table = fpc_of_match,
 	},
 	.probe	= fpc_tee_probe,
 	.remove	= fpc_tee_remove,
-#if defined(USE_PLATFORM_BUS)
-	.resume 	=	fpc_tee_resume,
-	.suspend 	=	fpc_tee_suspend,
-#endif
 };
 
 static int __init fpc_sensor_init(void)
 {
 	int status;
 
-#if defined(USE_PLATFORM_BUS)
-	status = platform_driver_register(&fpc_tee_driver);
-#elif defined(USE_SPI_BUS)
 	status = spi_register_driver(&fpc_tee_driver);
-#endif
 	if (status < 0)
 		printk("%s, fpc_sensor_init failed.\n", __func__);
 
@@ -746,11 +616,8 @@ module_init(fpc_sensor_init);
 
 static void __exit fpc_sensor_exit(void)
 {
-#if defined(USE_PLATFORM_BUS)
-	platform_driver_unregister(&fpc_tee_driver);
-#elif defined(USE_SPI_BUS)
 	spi_unregister_driver(&fpc_tee_driver);
-#endif
+	printk("%s. done\n", __func__);
 }
 module_exit(fpc_sensor_exit);
 
