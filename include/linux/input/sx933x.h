@@ -805,6 +805,9 @@ struct sx93XX
 	struct delayed_work dworker; /* work struct for worker function */
 	u8 phaseselect;
 
+	int read_flag; /* used for dump specified register*/
+	u16 read_reg; /* record reg address which want to read*/
+
 	int reset_count;
 	atomic_t init_busy;
 	struct delayed_work i2c_watchdog_work;

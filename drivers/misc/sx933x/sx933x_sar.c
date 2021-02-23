@@ -576,6 +576,55 @@ static ssize_t sx933x_register_read_store(struct class *class,
 	return count;
 }
 
+static ssize_t reg_show(struct class *class,
+		struct class_attribute *attr,
+		char *buf)
+{
+	u32 *p = (u32*)buf;
+	u16 reg_value = 0;
+	psx93XX_t this = global_sx933x;
+	if(this->read_flag){
+		this->read_flag = 0;
+		sx933x_i2c_read_16bit(this, this->read_reg, p);
+		LOG_DBG("%s : read_reg = 0x%x, val = 0x%x\n",__func__,this->read_reg,*p);
+		return 4;
+	}
+	return -1;
+}
+
+/*
+	reg attr is for TCMD on MTK only,
+	buf[6]-read_flag:
+	0-real write,
+	1-just transfer the reg value want to be readed
+*/
+static ssize_t reg_store(struct class *class,
+		struct class_attribute *attr,
+		const char *buf, size_t count)
+{
+	psx93XX_t this = global_sx933x;
+	u16 regaddr = 0;
+	u32 val = 0;
+	int i = 0;
+
+	if( count != 7){
+		LOG_ERR("%s :params error[ count == %d !=2]\n",__func__,count);
+		return -1;
+	}
+	for(i = 0 ; i < count ; i++)
+		LOG_DBG("%s : buf[%d] = 0x%x\n",__func__,i,buf[i]);
+	if(buf[6] == 0){
+		regaddr = ((u16)buf[0]<<8) | (u16)buf[1];
+		val= ((u32)buf[2]<<24) | ((u32)buf[3]<<16) | ((u32)buf[4]<<8) | ((u32)buf[5]);
+		sx933x_i2c_write_16bit(this, regaddr, val);
+	} else if(buf[6] == 1) {
+		this->read_reg = ((u16)buf[0]<<8) | (u16)buf[1];
+		this->read_flag = 1;
+		LOG_DBG("-----------\n");
+	}
+	return count;
+}
+
 static ssize_t manual_offset_calibration_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
@@ -648,7 +697,8 @@ static struct class_attribute class_attr_int_state =
 	__ATTR(int_state, 0440, sx933x_int_state_show, NULL);
 static struct class_attribute class_attr_reinitialize =
 	__ATTR(reinitialize, 0660, NULL, sx933x_reinitialize_store);
-
+static struct class_attribute class_attr_reg =
+	__ATTR(reg, 0660, reg_show, reg_store);
 
 static struct attribute *capsense_class_attrs[] = {
 	&class_attr_reset.attr,
@@ -661,6 +711,7 @@ static struct attribute *capsense_class_attrs[] = {
 	&class_attr_manual_calibrate.attr,
 	&class_attr_int_state.attr,
 	&class_attr_reinitialize.attr,
+	&class_attr_reg.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(capsense_class);
@@ -673,6 +724,7 @@ static struct class_attribute capsense_class_attributes[] = {
 	__ATTR(manual_calibrate, 0660, manual_offset_calibration_show,manual_offset_calibration_store),
 	__ATTR(int_state, 0440, sx933x_int_state_show, NULL),
 	__ATTR(reinitialize, 0660, NULL, sx933x_reinitialize_store),
+	__ATTR(reg, 0660, reg_show, reg_store),
 	__ATTR_NULL,
 };
 #endif
