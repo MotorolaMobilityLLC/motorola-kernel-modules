@@ -877,16 +877,15 @@ static int fpsensor_remove(struct platform_device *spi)
 #if FP_NOTIFY
         fb_unregister_client(&fpsensor_dev->notifier);
 #endif
-        fpsensor_dev_cleanup(fpsensor_dev);
-
-#if FPSENSOR_WAKEUP_SOURCE
-        wakeup_source_trash(&fpsensor_dev->ttw_wl);
-#else
-        wake_lock_destroy(&fpsensor_dev->ttw_wl);
-#endif
     } else {
         fpsensor_debug(ERR_LOG, "%s with free_flag = %d \n", __func__,fpsensor_dev->free_flag );
     }
+    fpsensor_dev_cleanup(fpsensor_dev);
+#if FPSENSOR_WAKEUP_SOURCE
+    wakeup_source_trash(&fpsensor_dev->ttw_wl);
+#else
+    wake_lock_destroy(&fpsensor_dev->ttw_wl);
+#endif
     fpsensor_spidev_dts_uninit(fpsensor_dev);
     if(fpsensor_dev!=NULL){
         kfree(fpsensor_dev);
