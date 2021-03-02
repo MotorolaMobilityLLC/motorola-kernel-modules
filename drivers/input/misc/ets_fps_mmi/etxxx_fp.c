@@ -1306,6 +1306,8 @@ int egisfp_probe(struct platform_device *pdev)
 		input_set_capability(egis_dev->input_dev, key_maps[i].type, key_maps[i].code);
 
 	egis_dev->input_dev->name = EGIS_INPUT_NAME;
+	egis_dev->input_dev->id.vendor = 0x001f;
+
 	status = input_register_device(egis_dev->input_dev);
 	if (status)
 	{
