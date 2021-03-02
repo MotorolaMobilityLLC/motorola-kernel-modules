@@ -29,7 +29,6 @@
 #include <linux/power_supply.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
-#include <linux/usb/usbpd.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
@@ -44,12 +43,12 @@
 #include "mmi_charger_core.h"
 
 extern struct mmi_charger_ops bq2597x_charger_ops;
-extern struct mmi_charger_ops qpnp_pmic_charger_ops;
+extern struct mmi_charger_ops mtk_pmic_charger_ops;
 
 static const struct mmi_chrg_dev_ops dev_ops[] = {
 	{
 		.dev_name = "pmic-sw",
-		.ops = &qpnp_pmic_charger_ops,
+		.ops = &mtk_pmic_charger_ops,
 	},
 	{
 		.dev_name = "cp-master",
@@ -368,6 +367,7 @@ void mmi_chrg_policy_clear(struct mmi_charger_manager *chip) {
 	clear_chg_manager(chip);
 	mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
 							DISABLE_CHRG_LIMIT);
+	chrg_list->chrg_dev[PMIC_SW]->charger_limited = false;
 	sm_state = PM_STATE_DISCONNECT;
 	chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 	quit_slave_chrg_cnt = 0;
@@ -379,17 +379,14 @@ void mmi_chrg_policy_clear(struct mmi_charger_manager *chip) {
 	return;
 }
 
-#define REV_BST_THRESH 4400000
+#define REV_BST_THRESH_UV 4400000
 #define REV_BST_DROP 150000
-#define CP_IBUS_THRESH 20
-#define IBAT_THRESH 10000
-#define VBUS_THRESH 5600000
-#define PD_ERR_CNT 3
+#define CP_IBUS_THRESH_MA 20
+#define IBAT_THRESH_UA 10000
 static bool is_cable_plugout(struct mmi_charger_manager *chip)
 {
 	struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
 	union power_supply_propval prop = {0,};
-	enum power_supply_typec_mode typec_mode = POWER_SUPPLY_TYPEC_NONE;
 	int rc, vbus_volt, ibatt_curr, ibus_curr, vbatt_volt;
 	bool pd_active = 0;
 
@@ -407,36 +404,13 @@ static bool is_cable_plugout(struct mmi_charger_manager *chip)
 	mmi_chrg_info(chip, "ibat:%d, vbat:%d, vbus:%d, ibus:%d\n",
 		ibatt_curr, vbatt_volt, vbus_volt, ibus_curr);
 
-	if (ibus_curr > CP_IBUS_THRESH || ibatt_curr > IBAT_THRESH)
+	if (ibus_curr > CP_IBUS_THRESH_MA || ibatt_curr > IBAT_THRESH_UA)
 		return false;
 
 	if  (vbatt_volt >= vbus_volt
-		&& vbus_volt < REV_BST_THRESH) {
+		&& vbus_volt < REV_BST_THRESH_UV) {
 			mmi_chrg_info(chip, "cable plug out: cp reverse\n");
 			return true;
-	}
-
-
-	rc = power_supply_get_property(chip->usb_psy,
-				POWER_SUPPLY_PROP_PD_ACTIVE, &prop);
-	if (!rc)
-		pd_active = prop.intval;
-	if (!pd_active){
-		mmi_chrg_info(chip, "cable plug out: pd inactive\n");
-		return true;
-	}
-
-	rc = power_supply_get_property(chip->usb_psy,
-				POWER_SUPPLY_PROP_TYPEC_MODE, &prop);
-	if (!rc)
-		typec_mode = prop.intval;
-
-	if (POWER_SUPPLY_TYPEC_SOURCE_DEFAULT == typec_mode
-		&& vbus_volt > VBUS_THRESH
-		&& chip->pd_busy_cnt > PD_ERR_CNT) {
-		mmi_chrg_info(chip, "cable plug out: cp double reverse\n");
-		chip->pd_busy_cnt = 0;
-		return true;
 	}
 
 	return false;
@@ -452,7 +426,6 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 	int heartbeat_dely_ms = 0;
 	int cooling_curr = 0;
 	int cooling_volt = 0;
-	int pmic_sys_therm_level = 0;
 	bool zone_change = false;
 	bool ignore_hysteresis_degc = false;
 	struct mmi_chrg_step_info *chrg_step;
@@ -474,11 +447,6 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		mmi_chrg_err(chip,"PMIC-SW isn't exist, force quite mmi chrg sm work !\n");
 		return;
 	}
-
-	rc = power_supply_get_property(chip->batt_psy,
-				POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL, &prop);
-	if (!rc)
-		pmic_sys_therm_level = prop.intval;
 
 	rc = power_supply_get_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
@@ -536,9 +504,10 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 	mmi_chrg_info(chip, "battery temp %d\n", batt_temp);
 	mmi_chrg_info(chip, "battery capacity %d\n", batt_soc);
 
-	if (vbus_pres && is_cable_plugout(chip))
+	if (vbus_pres && is_cable_plugout(chip)) {
+		mmi_chrg_info(chip, "is_cable_plugout true\n");
 		vbus_pres = 0;
-
+	}
 	if (vbus_pres &&
 		(sm_state == PM_STATE_PPS_TUNNING_CURR
 		|| sm_state == PM_STATE_PPS_TUNNING_VOLT
@@ -575,8 +544,6 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			|| sm_state == PM_STATE_STOP_CHARGE) {
 		mmi_find_chrg_step(chip, chip->pres_temp_zone, vbatt_volt);
 	} else if (sm_state == PM_STATE_DISCONNECT) {
-		mmi_get_input_current_settled(chrg_list->chrg_dev[PMIC_SW],
-					&chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
 		mmi_find_chrg_step(chip, chip->pres_temp_zone, vbatt_volt);
 		mmi_chrg_sm_move_state(chip, PM_STATE_ENTRY);
 	} else if (zone_change &&
@@ -624,10 +591,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 
 		if (chrg_list->chrg_dev[PMIC_SW]->charger_limited) {
-			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
-			mmi_chrg_info(chip,"recovery PMIC-SW ichg lmt ,%d uA\n",
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
+			mmi_chrg_info(chip,"recovery PMIC-SW ichg lmt \n");
 			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
 							DISABLE_CHRG_LIMIT);
 			chrg_list->chrg_dev[PMIC_SW]->charger_limited = false;
@@ -662,9 +626,9 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 							"CP master charging curr min %d uA\n",
 							vbatt_volt,
 							chip->pd_pps_support,
-			  				chrg_step->pres_chrg_step,
-			  				chrg_step->chrg_step_cc_curr,
-			  				chrg_list->chrg_dev[CP_MASTER]->charging_curr_min);
+							chrg_step->pres_chrg_step,
+							chrg_step->chrg_step_cc_curr,
+							chrg_list->chrg_dev[CP_MASTER]->charging_curr_min);
 			mmi_chrg_sm_move_state(chip, PM_STATE_CHRG_PUMP_ENTRY);
 
 		} else {
@@ -675,7 +639,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 							"chrg step %d\n",
 							vbatt_volt, chip->pl_chrg_vbatt_min,
 							chip->pd_pps_support,
-			  				chrg_step->pres_chrg_step);
+							chrg_step->pres_chrg_step);
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
 
 		}
@@ -702,10 +666,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 
 		if (chrg_list->chrg_dev[PMIC_SW]->charger_limited) {
-			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
-			mmi_chrg_info(chip, "Recovery PMIC-SW ichg lmt ,%d uA\n",
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
+			mmi_chrg_info(chip, "Recovery PMIC-SW ichg lmt \n");
 			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
 							DISABLE_CHRG_LIMIT);
 			chrg_list->chrg_dev[PMIC_SW]->charger_limited = false;
@@ -717,29 +678,13 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			msleep(100);
 			mmi_enable_charging(chrg_list->chrg_dev[PMIC_SW], true);
 		}
-		mmi_chrg_info(chip, "Check all effective pdo info again\n");
-		usbpd_get_pdo_info(chip->pd_handle, chip->mmi_pdo_info);
-		mmi_chrg_info(chip, "Select FIXED pdo for switch charging !\n");
-		for (i = 0; i < PD_MAX_PDO_NUM; i++) {
-		mmi_chrg_info(chip,"find pdo %d, max volt %d, max curr %d\n",
-						chip->mmi_pdo_info[i].type,
-						chip->mmi_pdo_info[i].uv_max,
-						chip->mmi_pdo_info[i].ua);
-			if (chip->mmi_pdo_info[i].type ==
-					PD_SRC_PDO_TYPE_FIXED
-				&& chip->mmi_pdo_info[i].uv_max >= SWITCH_CHARGER_PPS_VOLT
-				&& chip->mmi_pdo_info[i].ua >= TYPEC_HIGH_CURRENT_UA) {
-					mmi_chrg_dbg(chip, PR_MOTO, "select 5V/3A pps, pdo %d\n", i);
-					chip->mmi_pd_pdo_idx =
-						chip->mmi_pdo_info[i].pdo_pos;
-					break;
-				}
-		}
-
 		chip->pd_request_volt = SWITCH_CHARGER_PPS_VOLT;
 		chip->pd_request_curr = TYPEC_HIGH_CURRENT_UA;
-		mmi_chrg_info(chip,"Select pdo %d, pd request curr %d, volt %d\n",
-						chip->mmi_pd_pdo_idx,
+		usbpd_pps_enable_charging(chip, false,
+						chip->pd_request_volt / 1000,
+						chip->pd_request_curr / 1000);
+
+		mmi_chrg_info(chip,"Select pd request curr %d, volt %d\n",
 						chip->pd_request_curr,
 						chip->pd_request_volt);
 
@@ -778,8 +723,8 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			mmi_chrg_info(chip,"CP slave is exist !\n");
 			mmi_chrg_info(chip,"chrg step cc curr %d uA, "
 							"CP slave charging curr min %d uA\n",
-			  				chrg_step->chrg_step_cc_curr,
-			  				chrg_list->chrg_dev[CP_SLAVE]->charging_curr_min);
+							chrg_step->chrg_step_cc_curr,
+							chrg_list->chrg_dev[CP_SLAVE]->charging_curr_min);
 			if (chrg_step->chrg_step_cc_curr >=
 					chrg_list->chrg_dev[CP_SLAVE]->charging_curr_min) {
 				mmi_chrg_sm_move_state(chip,
@@ -803,36 +748,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 
 		mmi_chrg_info(chip, "Check all effective pdo info again\n");
-		usbpd_get_pdo_info(chip->pd_handle, chip->mmi_pdo_info);
-		for (i = 0; i < PD_MAX_PDO_NUM; i++) {
-			if ((chip->mmi_pdo_info[i].type ==
-					PD_SRC_PDO_TYPE_AUGMENTED)
-				&& chip->mmi_pdo_info[i].uv_max >= PUMP_CHARGER_PPS_MIN_VOLT
-				&& chip->mmi_pdo_info[i].ua >= chip->typec_middle_current) {
-					chip->mmi_pd_pdo_idx = chip->mmi_pdo_info[i].pdo_pos;
-					mmi_chrg_info(chip,
-							"Pd charger support pps, pdo %d, "
-							"volt %d, curr %d \n",
-							chip->mmi_pd_pdo_idx,
-							chip->mmi_pdo_info[i].uv_max,
-							chip->mmi_pdo_info[i].ua);
-					chip->pd_pps_support = true;
-
-					if (chip->mmi_pdo_info[i].uv_max <
-							chip->pd_volt_max) {
-						chip->pd_volt_max =
-						chip->mmi_pdo_info[i].uv_max;
-					}
-
-					if (chip->mmi_pdo_info[i].ua <
-							chip->pd_curr_max) {
-						chip->pd_curr_max =
-						chip->mmi_pdo_info[i].ua;
-					}
-
-				break;
-			}
-		}
+		chip->pd_pps_support = usbpd_get_pps_status(chip);
 
 		/*Initial setup pps request power by the battery voltage*/
 		chip->pd_request_volt = (2 * vbatt_volt) % 20000;
@@ -1166,7 +1082,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 					mmi_chrg_info(chip, "Ready quite CP chrg stage, "
 								"and Enter into PMIC switch chrg stage, "
 								"chrg step %d, ibatt %dmA\n",
-			  					chrg_step->pres_chrg_step, ibatt_curr);
+								chrg_step->pres_chrg_step, ibatt_curr);
 					mmi_find_chrg_step(chip,
 							chip->pres_temp_zone, vbatt_volt);
 					mmi_chrg_sm_move_state(chip, PM_STATE_CP_QUIT);
@@ -1241,8 +1157,8 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 				mmi_enable_charging(chrg_list->chrg_dev[CP_SLAVE], false);
 				mmi_chrg_info(chip,"Quit slave chrg, the reason is :ibatt %duA, "
 							"CP slave charging curr min %d uA\n",
-			  				ibatt_curr,
-			  				chrg_list->chrg_dev[CP_SLAVE]->charging_curr_min);
+							ibatt_curr,
+							chrg_list->chrg_dev[CP_SLAVE]->charging_curr_min);
 				msleep(100);
 				mmi_enable_charging(chrg_list->chrg_dev[CP_MASTER], true);
 				mmi_chrg_info(chip,"Restart CP master again\n");
@@ -1274,10 +1190,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 	case PM_STATE_RECOVERY_SW:
 		heartbeat_dely_ms = HEARTBEAT_SHORT_DELAY_MS;
 		if (chrg_list->chrg_dev[PMIC_SW]->charger_limited) {
-			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
-			mmi_chrg_info(chip,"Recovery PMIC-SW ichg lmt ,%d uA\n",
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
+			mmi_chrg_info(chip,"Recovery PMIC-SW ichg lmt \n");
 			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
 							DISABLE_CHRG_LIMIT);
 			chrg_list->chrg_dev[PMIC_SW]->charger_limited = false;
@@ -1325,10 +1238,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 
 		if (chrg_list->chrg_dev[PMIC_SW]->charger_limited) {
-			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
-			mmi_chrg_info(chip,"Recovery PMIC-SW ichg lmt ,%d uA\n",
-							chrg_list->chrg_dev[PMIC_SW]->input_curr_setted);
+			mmi_chrg_info(chip,"Recovery PMIC-SW ichg lmt \n");
 			mmi_set_charing_current(chrg_list->chrg_dev[PMIC_SW],
 							DISABLE_CHRG_LIMIT);
 			chrg_list->chrg_dev[PMIC_SW]->charger_limited = false;
@@ -1475,7 +1385,7 @@ schedule:
 		chip->system_thermal_level != chip->thermal_levels - 1 &&
 		sm_state == PM_STATE_SW_LOOP &&
 		chip->sys_therm_force_pmic_chrg) {
-			mmi_chrg_dbg(chip, PR_MOTO, "Try to recovery charger pump!\n");		
+			mmi_chrg_dbg(chip, PR_MOTO, "Try to recovery charger pump!\n");
 			mmi_chrg_sm_move_state(chip, PM_STATE_ENTRY);
 	}
 
@@ -1578,7 +1488,6 @@ schedule:
 								"battery current %d, "
 								"battery voltage %d, "
 								"sys therm level %d, "
-								"pmic therm level %d, "
 								"sys therm cooling %d, "
 								"batt therm cooling %d, "
 								"sys therm force pmic chrg %d, "
@@ -1587,7 +1496,6 @@ schedule:
 								batt_soc, batt_temp,
 								ibatt_curr, vbatt_volt,
 								chip->system_thermal_level,
-								pmic_sys_therm_level,
 								chip->sys_therm_cooling,
 								chip->batt_therm_cooling,
 								chip->sys_therm_force_pmic_chrg,
@@ -1629,14 +1537,9 @@ schedule:
 		goto skip_pd_select;
 	}
 
-	chip->pps_result = usbpd_select_pdo(chip->pd_handle,
-								chip->mmi_pd_pdo_idx,
-								chip->pd_target_volt,
-								chip->pd_target_curr);
-	if (chip->pps_result == -EBUSY)
-		chip->pd_busy_cnt++;
-	else
-		chip->pd_busy_cnt = 0;
+	chip->pps_result = usbpd_select_pdo(chip,
+								chip->pd_target_volt / 1000,
+								chip->pd_target_curr / 1000);
 	mmi_set_pps_result_history(chip, chip->pps_result);
 	if (!chip->pps_result) {
 		chip->pd_request_volt_prev = chip->pd_target_volt;

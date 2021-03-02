@@ -32,7 +32,6 @@
 #include <linux/power_supply.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
-#include <linux/usb/usbpd.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
@@ -48,6 +47,7 @@
 #include <linux/alarmtimer.h>
 #include <linux/notifier.h>
 #include "mmi_charger_class.h"
+#include <../../../misc/mediatek/typec/tcpc/inc/tcpm.h>
 
 #define mmi_chrg_err(chip, fmt, ...)		\
 	pr_err("%s: %s: " fmt, chip->name,	\
@@ -141,12 +141,10 @@ struct mmi_charger_manager {
 	const char	*name;
 	struct device	*dev;
 	struct power_supply	*batt_psy;
-	struct power_supply	*qcom_psy;
+	struct power_supply	*mtk_psy;
 	struct power_supply	*extrn_psy;
 	struct power_supply	*usb_psy;
 	struct power_supply	*mmi_chrg_mgr_psy;
-	struct usbpd	*pd_handle;
-	struct usbpd_pdo_info	mmi_pdo_info[PD_MAX_PDO_NUM];
 	struct notifier_block	psy_nb;
 
 	struct wakeup_source	mmi_hb_wake_source;
@@ -157,7 +155,6 @@ struct mmi_charger_manager {
 	bool			cp_disable;
 
 	int *debug_mask;
-	int mmi_pd_pdo_idx;	/*request the pdo idx of PD*/
 	int pps_volt_steps;	/*PPS voltage, programming step size*/
 	int pps_curr_steps;	/*pps current, programming step size*/
 
@@ -233,7 +230,10 @@ struct mmi_charger_manager {
 
 	int mmi_chrg_dev_num;
 	struct mmi_charger_device **chrg_list;	/*charger device list*/
-	int pd_busy_cnt;
+	struct tcpc_device *tcpc;
+	struct notifier_block tcp_nb;
+	bool is_pps_en_unlock;
+       int hrst_cnt;
 };
 
 extern bool mmi_get_pps_result_history(struct mmi_charger_manager *chip);
@@ -247,11 +247,9 @@ extern void mmi_update_all_charger_status(struct mmi_charger_manager *chip);
 extern void mmi_update_all_charger_error(struct mmi_charger_manager *chip);
 extern void mmi_dump_charger_error(struct mmi_charger_manager *chip,
 									struct mmi_charger_device *chrg_dev);
-extern ssize_t mmi_get_factory_image_mode(void);
-extern ssize_t mmi_set_factory_image_mode(int mode);
-extern ssize_t mmi_get_factory_charge_upper(void);
-extern ssize_t mmi_get_demo_mode(void);
-extern ssize_t mmi_set_demo_mode(int mode);
-extern ssize_t mmi_get_max_chrg_temp(void);
-extern ssize_t mmi_set_max_chrg_temp(int value);
+extern int init_tcpc(struct mmi_charger_manager *chip);
+extern bool usbpd_get_pps_status(struct mmi_charger_manager *chip);
+extern int usbpd_select_pdo(struct mmi_charger_manager *chip, u32 mV, u32 mA);
+int usbpd_pps_enable_charging(struct mmi_charger_manager *chip, bool en,
+				   u32 mV, u32 mA);
 #endif
