@@ -30,7 +30,6 @@
 #include <linux/power_supply.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
-#include <linux/usb/usbpd.h>
 #include <linux/debugfs.h>
 #include <linux/errno.h>
 #include <linux/device.h>
@@ -84,7 +83,6 @@ struct mmi_charger_device {
 	struct mmi_charger_info	charger_data;
 	struct mmi_charger_error_info charger_error;
 	int *debug_mask;
-	int input_curr_setted; /*save input current*/
 	int charging_curr_limited; /*charger current limitation*/
 	int charging_curr_min; /*The minimum charging current supported by this device*/
 	bool	charger_enabled; /*is this charger device enabled*/

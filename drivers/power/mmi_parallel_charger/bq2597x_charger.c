@@ -87,7 +87,7 @@ static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 
 	prop.intval = en;
 	rc = power_supply_set_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
+				POWER_SUPPLY_PROP_CHARGE_ENABLED, &prop);
 
 	if (!rc) {
 		chrg->charger_enabled = !!prop.intval;
@@ -106,7 +106,7 @@ static int bq2597x_is_charging_enabled(struct mmi_charger_device *chrg, bool *en
 		return -ENODEV;
 
 	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
+				POWER_SUPPLY_PROP_CHARGE_ENABLED, &prop);
 	if (!rc) {
 		chrg->charger_enabled = !!prop.intval;
 	} else
@@ -188,7 +188,7 @@ static int bq2597x_update_charger_status(struct mmi_charger_device *chrg)
 		chrg->charger_data.vbus_pres = !!prop.intval;
 
 	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
+				POWER_SUPPLY_PROP_CHARGE_ENABLED, &prop);
 	if (!rc)
 		chrg->charger_enabled = !!prop.intval;
 
