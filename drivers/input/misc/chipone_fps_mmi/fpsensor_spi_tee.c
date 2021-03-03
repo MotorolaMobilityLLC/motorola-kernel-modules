@@ -417,7 +417,7 @@ static irqreturn_t fpsensor_irq(int irq, void *handle)
     ** since this is interrupt context (other thread...) */
     smp_rmb();
 #if FPSENSOR_WAKEUP_SOURCE
-	__pm_wakeup_event(&fpsensor_dev->ttw_wl, msecs_to_jiffies(1000));
+    __pm_wakeup_event(&fpsensor_dev->ttw_wl, 1000);
 #else
     wake_lock_timeout(&fpsensor_dev->ttw_wl, msecs_to_jiffies(1000));
 #endif

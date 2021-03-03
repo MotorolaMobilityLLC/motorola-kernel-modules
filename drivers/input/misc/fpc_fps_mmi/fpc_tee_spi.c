@@ -172,7 +172,9 @@ static ssize_t wakeup_enable_set(struct device *dev,
 		fpc->wakeup_enabled = true;
 		smp_wmb();
 	} else if (!strncmp(buf, "disable", strlen("disable"))) {
+#if 0
 		fpc->wakeup_enabled = false;
+#endif
 		smp_wmb();
 	} else {
 		ret = -EINVAL;
@@ -284,7 +286,7 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 
 		fpc->irq_num = irq_num;
 
-		fpc->wakeup_enabled = false;
+		fpc->wakeup_enabled = true;
 
 		irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
 		if (of_property_read_bool(dev->of_node, "fpc,enable-wakeup")) {
