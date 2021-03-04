@@ -69,6 +69,7 @@ struct fpc_data {
 	bool wakeup_enabled;
 	bool request_irq;
 	bool init;
+	bool init_wakeup;
 	struct wakeup_source ttw_wl;
 };
 
@@ -287,11 +288,12 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 		fpc->irq_num = irq_num;
 
 		fpc->wakeup_enabled = true;
-
+		fpc->init_wakeup = false;
 		irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
 		if (of_property_read_bool(dev->of_node, "fpc,enable-wakeup")) {
 			irqf |= IRQF_NO_SUSPEND;
 			device_init_wakeup(dev, 1);
+			fpc->init_wakeup = true;
 		}
 
 		rc = devm_request_threaded_irq(dev, irq_num,
@@ -331,6 +333,10 @@ static int fpc_hw_res_release(struct fpc_data *fpc)
 		devm_gpio_free(dev,fpc->vdd_gpio);
 		fpc->vdd_gpio = 0;
 		pr_info("remove vdd_gpio success\n");
+	}
+	if(fpc->init_wakeup) {
+		device_init_wakeup(dev, false);
+		fpc->init_wakeup = false;
 	}
 	return 0;
 }
