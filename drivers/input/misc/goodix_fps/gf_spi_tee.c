@@ -818,7 +818,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case GF_IOC_REMOVE:
 		gf_debug(INFO_LOG, "%s: GF_IOC_REMOVE ======\n", __func__);
 
-		gf_netlink_destroy(gf_dev);
+		/*gf_netlink_destroy(gf_dev);
 
 		mutex_lock(&gf_dev->release_lock);
 		if (gf_dev->input == NULL) {
@@ -848,7 +848,7 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		spi_set_drvdata(gf_dev->spi, NULL);
 		gf_dev->spi = NULL;
 		mutex_destroy(&gf_dev->buf_lock);
-		mutex_destroy(&gf_dev->release_lock);
+		mutex_destroy(&gf_dev->release_lock);*/
 
 		break;
 
@@ -1321,6 +1321,7 @@ static int gf_remove(struct spi_device *spi)
 	}
 	mutex_unlock(&gf_dev->release_lock);
 
+	wakeup_source_trash(&fp_wakeup_source);
 	gf_netlink_destroy(gf_dev);
 	cdev_del(&gf_dev->cdev);
 	sysfs_remove_group(&spi->dev.kobj, &goodix_attribute_group);
