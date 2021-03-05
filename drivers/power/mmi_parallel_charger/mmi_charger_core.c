@@ -800,7 +800,7 @@ void mmi_chrg_rate_check(struct mmi_charger_manager *chg)
 	if (val.intval) {
 		val.intval = 0;
 		rc = power_supply_get_property(chg->usb_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED, &val);
+				POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &val);
 		if (rc < 0) {
 			mmi_chrg_info(chg, "Error getting HW Current Max rc = %d\n", rc);
 			return;
@@ -809,7 +809,7 @@ void mmi_chrg_rate_check(struct mmi_charger_manager *chg)
 
 		val.intval = 0;
 		rc = power_supply_get_property(chg->usb_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED, &val);
+				POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &val);
 		if (rc < 0) {
 			mmi_chrg_err(chg, "Error getting ICL Settled rc = %d\n", rc);
 			return;
@@ -1232,7 +1232,7 @@ static void psy_changed_work_func(struct work_struct *work)
 #define DEFAULT_PPS_VOLT_STEPS	20000
 #define DEFAULT_PPS_CURR_STEPS	50000
 #define DEFAULT_PPS_VOLT_MAX	11000000
-#define DEFAULT_PPS_CURR_MAX	4000000
+#define DEFAULT_PPS_CURR_MAX	5000000
 #define MMI_TEMP_ZONES	5
 static int mmi_chrg_manager_parse_dt(struct mmi_charger_manager *chip)
 {
