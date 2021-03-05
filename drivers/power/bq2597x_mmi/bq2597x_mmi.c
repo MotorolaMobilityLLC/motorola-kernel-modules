@@ -1878,7 +1878,7 @@ static const struct attribute_group bq2597x_attr_group = {
 static enum power_supply_property bq2597x_charger_props[] = {
 	POWER_SUPPLY_PROP_CP_STATUS1,
 	POWER_SUPPLY_PROP_PRESENT,
-	POWER_SUPPLY_PROP_CHARGE_ENABLED,
+	POWER_SUPPLY_PROP_CHARGING_ENABLED,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
@@ -1900,7 +1900,7 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 	int result;
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
 		val->intval = bq->charge_enabled;
 		break;
@@ -1976,7 +1976,7 @@ static int bq2597x_charger_set_property(struct power_supply *psy,
 {
 	struct bq2597x *bq = power_supply_get_drvdata(psy);
 	switch (prop) {
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 	/*	if (bq->usb_present) {*/
 //			bq_err("start dump reg\n");
 //			bq2597x_dump_reg(bq);
@@ -2025,7 +2025,7 @@ static int bq2597x_charger_is_writeable(struct power_supply *psy,
 	int ret;
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 		ret = 1;
 		break;
 	default:
