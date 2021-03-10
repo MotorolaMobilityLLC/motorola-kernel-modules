@@ -304,8 +304,8 @@ static void fpsensor_hw_reset(int delay)
 
 static void fpsensor_spi_clk_enable(u8 bonoff)
 {
-	if (bonoff == 0 &&(fpsensor_balance_spi_clk == 1)) {
-	#if FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_MASTER_CLKs
+	if (bonoff == 0 && (fpsensor_balance_spi_clk == 1)) {
+	#if FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_MASTER_CLK
 		mt_spi_disable_master_clk(g_fpsensor->spi);
 	#elif  FPSENSOR_SPI_CLOCK_TYPE == FPSENSOR_SPI_CLOCK_TYPE_CLK
 		mt_spi = spi_master_get_devdata(g_fpsensor->spi->master);
@@ -823,7 +823,6 @@ static int fpsensor_probe(struct platform_device *spi)
     fb_register_client(&fpsensor_dev->notifier);
 #endif
 
-    fpsensor_spi_clk_enable(1);
     fpsensor_dev->device_available = 1;
     fpsensor_debug(INFO_LOG, "%s finished, driver version: %s\n", __func__, FPSENSOR_SPI_VERSION);
     goto out;
