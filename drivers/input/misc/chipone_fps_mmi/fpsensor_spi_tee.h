@@ -60,7 +60,7 @@
 #endif
 
 /*********************** fingerprint compatible setting **********************/
-#define FPSENSOR_TKCORE_COMPATIBLE        1   // 0:off    1: on
+#define FPSENSOR_TKCORE_COMPATIBLE        0  // 0:off    1: on
 
 
 
