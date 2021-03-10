@@ -412,7 +412,6 @@ static enum power_supply_property batt_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
-	POWER_SUPPLY_PROP_NUM_SYSTEM_TEMP_LEVELS,
 	POWER_SUPPLY_PROP_CHARGE_ENABLED,
 	POWER_SUPPLY_PROP_CHARGE_RATE,
 	POWER_SUPPLY_PROP_AGE,
@@ -574,7 +573,6 @@ static enum power_supply_property mmi_chrg_mgr_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
-	POWER_SUPPLY_PROP_NUM_SYSTEM_TEMP_LEVELS,
 	POWER_SUPPLY_PROP_CP_ENABLE,
 };
 
@@ -630,9 +628,6 @@ static int mmi_chrg_mgr_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
 		val->intval = chip->system_thermal_level;
 		break;
-	case POWER_SUPPLY_PROP_NUM_SYSTEM_TEMP_LEVELS:
-		val->intval = chip->thermal_levels;
-		break;
 	case POWER_SUPPLY_PROP_CP_ENABLE:
 		val->intval = !chip->cp_disable;
 		break;
@@ -651,15 +646,17 @@ static int mmi_chrg_mgr_set_property(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
-		if (val->intval < 0)
+		if (val->intval < 0) {
+			chip->system_thermal_level = THERMAL_NOT_LIMIT;
+			return 0;
+		}
+
+		if (chip->thermal_min_level <= 0)
 			return -EINVAL;
 
-		if (chip->thermal_levels <= 0)
-			return -EINVAL;
-
-		if (val->intval >= chip->thermal_levels)
+		if (val->intval <= chip->thermal_min_level)
 			chip->system_thermal_level =
-				chip->thermal_levels - 1;
+				chip->thermal_min_level;
 		else
 			chip->system_thermal_level = val->intval;
 
@@ -1233,6 +1230,7 @@ static void psy_changed_work_func(struct work_struct *work)
 #define DEFAULT_PPS_CURR_STEPS	50000
 #define DEFAULT_PPS_VOLT_MAX	11000000
 #define DEFAULT_PPS_CURR_MAX	5000000
+#define DEFAULT_THERMAL_MIN_LEVL	2000000
 #define MMI_TEMP_ZONES	5
 static int mmi_chrg_manager_parse_dt(struct mmi_charger_manager *chip)
 {
@@ -1310,7 +1308,12 @@ static int mmi_chrg_manager_parse_dt(struct mmi_charger_manager *chip)
 	if (rc < 0)
 		chip->pps_curr_steps =
 				DEFAULT_PPS_CURR_STEPS;
-
+	rc = of_property_read_u32(node,
+				"mmi,thermal-min-level",
+				&chip->thermal_min_level);
+	if (rc < 0)
+		chip->thermal_min_level =
+				DEFAULT_THERMAL_MIN_LEVL;
 	rc = of_property_read_u32(node,
 				"mmi,pd-volt-max",
 				&chip->pd_volt_max);
@@ -1487,29 +1490,8 @@ static int mmi_chrg_manager_parse_dt(struct mmi_charger_manager *chip)
 		chip->chrg_step_nums = step_cnt;
 	}
 
-	if (of_find_property(node, "mmi,thermal-mitigation", &byte_len)) {
-		chip->thermal_mitigation = devm_kzalloc(chip->dev, byte_len,
-				GFP_KERNEL);
-
-		if (chip->thermal_mitigation == NULL) {
-			rc = -ENOMEM;
-			goto zones_failed;
-		}
-		chip->thermal_levels = byte_len / sizeof(u32);
-		rc = of_property_read_u32_array(node,
-			"mmi,thermal-mitigation",
-			chip->thermal_mitigation,
-			chip->thermal_levels);
-		if (rc < 0) {
-			mmi_chrg_err(chip,
-				   "Couldn't parse thermal-mitigation rc = %d\n", rc);
-			goto thermal_failed;
-		}
-	}
-
 	return rc;
-thermal_failed:
-	devm_kfree(chip->dev,chip->thermal_mitigation);
+
 zones_failed:
 	devm_kfree(chip->dev,chip->temp_zones);
 cleanup:
@@ -1543,6 +1525,7 @@ static int mmi_chrg_manager_probe(struct platform_device *pdev)
 	chip->name = "mmi_chrg_manager";
 	chip->debug_mask = &__debug_mask;
 	chip->suspended = false;
+	chip->system_thermal_level = THERMAL_NOT_LIMIT;
 
 	ret = mmi_charger_class_init();
 	if (ret < 0) {

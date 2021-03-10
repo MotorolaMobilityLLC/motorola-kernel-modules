@@ -137,6 +137,7 @@ struct mmi_chrg_dts_info {
 #define SWITCH_CHARGER_PPS_VOLT		5000000
 #define PUMP_CHARGER_PPS_MIN_VOLT	8000000
 #define COOLING_HYSTERISIS_DEGC 2
+#define THERMAL_NOT_LIMIT -1
 struct mmi_charger_manager {
 	const char	*name;
 	struct device	*dev;
@@ -221,9 +222,8 @@ struct mmi_charger_manager {
 	struct mmi_chrg_temp_zone		*temp_zones;	/*the temperature zone of charging*/
 	enum mmi_chrg_temp_zones	pres_temp_zone;	/*the present zone idx*/
 
-	int	*thermal_mitigation;	/*thermal mitigation array*/
-	int	thermal_levels;
 	int	system_thermal_level;	/*thermal level setting*/
+	int	thermal_min_level;
 
 	int	chrg_step_nums;
 	struct mmi_chrg_step_info chrg_step;	/*step charger info*/
