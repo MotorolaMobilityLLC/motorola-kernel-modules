@@ -1329,10 +1329,10 @@ schedule:
 	chip->pd_target_volt = min(chip->pd_request_volt, chip->pd_volt_max);
 	chip->pd_target_curr = min(chip->pd_request_curr, chip->pd_curr_max);
 
-	if (chip->system_thermal_level == 0) {
+	if (chip->system_thermal_level == THERMAL_NOT_LIMIT) {
 		chip->sys_therm_cooling= false;
 		chip->sys_therm_force_pmic_chrg = false;
-	} else if ((chip->system_thermal_level == chip->thermal_levels - 1)
+	} else if ((chip->system_thermal_level <= chip->thermal_min_level)
 	&& !chip->sys_therm_force_pmic_chrg) {
 		chip->sys_therm_cooling = true;
 		chip->sys_therm_force_pmic_chrg = true;
@@ -1341,7 +1341,7 @@ schedule:
 						"Force enter into single pmic charging !\n",
 						chip->system_thermal_level);
 
-	} else if (chip->system_thermal_level > 0 &&
+	} else if (chip->system_thermal_level > chip->thermal_min_level &&
 		(sm_state == PM_STATE_CP_CC_LOOP ||
 		sm_state == PM_STATE_CP_CV_LOOP)) {
 
@@ -1353,9 +1353,7 @@ schedule:
 			chip->pd_sys_therm_curr = chip->pd_request_curr_prev;
 		}
 
-		if (ibatt_curr >
-			chip->thermal_mitigation[chip->system_thermal_level]
-			+ CC_CURR_DEBOUNCE) {
+		if (ibatt_curr > chip->system_thermal_level + CC_CURR_DEBOUNCE) {
 			if (chip->pd_sys_therm_curr - THERMAL_TUNNING_CURR >=
 				chip->typec_middle_current) {
 				chip->pd_sys_therm_curr -= THERMAL_TUNNING_CURR;
@@ -1369,9 +1367,7 @@ schedule:
 								chip->pd_sys_therm_curr - THERMAL_TUNNING_CURR,
 								chip->typec_middle_current);
 			}
-		} else if (ibatt_curr <
-			chip->thermal_mitigation[chip->system_thermal_level]
-			- CC_CURR_DEBOUNCE) {
+		} else if (ibatt_curr < chip->system_thermal_level - CC_CURR_DEBOUNCE) {
 			if (chip->pd_sys_therm_curr + THERMAL_TUNNING_CURR <=
 				chip->pd_curr_max) {
 				chip->pd_sys_therm_curr += THERMAL_TUNNING_CURR;
@@ -1381,8 +1377,8 @@ schedule:
 		}
 
 		heartbeat_dely_ms = HEARTBEAT_SHORT_DELAY_MS;
-	} else if (chip->system_thermal_level > 0 &&
-		chip->system_thermal_level != chip->thermal_levels - 1 &&
+	} else if (chip->system_thermal_level != THERMAL_NOT_LIMIT &&
+		chip->system_thermal_level > chip-> thermal_min_level &&
 		sm_state == PM_STATE_SW_LOOP &&
 		chip->sys_therm_force_pmic_chrg) {
 			mmi_chrg_dbg(chip, PR_MOTO, "Try to recovery charger pump!\n");
