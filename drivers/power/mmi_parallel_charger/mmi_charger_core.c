@@ -841,8 +841,30 @@ end_rate_check:
 
 static bool mmi_factory_check(void)
 {
-	/*TODO*/
-	return 0;
+	char atm_str[64] = {0};
+	char *ptr = NULL, *ptr_e = NULL;
+	char keyword[] = "androidboot.atm=";
+	int size = 0;
+	bool is_fac_mode = false;
+
+	ptr = strstr(saved_command_line, keyword);
+	if (ptr != 0) {
+		ptr_e = strstr(ptr, " ");
+		if (ptr_e == NULL)
+			goto end;
+
+		size = ptr_e - (ptr + strlen(keyword));
+		if (size <= 0)
+			goto end;
+		strncpy(atm_str, ptr + strlen(keyword), size);
+		atm_str[size] = '\0';
+
+		if (!strncmp(atm_str, "enable", strlen("enable")))
+			is_fac_mode = true;
+	}
+end:
+	pr_info("%s: fac mode = %d\n", __func__, is_fac_mode);
+	return is_fac_mode;
 }
 
 static void kick_sm(struct mmi_charger_manager *chip, int ms)
