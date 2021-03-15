@@ -269,12 +269,12 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 	}
 
 	if (!fpc->request_irq) {
-
 		fpc->irq_gpio = of_get_named_gpio(dev->of_node, "fpc,irq", 0);
 		dev_info(dev, "Using GPIO#%d as IRQ.\n", fpc->irq_gpio);
 		if (!gpio_is_valid(fpc->irq_gpio)){
 			dev_err(dev, "invalid irq gpio!");
-			return -EINVAL;
+			rc = -EINVAL;
+			goto err_vdd;
 		}
 		gpio_direction_input(fpc->irq_gpio);
 		irq_num = gpio_to_irq(fpc->irq_gpio);
@@ -282,11 +282,10 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 		if (!irq_num) {
 			rc = -EINVAL;
 			dev_err(dev, "get irq_num error rc = %d.\n", rc);
-			goto exit;
+			goto err_vdd;
 		}
 
 		fpc->irq_num = irq_num;
-
 		fpc->wakeup_enabled = true;
 		fpc->init_wakeup = false;
 		irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
@@ -301,7 +300,7 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 			dev_name(dev), fpc);
 		if (rc) {
 			dev_err(dev, "could not request irq %d\n", irq_num);
-			goto exit;
+			goto err_vdd;
 		}
 		dev_info(dev, "requested thread irq %d\n", irq_num);
 
@@ -310,13 +309,17 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 
 		fpc->request_irq = true;
 	}
+	return rc;
 err_vdd:
 	if (fpc->vdd_gpio != 0) {
 		devm_gpio_free(dev,fpc->vdd_gpio);
 		fpc->vdd_gpio = 0;
-		pr_info("remove vdd_gpio success\n");
+		pr_info("fpc_spi: err_vdd:remove vdd_gpio success\n");
 	}
-exit:
+	if(fpc->init_wakeup) {
+		device_init_wakeup(dev, false);
+		fpc->init_wakeup = false;
+	}
 	return rc;
 }
 
@@ -332,7 +335,7 @@ static int fpc_hw_res_release(struct fpc_data *fpc)
 	if (fpc->vdd_gpio) {
 		devm_gpio_free(dev,fpc->vdd_gpio);
 		fpc->vdd_gpio = 0;
-		pr_info("remove vdd_gpio success\n");
+		pr_info("fpc_spi:remove vdd_gpio success\n");
 	}
 	if(fpc->init_wakeup) {
 		device_init_wakeup(dev, false);
