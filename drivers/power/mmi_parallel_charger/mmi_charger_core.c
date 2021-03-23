@@ -1537,9 +1537,10 @@ static int mmi_chrg_manager_probe(struct platform_device *pdev)
 			"Unable to alloc memory for mmi_charger_manager\n");
 		return -ENOMEM;
 	}
-	ret =init_tcpc(chip);
+	ret = init_tcpc(chip);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "tcpc init failed\n");
+		devm_kfree(&pdev->dev, chip);
 		return -ENODEV;
 	}
 
