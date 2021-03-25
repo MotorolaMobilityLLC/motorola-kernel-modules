@@ -43,6 +43,7 @@
 #include <linux/pm_wakeup.h>
 #include <linux/regulator/consumer.h>
 #include <linux/clk.h>
+#include <linux/version.h>
 
 #define FPC_RESET_LOW_US 5000
 #define FPC_RESET_HIGH1_US 100
@@ -347,7 +348,9 @@ static int fpc_hw_res_release(struct fpc_data *fpc)
 static ssize_t hw_enable_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+#ifdef USER_SPACE_SPI_INIT
 	struct  fpc_data *fpc = dev_get_drvdata(dev);
+#endif
 	ssize_t ret = count;
 #ifdef USER_SPACE_SPI_INIT
 	dev_info(dev, "%s: enter\n", __func__);
@@ -436,7 +439,11 @@ static struct attribute *fpc_attributes[] = {
 	NULL
 };
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+static const struct attribute_group fpc_attribute_group = {
+#else
 static const struct attribute_group const fpc_attribute_group = {
+#endif
 	.attrs = fpc_attributes,
 };
 
@@ -528,6 +535,9 @@ static int fpc_tee_probe(struct spi_device *spidev)
 	struct device *dev = &spidev->dev;
 	struct fpc_data *fpc;
 	int rc = 0;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	struct wakeup_source *src = NULL;
+#endif
 
 	spidev->dev.of_node = of_find_compatible_node(NULL,
 						NULL, FINGERPRINT_INT_COMPATIBLE);
@@ -551,7 +561,12 @@ static int fpc_tee_probe(struct spi_device *spidev)
 	fpc->spidev = spidev;
 	fpc->spidev->irq = 0; /*SPI_MODE_0*/
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	src = wakeup_source_register(fpc->dev, "fpc_ttw_wl");
+	memcpy(&fpc->ttw_wl, src, sizeof(struct wakeup_source));
+#else
 	wakeup_source_init(&fpc->ttw_wl, "fpc_ttw_wl");
+#endif
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	rc = fpc1020_create_sysfs(fpc, true);
 #else
@@ -590,7 +605,11 @@ static int fpc_tee_remove(struct spi_device *spidev)
 #else
 	sysfs_remove_group(&spidev->dev.kobj, &fpc_attribute_group);
 #endif
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	wakeup_source_unregister(&fpc->ttw_wl);
+#else
 	wakeup_source_trash(&fpc->ttw_wl);
+#endif
 	devm_kfree( &spidev->dev,fpc);
 	pr_info("%s end\n", __func__);
 	return 0;
