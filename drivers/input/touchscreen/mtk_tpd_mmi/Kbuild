@@ -1,0 +1,11 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+
+obj-m := mtk_tpd_mmi.o
+mtk_tpd_mmi-objs += mtk_tpd.o
+mtk_tpd_mmi-objs += tpd_button.o
+mtk_tpd_mmi-objs += tpd_calibrate.o
+mtk_tpd_mmi-objs += tpd_default.o
+mtk_tpd_mmi-objs += tpd_misc.o
+mtk_tpd_mmi-objs += tpd_setting.o
