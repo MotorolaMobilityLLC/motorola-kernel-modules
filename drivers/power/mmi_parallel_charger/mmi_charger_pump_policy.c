@@ -688,6 +688,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		chip->sys_therm_cooling = false;
 		chip->sys_therm_force_pmic_chrg = false;
 		chip->recovery_pmic_chrg = false;
+		chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		break;
 	case PM_STATE_SW_ENTRY:
