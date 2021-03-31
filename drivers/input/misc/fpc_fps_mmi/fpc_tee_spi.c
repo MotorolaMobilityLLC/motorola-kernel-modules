@@ -71,7 +71,11 @@ struct fpc_data {
 	bool request_irq;
 	bool init;
 	bool init_wakeup;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	struct wakeup_source* ttw_wl;
+#else
 	struct wakeup_source ttw_wl;
+#endif
 };
 
 static DEFINE_MUTEX(spidev_set_gpio_mutex);
@@ -472,7 +476,11 @@ static irqreturn_t fpc_irq_handler(int irq, void *handle)
 	*/
 	smp_rmb();
 	if (fpc->wakeup_enabled)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+		__pm_wakeup_event(fpc->ttw_wl, FPC_TTW_HOLD_TIME);
+#else
 		__pm_wakeup_event(&fpc->ttw_wl, FPC_TTW_HOLD_TIME);
+#endif
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	sysfs_notify(&fpc->class_dev->kobj, NULL, dev_attr_irq.attr.name);
 #else
@@ -535,9 +543,6 @@ static int fpc_tee_probe(struct spi_device *spidev)
 	struct device *dev = &spidev->dev;
 	struct fpc_data *fpc;
 	int rc = 0;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
-	struct wakeup_source *src = NULL;
-#endif
 
 	spidev->dev.of_node = of_find_compatible_node(NULL,
 						NULL, FINGERPRINT_INT_COMPATIBLE);
@@ -562,8 +567,7 @@ static int fpc_tee_probe(struct spi_device *spidev)
 	fpc->spidev->irq = 0; /*SPI_MODE_0*/
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
-	src = wakeup_source_register(fpc->dev, "fpc_ttw_wl");
-	memcpy(&fpc->ttw_wl, src, sizeof(struct wakeup_source));
+	fpc->ttw_wl = wakeup_source_register(fpc->dev, "fpc_ttw_wl");
 #else
 	wakeup_source_init(&fpc->ttw_wl, "fpc_ttw_wl");
 #endif
@@ -606,11 +610,11 @@ static int fpc_tee_remove(struct spi_device *spidev)
 	sysfs_remove_group(&spidev->dev.kobj, &fpc_attribute_group);
 #endif
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
-	wakeup_source_unregister(&fpc->ttw_wl);
+	wakeup_source_unregister(fpc->ttw_wl);
 #else
 	wakeup_source_trash(&fpc->ttw_wl);
-#endif
 	devm_kfree( &spidev->dev,fpc);
+#endif
 	pr_info("%s end\n", __func__);
 	return 0;
 }
