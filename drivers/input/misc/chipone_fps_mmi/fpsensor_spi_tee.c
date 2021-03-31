@@ -319,6 +319,25 @@ int fpsensor_spidev_dts_init(fpsensor_data_t *fpsensor)
     }
     return 0;
 }
+
+int fpsensor_spidev_dts_uninit(fpsensor_data_t *fpsensor)
+{
+    fpsensor_debug(ERR_LOG,"fpsensor_spidev_dts_uinit Enter.\n");
+#if FPSENSOR_PMIC_LDO
+    if (fpsensor->fp_regulator != NULL) {
+        regulator_disable(fpsensor->fp_regulator);
+        regulator_put(fpsensor->fp_regulator);
+        fpsensor->fp_regulator = NULL;
+    }
+#endif
+
+    if(NULL != fpsensor->pinctrl) {
+        devm_pinctrl_put(fpsensor->pinctrl);
+        fpsensor->pinctrl= NULL;
+    }
+    return 0;
+}
+
 /* delay us after reset */
 static void fpsensor_hw_reset(int delay)
 {
@@ -1050,7 +1069,7 @@ static int fpsensor_remove(struct platform_device *spi)
 #else
     wake_lock_destroy(&fpsensor_dev->ttw_wl);
 #endif
-
+    fpsensor_spidev_dts_uninit(fpsensor_dev);
      if(fpsensor_dev!=NULL){
 		  kfree(fpsensor_dev);
       fpsensor_dev = NULL;
