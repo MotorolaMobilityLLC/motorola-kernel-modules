@@ -1537,12 +1537,6 @@ static int mmi_chrg_manager_probe(struct platform_device *pdev)
 			"Unable to alloc memory for mmi_charger_manager\n");
 		return -ENOMEM;
 	}
-	ret = init_tcpc(chip);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "tcpc init failed\n");
-		devm_kfree(&pdev->dev, chip);
-		return -ENODEV;
-	}
 
 	chip->dev = &pdev->dev;
 	chip->name = "mmi_chrg_manager";
@@ -1598,8 +1592,16 @@ static int mmi_chrg_manager_probe(struct platform_device *pdev)
 
 	if (!chip->usb_psy) {
 		chip->usb_psy = power_supply_get_by_name("charger");
-		if (!chip->usb_psy)
+		if (!chip->usb_psy) {
 			mmi_chrg_err(chip, "Could not get USB power_supply\n");
+			goto cleanup;
+		}
+	}
+
+	ret = init_tcpc(chip);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "tcpc init failed\n");
+		goto cleanup;
 	}
 
 	INIT_WORK(&chip->psy_changed_work, psy_changed_work_func);
@@ -1612,12 +1614,12 @@ static int mmi_chrg_manager_probe(struct platform_device *pdev)
 
 	ret = mmi_chrg_mgr_psy_register(chip);
 	if (ret)
-		goto cleanup;
+		goto cleantcpc;
 
 	chip->psy_nb.notifier_call = psy_changed;
 	ret = power_supply_reg_notifier(&chip->psy_nb);
 	if (ret)
-		goto cleanup;
+		goto cleantcpc;
 
 	mmi_batt_age_init(chip);
 
@@ -1628,6 +1630,10 @@ static int mmi_chrg_manager_probe(struct platform_device *pdev)
 	schedule_work(&chip->psy_changed_work);
 	mmi_chrg_info(chip, "mmi chrg manager initialized successfully, ret %d\n", ret);
 	return 0;
+cleantcpc:
+	unregister_tcp_dev_notifier(chip->tcpc, &chip->tcp_nb,
+                                 TCP_NOTIFY_TYPE_USB);
+
 cleanup:
 	mmi_charger_class_exit();
 	devm_kfree(&pdev->dev, chip);
@@ -1641,7 +1647,7 @@ static int mmi_chrg_manager_remove(struct platform_device *pdev)
 	//remove_sysfs_entries(chip);
 	//cancel_delayed_work_sync(&chip->mmi_chrg_sm_work);
 	power_supply_unreg_notifier(&chip->psy_nb);
-	power_supply_unregister(chip->mmi_chrg_mgr_psy );
+	power_supply_unregister(chip->mmi_chrg_mgr_psy);
 
 	platform_set_drvdata(pdev, NULL);
 	devm_kfree(&pdev->dev, chip);
