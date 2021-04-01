@@ -159,7 +159,8 @@ static int pca_pps_tcp_notifier_call(struct notifier_block *nb,
 		break;
 	}
 
-	power_supply_changed(chip->usb_psy);
+	if(chip->usb_psy)
+		power_supply_changed(chip->usb_psy);
 
 	return NOTIFY_OK;
 }
