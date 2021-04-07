@@ -1,6 +1,10 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
+ifneq ($(BOARD_USES_TOUCHSCREEN_EARLY_BLANK),)
+	KERNEL_CFLAGS += CONFIG_USES_TOUCHSCREEN_EARLY_BLANK=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := mtk_tpd_mmi.ko
 LOCAL_MODULE_TAGS := optional
