@@ -9,3 +9,7 @@ mtk_tpd_mmi-objs += tpd_calibrate.o
 mtk_tpd_mmi-objs += tpd_default.o
 mtk_tpd_mmi-objs += tpd_misc.o
 mtk_tpd_mmi-objs += tpd_setting.o
+
+ifneq ($(filter m y,$(CONFIG_USES_TOUCHSCREEN_EARLY_BLANK)),)
+	EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_EARLY_BLANK
+endif
