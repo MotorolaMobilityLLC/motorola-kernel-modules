@@ -63,6 +63,9 @@
 #include <linux/dma-mapping.h>
 #include "focaltech_common.h"
 #include <linux/input/tpd.h>
+#ifdef FTS_USB_DETECT_EN
+#include <linux/power_supply.h>
+#endif
 #ifdef FOCALTECH_SENSOR_EN
 #include <linux/sensors.h>
 #endif
@@ -104,7 +107,7 @@
 
 #define FTS_MAX_COMPATIBLE_TYPE             4
 #define FTS_MAX_COMMMAND_LENGTH             16
-
+#define FTS_REG_RETRY_TIMES                 5
 
 /*****************************************************************************
 *  Alternative mode (When something goes wrong, the modules may be able to solve the problem.)
@@ -217,6 +220,12 @@ struct fts_ts_data {
     struct pinctrl          *pinctrl;
     struct pinctrl_state    *spi_default;
     struct pinctrl_state    *spi_active;
+
+#if FTS_USB_DETECT_EN
+    bool usb_detect_flag;
+    uint8_t usb_connected;
+    struct notifier_block charger_notif;
+#endif
 
 #ifdef FOCALTECH_SENSOR_EN
     bool wakeable;
