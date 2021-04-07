@@ -116,7 +116,7 @@
  * point report check
  * default: disable
  */
-#define FTS_POINT_REPORT_CHECK_EN               0
+#define FTS_POINT_REPORT_CHECK_EN               1
 
 /*****************************************************************************
 * Global variable or extern global variabls/functions
@@ -161,9 +161,17 @@ struct ts_ic_info {
     printk("[FTS_TS]%s: Exit(%d)\n", __func__, __LINE__); \
 } while (0)
 #else /* #if FTS_DEBUG_EN*/
-#define FTS_DEBUG(fmt, args...)
-#define FTS_FUNC_ENTER()
-#define FTS_FUNC_EXIT()
+#define FTS_DEBUG(fmt, args...) do { \
+    pr_debug("[FTS_TS]%s:"fmt"\n", __func__, ##args); \
+} while (0)
+
+#define FTS_FUNC_ENTER() do { \
+    pr_debug("[FTS_TS]%s: Enter\n", __func__); \
+} while (0)
+
+#define FTS_FUNC_EXIT() do { \
+    pr_debug("[FTS_TS]%s: Exit(%d)\n", __func__, __LINE__); \
+} while (0)
 #endif
 
 #define FTS_INFO(fmt, args...) do { \
