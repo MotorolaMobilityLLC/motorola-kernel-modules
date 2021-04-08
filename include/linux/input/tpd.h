@@ -29,6 +29,7 @@
 #include <generated/autoconf.h>
 #include <linux/kobject.h>
 #include <linux/regulator/consumer.h>
+#include <linux/version.h>
 
 /*debug macros */
 #define TPD_DEBUG
@@ -88,8 +89,10 @@ extern int tpd_wb_start[];
 extern int tpd_wb_end[];
 extern int tpd_v_magnify_x;
 extern int tpd_v_magnify_y;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0))
 extern unsigned int DISP_GetScreenHeight(void);
 extern unsigned int DISP_GetScreenWidth(void);
+#endif
 #if defined(CONFIG_MTK_S3320) || defined(CONFIG_MTK_S3320_47) || \
 	defined(CONFIG_MTK_S3320_50)
 extern void synaptics_init_sysfs(void);
