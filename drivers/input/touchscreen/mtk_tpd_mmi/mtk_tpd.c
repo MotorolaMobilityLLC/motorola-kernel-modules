@@ -18,6 +18,10 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/fb.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,0))
+#include <linux/pinctrl/consumer.h>
+#endif
 #ifdef CONFIG_MTK_MT6306_GPIO_SUPPORT
 #include <mtk_6306_gpio.h>
 #endif
@@ -543,6 +547,11 @@ static int tpd_driver_init(struct platform_device *pdev)
 	/* TPD_RES_X = simple_strtoul(LCM_WIDTH, NULL, 0); */
 	/* TPD_RES_Y = simple_strtoul(LCM_HEIGHT, NULL, 0); */
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,0))
+	TPD_RES_X = tpd_dts_data.tpd_resolution[0];
+	TPD_RES_Y = tpd_dts_data.tpd_resolution[1];
+	pr_info("tpd_resolution: x:%lu, y:%lu\n", TPD_RES_X, TPD_RES_Y);
+#else
 	#ifdef CONFIG_MTK_LCM_PHYSICAL_ROTATION
 	if (strncmp(CONFIG_MTK_LCM_PHYSICAL_ROTATION, "90", 2) == 0
 		|| strncmp(CONFIG_MTK_LCM_PHYSICAL_ROTATION, "270", 3) == 0) {
@@ -583,6 +592,7 @@ static int tpd_driver_init(struct platform_device *pdev)
 #endif
 #endif
 	}
+#endif
 
 	if (2560 == TPD_RES_X)
 		TPD_RES_X = 2048;
