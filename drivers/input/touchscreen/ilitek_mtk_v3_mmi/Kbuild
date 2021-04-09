@@ -1,0 +1,16 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
+		-I$(TOP)/motorola/kernel/modules/drivers/input/touchscreen/ilitek_mtk_v3_mmi \
+		-I$(TOP)/motorola/kernel/modules/drivers/input/touchscreen/ilitek_mtk_v3_mmi/firmware
+
+obj-m += ilitek_mtk_v3_mmi.o
+
+ilitek_mtk_v3_mmi-objs += ilitek_v3.o
+ilitek_mtk_v3_mmi-objs += ilitek_v3_spi.o
+ilitek_mtk_v3_mmi-objs += ilitek_v3_mtk.o
+ilitek_mtk_v3_mmi-objs += ilitek_v3_ic.o
+ilitek_mtk_v3_mmi-objs += ilitek_v3_touch.o
+ilitek_mtk_v3_mmi-objs += ilitek_v3_mp.o
+ilitek_mtk_v3_mmi-objs += ilitek_v3_hostdl.o
+ilitek_mtk_v3_mmi-objs += ilitek_v3_node.o
