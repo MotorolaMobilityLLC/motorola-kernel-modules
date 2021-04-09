@@ -1,0 +1,14 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
+		-I$(TOP)/motorola/kernel/modules/drivers/input/touchscreen/nt36xxx_mtk_mmi
+
+
+ifeq ($(filter m y, $(CONFIG_TOUCHSCREEN_NOVATEK_CHIPSET)),)
+	obj-m := nt36xxx_mtk_mmi.o
+endif
+
+nt36xxx_mtk_mmi-objs += nt36xxx.o
+nt36xxx_mtk_mmi-objs += nt36xxx_ext_proc.o
+nt36xxx_mtk_mmi-objs += nt36xxx_fw_update.o
+nt36xxx_mtk_mmi-objs += nt36xxx_mp_ctrlram.o
