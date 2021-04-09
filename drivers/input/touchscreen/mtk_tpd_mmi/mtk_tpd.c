@@ -61,6 +61,74 @@ const struct of_device_id touch_of_match[] = {
 EXPORT_SYMBOL(tpd_dts_data);
 EXPORT_SYMBOL(touch_of_match);
 
+#ifdef TPD_MULT_PANEL
+char active_panel_name[50] = {0};
+#if defined(CONFIG_FB)
+int tpd_get_panel_by_cmdline (void)
+{
+	//bringup, parse panel name from cmdline
+	TPD_DMESG("enter\n");
+	if (saved_command_line) {
+		char *sub;
+		char key_prefix[] = "mipi_mot_vid_";
+
+		//TPD_DMESG("saved_command_line is %s\n", saved_command_line);
+		sub = strstr(saved_command_line, key_prefix);
+		if (sub) {
+			char *d;
+			int len, len_max = 50;
+
+			d = strstr(sub, " ");
+			if (d) {
+				len = strlen(sub) - strlen(d);
+			} else {
+				len = strlen(sub);
+			}
+
+			strncpy(active_panel_name, sub, min(len, len_max));
+			TPD_DMESG("active_panel_name=%s\n", active_panel_name);
+
+		} else {
+			TPD_DMESG("active panel not found!");
+			return -1;
+		}
+	} else {
+		TPD_DMESG("saved_command_line null!");
+		return -1;
+	}
+
+	return 0;
+}
+
+int tpd_get_active_panel(void)
+{
+	int ret;
+
+	if (strlen(active_panel_name)) {
+		TPD_DMESG("already got active_panel_name=%s\n", active_panel_name);
+		return 0;
+	}
+
+	TPD_DMESG("enter\n");
+	if (saved_command_line) {
+		//bringup, parse panel name from cmdline
+		ret = tpd_get_panel_by_cmdline();
+	} else {
+		ret = -1;
+	}
+
+	return ret;
+}
+#else
+int tpd_get_active_panel(void)
+{
+	//TBD
+	return -1;
+}
+#endif
+
+#endif // end TPD_MULT_PANEL
+
 void tpd_get_dts_info(void)
 {
 	struct device_node *node1 = NULL;
@@ -151,6 +219,8 @@ void tpd_get_dts_info(void)
 		if (ret < 0)
 			tpd_dts_data.panel_supplier = NULL;
 
+		tpd_dts_data.tpd_panel_match =
+			of_property_read_bool(node1, "tpd-panel-match");
 	} else {
 		TPD_DMESG("can't find touch compatible custom node\n");
 	}
@@ -716,6 +786,23 @@ int tpd_driver_add(struct tpd_driver_t *tpd_drv)
 	/* check parameter */
 	if (tpd_drv == NULL)
 		return -1;
+
+#ifdef TPD_MULT_PANEL
+	if (tpd_dts_data.tpd_panel_match) {
+	        tpd_get_active_panel();
+	        if (tpd_drv->tpd_panel_supplier && strlen(active_panel_name) && strstr(active_panel_name, tpd_drv->tpd_panel_supplier)) {
+	                TPD_DMESG("tpd_panel_supplier:%s matched!\n", tpd_drv->tpd_panel_supplier);
+	        } else {
+			if (tpd_drv->tpd_panel_supplier)
+				TPD_DMESG("tpd_panel_supplier:%s not actived\n", tpd_drv->tpd_panel_supplier);
+			else
+				TPD_DMESG("tpd_panel_supplier NULL!\n");
+
+			return -1;
+	        }
+	}
+#endif
+
 	tpd_drv->tpd_have_button = tpd_dts_data.use_tpd_button;
 	/* R-touch */
 	if (strcmp(tpd_drv->tpd_device_name, "generic") == 0) {

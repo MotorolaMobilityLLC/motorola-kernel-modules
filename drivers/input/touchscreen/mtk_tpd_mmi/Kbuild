@@ -2,6 +2,10 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
+ifneq ($(filter m y,$(CONFIG_MTK_TPD_MULT_PANEL)),)
+	EXTRA_CFLAGS += -DTPD_MULT_PANEL
+endif
+
 obj-m := mtk_tpd_mmi.o
 mtk_tpd_mmi-objs += mtk_tpd.o
 mtk_tpd_mmi-objs += tpd_button.o
