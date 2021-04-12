@@ -28,30 +28,16 @@
 #define pr_fmt(fmt)	"qpnp_adap_chg-[%s]: " fmt, __func__
 #include <linux/module.h>
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 61))
-#include <linux/mmi-pmic-voter.h>
-#else
-#include <linux/pmic-voter.h>
-#endif
 #include <linux/power_supply.h>
 #include <linux/notifier.h>
 #include <linux/moduleparam.h>
+#include <linux/qpnp_adaptive_charge.h>
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 61))
-#define vote(votable, client_str, enabled, val) \
-	mmi_vote(votable, client_str, enabled, val)
-
-#define find_votable(name) mmi_find_votable(name)
-#endif
 
 static struct adap_chg_data {
 	struct power_supply	*batt_psy;
-	struct power_supply *dc_psy;
+	struct power_supply *ac_psy;
 	struct power_supply *usb_psy;
-	struct votable	*usb_icl_votable;
-	struct votable	*dc_suspend_votable;
-	struct votable	*fcc_votable;
-	struct votable	*chg_dis_votable;
 	int	batt_capacity;
 	struct	notifier_block ps_notif;
 	struct	work_struct update;
@@ -63,8 +49,6 @@ static struct adap_chg_data {
 int upper_limit = -1;
 int lower_limit = -1;
 int blocking = 0;
-
-#define ADAPTIVE_CHARGING_VOTER	"ADAPTIVE_CHARGING_VOTER"
 
 static int get_ps_int_prop(struct power_supply *psy, enum power_supply_property prop)
 {
@@ -88,15 +72,13 @@ static int get_ps_int_prop(struct power_supply *psy, enum power_supply_property 
 static void suspend_charging(bool on)
 {
 	if(!adap_chg_data.charging_suspended && on) {
-		vote(adap_chg_data.usb_icl_votable, ADAPTIVE_CHARGING_VOTER, true, 0);
-		vote(adap_chg_data.dc_suspend_votable, ADAPTIVE_CHARGING_VOTER, true, 0);
+		adaptive_charging_disable_ichg(true);
 		adap_chg_data.charging_suspended = true;
 		pr_info("Set suspended on\n");
 	}
 
 	if(adap_chg_data.charging_suspended && !on) {
-		vote(adap_chg_data.usb_icl_votable, ADAPTIVE_CHARGING_VOTER, false, 0);
-		vote(adap_chg_data.dc_suspend_votable, ADAPTIVE_CHARGING_VOTER, false, 0);
+		adaptive_charging_disable_ichg(false);
 		adap_chg_data.charging_suspended = false;
 		pr_info("Set suspended off");
 	}
@@ -106,15 +88,13 @@ static void suspend_charging(bool on)
 static void stop_charging(bool on)
 {
 	if(!adap_chg_data.charging_stopped && on) {
-		vote(adap_chg_data.fcc_votable, ADAPTIVE_CHARGING_VOTER, true, 0);
-		vote(adap_chg_data.chg_dis_votable, ADAPTIVE_CHARGING_VOTER, true, 0);
+		adaptive_charging_disable_ibat(true);
 		adap_chg_data.charging_stopped = true;
 		pr_info("Set stop charging on\n");
 	}
 
 	if(adap_chg_data.charging_stopped && !on) {
-		vote(adap_chg_data.fcc_votable, ADAPTIVE_CHARGING_VOTER, false, 0);
-		vote(adap_chg_data.chg_dis_votable, ADAPTIVE_CHARGING_VOTER, false, 0);
+		adaptive_charging_disable_ibat(false);
 		adap_chg_data.charging_stopped = false;
 		pr_info("Set stop charging off\n");
 	}
@@ -236,18 +216,18 @@ static int set_blocking(const char *val, const struct kernel_param *kp)
 
 static int get_blocking(char *buffer, const struct kernel_param *kp)
 {
-	bool dc_connected = false;
+	bool ac_connected = false;
 	bool usb_connected = false;
 
 	if (adap_chg_data.init_success) {
 		usb_connected = (get_ps_int_prop(adap_chg_data.usb_psy,
-			POWER_SUPPLY_PROP_PRESENT) > 0 ? true : false);
+			POWER_SUPPLY_PROP_ONLINE) > 0 ? true : false);
 
-		dc_connected = (get_ps_int_prop(adap_chg_data.dc_psy,
-			POWER_SUPPLY_PROP_PRESENT) > 0 ? true : false);
+		ac_connected = (get_ps_int_prop(adap_chg_data.ac_psy,
+			POWER_SUPPLY_PROP_ONLINE) > 0 ? true : false);
 
 		blocking = ((adap_chg_data.charging_suspended || adap_chg_data.charging_stopped) &&
-			(dc_connected || usb_connected));
+			(ac_connected || usb_connected));
 	} else
 		blocking = 0;
 
@@ -326,40 +306,14 @@ static int __init qpnp_adap_chg_init(void)
 		goto fail;
 	}
 
-	adap_chg_data.dc_psy = power_supply_get_by_name("dc");
-	if (!adap_chg_data.dc_psy)
-		pr_info("No dc power supply found\n");
+	adap_chg_data.ac_psy = power_supply_get_by_name("ac");
+	if (!adap_chg_data.ac_psy)
+		pr_info("No ac power supply found\n");
 
 	adap_chg_data.batt_capacity = get_ps_int_prop(adap_chg_data.batt_psy,
 		POWER_SUPPLY_PROP_CAPACITY);
-	if (adap_chg_data.batt_capacity < 0) {
+	if (adap_chg_data.batt_capacity < 0)
 		pr_err("Failed to get initial battery capacity\n");
-		goto fail;
-	}
-
-	adap_chg_data.usb_icl_votable = find_votable("USB_ICL");
-	if (IS_ERR(adap_chg_data.usb_icl_votable)) {
-		pr_err("Failed to get USB_ICL votable\n");
-		goto fail;
-	}
-
-	adap_chg_data.dc_suspend_votable = find_votable("DC_SUSPEND");
-	if (IS_ERR(adap_chg_data.dc_suspend_votable)) {
-		pr_err("Failed to get DC_SUSPEND votable\n");
-		goto fail;
-	}
-
-	adap_chg_data.fcc_votable = find_votable("FCC");
-	if (IS_ERR(adap_chg_data.fcc_votable)) {
-		pr_err("Failed to get FCC votable\n");
-		goto fail;
-	}
-
-	adap_chg_data.chg_dis_votable = find_votable("CHG_DISABLE");
-	if (IS_ERR(adap_chg_data.chg_dis_votable)) {
-		pr_err("Failed to get CHG_DISABLE votable\n");
-		goto fail;
-	}
 
 	adap_chg_data.ps_notif.notifier_call = ps_notify_callback;
 	if (power_supply_reg_notifier(&adap_chg_data.ps_notif)) {
