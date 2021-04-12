@@ -460,6 +460,7 @@ static const struct attribute_group *attribute_groups[] = {
 static irqreturn_t fpc_irq_handler(int irq, void *handle)
 {
 	struct fpc_data *fpc = handle;
+#if 0
 	struct device *dev = fpc->dev;
 	static int current_level = 0; // We assume low level from start
 	current_level = !current_level;
@@ -470,7 +471,7 @@ static irqreturn_t fpc_irq_handler(int irq, void *handle)
 		dev_dbg(dev, "Reconfigure irq to trigger in high level\n");
 		irq_set_irq_type(irq, IRQF_TRIGGER_HIGH);
 	}
-
+#endif
 	/* Make sure 'wakeup_enabled' is updated before using it
 	** since this is interrupt context (other thread...)
 	*/
