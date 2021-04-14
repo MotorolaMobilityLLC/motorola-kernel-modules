@@ -294,7 +294,7 @@ int  lm3697_set_brightness(struct lm3697 *drvdata, int brt_val)
 	if (!ext_lm3697_data)
 		return 0;
 
-	if(ext_lm3697_data->enabled == 0) {
+	if(ext_lm3697_data->enabled == 0 && brt_val != 0) {
 		lm3697_init(ext_lm3697_data);
 		ext_lm3697_data->enabled = 1;
 	}
