@@ -82,7 +82,9 @@ struct lm3697 {
 	unsigned int boost_control;
 	unsigned int pwm_config;
 	unsigned int ctrl_bank_en;
+	unsigned int bl_map;
 	int  enabled;
+	bool using_lsb;
 };
 
 struct lm3697 *ext_lm3697_data;
@@ -242,6 +244,27 @@ int is_lm3697_chip_exist(void)
 		return 0;
 }
 
+static int lm3697_brightness_map(unsigned int level)
+{
+	if (!ext_lm3697_data)
+		return 0;
+
+	/*MAX_LEVEL_256*/
+	if (ext_lm3697_data->bl_map == 1) {
+		if (level == 255)
+			return 2047;
+		return level * 8;
+	}
+	/*MAX_LEVEL_1024*/
+	if (ext_lm3697_data->bl_map == 2)
+		return level * 2;
+	/*MAX_LEVEL_2048*/
+	if (ext_lm3697_data->bl_map == 3)
+		return level;
+
+	return  level;
+}
+
 static int lm3697_gpio_init(struct lm3697 *priv)
 {
 	int ret = -1;
@@ -299,6 +322,8 @@ int  lm3697_set_brightness(struct lm3697 *drvdata, int brt_val)
 		ext_lm3697_data->enabled = 1;
 	}
 
+	brt_val = lm3697_brightness_map(brt_val);
+
 	if (brt_val == 0) {
 		ext_lm3697_data->enabled = 0;
 		lm3697_i2c_write(ext_lm3697_data->client, LM3697_CONTROL_A_RAMP, 0x00);
@@ -310,11 +335,11 @@ int  lm3697_set_brightness(struct lm3697 *drvdata, int brt_val)
 
 	lm3697_i2c_write(ext_lm3697_data->client,
 				LM3697_CTRL_A_BRT_LSB,
-				0X00);
+				brt_val&0x0007);
 
 	lm3697_i2c_write(ext_lm3697_data->client,
 				LM3697_CTRL_A_BRT_MSB,
-				brt_val  & 0xff);
+				(brt_val >> 3)&0xff);
 
 	return ret;
 
@@ -472,6 +497,26 @@ static void lm3697_probe_dt(struct device *dev, struct lm3697 *priv)
 			__func__, priv->ctrl_bank_en);
 	}
 
+	rc = of_property_read_u32(np, "lm3697,bl_map", &temp);
+	if (rc) {
+		pr_err("lm3697,bl_map read fail!\n");
+	} else {
+		priv->bl_map = temp;
+		pr_info("%s lm3697,bl_map --<%x >\n",
+			__func__, priv->bl_map);
+	}
+
+	priv->using_lsb = of_property_read_bool(np, "lm3697,using-lsb");
+	pr_info("%s using_lsb --<%d>\n", __func__, priv->using_lsb);
+
+	if (priv->using_lsb) {
+		priv->brightness = 0x7ff;
+		priv->max_brightness = 2047;
+	} else {
+		priv->brightness = 0xff;
+		priv->max_brightness = 255;
+	}
+
 }
 /******************************************************
  *
@@ -545,7 +590,7 @@ static int lm3697_probe(struct i2c_client *client,
 	led->led_dev.default_trigger = "bkl-trigger";
 	led->led_dev.name = LM3697_LED_DEV;
 	led->led_dev.brightness_set = lm3697_brightness_set;
-	led->led_dev.max_brightness = MAX_BRIGHTNESS_8BIT;
+	led->led_dev.max_brightness = MAX_BRIGHTNESS_11BIT;
 	mutex_init(&led->lock);
 	INIT_WORK(&led->work, lm3697_work);
 	lm3697_probe_dt(&client->dev, led);
@@ -569,8 +614,8 @@ static int lm3697_probe(struct i2c_client *client,
 #ifdef KERNEL_ABOVE_4_14
 	memset(&props, 0, sizeof(struct backlight_properties));
 	props.type = BACKLIGHT_PLATFORM;
-	props.brightness = MAX_BRIGHTNESS_8BIT;
-	props.max_brightness = MAX_BRIGHTNESS_8BIT;
+	props.brightness = MAX_BRIGHTNESS_11BIT;
+	props.max_brightness = MAX_BRIGHTNESS_11BIT;
 	bl_dev = backlight_device_register(LM3697_NAME, &client->dev,
 					led, &lm3697_bl_ops, &props);
 #endif
