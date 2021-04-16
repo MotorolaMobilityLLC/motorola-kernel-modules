@@ -1569,6 +1569,7 @@ static int ps_get_state(struct power_supply *psy, bool *present)
 			&pval);
 #else
 	retval = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
+                        &pval);
 #endif
 	if (retval) {
 		LOG_ERR("%s psy get property failed\n", psy->desc->name);
