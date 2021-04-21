@@ -469,6 +469,9 @@ struct himax_ts_data {
 	int (*power)(int on);
 	int pre_finger_data[10][2];
 
+	uint32_t build_id;
+	uint32_t config_id;
+
 	struct device *dev;
 	struct workqueue_struct *himax_wq;
 	struct work_struct work;
