@@ -60,6 +60,7 @@
 
 #include "gf_spi_tee.h"
 #include  <linux/regulator/consumer.h>
+#include <linux/version.h>
 
 /**************************defination******************************/
 #define GF_DEV_NAME "goodix_fp"
@@ -84,7 +85,11 @@ u32 gf_spi_speed = 1*1000000;
 static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_lock);
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+static struct wakeup_source *fp_wakeup_source;
+#else
 static struct wakeup_source fp_wakeup_source;
+#endif
 static unsigned int bufsiz = (25 * 1024);
 module_param(bufsiz, uint, S_IRUGO);
 MODULE_PARM_DESC(bufsiz, "maximum data bytes for SPI message");
@@ -125,7 +130,11 @@ static struct attribute *goodix_attributes[] = {
 	NULL
 };
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+static const struct attribute_group goodix_attribute_group = {
+#else
 static const struct attribute_group const goodix_attribute_group = {
+#endif
 	.attrs = goodix_attributes,
 };
 
@@ -300,9 +309,11 @@ static void gf_irq_gpio_cfg(struct gf_device *gf_dev)
 {
 #ifdef CONFIG_OF
 	struct device_node *node;
+	int gpio;
 
 	node = of_find_compatible_node(NULL, NULL, "mediatek,fingerprint-goodix");
-	int gpio = of_get_named_gpio(node, "int-gpios", 0);
+
+	gpio = of_get_named_gpio(node, "int-gpios", 0);
 
 	if (node) {
 		//gpio_direction_input(gpio);
@@ -544,7 +555,11 @@ static irqreturn_t gf_irq(int irq, void *handle)
 	struct gf_device *gf_dev = (struct gf_device *)handle;
 	FUNC_ENTRY();
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	__pm_wakeup_event(fp_wakeup_source, 500);
+#else
 	__pm_wakeup_event(&fp_wakeup_source, 500);
+#endif
 
 	gf_netlink_send(gf_dev, GF_NETLINK_IRQ);
 	gf_dev->sig_count++;
@@ -1223,7 +1238,11 @@ static int gf_probe(struct spi_device *spi)
 	}
 
 	/* wakeup source init */
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	fp_wakeup_source = wakeup_source_register(&spi->dev, "fingerprint wakelock");
+#else
 	wakeup_source_init(&fp_wakeup_source, "fingerprint wakelock");
+#endif
 
 	/* netlink interface init */
 	status = gf_netlink_init(gf_dev);
@@ -1321,7 +1340,11 @@ static int gf_remove(struct spi_device *spi)
 	}
 	mutex_unlock(&gf_dev->release_lock);
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	wakeup_source_unregister(fp_wakeup_source);
+#else
 	wakeup_source_trash(&fp_wakeup_source);
+#endif
 	gf_netlink_destroy(gf_dev);
 	cdev_del(&gf_dev->cdev);
 	sysfs_remove_group(&spi->dev.kobj, &goodix_attribute_group);
