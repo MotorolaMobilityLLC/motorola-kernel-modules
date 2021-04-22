@@ -13,17 +13,16 @@ ifneq ($(filter y, $(HIMAX_CONFIG_KALLSYMS_ALL)),)
 	EXTRA_CFLAGS += -D__KERNEL_KALLSYMS_ALL_ENABLED__
 endif
 
-ifneq ($(filter hx83112,$(CONFIG_INPUT_HIMAX_MTK_MMI_IC_NAME)),)
-	EXTRA_CFLAGS += -D__HIMAX_HX83112_MOD__
-	EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_HIMAX_IC_HX83112
-	himax_mtk_mmi-objs += himax_ic_HX83112.o
-endif
-
 obj-m := himax_mtk_mmi.o
 
-himax_mtk_mmi-objs += himax_modular_table.o
 himax_mtk_mmi-objs += himax_platform.o
 himax_mtk_mmi-objs += himax_common.o
 himax_mtk_mmi-objs += himax_debug.o
 himax_mtk_mmi-objs += himax_ic_incell_core.o
 himax_mtk_mmi-objs += himax_inspection.o
+
+ifneq ($(filter hx83112,$(CONFIG_INPUT_HIMAX_MTK_MMI_IC_NAME)),)
+	EXTRA_CFLAGS += -D__HIMAX_HX83112_MOD__
+	EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_HIMAX_IC_HX83112
+	himax_mtk_mmi-objs += himax_ic_HX83112.o
+endif
