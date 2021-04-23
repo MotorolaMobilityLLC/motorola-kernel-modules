@@ -987,6 +987,11 @@ int32_t nvt_update_firmware(char *firmware_name)
 {
 	int32_t ret = 0;
 
+#if NVT_CHARGER_NOTIFIER_CALLBACK
+	if(!strcmp(firmware_name,BOOT_UPDATE_FIRMWARE_NAME))
+		ts->update_floating = 1;
+#endif
+
 	// request bin file in "/etc/firmware"
 	ret = update_firmware_request(firmware_name);
 	if (ret) {
@@ -1028,6 +1033,14 @@ download_fail:
 
 	update_firmware_release();
 request_firmware_fail:
+
+#if NVT_CHARGER_NOTIFIER_CALLBACK
+	if(!strcmp(firmware_name,BOOT_UPDATE_FIRMWARE_NAME)){
+		ts->update_floating = 0;
+		NVT_LOG("nvt_set_charger_mode\n");
+		nvt_set_charger_mode();
+	}
+#endif
 
 	return ret;
 }

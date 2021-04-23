@@ -3,6 +3,9 @@ EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/input/touchscreen/nt36xxx_mtk_mmi
 
+ifneq ($(filter m y,$(CONFIG_NVT_CHARGE_DETECT)),)
+EXTRA_CFLAGS += -DNVT_CHARGE_DETECT
+endif
 
 ifeq ($(filter m y, $(CONFIG_TOUCHSCREEN_NOVATEK_CHIPSET)),)
 	obj-m := nt36xxx_mtk_mmi.o
