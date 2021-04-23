@@ -106,19 +106,19 @@ extern const uint16_t gesture_key_array[];
 
 #define CHECK_PEN_DATA_CHECKSUM 0
 
+#ifdef NVT_CHARGE_DETECT
+#define NVT_CHARGER_NOTIFIER_CALLBACK 1
+#else
+#define NVT_CHARGER_NOTIFIER_CALLBACK 0
+#endif
+
 struct nvt_ts_data {
 	struct spi_device *client;
 	struct input_dev *input_dev;
 	struct delayed_work nvt_fwu_work;
 	uint16_t addr;
 	int8_t phys[32];
-#if defined(CONFIG_FB)
-#if defined(_MSM_DRM_NOTIFY_H_)
-	struct notifier_block drm_notif;
-#else
-	struct notifier_block fb_notif;
-#endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
+#if defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
 #endif
 	uint8_t fw_ver;
@@ -159,6 +159,15 @@ struct nvt_ts_data {
 #ifdef CONFIG_SPI_MT65XX
     struct mtk_chip_config spi_ctrl;
 #endif
+
+#if NVT_CHARGER_NOTIFIER_CALLBACK
+	struct notifier_block notifier_charger;
+	struct workqueue_struct *nvt_charger_wq;
+	struct work_struct  nvt_charger_work;
+	uint8_t charger_mode;
+	uint8_t update_floating;
+#endif
+
 };
 
 #if NVT_TOUCH_PROC
@@ -222,5 +231,8 @@ int32_t nvt_write_addr(uint32_t addr, uint8_t data);
 #if NVT_TOUCH_ESD_PROTECT
 extern void nvt_esd_check_enable(uint8_t enable);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
+#if NVT_CHARGER_NOTIFIER_CALLBACK
+void nvt_set_charger_mode(void);
+#endif
 
 #endif /* _LINUX_NVT_TOUCH_H */
