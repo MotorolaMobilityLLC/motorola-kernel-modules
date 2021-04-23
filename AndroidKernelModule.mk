@@ -1,3 +1,3 @@
 include $(MTK_KERNEL_MODULE)
-$(linked_module): OPTS += $(KERNEL_CFLAGS) ANDROID_BUILD_TOP=$$(pwd) TOP=$$(pwd)
+$(linked_module): OPTS += $(KERNEL_CFLAGS) ANDROID_BUILD_TOP=$$(pwd) TOP=$$(pwd) KERNEL_DIR_PATH=$(LINUX_KERNEL_VERSION)
 
