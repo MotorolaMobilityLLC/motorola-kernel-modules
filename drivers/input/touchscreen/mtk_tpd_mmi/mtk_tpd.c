@@ -664,13 +664,6 @@ static int tpd_driver_init(struct platform_device *pdev)
 	}
 #endif
 
-	if (2560 == TPD_RES_X)
-		TPD_RES_X = 2048;
-	if (1600 == TPD_RES_Y)
-		TPD_RES_Y = 1536;
-	pr_info("mtk-tpd: TPD_RES_X = %lu, TPD_RES_Y = %lu\n",
-		TPD_RES_X, TPD_RES_Y);
-
 	tpd_mode = TPD_MODE_NORMAL;
 	tpd_mode_axis = 0;
 	tpd_mode_min = TPD_RES_Y / 2;
