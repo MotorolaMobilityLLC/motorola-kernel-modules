@@ -4,6 +4,14 @@ EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/input/touchscreen/ilitek_mtk_v3_mmi \
 		-I$(TOP)/motorola/kernel/modules/drivers/input/touchscreen/ilitek_mtk_v3_mmi/firmware
 
+ifneq ($(filter m y,$(CONFIG_ILITEK_CHARGE_DETECT)),)
+EXTRA_CFLAGS += -DILI_CONFIG_CHARGE_DETECT
+endif
+
+ifneq ($(filter m y,$(CONFIG_ILITEK_GESTURE)),)
+EXTRA_CFLAGS += -DILI_CONFIG_GESTURE
+endif
+
 obj-m += ilitek_mtk_v3_mmi.o
 
 ilitek_mtk_v3_mmi-objs += ilitek_v3.o

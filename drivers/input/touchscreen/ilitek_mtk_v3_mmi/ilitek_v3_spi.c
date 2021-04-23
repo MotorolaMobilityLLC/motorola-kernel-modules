@@ -578,6 +578,12 @@ static int ili_parse_dt(struct device_node *dp) {
 		if (ilits->fw_tp_module) {
 			ilits->tp_module = ili_parse_tp_module();
 		}
+
+	ret = of_property_read_string(dp, "ili,charger-psy-name", &ilits->psy_name);
+	if (!ret) {
+		ILI_INFO("get ili,charger-psy-name=%s\n", ilits->psy_name);
+	}
+
 	} else {
 		ILI_INFO("dp node NULL!\n");
 	}
@@ -691,7 +697,7 @@ static int ilitek_spi_probe(struct spi_device *spi)
 #endif
 
 #if ENABLE_GESTURE
-	ilits->gesture = DISABLE;
+	ilits->gesture = ENABLE;
 	ilits->ges_sym.double_tap = DOUBLE_TAP;
 	ilits->ges_sym.alphabet_line_2_top = ALPHABET_LINE_2_TOP;
 	ilits->ges_sym.alphabet_line_2_bottom = ALPHABET_LINE_2_BOTTOM;

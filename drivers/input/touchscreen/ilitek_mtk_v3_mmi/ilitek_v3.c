@@ -39,23 +39,37 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 	int ret = 0;
 	struct power_supply *psy = NULL;
 	union power_supply_propval prop;
+	bool isPsyBattery = false;
 
 	if (ilits->fw_update_stat != 100)
 		return 0;
 
-	psy = power_supply_get_by_name("usb");
+	if (ilits->psy_name && !strcmp(ilits->psy_name, "battery")) {
+		psy = power_supply_get_by_name("battery");
+		isPsyBattery = true;
+	}
+	else
+		psy = power_supply_get_by_name("usb");
+
 	if (!psy) {
-		ILI_ERR("Couldn't get usbpsy\n");
+		ILI_ERR("Couldn't get psy\n");
 		return -EINVAL;
 	}
-	if (!strcmp(psy->desc->name, "usb")) {
+	if (!strcmp(psy->desc->name, "usb") || !strcmp(psy->desc->name, "battery")) {
 		if (psy && val == POWER_SUPPLY_PROP_STATUS) {
-			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &prop);
+			if (isPsyBattery) {
+				ILI_DBG("ilitek_charger_notifier_callback event psy->desc->name is battery\n");
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &prop);
+			}
+			else {
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &prop);
+			}
 			if (ret < 0) {
-				ILI_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
+				ILI_ERR("Couldn't get POWER_SUPPLY_PROP_STATUS rc=%d\n", ret);
 				return ret;
 			} else {
-				if (ilits->usb_plug_status == 2)
+				ILI_DBG("usb prop.intval = %d ;ilits->usb_plug_status = %d \n", prop.intval,ilits->usb_plug_status);
+				if (ilits->usb_plug_status == 2 && !isPsyBattery)
 					ilits->usb_plug_status = prop.intval;
 				if (ilits->usb_plug_status != prop.intval) {
 					ILI_INFO("usb prop.intval =%d\n", prop.intval);
@@ -72,7 +86,10 @@ static void ilitek_update_charger(struct work_struct *work)
 {
 	int ret = 0;
 	mutex_lock(&ilits->touch_mutex);
-	ret = ili_ic_func_ctrl("plug", !ilits->usb_plug_status);// plug in
+	if( ilits->usb_plug_status == 1 )
+		ret = ili_ic_func_ctrl("plug", DISABLE);// plug in
+	else
+		ret = ili_ic_func_ctrl("plug", ENABLE);// plug out
 	if (ret < 0) {
 		ILI_ERR("Write plug in failed\n");
 	}
@@ -90,8 +107,14 @@ void ilitek_plat_charger_init(void)
 	INIT_WORK(&ilits->update_charger, ilitek_update_charger);
 	ilits->notifier_charger.notifier_call = ilitek_charger_notifier_callback;
 	ret = power_supply_reg_notifier(&ilits->notifier_charger);
-	if (ret < 0)
+	if (ret < 0) {
 		ILI_ERR("power_supply_reg_notifier failed\n");
+		if (ilits->charger_notify_wq) {
+			cancel_work_sync(&ilits->update_charger);
+			destroy_workqueue(ilits->charger_notify_wq);
+			ilits->charger_notify_wq = NULL;
+		}
+	}
 }
 /* add_for_charger_end */
 #endif
@@ -647,7 +670,11 @@ int ili_fw_upgrade_handler(void *data)
 #if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
 		/* add_for_charger_start */
 		if ((ilits->usb_plug_status) && (ilits->actual_tp_mode != P5_X_FW_TEST_MODE)) {
-			ret = ili_ic_func_ctrl("plug", !ilits->usb_plug_status);// plug in
+			ILI_DBG("resume to recover usb status\n");
+			if( ilits->usb_plug_status == 1 )
+				ret = ili_ic_func_ctrl("plug", DISABLE);// plug in
+			else
+				ret = ili_ic_func_ctrl("plug", ENABLE);// plug out
 			if (ret < 0) {
 				ILI_ERR("Write plug in failed\n");
 			}
@@ -1273,6 +1300,16 @@ void ili_dev_remove(bool flag)
 	if (ilits->ws)
 		wakeup_source_unregister(ilits->ws);
 
+#if CHARGER_NOTIFIER_CALLBACK
+#if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
+	power_supply_unreg_notifier(&ilits->notifier_charger);
+	if (ilits->charger_notify_wq) {
+		cancel_work_sync(&ilits->update_charger);
+		destroy_workqueue(ilits->charger_notify_wq);
+		ilits->charger_notify_wq = NULL;
+	}
+#endif
+#endif
 	kfree(ilits->tr_buf);
 	kfree(ilits->gcoord);
 

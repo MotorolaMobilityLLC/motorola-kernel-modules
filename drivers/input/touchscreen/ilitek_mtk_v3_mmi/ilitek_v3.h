@@ -124,14 +124,22 @@
 #define MT_PRESSURE			DISABLE
 #define ENABLE_WQ_ESD			DISABLE
 #define ENABLE_WQ_BAT			DISABLE
-#define ENABLE_GESTURE			ENABLE
+#ifdef ILI_CONFIG_GESTURE
+#define ENABLE_GESTURE                  ENABLE
+#else
+#define ENABLE_GESTURE			DISABLE
+#endif
 #define REGULATOR_POWER			DISABLE
 #define TP_SUSPEND_PRIO			ENABLE
 #define RESUME_BY_DDI			DISABLE
 #define BOOT_FW_UPDATE			ENABLE
 #define MP_INT_LEVEL			DISABLE
 #define PLL_CLK_WAKEUP_TP_RESUME	DISABLE
+#ifdef ILI_CONFIG_CHARGE_DETECT
+#define CHARGER_NOTIFIER_CALLBACK	ENABLE
+#else
 #define CHARGER_NOTIFIER_CALLBACK	DISABLE
+#endif
 #define ENABLE_EDGE_PALM_PARA		DISABLE
 #define MULTI_REPORT_RATE		DISABLE
 #define ENGINEER_FLOW			ENABLE
@@ -974,6 +982,7 @@ struct ilitek_ts_data {
 	bool fw_tp_module;
 	int tp_module;
 	int md_fw_ili_size;
+	const char *psy_name;
 	const char *panel_supplier;
 	char *md_name;
 	char *md_fw_filp_path;

@@ -448,7 +448,7 @@ static struct tpd_driver_t tpd_device_driver = {
 	.resume = tpd_resume,
 };
 
-int ili_parse_dt() {
+int ili_check_dt() {
 	int ret = 0;
         struct device_node *node1 = NULL;
 
@@ -475,7 +475,7 @@ static int __init ilitek_plat_dev_init(void)
                 tpd_get_dts_info();
         }
 
-	ili_parse_dt();
+	ili_check_dt();
 
 	ret = tpd_driver_add(&tpd_device_driver);
 	if (ret < 0) {
