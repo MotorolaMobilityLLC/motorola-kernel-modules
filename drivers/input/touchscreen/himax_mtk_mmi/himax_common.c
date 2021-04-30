@@ -17,6 +17,9 @@
 /*#include "himax_ic_core.h"*/
 #include "himax_inspection.h"
 #include "himax_modular.h"
+#if defined(HX_USB_DETECT_GLOBAL)
+#include <linux/power_supply.h>
+#endif
 
 #if (defined(__HIMAX_MOD__) && defined(HX_CONFIG_DRM))
 int (*hx_msm_drm_register_client)(struct notifier_block *nb);
@@ -1564,6 +1567,38 @@ void himax_report_data_deinit(void)
 
 /*start ts_work*/
 #if defined(HX_USB_DETECT_GLOBAL)
+static int himax_charger_notifier_callback(struct notifier_block *nb, unsigned long val, void *v)
+{
+	int ret = 0;
+	struct power_supply *psy = NULL;
+	union power_supply_propval prop;
+	psy = power_supply_get_by_name("battery");
+	if (!psy) {
+		E("Couldn't get batterypsy\n");
+		return -EINVAL;
+	}
+	if (!strcmp(psy->desc->name, "battery")) {
+		I("himax_charger_notifier_callback event  psy->desc->name is battery\n");
+		if (psy && val == POWER_SUPPLY_PROP_STATUS) {
+			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &prop);
+			if (ret < 0) {
+				E("Couldn't get POWER_SUPPLY_PROP_STATUS rc=%d\n", ret);
+				return ret;
+			} else {
+				I("usb prop.intval = %d \n", prop.intval );
+				if(prop.intval == 1 ) {//POWER_SUPPLY_STATUS_CHARGING
+					I("%s: himax tp charger is plug IN.\n", __func__);
+					USB_detect_flag = true;
+				} else {//POWER_SUPPLY_STATUS_DISCHARGING / POWER_SUPPLY_STATUS_NOT_CHARGING
+					I("%s: himax tp charger is plug OUT.\n", __func__);
+					USB_detect_flag = false;
+				}
+			}
+		}
+	}
+	return 0;
+}
+
 void himax_cable_detect_func(bool force_renew)
 {
 	struct himax_ts_data *ts;
@@ -3155,6 +3190,13 @@ int himax_chip_common_init(void)
 #if defined(HX_USB_DETECT_GLOBAL)
 	ts->usb_connected = 0x00;
 	ts->cable_config = pdata->cable_config;
+	I("himax charger mode init\n");
+	ts->notifier_charger.notifier_call = himax_charger_notifier_callback;
+	ret = power_supply_reg_notifier(&ts->notifier_charger);
+	if (ret < 0){
+		E("power_supply_reg_notifier failed\n");
+		goto err_power_supply_reg_notifier_failed;
+	}
 #endif
 
 #if defined(HX_PROTOCOL_A)
@@ -3261,6 +3303,10 @@ err_creat_proc_file_failed:
 #endif
 	cancel_delayed_work_sync(&ts->work_boot_upgrade);
 	destroy_workqueue(ts->himax_boot_upgrade_wq);
+#if defined(HX_USB_DETECT_GLOBAL)
+	power_supply_unreg_notifier(&ts->notifier_charger);
+err_power_supply_reg_notifier_failed:
+#endif
 err_boot_upgrade_wq_failed:
 	himax_ts_unregister_interrupt();
 err_register_interrupt_failed:
@@ -3292,6 +3338,10 @@ void himax_chip_common_deinit(void)
 	struct himax_ts_data *ts = private_ts;
 
 	himax_ts_unregister_interrupt();
+
+#if defined(HX_USB_DETECT_GLOBAL)
+	power_supply_unreg_notifier(&ts->notifier_charger);
+#endif
 
 	himax_remove_sysfs(ts);
 	himax_sysfs_touchscreen(ts, false);
