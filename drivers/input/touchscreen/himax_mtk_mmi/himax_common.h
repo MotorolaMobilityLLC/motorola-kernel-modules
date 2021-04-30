@@ -63,7 +63,7 @@
 #define HX_RESUME_SEND_CMD	/*Need to enable on TDDI chipset*/
 /*#define HX_HIGH_SENSE*/
 /*#define HX_PALM_REPORT*/
-/*#define HX_USB_DETECT_GLOBAL*/
+#define HX_USB_DETECT_GLOBAL
 
 /* for MTK special platform.If turning on,
  * it will report to system by using specific format.
@@ -532,6 +532,7 @@ struct himax_ts_data {
 #if defined(HX_USB_DETECT_GLOBAL)
 	uint8_t usb_connected;
 	uint8_t *cable_config;
+	struct notifier_block notifier_charger;
 #endif
 
 #if defined(HX_TP_PROC_GUEST_INFO)
