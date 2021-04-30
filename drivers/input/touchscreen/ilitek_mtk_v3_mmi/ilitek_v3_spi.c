@@ -379,6 +379,7 @@ static int ili_spi_pll_clk_wakeup(void)
 		ILI_INFO("spi slave write error\n");
 		return -1;
 	}
+	mdelay(1);
 
 	return 0;
 }
@@ -466,6 +467,11 @@ static int ili_spi_wrapper(u8 *txbuf, u32 wlen, u8 *rxbuf, u32 rlen, bool spi_ir
 		}
 
 		ret = ilits->spi_write_then_read(ilits->spi, wdata, wlen, txbuf, 0);
+		if(!ice){
+			ILI_INFO("send cmd delay 1ms\n");
+			mdelay(1);
+		}
+
 		if (ret < 0) {
 			ILI_INFO("spi-wrapper write error\n");
 			break;
