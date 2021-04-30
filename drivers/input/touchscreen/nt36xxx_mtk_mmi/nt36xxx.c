@@ -2292,6 +2292,7 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 	NVT_LOG("Removing driver...\n");
 
 #if NVT_CHARGER_NOTIFIER_CALLBACK
+	power_supply_unreg_notifier(&ts->notifier_charger);
 	if (ts->nvt_charger_wq) {
 		cancel_work_sync(&ts->nvt_charger_work);
 		destroy_workqueue(ts->nvt_charger_wq);
@@ -2371,6 +2372,7 @@ static void nvt_ts_shutdown(struct spi_device *client)
 	NVT_LOG("Shutdown driver...\n");
 
 #if NVT_CHARGER_NOTIFIER_CALLBACK
+	power_supply_unreg_notifier(&ts->notifier_charger);
 	if (ts->nvt_charger_wq) {
 		cancel_work_sync(&ts->nvt_charger_work);
 		destroy_workqueue(ts->nvt_charger_wq);
