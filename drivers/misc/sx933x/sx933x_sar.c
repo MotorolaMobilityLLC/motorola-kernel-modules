@@ -61,6 +61,7 @@
 
 #define SX933X_I2C_WATCHDOG_TIME 10000
 #define SX933X_I2C_WATCHDOG_TIME_ERR 2000
+#define SX933X_IRQ_FAILURE_DELAY 1000
 
 /*! \struct sx933x
  * Specialized struct containing input event data, platform data, and
@@ -76,7 +77,7 @@ static int irq_gpio_num;
 static psx93XX_t global_sx933x;
 static bool recovery_on_failure = false;
 
-static void sx93XX_schedule_work(psx93XX_t this, bool isdwork, unsigned long delay);
+static void sx93XX_schedule_work(psx93XX_t this, unsigned long delay);
 static int sx933x_get_nirq_state(void)
 {
 	return  !gpio_get_value(irq_gpio_num);
@@ -1097,6 +1098,7 @@ static int sx933x_parse_dt(struct sx933x_platform_data *pdata, struct device *de
 	pdata->phone_flip_update_regs = parse_flip_dt_params(pdata, dev);
 #endif
 	pdata->reinit_on_i2c_failure = of_property_read_bool(dNode, "reinit-on-i2c-failure");
+	pdata->reinit_on_irq_failure = of_property_read_bool(dNode, "reinit-on-irq-failure");
 
 	LOG_INFO("-[%d] parse_dt complete\n", pdata->irq_gpio);
 	return 0;
@@ -1375,6 +1377,7 @@ static int flip_notify_callback(struct notifier_block *self,
 #endif
 
 static void sx933x_i2c_watchdog_work(struct work_struct *work);
+static void sx933x_irq_failure_work(struct work_struct *work);
 
 /*! \fn static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *id)
  * \brief Probe function
@@ -1653,6 +1656,9 @@ static int sx933x_probe(struct i2c_client *client, const struct i2c_device_id *i
 			msecs_to_jiffies(SX933X_I2C_WATCHDOG_TIME));
 	}
 
+	if(pplatData->reinit_on_irq_failure)
+		INIT_DELAYED_WORK(&this->irq_failure_work, sx933x_irq_failure_work);
+
 #ifdef CONFIG_CAPSENSE_FLIP_CAL
 	update_flip_regs(pplatData, pplatData->phone_flip_state);
 #endif
@@ -1727,7 +1733,7 @@ static int sx933x_resume(struct device *dev)
 	psx93XX_t this = dev_get_drvdata(dev);
 	if (this) {
 		LOG_DBG(LOG_TAG "sx933x resume:enable irq!\n");
-		sx93XX_schedule_work(this,true,0);
+		sx93XX_schedule_work(this,0);
 		enable_irq(this->irq);
 		sx933x_i2c_write_16bit(this,SX933X_CMD_REG,0xC);//Exit from Sleep mode
 		this->suspended = 0;
@@ -1789,27 +1795,16 @@ MODULE_DESCRIPTION("SX933x Capacitive Proximity Controller Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("1");
 
-/*
-	bool isdwork:
-	true -> dworker -> sx93XX_worker_func
-	false -> i2c_watchdog_work -> sx933x_reinitialize
-*/
-static void sx93XX_schedule_work(psx93XX_t this, bool isdwork, unsigned long delay)
+static void sx93XX_schedule_work(psx93XX_t this, unsigned long delay)
 {
 	unsigned long flags;
-	struct delayed_work *pworker;
 	if (this)
 	{
-		LOG_DBG("sx93XX_schedule_work()\n");
-		if(isdwork)
-			pworker = &this->dworker;
-		else
-			pworker = &this->i2c_watchdog_work;
 		spin_lock_irqsave(&this->lock,flags);
 		/* Stop any pending penup queues */
-		cancel_delayed_work(pworker);
+		cancel_delayed_work(&this->dworker);
 		//after waiting for a delay, this put the job in the kernel-global workqueue. so no need to create new thread in work queue.
-		schedule_delayed_work(pworker,delay);
+		schedule_delayed_work(&this->dworker,delay);
 		spin_unlock_irqrestore(&this->lock,flags);
 	}
 	else
@@ -1827,15 +1822,17 @@ static irqreturn_t sx93XX_irq(int irq, void *pvoid)
 		if ((!this->get_nirq_low) || this->get_nirq_low())
 		{
 			LOG_DBG("sx93XX_irq - call sx93XX_schedule_work\n");
-			sx93XX_schedule_work(this,true,0);
+			sx93XX_schedule_work(this,0);
 			this->int_state = 1;
 		}
 		else
 		{
 			LOG_DBG("sx93XX_irq - nirq read high\n");
-			if ((pDevice = this->pDevice) && (pdata = pDevice->hw) && pdata->reinit_on_i2c_failure) {
+			if ((pDevice = this->pDevice) && (pdata = pDevice->hw) && pdata->reinit_on_irq_failure) {
+				LOG_DBG("sx93XX_irq - recovery_on_failure set true\n");
+				cancel_delayed_work(&this->irq_failure_work);
 				recovery_on_failure = true;
-				sx93XX_schedule_work(this,false,0);
+				schedule_delayed_work(&this->irq_failure_work,SX933X_IRQ_FAILURE_DELAY);
 			}
 		}
 	}
@@ -1885,7 +1882,7 @@ static void sx93XX_worker_func(struct work_struct *work)
 		{
 			/* Early models and if RATE=0 for newer models require a penup timer */
 			/* Queue up the function again for checking on penup */
-			sx93XX_schedule_work(this,true,msecs_to_jiffies(this->irqTimeout));
+			sx93XX_schedule_work(this,msecs_to_jiffies(this->irqTimeout));
 		}
 	}
 	else
@@ -1918,6 +1915,21 @@ int sx93XX_IRQ_init(psx93XX_t this)
 	return -ENOMEM;
 }
 
+static void sx933x_irq_failure_work(struct work_struct *work)
+{
+	psx93XX_t this = container_of(work, sx93XX_t, irq_failure_work.work);
+
+	LOG_DBG("sx933x_irq_failure_work");
+
+	if(!this->suspended) {
+		if (recovery_on_failure == true) {
+			sx933x_reinitialize(this);
+			recovery_on_failure = false;
+		}
+	} else
+		LOG_DBG("sx933x_irq_failure_work before resume.");
+}
+
 /* Read i2c every 10 seconds, if there is an error, schedule again in 2 seconds
  * and if it fails a few more times we can assume there is a device error and reset
  */
@@ -1940,11 +1952,10 @@ static void sx933x_i2c_watchdog_work(struct work_struct *work)
 		} else
 			err_cnt = 0;
 
-		if (err_cnt >= 3 || (recovery_on_failure == true)) {
+		if (err_cnt >= 3) {
 			err_cnt = 0;
 			sx933x_reinitialize(this);
 			delay = SX933X_I2C_WATCHDOG_TIME;
-			recovery_on_failure = false;
 		}
 	} else
 		LOG_DBG("sx933x_i2c_watchdog_work before resume.");
@@ -1964,7 +1975,7 @@ static void sx933x_reinitialize(psx93XX_t this)
 
 	LOG_INFO("sx933x_reinitialize now.");
 	if (this && (pDevice = this->pDevice) && (pdata = pDevice->hw)) {
-		if (!pdata->reinit_on_i2c_failure)
+		if (!pdata->reinit_on_i2c_failure && !pdata->reinit_on_irq_failure)
 			return;
 
 		if (!atomic_add_unless(&this->init_busy, 1, 1))
