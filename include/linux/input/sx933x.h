@@ -743,6 +743,7 @@ struct sx933x_platform_data
 #endif
 #endif
 	bool reinit_on_i2c_failure;
+	bool reinit_on_irq_failure;
 	pbuttonInformation_t pbuttonInformation;
 
 	int (*get_is_nirq_low)(void);
@@ -811,6 +812,7 @@ struct sx93XX
 	int reset_count;
 	atomic_t init_busy;
 	struct delayed_work i2c_watchdog_work;
+	struct delayed_work irq_failure_work;
 	int suspended;
 };
 
