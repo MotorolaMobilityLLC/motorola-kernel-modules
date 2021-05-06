@@ -52,7 +52,7 @@ static u32 abov_channel_number = 0;
 static u32 abov_flash_erase_time = 0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
-#define USB_POWER_SUPPLY_NAME   "mtk_charger_type"
+#define USB_POWER_SUPPLY_NAME   "charger"
 #else
 #define USB_POWER_SUPPLY_NAME   "usb"
 #endif
