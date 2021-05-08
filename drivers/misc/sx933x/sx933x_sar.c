@@ -1816,6 +1816,7 @@ static irqreturn_t sx93XX_irq(int irq, void *pvoid)
 	psx93XX_t this = 0;
 	psx933x_t pDevice = 0;
 	psx933x_platform_data_t pdata = 0;
+	struct delayed_work *pworker;
 	if (pvoid)
 	{
 		this = (psx93XX_t)pvoid;
@@ -1828,11 +1829,12 @@ static irqreturn_t sx93XX_irq(int irq, void *pvoid)
 		else
 		{
 			LOG_DBG("sx93XX_irq - nirq read high\n");
-			if ((pDevice = this->pDevice) && (pdata = pDevice->hw) && pdata->reinit_on_irq_failure) {
+			pworker = &this->irq_failure_work;
+			if ((pDevice = this->pDevice) && (pdata = pDevice->hw) && (&pworker->work)->func) {
 				LOG_DBG("sx93XX_irq - recovery_on_failure set true\n");
-				cancel_delayed_work(&this->irq_failure_work);
+				cancel_delayed_work(pworker);
 				recovery_on_failure = true;
-				schedule_delayed_work(&this->irq_failure_work,SX933X_IRQ_FAILURE_DELAY);
+				schedule_delayed_work(pworker,SX933X_IRQ_FAILURE_DELAY);
 			}
 		}
 	}
