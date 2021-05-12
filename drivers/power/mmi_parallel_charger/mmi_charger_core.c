@@ -49,8 +49,8 @@ module_param_named(
 	debug_mask, __debug_mask, int, S_IRUSR | S_IWUSR
 );
 
-static int pd_volt_max_init = 0;
-static int pd_curr_max_init = 0;
+int pd_volt_max_init = 0;
+int pd_curr_max_init = 0;
 static int *dt_temp_zones;
 static struct mmi_chrg_dts_info *chrg_name_list;
 static char *charge_rate[] = {

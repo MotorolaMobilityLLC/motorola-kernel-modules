@@ -236,6 +236,9 @@ struct mmi_charger_manager {
        int hrst_cnt;
 };
 
+extern int pd_volt_max_init;
+extern int pd_curr_max_init;
+
 extern bool mmi_get_pps_result_history(struct mmi_charger_manager *chip);
 extern void mmi_set_pps_result_history(struct mmi_charger_manager *chip, int pps_result);
 extern void mmi_clear_pps_result_history(struct mmi_charger_manager *chip);
@@ -249,6 +252,7 @@ extern void mmi_dump_charger_error(struct mmi_charger_manager *chip,
 									struct mmi_charger_device *chrg_dev);
 extern int init_tcpc(struct mmi_charger_manager *chip);
 extern bool usbpd_get_pps_status(struct mmi_charger_manager *chip);
+extern bool usbpd_get_pps_status_curr_volt(struct mmi_charger_manager *chip);
 extern int usbpd_select_pdo(struct mmi_charger_manager *chip, u32 mV, u32 mA);
 int usbpd_pps_enable_charging(struct mmi_charger_manager *chip, bool en,
 				   u32 mV, u32 mA);

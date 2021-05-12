@@ -416,6 +416,24 @@ static bool is_cable_plugout(struct mmi_charger_manager *chip)
 	return false;
 }
 
+static bool mmi_chrg_check_capability(struct mmi_charger_manager *chip)
+{
+	int old_pps_volt = 0;
+	int old_pps_curr = 0;
+
+	old_pps_volt = chip->pd_volt_max;
+	old_pps_curr = chip->pd_curr_max;
+	mmi_chrg_info(chip,"old pd_volt_max = %d, old pd_curr_max = %d\n",
+                      old_pps_volt, old_pps_curr);
+	usbpd_get_pps_status_curr_volt(chip);
+	mmi_chrg_info(chip,"new pd_volt_max = %d, new pd_curr_max = %d\n",
+                              chip->pd_volt_max, chip->pd_curr_max);
+	if (old_pps_volt != chip->pd_volt_max || old_pps_curr != chip->pd_curr_max) {
+		return false;
+	}
+	return true;
+}
+
 static void mmi_chrg_sm_work_func(struct work_struct *work)
 {
 	struct mmi_charger_manager *chip = container_of(work,
@@ -806,6 +824,12 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 						"CC stage as soon!\n");
 		} else if (chip->pps_result < 0) {
 			if (mmi_get_pps_result_history(chip) != NO_ERROR) {
+				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR: capability detect begin\n");
+				if (false == mmi_chrg_check_capability(chip)) {
+					mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR:pd_volt_max or pd_curr_max changed\n");
+					goto schedule;
+				}
+
 				mmi_chrg_sm_move_state(chip,
 						PM_STATE_CP_CC_LOOP);
 				mmi_chrg_info(chip,"Too many pdo request failed,"
@@ -851,6 +875,11 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 						" Enter into CC stage as soon!\n");
 		} else if (chip->pps_result < 0) {
 			if (mmi_get_pps_result_history(chip) != NO_ERROR) {
+				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT: capability detect begin\n");
+				if (false == mmi_chrg_check_capability(chip)) {
+					mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT:pd_volt_max or pd_curr_max changed\n");
+					goto schedule;
+				}
 				mmi_chrg_sm_move_state(chip,
 						PM_STATE_CP_CC_LOOP);
 				mmi_clear_pps_result_history(chip);
@@ -908,6 +937,12 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			mmi_chrg_info(chip,"CP MASTER was disabled, Enter into SW directly\n");
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
+			goto schedule;
+		}
+
+		mmi_chrg_info(chip,"PM_STATE_CP_CC_LOOP: capability detect begin\n");
+		if (false == mmi_chrg_check_capability(chip)) {
+			mmi_chrg_info(chip,"PM_STATE_CP_CC_LOOP:pd_volt_max or pd_curr_max changed\n");
 			goto schedule;
 		}
 
@@ -1043,6 +1078,13 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 			goto schedule;
 		}
+
+		mmi_chrg_info(chip,"PM_STATE_CP_CV_LOOP: capability detect begin\n");
+		if (false == mmi_chrg_check_capability(chip)) {
+			mmi_chrg_info(chip,"PM_STATE_CP_CV_LOOP:pd_volt_max or pd_curr_max changed\n");
+			goto schedule;
+		}
+
 
 		if (chip->pps_result < 0) {
 			mmi_chrg_err(chip, "Last select pdo failed\n");
