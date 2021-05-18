@@ -154,6 +154,7 @@ struct mmi_charger_manager {
 	bool			suspended;
 	bool			awake;
 	bool			cp_disable;
+	bool			sourcecap_dec_enable;
 
 	int *debug_mask;
 	int pps_volt_steps;	/*PPS voltage, programming step size*/
