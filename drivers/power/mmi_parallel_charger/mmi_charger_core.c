@@ -1419,6 +1419,8 @@ static int mmi_chrg_manager_parse_dt(struct mmi_charger_manager *chip)
 		chrg_idx++;
 	}
 
+	chip->sourcecap_dec_enable = of_property_read_bool(node, "mmi,enable-new-sourcecap-dec");
+
 	rc = of_property_read_u32(node,
 				"mmi,chrg-temp-zones-num",
 				&chip->num_temp_zones);

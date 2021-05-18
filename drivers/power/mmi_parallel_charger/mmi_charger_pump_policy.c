@@ -828,10 +828,13 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 						"CC stage as soon!\n");
 		} else if (chip->pps_result < 0) {
 			if (mmi_get_pps_result_history(chip) != NO_ERROR) {
-				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR: capability detect begin\n");
-				if (false == mmi_chrg_check_capability(chip)) {
-					mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR:pd_volt_max or pd_curr_max changed\n");
-					goto schedule;
+				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR: capability detect begin, sourcecap_dec_enable = %d\n",
+					chip->sourcecap_dec_enable);
+				if (chip->sourcecap_dec_enable) {
+					if (false == mmi_chrg_check_capability(chip)) {
+						mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR:pd_volt_max or pd_curr_max changed\n");
+						goto schedule;
+					}
 				}
 
 				mmi_chrg_sm_move_state(chip,
@@ -879,10 +882,13 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 						" Enter into CC stage as soon!\n");
 		} else if (chip->pps_result < 0) {
 			if (mmi_get_pps_result_history(chip) != NO_ERROR) {
-				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT: capability detect begin\n");
-				if (false == mmi_chrg_check_capability(chip)) {
-					mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT:pd_volt_max or pd_curr_max changed\n");
-					goto schedule;
+				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT: capability detect begin, sourcecap_dec_enable = %d\n",
+					chip->sourcecap_dec_enable);
+				if (chip->sourcecap_dec_enable) {
+					if (false == mmi_chrg_check_capability(chip)) {
+						mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT:pd_volt_max or pd_curr_max changed\n");
+						goto schedule;
+					}
 				}
 				mmi_chrg_sm_move_state(chip,
 						PM_STATE_CP_CC_LOOP);
@@ -944,10 +950,13 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			goto schedule;
 		}
 
-		mmi_chrg_info(chip,"PM_STATE_CP_CC_LOOP: capability detect begin\n");
-		if (false == mmi_chrg_check_capability(chip)) {
-			mmi_chrg_info(chip,"PM_STATE_CP_CC_LOOP:pd_volt_max or pd_curr_max changed\n");
-			goto schedule;
+		mmi_chrg_info(chip,"PM_STATE_CP_CC_LOOP: capability detect begin, sourcecap_dec_enable = %d\n",
+			chip->sourcecap_dec_enable);
+		if (chip->sourcecap_dec_enable) {
+			if (false == mmi_chrg_check_capability(chip)) {
+				mmi_chrg_info(chip,"PM_STATE_CP_CC_LOOP:pd_volt_max or pd_curr_max changed\n");
+				goto schedule;
+			}
 		}
 
 		if (chip->pps_result < 0) {
@@ -1083,12 +1092,14 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			goto schedule;
 		}
 
-		mmi_chrg_info(chip,"PM_STATE_CP_CV_LOOP: capability detect begin\n");
-		if (false == mmi_chrg_check_capability(chip)) {
-			mmi_chrg_info(chip,"PM_STATE_CP_CV_LOOP:pd_volt_max or pd_curr_max changed\n");
-			goto schedule;
+		mmi_chrg_info(chip,"PM_STATE_CP_CV_LOOP: capability detect begin,sourcecap_dec_enable = %d\n",
+			chip->sourcecap_dec_enable);
+		if (chip->sourcecap_dec_enable) {
+			if (false == mmi_chrg_check_capability(chip)) {
+				mmi_chrg_info(chip,"PM_STATE_CP_CV_LOOP:pd_volt_max or pd_curr_max changed\n");
+				goto schedule;
+			}
 		}
-
 
 		if (chip->pps_result < 0) {
 			mmi_chrg_err(chip, "Last select pdo failed\n");
