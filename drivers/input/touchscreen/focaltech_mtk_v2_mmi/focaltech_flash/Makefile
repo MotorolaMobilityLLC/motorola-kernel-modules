@@ -1,0 +1,1 @@
+obj-$(CONFIG_TOUCHSCREEN_FTS_MTK_V2) += focaltech_upgrade_ft5452i.o
