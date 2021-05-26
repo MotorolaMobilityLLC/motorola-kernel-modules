@@ -518,6 +518,19 @@ static int tpd_fb_notifier_callback(
 	evdata = data;
 
 #if defined(CONFIG_TOUCHSCREEN_EARLY_BLANK)
+#ifdef CONFIG_TOUCHSCREEN_LCM_NOTIFIY_SUPPORT
+	//some TP need LCM notify, e.g. NVT
+	//transfer LCM notify to TP notify event
+	if(event == FB_EVENT_NOTIFY_TP_BLANK) {
+		TPD_DMESG("%s transfer FB_EVENT_NOTIFY_TP_BLANK\n", __func__);
+		event = FB_EVENT_BLANK;
+	}
+	else if(event == FB_EARLY_EVENT_NOTIFY_TP_BLANK) {
+		TPD_DMESG("%s transfer FB_EARLY_EVENT_NOTIFY_TP_BLANK\n", __func__);
+		event = FB_EARLY_EVENT_BLANK;
+	}
+#endif
+
 	/* If we aren't interested in this event, skip it immediately ... */
 	if ((event != FB_EVENT_BLANK) && (event != FB_EARLY_EVENT_BLANK))
 		return 0;

@@ -16,4 +16,8 @@ mtk_tpd_mmi-objs += tpd_setting.o
 
 ifneq ($(filter m y,$(CONFIG_USES_TOUCHSCREEN_EARLY_BLANK)),)
 	EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_EARLY_BLANK
+
+ifneq ($(filter m y,$(CONFIG_SET_TOUCHSCREEN_LCM_NOTIFIY)),)
+	EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_LCM_NOTIFIY_SUPPORT
+endif
 endif
