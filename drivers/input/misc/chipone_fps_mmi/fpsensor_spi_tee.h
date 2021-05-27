@@ -124,10 +124,10 @@
 #define INFO_LOG    (1)
 #define DEBUG_LOG   (2)
 /* check log debug */
-#if FPSENSOR_LOG_ENABLE
+#if CONFIG_FPSENSOR_LOG_ENABLE
 #define FPSENSOR_LOG_LEVEL          DEBUG_LOG
 #else
-#define FPSENSOR_LOG_LEVEL          ERR_LOG
+#define FPSENSOR_LOG_LEVEL          INFO_LOG
 #endif
 uint32_t g_cmd_sn = 0;
 static u8 fpsensor_debug_level = FPSENSOR_LOG_LEVEL;
