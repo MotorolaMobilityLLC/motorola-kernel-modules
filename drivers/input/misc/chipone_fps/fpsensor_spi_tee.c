@@ -421,12 +421,6 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     switch (cmd) {
     case FPSENSOR_IOC_INIT:
         fpsensor_debug(INFO_LOG, "%s: fpsensor init started======\n", __func__);
-
-        if(fpsensor_irq_gpio_cfg(fpsensor_dev) != 0) {
-            retval = -1;
-            break;
-        }
-
         irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
         retval = request_threaded_irq(fpsensor_dev->irq, fpsensor_irq, NULL,
                                       irqf, FPSENSOR_DEV_NAME, fpsensor_dev);
@@ -804,7 +798,10 @@ static int fpsensor_probe(struct platform_device *spi)
         }
     }
 #endif
-
+    if(fpsensor_irq_gpio_cfg(fpsensor_dev) != 0) {
+        fpsensor_debug(ERR_LOG, "fpsensor_irq_gpio_cfg failed\n");
+        goto err0;
+    }
     /* setup a char device for fpsensor */
     status = fpsensor_dev_setup(fpsensor_dev);
     if (status) {
