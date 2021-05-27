@@ -834,7 +834,6 @@ struct ilitek_ts_data {
 	struct input_dev *input;
 	struct device *dev;
 	struct wakeup_source *ws;
-
 	struct ilitek_hwif_info *hwif;
 	struct ilitek_ic_info *chip;
 	struct ilitek_protocol_info *protocol;
@@ -874,6 +873,7 @@ struct ilitek_ts_data {
 	bool boot;
 	u32 fw_pc;
 	u32 fw_latch;
+	u32 fw_compatible;
 
 	u16 max_x;
 	u16 max_y;
