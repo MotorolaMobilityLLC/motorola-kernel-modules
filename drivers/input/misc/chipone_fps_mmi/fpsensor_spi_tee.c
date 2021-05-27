@@ -466,7 +466,7 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     unsigned int val = 0;
     int irqf;
 
-    fpsensor_debug(INFO_LOG, "[rickon]: fpsensor ioctl cmd : 0x%x \n", cmd );
+    fpsensor_debug(DEBUG_LOG, "[rickon]: fpsensor ioctl cmd : 0x%x \n", cmd );
     fpsensor_dev = (fpsensor_data_t *)filp->private_data;
     fpsensor_dev->cancel = 0 ;
     switch (cmd) {
@@ -500,17 +500,17 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         break;
 
     case FPSENSOR_IOC_RESET:
-        fpsensor_debug(INFO_LOG, "%s: chip reset command\n", __func__);
+        fpsensor_debug(DEBUG_LOG, "%s: chip reset command\n", __func__);
         fpsensor_hw_reset(1250);
         break;
 
     case FPSENSOR_IOC_ENABLE_IRQ:
-        fpsensor_debug(INFO_LOG, "%s: chip ENable IRQ command\n", __func__);
+        fpsensor_debug(DEBUG_LOG, "%s: chip ENable IRQ command\n", __func__);
         fpsensor_enable_irq(fpsensor_dev);
         break;
 
     case FPSENSOR_IOC_DISABLE_IRQ:
-        fpsensor_debug(INFO_LOG, "%s: chip disable IRQ command\n", __func__);
+        fpsensor_debug(DEBUG_LOG, "%s: chip disable IRQ command\n", __func__);
         fpsensor_disable_irq(fpsensor_dev);
         break;
     case FPSENSOR_IOC_GET_INT_VAL:
@@ -523,11 +523,11 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         retval = 0;
         break;
     case FPSENSOR_IOC_ENABLE_SPI_CLK:
-        fpsensor_debug(INFO_LOG, "%s: ENABLE_SPI_CLK ======\n", __func__);
+        fpsensor_debug(DEBUG_LOG, "%s: ENABLE_SPI_CLK ======\n", __func__);
         fpsensor_spi_clk_enable(1);
         break;
     case FPSENSOR_IOC_DISABLE_SPI_CLK:
-        fpsensor_debug(INFO_LOG, "%s: DISABLE_SPI_CLK ======\n", __func__);
+        fpsensor_debug(DEBUG_LOG, "%s: DISABLE_SPI_CLK ======\n", __func__);
         fpsensor_spi_clk_enable(0);
         break;
     case FPSENSOR_IOC_ENABLE_POWER:
@@ -754,7 +754,7 @@ static int fpsensor_fb_notifier_callback(struct notifier_block* self, unsigned l
     unsigned int blank;
     fpsensor_data_t *fpsensor_dev = g_fpsensor;
 
-    fpsensor_debug(INFO_LOG,"%s enter.  event : 0x%x\n", __func__, (unsigned)event);
+    fpsensor_debug(DEBUG_LOG,"%s enter.  event : 0x%x\n", __func__, (unsigned)event);
     if (event != FB_EVENT_BLANK /* FB_EARLY_EVENT_BLANK */) {
         return 0;
     }
@@ -780,11 +780,11 @@ static int fpsensor_fb_notifier_callback(struct notifier_block* self, unsigned l
         break;
 
     default:
-        fpsensor_debug(INFO_LOG,"%s: other notifier, ignore\n", __func__);
+        fpsensor_debug(DEBUG_LOG,"%s: other notifier, ignore\n", __func__);
         break;
     }
 
-    fpsensor_debug(INFO_LOG,"%s %s leave.\n", screen_status, __func__);
+    fpsensor_debug(DEBUG_LOG,"%s %s leave.\n", screen_status, __func__);
     return retval;
 }
 #endif
