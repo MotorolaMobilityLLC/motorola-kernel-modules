@@ -365,6 +365,14 @@ static int ilitek_plat_probe(void)
 
 	ili_irq_register(ilits->irq_tirgger_type);
 
+	struct device_node *dev_node = ilits->dev->of_node;
+	if (of_property_read_bool(dev_node, "ilitek,fw_compatible")) {
+		ILI_INFO("ilitek,fw_compatible set");
+		ilits->fw_compatible = 1;
+	} else {
+		ilits->fw_compatible = 0;
+	}
+
 	if (ili_tddi_init() < 0) {
 		ILI_ERR("ILITEK Driver probe failed\n");
 		ili_irq_unregister();

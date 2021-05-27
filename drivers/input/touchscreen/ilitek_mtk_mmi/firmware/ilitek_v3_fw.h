@@ -28,6 +28,8 @@
 #define DEF_FW_FILP_PATH		"/sdcard/ILITEK_FW"
 #define DEF_INI_REQUEST_PATH		"mp.ini"
 #define DEF_FW_REQUEST_PATH		"ILITEK_FW"
+#define DEF_FW_120hz_FILP_PATH		"/sdcard/ILITEK_FW_120hz"
+#define DEF_FW_120hz_REQUEST_PATH	"ILITEK_FW_120hz"
 static unsigned char CTPM_FW_DEF[] = {
 	#include "FW_TDDI_TRUNK_FB.ili"
 };
