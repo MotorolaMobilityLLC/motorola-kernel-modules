@@ -1121,8 +1121,13 @@ static void ili_update_tp_module_info(void)
 	if (module == 0 || ilits->md_fw_ili_size < ILI_FILE_HEADER) {
 		ILI_ERR("Couldn't find any tp modules, applying default settings\n");
 		ilits->md_name = "DEF";
-		ilits->md_fw_filp_path = DEF_FW_FILP_PATH;
-		ilits->md_fw_rq_path = DEF_FW_REQUEST_PATH;
+		if(ilits->fw_compatible == 0){
+			ilits->md_fw_filp_path = DEF_FW_FILP_PATH;
+			ilits->md_fw_rq_path = DEF_FW_REQUEST_PATH;
+		}else {
+			ilits->md_fw_filp_path = DEF_FW_120hz_FILP_PATH;
+			ilits->md_fw_rq_path = DEF_FW_120hz_REQUEST_PATH;
+		}
 		ilits->md_ini_path = DEF_INI_NAME_PATH;
 		ilits->md_ini_rq_path = DEF_INI_REQUEST_PATH;
 		ilits->md_fw_ili = CTPM_FW_DEF;
