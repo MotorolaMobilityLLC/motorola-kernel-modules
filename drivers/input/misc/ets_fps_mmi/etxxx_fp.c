@@ -618,7 +618,7 @@ long egisfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	struct egisfp_dev_t *egis_dev = NULL;
 	struct egisfp_ioctl_cmd_t data = {0};
 
-	INFO_PRINT(" %s : cmd = 0x%X \n", __func__, cmd);
+	//INFO_PRINT(" %s : cmd = 0x%X \n", __func__, cmd);
 	egis_dev = (struct egisfp_dev_t *)filp->private_data;
 
 	if (!egis_dev->pars_dtsi_done)
