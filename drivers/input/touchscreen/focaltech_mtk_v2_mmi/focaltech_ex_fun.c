@@ -1146,6 +1146,18 @@ static ssize_t fts_log_level_store(
     return count;
 }
 
+static ssize_t fts_panel_supplier_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *data = dev_get_drvdata(dev);
+
+	if (data->panel_supplier)
+		return scnprintf(buf, PAGE_SIZE, "%s\n",
+			data->panel_supplier);
+	return 0;
+}
+static DEVICE_ATTR(panel_supplier, 0444, fts_panel_supplier_show, NULL);
+
 /* get the fw version  example:cat fw_version */
 static DEVICE_ATTR(fts_fw_version, S_IRUGO | S_IWUSR, fts_tpfwver_show, fts_tpfwver_store);
 
@@ -1187,6 +1199,7 @@ static struct attribute *fts_attributes[] = {
     &dev_attr_fts_boot_mode.attr,
     &dev_attr_fts_touch_point.attr,
     &dev_attr_fts_log_level.attr,
+    &dev_attr_panel_supplier.attr,
     NULL
 };
 
