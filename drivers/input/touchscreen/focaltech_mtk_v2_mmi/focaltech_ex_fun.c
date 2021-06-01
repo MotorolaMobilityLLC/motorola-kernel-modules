@@ -650,6 +650,33 @@ static ssize_t fts_bootmode_show(
     return count;
 }
 
+static ssize_t fts_productinfo_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    return scnprintf(buf, PAGE_SIZE, "%s\n", FTS_CHIP_NAME);
+}
+
+static ssize_t fts_ic_ver_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+    int count = 0;
+    u8 val = 0;
+    struct input_dev *input_dev = fts_data->input_dev;
+    mutex_lock(&input_dev->mutex);
+#if FTS_ESDCHECK_EN
+    fts_esdcheck_proc_busy(1);
+#endif
+    fts_read_reg(FTS_REG_VENDOR_ID, &val);
+    count += snprintf(buf + count, PAGE_SIZE, "Product ID: 0x%02x\n", val);
+    fts_read_reg(FTS_REG_FW_VER, &val);
+    count += snprintf(buf + count, PAGE_SIZE, "Build ID: 0000-%02x\n", val);
+    count += scnprintf(buf + count, PAGE_SIZE, "IC: %s\n", FTS_CHIP_NAME);
+#if FTS_ESDCHECK_EN
+    fts_esdcheck_proc_busy(0);
+#endif
+    mutex_unlock(&input_dev->mutex);
+    return count;
+}
+
 /* fts_tpfwver interface */
 static ssize_t fts_tpfwver_show(
     struct device *dev, struct device_attribute *attr, char *buf)
@@ -683,6 +710,32 @@ static ssize_t fts_tpfwver_store(
     struct device_attribute *attr, const char *buf, size_t count)
 {
     return -EPERM;
+}
+
+static ssize_t buildid_show(
+    struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct fts_ts_data *ts_data = fts_data;
+    struct input_dev *input_dev = ts_data->input_dev;
+    ssize_t num_read_chars = 0;
+    u8 fwver = 0;
+
+    mutex_lock(&input_dev->mutex);
+
+#if FTS_ESDCHECK_EN
+    fts_esdcheck_proc_busy(1);
+#endif
+    fts_read_reg(FTS_REG_FW_VER, &fwver);
+#if FTS_ESDCHECK_EN
+    fts_esdcheck_proc_busy(0);
+#endif
+    if ((fwver == 0xFF) || (fwver == 0x00))
+        num_read_chars = snprintf(buf, PAGE_SIZE, "get tp fw version fail!\n");
+    else
+        num_read_chars = snprintf(buf, PAGE_SIZE, "0000-%02x\n", fwver);
+
+    mutex_unlock(&input_dev->mutex);
+    return num_read_chars;
 }
 
 /* fts_rw_reg */
@@ -1185,6 +1238,9 @@ static DEVICE_ATTR(fts_irq, S_IRUGO | S_IWUSR, fts_irq_show, fts_irq_store);
 static DEVICE_ATTR(fts_boot_mode, S_IRUGO | S_IWUSR, fts_bootmode_show, fts_bootmode_store);
 static DEVICE_ATTR(fts_touch_point, S_IRUGO | S_IWUSR, fts_tpbuf_show, fts_tpbuf_store);
 static DEVICE_ATTR(fts_log_level, S_IRUGO | S_IWUSR, fts_log_level_show, fts_log_level_store);
+static DEVICE_ATTR(buildid, S_IRUGO, buildid_show, NULL);
+static DEVICE_ATTR(productinfo, S_IRUGO, fts_productinfo_show, NULL);
+static DEVICE_ATTR(ic_ver, S_IRUGO, fts_ic_ver_show, NULL);
 
 /* add your attr in here*/
 static struct attribute *fts_attributes[] = {
@@ -1199,6 +1255,9 @@ static struct attribute *fts_attributes[] = {
     &dev_attr_fts_boot_mode.attr,
     &dev_attr_fts_touch_point.attr,
     &dev_attr_fts_log_level.attr,
+    &dev_attr_buildid.attr,
+    &dev_attr_productinfo.attr,
+    &dev_attr_ic_ver.attr,
     &dev_attr_panel_supplier.attr,
     NULL
 };
@@ -1235,9 +1294,23 @@ static ssize_t vendor_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "focaltech");
 }
 
+static ssize_t panel_supplier_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+    return fts_panel_supplier_show(dev, attr, buf);
+}
+
+static ssize_t ic_ver_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return fts_ic_ver_show(dev, attr, buf);
+}
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
+	__ATTR_RO(ic_ver),
+	__ATTR_RO(panel_supplier),
 	__ATTR_NULL
 };
 
