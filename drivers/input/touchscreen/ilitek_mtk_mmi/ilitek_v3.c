@@ -576,6 +576,21 @@ int ili_sleep_handler(int mode)
 				ILI_ERR("Check busy timeout during deep suspend\n");
 		}
 
+#ifdef  ILI_SENSOR_EN
+		if (ilits->should_enable_gesture) {
+			is_touchscreen_gesture_open(1);
+			ili_switch_tp_mode(P5_X_FW_GESTURE_MODE);
+			enable_irq_wake(ilits->irq_num);
+			ili_irq_enable();
+			ilits->wakeable = true;
+		} else {
+			is_touchscreen_gesture_open(0);
+			if (ili_ic_func_ctrl("sleep", DEEP_SLEEP_IN) < 0)
+				ILI_ERR("Write deep sleep in cmd failed\n");
+			ilits->wakeable = false;
+		}
+#else
+
 		if ((ilits->gesture) || (ilits->prox_face_mode == true)) {
 			ili_switch_tp_mode(P5_X_FW_GESTURE_MODE);
 			enable_irq_wake(ilits->irq_num);
@@ -584,6 +599,7 @@ int ili_sleep_handler(int mode)
 			if (ili_ic_func_ctrl("sleep", DEEP_SLEEP_IN) < 0)
 				ILI_ERR("Write deep sleep in cmd failed\n");
 		}
+#endif
 		ILI_INFO("TP deep suspend end\n");
 		break;
 	case TP_RESUME:
@@ -613,6 +629,13 @@ int ili_sleep_handler(int mode)
 		ilits->proxmity_face = false;
 #endif
 		ILI_INFO("TP resume end\n");
+#ifdef ILI_SENSOR_EN
+	if (ilits->wakeable) {
+		disable_irq_wake(ilits->irq_num);
+		ilits->gesture_enabled = false;
+		ilits->wakeable = false;
+	}
+#endif
 #endif
 		ili_wq_ctrl(WQ_ESD, ENABLE);
 		ili_wq_ctrl(WQ_BAT, ENABLE);
@@ -830,7 +853,6 @@ int ili_report_handler(void)
 	u8 *trdata = NULL;
 	int rlen = 0;
 	int tmp = debug_en;
-
 	/* Just in case these stats couldn't be blocked in top half context */
 	if (!ilits->boot || !ilits->report || atomic_read(&ilits->tp_reset) || atomic_read(&ilits->ignore_report) ||
 		atomic_read(&ilits->fw_stat) || atomic_read(&ilits->tp_sw_mode) ||
