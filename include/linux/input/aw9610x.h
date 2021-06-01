@@ -24,6 +24,10 @@
 #define AW_CLA1_SPE_REG_NUM			(6)
 #define AW_SPE_REG_DWORD			(8)
 #define AW_DATA_PROCESS_FACTOR				(1024)
+#define AW_CHANNEL_NUMBER_TWO     0x02
+#define AW_CHANNEL_NUMBER_THREE   0x03
+#define AW_CHANNEL_NUMBER_FOUR    0x04
+#define AW_CHANNEL_NUMBER_FIVE    0x05
 
 /*
 #define AWLOGD(dev, format, arg...) \
@@ -67,8 +71,8 @@ enum aw9610x_sar_vers {
 };
 
 enum aw9610x_operation_mode {
-	AW9610X_ACTIVE_MODE = 1,
-	AW9610X_SLEEP_MODE,
+	AW9610X_SLEEP_MODE = 0,
+	AW9610X_ACTIVE_MODE,
 	AW9610X_DEEPSLEEP_MODE,
 };
 
@@ -181,6 +185,8 @@ struct aw9610x {
 	uint8_t mode_flag0;
 	uint8_t mode_flag1;
 	uint8_t pad;
+	uint32_t aw_channel_number;
+	const char *aw_ch_name[12];
 
 	uint32_t sar_num;
 	int32_t irq_gpio;
@@ -189,6 +195,9 @@ struct aw9610x {
 	uint32_t hostirqen;
 	uint32_t first_irq_flag;
 	uint32_t mode;
+	uint32_t int_state;
+	uint16_t read_reg;
+	bool read_flag;
 	bool pwprox_dete;
 	bool firmware_flag;
 	bool satu_release;
@@ -221,62 +230,62 @@ struct aw_pad pad_event[] =
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar0_pad0",
+		//.name = "sar0_pad0",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar0_pad1",
+		//.name = "sar0_pad1",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar0_pad2",
+		//.name = "sar0_pad2",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar0_pad3",
+		//.name = "sar0_pad3",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar0_pad4",
+		//.name = "sar0_pad4",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar0_pad5",
+		//.name = "sar0_pad5",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar1_pad0",
+		//.name = "sar1_pad0",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar1_pad1",
+		//.name = "sar1_pad1",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar1_pad2",
+		//.name = "sar1_pad2",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar1_pad3",
+		//.name = "sar1_pad3",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar1_pad4",
+		//.name = "sar1_pad4",
 	},
 	{
 		.curr_state = 0,
 		.last_state = 0,
-		.name = "sar1_pad5",
+		//.name = "sar1_pad5",
 	},
 };
 
@@ -287,101 +296,23 @@ uint32_t attr_buf[] = {
 };
 
 #ifdef USE_SENSORS_CLASS
-static struct sensors_classdev sensors_capsensor_ch0_cdev = {
-	.name = "sar0_pad0",
-	.vendor = "awinic",
-	.version = 1,
-	.type = SENSOR_TYPE_MOTO_CAPSENSE,
-	.max_range = "5",
-	.resolution = "5.0",
-	.sensor_power = "3",
-	.min_delay = 0, /* in microseconds */
-	.fifo_reserved_event_count = 0,
-	.fifo_max_event_count = 0,
-	.enabled = 0,
-	.delay_msec = 100,
-	.sensors_enable = NULL,
-	.sensors_poll_delay = NULL,
-};
-static struct sensors_classdev sensors_capsensor_ch1_cdev = {
-	.name = "sar0_pad1",
-	.vendor = "awinic",
-	.version = 1,
-	.type = SENSOR_TYPE_MOTO_CAPSENSE,
-	.max_range = "5",
-	.resolution = "5.0",
-	.sensor_power = "3",
-	.min_delay = 0, /* in microseconds */
-	.fifo_reserved_event_count = 0,
-	.fifo_max_event_count = 0,
-	.enabled = 0,
-	.delay_msec = 100,
-	.sensors_enable = NULL,
-	.sensors_poll_delay = NULL,
-};
-static struct sensors_classdev sensors_capsensor_ch2_cdev = {
-	.name = "sar0_pad2",
-	.vendor = "awinic",
-	.version = 1,
-	.type = SENSOR_TYPE_MOTO_CAPSENSE,
-	.max_range = "5",
-	.resolution = "5.0",
-	.sensor_power = "3",
-	.min_delay = 0, /* in microseconds */
-	.fifo_reserved_event_count = 0,
-	.fifo_max_event_count = 0,
-	.enabled = 0,
-	.delay_msec = 100,
-	.sensors_enable = NULL,
-	.sensors_poll_delay = NULL,
-};
-static struct sensors_classdev sensors_capsensor_ch3_cdev = {
-	.name = "sar0_pad3",
-	.vendor = "awinic",
-	.version = 1,
-	.type = SENSOR_TYPE_MOTO_CAPSENSE,
-	.max_range = "5",
-	.resolution = "5.0",
-	.sensor_power = "3",
-	.min_delay = 0, /* in microseconds */
-	.fifo_reserved_event_count = 0,
-	.fifo_max_event_count = 0,
-	.enabled = 0,
-	.delay_msec = 100,
-	.sensors_enable = NULL,
-	.sensors_poll_delay = NULL,
-};
-static struct sensors_classdev sensors_capsensor_ch4_cdev = {
-	.name = "sar0_pad4",
-	.vendor = "awinic",
-	.version = 1,
-	.type = SENSOR_TYPE_MOTO_CAPSENSE,
-	.max_range = "5",
-	.resolution = "5.0",
-	.sensor_power = "3",
-	.min_delay = 0, /* in microseconds */
-	.fifo_reserved_event_count = 0,
-	.fifo_max_event_count = 0,
-	.enabled = 0,
-	.delay_msec = 100,
-	.sensors_enable = NULL,
-	.sensors_poll_delay = NULL,
-};
-static struct sensors_classdev sensors_capsensor_ch5_cdev = {
-	.name = "sar0_pad5",
-	.vendor = "awinic",
-	.version = 1,
-	.type = SENSOR_TYPE_MOTO_CAPSENSE,
-	.max_range = "5",
-	.resolution = "5.0",
-	.sensor_power = "3",
-	.min_delay = 0, /* in microseconds */
-	.fifo_reserved_event_count = 0,
-	.fifo_max_event_count = 0,
-	.enabled = 0,
-	.delay_msec = 100,
-	.sensors_enable = NULL,
-	.sensors_poll_delay = NULL,
+struct sensors_classdev sensors_capsensor_chs[AW_CHANNEL_MAX] = {
+    [0 ... AW_CHANNEL_MAX-1] = {
+		//.name = "sar0_pad0",
+		.vendor = "awinic",
+		.version = 1,
+		.type = SENSOR_TYPE_MOTO_CAPSENSE,
+		.max_range = "5",
+		.resolution = "5.0",
+		.sensor_power = "3",
+		.min_delay = 0, /* in microseconds */
+		.fifo_reserved_event_count = 0,
+		.fifo_max_event_count = 0,
+		.enabled = 0,
+		.delay_msec = 100,
+		.sensors_enable = NULL,
+		.sensors_poll_delay = NULL,
+    }
 };
 #endif
 /******************************************************
