@@ -1529,7 +1529,6 @@ int ili_mp_lcm_off_env_ctrl(u8 lcm_on)
 
 		if (ENABLE_WQ_ESD)
 			ilits->esd_func_ctrl = DISABLE;
-
 		/* enable gesture */
 		ilits->gesture = ENABLE;
 	}

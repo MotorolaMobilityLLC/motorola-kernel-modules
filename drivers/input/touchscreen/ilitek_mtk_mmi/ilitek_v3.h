@@ -102,6 +102,10 @@
 #include "sync_write.h"
 #endif
 
+#ifdef ILI_SENSOR_EN
+#include <linux/sensors.h>
+#endif
+
 #define DRIVER_VERSION			"3.0.5.0.201120"
 
 /* Options */
@@ -828,6 +832,23 @@ struct report_info_block {
 #define POSITION_CUSTOMER_TYPE_ON	0x00
 #define POSITION_CUSTOMER_TYPE_OFF	0x1F
 
+#ifdef ILI_SENSOR_EN
+/* display state */
+enum display_state {
+	SCREEN_UNKNOWN,
+	SCREEN_OFF,
+	SCREEN_ON,
+};
+struct ili_sensor_platform_data {
+	struct input_dev *input_sensor_dev;
+	struct sensors_classdev ps_cdev;
+	int sensor_opened;
+	char sensor_data; /* 0 near, 1 far */
+	struct ilitek_ts_data *data;
+};
+#define REPORT_MAX_COUNT 10000
+#endif
+
 struct ilitek_ts_data {
 	struct i2c_client *i2c;
 	struct spi_device *spi;
@@ -1003,6 +1024,21 @@ struct ilitek_ts_data {
 	int (*ges_recover)(void);
 	void (*demo_debug_info[5])(u8 *, size_t);
 	int (*detect_int_stat)(bool status);
+
+#ifdef ILI_SENSOR_EN
+	bool wakeable;
+	bool should_enable_gesture;
+	bool gesture_enabled;
+	uint32_t report_gesture_key;
+	enum display_state screen_state;
+	struct mutex state_mutex;
+	struct ili_sensor_platform_data *sensor_pdata;
+#ifdef CONFIG_HAS_WAKELOCK
+	struct wake_lock gesture_wakelock;
+#else
+	struct wakeup_source gesture_wakelock;
+#endif
+#endif
 };
 extern struct ilitek_ts_data *ilits;
 
@@ -1219,6 +1255,8 @@ extern int ili_get_tp_recore_ctrl(int data);
 extern int ili_get_tp_recore_data(bool mcu);
 extern void ili_demo_debug_info_mode(u8 *buf, size_t rlen);
 extern void ili_demo_debug_info_id0(u8 *buf, size_t len);
+
+extern void is_touchscreen_gesture_open(int value);
 
 static inline void ipio_kfree(void **mem)
 {
