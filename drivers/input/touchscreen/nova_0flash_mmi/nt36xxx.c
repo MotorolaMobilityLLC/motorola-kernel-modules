@@ -2124,6 +2124,62 @@ static int pen_notifier_callback(struct notifier_block *self,
 }
 #endif
 
+#ifdef NVT_MTK_GET_PANEL
+char active_panel_name[50] = {0};
+
+static int nvt_get_panel(void)
+{
+	if (strlen(active_panel_name)) {
+		NVT_LOG("got active_panel_name=%s\n", active_panel_name);
+		return 0;
+	}
+
+	//bringup, parse panel name from cmdline
+	NVT_LOG("enter\n");
+	if (saved_command_line) {
+		char *sub;
+		char key_prefix[] = "mipi_mot_vid_";
+		char ic_prefix[] = "nt36";
+		NVT_LOG("saved_command_line is %s\n", saved_command_line);
+		sub = strstr(saved_command_line, key_prefix);
+		if (sub) {
+			char *d;
+			int n, len, len_max = 50;
+
+			d = strstr(sub, " ");
+			if (d) {
+				n = strlen(sub) - strlen(d);
+			} else {
+				n = strlen(sub);
+			}
+
+			if (n > len_max)
+				len = len_max;
+			else
+				len = n;
+
+			strncpy(active_panel_name, sub, len);
+
+			if(strstr(active_panel_name, ic_prefix)) {
+				NVT_LOG("active_panel_name=%s\n", active_panel_name);
+			} else {
+				NVT_LOG("Not novatek panel!\n");
+				return -1;
+			}
+
+		} else {
+			NVT_LOG("active panel not found!\n");
+			return -1;
+		}
+	} else {
+		NVT_LOG("saved_command_line null!\n");
+		return -1;
+	}
+
+	return 0;
+}
+#endif
+
 /*******************************************************
 Description:
 	Novatek touchscreen driver probe function.
@@ -2149,7 +2205,13 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		return ret;
 	}
 #endif
-
+#ifdef NVT_MTK_GET_PANEL
+	ret = nvt_get_panel();
+	if (ret) {
+		NVT_LOG("MTK get panel error\n");
+		return ret;
+	}
+#endif
 	NVT_LOG("start\n");
 
 	ts = kzalloc(sizeof(struct nvt_ts_data), GFP_KERNEL);
