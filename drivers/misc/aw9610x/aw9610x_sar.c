@@ -34,7 +34,6 @@
 #include <linux/input/aw9610x.h>
 #include <linux/input/aw9610x_reg.h>
 
-
 #include "base.h"
 
 #define AW9610X_I2C_NAME "aw9610x_sar"
@@ -423,7 +422,7 @@ static void aw9610x_get_calidata(struct aw9610x *aw9610x)
 	/*class 2 special reg*/
 	for (; i < AW_SPE_REG_NUM; i++)
 		aw9610x_i2c_read(aw9610x,
-			REG_REFACFG + (i - AW_CHANNEL_MAX) *
+			REG_REFACFG + (i - aw9610x->aw_channel_number) *
 				AW_CL2SPE_CALI_OS, &aw9610x->spedata[i]);
 
 	for (i = AW_CLA1_SPE_REG_NUM; i < AW_SPE_REG_NUM; i++) {
@@ -745,7 +744,7 @@ aw9610x_sar_cfg_init(struct aw9610x *aw9610x, int32_t flag)
 	schedule_delayed_work(&aw9610x->cfg_work,
 					msecs_to_jiffies(cfg_timer_val));
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x->aw_pad[i].curr_state = 0;
 		aw9610x->aw_pad[i].last_state = 0;
 	}
@@ -813,7 +812,7 @@ static int32_t aw9610x_baseline_filter(struct aw9610x *aw9610x)
 	if (ret < 0)
 		return ret;
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		if (((status1 >> i) & 0x01) == 1) {
 			if (aw9610x->satu_flag[i] == 0) {
 				ret = aw9610x_i2c_read(aw9610x,
@@ -863,7 +862,7 @@ static void aw9610x_saturat_release_handle(struct aw9610x *aw9610x)
 		ret = aw9610x_i2c_read(aw9610x, REG_STAT0, &status0);
 		if (ret < 0)
 			return;
-		for (i = 0; i < AW_CHANNEL_MAX; i++) {
+		for (i = 0; i < aw9610x->aw_channel_number; i++) {
 			if (aw9610x->satu_flag[i] == 1) {
 				if (((status0 >> (i + 24)) & 0x01) == 0) {
 					ret = aw9610x_i2c_write(aw9610x,
@@ -931,7 +930,7 @@ static ssize_t aw9610x_valid_show(struct device *dev,
 	uint8_t i = 0;
 	int32_t reg_val = 0;
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x_i2c_read(aw9610x, REG_VALID_CH0 + i * 4, &reg_val);
 		reg_val /= AW_DATA_PROCESS_FACTOR;
 		len += snprintf(buf+len, PAGE_SIZE-len, "VALID_CH%d = %d\n", i,
@@ -949,7 +948,7 @@ static ssize_t aw9610x_baseline_show(struct device *dev,
 	uint8_t i = 0;
 	int32_t reg_val = 0;
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x_i2c_read(aw9610x, REG_BASELINE_CH0 + i * 4, &reg_val);
 		reg_val /= AW_DATA_PROCESS_FACTOR;
 		len += snprintf(buf+len, PAGE_SIZE-len, "BASELINE_CH%d = %d\n",
@@ -967,7 +966,7 @@ static ssize_t aw9610x_diff_show(struct device *dev,
 	uint8_t i = 0;
 	int32_t reg_val = 0;
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x_i2c_read(aw9610x, REG_DIFF_CH0 + i * 4, &reg_val);
 		reg_val /= AW_DATA_PROCESS_FACTOR;
 		len += snprintf(buf+len, PAGE_SIZE-len, "DIFF_CH%d = %d\n", i,
@@ -985,7 +984,7 @@ static ssize_t aw9610x_raw_data_show(struct device *dev,
 	uint8_t i = 0;
 	int32_t reg_val = 0;
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x_i2c_read(aw9610x, REG_RAW_CH0 + i * 4, &reg_val);
 		reg_val /= AW_DATA_PROCESS_FACTOR;
 		len += snprintf(buf+len, PAGE_SIZE-len, "RAW_DATA_CH%d = %d\n",
@@ -1003,7 +1002,7 @@ static ssize_t aw9610x_psc_data_show(struct device *dev,
 	uint8_t i = 0;
 	int32_t reg_val = 0;
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x_i2c_read(aw9610x, REG_PSCBD_CH0 + i * 4, &reg_val);
 		reg_val /= AW_DATA_PROCESS_FACTOR;
 		len += snprintf(buf+len, PAGE_SIZE-len, "PSC_DATA_CH%d = %d\n",
@@ -1025,7 +1024,7 @@ static ssize_t aw9610x_parasitic_data_show(struct device *dev,
 	uint32_t coff_data_dec = 0;
 	uint8_t temp_data[20] = { 0 };
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x_i2c_read(aw9610x,
 			REG_AFECFG1_CH0 + i * AW_CL1SPE_CALI_OS, &reg_val);
 		coff_data = (reg_val >> 24) * 900 +
@@ -1348,7 +1347,7 @@ static ssize_t enable_store(struct class *class,
 	ret = kstrtouint(buf, 10, &aw9610x->mode);
 	if (ret) {
 		LOG_ERR("fail to set operation mode");
-		return ret;
+		return count;
 	}
 
 	if (aw9610x->mode == AW9610X_ACTIVE_MODE) {
@@ -1371,7 +1370,7 @@ static ssize_t enable_store(struct class *class,
 		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
 	} else {
 		LOG_ERR("failed to operation mode!");
-		return aw9610x->mode;
+		return count;
 	}
 
 	return count;
@@ -1381,6 +1380,21 @@ static ssize_t enable_store(struct class *class,
 static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned int enable)
 {
 	struct aw9610x *aw9610x = g_aw9610x;
+	uint8_t i = 0;
+
+	for (i = 0; i < aw9610x->aw_channel_number; i++)
+	{
+		if (!strcmp(sensors_cdev->name, aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i])) {
+			if (enable == 1){
+				input_report_abs(
+					aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);}
+			else if (enable == 0){
+				input_report_abs(
+					aw9610x->aw_pad[i].input, ABS_DISTANCE, -1);
+			}
+            LOG_INFO("enable cap sensor: %s\n",sensors_cdev->name);
+		}
+	}
 
 	aw9610x->mode = enable;
 	if (aw9610x->mode == AW9610X_ACTIVE_MODE) {
@@ -1403,7 +1417,7 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned 
 		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
 	} else {
 		LOG_ERR("failed to operation mode!");
-		return aw9610x->mode;
+		return -1;
 	}
 
 	return 0;
@@ -1421,7 +1435,12 @@ static ssize_t reg_show(struct class *class,
 	uint32_t i = 0;
 	uint32_t reg_val = 0;
 	uint32_t reg_num = 0;
-
+	if (aw9610x->read_flag) {
+		aw9610x->read_flag = false;
+		aw9610x_i2c_read(aw9610x, aw9610x->read_reg, &reg_val);
+		len += snprintf(len, PAGE_SIZE, "(0x%04x)=0x%08x\n", aw9610x->read_reg, reg_val);
+		return len;
+	}
 	reg_num = ARRAY_SIZE(aw9610x_reg_access);
 	for (i = 0; i < reg_num; i++) {
 		if (aw9610x_reg_access[i].rw & REG_RD_ACCESS) {
@@ -1442,23 +1461,34 @@ static ssize_t reg_store(struct class *class,
 		const char *buf, size_t count)
 {
 	struct aw9610x *aw9610x = g_aw9610x;
-	uint32_t databuf[2] = { 0, 0 };
-
-	if (sscanf(buf, "%x %x", &databuf[0], &databuf[1]) == 2)
-		aw9610x_i2c_write(aw9610x, (uint16_t)databuf[0],
-							(uint32_t)databuf[1]);
-
-
+	unsigned int val, reg, opt;
+    if (sscanf(buf, "%x,%x,%x", &reg, &val, &opt) == 3) {
+		aw9610x->read_reg = (uint16_t)reg;
+		aw9610x->read_flag = true;
+	} else if (sscanf(buf, "%x,%x", &reg, &val) == 2) {
+		LOG_DBG("%s,reg = 0x%04x, val = 0x%08x\n",
+				__func__, (uint16_t)reg, (uint32_t)val);
+		aw9610x_i2c_write(aw9610x, (uint16_t)reg, (uint32_t)val);
+	}
 	return count;
 }
-
-
 static CLASS_ATTR_RW(reg);
+
+static ssize_t int_state_show(struct class *class,
+		struct class_attribute *attr,
+		char *buf)
+{
+	struct aw9610x *aw9610x = g_aw9610x;
+	return snprintf(buf, 8, "%d\n", aw9610x->int_state);
+}
+static CLASS_ATTR_RO(int_state);
 
 static struct class capsense_class = {
 	.name			= "capsense",
 	.owner			= THIS_MODULE,
 };
+
+
 /*****************************************************
 *
 * irq init
@@ -1475,7 +1505,7 @@ static void aw9610x_irq_handle(struct aw9610x *aw9610x)
 	aw9610x_i2c_read(aw9610x, REG_STAT0, &curr_status);
 	j = aw9610x->sar_num;
 	LOG_DBG("pad = 0x%08x", curr_status);
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].curr_state =
 			(((uint8_t)(curr_status >> (24 + i)) & 0x1)) |
 			(((uint8_t)(curr_status >> (16 + i)) & 0x1) << 1) |
@@ -1585,7 +1615,7 @@ static int32_t aw9610x_interrupt_init(struct aw9610x *aw9610x)
 
 	LOG_DBG("enter");
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++)
+	for (i = 0; i < aw9610x->aw_channel_number; i++)
 		aw9610x->satu_flag[i] = 0;
 
 	snprintf(irq_gpio_name, sizeof(irq_gpio_name),
@@ -1614,6 +1644,7 @@ static int32_t aw9610x_interrupt_init(struct aw9610x *aw9610x)
 				ret = -AW_IRQ_REQUEST_FAILED;
 			} else {
 				LOG_INFO("IRQ request successfully!");
+				aw9610x->int_state = 1;
 				ret = AW_SAR_SUCCESS;
 			}
 		}
@@ -1634,6 +1665,7 @@ static int32_t aw9610x_parse_dt(struct device *dev, struct aw9610x *aw9610x,
 			   struct device_node *np)
 {
 	uint32_t val = 0;
+	int sar_num_channel = 0;
 
 	val = of_property_read_u32(np, "sar-num", &aw9610x->sar_num);
 	if (val != 0) {
@@ -1641,6 +1673,38 @@ static int32_t aw9610x_parse_dt(struct device *dev, struct aw9610x *aw9610x,
 		return -AW_MULTIPLE_SAR_FAILED;
 	} else {
 		LOG_INFO("sar num = %d", aw9610x->sar_num);
+	}	
+	val = of_property_read_u32(np, "aw9610x,channel_number", &aw9610x->aw_channel_number);
+	if (val != 0) {
+		LOG_ERR("aw_channel_number failed!");
+		return -AW_MULTIPLE_SAR_FAILED;
+	} else {
+		if (aw9610x->aw_channel_number > AW_CHANNEL_MAX)
+		{
+			aw9610x->aw_channel_number = AW_CHANNEL_MAX;
+		}
+		LOG_INFO("aw_channel_number = %d", aw9610x->aw_channel_number);
+	}
+
+    sar_num_channel = aw9610x->sar_num * AW_CHANNEL_MAX;
+	if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_TWO) {
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[sar_num_channel + 1]);
+	} else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_THREE) {
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[1]);
+		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[sar_num_channel + 2]);
+	} else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_FOUR) {
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[sar_num_channel + 1]);
+		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[sar_num_channel + 2]);
+		of_property_read_string(np, "ch3_name", &aw9610x->aw_ch_name[sar_num_channel + 3]);
+	} else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_FIVE) {
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[sar_num_channel + 1]);
+		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[sar_num_channel + 2]);
+		of_property_read_string(np, "ch3_name", &aw9610x->aw_ch_name[sar_num_channel + 3]);
+		of_property_read_string(np, "ch4_name", &aw9610x->aw_ch_name[sar_num_channel + 4]);
 	}
 
 	aw9610x->irq_gpio = of_get_named_gpio(np, "irq-gpio", 0);
@@ -1861,14 +1925,13 @@ aw9610x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	aw9610x->aw_pad = pad_event;
 	/* input device */
 	j = aw9610x->sar_num;
-	for (i = 0; i < AW_CHANNEL_MAX; i++) {
+	for (i = 0; i < aw9610x->aw_channel_number; i++) {
 		aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input = input_allocate_device();
 		if (!(aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input)) {
 			err_num = i;
 			goto exit_input_alloc_failed;
 		}
-		aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input->name =
-						pad_event[j * AW_CHANNEL_MAX + i].name;
+		aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input->name = aw9610x->aw_ch_name[j * AW_CHANNEL_MAX + i];
 		__set_bit(EV_KEY, aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input->evbit);
 		__set_bit(EV_SYN, aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input->evbit);
 		__set_bit(KEY_F1, aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input->keybit);
@@ -1895,13 +1958,13 @@ aw9610x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 			LOG_ERR("Create reset file failed (%d)\n", ret);
 			return ret;
 		}
-/*
+
 		ret = class_create_file(&capsense_class, &class_attr_int_state);
         if (ret < 0) {
             LOG_DBG("Create int_state file failed (%d)\n", ret);
             return ret;
         }
-
+/*
 		ret = class_create_file(&capsense_class, &class_attr_fw_download_status);
 		if (ret < 0) {
 			LOG_DBG("Create fw_download_status file failed (%d)\n", ret);
@@ -1924,47 +1987,16 @@ aw9610x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		//kobject_uevent(&capsense_class.p->subsys.kobj, KOBJ_CHANGE);
 
 #ifdef USE_SENSORS_CLASS
-		sensors_capsensor_ch0_cdev.sensors_enable = capsensor_set_enable;
-		sensors_capsensor_ch0_cdev.sensors_poll_delay = NULL;
-		ret = sensors_classdev_register(&aw9610x->aw_pad[0].input->dev,
-										&sensors_capsensor_ch0_cdev);
+	for (i = 0; i < aw9610x->aw_channel_number; i++){
+		sensors_capsensor_chs[i].sensors_enable = capsensor_set_enable;
+		sensors_capsensor_chs[i].sensors_poll_delay = NULL;
+		sensors_capsensor_chs[i].name = aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i];
+        LOG_ERR("cap sensor_class channel_name:%s\n", aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i]);
+		ret = sensors_classdev_register(&aw9610x->aw_pad[i].input->dev,
+										&sensors_capsensor_chs[i]);
 		if (ret < 0)
 			LOG_ERR("create ch0 cap sensor_class  file failed (%d)\n", ret);
-
-		sensors_capsensor_ch1_cdev.sensors_enable = capsensor_set_enable;
-		sensors_capsensor_ch1_cdev.sensors_poll_delay = NULL;
-		ret = sensors_classdev_register(&aw9610x->aw_pad[1].input->dev,
-										&sensors_capsensor_ch1_cdev);
-		if (ret < 0)
-			LOG_ERR("create ch1 cap sensor_class  file failed (%d)\n", ret);
-
-		sensors_capsensor_ch2_cdev.sensors_enable = capsensor_set_enable;
-		sensors_capsensor_ch2_cdev.sensors_poll_delay = NULL;
-		ret = sensors_classdev_register(&aw9610x->aw_pad[2].input->dev,
-										&sensors_capsensor_ch2_cdev);
-		if (ret < 0)
-			LOG_ERR("create ch2 cap sensor_class  file failed (%d)\n", ret);
-
-		sensors_capsensor_ch3_cdev.sensors_enable = capsensor_set_enable;
-		sensors_capsensor_ch3_cdev.sensors_poll_delay = NULL;
-		ret = sensors_classdev_register(&aw9610x->aw_pad[3].input->dev,
-										&sensors_capsensor_ch3_cdev);
-		if (ret < 0)
-			LOG_ERR("create ch3 cap sensor_class  file failed (%d)\n", ret);
-
-		sensors_capsensor_ch4_cdev.sensors_enable = capsensor_set_enable;
-		sensors_capsensor_ch4_cdev.sensors_poll_delay = NULL;
-		ret = sensors_classdev_register(&aw9610x->aw_pad[4].input->dev,
-										&sensors_capsensor_ch4_cdev);
-		if (ret < 0)
-			LOG_ERR("create ch4 cap sensor_class  file failed (%d)\n", ret);
-
-		sensors_capsensor_ch5_cdev.sensors_enable = capsensor_set_enable;
-		sensors_capsensor_ch5_cdev.sensors_poll_delay = NULL;
-		ret = sensors_classdev_register(&aw9610x->aw_pad[5].input->dev,
-										&sensors_capsensor_ch5_cdev);
-		if (ret < 0)
-			LOG_ERR("create ch5 cap sensor_class  file failed (%d)\n", ret);
+	}
 #endif
 
 	/* attribute */
@@ -2017,20 +2049,18 @@ static int32_t aw9610x_i2c_remove(struct i2c_client *i2c)
 		regulator_put(aw9610x->vcc);
 	}
 #ifdef USE_SENSORS_CLASS
-	sensors_classdev_unregister(&sensors_capsensor_ch0_cdev);
-	sensors_classdev_unregister(&sensors_capsensor_ch1_cdev);
-	sensors_classdev_unregister(&sensors_capsensor_ch2_cdev);
-	sensors_classdev_unregister(&sensors_capsensor_ch3_cdev);
-	sensors_classdev_unregister(&sensors_capsensor_ch4_cdev);
-	sensors_classdev_unregister(&sensors_capsensor_ch5_cdev);
+	for (i = 0; i < aw9610x->aw_channel_number; i++)
+	{
+		sensors_classdev_unregister(&sensors_capsensor_chs[i]);
+	}
 #endif
 	if (gpio_is_valid(aw9610x->irq_gpio))
 		devm_gpio_free(&i2c->dev, aw9610x->irq_gpio);
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++)
+	for (i = 0; i < aw9610x->aw_channel_number; i++)
 		input_free_device(aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input);
 
-	for (i = 0; i < AW_CHANNEL_MAX; i++)
+	for (i = 0; i < aw9610x->aw_channel_number; i++)
 		input_unregister_device(aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].input);
 
 	sysfs_remove_group(&i2c->dev.kobj, &aw9610x_sar_attribute_group);
@@ -2125,5 +2155,5 @@ static void __exit aw9610x_i2c_exit(void)
 }
 module_exit(aw9610x_i2c_exit);
 MODULE_DESCRIPTION("AW9610X SAR Driver");
-MODULE_LICENSE("GPL");
-MODULE_VERSION("1");
+
+MODULE_LICENSE("GPL v2");
