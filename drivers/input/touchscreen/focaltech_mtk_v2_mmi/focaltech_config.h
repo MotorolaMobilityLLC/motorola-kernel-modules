@@ -189,7 +189,7 @@
  * show debug log info
  * enable it for debug, disable it for release
  */
-#define FTS_DEBUG_EN                            1
+#define FTS_DEBUG_EN                            0
 
 /*
  * Linux MultiTouch Protocol
@@ -261,6 +261,11 @@
  * Numbers of modules support
  */
 #define FTS_GET_MODULE_NUM                      0
+
+/*
+ * Usb detect support
+ */
+#define FTS_USB_DETECT_EN                       1
 
 /*
  * module_id: mean vendor_id generally, also maybe gpio or lcm_id...
