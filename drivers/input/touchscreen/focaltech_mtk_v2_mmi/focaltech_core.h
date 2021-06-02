@@ -62,6 +62,9 @@
 #include <linux/kthread.h>
 #include <linux/dma-mapping.h>
 #include "focaltech_common.h"
+#ifdef FTS_USB_DETECT_EN
+#include <linux/power_supply.h>
+#endif
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -100,7 +103,7 @@
 
 #define FTS_MAX_COMPATIBLE_TYPE             4
 #define FTS_MAX_COMMMAND_LENGTH             16
-
+#define FTS_REG_RETRY_TIMES                 5
 
 /*****************************************************************************
 *  Alternative mode (When something goes wrong, the modules may be able to solve the problem.)
@@ -220,6 +223,13 @@ struct fts_ts_data {
     struct pinctrl_state *pins_suspend;
     struct pinctrl_state *pins_release;
 #endif
+
+#if FTS_USB_DETECT_EN
+    bool usb_detect_flag;
+    uint8_t usb_connected;
+    struct notifier_block charger_notif;
+#endif
+
 #if defined(CONFIG_FB) || defined(CONFIG_DRM)
     struct notifier_block fb_notif;
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
