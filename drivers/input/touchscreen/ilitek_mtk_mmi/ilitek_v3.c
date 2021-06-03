@@ -39,18 +39,17 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 	int ret = 0;
 	struct power_supply *psy = NULL;
 	union power_supply_propval prop;
-
 	if (ilits->fw_update_stat != 100)
 		return 0;
 
-	psy = power_supply_get_by_name("usb");
+	psy = power_supply_get_by_name("charger");
 	if (!psy) {
 		ILI_ERR("Couldn't get usbpsy\n");
 		return -EINVAL;
 	}
-	if (!strcmp(psy->desc->name, "usb")) {
+	if (!strcmp(psy->desc->name, "charger")) {
 		if (psy && val == POWER_SUPPLY_PROP_STATUS) {
-			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &prop);
+			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
 			if (ret < 0) {
 				ILI_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
 				return ret;
@@ -83,6 +82,7 @@ void ilitek_plat_charger_init(void)
 	int ret = 0;
 	ilits->usb_plug_status = 2;
 	ilits->charger_notify_wq = create_singlethread_workqueue("ili_charger_wq");
+
 	if (!ilits->charger_notify_wq) {
 		ILI_ERR("allocate ili_charger_notify_wq failed\n");
 		return;
