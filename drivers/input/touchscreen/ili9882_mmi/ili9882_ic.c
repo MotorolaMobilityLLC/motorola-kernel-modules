@@ -57,13 +57,14 @@ static struct ilitek_ic_func_ctrl func_ctrl[FUNC_CTRL_NUM] = {
 	[15] = {"ear_phone", {0x1, 0x17, 0x0}, 3, 0x0, 0, 0xFF},
 };
 
-#define CHIP_SUP_NUM	5
+#define CHIP_SUP_NUM	6
 static u32 ic_sup_list[CHIP_SUP_NUM] = {
 	[0] = ILI9881_CHIP,
 	[1] = ILI7807_CHIP,
 	[2] = ILI9881N_AA,
 	[3] = ILI9881O_AA,
-	[4] = ILI9882_CHIP
+	[4] = ILI9882_CHIP,
+	[5] = ILI9883_CHIP
 };
 
 static int ilitek_tddi_ic_check_support(u32 pid, u16 id)

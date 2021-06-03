@@ -1029,6 +1029,15 @@ static void ili_update_tp_module_info(void)
 		ilits->md_fw_ili = CTPM_FW_TM_9882H;
 		ilits->md_fw_ili_size = sizeof(CTPM_FW_TM_9882H);
 		break;
+	case MODEL_TM_9883A:
+		ilits->md_name = "TM_9883A";
+		ilits->md_fw_filp_path = TM_9883A_FW_FILP_PATH;
+		ilits->md_fw_rq_path = TM_9883A_FW_REQUEST_PATH;
+		ilits->md_ini_path = TM_9883A_INI_NAME_PATH;
+		ilits->md_ini_rq_path = TM_9883A_FW_REQUEST_PATH;
+		ilits->md_fw_ili = CTPM_FW_TM_9883A;
+		ilits->md_fw_ili_size = sizeof(CTPM_FW_TM_9883A);
+		break;
 	case MODEL_TM_7807S:
 		ilits->md_name = "TM_7807S";
 		ilits->md_fw_filp_path = TM_7807S_FW_FILP_PATH;
