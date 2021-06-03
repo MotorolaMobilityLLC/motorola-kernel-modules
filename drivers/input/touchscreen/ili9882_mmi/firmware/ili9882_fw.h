@@ -120,6 +120,14 @@ static unsigned char CTPM_FW_TM_9882H[] = {
 	0xFF,
 };
 
+#define TM_9883A_INI_NAME_PATH		"/sdcard/mp_tm_9883a.ini"
+#define TM_9883A_FW_FILP_PATH		"/sdcard/ILITEK_FW_TM_9883A"
+#define TM_9883A_INI_REQUEST_PATH	"mp_tm_9883a.ini"
+#define TM_9883A_FW_REQUEST_PATH	"ILITEK_FW_TM_9883A"
+static unsigned char CTPM_FW_TM_9883A[] = {
+	0xFF,
+};
+
 #define TM_7807S_INI_NAME_PATH		"/sdcard/mp_tm_7807s.ini"
 #define TM_7807S_FW_FILP_PATH		"/sdcard/ILITEK_FW_TM_7807S"
 #define TM_7807S_INI_REQUEST_PATH	"mp_tm_7807s.ini"
