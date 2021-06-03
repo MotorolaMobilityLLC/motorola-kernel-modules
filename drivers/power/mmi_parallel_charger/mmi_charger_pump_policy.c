@@ -812,9 +812,11 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 	case PM_STATE_PPS_TUNNING_CURR:
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		if (chrg_list->cp_master
-			&& !chrg_list->chrg_dev[CP_MASTER]->charger_enabled) {
+			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT)))) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, Enter into "
 								"SW directly\n");
+			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
 		}else if (vbatt_volt > chrg_step->chrg_step_cv_volt) {
 			if (chip->pd_request_curr - chip->pps_curr_steps
@@ -868,9 +870,11 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 
 		if (chrg_list->cp_master
-			&& !chrg_list->chrg_dev[CP_MASTER]->charger_enabled) {
+			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT)))) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, "
 							"Enter into SW directly\n");
+			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
 		} else if (vbatt_volt > chrg_step->chrg_step_cv_volt) {
 			chip->pd_request_volt -= chip->pps_volt_steps;
@@ -943,8 +947,10 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 								chrg_step->chrg_step_cc_curr,
 								chrg_step->chrg_step_cv_volt);
 		if (chrg_list->cp_master
-			&& !chrg_list->chrg_dev[CP_MASTER]->charger_enabled) {
+			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT)))) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, Enter into SW directly\n");
+			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 			goto schedule;
@@ -1085,8 +1091,10 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 								chrg_step->chrg_step_cv_volt,
 								chrg_step->chrg_step_cv_tapper_curr);
 		if (chrg_list->cp_master
-			&& !chrg_list->chrg_dev[CP_MASTER]->charger_enabled) {
+			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type &  (1<< MMI_CP_SWITCH_BIT)))) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, Enter into SW directly\n");
+			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 			goto schedule;
