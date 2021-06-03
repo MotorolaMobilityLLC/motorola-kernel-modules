@@ -47,6 +47,7 @@
 #define	CONV_OCP_FAULT_SHIFT			15
 #define	SS_TIMEOUT_FAULT_SHIFT			16
 #define	TS_SHUT_FAULT_SHIFT			17
+#define	CP_SWITCH_SHIFT                         18
 
 #define	BAT_OVP_FAULT_MASK		(1 << BAT_OVP_FAULT_SHIFT)
 #define	BAT_OCP_FAULT_MASK		(1 << BAT_OCP_FAULT_SHIFT)
@@ -58,6 +59,7 @@
 #define	CONV_OCP_FAULT_MASK		(1 << CONV_OCP_FAULT_SHIFT)
 #define	SS_TIMEOUT_FAULT_MASK		(1 << SS_TIMEOUT_FAULT_SHIFT)
 #define	TS_SHUT_FAULT_MASK		(1 << TS_SHUT_FAULT_SHIFT)
+#define	CP_SWITCH_MASK			(1 << CP_SWITCH_SHIFT)
 
 #define	BAT_OVP_ALARM_SHIFT			0
 #define	BAT_OCP_ALARM_SHIFT			1
@@ -248,7 +250,10 @@ static int bq2597x_update_charger_error_status(struct mmi_charger_device *chrg)
 			0 << MMI_BUS_UCP_FAULT_BIT) |
 			((!!(prop.intval & CONV_OCP_FAULT_MASK)) ?
 			1 << MMI_CONV_OCP_FAULT_BIT :
-			0 << MMI_CONV_OCP_FAULT_BIT);
+			0 << MMI_CONV_OCP_FAULT_BIT) |
+			((!!(prop.intval & CP_SWITCH_MASK)) ?
+			1 << MMI_CP_SWITCH_BIT :
+			0 << MMI_CP_SWITCH_BIT);
 	}
 	return rc;
 }
