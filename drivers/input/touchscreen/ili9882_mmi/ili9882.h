@@ -352,6 +352,7 @@ enum TP_MODEL {
 	MODEL_TM,
 	MODEL_TM_9882N,
 	MODEL_TM_9882H,
+	MODEL_TM_9883A,
 	MODEL_TM_7807S,
 	MODEL_TIANMA_9882N,
 	MODEL_TM_END, //For tianma panel check
@@ -778,6 +779,7 @@ struct report_info_block {
 #define ILI9881N_AA					0x98811700
 #define ILI9881O_AA					0x98811800
 #define ILI9882_CHIP				0x9882
+#define ILI9883_CHIP				0x9883
 #define TDDI_PID_ADDR					0x4009C
 #define TDDI_OTP_ID_ADDR				0x400A0
 #define TDDI_ANA_ID_ADDR				0x400A4

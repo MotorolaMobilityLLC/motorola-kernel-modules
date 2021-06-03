@@ -23,11 +23,17 @@
 #include "ili9882.h"
 #ifdef CONFIG_DRM
 struct drm_panel *ili_active_panel;
-#ifdef ILI_FW_PANEL
-static const char *active_panel_name = NULL;
+#if defined(ILI_FW_PANEL) || defined(ILI_MTK_GET_PANEL)
+static char *active_panel_name = NULL;
 #endif
 static int check_dt(struct device_node *np);
 #endif
+
+/*
+#ifdef ILI_MTK_GET_PANEL
+char active_panel_name[50] = {0};
+#endif
+*/
 
 struct touch_bus_info {
 	struct spi_driver bus_driver;
@@ -447,7 +453,7 @@ int ili_core_spi_setup(int num)
 	return 0;
 }
 
-#ifdef ILI_FW_PANEL
+#if defined(ILI_FW_PANEL) || defined(ILI_MTK_GET_PANEL)
 static int ili_parse_tp_module()
 {
    int tp_module = 0;
@@ -465,6 +471,8 @@ static int ili_parse_tp_module()
 				tp_module = MODEL_TM_9882N;
 			} else if (strstr(active_panel_name, "ili9882h")) {
 				tp_module = MODEL_TM_9882H;
+			} else if (strstr(active_panel_name, "ili9883a")) {
+				tp_module = MODEL_TM_9883A;
 			} else if (strstr(active_panel_name, "ili7807s")) {
 				tp_module = MODEL_TM_7807S;
 			}
@@ -578,6 +586,57 @@ static int parse_dt(struct device_node *np)
 }
 #endif
 
+#ifdef ILI_MTK_GET_PANEL
+char panel_name[50] = {0};
+
+static int ili_get_panel(void)
+{
+	//bringup, parse panel name from cmdline
+	ILI_INFO("enter\n");
+	if (saved_command_line) {
+		char *sub;
+		char key_prefix[] = "mipi_mot_vid_";
+		char ic_prefix[] = "ili";
+		ILI_INFO("saved_command_line is %s\n", saved_command_line);
+		sub = strstr(saved_command_line, key_prefix);
+		if (sub) {
+			char *d;
+			int n, len, len_max = 50;
+
+			d = strstr(sub, " ");
+			if (d) {
+				n = strlen(sub) - strlen(d);
+			} else {
+				n = strlen(sub);
+			}
+
+			if (n > len_max)
+				len = len_max;
+			else
+				len = n;
+
+			strncpy(panel_name, sub, len);
+			active_panel_name = panel_name;
+			if(strstr(active_panel_name, ic_prefix)) {
+				ILI_INFO("active_panel_name=%s\n", active_panel_name);
+			} else {
+				ILI_INFO("Not ilitek panel!\n");
+				return -1;
+			}
+
+		} else {
+			ILI_INFO("ilitek active panel not found!\n");
+			return -1;
+		}
+	} else {
+		ILI_INFO("saved_command_line null!\n");
+		return -1;
+	}
+
+	return 0;
+}
+#endif
+
 static int ilitek_spi_probe(struct spi_device *spi)
 {
 	struct touch_bus_info *info =
@@ -612,6 +671,11 @@ static int ilitek_spi_probe(struct spi_device *spi)
 #endif
 }
 #endif
+
+#ifdef ILI_MTK_GET_PANEL
+	ili_get_panel();
+#endif
+
 	ilits = devm_kzalloc(&spi->dev, sizeof(struct ilitek_ts_data), GFP_KERNEL);
 	if (ERR_ALLOC_MEM(ilits)) {
 		ILI_ERR("Failed to allocate ts memory, %ld\n", PTR_ERR(ilits));
@@ -655,7 +719,7 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	}
 
 //---parse tp module---
-#ifdef ILI_FW_PANEL
+#if defined(ILI_FW_PANEL) || defined(ILI_MTK_GET_PANEL)
 	tp_module = ili_parse_tp_module();
 #endif
 
