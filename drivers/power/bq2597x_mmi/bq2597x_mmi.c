@@ -103,6 +103,7 @@ static int bq2597x_role_data[] = {
 #define	CONV_OCP_FAULT_SHIFT			15
 #define	SS_TIMEOUT_FAULT_SHIFT			16
 #define	TS_SHUT_FAULT_SHIFT			17
+#define	CP_SWITCH_SHIFT                         18
 
 #define	BAT_OVP_FAULT_MASK		(1 << BAT_OVP_FAULT_SHIFT)
 #define	BAT_OCP_FAULT_MASK		(1 << BAT_OCP_FAULT_SHIFT)
@@ -114,7 +115,7 @@ static int bq2597x_role_data[] = {
 #define	CONV_OCP_FAULT_MASK		(1 << CONV_OCP_FAULT_SHIFT)
 #define	SS_TIMEOUT_FAULT_MASK		(1 << SS_TIMEOUT_FAULT_SHIFT)
 #define	TS_SHUT_FAULT_MASK		(1 << TS_SHUT_FAULT_SHIFT)
-
+#define	CP_SWITCH_MASK			(1 << CP_SWITCH_SHIFT)
 
 #define	BAT_OVP_ALARM_SHIFT			0
 #define	BAT_OCP_ALARM_SHIFT			1
@@ -296,6 +297,8 @@ struct bq2597x {
 
 	bool vbat_reg;
 	bool ibat_reg;
+
+	bool cp_switch;
 
 	int  prev_alarm;
 	int  prev_fault;
@@ -1898,6 +1901,7 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 	struct bq2597x *bq  = power_supply_get_drvdata(psy);
 	int ret;
 	int result;
+	u8 cp_conv;
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
@@ -1944,6 +1948,10 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CP_STATUS1:
 //		bq2597x_check_alarm_status(bq);
 //		bq2597x_check_fault_status(bq);
+		ret = bq2597x_read_byte(bq, BQ2597X_REG_0A, &cp_conv);
+		if (!ret) {
+			bq->cp_switch = !!(cp_conv & BQ2597X_CONV_SWITCHING_STAT_MASK);
+		}
 		val->intval = ((bq->bat_ovp_alarm << BAT_OVP_ALARM_SHIFT)
 			| (bq->bat_ocp_alarm << BAT_OCP_ALARM_SHIFT)
 			| (bq->bat_ucp_alarm << BAT_UCP_ALARM_SHIFT)
@@ -1961,7 +1969,8 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 			| (bq->conv_ocp_fault << CONV_OCP_FAULT_SHIFT)
 			| (bq->ss_timeout_fault << SS_TIMEOUT_FAULT_SHIFT)
 			| (bq->ts_shut_fault << TS_SHUT_FAULT_SHIFT)
-			| (bq->bus_ucp_alarm <<BUS_UCP_FAULT_SHIFT));
+			| (bq->bus_ucp_alarm <<BUS_UCP_FAULT_SHIFT)
+			| (bq->cp_switch << CP_SWITCH_SHIFT));
 		break;
 	default:
 		return -EINVAL;
