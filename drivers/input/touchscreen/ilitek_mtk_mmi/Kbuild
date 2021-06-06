@@ -16,6 +16,9 @@ endif
 ifneq ($(filter m y,$(CONFIG_ILITEK_RESUME_BY_DDI)),)
 EXTRA_CFLAGS += -DILI_CONFIG_RESUME_BY_DDI
 endif
+ifneq ($(filter m y,$(CONFIG_INPUT_ILI_DECTECT_LCM_NAME)),)
+EXTRA_CFLAGS += -DILI_DECTECT_LCM_NAME
+endif
 
 ilitek_mtk_mmi-objs += ilitek_v3.o
 ilitek_mtk_mmi-objs += ilitek_v3_spi.o
