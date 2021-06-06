@@ -1066,10 +1066,17 @@ static int ilitek_get_tp_module(void)
 	return 0;
 }
 
+#ifdef ILI_DECTECT_LCM_NAME
+extern int touchscreen_get_lcm_name(void);
+#endif
 static void ili_update_tp_module_info(void)
 {
 	int module;
+#ifdef ILI_DECTECT_LCM_NAME
+	int lcm_name = 0;
 
+	lcm_name = touchscreen_get_lcm_name();
+#endif
 	module = ilitek_get_tp_module();
 
 	switch (module) {
@@ -1143,6 +1150,18 @@ static void ili_update_tp_module_info(void)
 	if (module == 0 || ilits->md_fw_ili_size < ILI_FILE_HEADER) {
 		ILI_ERR("Couldn't find any tp modules, applying default settings\n");
 		ilits->md_name = "DEF";
+#ifdef ILI_DECTECT_LCM_NAME
+		if(lcm_name == 2){
+			ilits->md_fw_filp_path = DEF_FW_FILP_PATH;
+			ilits->md_fw_rq_path = DEF_FW_REQUEST_PATH;
+		}else if(lcm_name == 1){
+			ilits->md_fw_filp_path = DEF_FW_120hz_FILP_PATH;
+			ilits->md_fw_rq_path = DEF_FW_120hz_REQUEST_PATH;
+		}else {
+			ilits->md_fw_filp_path = DEF_FW_FILP_PATH;
+			ilits->md_fw_rq_path = DEF_FW_REQUEST_PATH;
+		}
+#else
 		if(ilits->fw_compatible == 0){
 			ilits->md_fw_filp_path = DEF_FW_FILP_PATH;
 			ilits->md_fw_rq_path = DEF_FW_REQUEST_PATH;
@@ -1150,6 +1169,7 @@ static void ili_update_tp_module_info(void)
 			ilits->md_fw_filp_path = DEF_FW_120hz_FILP_PATH;
 			ilits->md_fw_rq_path = DEF_FW_120hz_REQUEST_PATH;
 		}
+#endif
 		ilits->md_ini_path = DEF_INI_NAME_PATH;
 		ilits->md_ini_rq_path = DEF_INI_REQUEST_PATH;
 		ilits->md_fw_ili = CTPM_FW_DEF;
