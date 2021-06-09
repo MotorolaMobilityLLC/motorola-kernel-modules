@@ -330,7 +330,6 @@ static int initialize(pabovXX_t this)
 		   this->irq_disabled = 1;
 		}
 		hw_init(this);
-		msleep(300); /* make sure everything is running */
 		/* re-enable interrupt handling */
 		if(this->irq_disabled == 1) {
 		   enable_irq(this->irq);
