@@ -1212,7 +1212,10 @@ static int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
     if (enable) {
         if (ts_data->power_disabled) {
             FTS_DEBUG("regulator enable !");
-            gpio_direction_output(ts_data->pdata->reset_gpio, 0);
+            if(!ts_data->rst_high)
+                gpio_direction_output(ts_data->pdata->reset_gpio, 0);
+            else
+                FTS_INFO("case enable, tp rst_high enabled, skip.");
             msleep(1);
             ret = regulator_enable(ts_data->vdd);
             if (ret) {
@@ -1230,7 +1233,10 @@ static int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
     } else {
         if (!ts_data->power_disabled) {
             FTS_DEBUG("regulator disable !");
-            gpio_direction_output(ts_data->pdata->reset_gpio, 0);
+            if(!ts_data->rst_high)
+                gpio_direction_output(ts_data->pdata->reset_gpio, 0);
+            else
+                FTS_INFO("tp rst_high enabled, skip.");
             msleep(1);
             ret = regulator_disable(ts_data->vdd);
             if (ret) {
@@ -1529,6 +1535,10 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
+
+	fts_data->rst_high = of_property_read_bool(np, "focaltech,tp_rst_high");
+	if (fts_data->rst_high)
+		FTS_INFO("rst_high is set.");
 
 	ret = of_property_read_string(np, "focaltech,panel-supplier",
 		&fts_data->panel_supplier);
