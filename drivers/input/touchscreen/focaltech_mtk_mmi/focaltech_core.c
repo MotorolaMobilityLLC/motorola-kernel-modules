@@ -52,7 +52,7 @@
 *****************************************************************************/
 #define FTS_DRIVER_NAME                     "fts_ts"
 #define FTS_DRIVER_PEN_NAME                 "fts_ts,pen"
-#define INTERVAL_READ_REG                   200  /* unit:ms */
+#define INTERVAL_READ_REG                   50  /* unit:ms */
 #define TIMEOUT_READ_REG                    1000 /* unit:ms */
 #if FTS_POWER_SOURCE_CUST_EN
 #define FTS_VTG_MIN_UV                      3000000
@@ -1384,7 +1384,7 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 #endif
 
 #if (!FTS_CHIP_IDC)
-    fts_reset_proc(200);
+    fts_reset_proc(150);
 #endif
 
     ret = fts_get_ic_information(ts_data);
@@ -1771,7 +1771,7 @@ static void tpd_resume(struct device *dev)
 #if FTS_POWER_SOURCE_CUST_EN
         fts_power_source_resume(ts_data);
 #endif
-        fts_reset_proc(200);
+        fts_reset_proc(150);
     }
 
     fts_wait_tp_to_valid();
