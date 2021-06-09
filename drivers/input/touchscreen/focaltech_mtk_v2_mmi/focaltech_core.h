@@ -202,6 +202,7 @@ struct fts_ts_data {
     bool charger_mode;
     bool gesture_mode;      /* gesture enable or disable, default: disable */
     bool prc_mode;
+    bool rst_high;
     struct pen_event pevent;
     /* multi-touch */
     struct ts_event *events;
