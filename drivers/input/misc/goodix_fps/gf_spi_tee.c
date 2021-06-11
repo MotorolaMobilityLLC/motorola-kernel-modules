@@ -226,6 +226,49 @@ static int gf_get_gpio_dts_info(struct gf_device *gf_dev)
 		return -EINVAL;
 	}
 
+	if(of_property_read_bool(node,"rgltr-ctrl-support")) {
+		gf_dev->rgltr_ctrl_support = 1;
+	} else {
+		gf_dev->rgltr_ctrl_support = 0;
+		pr_err("goodix: No regulator control parameter defined\n");
+	}
+	if (gf_dev->rgltr_ctrl_support) {
+		gf_dev->pwr_supply = regulator_get(&pdev->dev, "fp,vdd");
+		if (IS_ERR_OR_NULL(gf_dev->pwr_supply)) {
+			gf_dev->pwr_supply = NULL;
+			gf_dev->rgltr_ctrl_support = 0;
+			pr_warn("goodix Unable to get fp,vdd");
+		} else {
+			ret = of_property_read_u32_array(node, "fp,voltage-range", gf_dev->pwr_voltage_range, 2);
+			if (ret) {
+				gf_dev->pwr_voltage_range[0] = -1;
+				gf_dev->pwr_voltage_range[1] = -1;
+			}
+			if (regulator_count_voltages(gf_dev->pwr_supply) > 0) {
+				if((gf_dev->pwr_voltage_range[0] >0) && (gf_dev->pwr_voltage_range[1] > 0))
+					ret = regulator_set_voltage(gf_dev->pwr_supply,
+						gf_dev->pwr_voltage_range[0], gf_dev->pwr_voltage_range[1]);
+				if (ret) {
+					pr_warn("goodix: %s : set vdd regulator voltage failed %d \n", __func__, ret);
+				}
+			}
+		}
+	}
+
+	gf_dev->pwr_gpio = of_get_named_gpio(node, "fp-gpio-ven", 0);
+	if (gf_dev->pwr_gpio < 0) {
+		pr_warn("goodix: failed to get pwr gpio!\n");
+	} else {
+		if (gpio_is_valid(gf_dev->pwr_gpio)) {
+			ret = gpio_request(gf_dev->pwr_gpio, "goodix_pwr");
+			if (ret) {
+				pr_err("goodix: failed to request pwr gpio, rc = %d\n", ret);
+				goto err_pwr;
+			}
+			gpio_direction_output(gf_dev->pwr_gpio, 1);
+		}
+	}
+
 	gf_dev->pins_reset_high = pinctrl_lookup_state(gf_dev->pinctrl_gpios, "fingerprint_reset_high");
 	if (IS_ERR(gf_dev->pins_reset_high)) {
 		ret = PTR_ERR(gf_dev->pins_reset_high);
@@ -240,8 +283,16 @@ static int gf_get_gpio_dts_info(struct gf_device *gf_dev)
 	}
 
 	gf_debug(DEBUG_LOG, "%s success\n", __func__);
-#endif
 	return 0;
+err_pwr:
+	if (!IS_ERR_OR_NULL(gf_dev->pwr_supply))
+	{
+		pr_info(" %s goodix:  devm_regulator_put \n", __func__);
+		regulator_put(gf_dev->pwr_supply);
+		gf_dev->pwr_supply= NULL;
+	}
+#endif
+	return ret;
 }
 
 static int gf_hw_power_enable(struct gf_device *gf_dev, u8 onoff)
@@ -252,7 +303,14 @@ static int gf_hw_power_enable(struct gf_device *gf_dev, u8 onoff)
 
 	if (onoff && enable) {
 		gf_debug(INFO_LOG, "%s, enable\n", __func__);
-	/* TODO:  set power  according to actual situation  */
+		if(gf_dev->rgltr_ctrl_support && !IS_ERR_OR_NULL(gf_dev->pwr_supply)) {
+			rc = regulator_enable(gf_dev->pwr_supply);
+			pr_warn("goodix:  %s : enable  pwr_supply return %d \n", __func__, rc);
+		}
+		if (gpio_is_valid(gf_dev->pwr_gpio)) {
+			gpio_direction_output(gf_dev->pwr_gpio, 1);
+			pr_warn(" goodix: %s : set  pwr_gpio:%d  1\n", __func__, gf_dev->pwr_gpio);
+		}
 //		hwPowerOn(MT6331_POWER_LDO_VIBR, VOL_2800, "fingerprint");
 		enable = 0;
 		#ifdef CONFIG_OF
@@ -269,6 +327,14 @@ static int gf_hw_power_enable(struct gf_device *gf_dev, u8 onoff)
 		#endif
 	}
 	else if (!onoff && !enable) {
+		if (gf_dev->rgltr_ctrl_support  && !IS_ERR_OR_NULL(gf_dev->pwr_supply)) {
+			rc = regulator_disable(gf_dev->pwr_supply);
+			pr_warn(" goodix: %s : disable  pwr_supply return %d \n", __func__, rc);
+		}
+		if (gpio_is_valid(gf_dev->pwr_gpio)) {
+			gpio_direction_output(gf_dev->pwr_gpio, 0);
+			pr_warn(" goodix: %s : set  pwr_gpio:%d 0 \n", __func__,gf_dev->pwr_gpio);
+		}
 //		hwPowerDown(MT6331_POWER_LDO_VIBR, "fingerprint");
 		enable = 1;
 	}
@@ -1355,7 +1421,17 @@ static int gf_remove(struct spi_device *spi)
 	class_destroy(gf_dev->class);
 	gf_hw_power_enable(gf_dev, 0);
 	gf_spi_clk_enable(gf_dev, 0);
-
+	if (gpio_is_valid(gf_dev->pwr_gpio)) {
+		gpio_free(gf_dev->pwr_gpio);
+		gf_dev->pwr_gpio = -1;
+		pr_info("goodix: remove pwr_gpio success\n");
+	}
+	if (gf_dev->rgltr_ctrl_support && !IS_ERR_OR_NULL(gf_dev->pwr_supply))
+	{
+		pr_info(" goodix: %s : devm_regulator_put \n", __func__);
+		regulator_put(gf_dev->pwr_supply);
+		gf_dev->pwr_supply= NULL;
+	}
 	spin_lock_irq(&gf_dev->spi_lock);
 	spi_set_drvdata(spi, NULL);
 	gf_dev->spi = NULL;
