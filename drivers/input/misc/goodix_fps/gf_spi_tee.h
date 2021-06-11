@@ -212,6 +212,10 @@ struct gf_device {
 	u32 reset_gpio;
 	u32 irq_gpio;
 	u32 irq;
+	int pwr_gpio;
+	unsigned int  rgltr_ctrl_support; //whether regulator control is supported
+	struct regulator *pwr_supply;
+	int pwr_voltage_range[2];
 	u8  need_update;
 	bool init;
 
