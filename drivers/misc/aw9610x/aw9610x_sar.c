@@ -441,16 +441,16 @@ static void aw9610x_get_calidata(struct aw9610x *aw9610x)
 							&reg_val);
 			break;
 		case AW_CHANNEL3:
-			aw9610x_i2c_read(aw9610x, REG_VALID_CH3,
-							&reg_val);
+			//aw9610x_i2c_read(aw9610x, REG_VALID_CH3,
+			//				&reg_val);
 			break;
 		case AW_CHANNEL4:
-			aw9610x_i2c_read(aw9610x, REG_VALID_CH4,
-							&reg_val);
+			//aw9610x_i2c_read(aw9610x, REG_VALID_CH4,
+			//				&reg_val);
 			break;
 		case AW_CHANNEL5:
-			aw9610x_i2c_read(aw9610x, REG_VALID_CH5,
-							&reg_val);
+			//aw9610x_i2c_read(aw9610x, REG_VALID_CH5,
+			//				&reg_val);
 			break;
 		default:
 			return;
@@ -1665,7 +1665,15 @@ static int32_t aw9610x_parse_dt(struct device *dev, struct aw9610x *aw9610x,
 			   struct device_node *np)
 {
 	uint32_t val = 0;
-	int sar_num_channel = 0;
+
+	aw9610x->irq_gpio = of_get_named_gpio(np, "irq-gpio", 0);
+	if (aw9610x->irq_gpio < 0) {
+		aw9610x->irq_gpio = -1;
+		LOG_ERR("no irq gpio provided.");
+		return -AW_IRQGPIO_FAILED;
+	} else {
+		LOG_INFO("irq gpio provided ok.");
+	}
 
 	val = of_property_read_u32(np, "sar-num", &aw9610x->sar_num);
 	if (val != 0) {
@@ -1686,34 +1694,24 @@ static int32_t aw9610x_parse_dt(struct device *dev, struct aw9610x *aw9610x,
 		LOG_INFO("aw_channel_number = %d", aw9610x->aw_channel_number);
 	}
 
-    sar_num_channel = aw9610x->sar_num * AW_CHANNEL_MAX;
 	if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_TWO) {
-		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
-		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[sar_num_channel + 1]);
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 1]);
 	} else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_THREE) {
-		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
-		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[1]);
-		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[sar_num_channel + 2]);
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 1]);
+		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 2]);
 	} else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_FOUR) {
-		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
-		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[sar_num_channel + 1]);
-		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[sar_num_channel + 2]);
-		of_property_read_string(np, "ch3_name", &aw9610x->aw_ch_name[sar_num_channel + 3]);
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 1]);
+		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 2]);
+		of_property_read_string(np, "ch3_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 3]);
 	} else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_FIVE) {
-		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[sar_num_channel + 0]);
-		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[sar_num_channel + 1]);
-		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[sar_num_channel + 2]);
-		of_property_read_string(np, "ch3_name", &aw9610x->aw_ch_name[sar_num_channel + 3]);
-		of_property_read_string(np, "ch4_name", &aw9610x->aw_ch_name[sar_num_channel + 4]);
-	}
-
-	aw9610x->irq_gpio = of_get_named_gpio(np, "irq-gpio", 0);
-	if (aw9610x->irq_gpio < 0) {
-		aw9610x->irq_gpio = -1;
-		LOG_ERR("no irq gpio provided.");
-		return -AW_IRQGPIO_FAILED;
-	} else {
-		LOG_INFO("irq gpio provided ok.");
+		of_property_read_string(np, "ch0_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 0]);
+		of_property_read_string(np, "ch1_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 1]);
+		of_property_read_string(np, "ch2_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 2]);
+		of_property_read_string(np, "ch3_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 3]);
+		of_property_read_string(np, "ch4_name", &aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + 4]);
 	}
 
 	aw9610x->firmware_flag =
@@ -2155,5 +2153,5 @@ static void __exit aw9610x_i2c_exit(void)
 }
 module_exit(aw9610x_i2c_exit);
 MODULE_DESCRIPTION("AW9610X SAR Driver");
-
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
+MODULE_VERSION("2");

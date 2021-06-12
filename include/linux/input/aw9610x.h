@@ -29,7 +29,7 @@
 #define AW_CHANNEL_NUMBER_FOUR    0x04
 #define AW_CHANNEL_NUMBER_FIVE    0x05
 
-/*
+#if 0
 #define AWLOGD(dev, format, arg...) \
 	do {\
 		 dev_printk(KERN_DEBUG, dev, \
@@ -47,6 +47,7 @@
 		 dev_printk(KERN_ERR, dev, \
 			"[%s:%d] "format"\n", __func__, __LINE__, ##arg);\
 	} while (0)
+#endif
 
 /**********************************************
 * cfg load situation
@@ -71,8 +72,8 @@ enum aw9610x_sar_vers {
 };
 
 enum aw9610x_operation_mode {
-	AW9610X_SLEEP_MODE = 0,
-	AW9610X_ACTIVE_MODE,
+	AW9610X_ACTIVE_MODE = 1,
+	AW9610X_SLEEP_MODE,
 	AW9610X_DEEPSLEEP_MODE,
 };
 
