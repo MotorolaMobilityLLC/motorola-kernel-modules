@@ -5,3 +5,4 @@ EXTRA_CFLAGS += -I$(TOP)/kernel-4.14/include/uapi/
 
 aw881xx_dlkm-objs = aw881xx.o aw881xx_cali.o aw881xx_monitor.o
 obj-m += aw881xx_dlkm.o
+
