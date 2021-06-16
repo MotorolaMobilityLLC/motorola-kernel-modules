@@ -1,0 +1,7 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/kernel-4.14/include
+EXTRA_CFLAGS += -I$(TOP)/kernel-4.14/include/uapi/
+
+fs16xx_dlkm-objs = fs1603.o fsm_codec.o fsm_core.o fsm_firmware.o fsm_i2c.o fsm_misc.o
+obj-m += fs16xx_dlkm.o
