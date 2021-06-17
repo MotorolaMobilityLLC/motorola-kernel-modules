@@ -77,6 +77,11 @@ enum aw9610x_operation_mode {
 	AW9610X_DEEPSLEEP_MODE,
 };
 
+enum aw9610x_operation_ap_mode {
+	AW9610X_SLEEP_AP_MODE = 0,
+	AW9610X_ACTIVE_AP_MODE,
+	AW9610X_DEEPSLEEP_AP_MODE,
+};
 /**********************************************
 *spereg addr offset
 **********************************************/

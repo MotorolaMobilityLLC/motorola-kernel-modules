@@ -427,34 +427,43 @@ static void aw9610x_get_calidata(struct aw9610x *aw9610x)
 
 	for (i = AW_CLA1_SPE_REG_NUM; i < AW_SPE_REG_NUM; i++) {
 		ret = aw9610x->spedata[i] & 0x07;
-		switch (ret) {
-		case AW_CHANNEL0:
-			aw9610x_i2c_read(aw9610x, REG_VALID_CH0,
-							&reg_val);
-			break;
-		case AW_CHANNEL1:
-			aw9610x_i2c_read(aw9610x, REG_VALID_CH1,
-							&reg_val);
-			break;
-		case AW_CHANNEL2:
-			aw9610x_i2c_read(aw9610x, REG_VALID_CH2,
-							&reg_val);
-			break;
-		case AW_CHANNEL3:
-			//aw9610x_i2c_read(aw9610x, REG_VALID_CH3,
-			//				&reg_val);
-			break;
-		case AW_CHANNEL4:
-			//aw9610x_i2c_read(aw9610x, REG_VALID_CH4,
-			//				&reg_val);
-			break;
-		case AW_CHANNEL5:
-			//aw9610x_i2c_read(aw9610x, REG_VALID_CH5,
-			//				&reg_val);
-			break;
-		default:
-			return;
-		}
+	    if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_TWO) {
+            if(AW_CHANNEL0 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH0, &reg_val);
+            }else if(AW_CHANNEL1 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH1, &reg_val);
+            }
+	    } else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_THREE) {
+            if(AW_CHANNEL0 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH0, &reg_val);
+            }else if(AW_CHANNEL1 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH1, &reg_val);
+            }else if(AW_CHANNEL2 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH2, &reg_val);
+            }
+	    } else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_FOUR) {
+            if(AW_CHANNEL0 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH0, &reg_val);
+            }else if(AW_CHANNEL1 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH1, &reg_val);
+            }else if(AW_CHANNEL2 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH2, &reg_val);
+            }else if(AW_CHANNEL3 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH3, &reg_val);
+            }
+	    } else if (aw9610x->aw_channel_number == AW_CHANNEL_NUMBER_FIVE) {
+            if(AW_CHANNEL0 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH0, &reg_val);
+            }else if(AW_CHANNEL1 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH1, &reg_val);
+            }else if(AW_CHANNEL2 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH2, &reg_val);
+            }else if(AW_CHANNEL3 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH3, &reg_val);
+            }else if(AW_CHANNEL4 == ret){
+                aw9610x_i2c_read(aw9610x, REG_VALID_CH4, &reg_val);
+            }
+	    }
 		aw9610x->spedata[i] = ((reg_val >> 6) & 0x03fffff0) |
 					(aw9610x->spedata[i] & 0xfc00000f);
 	}
@@ -1225,24 +1234,18 @@ static ssize_t aw9610x_operation_mode_set(struct device *dev,
 		return ret;
 	}
 
-	if (aw9610x->mode == AW9610X_ACTIVE_MODE) {
+	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE) {
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
 			aw9610x_i2c_write(aw9610x, REG_HOSTCTRL1, 1);
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
-		if (aw9610x->mode_flag0 == AW9610X_FUNC_ON)
-			enable_irq(aw9610x->to_irq);
-		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
-	} else if (aw9610x->mode == AW9610X_SLEEP_MODE) {
-		disable_irq(aw9610x->to_irq);
+	} else if (aw9610x->mode == AW9610X_SLEEP_AP_MODE) {
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
 			aw9610x_i2c_write(aw9610x, REG_HOSTCTRL1, 1);
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_SLEEP_MODE);
-		aw9610x->mode_flag0 = AW9610X_FUNC_ON;
-	} else if ((aw9610x->mode == AW9610X_DEEPSLEEP_MODE) &&
+	} else if ((aw9610x->mode == AW9610X_DEEPSLEEP_AP_MODE) &&
 					(aw9610x->vers == AW9610XA)) {
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_DEEPSLEEP_MODE);
 		aw9610x->mode_flag1 = AW9610X_FUNC_ON;
-		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
 	} else {
 		LOG_ERR("failed to operation mode!");
 		return aw9610x->mode;
@@ -1257,13 +1260,13 @@ static ssize_t aw9610x_operation_mode_get(struct device *dev,
 	struct aw9610x *aw9610x = dev_get_drvdata(dev);
 	ssize_t len = 0;
 
-	if (aw9610x->mode == AW9610X_ACTIVE_MODE)
+	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE)
 		len += snprintf(buf + len, PAGE_SIZE - len,
 						"operation mode: Active\n");
-	else if (aw9610x->mode == AW9610X_SLEEP_MODE)
+	else if (aw9610x->mode == AW9610X_SLEEP_AP_MODE)
 		len += snprintf(buf + len, PAGE_SIZE - len,
 						"operation mode: Sleep\n");
-	else if ((aw9610x->mode == AW9610X_DEEPSLEEP_MODE) &&
+	else if ((aw9610x->mode == AW9610X_DEEPSLEEP_AP_MODE) &&
 					(aw9610x->vers == AW9610XA))
 		len += snprintf(buf + len, PAGE_SIZE - len,
 						"operation mode: DeepSleep\n");
@@ -1323,8 +1326,10 @@ static ssize_t reset_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
 {
-	if (!strncmp(buf, "reset", 5) || !strncmp(buf, "1", 1))
+	if (!strncmp(buf, "reset", 5) || !strncmp(buf, "1", 1)) {
 		aw9610x_i2c_write(g_aw9610x, REG_HOSTCTRL2, 0);
+		aw9610x_sar_cfg_init(g_aw9610x,AW_CFG_LOADED);
+	}
 	return count;
 }
 
@@ -1350,24 +1355,18 @@ static ssize_t enable_store(struct class *class,
 		return count;
 	}
 
-	if (aw9610x->mode == AW9610X_ACTIVE_MODE) {
+	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE) {
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
 			aw9610x_i2c_write(aw9610x, REG_HOSTCTRL1, 1);
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
-		if (aw9610x->mode_flag0 == AW9610X_FUNC_ON)
-			enable_irq(aw9610x->to_irq);
-		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
-	} else if (aw9610x->mode == AW9610X_SLEEP_MODE) {
-		disable_irq(aw9610x->to_irq);
+	} else if (aw9610x->mode == AW9610X_SLEEP_AP_MODE) {
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
 			aw9610x_i2c_write(aw9610x, REG_HOSTCTRL1, 1);
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_SLEEP_MODE);
-		aw9610x->mode_flag0 = AW9610X_FUNC_ON;
-	} else if ((aw9610x->mode == AW9610X_DEEPSLEEP_MODE) &&
+	} else if ((aw9610x->mode == AW9610X_DEEPSLEEP_AP_MODE) &&
 					(aw9610x->vers == AW9610XA)) {
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_DEEPSLEEP_MODE);
 		aw9610x->mode_flag1 = AW9610X_FUNC_ON;
-		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
 	} else {
 		LOG_ERR("failed to operation mode!");
 		return count;
@@ -1397,24 +1396,18 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned 
 	}
 
 	aw9610x->mode = enable;
-	if (aw9610x->mode == AW9610X_ACTIVE_MODE) {
+	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE) {
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
 			aw9610x_i2c_write(aw9610x, REG_HOSTCTRL1, 1);
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
-		if (aw9610x->mode_flag0 == AW9610X_FUNC_ON)
-			enable_irq(aw9610x->to_irq);
-		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
-	} else if (aw9610x->mode == AW9610X_SLEEP_MODE) {
-		disable_irq(aw9610x->to_irq);
+	} else if (aw9610x->mode == AW9610X_SLEEP_AP_MODE) {
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
 			aw9610x_i2c_write(aw9610x, REG_HOSTCTRL1, 1);
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_SLEEP_MODE);
-		aw9610x->mode_flag0 = AW9610X_FUNC_ON;
-	} else if ((aw9610x->mode == AW9610X_DEEPSLEEP_MODE) &&
+	} else if ((aw9610x->mode == AW9610X_DEEPSLEEP_AP_MODE) &&
 					(aw9610x->vers == AW9610XA)) {
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_DEEPSLEEP_MODE);
 		aw9610x->mode_flag1 = AW9610X_FUNC_ON;
-		aw9610x->mode_flag0 = AW9610X_FUNC_OFF;
 	} else {
 		LOG_ERR("failed to operation mode!");
 		return -1;
@@ -1430,30 +1423,16 @@ static ssize_t reg_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
 {
+	u32 *p = (u32*)buf;
+	u16 reg_value = 0;
 	struct aw9610x *aw9610x = g_aw9610x;
-	ssize_t len = 0;
-	uint32_t i = 0;
-	uint32_t reg_val = 0;
-	uint32_t reg_num = 0;
-	if (aw9610x->read_flag) {
-		aw9610x->read_flag = false;
-		aw9610x_i2c_read(aw9610x, aw9610x->read_reg, &reg_val);
-		len += snprintf(len, PAGE_SIZE, "(0x%04x)=0x%08x\n", aw9610x->read_reg, reg_val);
-		return len;
+	if(aw9610x->read_flag){
+		aw9610x->read_flag = 0;
+		aw9610x_i2c_read(aw9610x, aw9610x->read_reg, p);
+		LOG_DBG("%s : read_reg = 0x%x, val = 0x%x\n",__func__,aw9610x->read_reg,*p);
+		return 4;
 	}
-	reg_num = ARRAY_SIZE(aw9610x_reg_access);
-	for (i = 0; i < reg_num; i++) {
-		if (aw9610x_reg_access[i].rw & REG_RD_ACCESS) {
-			aw9610x_i2c_read(aw9610x, aw9610x_reg_access[i].reg,
-								&reg_val);
-			len += snprintf(buf + len, PAGE_SIZE - len,
-						"reg:0x%04x=0x%08x\n",
-						aw9610x_reg_access[i].reg,
-						reg_val);
-		}
-	}
-
-	return len;
+	return -1;
 }
 
 static ssize_t reg_store(struct class *class,
@@ -1461,14 +1440,25 @@ static ssize_t reg_store(struct class *class,
 		const char *buf, size_t count)
 {
 	struct aw9610x *aw9610x = g_aw9610x;
-	unsigned int val, reg, opt;
-    if (sscanf(buf, "%x,%x,%x", &reg, &val, &opt) == 3) {
-		aw9610x->read_reg = (uint16_t)reg;
+	uint16_t regaddr = 0;
+	uint32_t val = 0;
+	int i = 0;
+
+	if( count != 7){
+		LOG_ERR("%s :params error[ count == %d !=2]\n",__func__,count);
+		return -1;
+	}
+	for(i = 0 ; i < count ; i++)
+		LOG_DBG("%s : buf[%d] = 0x%x\n",__func__,i,buf[i]);
+
+	if(buf[6] == 0){
+		regaddr = ((uint16_t)buf[0]<<8) | (uint16_t)buf[1];
+		val= ((uint32_t)buf[2]<<24) | ((uint32_t)buf[3]<<16) | ((uint32_t)buf[4]<<8) | ((uint32_t)buf[5]);
+		aw9610x_i2c_write(aw9610x, regaddr, val);
+	} else if(buf[6] == 1) {
+		aw9610x->read_reg = ((uint16_t)buf[0]<<8) | (uint16_t)buf[1];
 		aw9610x->read_flag = true;
-	} else if (sscanf(buf, "%x,%x", &reg, &val) == 2) {
-		LOG_DBG("%s,reg = 0x%04x, val = 0x%08x\n",
-				__func__, (uint16_t)reg, (uint32_t)val);
-		aw9610x_i2c_write(aw9610x, (uint16_t)reg, (uint32_t)val);
+		LOG_DBG("-----------\n");
 	}
 	return count;
 }
