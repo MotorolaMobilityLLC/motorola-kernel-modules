@@ -3494,7 +3494,7 @@ int himax_chip_common_resume(struct himax_ts_data *ts)
 #if defined(HX_RESUME_SET_FW)
 	int result = 0;
 #endif
-	I("%s: enter\n", __func__);
+	I("%s: enter, himax TOUCH_VER: 0x%02X\n", __func__,ic_data->vendor_touch_cfg_ver);
 
 	if (ts->suspended == false) {
 		I("%s: It had entered resume, skip this step\n", __func__);
