@@ -1,0 +1,5 @@
+
+
+focal_fps-y += ff_ctl.o plat-mt6768.o
+
+obj-m += focal_fps.o
