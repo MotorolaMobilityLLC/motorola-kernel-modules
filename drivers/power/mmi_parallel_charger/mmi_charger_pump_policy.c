@@ -534,7 +534,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		chrg_policy_error_recovery(chip, chrg_list);
 	}
 
-	if (sm_state == PM_STATE_CP_CV_LOOP)
+	if (sm_state == PM_STATE_CP_CV_LOOP && false == chip->sourcecap_dec_enable)
 		ignore_hysteresis_degc = true;
 	zone_change = mmi_find_temp_zone(chip, batt_temp, ignore_hysteresis_degc);
 	chrg_step = &chip->chrg_step;
