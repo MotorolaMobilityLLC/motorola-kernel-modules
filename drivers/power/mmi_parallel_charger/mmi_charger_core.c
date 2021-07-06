@@ -1420,6 +1420,7 @@ static int mmi_chrg_manager_parse_dt(struct mmi_charger_manager *chip)
 	}
 
 	chip->sourcecap_dec_enable = of_property_read_bool(node, "mmi,enable-new-sourcecap-dec");
+	chip->disable_ignore_hysteresis = of_property_read_bool(node, "mmi,disable-ignore-hysteresis");
 
 	rc = of_property_read_u32(node,
 				"mmi,chrg-temp-zones-num",
