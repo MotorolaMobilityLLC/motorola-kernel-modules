@@ -65,7 +65,7 @@ extern void enable_clock(MT_CG_PERI_SPI0, "spi");
 extern void disable_clock(MT_CG_PERI_SPI0, "spi");
 #endif
 
-
+int irq_free_flag = 0;
 /* -------------------------------------------------------------------- */
 /* fingerprint chip hardware configuration                              */
 /* -------------------------------------------------------------------- */
@@ -421,6 +421,35 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     switch (cmd) {
     case FPSENSOR_IOC_INIT:
         fpsensor_debug(INFO_LOG, "%s: fpsensor init started======\n", __func__);
+	
+	retval = fpsensor_spidev_dts_init(fpsensor_dev);
+    if (retval < 0)
+    {
+        fpsensor_debug(ERR_LOG, "%s, fpsensor_spidev_dts_init failed.\n", __func__);
+        break;
+    }
+
+#if FPSENSOR_PMIC_LDO
+    if (fpsensor_dev->fp_regulator != NULL ) {
+        if(regulator_count_voltages(fpsensor_dev->fp_regulator) > 0) {
+            retval = regulator_set_voltage(fpsensor_dev->fp_regulator, FPSENSOR_VDD_MIN_UV,FPSENSOR_VDD_MAX_UV);
+            if (retval) {
+                fpsensor_debug(ERR_LOG, "fpsensor Regulator set_vtg failed vdd err \n");
+                break;
+            }
+        }
+        retval = regulator_enable(fpsensor_dev->fp_regulator);
+        if (retval) {
+            fpsensor_debug(ERR_LOG, "Regulator vdd enable failed retval = %d\n", retval);
+            break;
+        }
+    }
+#endif
+    if(fpsensor_irq_gpio_cfg(fpsensor_dev) != 0) {
+        fpsensor_debug(ERR_LOG, "fpsensor_irq_gpio_cfg failed\n");
+        break;;
+    }
+	
         irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
         retval = request_threaded_irq(fpsensor_dev->irq, fpsensor_irq, NULL,
                                       irqf, FPSENSOR_DEV_NAME, fpsensor_dev);
@@ -440,8 +469,9 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
     case FPSENSOR_IOC_EXIT:
         if(fpsensor_dev->device_available) {
             fpsensor_disable_irq(fpsensor_dev);
-            if (fpsensor_dev->irq) {
+            if (fpsensor_dev->irq ) {
                 free_irq(fpsensor_dev->irq, fpsensor_dev);
+                fpsensor_dev->irq = 0;
                 fpsensor_dev->irq_enabled = 0;
             }
             fpsensor_dev->device_available = 0;
@@ -774,7 +804,7 @@ static int fpsensor_probe(struct platform_device *spi)
     fpsensor_dev->irq_gpio          = 0;
     fpsensor_dev->irq_enabled       = 0;
     fpsensor_dev->free_flag         = 0;
-
+/*
     status = fpsensor_spidev_dts_init(fpsensor_dev);
     if (status < 0)
     {
@@ -802,6 +832,7 @@ static int fpsensor_probe(struct platform_device *spi)
         fpsensor_debug(ERR_LOG, "fpsensor_irq_gpio_cfg failed\n");
         goto err0;
     }
+	*/
     /* setup a char device for fpsensor */
     status = fpsensor_dev_setup(fpsensor_dev);
     if (status) {
