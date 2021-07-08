@@ -189,7 +189,7 @@ static int32_t i2c_write_seq(struct aw9610x *aw9610x)
 
 	for (msg_idx = 0; msg_idx < addr_bytes; msg_idx++) {
 		w_buf[msg_idx] = aw9610x->aw_i2c_package.init_addr[msg_idx];
-		LOG_INFO("w_buf_addr[%d] = 0x%02x",msg_idx, w_buf[msg_idx]);
+		LOG_DBG("w_buf_addr[%d] = 0x%02x",msg_idx, w_buf[msg_idx]);
 	}
 	msg_cnt = addr_bytes;
 	for (msg_idx = 0; msg_idx < data_bytes * reg_num; msg_idx++) {
@@ -570,7 +570,7 @@ static void aw9610x_power_on_prox_detection(struct aw9610x *aw9610x)
 		aw9610x_i2c_read(aw9610x, REG_HOSTIRQSRC, &reg_data);
 		reg_data = (reg_data >> 4) & 0x01;
 		if (reg_data == 1) {
-			LOG_INFO("time = %d", temp_time);
+			LOG_DBG("time = %d", temp_time);
 			if ((aw9610x->cali_flag == AW_CALI) && ret >= 0)
 				aw9610x_get_calidata(aw9610x);
 			break;
@@ -622,7 +622,7 @@ static void aw9610x_bin_valid_loaded(struct aw9610x *aw9610x,
 		if (ret < 0)
 			return ;
 
-		LOG_INFO("reg_addr = 0x%04x, reg_data = 0x%08x",
+		LOG_DBG("reg_addr = 0x%04x, reg_data = 0x%08x",
 					reg_addr, reg_data);
 	}
 	LOG_INFO("bin writen completely");
@@ -646,7 +646,7 @@ static int32_t aw9610x_para_loaded(struct aw9610x *aw9610x)
 				aw9610x_reg_default[i+1]);
 		if (aw9610x_reg_default[i] == REG_HOSTIRQEN)
 			aw9610x->hostirqen = aw9610x_reg_default[i+1];
-		LOG_INFO("reg_addr = 0x%04x, reg_data = 0x%08x",aw9610x_reg_default[i],aw9610x_reg_default[i+1]);
+		LOG_DBG("reg_addr = 0x%04x, reg_data = 0x%08x",aw9610x_reg_default[i],aw9610x_reg_default[i+1]);
 	}
 	LOG_INFO("para writen completely");
 
@@ -1371,7 +1371,7 @@ static ssize_t enable_store(struct class *class,
                         input_report_abs(aw9610x->aw_pad[i].input, ABS_DISTANCE, -1);
                         input_sync(aw9610x->aw_pad[i].input);
                 }
-                LOG_INFO("enable cap sensor: %s\n",buf);
+                LOG_DBG("enable cap sensor: %s\n",buf);
         }
 
 	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE) {
@@ -1410,7 +1410,7 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned 
                                 input_report_abs(aw9610x->aw_pad[i].input, ABS_DISTANCE, -1);
                                 input_sync(aw9610x->aw_pad[i].input);
 			}
-                        LOG_INFO("enable cap sensor: %s\n",sensors_cdev->name);
+                        LOG_DBG("enable cap sensor: %s\n",sensors_cdev->name);
                 }
         }
 
@@ -1520,7 +1520,7 @@ static void aw9610x_irq_handle(struct aw9610x *aw9610x)
 			(((uint8_t)(curr_status >> (16 + i)) & 0x1) << 1) |
 			(((uint8_t)(curr_status >> (8 + i)) & 0x1) << 2) |
 			(((uint8_t)(curr_status >> (i)) & 0x1) << 3);
-		LOG_INFO("curr_state[%d] = 0x%x", j * AW_CHANNEL_MAX + i,aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].curr_state);
+		LOG_DBG("curr_state[%d] = 0x%x", j * AW_CHANNEL_MAX + i,aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].curr_state);
 
 		if (aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].curr_state !=
 					aw9610x->aw_pad[j * AW_CHANNEL_MAX + i].last_state) {
@@ -1998,9 +1998,8 @@ aw9610x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		sensors_capsensor_chs[i].sensors_enable = capsensor_set_enable;
 		sensors_capsensor_chs[i].sensors_poll_delay = NULL;
 		sensors_capsensor_chs[i].name = aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i];
-        LOG_ERR("cap sensor_class channel_name:%s\n", aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i]);
-		ret = sensors_classdev_register(&aw9610x->aw_pad[i].input->dev,
-										&sensors_capsensor_chs[i]);
+		LOG_INFO("cap sensor_class channel_name:%s\n", aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i]);
+		ret = sensors_classdev_register(&aw9610x->aw_pad[i].input->dev, &sensors_capsensor_chs[i]);
 		if (ret < 0)
 			LOG_ERR("create ch0 cap sensor_class  file failed (%d)\n", ret);
 	}
