@@ -1400,7 +1400,11 @@ static int fts_gpio_configure(struct fts_ts_data *data)
             goto err_irq_gpio_dir;
         }
 
+#ifdef CONFIG_FTS_IC_NAME_FT3519
+        ret = gpio_direction_output(data->pdata->reset_gpio, 0);
+#else
         ret = gpio_direction_output(data->pdata->reset_gpio, 1);
+#endif
         if (ret) {
             FTS_ERROR("[GPIO]set_direction for reset gpio failed");
             goto err_reset_gpio_dir;
