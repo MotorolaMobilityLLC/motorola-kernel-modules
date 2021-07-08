@@ -1330,6 +1330,13 @@ static ssize_t reset_store(struct class *class,
 		aw9610x_i2c_write(g_aw9610x, REG_HOSTCTRL2, 0);
 		aw9610x_sar_cfg_init(g_aw9610x,AW_CFG_LOADED);
 	}
+
+	for (int i = 0; i < g_aw9610x->aw_channel_number; i++)
+	{
+                input_report_abs(g_aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);
+		input_sync(g_aw9610x->aw_pad[i].input);
+        }
+
 	return count;
 }
 
@@ -1354,6 +1361,18 @@ static ssize_t enable_store(struct class *class,
 		LOG_ERR("fail to set operation mode");
 		return count;
 	}
+
+        for (int i = 0; i < aw9610x->aw_channel_number; i++)
+        {
+                if (!strncmp(buf, "1", 1)){
+                        input_report_abs(aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);
+                        input_sync(aw9610x->aw_pad[i].input);
+                }else if (!strncmp(buf, "0", 1)){
+                        input_report_abs(aw9610x->aw_pad[i].input, ABS_DISTANCE, -1);
+                        input_sync(aw9610x->aw_pad[i].input);
+                }
+                LOG_INFO("enable cap sensor: %s\n",buf);
+        }
 
 	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE) {
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
@@ -1381,19 +1400,19 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned 
 	struct aw9610x *aw9610x = g_aw9610x;
 	uint8_t i = 0;
 
-	for (i = 0; i < aw9610x->aw_channel_number; i++)
-	{
-		if (!strcmp(sensors_cdev->name, aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i])) {
-			if (enable == 1){
-				input_report_abs(
-					aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);}
-			else if (enable == 0){
-				input_report_abs(
-					aw9610x->aw_pad[i].input, ABS_DISTANCE, -1);
+        for (i = 0; i < aw9610x->aw_channel_number; i++)
+        {
+                if (!strcmp(sensors_cdev->name, aw9610x->aw_ch_name[aw9610x->sar_num * AW_CHANNEL_MAX + i])) {
+                        if (enable == 1){
+                                input_report_abs(aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);
+                                input_sync(aw9610x->aw_pad[i].input);
+                        }else if (enable == 0){
+                                input_report_abs(aw9610x->aw_pad[i].input, ABS_DISTANCE, -1);
+                                input_sync(aw9610x->aw_pad[i].input);
 			}
-            LOG_INFO("enable cap sensor: %s\n",sensors_cdev->name);
-		}
-	}
+                        LOG_INFO("enable cap sensor: %s\n",sensors_cdev->name);
+                }
+        }
 
 	aw9610x->mode = enable;
 	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE) {
