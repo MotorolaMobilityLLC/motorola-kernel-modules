@@ -59,6 +59,12 @@ static char *charge_rate[] = {
 #define MIN_TEMP_C -20
 #define MAX_TEMP_C 60
 #define HYSTEREISIS_DEGC 2
+
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+extern int wt6670f_get_charger_type(void);
+extern void wt6670f_reset_chg_type(void);
+#endif
+
 void mmi_chrg_rate_check(struct mmi_charger_manager *chg);
 bool mmi_find_temp_zone(struct mmi_charger_manager *chip, int temp_c, bool ignore_hysteresis_degc)
 {
@@ -1202,6 +1208,10 @@ static void psy_changed_work_func(struct work_struct *work)
 				struct mmi_charger_manager, psy_changed_work);
 	union power_supply_propval val;
 	int ret;
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+//	int chrg_type = CHARGER_UNKNOWN;
+	int chrg_type = 0;
+#endif
 
 	mmi_chrg_info(chip, "kick psy changed work.\n");
 
@@ -1224,8 +1234,43 @@ static void psy_changed_work_func(struct work_struct *work)
 
 	if (chip->vbus_present) {
 		mmi_chrg_info(chip, "check all effective pdo info at psy change\n");
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+//                ret = power_supply_get_property(chip->usb_psy,
+//                        POWER_SUPPLY_PROP_CHARGE_TYPE, &val);
+
+		chrg_type = wt6670f_get_charger_type();
+		mmi_chrg_info(chip, "WT6670F return charger type: 0x%x", chrg_type);
+                if (ret) {
+			mmi_chrg_err(chip, "Unable to get charger type: %d\n", ret);
+			return;
+		}
+
+		switch(chrg_type){
+//			case QC3P_18W_CHARGER:
+			case 0x8:
+				chip->pd_volt_max = 9500000;
+				chip->pd_curr_max = 2000000;
+				chip->pd_pps_support = true;
+				break;
+//			case QC3P_27W_CHARGER:
+			case 0x9:
+				chip->pd_volt_max = 11000000;
+				chip->pd_curr_max = 3000000;
+				chip->pd_pps_support = true;
+				break;
+			default:
+				break;
+		}
+#else
 		chip->pd_pps_support = usbpd_get_pps_status(chip);
+#endif
 	}
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+	else {
+		wt6670f_reset_chg_type();
+		mmi_chrg_info(chip, "Reset WT6670F charger type\n");
+	}
+#endif
 
 	mmi_chrg_info(chip, "vbus present %d, pd pps support %d, "
 					"pps max voltage %d, pps max curr %d\n",
