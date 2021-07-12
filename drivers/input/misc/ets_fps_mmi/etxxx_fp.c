@@ -908,7 +908,9 @@ int egisfp_platforminit(struct egisfp_dev_t *egis_dev)
 						goto egisfp_power_request_fail;
 					}
 
+#ifndef EGIS_SHARE_GPIO
 					status = gpio_direction_output(egis_dev->vcc_33v_Pin, 0);
+#endif
 				}
 				else
 				{
