@@ -3,6 +3,13 @@ EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/input/misc/ets_fps_mmi
 
+prod_list := corfu
+find_target := $(foreach find, $(prod_list), $(findstring $(find), $(TARGET_PRODUCT)))
+ifneq ($(find_target), )
+$(warning jianl: define EGIS_SHARE_GPIO)
+EXTRA_CFLAGS += -DEGIS_SHARE_GPIO
+endif
+
 ets_fps-y += etxxx_fp.o
 
 obj-m += ets_fps.o
