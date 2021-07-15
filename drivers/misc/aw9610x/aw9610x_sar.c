@@ -1326,9 +1326,13 @@ static ssize_t reset_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
 {
+	uint32_t data_en = 0;
 	if (!strncmp(buf, "reset", 5) || !strncmp(buf, "1", 1)) {
-		aw9610x_i2c_write(g_aw9610x, REG_HOSTCTRL2, 0);
-		aw9610x_sar_cfg_init(g_aw9610x,AW_CFG_LOADED);
+		aw9610x_i2c_read(g_aw9610x, REG_SCANCTRL0, &data_en);
+		aw9610x_i2c_write_bits(g_aw9610x, REG_SCANCTRL0, ~(0x3f << 8),
+							(data_en & 0x3f) << 8);
+		aw9610x_i2c_write(g_aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
+		g_aw9610x->mode = AW9610X_ACTIVE_MODE;
 	}
 
 	for (int i = 0; i < g_aw9610x->aw_channel_number; i++)
