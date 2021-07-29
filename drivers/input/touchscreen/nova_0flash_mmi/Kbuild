@@ -46,6 +46,10 @@ ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_0FLASH_MMI_MTK_GET_PANEL)),)
 	EXTRA_CFLAGS += -DNVT_MTK_GET_PANEL
 endif
 
+ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_0FLASH_MMI_MT6768_SPI_CONF)),)
+	EXTRA_CFLAGS += -DMT6768_NOVA_SPI_CONF
+endif
+
 nova_0flash_mmi-objs += nt36xxx.o
 nova_0flash_mmi-objs += nt36xxx_ext_proc.o
 nova_0flash_mmi-objs += nt36xxx_fw_update.o
