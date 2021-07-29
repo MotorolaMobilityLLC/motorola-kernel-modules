@@ -416,7 +416,77 @@ int ili_sysfs_remove_device(struct device *dev) {
 	return 0;
 }
 #else
+#ifdef CONFIG_MTK_FB
+static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long event, void *data)
+{
+	int *blank;
+	struct fb_event *evdata = data;
 
+	ILI_INFO("Notifier's event = %ld\n", event);
+
+	if (!(evdata && evdata->data))
+		return 0;
+
+	blank = evdata->data;
+
+	switch (*blank) {
+	case FB_BLANK_POWERDOWN:
+		if (event == FB_EARLY_EVENT_BLANK)
+		{
+#if ENABLE_GESTURE
+#ifdef ILI_CONFIG_PANEL_GESTURE
+		if (ilits->panel_gesture_enable) {
+				if (ili_sleep_handler(TP_SUSPEND) < 0)
+					ILI_ERR("TP suspend failed!\n");
+				else
+					ILI_INFO("TP suspend!\n");
+			} else {
+				//enter deep sleep when panel not config gesture
+				if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
+					ILI_ERR("TP deep sleep in failed!\n");
+				else
+					ILI_INFO("TP in deep sleep!\n");
+			}
+#else
+			if (ilits->tp_module == MODEL_TM) {
+				if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
+					ILI_ERR("TP deep sleep in failed\n");
+			} else {
+				if (ili_sleep_handler(TP_SUSPEND) < 0)
+					ILI_ERR("TP suspend failed\n");
+			}
+#endif
+#else
+			//enter deep sleep when not enable gesture
+			if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
+			{
+				ILI_ERR("TP deep sleep in failed\n");
+			} else {
+				ILI_INFO("TP in deep sleep\n");
+			}
+#endif
+
+#if defined(ILI_CONFIG_GESTURE) || defined(ILI_CONFIG_PANEL_GESTURE)
+			touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
+#endif
+		}
+		break;
+
+	case FB_BLANK_UNBLANK:
+		if (event == FB_EVENT_BLANK)
+		{
+			if (ili_sleep_handler(TP_RESUME) < 0)
+				ILI_ERR("TP resume failed\n");
+
+		}
+		break;
+	default:
+		ILI_ERR("Unknown event, blank = %d\n", *blank);
+		break;
+	}
+	return NOTIFY_OK;
+}
+#else //ifdef CONFIG_MTK_FB
 #ifdef CONFIG_DRM
 static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long event, void *data)
 {
@@ -445,7 +515,7 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 		{
 #if ENABLE_GESTURE
 #ifdef ILI_CONFIG_PANEL_GESTURE
-  		if (ilits->panel_gesture_enable) {
+		if (ilits->panel_gesture_enable) {
 				if (ili_sleep_handler(TP_SUSPEND) < 0)
 					ILI_ERR("TP suspend failed!\n");
 				else
@@ -582,15 +652,24 @@ static void ilitek_plat_late_resume(struct early_suspend *h)
 		ILI_ERR("TP resume failed\n");
 }
 #endif
+#endif //ifdef CONFIG_MTK_FB
 #endif
 
 static void ilitek_plat_sleep_init(void)
 {
+#if defined(CONFIG_MTK_FB) || defined(CONFIG_DRM)
+    int ret = 0;
+#endif
 	ILI_INFO("Init notifier_fb struct\n");
 	ilits->notifier_fb.notifier_call = ilitek_plat_notifier_fb;
+#if defined(CONFIG_MTK_FB)
+	ret = fb_register_client((&ilits->notifier_fb));
+	if(ret) {
+		ILI_ERR("register fb_notifier failed. ret=%d\n", ret);
+	}
+#else
 #if defined(CONFIG_DRM)
 {
-    int ret = 0;
     extern struct drm_panel *ili_active_panel;
     if (ili_active_panel) {
         ret = drm_panel_notifier_register(ili_active_panel, &ilits->notifier_fb);
@@ -621,6 +700,7 @@ static void ilitek_plat_sleep_init(void)
 	ilits->early_suspend.resume = ilitek_plat_late_resume;
 	ilits->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	register_early_suspend(&ilits->early_suspend);
+#endif
 #endif
 #endif
 }
