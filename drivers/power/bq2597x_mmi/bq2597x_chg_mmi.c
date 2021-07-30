@@ -437,6 +437,7 @@ static int __bq2597x_read_word(struct bq2597x *bq, u8 reg, u16 *data)
 static int bq2597x_read_byte(struct bq2597x *bq, u8 reg, u8 *data)
 {
 	int ret;
+	int sleep_count;
 
 	if (bq->skip_reads) {
 		*data = 0;
@@ -444,6 +445,11 @@ static int bq2597x_read_byte(struct bq2597x *bq, u8 reg, u8 *data)
 	}
 
 	mutex_lock(&bq->i2c_rw_lock);
+        for(sleep_count = 0; (!bq->resume_completed && sleep_count < 10); sleep_count ++){
+                pr_err("bq2597x is still suspended, sleep %dms to wait for resume", sleep_count * 10);
+                msleep(10);
+        }
+
 	ret = __bq2597x_read_byte(bq, reg, data);
 	mutex_unlock(&bq->i2c_rw_lock);
 
@@ -453,11 +459,17 @@ static int bq2597x_read_byte(struct bq2597x *bq, u8 reg, u8 *data)
 static int bq2597x_write_byte(struct bq2597x *bq, u8 reg, u8 data)
 {
 	int ret;
+	u8 sleep_count;
 
 	if (bq->skip_writes)
 		return 0;
 
 	mutex_lock(&bq->i2c_rw_lock);
+        for(sleep_count = 0; (!bq->resume_completed && sleep_count < 10); sleep_count ++){
+                pr_err("bq2597x is still suspended, sleep %dms to wait for resume", sleep_count * 10);
+                msleep(10);
+        }
+
 	ret = __bq2597x_write_byte(bq, reg, data);
 	mutex_unlock(&bq->i2c_rw_lock);
 
@@ -467,6 +479,7 @@ static int bq2597x_write_byte(struct bq2597x *bq, u8 reg, u8 data)
 static int bq2597x_read_word(struct bq2597x *bq, u8 reg, u16 *data)
 {
 	int ret;
+	u8 sleep_count;
 
 	if (bq->skip_reads) {
 		*data = 0;
@@ -474,6 +487,11 @@ static int bq2597x_read_word(struct bq2597x *bq, u8 reg, u16 *data)
 	}
 
 	mutex_lock(&bq->i2c_rw_lock);
+        for(sleep_count = 0; (!bq->resume_completed && sleep_count < 10); sleep_count ++){
+                pr_err("bq2597x is still suspended, sleep %dms to wait for resume", sleep_count * 10);
+                msleep(10);
+        }
+
 	ret = __bq2597x_read_word(bq, reg, data);
 	mutex_unlock(&bq->i2c_rw_lock);
 
@@ -485,11 +503,17 @@ static int bq2597x_update_bits(struct bq2597x *bq, u8 reg,
 {
 	int ret;
 	u8 tmp;
+	u8 sleep_count;
 
 	if (bq->skip_reads || bq->skip_writes)
 		return 0;
 
 	mutex_lock(&bq->i2c_rw_lock);
+        for(sleep_count = 0; (!bq->resume_completed && sleep_count < 10); sleep_count ++){
+                pr_err("bq2597x is still suspended, sleep %dms to wait for resume", sleep_count * 10);
+                msleep(10);
+        }
+
 	ret = __bq2597x_read_byte(bq, reg, &tmp);
 	if (ret) {
 		bq_err("Failed: reg=%02X, ret=%d\n", reg, ret);

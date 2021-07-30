@@ -477,6 +477,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 	struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 	int ibus_curr = 0, calculated_vbus = 0,ibus_cov_to_volt = 0, vbus_cov_to_volt = 0;
+	int vbus_volt = 0, volt_change = 0;
 #endif
 
 	mmi_chrg_dbg(chip, PR_MOTO, "\n\n\n");
@@ -499,6 +500,8 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 				POWER_SUPPLY_PROP_CURRENT_NOW, &prop);
 	if (!rc)
 		ibatt_curr = prop.intval;
+
+	mmi_chrg_info(chip, "Get battery current %d\n", ibatt_curr);
 
 	rc = power_supply_get_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_TEMP, &prop);
@@ -523,6 +526,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		ibatt_curr *= 1000;
 		if (ibatt_curr < 0)
 			ibatt_curr *= -1;
+	        mmi_chrg_info(chip, "Get extrn_sense battery current %d\n", ibatt_curr);
 	}
 	vbatt_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbatt_volt;
 	vbatt_volt *= 1000;
@@ -722,15 +726,25 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 		chip->pd_request_volt = SWITCH_CHARGER_PPS_VOLT;
 		chip->pd_request_curr = TYPEC_HIGH_CURRENT_UA;
+#ifndef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 		usbpd_pps_enable_charging(chip, false,
 						chip->pd_request_volt / 1000,
 						chip->pd_request_curr / 1000);
+#endif
 
 		mmi_chrg_info(chip,"Select pd request curr %d, volt %d\n",
 						chip->pd_request_curr,
 						chip->pd_request_volt);
 
-		mmi_chrg_sm_move_state(chip, PM_STATE_SW_LOOP);
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+		if(!chrg_list->chrg_dev[PMIC_SW]->charger_limited){
+			mmi_chrg_sm_move_state(chip, PM_STATE_STOP_CHARGE);
+		} else {
+#endif
+		        mmi_chrg_sm_move_state(chip, PM_STATE_SW_LOOP);
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+		}
+#endif
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		break;
 	case PM_STATE_SW_LOOP:
@@ -1339,12 +1353,19 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 			heartbeat_dely_ms = HEARTBEAT_PPS_TUNNING_MS;
 			chrg_cv_taper_tunning_cnt = 0;
 		} else {
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+			chip->pd_request_volt = 5000000;
+#endif
 			chrg_cv_taper_tunning_cnt++;
 
 		}
 
 		if (chrg_cv_taper_tunning_cnt > CV_TAPPER_COUNT){
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+			mmi_chrg_sm_move_state(chip, PM_STATE_STOP_CHARGE);
+#else
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_LOOP);
+#endif
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		}
 		break;
@@ -1692,6 +1713,19 @@ schedule:
 
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 	chip->pps_result = qc3p_select_pdo(chip, chip->pd_target_volt, chip->pd_target_curr);
+
+	vbus_volt = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbus_volt;
+	volt_change = (chip->pd_target_volt > vbus_volt)?
+		(chip->pd_target_volt - vbus_volt) :
+		(vbus_volt - chip->pd_target_volt);
+		
+	volt_change = volt_change/1000;
+
+	if(volt_change > 200){
+		heartbeat_dely_ms = volt_change/200 * 50;
+	}
+	mmi_chrg_err(chip, "checking vbus_volt: %d, target_volt: %d, volt_chage: %d, delay_ms: %dms\n", vbus_volt, chip->pd_target_volt, volt_change, heartbeat_dely_ms);
+
 #else
 	chip->pps_result = usbpd_select_pdo(chip,
 								chip->pd_target_volt / 1000,
@@ -1909,8 +1943,13 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 
         mmi_chrg_err(chip, "prev_calculate current inc:%d,dec:%d,voltage inc:%d,dec:%d\n",req_curr_inc_step,req_curr_dec_step,req_volt_inc_step,req_volt_dec_step);
 
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+	real_inc_step = req_volt_inc_step;
+	real_dec_step = req_volt_dec_step;
+#else
         real_inc_step = max(req_volt_inc_step,req_curr_inc_step);
         real_dec_step = max(req_volt_dec_step,req_curr_dec_step);
+#endif
 
         mmi_chrg_err(chip, "after calculated, voltage inc:%d,dec:%d\n",real_inc_step,real_dec_step);
 
@@ -1920,10 +1959,12 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
                 && ibus_curr <= chip->pd_curr_max){  //increase
 		target_vbus_volt = vbus_volt + real_inc_step/1000;
 		target_vbus_volt = min(target_vbus_volt, chip->pd_volt_max);
+
 		mmi_chrg_err(chip, "increase to vbus volt: %d, cal_vbus = %d \n", target_vbus_volt, calculated_vbus);
 	}
 	else{
 		target_vbus_volt = vbus_volt - real_dec_step/1000;
+
 		mmi_chrg_err(chip, "descend to vbus volt: %d, cal_vbus = %d \n", target_vbus_volt, calculated_vbus);
 	}
 
@@ -1933,29 +1974,15 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
                 udelay(200);
         }
         else if(rc != 0){
-                mmi_chrg_err(chip, "adapter_set_cap_start_bq failed, switch to main charger!\n");
+                mmi_chrg_err(chip, "wt6670f_set_voltage failed, switch to main charger!\n");
                 mmi_chrg_sm_move_state(chip,PM_STATE_STOP_CHARGE);
 		retry_cnt = 0;
         }
 	else{
 		retry_cnt = 0;
-/*
-                udelay(3000);
-		if(real_inc_step > 0){
-			if(chip->pd_request_volt_prev != 0) {
-				chip->pd_request_volt = chip->pd_request_volt_prev + real_inc_step;
-				chip->pd_target_volt = chip->pd_request_volt;
-			}
-		}
-		else{
-			if(chip->pd_request_volt_prev != 0) {
-				chip->pd_request_volt = chip->pd_request_volt_prev - real_dec_step;
-				chip->pd_target_volt = chip->pd_request_volt;
-			}
-		}
-*/
-                chip->pd_target_volt = target_vbus_volt;
-		mmi_chrg_err(chip, "after adjust vbus volt, pd_request_volt = %d, target_vbus = %d \n", chip->pd_request_volt, target_vbus_volt);
+
+                chip->pd_target_volt = target_vbus_volt * 1000;
+		mmi_chrg_err(chip, "after adjust vbus volt, pd_request_volt = %d, target_vbus = %d \n", chip->pd_request_volt, chip->pd_target_volt);
 	}
 #else
         //get current dp dm count
