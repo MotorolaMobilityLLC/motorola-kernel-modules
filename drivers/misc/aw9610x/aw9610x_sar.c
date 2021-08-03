@@ -1331,8 +1331,8 @@ static ssize_t reset_store(struct class *class,
 		aw9610x_i2c_read(g_aw9610x, REG_SCANCTRL0, &data_en);
 		aw9610x_i2c_write_bits(g_aw9610x, REG_SCANCTRL0, ~(0x3f << 8),
 							(data_en & 0x3f) << 8);
-		aw9610x_i2c_write(g_aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
-		g_aw9610x->mode = AW9610X_ACTIVE_MODE;
+		//aw9610x_i2c_write(g_aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
+		//g_aw9610x->mode = AW9610X_ACTIVE_MODE;
 	}
 
 	for (int i = 0; i < g_aw9610x->aw_channel_number; i++)
