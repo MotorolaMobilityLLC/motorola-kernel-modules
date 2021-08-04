@@ -1282,6 +1282,25 @@ static void psy_changed_work_func(struct work_struct *work)
 	if (chip->vbus_present
 		&& chip->pd_pps_support
 		&& !chip->factory_mode) {
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+		char *chrg_rate_string = NULL;
+                char *envp[2];
+
+                chrg_rate_string = kmalloc(CHG_SHOW_MAX_SIZE, GFP_KERNEL);
+                if (!chrg_rate_string) {
+                       mmi_chrg_err(chip, "SMBMMI: Failed to Get Uevent Mem\n");
+                       envp[0] = NULL;
+                } else {
+                       scnprintf(chrg_rate_string, CHG_SHOW_MAX_SIZE,
+                                "POWER_SUPPLY_CHARGE_RATE=%s",
+                                "Turbo");
+                       envp[0] = chrg_rate_string;
+                       envp[1] = NULL;
+
+		       mmi_power_supply_changed(chip->batt_psy, envp);
+                }
+#endif
+
 		kick_sm(chip, 100);
 	} else {
 		cancel_sm(chip);
