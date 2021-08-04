@@ -25,6 +25,10 @@ ifneq ($(filter ft3518u,$(CONFIG_INPUT_FTS_MTK_V2_MMI_IC_NAME)),)
 	focaltech_mtk_v2_mmi-objs += focaltech_flash/focaltech_upgrade_ft3518u.o
 endif
 
+ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_MMI_ENABLE_DOUBLE_TAP)),)
+	EXTRA_CFLAGS += -DFOCALTECH_SENSOR_EN
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_FTS_TEST_SUPPORT)),)
 	EXTRA_CFLAGS += -DFTS_TEST_SUPPORT
 	focaltech_mtk_v2_mmi-objs += focaltech_test/focaltech_test.o

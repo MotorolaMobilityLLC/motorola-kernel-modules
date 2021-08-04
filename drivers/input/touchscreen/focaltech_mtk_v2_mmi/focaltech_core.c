@@ -1598,6 +1598,12 @@ static int fb_notifier_callback(struct notifier_block *self,
         if (FB_EARLY_EVENT_BLANK == event) {
             cancel_work_sync(&fts_data->resume_work);
             fts_ts_suspend(ts_data->dev);
+#ifdef FOCALTECH_SENSOR_EN
+            if (fts_data->gesture_mode) {
+                FTS_INFO("double tap gesture suspend\n");
+                return 1;
+            }
+#endif
         } else if (FB_EVENT_BLANK == event) {
             FTS_INFO("suspend: event = %lu, not care\n", event);
         }
@@ -1822,6 +1828,9 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     spin_lock_init(&ts_data->irq_lock);
     mutex_init(&ts_data->report_mutex);
     mutex_init(&ts_data->bus_lock);
+#ifdef FOCALTECH_SENSOR_EN
+    mutex_init(&ts_data->state_mutex);
+#endif
 
     /* Init communication interface */
     ret = fts_bus_init(ts_data);
@@ -2081,13 +2090,23 @@ static int fts_ts_suspend(struct device *dev)
     int ret = 0;
     struct fts_ts_data *ts_data = fts_data;
 
+#ifdef FOCALTECH_SENSOR_EN
+    mutex_lock(&ts_data->state_mutex);
+#endif
+
     FTS_FUNC_ENTER();
     if (ts_data->suspended) {
+#ifdef FOCALTECH_SENSOR_EN
+        mutex_unlock(&ts_data->state_mutex);
+#endif
         FTS_INFO("Already in suspend state");
         return 0;
     }
 
     if (ts_data->fw_loading) {
+#ifdef FOCALTECH_SENSOR_EN
+        mutex_unlock(&ts_data->state_mutex);
+#endif
         FTS_INFO("fw upgrade in process, can't suspend");
         return 0;
     }
@@ -2098,6 +2117,10 @@ static int fts_ts_suspend(struct device *dev)
 
     if (ts_data->gesture_mode) {
         fts_gesture_suspend(ts_data);
+#ifdef FOCALTECH_SENSOR_EN
+        ts_data->wakeable = true;
+        FTS_INFO("Enter gesture suspend mode.");
+#endif
     } else {
         fts_irq_disable();
 
@@ -2119,6 +2142,9 @@ static int fts_ts_suspend(struct device *dev)
     fts_release_all_finger();
     ts_data->suspended = true;
     FTS_FUNC_EXIT();
+#ifdef FOCALTECH_SENSOR_EN
+    mutex_unlock(&ts_data->state_mutex);
+#endif
     return 0;
 }
 
@@ -2126,8 +2152,15 @@ static int fts_ts_resume(struct device *dev)
 {
     struct fts_ts_data *ts_data = fts_data;
 
+#ifdef FOCALTECH_SENSOR_EN
+    mutex_lock(&ts_data->state_mutex);
+#endif
+
     FTS_FUNC_ENTER();
     if (!ts_data->suspended) {
+#ifdef FOCALTECH_SENSOR_EN
+        mutex_unlock(&ts_data->state_mutex);
+#endif
         FTS_DEBUG("Already in awake state");
         return 0;
     }
@@ -2153,12 +2186,25 @@ static int fts_ts_resume(struct device *dev)
 #endif
 
     if (ts_data->gesture_mode) {
+#ifdef FOCALTECH_SENSOR_EN
+        if (ts_data->wakeable) {
+            fts_gesture_resume(ts_data);
+            ts_data->wakeable = false;
+            FTS_INFO("Exit from gesture suspend mode.");
+        }
+#else
         fts_gesture_resume(ts_data);
+#endif
     } else {
         fts_irq_enable();
     }
 
     ts_data->suspended = false;
+
+#ifdef FOCALTECH_SENSOR_EN
+    mutex_unlock(&ts_data->state_mutex);
+#endif
+
     FTS_FUNC_EXIT();
     return 0;
 }
