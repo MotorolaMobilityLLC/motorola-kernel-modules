@@ -217,10 +217,9 @@ const struct mtk_chip_config spi_ctrdata = {
 #ifdef MT6768_NOVA_SPI_CONF
 	.rx_mlsb = 1,
 	.tx_mlsb = 1,
-#else
+#endif
 	.sample_sel = 1,
 	.cs_setuptime = 2148,
-#endif
 };
 #endif
 
