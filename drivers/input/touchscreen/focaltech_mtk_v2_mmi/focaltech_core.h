@@ -61,9 +61,13 @@
 #include <linux/sched.h>
 #include <linux/kthread.h>
 #include <linux/dma-mapping.h>
+#include <linux/mmi_wake_lock.h>
 #include "focaltech_common.h"
 #ifdef FTS_USB_DETECT_EN
 #include <linux/power_supply.h>
+#endif
+#ifdef FOCALTECH_SENSOR_EN
+#include <linux/sensors.h>
 #endif
 
 /*****************************************************************************
@@ -167,6 +171,14 @@ struct pen_event {
     int tool_type;
 };
 
+#ifdef FOCALTECH_SENSOR_EN
+struct focaltech_sensor_platform_data {
+    struct input_dev *input_sensor_dev;
+    struct sensors_classdev ps_cdev;
+    struct fts_ts_data *data;
+};
+#endif
+
 struct fts_ts_data {
     struct i2c_client *client;
     struct spi_device *spi;
@@ -229,6 +241,12 @@ struct fts_ts_data {
     bool usb_detect_flag;
     uint8_t usb_connected;
     struct notifier_block charger_notif;
+#endif
+
+#ifdef FOCALTECH_SENSOR_EN
+    bool wakeable;
+    struct mutex state_mutex;
+    struct focaltech_sensor_platform_data *sensor_pdata;
 #endif
 
 #if defined(CONFIG_FB) || defined(CONFIG_DRM)
