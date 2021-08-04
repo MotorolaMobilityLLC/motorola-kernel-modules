@@ -100,11 +100,6 @@ static int bq2597x_mode_data[] = {
 	[BQ25970_SLAVE] = BQ25970_ROLE_SLAVE,
 };
 
-#define BQ2597X_PART_NO 0x10
-#define SC8551_PART_NO  0x00
-#define SC8551A_PART_NO 0x51
-
-#define BUS_UCP_ALARM           BIT(4)
 #define	BAT_OVP_ALARM		BIT(7)
 #define BAT_OCP_ALARM		BIT(6)
 #define	BUS_OVP_ALARM		BIT(5)
@@ -147,7 +142,6 @@ static int bq2597x_mode_data[] = {
 #define	BAT_OCP_ALARM_SHIFT			1
 #define	BUS_OVP_ALARM_SHIFT			2
 #define	BUS_OCP_ALARM_SHIFT			3
-#define BUS_UCP_FAULT_SHIFT                     4
 #define	BAT_THERM_ALARM_SHIFT			4
 #define	BUS_THERM_ALARM_SHIFT			5
 #define	DIE_THERM_ALARM_SHIFT			6
@@ -388,7 +382,7 @@ struct bq2597x {
 #endif
 };
 
-// extern void set_bq2597x_load_flag(bool bqflag);
+//extern void set_bq2597x_load_flag(bool bqflag);
 
 /************************************************************************/
 static int __bq2597x_read_byte(struct bq2597x *bq, u8 reg, u8 *data)
@@ -505,8 +499,10 @@ static int bq2597x_update_bits(struct bq2597x *bq, u8 reg,
 	u8 tmp;
 	u8 sleep_count;
 
-	if (bq->skip_reads || bq->skip_writes)
+	if (bq->skip_reads || bq->skip_writes){
+		bq_err("Skip read or write: skip_reads=%d, skip_writes= %d\n", bq->skip_reads, bq->skip_writes);
 		return 0;
+	}
 
 	mutex_lock(&bq->i2c_rw_lock);
         for(sleep_count = 0; (!bq->resume_completed && sleep_count < 10); sleep_count ++){
@@ -539,6 +535,7 @@ static int bq2597x_enable_charge(struct bq2597x *bq, bool enable)
 	int ret;
 	u8 val;
 
+	bq_err("bq2597x_enable_charge: enable: %d\n", enable);
 	if (enable)
 		val = BQ2597X_CHG_ENABLE;
 	else
@@ -1376,24 +1373,24 @@ static int bq2597x_set_sense_resistor(struct bq2597x *bq, int r_mohm)
 	return ret;
 }
 
-static int bq2597x_set_ucp_threshold(struct bq2597x *bq, int curr_ma)
+static int bq2597x_set_ibus_ucp_thr(struct bq2597x *bq, int ibus_ucp_thr)
 {
-        int ret;
-        u8 val;
+	int ret;
+	u8 val;
 
-        if (curr_ma == 300)
-                val = BQ2597X_IBUS_UCP_RISE_300MA;
-        else if (curr_ma == 500)
-                val = BQ2597X_IBUS_UCP_RISE_500MA;
-        else
-                val = BQ2597X_IBUS_UCP_RISE_300MA;
+	if (ibus_ucp_thr == 300)
+		val = BQ2597X_IBUS_UCP_RISE_300MA;
+	else if (ibus_ucp_thr == 500)
+		val = BQ2597X_IBUS_UCP_RISE_500MA;
+	else
+		return -EINVAL;
 
-        val <<= BQ2597X_IBUS_UCP_RISE_TH_SHIFT;
+	val <<= BQ2597X_IBUS_UCP_RISE_TH_SHIFT;
 
-        ret = bq2597x_update_bits(bq, BQ2597X_REG_2B,
-                                BQ2597X_IBUS_UCP_RISE_TH_MASK,
-                                val);
-        return ret;
+	ret = bq2597x_update_bits(bq, BQ2597X_REG_2B,
+				BQ2597X_IBUS_UCP_RISE_TH_MASK,
+				val);
+	return ret;
 }
 
 static int bq2597x_enable_regulation(struct bq2597x *bq, bool enable)
@@ -1415,28 +1412,6 @@ static int bq2597x_enable_regulation(struct bq2597x *bq, bool enable)
 	return ret;
 
 }
-
-/*
-static int bq2597x_enable_vout(struct bq2597x *bq, bool enable)
-{
-        int ret;
-        u8 val;
-
-        if (enable)
-                val = BQ2597X_VOUT_OVP_ENABLE;
-        else
-                val = BQ2597X_VOUT_OVP_DISABLE;
-
-        val <<= BQ2597X_VOUT_OVP_DIS_SHIFT;
-
-        ret = bq2597x_update_bits(bq, BQ2597X_REG_2B,
-                                BQ2597X_VOUT_OVP_DIS_MASK,
-                                val);
-
-        return ret;
-
-}
-*/
 
 static int bq2597x_enable_ucp(struct bq2597x *bq, bool enable)
 {
@@ -1468,25 +1443,25 @@ static int bq2597x_set_ss_timeout(struct bq2597x *bq, int timeout)
 		val = BQ2597X_SS_TIMEOUT_DISABLE;
 		break;
 	case 12:
-		val = BQ2597X_SS_TIMEOUT_SET_12P5MS;
+		val = BQ2597X_SS_TIMEOUT_12P5MS;
 		break;
 	case 25:
-		val = BQ2597X_SS_TIMEOUT_SET_25MS;
+		val = BQ2597X_SS_TIMEOUT_25MS;
 		break;
 	case 50:
-		val = BQ2597X_SS_TIMEOUT_SET_50MS;
+		val = BQ2597X_SS_TIMEOUT_50MS;
 		break;
 	case 100:
-		val = BQ2597X_SS_TIMEOUT_SET_100MS;
+		val = BQ2597X_SS_TIMEOUT_100MS;
 		break;
 	case 400:
-		val = BQ2597X_SS_TIMEOUT_SET_400MS;
+		val = BQ2597X_SS_TIMEOUT_400MS;
 		break;
 	case 1500:
-		val = BQ2597X_SS_TIMEOUT_SET_1500MS;
+		val = BQ2597X_SS_TIMEOUT_1500MS;
 		break;
 	case 100000:
-		val = BQ2597X_SS_TIMEOUT_SET_100000MS;
+		val = BQ2597X_SS_TIMEOUT_100000MS;
 		break;
 	default:
 		val = BQ2597X_SS_TIMEOUT_DISABLE;
@@ -1598,11 +1573,8 @@ static int bq2597x_detect_device(struct bq2597x *bq)
 
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_13, &data);
 	if (ret == 0) {
-		bq->part_no = data;
-		bq->device_id = (data & BQ2597X_DEV_ID_MASK);
-		bq->device_id >>= BQ2597X_DEV_ID_SHIFT;
-                bq->revision = (data & BQ2597X_DEV_REV_MASK);
-                bq->revision >>= BQ2597X_DEV_REV_SHIFT;
+		bq->part_no = (data & BQ2597X_DEV_ID_MASK);
+		bq->part_no >>= BQ2597X_DEV_ID_SHIFT;
 
 		if (data == SC8551_DEVICE_ID || data == SC8551A_DEVICE_ID)
 			bq->chip_vendor = SC8551;
@@ -1972,7 +1944,7 @@ static int bq2597x_init_device(struct bq2597x *bq)
 	bq2597x_enable_wdt(bq, false);
 
 	bq2597x_set_ss_timeout(bq, 100000);
-	bq2597x_set_ucp_threshold(bq, 300);
+	bq2597x_set_ibus_ucp_thr(bq, 300);
 	bq2597x_enable_ucp(bq, 1);
 	bq2597x_set_sense_resistor(bq, bq->cfg->sense_r_mohm);
 
@@ -2242,39 +2214,6 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TI_BYPASS_MODE_ENABLED:
 		val->intval = sc8551_get_bypass_mode_en(bq);
 		break;
-/*
-        case POWER_SUPPLY_PROP_CP_IRQ_STATUS:
-                val->intval = bq->irq_counts;
-                break;
-	case POWER_SUPPLY_PROP_CHIP_VERSION:
-                val->intval = bq->part_no;
-                break;
-        case POWER_SUPPLY_PROP_CP_STATUS1:
-                ret = bq2597x_read_byte(bq, BQ2597X_REG_0A, &cp_conv);
-                if (!ret) {
-                        bq->cp_switch = !!(cp_conv & BQ2597X_CONV_SWITCHING_STAT_MASK);
-                }
-                val->intval = ((bq->bat_ovp_alarm << BAT_OVP_ALARM_SHIFT)
-                        | (bq->bat_ocp_alarm << BAT_OCP_ALARM_SHIFT)
-                        | (bq->bat_ucp_alarm << BAT_UCP_ALARM_SHIFT)
-                        | (bq->bus_ovp_alarm << BUS_OVP_ALARM_SHIFT)
-                        | (bq->bus_ocp_alarm << BUS_OCP_ALARM_SHIFT)
-                        | (bq->bus_therm_alarm << BUS_THERM_ALARM_SHIFT)
-                        | (bq->die_therm_alarm << DIE_THERM_ALARM_SHIFT)
-                        | (bq->bat_ovp_fault << BAT_OVP_FAULT_SHIFT)
-                        | (bq->bat_ocp_fault << BAT_OCP_FAULT_SHIFT)
-                        | (bq->bus_ovp_fault << BUS_OVP_FAULT_SHIFT)
-                        | (bq->bus_ocp_fault << BUS_OCP_FAULT_SHIFT)
-                        | (bq->bat_therm_fault << BAT_THERM_FAULT_SHIFT)
-                        | (bq->bus_therm_fault << BUS_THERM_FAULT_SHIFT)
-                        | (bq->die_therm_fault << DIE_THERM_FAULT_SHIFT)
-                        | (bq->conv_ocp_fault << CONV_OCP_FAULT_SHIFT)
-                        | (bq->ss_timeout_fault << SS_TIMEOUT_FAULT_SHIFT)
-                        | (bq->ts_shut_fault << TS_SHUT_FAULT_SHIFT)
-                        | (bq->bus_ucp_alarm <<BUS_UCP_FAULT_SHIFT)
-                        | (bq->cp_switch << CP_SWITCH_SHIFT));
-                break;
-*/
 	default:
 		return -EINVAL;
 
@@ -2390,8 +2329,7 @@ static int bq2597x_psy_register(struct bq2597x *bq)
 	bq->psy_desc.property_is_writeable = bq2597x_charger_is_writeable;
 
 
-//	bq->fc2_psy = devm_power_supply_register(bq->dev,
-	bq->fc2_psy = power_supply_register(bq->dev,
+	bq->fc2_psy = devm_power_supply_register(bq->dev,
 			&bq->psy_desc, &bq->psy_cfg);
 	if (IS_ERR(bq->fc2_psy)) {
 		bq_err("failed to register fc2_psy:%d\n",
@@ -2470,8 +2408,8 @@ static void bq2597x_check_alarm_status(struct bq2597x *bq)
 	if (!ret && (flag & BQ2597X_IBUS_UCP_FALL_FLAG_MASK)){
 		bq_info("UCP_FLAG =0x%02X\n",
 			!!(flag & BQ2597X_IBUS_UCP_FALL_FLAG_MASK));
-                bq->bus_ucp_alarm =
-                                !!(flag & BUS_UCP_ALARM);
+//                bq->bus_ucp_alarm =
+//                                !!(flag & BUS_UCP_ALARM);
 	}
 
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_2D, &flag);
@@ -2505,7 +2443,7 @@ static void bq2597x_check_alarm_status(struct bq2597x *bq)
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_0A, &stat);
 	if (!ret && (stat & 0x02)){
 		bq_err("Reg[0A]CONV_OCP = 0x%02X\n", stat);
-		bq->bus_ocp_alarm = true;
+//		bq->bus_ocp_alarm = true;
 	}
 
 	mutex_unlock(&bq->data_lock);
@@ -2695,7 +2633,7 @@ static struct of_device_id bq2597x_charger_match_table[] = {
 	},
 	{},
 };
-MODULE_DEVICE_TABLE(of, bq2597x_charger_match_table);
+//MODULE_DEVICE_TABLE(of, bq2597x_charger_match_table);
 
 
 static int bq2597x_charger_probe(struct i2c_client *client,
@@ -2908,7 +2846,7 @@ static const struct i2c_device_id bq2597x_charger_id[] = {
 	{"bq2597x-slave", BQ25970_ROLE_SLAVE},
 	{},
 };
-MODULE_DEVICE_TABLE(i2c, bq2597x_charger_id);
+//MODULE_DEVICE_TABLE(i2c, bq2597x_charger_id);
 
 static struct i2c_driver bq2597x_charger_driver = {
 	.driver		= {
