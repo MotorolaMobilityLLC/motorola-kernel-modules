@@ -643,7 +643,7 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	container_of(to_spi_driver(spi->dev.driver),
 		struct touch_bus_info, bus_driver);
 	int tp_module = 0;
-#ifdef ILI_FW_PANEL
+#if defined(ILI_FW_PANEL) || defined(ILI_MTK_GET_PANEL)
 	int ret;
 #endif
 	ILI_INFO("ilitek spi probe\n");
@@ -673,7 +673,11 @@ static int ilitek_spi_probe(struct spi_device *spi)
 #endif
 
 #ifdef ILI_MTK_GET_PANEL
-	ili_get_panel();
+	ret = ili_get_panel();
+	if (ret) {
+		ILI_INFO("MTK get ilitek panel error\n");
+		return ret;
+	}
 #endif
 
 	ilits = devm_kzalloc(&spi->dev, sizeof(struct ilitek_ts_data), GFP_KERNEL);
