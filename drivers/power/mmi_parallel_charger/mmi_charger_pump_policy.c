@@ -46,6 +46,7 @@ extern struct mmi_charger_ops bq2597x_charger_ops;
 extern struct mmi_charger_ops mtk_pmic_charger_ops;
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 extern int wt6670f_set_voltage(u16 voltage);
+extern int wt6670f_set_volt_count(int count);
 //extern int wt6670f_get_charger_type(void);
 int qc3p_select_pdo(struct mmi_charger_manager *chip, int target_uv, int target_ua);
 int get_caculated_real_ibus_vbus(struct mmi_charger_manager *chip, int *ibus_curr, int *calculated_vbus);
@@ -829,13 +830,9 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		if (chrg_list->cp_master) {
 			mmi_enable_charging(chrg_list->chrg_dev[CP_MASTER], true);
 			mmi_chrg_info(chip,"Enable Master Charger Pump !\n");
+			msleep(120);
 			mmi_chrg_sm_move_state(chip, PM_STATE_PPS_TUNNING_CURR);
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-//			heartbeat_dely_ms = 500;
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
-#else
-			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
-#endif
 		}
 		break;
 	case PM_STATE_DULE_CP_ENTRY:
@@ -856,12 +853,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 		break;
 	case PM_STATE_PPS_TUNNING_CURR:
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
-//              heartbeat_dely_ms = 500;
-#else
-		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
-#endif
 		if (chrg_list->cp_master
 			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
 #ifndef CONFIG_MOTO_CHG_WT6670F_SUPPORT
@@ -918,12 +910,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 		break;
 	case PM_STATE_PPS_TUNNING_VOLT:
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-//                heartbeat_dely_ms = 500;
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
-#else
-		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
-#endif
 		if (chrg_list->cp_slave
 			&& chrg_list->cp_clave_later
 			&& !chrg_list->chrg_dev[CP_SLAVE]->charger_enabled) {
@@ -1722,7 +1709,7 @@ schedule:
 	volt_change = volt_change/1000;
 
 	if(volt_change > 200){
-		heartbeat_dely_ms = volt_change/200 * 50;
+		heartbeat_dely_ms = volt_change/200 * 100;
 	}
 	mmi_chrg_err(chip, "checking vbus_volt: %d, target_volt: %d, volt_chage: %d, delay_ms: %dms\n", vbus_volt, chip->pd_target_volt, volt_change, heartbeat_dely_ms);
 
@@ -1818,6 +1805,7 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 	int target_vbus_volt = 0;
 	static int retry_cnt = 0;
+	int count = 0;
 #endif
 
         rc = power_supply_get_property(chip->batt_psy,
@@ -1959,15 +1947,18 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
                 && ibus_curr <= chip->pd_curr_max){  //increase
 		target_vbus_volt = vbus_volt + real_inc_step/1000;
 		target_vbus_volt = min(target_vbus_volt, chip->pd_volt_max);
+		count = (target_vbus_volt - vbus_volt)/20;
 
-		mmi_chrg_err(chip, "increase to vbus volt: %d, cal_vbus = %d \n", target_vbus_volt, calculated_vbus);
+		mmi_chrg_err(chip, "increase to vbus volt: %d, cal_vbus = %d, count = %d \n", target_vbus_volt, calculated_vbus, count);
 	}
 	else{
 		target_vbus_volt = vbus_volt - real_dec_step/1000;
+		count -= real_dec_step/20000;
 
-		mmi_chrg_err(chip, "descend to vbus volt: %d, cal_vbus = %d \n", target_vbus_volt, calculated_vbus);
+		mmi_chrg_err(chip, "descend to vbus volt: %d, cal_vbus = %d, count = %d \n", target_vbus_volt, calculated_vbus, count);
 	}
 
+//	rc = wt6670f_set_volt_count(count);
         rc = wt6670f_set_voltage(target_vbus_volt);
         if (rc == 6 && retry_cnt++ < 5) {
                 mmi_chrg_err(chip, "adapter is verifying, retry:%d\n", retry_cnt);
