@@ -10,5 +10,9 @@ ifneq ($(filter m y,$(CONFIG_ABOV_MTK_CHARGER)),)
 	EXTRA_CFLAGS += -DCONFIG_ABOV_MTK_CHARGER
 endif
 
+ifneq ($(filter m y,$(CONFIG_ABOV_MTK_KERNEL419_CHARGER_TYPE)),)
+	EXTRA_CFLAGS += -DCONFIG_ABOV_MTK_KERNEL419_CHARGER_TYPE
+endif
+
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../sensors/Module.symvers
 obj-m = abov_sar_mmi_overlay_7ch.o
