@@ -1,0 +1,25 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/icnl9916_tddi_mmi
+ifneq ($(filter m y,$(CONFIG_CHIPONE_ESD)),)
+EXTRA_CFLAGS += -DCONFIG_CTS_ESD_PROTECTION
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_CHIPONE_MTK_GET_PANEL)),)
+	EXTRA_CFLAGS += -DCTS_MTK_GET_PANEL
+endif
+
+obj-m := icnl9916_tddi_mmi.o
+
+icnl9916_tddi_mmi-objs += cts_i2c_driver.o
+icnl9916_tddi_mmi-objs += cts_core.o
+icnl9916_tddi_mmi-objs += cts_platform.o
+icnl9916_tddi_mmi-objs += cts_sfctrlv2.o
+icnl9916_tddi_mmi-objs += cts_spi_flash.o
+icnl9916_tddi_mmi-objs += cts_firmware.o
+icnl9916_tddi_mmi-objs += cts_tool.o
+icnl9916_tddi_mmi-objs += cts_sysfs.o
+icnl9916_tddi_mmi-objs += cts_test.o
+icnl9916_tddi_mmi-objs += cts_charger_detect.o
+icnl9916_tddi_mmi-objs += cts_tcs.o
