@@ -209,6 +209,10 @@ struct aw9610x {
 	bool satu_release;
 	bool power_enable;
 
+	struct work_struct ps_notify_work;
+	struct notifier_block ps_notif;
+	bool ps_is_present;
+
 	struct delayed_work cfg_work;
 	struct i2c_client *i2c;
 	struct device *dev;
