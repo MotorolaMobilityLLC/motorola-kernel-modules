@@ -29,6 +29,9 @@
 #include <linux/string.h>
 #include <linux/jiffies.h>
 #include <linux/sensors.h>
+#include <linux/notifier.h>
+#include <linux/usb.h>
+#include <linux/power_supply.h>
 
 #include <linux/input/aw_bin_parse.h>
 #include <linux/input/aw9610x.h>
@@ -38,6 +41,12 @@
 
 #define AW9610X_I2C_NAME "aw9610x_sar"
 #define AW9610X_DRIVER_VERSION "v0.1.9"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+#define USB_POWER_SUPPLY_NAME   "charger"
+#else
+#define USB_POWER_SUPPLY_NAME   "usb"
+#endif
 
 #define AW_READ_CHIPID_RETRIES		(5)
 #define AW_I2C_RETRIES			(5)
@@ -1501,6 +1510,94 @@ static struct class capsense_class = {
 	.owner			= THIS_MODULE,
 };
 
+/*****************************************************
+*
+* USB charging calibra
+*
+*****************************************************/
+static void ps_notify_callback_work(struct work_struct *work)
+{
+	struct aw9610x *aw9610x = container_of(work, struct aw9610x, ps_notify_work);
+	uint32_t data_en = 0;
+	int ret = 0;
+	uint8_t  i;
+
+
+	LOG_INFO("Usb insert,going to force calibrate\n");
+	aw9610x_i2c_read(aw9610x, REG_SCANCTRL0, &data_en);
+
+	ret = aw9610x_i2c_write_bits(aw9610x, REG_SCANCTRL0, ~(0x3f << 8),
+							(data_en & 0x3f) << 8);
+
+	if (ret < 0){
+		LOG_ERR(" Usb insert,calibrate cap sensor failed\n");
+		return;
+	}
+
+	for (i = 0; i < aw9610x->aw_channel_number; i++){
+		input_report_abs(
+					aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);
+		input_sync(aw9610x->aw_pad[i].input);
+	}
+
+}
+
+static int ps_get_state(struct power_supply *psy, bool *present)
+{
+	union power_supply_propval pval = { 0 };
+	int retval;
+
+#ifdef CONFIG_AW9610_MTK_CHARGER
+	retval = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE,
+			&pval);
+#else
+	retval = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
+								&pval);
+#endif
+	if (retval) {
+		LOG_ERR( "aw9610x %s psy get property failed\n", psy->desc->name);
+		return retval;
+	}
+	*present = (pval.intval) ? true : false;
+	LOG_INFO( "aw9610x %s is %s\n", psy->desc->name,
+			(*present) ? "present" : "not present");
+	return 0;
+}
+
+static int ps_notify_callback(struct notifier_block *self,
+		unsigned long event, void *p)
+{
+	struct aw9610x *aw9610x = container_of(self, struct aw9610x, ps_notif);
+	struct power_supply *psy = p;
+	bool present;
+	int retval;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+	if (event == PSY_EVENT_PROP_CHANGED
+#else
+	if ((event == PSY_EVENT_PROP_ADDED || event == PSY_EVENT_PROP_CHANGED))
+#endif
+			&& psy && psy->desc->get_property && psy->desc->name &&
+			!strncmp(psy->desc->name, USB_POWER_SUPPLY_NAME, sizeof(USB_POWER_SUPPLY_NAME))){
+		LOG_INFO("ps notification: event = %lu\n", event);
+		retval = ps_get_state(psy, &present);
+		if (retval) {
+			LOG_ERR("psy get property failed\n");
+			return retval;
+		}
+
+		if (event == PSY_EVENT_PROP_CHANGED) {
+			if (aw9610x->ps_is_present == present) {
+				LOG_INFO("ps present state not change\n");
+				return 0;
+			}
+		}
+		aw9610x->ps_is_present = present;
+		schedule_work(&aw9610x->ps_notify_work);
+	}
+
+	return 0;
+}
 
 /*****************************************************
 *
@@ -1873,6 +1970,7 @@ aw9610x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 {
 	struct aw9610x *aw9610x;
 	struct device_node *np = i2c->dev.of_node;
+	struct power_supply *psy = NULL;
 	int32_t ret = 0;
 	uint32_t i = 0;
 	uint32_t j = 0;
@@ -2014,6 +2112,23 @@ aw9610x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	if (ret < 0) {
 		LOG_ERR( "error creating sysfs attr files");
 		goto err_sysfs;
+	}
+
+	INIT_WORK(&aw9610x->ps_notify_work, ps_notify_callback_work);
+	aw9610x->ps_notif.notifier_call = ps_notify_callback;
+	ret = power_supply_reg_notifier(&aw9610x->ps_notif);
+	if (ret) {
+		LOG_ERR("Unable to register ps_notifier: %d\n", ret);
+		power_supply_unreg_notifier(&aw9610x->ps_notif);
+	}
+
+	psy = power_supply_get_by_name(USB_POWER_SUPPLY_NAME);
+	if (psy) {
+		ret = ps_get_state(psy, &aw9610x->ps_is_present);
+		if (ret) {
+			LOG_ERR("psy get property failed rc=%d\n",ret);
+			power_supply_unreg_notifier(&aw9610x->ps_notif);
+		}
 	}
 
 	ret = aw9610x_sar_cfg_init(aw9610x, AW_CFG_UNLOAD);
