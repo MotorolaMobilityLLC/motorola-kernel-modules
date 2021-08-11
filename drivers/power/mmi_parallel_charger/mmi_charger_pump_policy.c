@@ -868,7 +868,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 			if ((chip->pd_request_curr - chip->pps_curr_steps
 				> chip->typec_middle_current) ||
-			    (vbatt_volt - chip->pps_curr_steps > chrg_step->chrg_step_cv_volt)){
+			    (ibatt_curr - chip->pps_curr_steps > chrg_step->chrg_step_cc_curr)){
 #else
                         if (chip->pd_request_curr - chip->pps_curr_steps
                                 > chip->typec_middle_current){
@@ -908,6 +908,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 				&& ibatt_curr < chrg_step->chrg_step_cc_curr) {
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
                                 mmi_chrg_dbg(chip, PR_MOTO, "pd_request_curr: %dua, pd_curr_max: %dua, chrg_step_cc_curr: %d, pps_curr_steps: %d \n", chip->pd_request_curr, chip->pd_curr_max, chrg_step->chrg_step_cc_curr, chip->pps_curr_steps);
+/*
 				if((chip->pd_curr_max - chip->pd_request_curr) >= (4*chip->pps_curr_steps)){
 //					chip->pd_request_curr += (chip->pd_curr_max - 3*chip->pps_curr_steps - chip->pd_request_curr)/chip->pps_curr_steps * chip->pps_curr_steps;
 					chip->pd_request_curr += 3 * chip->pps_curr_steps;
@@ -915,13 +916,13 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 					chip->pd_request_curr += chip->pps_curr_steps;
 				}
 
-/*
-				if(chip->pd_request_curr + 2 * chip->pps_curr_steps <= chip->pd_curr_max){
-				chip->pd_request_curr += chip->pps_curr_steps * 2;
+*/
+				if(chip->pd_request_curr + 3 * chip->pps_curr_steps <= chip->pd_curr_max){
+				chip->pd_request_curr += chip->pps_curr_steps * 3;
 				} else {
 				      chip->pd_request_curr += chip->pps_curr_steps;
 				}
-*/
+
 #else
 				chip->pd_request_curr += chip->pps_curr_steps;
 #endif
@@ -988,18 +989,19 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 				chrg_step->chrg_step_cc_curr)) {
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 				mmi_chrg_dbg(chip, PR_MOTO, "pd_request_volt: %duv, pd_volt_max: %duv, chrg_step_cv_volt: %d, pps_volt_steps: %d \n", chip->pd_request_volt, chip->pd_volt_max, chrg_step->chrg_step_cv_volt, chip->pps_volt_steps);
+/*
 				if((chip->pd_volt_max - chip->pd_request_volt) >= (30 * chip->pps_volt_steps)){
 					chip->pd_request_volt += (chip->pd_volt_max - 30 * chip->pps_volt_steps - chip->pd_request_volt)/chip->pps_volt_steps * chip->pps_volt_steps;
 				} else {
 					chip->pd_request_volt += chip->pps_volt_steps;
 				}
-/*
+*/
 				if(chip->pd_request_volt + 5 * chip->pps_volt_steps <= chip->pd_volt_max){
 				        chip->pd_request_volt += 5 * chip->pps_volt_steps;
 				} else {
-					chip->pd_request_volt += chip->pps_volt_steps;
+					chip->pd_request_volt += 2 * chip->pps_volt_steps;
 				}
-*/
+
 #else
 				chip->pd_request_volt += chip->pps_volt_steps;
 #endif
@@ -1741,7 +1743,8 @@ schedule:
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 	chip->pps_result = qc3p_select_pdo(chip, chip->pd_target_volt, chip->pd_target_curr);
 
-	vbus_volt = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbus_volt;
+	vbus_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbus_volt;
+	vbus_volt *= 1000;
 	volt_change = (chip->pd_target_volt > vbus_volt)?
 		(chip->pd_target_volt - vbus_volt) :
 		(vbus_volt - chip->pd_target_volt);
@@ -2009,13 +2012,13 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 		target_vbus_volt = min(target_vbus_volt, chip->pd_volt_max);
 		count = (target_vbus_volt - vbus_volt)/20;
 
-		mmi_chrg_err(chip, "increase to vbus volt: %d, cal_vbus = %d, count = %d \n", target_vbus_volt, calculated_vbus, count);
+		mmi_chrg_err(chip, "vbus increase to volt: %d, vbus now = %d, count = %d \n", target_vbus_volt, vbus_volt, count);
 	}
 	else{
 		target_vbus_volt = vbus_volt - real_dec_step/1000;
 		count -= real_dec_step/20000;
 
-		mmi_chrg_err(chip, "descend to vbus volt: %d, cal_vbus = %d, count = %d \n", target_vbus_volt, calculated_vbus, count);
+		mmi_chrg_err(chip, "vbus descend to volt: %d, vbus now = %d, count = %d \n", target_vbus_volt, vbus_volt, count);
 	}
 
 	rc = wt6670f_set_volt_count(count);
