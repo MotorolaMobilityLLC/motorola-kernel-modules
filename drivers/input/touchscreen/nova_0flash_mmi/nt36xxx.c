@@ -3207,6 +3207,19 @@ static int nvt_fb_notifier_callback(struct notifier_block *self, unsigned long e
 	struct nvt_ts_data *ts =
 		container_of(self, struct nvt_ts_data, fb_notif);
 
+#ifdef CONFIG_LCM_NOTIFIY_SUPPORT
+	//some TP need LCM notify, e.g. NVT
+	//transfer LCM notify to TP notify event
+	if(event == FB_EVENT_NOTIFY_TP_BLANK){
+		NVT_LOG("%s transfer FB_EVENT_NOTIFY_TP_BLANK\n", __func__);
+		event = FB_EVENT_BLANK;
+	}
+	else if(event == FB_EARLY_EVENT_NOTIFY_TP_BLANK){
+		NVT_LOG("%s transfer FB_EARLY_EVENT_NOTIFY_TP_BLANK\n", __func__);
+		event = FB_EARLY_EVENT_BLANK;
+	}
+#endif
+
 	if (evdata && evdata->data && event == FB_EARLY_EVENT_BLANK) {
 		blank = evdata->data;
 		if (*blank == FB_BLANK_POWERDOWN) {
