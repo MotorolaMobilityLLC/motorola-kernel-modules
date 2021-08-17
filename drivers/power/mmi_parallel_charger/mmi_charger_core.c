@@ -1235,9 +1235,6 @@ static void psy_changed_work_func(struct work_struct *work)
 	if (chip->vbus_present) {
 		mmi_chrg_info(chip, "check all effective pdo info at psy change\n");
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-//                ret = power_supply_get_property(chip->usb_psy,
-//                        POWER_SUPPLY_PROP_CHARGE_TYPE, &val);
-
 		chrg_type = wt6670f_get_charger_type();
 		mmi_chrg_info(chip, "WT6670F return charger type: 0x%x", chrg_type);
                 if (ret) {
@@ -1254,8 +1251,8 @@ static void psy_changed_work_func(struct work_struct *work)
 				break;
 //			case QC3P_27W_CHARGER:
 			case 0x9:
-				chip->pd_volt_max = 11000000;
-				chip->pd_curr_max = 3000000;
+				chip->pd_volt_max = 97000000;
+				chip->pd_curr_max = 3400000;
 				chip->pd_pps_support = true;
 				break;
 			default:
@@ -1282,24 +1279,6 @@ static void psy_changed_work_func(struct work_struct *work)
 	if (chip->vbus_present
 		&& chip->pd_pps_support
 		&& !chip->factory_mode) {
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-		char *chrg_rate_string = NULL;
-                char *envp[2];
-
-                chrg_rate_string = kmalloc(CHG_SHOW_MAX_SIZE, GFP_KERNEL);
-                if (!chrg_rate_string) {
-                       mmi_chrg_err(chip, "SMBMMI: Failed to Get Uevent Mem\n");
-                       envp[0] = NULL;
-                } else {
-                       scnprintf(chrg_rate_string, CHG_SHOW_MAX_SIZE,
-                                "POWER_SUPPLY_CHARGE_RATE=%s",
-                                "Turbo");
-                       envp[0] = chrg_rate_string;
-                       envp[1] = NULL;
-
-		       mmi_power_supply_changed(chip->batt_psy, envp);
-                }
-#endif
 
 		kick_sm(chip, 100);
 	} else {
