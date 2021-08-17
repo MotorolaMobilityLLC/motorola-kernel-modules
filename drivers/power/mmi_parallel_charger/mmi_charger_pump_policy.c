@@ -737,15 +737,15 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 						chip->pd_request_curr,
 						chip->pd_request_volt);
 
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-		if(!chrg_list->chrg_dev[PMIC_SW]->charger_limited){
-			mmi_chrg_sm_move_state(chip, PM_STATE_STOP_CHARGE);
-		} else {
-#endif
+//#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+//		if(!chrg_list->chrg_dev[PMIC_SW]->charger_limited){
+//			mmi_chrg_sm_move_state(chip, PM_STATE_STOP_CHARGE);
+//		} else {
+//#endif
 		        mmi_chrg_sm_move_state(chip, PM_STATE_SW_LOOP);
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-		}
-#endif
+//#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+//		}
+//#endif
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		break;
 	case PM_STATE_SW_LOOP:
@@ -1390,11 +1390,11 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 
 		if (chrg_cv_taper_tunning_cnt > CV_TAPPER_COUNT){
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-			mmi_chrg_sm_move_state(chip, PM_STATE_STOP_CHARGE);
-#else
+//#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+//			mmi_chrg_sm_move_state(chip, PM_STATE_STOP_CHARGE);
+//#else
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_LOOP);
-#endif
+//#endif
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		}
 		break;
