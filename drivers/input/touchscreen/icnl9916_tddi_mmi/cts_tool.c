@@ -86,16 +86,16 @@ struct cts_test_comp_cap_ioctl_data {
 #define CTS_TOOL_IOCTL_TEST_INT_PIN     _IO('C',  0x12)
 #define CTS_TOOL_IOCTL_TEST_DEVICE_TYPE _IOW('C', 0x13, unsigned int)
 #define CTS_TOOL_IOCTL_TEST_FW_VERSION  _IOW('C', 0x14, unsigned short)
-#define CTS_TOOL_IOCTL_TEST_RAWDATA     _IOW('C', 0x15,\
-        struct cts_test_rawdata_ioctl_data *)
-#define CTS_TOOL_IOCTL_TEST_NOISE       _IOW('C', 0x16,\
-        struct cts_test_noise_ioctl_data *)
-#define CTS_TOOL_IOCTL_TEST_OPEN        _IOW('C', 0x17,\
-        struct cts_test_open_ioctl_data *)
-#define CTS_TOOL_IOCTL_TEST_SHORT       _IOW('C', 0x18,\
-        struct cts_test_short_ioctl_data *)
-#define CTS_TOOL_IOCTL_TEST_COMP_CAP    _IOW('C', 0x19,\
-        struct cts_test_comp_cap_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_RAWDATA     \
+	_IOW('C', 0x15, struct cts_test_rawdata_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_NOISE       \
+	_IOW('C', 0x16, struct cts_test_noise_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_OPEN        \
+	_IOW('C', 0x17, struct cts_test_open_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_SHORT       \
+	_IOW('C', 0x18, struct cts_test_short_ioctl_data *)
+#define CTS_TOOL_IOCTL_TEST_COMP_CAP    \
+	_IOW('C', 0x19, struct cts_test_comp_cap_ioctl_data *)
 
 #define CTS_DRIVER_VERSION_CODE ((CFG_CTS_DRIVER_MAJOR_VERSION << 16) | \
         (CFG_CTS_DRIVER_MINOR_VERSION << 8) | \
@@ -636,7 +636,7 @@ static long cts_tool_ioctl(struct file *file, unsigned int cmd,
             return -EFAULT;
 
         return cts_rawdata_test(cts_dev, param.min, param.max);
-	}
+    }
     case CTS_TOOL_IOCTL_TEST_NOISE:{
         struct cts_test_noise_ioctl_data param;
 

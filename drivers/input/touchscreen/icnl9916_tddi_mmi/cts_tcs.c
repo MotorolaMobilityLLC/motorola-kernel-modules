@@ -370,34 +370,6 @@ int cts_tcs_get_esd_method(const struct cts_device *cts_dev, u8 *esd_method)
     return -1;
 }
 
-int cts_tcs_get_auto_compensate(const struct cts_device *cts_dev,
-        u8 *auto_compensate)
-{
-    int ret;
-    u8 buf[4];
-
-    buf[0] = 0x01;
-    buf[1] = 0x14;
-    buf[2] = 0x81;
-    buf[3] = 0x00;
-
-    ret = cts_tcs_spi_write(cts_dev,
-        TP_STD_CMD_TP_DATA_OFFSET_AND_TYPE_CFG_RW,
-        buf, sizeof(buf));
-    if (ret != 0) {
-        return -1;
-    }
-
-    ret = cts_tcs_spi_read(cts_dev,
-        TP_STD_CMD_TP_DATA_OFFSET_AND_TYPE_CFG_RW,
-        auto_compensate, sizeof(u8));
-    if (!ret) {
-        return 0;
-    }
-    return -1;
-
-}
-
 int cts_tcs_get_esd_protection(const struct cts_device *cts_dev,
         u8 *esd_protection)
 {
@@ -424,34 +396,6 @@ int cts_tcs_get_esd_protection(const struct cts_device *cts_dev,
     }
     return -1;
 }
-
-int cts_tcs_get_monitor_mode(const struct cts_device *cts_dev,
-        u8 *monitor_mode)
-{
-    int ret;
-    u8 buf[4];
-
-    buf[0] = 0x01;
-    buf[1] = 0x58;
-    buf[2] = 0x81;
-    buf[3] = 0x00;
-
-    ret = cts_tcs_spi_write(cts_dev,
-        TP_STD_CMD_TP_DATA_OFFSET_AND_TYPE_CFG_RW,
-        buf, sizeof(buf));
-    if (ret != 0) {
-        return -1;
-    }
-
-    ret = cts_tcs_spi_read(cts_dev,
-        TP_STD_CMD_TP_DATA_OFFSET_AND_TYPE_CFG_RW,
-        monitor_mode, sizeof(u8));
-    if (!ret) {
-        return 0;
-    }
-    return -1;
-}
-
 
 int cts_tcs_get_data_ready_flag(const struct cts_device *cts_dev, u8 *ready)
 {
@@ -546,7 +490,7 @@ int cts_tcs_is_cneg_ready(const struct cts_device *cts_dev, u8 *ready)
     int ret;
     u8 buf[1];
 
-    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_SYS_STS_DAT_RDY_FLAG_RW,
+    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_SYS_STS_CNEG_RDY_FLAG_RW,
         buf, sizeof(buf));
     if (!ret) {
         *ready = buf[0];
@@ -727,5 +671,194 @@ int cts_tcs_get_touchinfo(const struct cts_device *cts_dev,
     dump_flag = 1;
 
     return ret;
+}
+
+int cts_tcs_get_workmode(const struct cts_device *cts_dev, u8 *workmode)
+{
+    int ret;
+    u8 buf[1];
+
+    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_SYS_STS_CURRENT_WORKMODE_RO, buf, sizeof(buf));
+    if (!ret) {
+        *workmode = buf[0];
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_set_workmode(const struct cts_device *cts_dev, u8 workmode)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_SYS_STS_WORK_MODE_RW, &workmode, sizeof(workmode));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_set_openshort_mode(const struct cts_device *cts_dev, u8 mode)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_OPENSHORT_MODE_SEL_RW, &mode, sizeof(mode));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_set_tx_vol(const struct cts_device *cts_dev, u8 txvol)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_SYS_STS_VSTIM_LVL_RW, &txvol, sizeof(txvol));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_is_enabled_get_rawdata(const struct cts_device *cts_dev, u8 *enable)
+{
+   int ret;
+   u8 buf[1];
+
+   ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_SYS_STS_DAT_TRANS_IN_NORMAL_RW, buf, sizeof(buf));
+   if (!ret) {
+       *enable = buf[0];
+       return 0;
+   }
+
+   return ret;
+}
+
+int cts_tcs_set_short_test_type(const struct cts_device *cts_dev, u8 short_type)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_OPENSHORT_SHORT_SEL_RW, &short_type, sizeof(short_type));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_is_openshort_enabled(const struct cts_device *cts_dev, u8 *enabled)
+{
+    int ret;
+    u8 buf[1];
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_OPENSHORT_EN_RW, buf, sizeof(buf));
+    if (!ret) {
+        *enabled = buf[0];
+        return 0;
+    }
+
+    return -1;
+}
+
+
+int cts_tcs_set_openshort_enable(const struct cts_device *cts_dev, u8 enable)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_OPENSHORT_EN_RW, &enable, sizeof(enable));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_set_esd_enable(const struct cts_device *cts_dev, u8 enable)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_DDI_ESD_EN_RW, &enable, sizeof(enable));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_is_cneg_enabled(const struct cts_device *cts_dev, u8 *enabled)
+{
+    int ret;
+
+    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_CNEG_EN_RW, enabled, sizeof(*enabled));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_is_mnt_enabled(const struct cts_device *cts_dev, u8 *enabled)
+{
+    int ret;
+
+    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_MNT_EN_RW, enabled, sizeof(*enabled));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_set_cneg_enable(const struct cts_device *cts_dev, u8 enable)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_CNEG_EN_RW, &enable, sizeof(enable));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_set_mnt_enable(const struct cts_device *cts_dev, u8 enable)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_MNT_EN_RW, &enable, sizeof(enable));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
+}
+
+int cts_tcs_is_display_on(const struct cts_device *cts_dev, u8 *display_on)
+{
+    int ret;
+    u8 buf[0];
+
+    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW, buf, sizeof(buf));
+    if (!ret) {
+        *display_on = buf[0];
+        return 0;
+    }
+
+    return ret;
+}
+
+int cts_tcs_set_display_on(const struct cts_device *cts_dev, u8 display_on)
+{
+    int ret;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW, &display_on, sizeof(display_on));
+    if (!ret) {
+        return 0;
+    }
+
+    return -1;
 }
 

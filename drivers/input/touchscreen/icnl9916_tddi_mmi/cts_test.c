@@ -3,6 +3,7 @@
 #include "cts_config.h"
 #include "cts_platform.h"
 #include "cts_core.h"
+#include "cts_tcs.h"
 
 #define CTS_FIRMWARE_WORK_MODE_NORMAL   (0x00)
 #define CTS_FIRMWARE_WORK_MODE_FACTORY  (0x01)
@@ -22,7 +23,7 @@
 
 #define RAWDATA_BUFFER_SIZE(cts_dev) \
     (cts_dev->fwdata.rows * cts_dev->fwdata.cols * 2)
-
+/*
 static int disable_fw_esd_protection(struct cts_device *cts_dev)
 {
     return cts_fw_reg_writeb(cts_dev, 0x8000 + 342, 1);
@@ -170,7 +171,7 @@ static int set_display_state(struct cts_device *cts_dev, bool active)
     }
 
     return 0;
-}
+}*/
 
 static int wait_test_complete(struct cts_device *cts_dev, int skip_frames)
 {
@@ -181,11 +182,11 @@ static int wait_test_complete(struct cts_device *cts_dev, int skip_frames)
     for (i = 0; i < (skip_frames + 1); i++) {
         u8 ready;
 
-        for (j = 0; j < 1000; j++) {
-            mdelay(1);
+        for (j = 0; j < 100; j++) {
+            mdelay(10);
 
             ready = 0;
-            ret = cts_get_data_ready_flag(cts_dev, &ready);
+            ret = cts_tcs_get_data_ready_flag(cts_dev, &ready);
             if (ret) {
                 cts_err("Get data ready flag failed %d", ret);
                 return ret;
@@ -200,7 +201,7 @@ static int wait_test_complete(struct cts_device *cts_dev, int skip_frames)
             return -ETIMEDOUT;
         }
         if (i < skip_frames) {
-            ret = cts_clr_data_ready_flag(cts_dev);
+            ret = cts_tcs_clr_data_ready_flag(cts_dev);
             if (ret) {
                 cts_err("Clr data ready flag failed %d", ret);
                 return ret;
@@ -215,22 +216,15 @@ static int get_test_result(struct cts_device *cts_dev, u16 *result)
 {
     int ret;
 
-    ret = cts_fw_reg_readsb(cts_dev, CTS_DEVICE_FW_REG_RAW_DATA, result,
-                TEST_RESULT_BUFFER_SIZE(cts_dev));
+    ret = cts_get_rawdata(cts_dev, (u8 *)result);
     if (ret) {
         cts_err("Get test result data failed %d", ret);
         return ret;
     }
 
-    ret = cts_clr_data_ready_flag(cts_dev);
-    if (ret) {
-        cts_err("Clear data ready flag failed %d", ret);
-        return ret;
-    }
-
     return 0;
 }
-
+/*
 static int set_fw_test_type(struct cts_device *cts_dev, u8 type)
 {
     int i, ret;
@@ -260,14 +254,14 @@ static int set_fw_test_type(struct cts_device *cts_dev, u8 type)
     }
 
     return ret;
-}
+}*/
 
 struct cts_fw_short_test_param {
     u8 type;
     u32 col_pattern[2];
     u32 row_pattern[2];
 };
-
+/*
 static bool set_short_test_type(struct cts_device *cts_dev, u8 type)
 {
     static struct cts_fw_short_test_param param = {
@@ -303,7 +297,7 @@ static bool set_short_test_type(struct cts_device *cts_dev, u8 type)
     }
 
     return ret;
-}
+}*/
 
 static void dump_test_data(struct cts_device *cts_dev,
         const char *desc, const u16 *data)
@@ -419,40 +413,26 @@ static int test_short_to_gnd(struct cts_device *cts_dev,
 
     cts_info("Test short to GND");
 
-    ret = set_short_test_type(cts_dev, CTS_SHORT_TEST_UNDEFINED);
+    ret = cts_tcs_set_short_test_type(cts_dev, CTS_SHORT_TEST_UNDEFINED);
     if (ret) {
         cts_err("Set short test type to UNDEFINED failed %d", ret);
         return ret;
     }
 
-    ret = set_fw_test_type(cts_dev, CTS_TEST_SHORT);
+    ret = cts_tcs_set_openshort_mode(cts_dev, CTS_TEST_SHORT);
     if (ret) {
         cts_err("Set test type to SHORT failed %d", ret);
         return ret;
     }
 
-    ret = set_fw_work_mode(cts_dev, CTS_FIRMWARE_WORK_MODE_TEST);
+    ret = cts_tcs_set_workmode(cts_dev, CTS_FIRMWARE_WORK_MODE_TEST);
     if (ret) {
         cts_err("Set firmware work mode to WORK_MODE_TEST failed %d",
             ret);
         return ret;
     }
 
-    if (feature_ver <= 3) {
-        u8 val;
-        ret = cts_hw_reg_readb_relaxed(cts_dev, 0x350E2, &val);
-        if (ret) {
-            cts_err("Read 0x350E2 failed %d", ret);
-            return ret;
-        }
-        ret = cts_hw_reg_writeb_relaxed(cts_dev, 0x350E2, val & 0xDB);
-        if (ret) {
-            cts_err("Write 0x350E2 failed %d", ret);
-            return ret;
-        }
-    }
-
-    ret = set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_GND);
+    ret = cts_tcs_set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_GND);
     if (ret) {
         cts_err("Set short test type to SHORT_TO_GND failed %d", ret);
         return ret;
@@ -475,7 +455,7 @@ static int test_short_to_gnd(struct cts_device *cts_dev,
     return validate_test_result(cts_dev, "GND-short", test_result,
                     threshold, USHRT_MAX);
 }
-
+/*
 static int test_short_to_gnd_legacy(struct cts_device *cts_dev,
         u16 *test_result, u16 threshold)
 {
@@ -505,7 +485,7 @@ static int test_short_to_gnd_legacy(struct cts_device *cts_dev,
 
     return validate_test_result(cts_dev, "GND-short", test_result,
                     threshold, USHRT_MAX);
-}
+}*/
 
 static int test_short_between_cols(struct cts_device *cts_dev,
         u16 *test_result, u16 threshold, bool skip_first_frame)
@@ -514,19 +494,19 @@ static int test_short_between_cols(struct cts_device *cts_dev,
 
     cts_info("Test short between columns");
 
-    ret = set_fw_test_type(cts_dev, CTS_TEST_SHORT);
+    ret = cts_tcs_set_openshort_mode(cts_dev, CTS_TEST_SHORT);
     if (ret) {
         cts_err("Set test type to SHORT failed %d", ret);
         return ret;
     }
 
-    ret = set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_COLS);
+    ret = cts_tcs_set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_COLS);
     if (ret) {
         cts_err("Set short test type to BETWEEN_COLS failed %d", ret);
         return ret;
     }
 
-    ret = set_fw_work_mode(cts_dev, CTS_FIRMWARE_WORK_MODE_TEST);
+    ret = cts_tcs_set_workmode(cts_dev, CTS_FIRMWARE_WORK_MODE_TEST);
     if (ret) {
         cts_err("Set firmware work mode to WORK_MODE_TEST failed %d",
             ret);
@@ -548,7 +528,7 @@ static int test_short_between_cols(struct cts_device *cts_dev,
             return ret;
         }
 
-        ret = set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_COLS);
+        ret = cts_tcs_set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_COLS);
         if (ret) {
             cts_err("Set short test type to BETWEEN_COLS failed %d",
                 ret);
@@ -582,14 +562,34 @@ static int test_short_between_rows(struct cts_device *cts_dev,
 
     cts_info("Test short between rows");
 
-    ret = set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_ROWS);
-    if (ret) {
-        cts_err("Set short test type to BETWEEN_ROWS failed %d", ret);
-        return ret;
-    }
-
     loopcnt = cts_dev->hwdata->num_row;
     while (loopcnt > 1) {
+
+        ret = cts_tcs_set_short_test_type(cts_dev, CTS_SHORT_TEST_UNDEFINED);
+        if (ret) {
+            cts_err("Set short test type to UNDEFINED failed %d", ret);
+            return ret;
+        }
+
+        ret = cts_tcs_set_openshort_mode(cts_dev, CTS_TEST_SHORT);
+        if (ret) {
+            cts_err("Set test type to SHORT failed %d", ret);
+            return ret;
+        }
+
+        ret = cts_tcs_set_short_test_type(cts_dev, CTS_SHORT_TEST_BETWEEN_ROWS);
+        if (ret) {
+            cts_err("Set short test type to BETWEEN_ROWS failed %d", ret);
+            return ret;
+        }
+
+        ret = cts_tcs_set_workmode(cts_dev, CTS_FIRMWARE_WORK_MODE_TEST);
+        if (ret) {
+            cts_err("Set firmware work mode to WORK_MODE_TEST failed %d",
+                ret);
+            return ret;
+        }
+
         ret = wait_test_complete(cts_dev, 0);
         if (ret) {
             cts_err("Wait test complete failed %d", ret);
@@ -627,8 +627,7 @@ static int wait_fw_to_normal_work(struct cts_device *cts_dev)
     do {
         u8 work_mode;
 
-        ret = cts_fw_reg_readb(cts_dev, CTS_DEVICE_FW_REG_GET_WORK_MODE,
-            &work_mode);
+        ret = cts_tcs_get_workmode(cts_dev, &work_mode);
         if (ret) {
             cts_err("Get fw curr work mode failed %d", work_mode);
             continue;
@@ -658,25 +657,25 @@ static int prepare_test(struct cts_device *cts_dev)
         return ret;
     }
 
-    ret = disable_fw_esd_protection(cts_dev);
+    ret = cts_tcs_set_esd_enable(cts_dev, 0x00);
     if (ret) {
         cts_err("Disable firmware ESD protection failed %d", ret);
         return ret;
     }
 
-    ret = disable_fw_monitor_mode(cts_dev);
+    ret = cts_tcs_set_mnt_enable(cts_dev, 0x00);
     if (ret) {
         cts_err("Disable firmware monitor mode failed %d", ret);
         return ret;
     }
 
-    ret = disable_fw_auto_compensate(cts_dev);
+    ret = cts_tcs_set_cneg_enable(cts_dev, 0x00);
     if (ret) {
         cts_err("Disable firmware auto compensate failed %d", ret);
         return ret;
     }
 
-    ret = set_fw_work_mode(cts_dev, CTS_FIRMWARE_WORK_MODE_CONFIG);
+    ret = cts_tcs_set_workmode(cts_dev, CTS_FIRMWARE_WORK_MODE_CONFIG);
     if (ret) {
         cts_err("Set firmware work mode to WORK_MODE_CONFIG failed %d",
             ret);
@@ -696,7 +695,7 @@ static void post_test(struct cts_device *cts_dev)
 
     cts_plat_reset_device(cts_dev->pdata);
 
-    ret = set_fw_work_mode(cts_dev, CTS_FIRMWARE_WORK_MODE_NORMAL);
+    ret = cts_tcs_set_workmode(cts_dev, CTS_FIRMWARE_WORK_MODE_NORMAL);
     if (ret) {
         cts_err("Set firmware work mode to WORK_MODE_NORMAL failed %d", ret);
     }
@@ -718,7 +717,7 @@ int cts_short_test(struct cts_device *cts_dev, u16 threshold)
     u16 *test_result = NULL;
     bool recovery_display_state = false;
     u8 need_display_on;
-    u8 feature_ver;
+    u8 feature_ver = 0;
 
     cts_info("Start short test, threshold = %u", threshold);
 
@@ -742,36 +741,31 @@ int cts_short_test(struct cts_device *cts_dev, u16 threshold)
         goto err_free_test_result;
     }
 
-    ret = cts_sram_readb(cts_dev, 0xE8, &feature_ver);
+    ret = cts_tcs_set_workmode(cts_dev, CTS_FIRMWARE_WORK_MODE_FACTORY);
     if (ret) {
-        cts_err("Read firmware feature version failed %d", ret);
-        goto err_free_test_result;
-    }
-    cts_info("Feature version: %u", feature_ver);
-
-    if (feature_ver > 0) {
-        ret = test_short_to_gnd(cts_dev, feature_ver, test_result, threshold);
-    } else {
-        ret = test_short_to_gnd_legacy(cts_dev, test_result, threshold);
-    }
-    if (ret) {
-        cts_err("Short to GND test failed %d", ret);
+        cts_err("Set work mode to factory mode failed %d", ret);
         goto err_free_test_result;
     }
 
-    ret = cts_fw_reg_readb(cts_dev, 0x8000 + 163, &need_display_on);
+    ret = cts_tcs_is_display_on(cts_dev, &need_display_on);
     if (ret) {
         cts_err("Read need display on register failed %d", ret);
         goto err_free_test_result;
     }
 
     if (need_display_on == 0) {
-        ret = set_display_state(cts_dev, false);
+        ret = cts_tcs_set_display_on(cts_dev, 0x00);
         if (ret) {
             cts_err("Set display state to SLEEP failed %d", ret);
             goto err_free_test_result;
         }
         recovery_display_state = true;
+    }
+
+    ret = test_short_to_gnd(cts_dev, feature_ver, test_result, threshold);
+    if (ret) {
+        cts_err("Short to GND test failed %d", ret);
+        goto err_recovery_display_state;
     }
 
     ret = test_short_between_cols(cts_dev, test_result, threshold,
@@ -783,13 +777,13 @@ int cts_short_test(struct cts_device *cts_dev, u16 threshold)
 
     ret = test_short_between_rows(cts_dev, test_result, threshold);
     if (ret) {
-        cts_err("Short between columns test failed %d", ret);
+        cts_err("Short between rows test failed %d", ret);
         goto err_recovery_display_state;
     }
 
 err_recovery_display_state:
     if (recovery_display_state) {
-        int r = set_display_state(cts_dev, true);
+        int r = cts_tcs_set_display_on(cts_dev, 0x01);
         if (r) {
             cts_err("Set display state to ACTIVE failed %d", r);
         }
@@ -838,14 +832,14 @@ int cts_open_test(struct cts_device *cts_dev, u16 threshold)
         goto err_free_test_result;
     }
 
-    ret = cts_fw_reg_readb(cts_dev, 0x8000 + 163, &need_display_on);
+    ret = cts_tcs_is_display_on(cts_dev, &need_display_on);
     if (ret) {
         cts_err("Read need display on register failed %d", ret);
         goto err_free_test_result;
     }
 
     if (need_display_on == 0) {
-        ret = set_display_state(cts_dev, false);
+        ret = cts_tcs_set_display_on(cts_dev, 0x00);
         if (ret) {
             cts_err("Set display state to SLEEP failed %d", ret);
             goto err_free_test_result;
@@ -853,25 +847,19 @@ int cts_open_test(struct cts_device *cts_dev, u16 threshold)
         recovery_display_state = true;
     }
 
-    ret = cts_send_command(cts_dev, CTS_CMD_RECOVERY_TX_VOL);
-    if (ret) {
-        cts_err("Recovery tx voltage failed %d", ret);
-        goto err_recovery_display_state;
-    }
-
-    ret = set_fw_test_type(cts_dev, CTS_TEST_OPEN);
+    ret = cts_tcs_set_openshort_mode(cts_dev, CTS_TEST_OPEN);
     if (ret) {
         cts_err("Set test type to OPEN_TEST failed %d", ret);
         goto err_recovery_display_state;
     }
 
-    ret = set_fw_work_mode(cts_dev, CTS_FIRMWARE_WORK_MODE_TEST);
+    ret = cts_tcs_set_workmode(cts_dev, CTS_FIRMWARE_WORK_MODE_TEST);
     if (ret) {
         cts_err("Set firmware work mode to WORK_MODE_TEST failed %d", ret);
         goto err_recovery_display_state;
     }
 
-    ret = wait_test_complete(cts_dev, 2);
+    ret = wait_test_complete(cts_dev, 20);
     if (ret) {
         cts_err("Wait test complete failed %d", ret);
         goto err_recovery_display_state;
@@ -890,7 +878,7 @@ int cts_open_test(struct cts_device *cts_dev, u16 threshold)
 
 err_recovery_display_state:
     if (recovery_display_state) {
-        int r = set_display_state(cts_dev, true);
+        int r = cts_tcs_set_display_on(cts_dev, 0x01);
         if (r) {
             cts_err("Set display state to ACTIVE failed %d", r);
         }
@@ -1178,13 +1166,13 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 min, u16 max)
     for (i = 0; i < 5; i++) {
         int r;
         u8 val;
-        r = cts_enable_get_rawdata(cts_dev);
+        r = cts_tcs_enable_get_rawdata(cts_dev);
         if (r) {
             cts_err("Enable get ts data failed %d", r);
             continue;
         }
         mdelay(1);
-        r = cts_fw_reg_readb(cts_dev, 0x12, &val);
+        r = cts_tcs_is_enabled_get_rawdata(cts_dev, &val);
         if (r) {
             cts_err("Read enable get ts data failed %d", r);
             continue;
@@ -1200,10 +1188,10 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 min, u16 max)
         goto unlock_device;
     }
 
-    ret = cts_send_command(cts_dev, CTS_CMD_QUIT_GESTURE_MONITOR);
-    if (ret) {
-        cts_err("Send CMD_QUIT_GESTURE_MONITOR failed %d", ret);
-    }
+    //ret = cts_send_command(cts_dev, CTS_CMD_QUIT_GESTURE_MONITOR);
+    //if (ret) {
+    //    cts_err("Send CMD_QUIT_GESTURE_MONITOR failed %d", ret);
+    //}
 
     msleep(50);
     for (i = 0; i < 3; i++) {
@@ -1224,7 +1212,7 @@ int cts_rawdata_test(struct cts_device *cts_dev, u16 min, u16 max)
     }
 
     for (i = 0; i < 5; i++) {
-        int r = cts_disable_get_rawdata(cts_dev);
+        int r = cts_tcs_disable_get_rawdata(cts_dev);
         if (r) {
             cts_err("Disable get rawdata failed %d", r);
             continue;
@@ -1277,13 +1265,13 @@ int cts_noise_test(struct cts_device *cts_dev, u32 frames, u16 max)
     for (i = 0; i < 5; i++) {
         int r;
         u8 val;
-        r = cts_enable_get_rawdata(cts_dev);
+        r = cts_tcs_enable_get_rawdata(cts_dev);
         if (r) {
             cts_err("Enable get ts data failed %d", r);
             continue;
         }
         mdelay(1);
-        r = cts_fw_reg_readb(cts_dev, 0x12, &val);
+        r = cts_tcs_get_data_ready_flag(cts_dev, &val);
         if (r) {
             cts_err("Read enable get ts data failed %d", r);
             continue;
@@ -1299,10 +1287,10 @@ int cts_noise_test(struct cts_device *cts_dev, u32 frames, u16 max)
         goto unlock_device;
     }
 
-    ret = cts_send_command(cts_dev, CTS_CMD_QUIT_GESTURE_MONITOR);
-    if (ret) {
-        cts_err("send quit gesture monitor err");
-    }
+    //ret = cts_send_command(cts_dev, CTS_CMD_QUIT_GESTURE_MONITOR);
+    //if (ret) {
+    //    cts_err("send quit gesture monitor err");
+    //}
 
     msleep(50);
 
@@ -1349,7 +1337,7 @@ int cts_noise_test(struct cts_device *cts_dev, u32 frames, u16 max)
 
 disable_get_tsdata:
     for (i = 0; i < 5; i++) {
-        int r = cts_disable_get_rawdata(cts_dev);
+        int r = cts_tcs_disable_get_rawdata(cts_dev);
         if (r) {
             cts_err("Disable get rawdata failed %d", r);
             continue;

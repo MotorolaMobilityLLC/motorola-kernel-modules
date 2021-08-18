@@ -48,8 +48,6 @@ int cts_tcs_get_esd_method(const struct cts_device *cts_dev, u8 *esd_method);
 
 int cts_tcs_get_touchinfo(const struct cts_device *cts_dev,
         struct cts_device_touch_info *touch_info);
-int cts_tcs_get_auto_compensate(const struct cts_device *cts_dev,
-        u8 *auto_compensate);
 int cts_tcs_get_esd_protection(const struct cts_device *cts_dev,
         u8 *esd_protection);
 int cts_tcs_get_monitor_mode(const struct cts_device *cts_dev,
@@ -58,6 +56,7 @@ int cts_tcs_get_monitor_mode(const struct cts_device *cts_dev,
 int cts_tcs_get_data_ready_flag(const struct cts_device *cts_dev, u8 *ready);
 int cts_tcs_clr_data_ready_flag(const struct cts_device *cts_dev);
 int cts_tcs_enable_get_rawdata(const struct cts_device *cts_dev);
+int cts_tcs_is_enabled_get_rawdata(const struct cts_device *cts_dev, u8 *enable);
 int cts_tcs_disable_get_rawdata(const struct cts_device *cts_dev);
 int cts_tcs_enable_get_cneg(const struct cts_device *cts_dev);
 int cts_tcs_disable_get_cneg(const struct cts_device *cts_dev);
@@ -79,7 +78,22 @@ int cts_tcs_write_fw_reg(const struct cts_device *cts_dev, u32 addr,
         u8 *buf, size_t size);
 
 int cts_tcs_get_fw_id(const struct cts_device *cts_dev, u16 *fwid);
+int cts_tcs_get_workmode(const struct cts_device *cts_dev, u8 *workmode);
+int cts_tcs_set_workmode(const struct cts_device *cts_dev, u8 workmode);
+int cts_tcs_set_openshort_mode(const struct cts_device *cts_dev, u8 mode);
+int cts_tcs_set_tx_vol(const struct cts_device *cts_dev, u8 txvol);
 
+int cts_tcs_set_short_test_type(const struct cts_device *cts_dev, u8 short_type);
+int cts_tcs_set_openshort_enable(const struct cts_device *cts_dev, u8 enable);
+int cts_tcs_is_openshort_enabled(const struct cts_device *cts_dev, u8 *enabled);
+
+int cts_tcs_set_esd_enable(const struct cts_device *cts_dev, u8 enable);
+int cts_tcs_set_cneg_enable(const struct cts_device *cts_dev, u8 enable);
+int cts_tcs_set_mnt_enable(const struct cts_device *cts_dev, u8 enable);
+int cts_tcs_is_display_on(const struct cts_device *cts_dev, u8 *display_on);
+int cts_tcs_set_display_on(const struct cts_device *cts_dev, u8 display_on);
+int cts_tcs_is_cneg_enabled(const struct cts_device *cts_dev, u8 *enabled);
+int cts_tcs_is_mnt_enabled(const struct cts_device *cts_dev, u8 *enabled);
 
 enum TcsCmdIndex
 {
@@ -110,6 +124,18 @@ enum TcsCmdIndex
     TP_STD_CMD_TP_DATA_WR_REG_RAM_SEQUENCE_WO,
     TP_STD_CMD_SYS_STS_READ_RO,
     TP_STD_CMD_SYS_STS_CURRENT_WORKMODE_RO,
+    TP_STD_CMD_SYS_STS_WORK_MODE_RW,
+    TP_STD_CMD_OPENSHORT_MODE_SEL_RW,
+
+    TP_STD_CMD_SYS_STS_VSTIM_LVL_RW,
+    TP_STD_CMD_OPENSHORT_SHORT_SEL_RW,
+    TP_STD_CMD_OPENSHORT_EN_RW,
+    TP_STD_CMD_DDI_ESD_EN_RW,
+    TP_STD_CMD_CNEG_EN_RW,
+
+    TP_STD_CMD_MNT_EN_RW,
+    TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW,
+    TP_STD_CMD_SYS_STS_CNEG_RDY_FLAG_RW,
 };
 
 #ifdef _CTS_TCS_C_
@@ -145,6 +171,18 @@ static TcsCmdValue_t TcsCmdValue[] =
     { 0,  1, 20,  0,  1,  1 }, /* TP_STD_CMD_TP_DATA_WR_REG_RAM_SEQUENCE_WO */
     { 0,  2,  0,  1,  0,  1 }, /* TP_STD_CMD_SYS_STS_READ_RO */
     { 0,  2, 52,  1,  0,  0 }, /* TP_STD_CMD_SYS_STS_CURRENT_WORKMODE_RO */
+    { 0,  2,  1,  1,  1,  0 }, /* TP_STD_CMD_SYS_STS_WORK_MODE_RW */
+    { 0, 11,  2,  1,  1,  0 }, /* TP_STD_CMD_OPENSHORT_MODE_SEL_RW */
+
+    { 0,  2,  8,  1,  1,  0 }, /* TP_STD_CMD_SYS_STS_VSTIM_LVL_RW */
+    { 0, 11,  3,  1,  1,  0 }, /* TP_STD_CMD_OPENSHORT_SHORT_SEL_RW */
+    { 0, 11,  1,  1,  1,  0 }, /* TP_STD_CMD_OPENSHORT_EN_RW */
+    { 0,  5,  1,  1,  1,  0 }, /* TP_STD_CMD_DDI_ESD_EN_RW */
+    { 0,  6,  1,  1,  1,  0 }, /* TP_STD_CMD_CNEG_EN_RW */
+
+    { 0,  4,  1,  1,  1,  0 }, /* TP_STD_CMD_MNT_EN_RW */
+    { 0, 11,  4,  1,  1,  0 }, /* TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW */
+    { 0,  2, 17,  1,  1,  0 }, /* TP_STD_CMD_SYS_STS_CNEG_RDY_FLAG_RW */
 };
 #endif /* _CTS_TCS_C_ */
 
