@@ -720,7 +720,7 @@ static ssize_t monitor_mode_show(struct device *dev,
 
     cts_lock_device(cts_dev);
     /* ret = cts_fw_reg_readb(&cts_data->cts_dev, 0x8000 + 344, &value); */
-    ret = cts_tcs_get_monitor_mode(cts_dev, &value);
+    ret = cts_tcs_is_mnt_enabled(cts_dev, &value);
     cts_unlock_device(cts_dev);
     if (ret) {
         return snprintf(buf, PAGE_SIZE,
@@ -791,7 +791,7 @@ static ssize_t auto_compensate_show(struct device *dev,
 
     cts_lock_device(cts_dev);
     /*ret = cts_fw_reg_readb(&cts_data->cts_dev, 0x8000 + 276, &value);*/
-    ret = cts_tcs_get_auto_compensate(&cts_data->cts_dev, &value);
+    ret = cts_tcs_is_cneg_enabled(&cts_data->cts_dev, &value);
     cts_unlock_device(cts_dev);
     if (ret) {
         return snprintf(buf, PAGE_SIZE,
