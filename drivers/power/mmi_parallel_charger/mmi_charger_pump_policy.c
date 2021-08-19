@@ -479,6 +479,8 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 	int ibus_curr = 0, calculated_vbus = 0,ibus_cov_to_volt = 0, vbus_cov_to_volt = 0;
 	int vbus_volt = 0, volt_change = 0;
+	bool thermal_reset = false;
+	bool skip_qc3p_pdo = true;
 #endif
 
 	mmi_chrg_dbg(chip, PR_MOTO, "\n\n\n");
@@ -677,6 +679,9 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 							chrg_step->chrg_step_cc_curr,
 							chrg_list->chrg_dev[CP_MASTER]->charging_curr_min);
 			mmi_chrg_sm_move_state(chip, PM_STATE_CHRG_PUMP_ENTRY);
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+			skip_qc3p_pdo = true;
+#endif
 
 		} else {
 			mmi_chrg_dbg(chip, PR_MOTO, "Enter into PMIC switch charging, "
@@ -765,6 +770,9 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 							vbatt_volt, chrg_step->pres_chrg_step);
 			mmi_chrg_sm_move_state(chip, PM_STATE_CHRG_PUMP_ENTRY);
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+			skip_qc3p_pdo = true;
+#endif
 		} else {
 			mmi_chrg_dbg(chip, PR_MOTO, "Continue to SW charging, "
 						"vbatt %d uV, ibatt %d uA\n",
@@ -908,28 +916,37 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 				&& ibatt_curr < chrg_step->chrg_step_cc_curr) {
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
                                 mmi_chrg_dbg(chip, PR_MOTO, "pd_request_curr: %dua, pd_curr_max: %dua, chrg_step_cc_curr: %d, pps_curr_steps: %d \n", chip->pd_request_curr, chip->pd_curr_max, chrg_step->chrg_step_cc_curr, chip->pps_curr_steps);
-/*
-				if((chip->pd_curr_max - chip->pd_request_curr) >= (4*chip->pps_curr_steps)){
-//					chip->pd_request_curr += (chip->pd_curr_max - 3*chip->pps_curr_steps - chip->pd_request_curr)/chip->pps_curr_steps * chip->pps_curr_steps;
-					chip->pd_request_curr += 3 * chip->pps_curr_steps;
-				} else {
-					chip->pd_request_curr += chip->pps_curr_steps;
-				}
 
-*/
-				if(chip->pd_request_curr + 3 * chip->pps_curr_steps <= chip->pd_curr_max){
-				chip->pd_request_curr += chip->pps_curr_steps * 3;
-				} else {
-				      chip->pd_request_curr += chip->pps_curr_steps;
-				}
+//				if(chip->pd_request_curr + 2 * chip->pps_curr_steps <= chrg_step->chrg_step_cc_curr){
+//				volt_change = chip->pps_curr_steps * 2;
+//				} else {
+				      volt_change = chip->pps_curr_steps;
+//				}
+
+				chip->pd_request_curr += min(volt_change, chrg_step->chrg_step_cc_curr - ibatt_curr);
+				mmi_chrg_dbg(chip, PR_MOTO, "Increase pps curr %d, volt_chage: %d \n", chip->pd_request_curr, volt_change);
+				volt_change = 0;
 
 #else
 				chip->pd_request_curr += chip->pps_curr_steps;
-#endif
 				mmi_chrg_dbg(chip, PR_MOTO, "Increase pps curr %d\n",
 								chip->pd_request_curr);
+#endif
 				heartbeat_dely_ms = HEARTBEAT_PPS_TUNNING_MS;
 		} else {
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+			if(ibatt_curr > chrg_step->chrg_step_cc_curr){
+                                volt_change = ((ibatt_curr - chrg_step->chrg_step_cc_curr) % 20 == 0) ?
+					(ibatt_curr - chrg_step->chrg_step_cc_curr) :
+					(ibatt_curr - chrg_step->chrg_step_cc_curr + 20);
+
+                                chip->pd_request_curr -= volt_change;
+
+                                mmi_chrg_dbg(chip, PR_MOTO, "Reduce pps curr %d, volt_chage: %d \n", chip->pd_request_curr, volt_change);
+                                volt_change = 0;
+		     	}
+#endif
+
 			mmi_chrg_info(chip,"Enter into tunning pps volt\n");
 			mmi_chrg_sm_move_state(chip, PM_STATE_PPS_TUNNING_VOLT);
 		}
@@ -997,18 +1014,37 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 				}
 */
 				if(chip->pd_request_volt + 5 * chip->pps_volt_steps <= chip->pd_volt_max){
-				        chip->pd_request_volt += 5 * chip->pps_volt_steps;
+				        volt_change = 5 * chip->pps_volt_steps;
 				} else {
-					chip->pd_request_volt += 2 * chip->pps_volt_steps;
+					volt_change = 2 * chip->pps_volt_steps;
 				}
 
+				ibus_curr = (chrg_step->pres_chrg_step == STEP_FIRST) ?
+					chrg_step->chrg_step_cc_curr + chip->step_first_curr_comp:
+					chrg_step->chrg_step_cc_curr;
+
+				chip->pd_request_volt += min(volt_change, ibus_curr - ibatt_curr);
+
+				mmi_chrg_dbg(chip, PR_MOTO, "Increase pps volt %d, volt_change: %d, ibus_curr: %d \n", chip->pd_request_volt, volt_change, ibus_curr);
 #else
 				chip->pd_request_volt += chip->pps_volt_steps;
+				mmi_chrg_dbg(chip, PR_MOTO, "Increase pps volt %d \n", chip->pd_request_volt);
 #endif
-				mmi_chrg_dbg(chip, PR_MOTO, "Increase pps volt %d\n",
-								chip->pd_request_volt);
 				heartbeat_dely_ms = HEARTBEAT_PPS_TUNNING_MS;
 		} else {
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+                        if(ibatt_curr > chrg_step->chrg_step_cc_curr){
+                                volt_change = ((ibatt_curr - chrg_step->chrg_step_cc_curr) % 20 == 0) ?
+                                        (ibatt_curr - chrg_step->chrg_step_cc_curr) :
+                                        (ibatt_curr - chrg_step->chrg_step_cc_curr + 20);
+
+                                chip->pd_request_curr -= volt_change;
+
+                                mmi_chrg_dbg(chip, PR_MOTO, "Reduce pps curr %d, volt_chage: %d \n", chip->pd_request_curr, volt_change);
+                                volt_change = 0;
+                        }
+#endif
+
 			mmi_chrg_info(chip,"Enter into CC loop stage !\n");
 			mmi_chrg_sm_move_state(chip, PM_STATE_CP_CC_LOOP);
 		}
@@ -1024,6 +1060,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		if (pd_constant_power_cnt > PD_CONT_PWR_CNT) {
 			mmi_chrg_info(chip,"PD adapter was ready in constant power state, "
 							"Enter into CC loop stage !\n");
+
 			mmi_chrg_sm_move_state(chip, PM_STATE_CP_CC_LOOP);
 		}
 		mmi_chrg_info(chip, "pd_constant_power_cnt %d, "
@@ -1533,6 +1570,12 @@ schedule:
 	chip->pd_target_curr = min(chip->pd_request_curr, chip->pd_curr_max);
 
 	if (chip->system_thermal_level == THERMAL_NOT_LIMIT) {
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+		if(chip->sys_therm_force_pmic_chrg){
+		        mmi_chrg_info(chip, "sys_therm_force_pmic_chrg is reset!\n");
+			thermal_reset = true;
+		}
+#endif
 		chip->sys_therm_cooling= false;
 		chip->sys_therm_force_pmic_chrg = false;
 	} else if ((chip->system_thermal_level <= chip->thermal_min_level)
@@ -1680,7 +1723,14 @@ schedule:
 		heartbeat_dely_ms = HEARTBEAT_lOOP_WAIT_MS;
 	}
 
+#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+	if (chip->batt_therm_cooling || thermal_reset) {
+		if(thermal_reset){
+			thermal_reset = false;
+		}
+#else
 	if (chip->batt_therm_cooling) {
+#endif
 		chip->pd_target_volt = min(chip->pd_target_volt, chip->pd_batt_therm_volt);
 		chip->pd_target_curr = min(chip->pd_target_curr, chip->pd_batt_therm_curr);
 	}
@@ -1741,6 +1791,9 @@ schedule:
 	}
 
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+	if(skip_qc3p_pdo){
+		goto skip_pd_select;
+	}
 	chip->pps_result = qc3p_select_pdo(chip, chip->pd_target_volt, chip->pd_target_curr);
 
 	vbus_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbus_volt;
@@ -1848,6 +1901,7 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 	int target_vbus_volt = 0;
 	static int retry_cnt = 0;
+//	struct mmi_chrg_step_info *chrg_step;
 	int count = 0;
 #endif
 
@@ -1917,7 +1971,7 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
         //req current step
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
         if(chip->pd_target_curr > chip->pd_request_curr_prev) {  //100mA -> 100mv
-                req_curr_inc_step =  chip->pd_target_curr -chip->pd_request_curr_prev;
+                req_curr_inc_step =  chip->pd_target_curr - chip->pd_request_curr_prev;
                 if(req_curr_inc_step < 0 )
                         req_curr_inc_step = 0;
 
@@ -1959,8 +2013,8 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
                 req_volt_inc_step =  chip->pd_target_volt - vbus_volt * 1000;
 
         mmi_chrg_err(chip, "thermal flag sys_therm_cooling:%d, batt_therm_cooling:%d\n", chip->sys_therm_cooling, chip->batt_therm_cooling);
-	if(chip->sys_therm_cooling || chip->batt_therm_cooling)
-		req_volt_inc_step = 0;
+//	if(chip->sys_therm_cooling || chip->batt_therm_cooling)
+//		req_volt_inc_step = 0;
 #else
         if(chip->pd_target_volt >= chip->pd_request_volt_prev) {
                 req_volt_inc_step =  (chip->pd_target_volt -chip->pd_request_volt_prev)/QC3P_V_STEP;
@@ -1989,23 +2043,18 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 
         mmi_chrg_err(chip, "prev_calculate current inc:%d,dec:%d,voltage inc:%d,dec:%d\n",req_curr_inc_step,req_curr_dec_step,req_volt_inc_step,req_volt_dec_step);
 
-#if 0
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-	real_inc_step = req_volt_inc_step;
-	real_dec_step = req_volt_dec_step;
-#else
         real_inc_step = max(req_volt_inc_step,req_curr_inc_step);
         real_dec_step = max(req_volt_dec_step,req_curr_dec_step);
-#endif
-#else
-        real_inc_step = max(req_volt_inc_step,req_curr_inc_step);
-        real_dec_step = max(req_volt_dec_step,req_curr_dec_step);
-#endif
 
         mmi_chrg_err(chip, "after calculated, voltage inc:%d,dec:%d\n",real_inc_step,real_dec_step);
 
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-        if(real_inc_step > 0
+	if(real_dec_step > 0){
+		target_vbus_volt = vbus_volt - real_dec_step/1000;
+		count -= real_dec_step/20000;
+
+		mmi_chrg_err(chip, "vbus descend to volt: %d, vbus now = %d, count = %d \n", target_vbus_volt, vbus_volt, count);
+	} else if(real_inc_step > 0
                 && (calculated_vbus <= chip->pd_volt_max)
                 && ibus_curr <= chip->pd_curr_max){  //increase
 		target_vbus_volt = vbus_volt + real_inc_step/1000;
@@ -2014,30 +2063,24 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 
 		mmi_chrg_err(chip, "vbus increase to volt: %d, vbus now = %d, count = %d \n", target_vbus_volt, vbus_volt, count);
 	}
-	else{
-		target_vbus_volt = vbus_volt - real_dec_step/1000;
-		count -= real_dec_step/20000;
 
-		mmi_chrg_err(chip, "vbus descend to volt: %d, vbus now = %d, count = %d \n", target_vbus_volt, vbus_volt, count);
-	}
-
-	rc = wt6670f_set_volt_count(count);
+	if(count != 0){
+		rc = wt6670f_set_volt_count(count);
 //        rc = wt6670f_set_voltage(target_vbus_volt);
-        if (rc == 6 && retry_cnt++ < 5) {
-                mmi_chrg_err(chip, "adapter is verifying, retry:%d\n", retry_cnt);
-                udelay(200);
-        }
-        else if(rc != 0){
-                mmi_chrg_err(chip, "wt6670f_set_voltage failed, switch to main charger!\n");
-                mmi_chrg_sm_move_state(chip,PM_STATE_STOP_CHARGE);
-		retry_cnt = 0;
-        }
-	else{
-		retry_cnt = 0;
+                if (rc == 6 && retry_cnt++ < 5) {
+	       		mmi_chrg_err(chip, "adapter is verifying, retry:%d\n", retry_cnt);
+                        udelay(200);
+                } else if(rc != 0){
+                        mmi_chrg_err(chip, "wt6670f_set_voltage failed, switch to main charger!\n");
+                        mmi_chrg_sm_move_state(chip,PM_STATE_STOP_CHARGE);
+		        retry_cnt = 0;
+                } else{
+			retry_cnt = 0;
 
-                chip->pd_target_volt = target_vbus_volt * 1000;
-		chip->pd_request_volt = chip->pd_target_volt;
-		mmi_chrg_err(chip, "after adjust vbus volt, pd_request_volt = %d, target_vbus = %d \n", chip->pd_request_volt, chip->pd_target_volt);
+                        chip->pd_target_volt = target_vbus_volt * 1000;
+		        chip->pd_request_volt = chip->pd_target_volt;
+		        mmi_chrg_err(chip, "after adjust vbus volt, pd_request_volt = %d, target_vbus = %d \n", chip->pd_request_volt, chip->pd_target_volt);
+	        }
 	}
 #else
         //get current dp dm count
