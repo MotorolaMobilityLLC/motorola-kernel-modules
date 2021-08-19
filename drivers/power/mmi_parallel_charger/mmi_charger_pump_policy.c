@@ -480,7 +480,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 	int ibus_curr = 0, calculated_vbus = 0,ibus_cov_to_volt = 0, vbus_cov_to_volt = 0;
 	int vbus_volt = 0, volt_change = 0;
 	bool thermal_reset = false;
-	bool skip_qc3p_pdo = true;
+	bool skip_qc3p_pdo = false;
 #endif
 
 	mmi_chrg_dbg(chip, PR_MOTO, "\n\n\n");
