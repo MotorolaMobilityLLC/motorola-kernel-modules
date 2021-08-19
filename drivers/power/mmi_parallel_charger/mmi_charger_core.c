@@ -1251,8 +1251,8 @@ static void psy_changed_work_func(struct work_struct *work)
 				break;
 //			case QC3P_27W_CHARGER:
 			case 0x9:
-				chip->pd_volt_max = 97000000;
-				chip->pd_curr_max = 3400000;
+				chip->pd_volt_max = 10000000;
+				chip->pd_curr_max = 3100000;
 				chip->pd_pps_support = true;
 				break;
 			default:
