@@ -1271,7 +1271,7 @@ int cts_noise_test(struct cts_device *cts_dev, u32 frames, u16 max)
             continue;
         }
         mdelay(1);
-        r = cts_tcs_get_data_ready_flag(cts_dev, &val);
+        r = cts_tcs_is_enabled_get_rawdata(cts_dev, &val);
         if (r) {
             cts_err("Read enable get ts data failed %d", r);
             continue;
