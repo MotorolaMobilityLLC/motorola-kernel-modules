@@ -423,12 +423,14 @@ static void send_navi_event(struct egisfp_dev_t *egis_dev, int nav_event)
 	switch (nav_event)
 	{
 	case NAVI_EVENT_ON:
-		DEBUG_PRINT(" %s : finger down \n", __func__);
-		input_event = EGIS_NAV_INPUT_FINGER_DOWN;
+		DEBUG_PRINT(" %s : ignore finger down \n", __func__);
+		//input_event = EGIS_NAV_INPUT_FINGER_DOWN;
+		input_event = 0;
 		break;
 	case NAVI_EVENT_OFF:
-		DEBUG_PRINT(" %s : finger up \n", __func__);
-		input_event = EGIS_NAV_INPUT_FINGER_UP;
+		DEBUG_PRINT(" %s : ignore finger up \n", __func__);
+		//input_event = EGIS_NAV_INPUT_FINGER_UP;
+		input_event = 0;
 		break;
 	case NAVI_EVENT_UP:
 		DEBUG_PRINT(" %s : nav swip up \n", __func__);
@@ -455,8 +457,9 @@ static void send_navi_event(struct egisfp_dev_t *egis_dev, int nav_event)
 		input_event = EGIS_NAV_INPUT_DOUBLE_CLICK;
 		break;
 	case NAVI_EVENT_LONG_PRESS:
-		DEBUG_PRINT(" %s : nav finger long press \n", __func__);
-		input_event = EGIS_NAV_INPUT_LONG_PRESS;
+		DEBUG_PRINT(" %s : ignore nav finger long press \n", __func__);
+		//input_event = EGIS_NAV_INPUT_LONG_PRESS;
+		input_event = 0;
 		break;
 	default:
 		DEBUG_PRINT(" %s : unknown nav event: %d \n", __func__, nav_event);
