@@ -3,11 +3,4 @@ EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/power/bq2597x_mmi
 
-ifeq ($(findstring corfu, $(TARGET_PRODUCT)), corfu)
-$(warning jianl: build bq2597x_charger.o)
 obj-m += bq2597x_mmi.o
-bq2597x_mmi-objs += bq2597x_chg_mmi.o
-else
-obj-m += bq2597x_mmi.o
-#bq2597x_mmi-objs += bq2597x_mmi.o
-endif
