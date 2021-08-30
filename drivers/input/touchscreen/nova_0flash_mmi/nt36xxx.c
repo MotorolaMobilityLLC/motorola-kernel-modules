@@ -155,6 +155,7 @@ static int nvt_panel_notifier_callback(struct notifier_block *self, unsigned lon
 uint32_t ENG_RST_ADDR  = 0x7FFF80;
 uint32_t SWRST_N8_ADDR = 0; //read from dtsi
 uint32_t SPI_RD_FAST_ADDR = 0;	//read from dtsi
+uint32_t panel_wakeup = 0;	//read from dtsi
 static int charger_notifier_callback(struct notifier_block *nb, unsigned long val, void *v);
 static int nvt_set_charger(uint8_t charger_on_off);
 static void nvt_charger_notify_work(struct work_struct *work);
@@ -1312,6 +1313,12 @@ static int32_t nvt_parse_dt(struct device *dev)
 	} else {
 		ts->report_gesture_key = 0;
 	}
+	if (of_property_read_bool(np, "novatek,panel_wakeup")) {
+		NVT_LOG("novatek,panel_wakeup set");
+		panel_wakeup = 1;
+	} else {
+		panel_wakeup = 0;
+	}
 
 	return ret;
 
@@ -1831,8 +1838,16 @@ static int nvt_sensor_set_enable(struct sensors_classdev *sensors_cdev,
 	NVT_LOG("Gesture set enable %d!", enable);
 	mutex_lock(&ts->state_mutex);
 	if (enable == 1) {
+		if(panel_wakeup){
+			NVT_LOG("panel_wakeup");
+			is_touchscreen_gesture_open(1);
+		}
 		ts->should_enable_gesture = true;
 	} else if (enable == 0) {
+		if(panel_wakeup){
+			NVT_LOG("panel_wakeup off");
+			is_touchscreen_gesture_open(0);
+		}
 		ts->should_enable_gesture = false;
 	} else {
 		NVT_LOG("unknown enable symbol\n");
