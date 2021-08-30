@@ -329,4 +329,8 @@ extern int nvt_mcu_pen_detect_set(uint8_t pen_detect);
 #ifdef PALM_GESTURE
 extern int nvt_palm_set(bool enabled);
 #endif
+
+#ifdef NVT_SENSOR_EN
+extern void is_touchscreen_gesture_open(int value);
+#endif
 #endif /* _LINUX_NVT_TOUCH_H */
