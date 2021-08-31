@@ -1,0 +1,8 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/kernel-4.14/include
+EXTRA_CFLAGS += -I$(TOP)/kernel-4.14/include/uapi/
+
+aw883xx_dlkm-objs = aw883xx.o aw_monitor.o aw_bin_parse.o aw_device.o aw_init.o aw_calib.o
+obj-m += aw883xx_dlkm.o
+
