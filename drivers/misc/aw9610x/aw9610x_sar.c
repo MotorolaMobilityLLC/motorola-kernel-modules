@@ -1412,6 +1412,7 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned 
 {
 	struct aw9610x *aw9610x = g_aw9610x;
 	uint8_t i = 0;
+        uint32_t data_en = 0;
 
         for (i = 0; i < aw9610x->aw_channel_number; i++)
         {
@@ -1429,6 +1430,8 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned 
 
 	aw9610x->mode = enable;
 	if (aw9610x->mode == AW9610X_ACTIVE_AP_MODE) {
+                aw9610x_i2c_read(aw9610x, REG_SCANCTRL0, &data_en);
+                aw9610x_i2c_write_bits(aw9610x, REG_SCANCTRL0, ~(0x3f << 8), (data_en & 0x3f) << 8);
 		if (aw9610x->mode_flag1 == AW9610X_FUNC_ON)
 			aw9610x_i2c_write(aw9610x, REG_HOSTCTRL1, 1);
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
