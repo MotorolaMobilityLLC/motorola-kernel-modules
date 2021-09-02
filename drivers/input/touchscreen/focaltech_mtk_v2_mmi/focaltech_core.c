@@ -171,6 +171,7 @@ void fts_irq_disable(void)
     if (!fts_data->irq_disabled) {
         disable_irq_nosync(fts_data->irq);
         fts_data->irq_disabled = true;
+        FTS_INFO("disable_irq done\n");
     }
 
     spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
@@ -187,6 +188,7 @@ void fts_irq_enable(void)
     if (fts_data->irq_disabled) {
         enable_irq(fts_data->irq);
         fts_data->irq_disabled = false;
+        FTS_INFO("enable_irq done\n");
     }
 
     spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
@@ -2185,19 +2187,20 @@ static int fts_ts_resume(struct device *dev)
     fts_cable_detect_func(true);
 #endif
 
-    if (ts_data->gesture_mode) {
 #ifdef FOCALTECH_SENSOR_EN
-        if (ts_data->wakeable) {
-            fts_gesture_resume(ts_data);
-            ts_data->wakeable = false;
-            FTS_INFO("Exit from gesture suspend mode.");
-        }
-#else
+    if (ts_data->wakeable) {
         fts_gesture_resume(ts_data);
-#endif
-    } else {
-        fts_irq_enable();
+        ts_data->wakeable = false;
+        FTS_INFO("Exit from gesture suspend mode.");
     }
+#else
+    if (ts_data->gesture_mode) {
+        fts_gesture_resume(ts_data);
+    }
+#endif
+
+    //enable irq when resume
+    fts_irq_enable();
 
     ts_data->suspended = false;
 
