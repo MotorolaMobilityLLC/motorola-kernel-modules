@@ -15,7 +15,7 @@
     (cts_dev->fwdata.rows * cts_dev->fwdata.cols * 2)
 
 #define DIFFDATA_BUFFER_SIZE(cts_dev) \
-    (cts_dev->fwdata.rows * cts_dev->fwdata.cols * 2)
+    ((cts_dev->fwdata.rows + 2) * (cts_dev->fwdata.cols + 2)* 2)
 
 
 static u8 dump_flag = 1;
