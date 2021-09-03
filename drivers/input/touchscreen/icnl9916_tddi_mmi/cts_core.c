@@ -1885,6 +1885,7 @@ bool cts_is_device_suspended(const struct cts_device *cts_dev)
 int cts_suspend_device(struct cts_device *cts_dev)
 {
     int ret;
+	u8 buf;
 
     cts_info("Suspend device");
 
@@ -1900,10 +1901,11 @@ int cts_suspend_device(struct cts_device *cts_dev)
             return ret;
         }
     }
-    ret = cts_send_command(cts_dev,
-        cts_dev->rtdata.gesture_wakeup_enabled ?
-        CTS_CMD_SUSPEND_WITH_GESTURE : CTS_CMD_SUSPEND);
-
+    //ret = cts_send_command(cts_dev,
+    //    cts_dev->rtdata.gesture_wakeup_enabled ?
+    //    CTS_CMD_SUSPEND_WITH_GESTURE : CTS_CMD_SUSPEND);
+    buf = cts_dev->rtdata.gesture_wakeup_enabled ? 2 : 3;
+	ret = cts_tcs_set_pwr_mode(cts_dev, buf);
     if (ret) {
         cts_err("Suspend device failed %d", ret);
 

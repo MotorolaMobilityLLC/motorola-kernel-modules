@@ -94,6 +94,7 @@ int cts_tcs_is_display_on(const struct cts_device *cts_dev, u8 *display_on);
 int cts_tcs_set_display_on(const struct cts_device *cts_dev, u8 display_on);
 int cts_tcs_is_cneg_enabled(const struct cts_device *cts_dev, u8 *enabled);
 int cts_tcs_is_mnt_enabled(const struct cts_device *cts_dev, u8 *enabled);
+int cts_tcs_set_pwr_mode(const struct cts_device *cts_dev, u8 pwr_mode);
 
 enum TcsCmdIndex
 {
@@ -136,6 +137,8 @@ enum TcsCmdIndex
     TP_STD_CMD_MNT_EN_RW,
     TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW,
     TP_STD_CMD_SYS_STS_CNEG_RDY_FLAG_RW,
+
+	TP_STD_CMD_SYS_STS_PWR_STATE_RW,
 };
 
 #ifdef _CTS_TCS_C_
@@ -183,6 +186,7 @@ static TcsCmdValue_t TcsCmdValue[] =
     { 0,  4,  1,  1,  1,  0 }, /* TP_STD_CMD_MNT_EN_RW */
     { 0, 11,  4,  1,  1,  0 }, /* TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW */
     { 0,  2, 17,  1,  1,  0 }, /* TP_STD_CMD_SYS_STS_CNEG_RDY_FLAG_RW */
+    { 0,  2,  4,  1,  1,  1 }, /* TP_STD_CMD_SYS_STS_PWR_STATE_RW */
 };
 #endif /* _CTS_TCS_C_ */
 
