@@ -850,6 +850,16 @@ int cts_tcs_is_display_on(const struct cts_device *cts_dev, u8 *display_on)
     return ret;
 }
 
+int cts_tcs_set_pwr_mode(const struct cts_device *cts_dev, u8 pwr_mode)
+{
+	int ret;
+	u8 buf[0];
+
+	buf[0] = pwr_mode;
+	ret = cts_tcs_spi_write(cts_dev,TP_STD_CMD_SYS_STS_PWR_STATE_RW, buf, 1);
+	return ret;
+}
+
 int cts_tcs_set_display_on(const struct cts_device *cts_dev, u8 display_on)
 {
     int ret;
