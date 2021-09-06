@@ -656,10 +656,11 @@ int32_t nvt_cmd_store(uint8_t u8Cmd)
 #ifdef NOVATECH_PEN_NOTIFIER
 int nvt_mcu_pen_detect_set(uint8_t pen_detect) {
 	int ret = 0;
-
 	if (pen_detect == PEN_DETECTION_PULL) {
+		NVT_LOG("pen detect enable");
 		ret = nvt_cmd_store(ENABLE_PASSIVE_PEN_MODE_CMD);
 	} else if (pen_detect == PEN_DETECTION_INSERT) {
+		NVT_LOG("pen detect disable");
 		ret = nvt_cmd_store(DISABLE_PASSIVE_PEN_MODE_CMD);
 	}
 
