@@ -86,6 +86,7 @@ enum {
 	BQ25968,
 	BQ25970,
 	SC8551,
+	NU2105,
 };
 
 enum {
@@ -1151,11 +1152,22 @@ static int bq2597x_get_adc_data(struct bq2597x *bq, int channel,  int *result)
 {
 	int ret;
 	u16 val;
+	u8 val_l, val_h;
 	s16 t;
 
 	if (channel < 0 || channel >= ADC_MAX_NUM)
 		return -EINVAL;
 
+    if (bq->chip_vendor == NU2105){
+        ret = bq2597x_read_byte(bq, ADC_REG_BASE + (channel << 1), &val_h);
+        ret |= bq2597x_read_byte(bq, ADC_REG_BASE + (channel << 1) + 1, &val_l);
+	    if (ret < 0) {
+		    bq_err("i2c read fail: can't read from channel 0x%02X\n", channel);
+		    return ret;
+	    }
+	    t = val_l + (val_h << 8);
+	    *result = t;
+    } else {
 	ret = bq2597x_read_word(bq, ADC_REG_BASE + (channel << 1), &val);
 	if (ret < 0)
 		return ret;
@@ -1163,7 +1175,7 @@ static int bq2597x_get_adc_data(struct bq2597x *bq, int channel,  int *result)
 	t <<= 8;
 	t |= (val >> 8) & 0xFF;
 	*result = t;
-
+   }
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 	if (bq->chip_vendor == SC8551) {
 #else
@@ -1580,6 +1592,8 @@ static int bq2597x_detect_device(struct bq2597x *bq)
 			bq->chip_vendor = SC8551;
 		else if (data == BQ25968_DEVICE_ID)
 			bq->chip_vendor = BQ25968;
+		else if (data == NU2105_DEVICE_ID)
+			bq->chip_vendor = NU2105;
 		else
 			bq->chip_vendor = BQ25970;
 
@@ -1933,6 +1947,12 @@ static int bq2597x_init_regulation(struct bq2597x *bq)
 
 	if (bq->chip_vendor == SC8551)
 		bq2597x_enable_regulation(bq, false);
+	else if (bq->chip_vendor == NU2105)
+	{
+	    bq2597x_update_bits(bq, BQ2597X_REG_0C,
+				BQ2597X_FREQ_SHIFT_MASK, (0x02 << BQ2597X_FREQ_SHIFT_SHIFT));
+	    bq2597x_enable_regulation(bq, false);
+	}
 	else
 		bq2597x_enable_regulation(bq, true);
 
@@ -2647,7 +2667,8 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 
 	bq_info("client->irq=%d", client->irq);
 	ret = i2c_smbus_read_byte_data(client, BQ2597X_REG_13);
-	if (ret != BQ25968_DEVICE_ID && ret !=SC8551_DEVICE_ID && ret !=BQ25970_DEVICE_ID && ret !=SC8551A_DEVICE_ID) {
+	if (ret != BQ25968_DEVICE_ID && ret !=SC8551_DEVICE_ID && ret !=BQ25970_DEVICE_ID
+		&& ret !=SC8551A_DEVICE_ID && ret != NU2105_DEVICE_ID) {
 		bq_err("failed to communicate with chip\n");
 		return -ENODEV;
 	}
