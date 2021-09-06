@@ -441,6 +441,7 @@
 #define BQ25970_DEVICE_ID				0x10
 #define SC8551_DEVICE_ID				0x00
 #define SC8551A_DEVICE_ID				0x51
+#define NU2105_DEVICE_ID				0xC0
 
 /* Register 14h */
 #define BQ2597X_REG_14					0x14
