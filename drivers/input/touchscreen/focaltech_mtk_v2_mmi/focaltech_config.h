@@ -248,6 +248,12 @@
  */
 #define FTS_POWER_SOURCE_CUST_EN                1
 
+#ifdef FOCALTECH_POWER_RECOVER_EN
+#define  FTS_POWER_DOWN_RECOVER		1
+#else
+#define  FTS_POWER_DOWN_RECOVER		0
+#endif
+
 /****************************************************/
 
 /********************** Upgrade ****************************/
