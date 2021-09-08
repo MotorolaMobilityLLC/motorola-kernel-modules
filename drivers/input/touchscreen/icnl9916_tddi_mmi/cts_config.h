@@ -6,7 +6,7 @@
 #define CFG_CTS_DRIVER_MINOR_VERSION        0
 #define CFG_CTS_DRIVER_PATCH_VERSION        0
 
-#define CFG_CTS_DRIVER_VERSION              "v3.0.7"
+#define CFG_CTS_DRIVER_VERSION              "v3.0.9"
 
 /** Whether reset pin is used */
 #define CFG_CTS_HAS_RESET_PIN
