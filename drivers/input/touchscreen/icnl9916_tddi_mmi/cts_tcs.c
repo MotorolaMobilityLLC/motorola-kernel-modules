@@ -516,8 +516,7 @@ int cts_tcs_quit_guesture_mode(const struct cts_device *cts_dev)
     return ret;
 }
 
-
-int cts_tcs_get_rawdata(const struct cts_device *cts_dev, u8 *buf, size_t size)
+int cts_tcs_get_rawdata(const struct cts_device *cts_dev, u8 *buf)
 {
     int ret;
 
@@ -527,11 +526,21 @@ int cts_tcs_get_rawdata(const struct cts_device *cts_dev, u8 *buf, size_t size)
     return ret;
 }
 
-int cts_tcs_get_diffdata(const struct cts_device *cts_dev, u8 *buf, size_t size)
+int cts_tcs_get_diffdata(const struct cts_device *cts_dev, u8 *buf)
 {
     int ret;
 
     ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_TP_DATA_DIFF_RO, buf,
+        DIFFDATA_BUFFER_SIZE(cts_dev));
+
+    return ret;
+}
+
+int cts_tcs_get_basedata(const struct cts_device *cts_dev, u8 *buf)
+{
+    int ret;
+
+    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_TP_DATA_BASE_RO, buf,
         DIFFDATA_BUFFER_SIZE(cts_dev));
 
     return ret;
@@ -605,6 +614,126 @@ int cts_tcs_write_hw_reg(const struct cts_device *cts_dev, u32 addr,
     return ret;
 
 }
+int cts_tcs_read_ddi_reg(const struct cts_device *cts_dev, u32 addr,
+        u8 *regbuf, size_t size)
+{
+    int ret;
+    u8 buf[2];
+
+    buf[0] = 2;
+    buf[1] = addr;
+
+    ret = cts_tcs_spi_write(cts_dev, TP_STD_CMD_TP_DATA_OFFSET_AND_TYPE_CFG_RW,
+        buf, sizeof(buf));
+    if (ret != 0) {
+        return -1;
+    }
+
+    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_TP_DATA_READ_START_RO,
+        regbuf, size);
+    if (ret != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int cts_tcs_write_ddi_reg(const struct cts_device *cts_dev, u32 addr,
+        u8 *regbuf, size_t size)
+{
+    int ret;
+    u8 *buf;
+
+    buf = kmalloc(size + 6, GFP_KERNEL);
+    if (buf == NULL) {
+        return -ENOMEM;
+    }
+
+    buf[0] = ((size >>  0) & 0xFF);
+    buf[1] = ((size >>  8) & 0xFF);
+    buf[2] = addr;
+    buf[3] = 0;
+    buf[4] = 0;
+    buf[5] = 0;
+    memcpy(buf + 6, regbuf, size);
+
+    ret = cts_tcs_spi_write(cts_dev,
+        TP_STD_CMD_TP_DATA_WR_DDI_REG_SEQUENCE_WO,
+        buf, size + 6);
+    if (ret != 0) {
+        kfree(buf);
+        return -1;
+    }
+
+    kfree(buf);
+
+    return ret;
+
+}
+
+static int cts_tcs_reg_read_pack(u8 *tx, uint16_t cmd, u16 rdatalen)
+{
+    tcs_tx_head *txhdr = (tcs_tx_head *)tx;
+    int packlen = 0;
+    u16 crc16;
+
+    txhdr->addr = TCS_RD_ADDR;
+    txhdr->cmd = cmd;
+    txhdr->datlen = rdatalen;
+    crc16 = cts_crc16((const u8 *)txhdr, offsetof(tcs_tx_head, crc16));
+    txhdr->crc16 = crc16;
+    packlen += sizeof(tcs_tx_head);
+
+    return packlen;
+}
+
+int cts_tcs_read_reg(const struct cts_device *cts_dev, uint16_t cmd,
+        u8 *rbuf, size_t rlen)
+{
+    static u8 tx[2048];
+    int txlen = cts_tcs_reg_read_pack(tx, cmd, rlen);
+
+    cts_tcs_spi_xtrans(cts_dev, tx, txlen, rbuf, rlen + sizeof(tcs_rx_tail));
+
+    return 0;
+}
+
+static int cts_tcs_reg_write_pack(u8 *tx, uint16_t cmd,
+        u8 *wdata, u16 wdatalen)
+{
+    tcs_tx_head *txhdr = (tcs_tx_head *)tx;
+    int packlen = 0;
+    u16 crc16;
+
+    txhdr->addr = TCS_WR_ADDR;
+    txhdr->cmd = cmd;
+    txhdr->datlen = wdatalen;
+    crc16 = cts_crc16((const u8 *)txhdr, offsetof(tcs_tx_head, crc16));
+    txhdr->crc16 = crc16;
+    packlen += sizeof(tcs_tx_head);
+
+    if (wdatalen > 0) {
+        memcpy(tx + sizeof(tcs_tx_head), wdata, wdatalen);
+        crc16 = cts_crc16(wdata, wdatalen);
+        *(tx + sizeof(tcs_tx_head) + wdatalen) = ((crc16 >> 0) & 0xFF);
+        *(tx + sizeof(tcs_tx_head) + wdatalen + 1) = ((crc16 >> 8) & 0xFF);
+        packlen += wdatalen + sizeof(crc16);
+    }
+
+    return packlen;
+}
+
+int cts_tcs_write_reg(const struct cts_device *cts_dev, uint16_t cmd,
+        u8 *wbuf, size_t wlen)
+{
+    static u8 rx[2048];
+    static u8 tx[2048];
+    int txlen = cts_tcs_reg_write_pack(tx, cmd, wbuf, wlen);;
+
+    cts_tcs_spi_xtrans(cts_dev, tx, txlen+wlen, rx, wlen + sizeof(tcs_rx_tail));
+    return 0;
+}
+
 
 int cts_tcs_read_fw_reg(const struct cts_device *cts_dev, u32 addr,
         u8 *regbuf, size_t size)

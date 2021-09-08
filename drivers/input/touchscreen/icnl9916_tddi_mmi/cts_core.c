@@ -1521,8 +1521,7 @@ int cts_get_rawdata(const struct cts_device *cts_dev, void *buf)
     /* Read rawdata */
 read_rawdata:
     do {
-        ret = cts_tcs_get_rawdata(cts_dev, buf,
-            cts_dev->fwdata.rows * cts_dev->fwdata.cols);
+        ret = cts_tcs_get_rawdata(cts_dev, buf);
         if (ret) {
             cts_err("Read rawdata failed %d", ret);
         } else {
@@ -1581,8 +1580,7 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
         goto get_diff_free_buf;
     }
     do {
-        ret = cts_tcs_get_diffdata(cts_dev, cache_buf,
-            (cts_dev->fwdata.rows + 2) * (cts_dev->fwdata.cols + 2) * 2);
+        ret = cts_tcs_get_diffdata(cts_dev, cache_buf);
         if (ret) {
             cts_err("Read diffdata failed %d", ret);
         } else {
@@ -1590,6 +1588,79 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
         }
     } while (--retries > 0);
 
+    if (ret == 0) {
+        for (i = 0; i < cts_dev->fwdata.rows; i++) {
+            for (j = 0; j < cts_dev->fwdata.cols; j++) {
+                ((u8 *) buf)[2 * (i * cts_dev->fwdata.cols + j)] =
+                    cache_buf[2 * ((i + 1) * (cts_dev->fwdata.cols + 2) +
+                           j + 1)];
+                ((u8 *) buf)[2 * (i * cts_dev->fwdata.cols + j) + 1] =
+                    cache_buf[2 * ((i + 1) * (cts_dev->fwdata.cols + 2) +
+                           j + 1) + 1];
+            }
+        }
+    }
+
+    for (i = 0; i < 5; i++) {
+        int r = cts_tcs_clr_data_ready_flag(cts_dev);
+        if (r) {
+            cts_err("Clear data ready flag failed %d", r);
+        } else {
+            break;
+        }
+    }
+
+    if (cts_dev->fwdata.flip_x) {
+        tsdata_flip_x(buf, cts_dev->fwdata.rows, cts_dev->fwdata.cols);
+    }
+    if (cts_dev->fwdata.flip_y) {
+        tsdata_flip_y(buf, cts_dev->fwdata.rows, cts_dev->fwdata.cols);
+    }
+get_diff_free_buf:
+    kfree(cache_buf);
+get_diff_exit:
+    return ret;
+}
+
+int cts_get_basedata(const struct cts_device *cts_dev, void *buf)
+{
+    int i, j, ret;
+    u8 ready;
+    u8 retries = 5;
+    u8 *cache_buf;
+
+    cts_info("Get basedata");
+    cache_buf = kzalloc((cts_dev->fwdata.rows + 2) * (cts_dev->fwdata.cols +
+                              2) * 2, GFP_KERNEL);
+    if (cache_buf == NULL) {
+        cts_err("Get basedata: malloc error");
+        ret = -ENOMEM;
+        goto get_diff_exit;
+    }
+    /** - Wait data ready flag set */
+    for (i = 0; i < 1000; i++) {
+        mdelay(1);
+        ret = cts_tcs_get_data_ready_flag(cts_dev, &ready);
+        if (ret) {
+            cts_err("Get data ready flag failed %d", ret);
+            goto get_diff_free_buf;
+        }
+        if (ready) {
+            break;
+        }
+    }
+    if (i == 1000) {
+        ret = -ETIMEDOUT;
+        goto get_diff_free_buf;
+    }
+    do {
+        ret = cts_tcs_get_basedata(cts_dev, cache_buf);
+        if (ret) {
+            cts_err("Read basedata failed %d", ret);
+        } else {
+            break;
+        }
+    } while (--retries > 0);
     if (ret == 0) {
         for (i = 0; i < cts_dev->fwdata.rows; i++) {
             for (j = 0; j < cts_dev->fwdata.cols; j++) {

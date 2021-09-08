@@ -64,18 +64,27 @@ int cts_tcs_is_cneg_ready(const struct cts_device *cts_dev, u8 *ready);
 
 int cts_tcs_quit_guesture_mode(const struct cts_device *cts_dev);
 
-int cts_tcs_get_rawdata(const struct cts_device *cts_dev, u8 *buf, size_t size);
-int cts_tcs_get_diffdata(const struct cts_device *cts_dev, u8 *buf, size_t size);
+int cts_tcs_get_rawdata(const struct cts_device *cts_dev, u8 *buf);
+int cts_tcs_get_diffdata(const struct cts_device *cts_dev, u8 *buf);
+int cts_tcs_get_basedata(const struct cts_device *cts_dev, u8 *buf);
 int cts_tcs_get_cneg(const struct cts_device *cts_dev, u8 *buf, size_t size);
 
 int cts_tcs_read_hw_reg(const struct cts_device *cts_dev, u32 addr,
         u8 *buf, size_t size);
 int cts_tcs_write_hw_reg(const struct cts_device *cts_dev, u32 addr,
         u8 *buf, size_t size);
+int cts_tcs_read_ddi_reg(const struct cts_device *cts_dev, u32 addr,
+        u8 *regbuf, size_t size);
+int cts_tcs_write_ddi_reg(const struct cts_device *cts_dev, u32 addr,
+        u8 *regbuf, size_t size);
 int cts_tcs_read_fw_reg(const struct cts_device *cts_dev, u32 addr,
         u8 *buf, size_t size);
 int cts_tcs_write_fw_reg(const struct cts_device *cts_dev, u32 addr,
         u8 *buf, size_t size);
+int cts_tcs_read_reg(const struct cts_device *cts_dev, uint16_t cmd,
+        u8 *rbuf, size_t rlen);
+int cts_tcs_write_reg(const struct cts_device *cts_dev, uint16_t cmd,
+        u8 *wbuf, size_t wlen);
 
 int cts_tcs_get_fw_id(const struct cts_device *cts_dev, u16 *fwid);
 int cts_tcs_get_workmode(const struct cts_device *cts_dev, u8 *workmode);
@@ -113,6 +122,7 @@ enum TcsCmdIndex
     TP_STD_CMD_TP_DATA_COORDINATES_RO,
     TP_STD_CMD_TP_DATA_RAW_RO,
     TP_STD_CMD_TP_DATA_DIFF_RO,
+    TP_STD_CMD_TP_DATA_BASE_RO,
     TP_STD_CMD_TP_DATA_CNEG_RO,
     TP_STD_CMD_TP_DATA_OFFSET_AND_TYPE_CFG_RW,
 
@@ -138,7 +148,9 @@ enum TcsCmdIndex
     TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW,
     TP_STD_CMD_SYS_STS_CNEG_RDY_FLAG_RW,
 
-	TP_STD_CMD_SYS_STS_PWR_STATE_RW,
+    TP_STD_CMD_SYS_STS_PWR_STATE_RW,
+    TP_STD_CMD_TP_DATA_WR_REG_RAM_BATCH_WO,
+    TP_STD_CMD_TP_DATA_WR_DDI_REG_SEQUENCE_WO,
 };
 
 #ifdef _CTS_TCS_C_
@@ -162,6 +174,7 @@ static TcsCmdValue_t TcsCmdValue[] =
     { 0,  1,  3,  1,  0,  1 }, /* TP_STD_CMD_TP_DATA_COORDINATES_RO */
     { 0,  1,  4,  1,  0,  1 }, /* TP_STD_CMD_TP_DATA_RAW_RO */
     { 0,  1,  5,  1,  0,  1 }, /* TP_STD_CMD_TP_DATA_DIFF_RO */
+    { 0,  1,  6,  1,  0,  1 }, /* TP_STD_CMD_TP_DATA_BASE_RO */
     { 0,  1, 10,  1,  0,  1 }, /* TP_STD_CMD_TP_DATA_CNEG_RO */
     { 0,  1,  1,  1,  1,  0 }, /* TP_STD_CMD_TP_DATA_OFFSET_AND_TYPE_CFG_RW */
 
@@ -187,6 +200,8 @@ static TcsCmdValue_t TcsCmdValue[] =
     { 0, 11,  4,  1,  1,  0 }, /* TP_STD_CMD_OPENSHORT_SHORT_DISP_ON_EN_RW */
     { 0,  2, 17,  1,  1,  0 }, /* TP_STD_CMD_SYS_STS_CNEG_RDY_FLAG_RW */
     { 0,  2,  4,  1,  1,  1 }, /* TP_STD_CMD_SYS_STS_PWR_STATE_RW */
+    { 0,  1, 21,  0,  1,  1 }, /* TP_STD_CMD_TP_DATA_WR_REG_RAM_BATCH_WO */
+    { 0,  1, 22,  0,  1,  1 }, /* TP_STD_CMD_TP_DATA_WR_DDI_REG_SEQUENCE_WO */
 };
 #endif /* _CTS_TCS_C_ */
 
