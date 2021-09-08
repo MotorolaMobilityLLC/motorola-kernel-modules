@@ -5,6 +5,7 @@
 #include "cts_core.h"
 #include "cts_firmware.h"
 #include "cts_test.h"
+#include "cts_tcs.h"
 
 #ifdef CONFIG_CTS_LEGACY_TOOL
 
@@ -18,13 +19,14 @@ struct cts_tool_cmd {
     u8 retry;
     u32 data_len;
     u8 addr_len;
-    u8 addr[2];
+    u8 addr[4];
+    u8 tcs[2];
     u8 data[PAGE_SIZE];
 
 };
 #pragma pack()
 
-#define CTS_TOOL_CMD_HEADER_LENGTH            (12)
+#define CTS_TOOL_CMD_HEADER_LENGTH            (16)
 
 enum cts_tool_cmd_code {
     CTS_TOOL_CMD_GET_PANEL_PARAM = 0,
@@ -39,6 +41,10 @@ enum cts_tool_cmd_code {
     CTS_TOOL_CMD_READ_ICTYPE = 22,
     CTS_TOOL_CMD_I2C_DIRECT_READ = 24,
     CTS_TOOL_CMD_GET_DRIVER_INFO = 26,
+    CTS_TOOL_CMD_TCS_READ_HW_CMD = 28,
+    CTS_TOOL_CMD_TCS_READ_DDI_CMD = 30,
+    CTS_TOOL_CMD_TCS_READ_FW_CMD = 32,
+    CTS_TOOL_CMD_GET_BASE_DATA = 34,
 
     CTS_TOOL_CMD_UPDATE_PANEL_PARAM_IN_SRAM = 1,
     CTS_TOOL_CMD_DOWNLOAD_FIRMWARE_WITH_FILENAME = 3,
@@ -47,6 +53,11 @@ enum cts_tool_cmd_code {
     CTS_TOOL_CMD_WRITE_HOSTCOMM_MULTIBYTE = 15,
     CTS_TOOL_CMD_WRITE_PROGRAM_MODE_MULTIBYTE = 17,
     CTS_TOOL_CMD_I2C_DIRECT_WRITE = 19,
+    CTS_TOOL_CMD_TCS_WRITE_HW_CMD = 21,
+    CTS_TOOL_CMD_TCS_WRITE_DDI_CMD = 23,
+    CTS_TOOL_CMD_TCS_WRITE_FW_CMD = 25,
+    CTS_TOOL_CMD_TCS_ENABLE_GET_RAWDATA_CMD = 27,
+    CTS_TOOL_CMD_TCS_DISABLE_GET_RAWDATA_CMD = 29,
 
 };
 
@@ -132,7 +143,19 @@ static ssize_t cts_tool_read(struct file *file,
     cts_dev = &cts_data->cts_dev;
     cts_lock_device(cts_dev);
 
+    cts_info("read: flag:%d, addr:0x%06x, tcm:0x%04x, datalen:%d",
+        cmd->cmd, get_unaligned_le32(cmd->addr), get_unaligned_le16(cmd->tcs), cmd->data_len);
+
     switch (cmd->cmd) {
+    case CTS_TOOL_CMD_TCS_READ_HW_CMD:
+        cts_tcs_read_hw_reg(cts_dev, get_unaligned_le32(cmd->addr), cmd->data, cmd->data_len);
+        break;
+    case CTS_TOOL_CMD_TCS_READ_DDI_CMD:
+        cts_tcs_read_ddi_reg(cts_dev, get_unaligned_le32(cmd->addr), cmd->data, cmd->data_len);
+        break;
+    case CTS_TOOL_CMD_TCS_READ_FW_CMD:
+        cts_tcs_read_reg(cts_dev, get_unaligned_le16(cmd->tcs), cmd->data, cmd->data_len);
+        break;
     case CTS_TOOL_CMD_GET_PANEL_PARAM:
         cts_info("Get panel param len: %u", cmd->data_len);
         ret = cts_get_panel_param(cts_dev, cmd->data, cmd->data_len);
@@ -149,36 +172,23 @@ static ssize_t cts_tool_read(struct file *file,
 
     case CTS_TOOL_CMD_GET_RAW_DATA:
     case CTS_TOOL_CMD_GET_DIFF_DATA:
-        cts_dbg("Get %s data row: %u col: %u len: %u",
+    case CTS_TOOL_CMD_GET_BASE_DATA:
+        cts_info("Get %s data row: %u col: %u len: %u",
             cmd->cmd == CTS_TOOL_CMD_GET_RAW_DATA ? "raw" : "diff",
             cmd->addr[1], cmd->addr[0], cmd->data_len);
-
-        ret = cts_enable_get_rawdata(cts_dev);
-        if (ret) {
-            cts_err("Enable read raw/diff data failed %d", ret);
-            break;
-        }
-        mdelay(1);
 
         if (cmd->cmd == CTS_TOOL_CMD_GET_RAW_DATA) {
             ret = cts_get_rawdata(cts_dev, cmd->data);
         } else if (cmd->cmd == CTS_TOOL_CMD_GET_DIFF_DATA) {
             ret = cts_get_diffdata(cts_dev, cmd->data);
+        } else if (cmd->cmd == CTS_TOOL_CMD_GET_BASE_DATA) {
+            ret = cts_get_basedata(cts_dev, cmd->data);
         }
         if (ret) {
             cts_err("Get %s data failed %d",
-                cmd->cmd ==
-                CTS_TOOL_CMD_GET_RAW_DATA ? "raw" : "diff",
-                ret);
-            break;
+                cmd->cmd == CTS_TOOL_CMD_GET_RAW_DATA ? "raw" :
+                cmd->cmd == CTS_TOOL_CMD_GET_DIFF_DATA ? "diff" : "base", ret);
         }
-
-        ret = cts_disable_get_rawdata(cts_dev);
-        if (ret) {
-            cts_err("Disable read raw/diff data failed %d", ret);
-            break;
-        }
-
         break;
 
     case CTS_TOOL_CMD_READ_HOSTCOMM:
@@ -365,6 +375,10 @@ static ssize_t cts_tool_write(struct file *file,
 
     cmd = &cts_tool_cmd;
     ret = copy_from_user(cmd, buffer, CTS_TOOL_CMD_HEADER_LENGTH);
+    cts_info("write: flag:%d, addr:0x%06x, tcmd:0x%04x data:0x%02x, datalen:%d",
+        cmd->cmd, get_unaligned_le32(cmd->addr), get_unaligned_le16(cmd->tcs),
+        cmd->data[0], cmd->data_len);
+
     if (ret) {
         cts_err("Copy command header from user buffer failed %d", ret);
         return -EIO;
@@ -398,6 +412,29 @@ static ssize_t cts_tool_write(struct file *file,
     cts_lock_device(cts_dev);
 
     switch (cmd->cmd) {
+    case CTS_TOOL_CMD_TCS_WRITE_HW_CMD:
+        cts_tcs_write_hw_reg(cts_dev, get_unaligned_le32(cmd->addr),
+            cmd->data, cmd->data_len);
+        break;
+    case CTS_TOOL_CMD_TCS_WRITE_DDI_CMD:
+        cts_tcs_write_ddi_reg(cts_dev, get_unaligned_le32(cmd->addr),
+            cmd->data, cmd->data_len);
+        break;
+    case CTS_TOOL_CMD_TCS_WRITE_FW_CMD:
+        cts_tcs_write_reg(cts_dev, get_unaligned_le16(cmd->tcs), cmd->data, cmd->data_len);
+        break;
+    case CTS_TOOL_CMD_TCS_ENABLE_GET_RAWDATA_CMD:
+        cts_info("Enable touch data");
+        ret = cts_tcs_enable_get_rawdata(cts_dev);
+        if (ret)
+            cts_err("Enable get touch data failed");
+	break;
+    case CTS_TOOL_CMD_TCS_DISABLE_GET_RAWDATA_CMD:
+        cts_info("Disable touch data");
+        ret = cts_tcs_disable_get_rawdata(cts_dev);
+        if (ret)
+            cts_err("Disable get touch data failed");
+        break;
     case CTS_TOOL_CMD_UPDATE_PANEL_PARAM_IN_SRAM:
         cts_info("Write panel param len %u data\n", cmd->data_len);
         ret = cts_fw_reg_writesb(cts_dev, CTS_DEVICE_FW_REG_PANEL_PARAM,

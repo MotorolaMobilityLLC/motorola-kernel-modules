@@ -611,6 +611,7 @@ extern int cts_enable_get_rawdata(const struct cts_device *cts_dev);
 extern int cts_disable_get_rawdata(const struct cts_device *cts_dev);
 extern int cts_get_rawdata(const struct cts_device *cts_dev, void *buf);
 extern int cts_get_diffdata(const struct cts_device *cts_dev, void *buf);
+extern int cts_get_basedata(const struct cts_device *cts_dev, void *buf);
 extern int cts_get_compensate_cap(struct cts_device *cts_dev, u8 *cap);
 extern int cts_get_fwid(struct cts_device *cts_dev, u16 *fwid);
 extern int cts_get_hwid(struct cts_device *cts_dev, u32 *hwid);
