@@ -1212,7 +1212,13 @@ static int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
 
     FTS_FUNC_ENTER();
     if (enable) {
+#if FTS_POWER_DOWN_RECOVER
+        if (ts_data->power_disabled || ts_data->power_recover) {
+            if (ts_data->power_recover)
+                FTS_INFO("enable for power_recover\n");
+#else
         if (ts_data->power_disabled) {
+#endif
             FTS_DEBUG("regulator enable !");
             if(!ts_data->rst_high)
                 gpio_direction_output(ts_data->pdata->reset_gpio, 0);
@@ -1230,6 +1236,9 @@ static int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
                     FTS_ERROR("enable vcc_i2c regulator failed,ret=%d", ret);
                 }
             }
+            else
+                FTS_INFO("vcc_i2c err/null !");
+
             ts_data->power_disabled = false;
         }
     } else {
@@ -1324,6 +1333,7 @@ static int fts_power_source_exit(struct fts_ts_data *ts_data)
     fts_pinctrl_select_release(ts_data);
 #endif
 
+    FTS_INFO("enter, fts_power_source_ctrl DISABLE\n");
     fts_power_source_ctrl(ts_data, DISABLE);
 
     if (!IS_ERR_OR_NULL(ts_data->vdd)) {
@@ -1520,6 +1530,11 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
                         0, &pdata->reset_gpio_flags);
     if (pdata->reset_gpio < 0)
         FTS_ERROR("Unable to get reset_gpio");
+
+    pdata->vdd_gpio = of_get_named_gpio_flags(np, "focaltech,vdd-gpio",
+                        0, &pdata->vdd_gpio_flags);
+    if (pdata->vdd_gpio)
+        FTS_INFO("get vdd_gpio:%d\n", pdata->vdd_gpio);
 
     pdata->irq_gpio = of_get_named_gpio_flags(np, "focaltech,irq-gpio",
                       0, &pdata->irq_gpio_flags);
@@ -2087,6 +2102,38 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     return 0;
 }
 
+#if FTS_POWER_DOWN_RECOVER
+static int fts_ts_recover_power_gpio(struct fts_ts_data *ts_data)
+{
+    int ret = -1;
+
+    if (!ts_data->pdata->vdd_gpio) {
+        FTS_INFO("vdd_gpio null or not set");
+        return ret;
+    }
+
+    // recover vdd gpio
+    if (gpio_is_valid(ts_data->pdata->vdd_gpio)) {
+        gpio_free(ts_data->pdata->vdd_gpio);
+        ret = gpio_request(ts_data->pdata->vdd_gpio, "fts_vdd_gpio");
+        if (ret) {
+            FTS_ERROR("gpio_request vdd gpio request failed");
+        }
+        else {
+            // pull up power gpio
+            ret = gpio_direction_output(ts_data->pdata->vdd_gpio, 1);
+            FTS_INFO("set_direction for vdd gpio ret:%d", ret);
+        }
+
+        gpio_free(ts_data->pdata->vdd_gpio);
+    }
+    else
+        FTS_ERROR("vdd_gpio invalid\n");
+
+    return ret;
+}
+#endif
+
 static int fts_ts_suspend(struct device *dev)
 {
     int ret = 0;
@@ -2118,16 +2165,41 @@ static int fts_ts_suspend(struct device *dev)
 #endif
 
     if (ts_data->gesture_mode) {
-        fts_gesture_suspend(ts_data);
+        ret = fts_gesture_suspend(ts_data);
 #ifdef FOCALTECH_SENSOR_EN
         ts_data->wakeable = true;
         FTS_INFO("Enter gesture suspend mode.");
+#endif
+#if FTS_POWER_DOWN_RECOVER
+        if (ret < 0) {
+            FTS_ERROR("fts_gesture_suspend ret=%d, try recover power", ret);
+            ret = fts_ts_recover_power_gpio(ts_data);
+            if (!ret) {
+                FTS_INFO("fts_ts_recover_power_gpio done, try suspend again\n");
+                fts_gesture_suspend(ts_data);
+            }
+        }
 #endif
     } else {
         fts_irq_disable();
 
         FTS_INFO("make TP enter into sleep mode");
         ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
+#if FTS_POWER_DOWN_RECOVER
+        if (ret < 0) {
+            FTS_ERROR("fts_write_reg fail, ret=%d, try recover power", ret);
+            ret = fts_ts_recover_power_gpio(ts_data);
+            if (!ret) {
+                int i = 0;
+                for (i = 0; i < 5; i++) {
+                    msleep(1);
+                    ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
+                    if (!ret)
+                        break;
+                }
+            }
+        }
+#endif
         if (ret < 0)
             FTS_ERROR("set TP to sleep mode fail, ret=%d", ret);
 
@@ -2153,6 +2225,10 @@ static int fts_ts_suspend(struct device *dev)
 static int fts_ts_resume(struct device *dev)
 {
     struct fts_ts_data *ts_data = fts_data;
+    int ret;
+#if FTS_POWER_SOURCE_CUST_EN
+    int ret_pwr_resume = 0;
+#endif
 
 #ifdef FOCALTECH_SENSOR_EN
     mutex_lock(&ts_data->state_mutex);
@@ -2169,14 +2245,39 @@ static int fts_ts_resume(struct device *dev)
 
     fts_release_all_finger();
 
+#if FTS_POWER_DOWN_RECOVER
+    ts_data->power_recover = false;
+#endif
+
     if (!ts_data->ic_info.is_incell) {
 #if FTS_POWER_SOURCE_CUST_EN
-        fts_power_source_resume(ts_data);
+        ret_pwr_resume = fts_power_source_resume(ts_data);
+        if (ret_pwr_resume)
+            FTS_DEBUG("fts_power_source_resume fail, ret=%d", ret_pwr_resume);
 #endif
         fts_reset_proc(200);
     }
 
-    fts_wait_tp_to_valid();
+    ret = fts_wait_tp_to_valid();
+    if (ret) {
+        FTS_DEBUG("fts_wait_tp_to_valid fail, ret=%d", ret);
+#if FTS_POWER_DOWN_RECOVER
+        //TP not ready, recover power
+        ret = fts_ts_recover_power_gpio(ts_data);
+        if (!ret) {
+            // power gpio recover done, recheck TP
+            fts_wait_tp_to_valid();
+        }
+
+        if (ret_pwr_resume) {
+            FTS_INFO("fts_power_source_resume recover");
+            ts_data->power_recover = true;
+            fts_power_source_resume(ts_data);
+            ts_data->power_recover = false;
+        }
+#endif
+    }
+
     fts_ex_mode_recovery(ts_data);
 
 #if FTS_ESDCHECK_EN
