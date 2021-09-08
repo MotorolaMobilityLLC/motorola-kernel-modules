@@ -29,6 +29,10 @@ ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_MMI_ENABLE_DOUBLE_TAP)),)
 	EXTRA_CFLAGS += -DFOCALTECH_SENSOR_EN
 endif
 
+ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_POWER_RECOVER_EN)),)
+	EXTRA_CFLAGS += -DFOCALTECH_POWER_RECOVER_EN
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_FTS_TEST_SUPPORT)),)
 	EXTRA_CFLAGS += -DFTS_TEST_SUPPORT
 	focaltech_mtk_v2_mmi-objs += focaltech_test/focaltech_test.o
