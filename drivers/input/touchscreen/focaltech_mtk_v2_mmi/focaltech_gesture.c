@@ -476,7 +476,7 @@ void fts_gesture_recovery(struct fts_ts_data *ts_data)
 
 int fts_gesture_suspend(struct fts_ts_data *ts_data)
 {
-    int i = 0;
+    int i = 0, ret = 0;
     u8 state = 0xFF;
 
     FTS_FUNC_ENTER();
@@ -491,7 +491,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
         fts_write_reg(0xD6, 0xFF);
         fts_write_reg(0xD7, 0xFF);
         fts_write_reg(0xD8, 0xFF);
-        fts_write_reg(FTS_REG_GESTURE_EN, ENABLE);
+        ret = fts_write_reg(FTS_REG_GESTURE_EN, ENABLE);
         msleep(1);
         fts_read_reg(FTS_REG_GESTURE_EN, &state);
         if (state == ENABLE)
@@ -504,7 +504,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
         FTS_INFO("Enter into gesture(suspend) successfully");
 
     FTS_FUNC_EXIT();
-    return 0;
+    return ret;
 }
 
 int fts_gesture_resume(struct fts_ts_data *ts_data)

@@ -137,6 +137,8 @@ struct fts_ts_platform_data {
     u32 irq_gpio_flags;
     u32 reset_gpio;
     u32 reset_gpio_flags;
+    u32 vdd_gpio;
+    u32 vdd_gpio_flags;
     bool have_key;
     u32 key_number;
     u32 keys[FTS_MAX_KEYS];
@@ -209,6 +211,9 @@ struct fts_ts_data {
     bool fw_loading;
     bool irq_disabled;
     bool power_disabled;
+#if FTS_POWER_DOWN_RECOVER
+    bool power_recover;
+#endif
     bool glove_mode;
     bool cover_mode;
     bool charger_mode;
