@@ -828,10 +828,38 @@ static ssize_t vendor_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "goodix");
 }
 
+static ssize_t ic_ver_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct goodix_ts_device *ts_dev = dev_get_drvdata(dev);
+	struct goodix_ts_version chip_ver;
+	int r, cnt = 0;
+
+	if (!ts_dev) {
+		ts_info("ts_dev null!");
+		return 0;
+	}
+
+	if (ts_dev->hw_ops && ts_dev->hw_ops->read_version) {
+		r = ts_dev->hw_ops->read_version(ts_dev, &chip_ver);
+		if (!r && chip_ver.valid) {
+			cnt = scnprintf(buf, PAGE_SIZE,
+				"Product ID: %s\nBuild ID: %02x%02x%02x%02x\nSensID: %02x\n",
+				chip_ver.pid, chip_ver.vid[0],
+				chip_ver.vid[1], chip_ver.vid[2],
+				chip_ver.vid[3], chip_ver.sensor_id);
+		}
+	}
+	else
+		ts_info("read_version null!");
+
+	return cnt;
+}
 
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
+	__ATTR_RO(ic_ver),
 	__ATTR_NULL
 };
 
