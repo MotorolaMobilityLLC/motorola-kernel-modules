@@ -1014,8 +1014,10 @@ int egisfp_platforminit(struct egisfp_dev_t *egis_dev)
 						ERROR_PRINT(" %s : can't find fingerprint pinctrl egis_vcc_low \n", __func__);
 						goto egisfp_pinctrl_fail;
 					}
+#ifndef EGIS_SHARE_GPIO
 					if (pinctrl_select_state(egis_dev->pinctrl, egis_dev->vcc_low))
 						goto egisfp_pinctrl_fail;
+#endif
 				}
 			}
 
