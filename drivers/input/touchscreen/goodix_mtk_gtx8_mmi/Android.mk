@@ -13,3 +13,9 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
+include $(CLEAR_VARS)
+LOCAL_MODULE := goodix_mtk_gtx8_gesture_mmi.ko
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
+include $(DLKM_DIR)/AndroidKernelModule.mk
+
