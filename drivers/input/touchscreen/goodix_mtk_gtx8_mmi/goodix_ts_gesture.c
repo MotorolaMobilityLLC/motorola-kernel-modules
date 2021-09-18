@@ -337,7 +337,7 @@ static int gsx_gesture_ist(struct goodix_ts_core *core_data,
 	else
 		gsx_type = temp_data[2];
 
-	if (gsx_type == 0xCC) {		/* double tap */
+	if ((gsx_type == 0x4C) || (gsx_type == 0xCC)) {		/* 0x4C;single tap; 0xCC:double tap; */
 		/* do resume routine */
 		ts_info("Gesture match success, resume IC");
 		input_report_key(core_data->input_dev, KEY_POWER, 1);
