@@ -2364,6 +2364,25 @@ err_finger:
 	return r;
 }
 
+static int goodix_ts_parse_dt(struct device *dev, struct goodix_ts_core *ts_data)
+{
+	int ret = 0;
+	struct device_node *np = dev->of_node;
+
+	if (!ts_data || !np) {
+		ts_info("input NULL\n");
+		return -1;
+	}
+
+#ifdef GOODIX_SENSOR_EN
+	ts_data->report_gesture_key = of_property_read_bool(np, "goodix,report_gesture_key");
+	if (ts_data->report_gesture_key)
+		ts_info("report_gesture_key set\n");
+#endif
+
+	return ret;
+}
+
 /**
  * goodix_ts_probe - called by kernel when Goodix touch
  *  platform driver is added.
@@ -2391,6 +2410,8 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	}
 
 	goodix_core_data = core_data;
+	goodix_ts_parse_dt(ts_device->dev, core_data);
+
 	goodix_core_module_init();
 	/* touch core layer is a platform driver */
 	core_data->pdev = pdev;
