@@ -49,6 +49,10 @@
 #include <linux/fb.h>
 #endif
 
+#ifdef GOODIX_SENSOR_EN
+#include <linux/sensors.h>
+#endif
+
 #define GOODIX_FLASH_CONFIG_WITH_ISP	1
 /* macros definition */
 #define GOODIX_CORE_DRIVER_NAME		"goodix_ts"
@@ -327,6 +331,14 @@ enum goodix_cfg_bin_state {
 	CFG_BIN_STATE_TEMP, /* config bin need reparse */
 };
 
+#ifdef GOODIX_SENSOR_EN
+struct gtx_sensor_platform_data {
+    struct input_dev *input_sensor_dev;
+    struct sensors_classdev ps_cdev;
+    struct goodix_ts_board_data *data;
+};
+#endif
+
 /*
  * struct goodix_ts_device - ts device data
  * @name: device name
@@ -438,6 +450,12 @@ struct goodix_ts_core {
 	int initialized;
 	int init_stage;
 	int gesture_enable;
+#ifdef GOODIX_SENSOR_EN
+	bool report_gesture_key;
+	struct mutex state_mutex;
+	struct goodix_sensor_platform_data *sensor_pdata;
+#endif
+
 	u8 lockdown_info[GOODIX_LOCKDOWN_SIZE];
 	struct platform_device *pdev;
 	struct goodix_ts_device *ts_dev;
@@ -504,6 +522,16 @@ struct goodix_ext_module_funcs {
 	int (*irq_event)(struct goodix_ts_core *core_data,
 			 struct goodix_ext_module *module);
 };
+
+#ifdef GOODIX_SENSOR_EN
+struct goodix_sensor_platform_data {
+	struct input_dev *input_sensor_dev;
+	struct sensors_classdev ps_cdev;
+	int sensor_opened;
+	char sensor_data; /* 0 near, 1 far */
+	struct goodix_ts_core *data;
+};
+#endif
 
 /*
  * struct goodix_ext_module - external module struct

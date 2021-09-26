@@ -14,6 +14,10 @@ goodix_mtk_gtx8_mmi-objs = goodix_ts_i2c.o goodix_ts_core.o goodix_ts_test.o goo
 obj-m += goodix_mtk_gtx8_ts_tools_mmi.o
 goodix_mtk_gtx8_ts_tools_mmi-objs = goodix_ts_tools.o
 
+ifneq ($(filter m y,$(CONFIG_INPUT_GTX_MTK_MMI_ENABLE_DOUBLE_TAP)),)
+	EXTRA_CFLAGS += -DGOODIX_SENSOR_EN
+
 obj-m += goodix_mtk_gtx8_gesture_mmi.o
 goodix_mtk_gtx8_gesture_mmi-objs = goodix_ts_gesture.o
+endif
 
