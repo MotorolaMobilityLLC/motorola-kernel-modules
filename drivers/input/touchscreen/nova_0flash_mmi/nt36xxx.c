@@ -1349,6 +1349,10 @@ static int32_t nvt_parse_dt(struct device *dev)
 	if (of_property_read_bool(np, "novatek,usb_charger")) {
 		NVT_LOG("novatek,usb_charger set");
 		ts->charger_detection_enable = 1;
+		if(of_property_read_bool(np, "novatek,usb-psp-online")) {
+			NVT_LOG("novatek,usb-psp-online set\n");
+			ts->usb_psp_online = 1;
+		}
 	} else {
 		ts->charger_detection_enable = 0;
 	}
@@ -2524,10 +2528,27 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		 */
 		psy = power_supply_get_by_name("usb");
 		if (psy) {
-			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
+			if (ts->usb_psp_online) {
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
+				if (ret < 0)
+					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
+			} else {
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
+				if (ret < 0)
+					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
+			}
 			if (ret < 0) {
-				NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
-				goto err_register_charger_notify_failed;
+				//release charger_detection instead of goto err_register_charger_notify_failed
+				//to NOT interrupt NVT probe process
+				//goto err_register_charger_notify_failed;
+				if (ts->charger_detection) {
+					if (ts->charger_detection->charger_notif.notifier_call)
+						power_supply_unreg_notifier(&ts->charger_detection->charger_notif);
+
+					destroy_workqueue(ts->charger_detection->nvt_charger_notify_wq);
+					ts->charger_detection->nvt_charger_notify_wq = NULL;
+					kfree(ts->charger_detection);
+				}
 			} else {
 				usb_detect_flag = prop.intval;
 				if (usb_detect_flag != ts->charger_detection->usb_connected) {
@@ -3418,9 +3439,17 @@ static int charger_notifier_callback(struct notifier_block *nb,
 
 	if (!strcmp(psy->desc->name, "usb")){
 		if (psy && charger_detection && val == POWER_SUPPLY_PROP_STATUS) {
-			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
+			if (ts->usb_psp_online) {
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
+				if (ret < 0)
+					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
+			} else {
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
+				if (ret < 0)
+					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
+			}
+
 			if (ret < 0) {
-				NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
 				return ret;
 			}else{
 				usb_detect_flag = prop.intval;
