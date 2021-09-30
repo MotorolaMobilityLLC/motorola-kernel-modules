@@ -202,6 +202,7 @@ struct nvt_ts_data {
 	uint32_t charger_detection_enable;
 	uint32_t report_gesture_key;
 	struct usb_charger_detection *charger_detection;
+	bool usb_psp_online;
 #ifdef CONFIG_SPI_MT65XX
     struct mtk_chip_config spi_ctrl;
 #endif
