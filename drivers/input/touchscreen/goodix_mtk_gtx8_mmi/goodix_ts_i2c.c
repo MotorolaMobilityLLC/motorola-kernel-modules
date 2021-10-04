@@ -166,6 +166,16 @@ static int goodix_parse_dt(struct device_node *node,
 		return -EINVAL;
 	}
 
+	r = of_property_read_string(node, "goodix,panel-supplier", &board_data->panel_supplier);
+	if (r < 0) {
+		board_data->panel_supplier = NULL;
+#if GOODIX_FB_PANEL
+		ts_err("read panel_supplier fail\n");
+#endif
+	} else {
+		ts_info("panel supplier is %s", (char *)board_data->panel_supplier);
+	}
+
 	memset(board_data->avdd_name, 0, sizeof(board_data->avdd_name));
 	r = of_property_read_string(node, "goodix,avdd-name", &name_tmp);
 	if (!r) {
@@ -235,6 +245,88 @@ static int goodix_parse_dt(struct device_node *node,
 	return 0;
 }
 #endif
+
+#ifdef CONFIG_FB
+#if GOODIX_FB_PANEL
+char active_panel_name[50] = {0};
+int goodix_get_panel_by_cmdline(void)
+{
+	//bringup, parse panel name from cmdline
+	if (saved_command_line) {
+		char *sub;
+		char key_prefix[] = "mipi_mot_vid_";
+
+		//ts_info("saved_command_line is %s\n", saved_command_line);
+		sub = strstr(saved_command_line, key_prefix);
+		if (sub) {
+			char *d;
+			int len, len_max = 50;
+
+			d = strstr(sub, " ");
+			if (d) {
+				len = strlen(sub) - strlen(d);
+			} else {
+				len = strlen(sub);
+			}
+
+			strncpy(active_panel_name, sub, min(len, len_max));
+			ts_info("active_panel_name=%s\n", active_panel_name);
+
+		} else {
+			ts_err("active panel not found!");
+			return -1;
+		}
+	} else {
+		ts_info("saved_command_line null!");
+		return -1;
+	}
+
+	return 0;
+}
+
+int goodix_get_active_panel(void)
+{
+	int ret;
+
+	if (strlen(active_panel_name)) {
+		ts_info("already got active_panel_name=%s\n", active_panel_name);
+		return 0;
+	}
+
+	ts_info("enter\n");
+	if (saved_command_line) {
+		//bringup, parse panel name from cmdline
+		ret = goodix_get_panel_by_cmdline();
+	} else {
+		ret = -1;
+	}
+
+	return ret;
+}
+
+static int goodix_fb_check_dt(struct goodix_ts_board_data *board_data)
+{
+	int ret = 0;
+
+	ret = goodix_get_active_panel();
+	if (ret) {
+		ts_err("not get active_panel\n");
+		return ret;
+	}
+
+	if (board_data->panel_supplier && strlen(active_panel_name) && strstr(active_panel_name, board_data->panel_supplier)) {
+		ts_info("panel_supplier:%s matched!\n", board_data->panel_supplier);
+		return 0;
+	} else {
+		if (board_data->panel_supplier)
+			ts_info(":%s not active\n", board_data->panel_supplier);
+		else
+			ts_info("panel_supplier NULL!\n");
+	}
+	return -1;
+}
+#endif  //GOODIX_FB_PANEL
+#endif  //CONFIG_FB
 
 int goodix_i2c_test(struct goodix_ts_device *dev)
 {
@@ -1903,6 +1995,14 @@ static int goodix_i2c_probe(struct i2c_client *client,
 			ts_err("failed parse device info form dts, %d", r);
 			return -EINVAL;
 		}
+
+#if GOODIX_FB_PANEL
+		r = goodix_fb_check_dt(&ts_device->board_data);
+		if(r) {
+			ts_err("check fb_check_dt fail");
+			return -ENODEV;
+		}
+#endif
 	} else {
 		ts_err("no valid device tree node found");
 		return -ENODEV;
