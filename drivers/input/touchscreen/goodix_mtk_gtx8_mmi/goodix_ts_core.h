@@ -139,6 +139,7 @@ struct goodix_ts_board_data {
 	unsigned int tp_key_num;
 	/*add end*/
 
+	const char *panel_supplier;
 	const char *fw_name;
 	const char *cfg_bin_name;
 	bool esd_default_on;
@@ -695,6 +696,12 @@ static inline u32 checksum_be32(u8 *data, u32 size)
 #define ts_debug(fmt, arg...)	pr_info("[GTP-DBG][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
 #else
 #define ts_debug(fmt, arg...)	do {} while (0)
+#endif
+
+#ifdef GOODIX_FB_PANEL_EN
+#define GOODIX_FB_PANEL				1
+#else
+#define GOODIX_FB_PANEL				0
 #endif
 
 /**
