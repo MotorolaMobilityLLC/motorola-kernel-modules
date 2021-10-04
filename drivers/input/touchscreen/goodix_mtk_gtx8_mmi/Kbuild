@@ -3,6 +3,10 @@ EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/input/touchscreen/goodix_mtk_gtx8_mmi
 
+ifneq ($(filter m y,$(CONFIG_GOODIX_FB_PANEL)),)
+	EXTRA_CFLAGS += -DGOODIX_FB_PANEL_EN
+endif
+
 obj-m := goodix_mtk_gtx8_mmi.o
 goodix_mtk_gtx8_mmi-objs = goodix_ts_i2c.o goodix_ts_core.o goodix_ts_test.o goodix_cfg_bin.o goodix_gtx8_update.o
 //goodix_mtk_gtx8_mmi-objs = goodix_ts_i2c.o goodix_ts_core.o goodix_ts_test.o goodix_cfg_bin.o goodix_gtx8_update.o goodix_ts_tools.o goodix_ts_gesture.o
