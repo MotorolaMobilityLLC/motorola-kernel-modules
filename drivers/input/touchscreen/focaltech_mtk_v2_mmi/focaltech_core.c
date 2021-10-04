@@ -1583,6 +1583,88 @@ static void fts_resume_work(struct work_struct *work)
 }
 
 #if defined(CONFIG_FB)
+#if FTS_FB_PANEL
+char active_panel_name[50] = {0};
+int fts_get_panel_by_cmdline(void)
+{
+	//bringup, parse panel name from cmdline
+	FTS_FUNC_ENTER();
+	if (saved_command_line) {
+		char *sub;
+		char key_prefix[] = "mipi_mot_vid_";
+
+		//FTS_DEBUG("saved_command_line is %s\n", saved_command_line);
+		sub = strstr(saved_command_line, key_prefix);
+		if (sub) {
+			char *d;
+			int len, len_max = 50;
+
+			d = strstr(sub, " ");
+			if (d) {
+				len = strlen(sub) - strlen(d);
+			} else {
+				len = strlen(sub);
+			}
+
+			strncpy(active_panel_name, sub, min(len, len_max));
+			FTS_INFO("active_panel_name=%s\n", active_panel_name);
+
+		} else {
+			FTS_INFO("active panel not found!");
+			return -1;
+		}
+	} else {
+		FTS_INFO("saved_command_line null!");
+		return -1;
+	}
+
+	return 0;
+}
+
+int fts_get_active_panel(void)
+{
+	int ret;
+
+	if (strlen(active_panel_name)) {
+		FTS_INFO("already got active_panel_name=%s\n", active_panel_name);
+		return 0;
+	}
+
+	if (saved_command_line) {
+		//bringup, parse panel name from cmdline
+		ret = fts_get_panel_by_cmdline();
+	} else {
+		ret = -1;
+	}
+
+	return ret;
+}
+
+static int fts_fb_check_dt()
+{
+	int ret = 0;
+
+	FTS_FUNC_ENTER();
+	ret = fts_get_active_panel();
+	if (ret) {
+		FTS_ERROR("not get active_panel\n");
+		return ret;
+	}
+
+	if (fts_data->panel_supplier && strlen(active_panel_name) && strstr(active_panel_name, fts_data->panel_supplier)) {
+		FTS_INFO("panel_supplier:%s matched!\n", fts_data->panel_supplier);
+		return 0;
+	} else {
+		if (fts_data->panel_supplier)
+			FTS_INFO(":%s not actived\n", fts_data->panel_supplier);
+		else
+			FTS_INFO("panel_supplier NULL!\n");
+	}
+
+	return -1;
+}
+#endif  //FTS_FB_PANEL
+
 static int fb_notifier_callback(struct notifier_block *self,
                                 unsigned long event, void *data)
 {
@@ -1825,6 +1907,14 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         ret = drm_check_dt(ts_data->dev->of_node);
         if (ret) {
             FTS_ERROR("parse drm-panel fail");
+        }
+#endif
+#else
+#if FTS_FB_PANEL
+        ret = fts_fb_check_dt();
+        if(ret) {
+            FTS_ERROR("check fb_check_dt fail");
+            return -ENODEV;
         }
 #endif
 #endif
