@@ -219,6 +219,12 @@
 #define FTS_GESTURE_EN                          0
 #endif
 
+#ifdef FOCALTECH_FB_PANEL_EN
+#define FTS_FB_PANEL				1
+#else
+#define FTS_FB_PANEL				0
+#endif
+
 /*
  * ESD check & protection
  * default: disable
