@@ -49,6 +49,7 @@ int goodix_fw_update_init(struct goodix_ts_core *core_data);
 void goodix_fw_update_uninit(void);
 
 struct goodix_module goodix_modules;
+struct goodix_ts_core *goodix_core_data;
 
 #define CORE_MODULE_UNPROBED     0
 #define CORE_MODULE_PROB_SUCCESS 1
@@ -170,6 +171,14 @@ int goodix_register_ext_module(struct goodix_ext_module *module)
 {
 	if (!module)
 		return -EINVAL;
+
+#if GOODIX_FB_PANEL
+	if (!goodix_core_data) {
+		//do not init ext modules when not probe
+		ts_info("goodix_core_data null, return");
+		return -ENODEV;
+	}
+#endif
 
 	ts_info("goodix_register_ext_module IN");
 
@@ -2381,6 +2390,7 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+	goodix_core_data = core_data;
 	goodix_core_module_init();
 	/* touch core layer is a platform driver */
 	core_data->pdev = pdev;
