@@ -241,6 +241,7 @@ struct aw99703_data {
 	unsigned int ovp_level;
 	unsigned int frequency;
 	unsigned int default_brightness;
+	unsigned int reinit_brightness;
 	unsigned int max_brightness;
 	unsigned int induct_current;
 	unsigned int flash_current;
