@@ -444,6 +444,7 @@ static int gsx_gesture_ist(struct goodix_ts_core *core_data,
 		ts_err("gesture reg can't be null");
 		return EVT_CONTINUE;
 	}
+	ts_info("gesture:0x%04x", ts_dev->reg.gesture);
 	/* get ic gesture state*/
 	if (ts_dev->ic_type == IC_TYPE_YELLOWSTONE)
 		key_data_len = GSX_KEY_DATA_LEN_YS;
@@ -481,7 +482,7 @@ static int gsx_gesture_ist(struct goodix_ts_core *core_data,
 		gsx_type = temp_data[4];
 	else
 		gsx_type = temp_data[2];
-
+	ts_info("gsx_type is 0x%x",gsx_type);
 	if ((gsx_type == 0x4C) || (gsx_type == 0xCC)) {		/* 0x4C;single tap; 0xCC:double tap; */
 		/* do resume routine */
 		ts_info("Gesture match success, resume IC");
