@@ -53,6 +53,10 @@
 #include <linux/sensors.h>
 #endif
 
+#ifdef GOODIX_CHG_DETECT_EN
+#include <linux/power_supply.h>
+#endif
+
 #define GOODIX_FLASH_CONFIG_WITH_ISP	1
 /* macros definition */
 #define GOODIX_CORE_DRIVER_NAME		"goodix_ts"
@@ -83,6 +87,12 @@
 #define GOODIX_PEN_MAX_PRESSURE		4096
 #define GOODIX_MAX_TP_KEY  4
 #define GOODIX_MAX_PEN_KEY 2
+
+#ifdef GOODIX_CHG_DETECT_EN
+#define GOODIX_CHARGER_DETECT	1
+#else
+#define GOODIX_CHARGER_DETECT	0
+#endif
 
 #define TS_RAWDATA_BUFF_MAX         3000
 #define TS_RAWDATA_RESULT_MAX       100
@@ -479,7 +489,10 @@ struct goodix_ts_core {
 
 	u32 drv_num;
 	u32 sen_num;
-
+#if GOODIX_CHARGER_DETECT
+	bool usb_detect_flag;
+	struct notifier_block charger_notif;
+#endif
 	struct notifier_block ts_notifier;
 	struct goodix_ts_esd ts_esd;
 
