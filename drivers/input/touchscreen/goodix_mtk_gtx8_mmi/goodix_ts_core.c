@@ -41,7 +41,10 @@
 #define GOOIDX_INPUT_PHYS	"goodix_ts/input0"
 #define PINCTRL_STATE_ACTIVE    "pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND   "pmx_ts_suspend"
-
+#if GOODIX_CHARGER_DETECT
+int usb_connected = 0;
+extern int goodix_send_command(struct goodix_ts_device *dev,struct goodix_ts_cmd *cmd);
+#endif
 static int goodix_ts_remove(struct platform_device *pdev);
 int goodix_start_later_init(struct goodix_ts_core *ts_core);
 void goodix_ts_dev_release(void);
@@ -2364,6 +2367,110 @@ err_finger:
 	return r;
 }
 
+#if GOODIX_CHARGER_DETECT
+static void goodix_cmd_init(struct goodix_ts_device *dev,
+			    struct goodix_ts_cmd *ts_cmd,
+			    u8 cmds, u16 cmd_data, u32 reg_addr)
+{
+	u16 checksum = 0;
+	ts_cmd->initialized = false;
+	if (!reg_addr || !cmds)
+		return;
+
+	if (dev->ic_type == IC_TYPE_YELLOWSTONE) {
+		ts_cmd->cmd_reg = reg_addr;
+		ts_cmd->length = 5;
+		ts_cmd->cmds[0] = cmds;
+		ts_cmd->cmds[1] = (cmd_data >> 8) & 0xFF;
+		ts_cmd->cmds[2] = cmd_data & 0xFF;
+		checksum = ts_cmd->cmds[0] + ts_cmd->cmds[1] +
+			ts_cmd->cmds[2];
+		ts_cmd->cmds[3] = (checksum >> 8) & 0xFF;
+		ts_cmd->cmds[4] = checksum & 0xFF;
+		ts_cmd->initialized = true;
+	} else if (dev->ic_type == IC_TYPE_NORMANDY) {
+		ts_cmd->cmd_reg = reg_addr;
+		ts_cmd->length = 3;
+		ts_cmd->cmds[0] = cmds;
+		ts_cmd->cmds[1] = cmd_data & 0xFF;
+		ts_cmd->cmds[2] = 0 - cmds - cmd_data;
+		ts_cmd->initialized = true;
+	} else {
+		ts_err("unsupported ic type");
+	}
+}
+int goodix_hw_charger(struct goodix_ts_device *dev)
+{
+	struct goodix_ts_cmd sleep_cmd;
+	int r = 0;
+
+	if(usb_connected) {
+		//charger mode
+		goodix_cmd_init(dev, &sleep_cmd, 0x06,0, dev->reg.command);
+		if (sleep_cmd.initialized) {
+			r = goodix_send_command(dev, &sleep_cmd);
+			ts_info("send 0x06 cmd");
+			if (!r)
+				ts_info("Chip in charger mode");
+			else
+				ts_info("send 0x06 cmd fail");
+		}
+		else
+			ts_info("usb in, sleep_cmd.initialized null");
+	} else {
+		goodix_cmd_init(dev, &sleep_cmd, 0x07,0, dev->reg.command);
+		if (sleep_cmd.initialized) {
+			r = goodix_send_command(dev, &sleep_cmd);
+			ts_info("send 0x07 cmd");
+			if (!r)
+			ts_info("Chip in not charger mode");
+		}
+		else
+			ts_info("usb out, sleep_cmd initialized null");
+	}
+	return r;
+}
+
+static int goodix_charger_notifier_callback(struct notifier_block *nb,
+								unsigned long val, void *v) {
+	int ret = 0;
+	struct power_supply *psy = NULL;
+	struct goodix_ts_core *core_data = container_of(nb, struct goodix_ts_core, charger_notif);
+	struct goodix_ts_device *dev = core_data->ts_dev;
+	union power_supply_propval prop={0};
+
+	psy= power_supply_get_by_name("charger");
+	if (!psy) {
+		ts_info("Couldn't get usbpsy\n");
+		return -EINVAL;
+	}
+	if (!strcmp(psy->desc->name, "charger")) {
+		if (psy && core_data && val == POWER_SUPPLY_PROP_STATUS) {
+			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
+			if (ret < 0) {
+				ts_info("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
+				return ret;
+			} else {
+				//ts_info("usb prop.intval =%d\n", prop.intval);
+				if(core_data->usb_detect_flag != prop.intval) {
+					core_data->usb_detect_flag = prop.intval;
+					ts_info("usb prop.intval =%d\n", prop.intval);
+					if(core_data->usb_detect_flag) {
+						ts_info("usb is in \n");
+						usb_connected = 1;
+					} else {
+						ts_info("usb is not in \n");
+						usb_connected = 0;
+					}
+					goodix_hw_charger(dev);
+				}
+			}
+		}
+	}
+	return 0;
+}
+#endif
+
 static int goodix_ts_parse_dt(struct device *dev, struct goodix_ts_core *ts_data)
 {
 	int ret = 0;
@@ -2449,6 +2556,16 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		goto gpio_err;
 	}
 
+#if GOODIX_CHARGER_DETECT
+	usb_connected = 0;
+	core_data->charger_notif.notifier_call = goodix_charger_notifier_callback;
+	r = power_supply_reg_notifier(&core_data->charger_notif);
+	if (r) {
+		ts_err("Unable to register charger_notifier: %d\n",r);
+		goto err_register_charger_notify_failed;
+	}
+#endif
+
 	/* generic notifier callback */
 	core_data->ts_notifier.notifier_call = goodix_generic_noti_callback;
 	goodix_ts_register_notifier(&core_data->ts_notifier);
@@ -2472,7 +2589,11 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	complete_all(&goodix_modules.core_comp);
 	ts_info("goodix_ts_core probe success");
 	return 0;
-
+#if GOODIX_CHARGER_DETECT
+err_register_charger_notify_failed:
+if (core_data->charger_notif.notifier_call)
+	power_supply_unreg_notifier(&core_data->charger_notif);
+#endif
 later_thread_err:
 	goodix_fw_update_uninit();
 gpio_err:
@@ -2499,6 +2620,10 @@ static int goodix_ts_remove(struct platform_device *pdev)
 	goodix_ts_unregister_notifier(&core_data->ts_notifier);
 #ifdef CONFIG_FB
 	fb_unregister_client(&core_data->fb_notifier);
+#endif
+#if GOODIX_CHARGER_DETECT
+	if (core_data->charger_notif.notifier_call)
+		power_supply_unreg_notifier(&core_data->charger_notif);
 #endif
 	core_data->initialized = 0;
 	core_module_prob_sate = CORE_MODULE_REMOVED;

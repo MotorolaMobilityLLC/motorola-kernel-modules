@@ -90,6 +90,10 @@ enum TS_SEND_CFG_REPLY {
 #define IRQ_HEAD_LEN_YS			8
 #define IRQ_HEAD_LEN_NOR		2
 
+#if GOODIX_CHARGER_DETECT
+extern int goodix_hw_charger(struct goodix_ts_device *dev);
+#endif
+
 #ifdef CONFIG_OF
 /**
  * goodix_parse_dt_resolution - parse resolution from dt
@@ -1321,7 +1325,11 @@ int goodix_hw_reset(struct goodix_ts_device *dev)
 	} else {
 		ts_info("reg.esd is NULL, skip dynamic esd init");
 	}
-
+#if GOODIX_CHARGER_DETECT
+	msleep(100);
+	ts_info("goodix_hw_charger in resume");
+	goodix_hw_charger(dev);
+#endif
 	return 0;
 }
 
