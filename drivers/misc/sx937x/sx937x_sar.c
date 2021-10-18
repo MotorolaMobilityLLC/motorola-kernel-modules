@@ -296,7 +296,7 @@ static void read_dbg_raw(psx93XX_t this)
 		sx937x_i2c_read_16bit(this, SX937X_DIFF_PH0 + ph*4, &uData);
 		diff = (s32)uData>>10;
 		sx937x_i2c_read_16bit(this, SX937X_OFFSET_PH0 + ph*4*3, &uData);
-		off = (u16)(uData & 0x7FFF);
+		off = (u16)(uData & 0x3FFF);
 		state = psmtcButtons[ph].state;
 
 		LOG_DBG("SMTC_DBG PH= %d USE= %d RAW= %d PH%d_USE= %d PH%d_USE= %d PH%d_USE= %d STATE= %d AVG= %d DIFF= %d OFF= %d ADC_MIN= %d ADC_MAX= %d DLT= %d SMTC_END\n",
@@ -358,7 +358,7 @@ static void read_rawData(psx93XX_t this)
 			sx937x_i2c_read_16bit(this, SX937X_DIFF_PH0 + index, &uData);
 			diff = (s32)uData>>10;
 			sx937x_i2c_read_16bit(this, SX937X_OFFSET_PH0 + index*3, &uData);
-			offset = (u16)(uData & 0x7FFF);
+			offset = (u16)(uData & 0x3FFF);
 
 			state = psmtcButtons[csx].state;
 
@@ -456,7 +456,7 @@ static ssize_t capsense_raw_data_show(struct class *class,
 			sx937x_i2c_read_16bit(this, SX937X_DIFF_PH0 + csx*4, &uData);
 			diff = (s32)uData>>10;
 			sx937x_i2c_read_16bit(this, SX937X_OFFSET_PH0 + csx*12, &uData);
-			offset = (u16)(uData & 0x7FFF);
+			offset = (u16)(uData & 0x3FFF);
 			p += snprintf(p, PAGE_SIZE, "PH= %d Useful = %d Average = %d DIFF = %d Offset = %d \n",
 					csx,useful,average,diff,offset);
 		}
