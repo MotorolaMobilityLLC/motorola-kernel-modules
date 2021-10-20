@@ -2666,6 +2666,7 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 	int ret;
 
 	bq_info("client->irq=%d", client->irq);
+/*
 	ret = i2c_smbus_read_byte_data(client, BQ2597X_REG_13);
 	if (ret != BQ25968_DEVICE_ID && ret !=SC8551_DEVICE_ID && ret !=BQ25970_DEVICE_ID
 		&& ret !=SC8551A_DEVICE_ID && ret != NU2105_DEVICE_ID) {
@@ -2673,6 +2674,7 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 		return -ENODEV;
 	}
 	bq_info("bq device id=0x%x\n", ret);
+*/
 //	set_bq2597x_load_flag(true);
 
 	bq = devm_kzalloc(&client->dev, sizeof(struct bq2597x), GFP_KERNEL);
