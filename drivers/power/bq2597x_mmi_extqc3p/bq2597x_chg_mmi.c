@@ -2665,8 +2665,9 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 	struct device_node *node = client->dev.of_node;
 	int ret;
 
-	bq_info("client->irq=%d", client->irq);
+	printk("-----------bq2597x probe -----\n");
 /*
+	bq_info("client->irq=%d", client->irq);
 	ret = i2c_smbus_read_byte_data(client, BQ2597X_REG_13);
 	if (ret != BQ25968_DEVICE_ID && ret !=SC8551_DEVICE_ID && ret !=BQ25970_DEVICE_ID
 		&& ret !=SC8551A_DEVICE_ID && ret != NU2105_DEVICE_ID) {
