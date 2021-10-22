@@ -159,12 +159,20 @@ struct mmi_charger_device *mmi_charger_device_register(const char *name,
 	struct mmi_charger_device *charger_dev;
 	int rc;
 
-	pr_info("mmi charger device register: name=%s\n",name);
+	pr_info("mmi charger device register: name=%s, psy=%s\n",name, psy_name);
 	charger_dev = kzalloc(sizeof(struct mmi_charger_device),GFP_KERNEL);
 	if (!charger_dev)
 		return ERR_PTR(-ENOMEM);
 
 	mutex_init(&charger_dev->ops_lock);
+
+        charger_dev->chrg_psy = power_supply_get_by_name(psy_name);
+        charger_dev->ops = ops;
+        if (!charger_dev->chrg_psy){
+		pr_info("mmi charger device register: failed to get psy %s \n", psy_name);
+                return ERR_PTR(-ENODEV);
+	}
+
 	charger_dev->dev.class = mmi_charger_class;
 	charger_dev->dev.parent = parent;
 	charger_dev->dev.release = mmi_charger_device_release;
@@ -177,10 +185,7 @@ struct mmi_charger_device *mmi_charger_device_register(const char *name,
 		kfree(charger_dev);
 		return ERR_PTR(rc);
 	}
-	charger_dev->chrg_psy = power_supply_get_by_name(psy_name);
-	charger_dev->ops = ops;
-	if (!charger_dev->chrg_psy)
-		return ERR_PTR(-ENODEV);
+
 	pr_info("mmi charger device register: name=%s, successfully\n",name);
 	return charger_dev;
 }
