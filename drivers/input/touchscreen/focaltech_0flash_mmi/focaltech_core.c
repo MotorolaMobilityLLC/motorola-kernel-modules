@@ -82,6 +82,7 @@ static struct sensors_classdev __maybe_unused palm_sensors_touch_cdev = {
     .sensor_power = "1",
     .min_delay = 0,
     .max_delay = 0,
+    .flags = 1 | 6,
     .fifo_reserved_event_count = 0,
     .fifo_max_event_count = 0,
     .enabled = 0,
