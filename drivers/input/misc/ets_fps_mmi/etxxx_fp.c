@@ -537,14 +537,14 @@ int do_egisfp_power_onoff(struct egisfp_dev_t *egis_dev, struct egisfp_ioctl_cmd
 		msleep(Tpwr_on_delay);
 		egis_dev->power_enable = 1;
 	}
-
-	/* When fps power off, can't change pin state in case other
-	 * devices use same pin. */
-/*
 	else
 	{
 		if (egis_dev->pwr_by_gpio)
+#ifdef EGIS_SHARE_GPIO
+			ret = 0;
+#else
 			ret = pinctrl_select_state(egis_dev->pinctrl, egis_dev->vcc_low);
+#endif
 		else
 			ret = regulator_disable(egis_dev->vcc);
 
@@ -554,7 +554,7 @@ int do_egisfp_power_onoff(struct egisfp_dev_t *egis_dev, struct egisfp_ioctl_cmd
 		msleep(Tpwr_off_delay);
 		egis_dev->power_enable = 0;
 	}
-*/
+
 	if (egis_dev->pwr_by_gpio)
 		DEBUG_PRINT(" %s : power_pin value = %d \n", __func__, gpio_get_value(egis_dev->vcc_33v_Pin));
 	else
