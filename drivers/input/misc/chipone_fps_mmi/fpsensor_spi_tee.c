@@ -534,6 +534,13 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_ENABLE_POWER ======\n", __func__);
         break;
     case FPSENSOR_IOC_DISABLE_POWER:
+        #if FPSENSOR_PMIC_LDO
+        if (fpsensor_dev->fp_regulator != NULL) {
+            regulator_disable(fpsensor_dev->fp_regulator);
+            regulator_put(fpsensor_dev->fp_regulator);
+            fpsensor_dev->fp_regulator = NULL;
+        }
+        #endif
         fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
         break;
     case FPSENSOR_IOC_REMOVE:
