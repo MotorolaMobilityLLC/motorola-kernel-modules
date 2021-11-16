@@ -31,7 +31,6 @@
 
 #define AW99703_VERSION "v1.0.3"
 
-static int last_bl = 0;
 struct aw99703_data *g_aw99703_data;
 
 static int platform_read_i2c_block(struct i2c_client *client, char *writebuf,
@@ -310,11 +309,7 @@ static int aw99703_backlight_init(struct aw99703_data *drvdata)
 	aw99703_transition_ramp(drvdata);
 
 	if (drvdata->reinit_brightness) {
-		int bl_level = last_bl;
-		if (last_bl > drvdata->max_brightness || !last_bl)
-		{
-			bl_level = drvdata->reinit_brightness;
-		}
+		int bl_level = drvdata->reinit_brightness;
 		aw99703_i2c_write(drvdata->client,
 				AW99703_REG_LEDLSB,
 				bl_level&0x0007);
@@ -379,7 +374,6 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 					AW99703_MODE_WORKMODE_MASK,
 					AW99703_MODE_WORKMODE_BACKLIGHT);
 
-		last_bl = brt_val;
 	} else {
 		/* standby mode*/
 		aw99703_i2c_write_bit(drvdata->client,
