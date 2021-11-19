@@ -355,6 +355,12 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 		aw99703_backlight_enable(drvdata);
 	}
 
+	if (drvdata->bl_low_remap && (brt_val < AW99703_BL_MAP_MAX)) {
+		//Remap bl level in low env for devices with multiple bl ICs
+		brt_val = aw99703_backlight_map[brt_val];
+		pr_info("%s: remap brt_val:%d", __func__, brt_val);
+	}
+
 	brt_val = aw99703_brightness_map(brt_val);
 
 	if (brt_val > 0) {
@@ -496,6 +502,11 @@ aw99703_get_dt_data(struct device *dev, struct aw99703_data *drvdata)
 		drvdata->max_brightness = 2047;
 	} else {
 		drvdata->max_brightness = 255;
+	}
+
+	drvdata->bl_low_remap = of_property_read_bool(np, "aw99703,bl-low-remap");
+	if (drvdata->bl_low_remap) {
+		pr_info("%s bl_low_remap --<%d>\n", __func__, drvdata->bl_low_remap);
 	}
 
 	rc = of_property_read_u32(np, "aw99703,default-brightness", &drvdata->default_brightness);
