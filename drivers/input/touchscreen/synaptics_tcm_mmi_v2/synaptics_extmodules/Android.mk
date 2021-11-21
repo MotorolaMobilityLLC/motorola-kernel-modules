@@ -19,6 +19,7 @@ LOCAL_MODULE := synaptics_device.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(SYNA_TCM_MODULE_PATH)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/synaptics_core_module.ko
+LOCAL_REQUIRED_MODULES := synaptics_core_module.ko
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
@@ -27,6 +28,7 @@ LOCAL_MODULE := synaptics_diagnostics.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(SYNA_TCM_MODULE_PATH)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/synaptics_core_module.ko
+LOCAL_REQUIRED_MODULES := synaptics_core_module.ko
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
@@ -35,6 +37,7 @@ LOCAL_MODULE := synaptics_recovery.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(SYNA_TCM_MODULE_PATH)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/synaptics_core_module.ko
+LOCAL_REQUIRED_MODULES := synaptics_core_module.ko
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
@@ -43,6 +46,7 @@ LOCAL_MODULE := synaptics_reflash.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(SYNA_TCM_MODULE_PATH)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/synaptics_core_module.ko
+LOCAL_REQUIRED_MODULES := synaptics_core_module.ko
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
@@ -51,6 +55,7 @@ LOCAL_MODULE := synaptics_testing.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(SYNA_TCM_MODULE_PATH)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/synaptics_core_module.ko
+LOCAL_REQUIRED_MODULES := synaptics_core_module.ko
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
@@ -59,6 +64,7 @@ LOCAL_MODULE := synaptics_zeroflash.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(SYNA_TCM_MODULE_PATH)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/synaptics_core_module.ko
+LOCAL_REQUIRED_MODULES := synaptics_core_module.ko
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
