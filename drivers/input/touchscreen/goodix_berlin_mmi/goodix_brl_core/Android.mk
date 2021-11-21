@@ -7,7 +7,9 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 ifneq ($(findstring goodix_brl_i2c.ko,$(BOARD_VENDOR_KERNEL_MODULES)),)
     LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/goodix_brl_i2c.ko
+    LOCAL_REQUIRED_MODULES := goodix_brl_i2c.ko
 else
     LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/goodix_brl_spi.ko
+    LOCAL_REQUIRED_MODULES := goodix_brl_spi.ko
 endif
 include $(DLKM_DIR)/AndroidKernelModule.mk
