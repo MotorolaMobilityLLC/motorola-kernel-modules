@@ -527,6 +527,9 @@ static ssize_t fts_mmi_calibrate_store(struct device *dev,
 		return -EINVAL;
 	}
 
+	/* disable irq to fully control IC*/
+	fts_disableInterrupt();
+
 	if (value == 3) {
 		u8 cmd[3] = { FTS_CMD_SYSTEM, SYS_CMD_SPECIAL, SPECIAL_FULL_PANEL_INIT };
 		pr_info("Sending Event [0x%02x 0x%02x 0x%02x]...\n",
@@ -543,6 +546,7 @@ static ssize_t fts_mmi_calibrate_store(struct device *dev,
 		return -EINVAL;
 	}
 
+	fts_enableInterrupt();
 	return size;
 }
 
