@@ -829,10 +829,16 @@ static ssize_t nvt_fwupdate_read(struct file *file, char __user *buff, size_t co
 
 	switch (fwtype) {
 		case FWTYPE_Normal:
-			nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+			if(nvt_boot_firmware_name)
+				nvt_update_firmware(nvt_boot_firmware_name);
+			else
+				nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
 			break;
 		case FWTYPE_MP:
-			nvt_update_firmware(MP_UPDATE_FIRMWARE_NAME);
+			if(nvt_mp_firmware_name)
+				nvt_update_firmware(nvt_mp_firmware_name);
+			else
+				nvt_update_firmware(MP_UPDATE_FIRMWARE_NAME);
 			break;
 		default:
 			NVT_ERR("fwtype error\n");
