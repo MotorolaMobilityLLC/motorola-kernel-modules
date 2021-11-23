@@ -7,6 +7,10 @@ ifneq ($(filter m y,$(CONFIG_NVT_CHARGE_DETECT)),)
 EXTRA_CFLAGS += -DNVT_CHARGE_DETECT
 endif
 
+ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_MULTI_SUPPLIER)),)
+	EXTRA_CFLAGS += -DNVT_CONFIG_MULTI_SUPPLIER
+endif
+
 ifeq ($(filter m y, $(CONFIG_TOUCHSCREEN_NOVATEK_CHIPSET)),)
 	obj-m := nt36xxx_mtk_mmi.o
 endif
