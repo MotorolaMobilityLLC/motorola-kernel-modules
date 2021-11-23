@@ -986,10 +986,23 @@ return:
 int32_t nvt_update_firmware(char *firmware_name)
 {
 	int32_t ret = 0;
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+	char *c_firmware_name = BOOT_UPDATE_FIRMWARE_NAME;
+
+	if (nvt_boot_firmware_name)
+		c_firmware_name = nvt_boot_firmware_name;
+#endif
 
 #if NVT_CHARGER_NOTIFIER_CALLBACK
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+	NVT_LOG("c_firmware_name=%s\n", c_firmware_name);
+	if(!strcmp(firmware_name,c_firmware_name))
+#else
 	if(!strcmp(firmware_name,BOOT_UPDATE_FIRMWARE_NAME))
+#endif
 		ts->update_floating = 1;
+
+	NVT_LOG("update_floating=%d\n", ts->update_floating);
 #endif
 
 	// request bin file in "/etc/firmware"
@@ -1035,9 +1048,13 @@ download_fail:
 request_firmware_fail:
 
 #if NVT_CHARGER_NOTIFIER_CALLBACK
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+	if(!strcmp(firmware_name,c_firmware_name)){
+#else
 	if(!strcmp(firmware_name,BOOT_UPDATE_FIRMWARE_NAME)){
+#endif
 		ts->update_floating = 0;
-		NVT_LOG("nvt_set_charger_mode\n");
+		NVT_LOG("nvt_set_charger_mode, update_floating=%d\n", ts->update_floating);
 		nvt_set_charger_mode();
 	}
 #endif
@@ -1056,7 +1073,11 @@ return:
 void Boot_Update_Firmware(struct work_struct *work)
 {
 	mutex_lock(&ts->lock);
-	nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+
+	if(nvt_boot_firmware_name)
+		nvt_update_firmware(nvt_boot_firmware_name);
+	else
+		nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
 	mutex_unlock(&ts->lock);
 }
 #endif /* BOOT_UPDATE_FIRMWARE */
