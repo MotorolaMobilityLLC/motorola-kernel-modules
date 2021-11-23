@@ -62,6 +62,13 @@ extern void nvt_mp_proc_deinit(void);
 
 struct nvt_ts_data *ts;
 
+
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+#define NVT_MAX_SUPPLIER_LEN		16
+const char* lcm_panel_supplier;
+char active_panel_name[50] = {0};
+#endif
+
 #if BOOT_UPDATE_FIRMWARE
 static struct workqueue_struct *nvt_fwu_wq;
 extern void Boot_Update_Firmware(struct work_struct *work);
@@ -82,6 +89,9 @@ uint32_t SPI_RD_FAST_ADDR = 0;	//read from dtsi
 #define CMD_CHARGER_ON	(0x53)
 #define CMD_CHARGER_OFF (0x51)
 #endif
+
+char *nvt_boot_firmware_name = NULL;
+char *nvt_mp_firmware_name = NULL;
 
 #if TOUCH_KEY_NUM > 0
 const uint16_t touch_key_array[TOUCH_KEY_NUM] = {
@@ -1086,6 +1096,32 @@ static int32_t nvt_parse_dt(struct device *dev)
 		NVT_LOG("SWRST_N8_ADDR=0x%06X\n", SWRST_N8_ADDR);
 	}
 
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+	if (lcm_panel_supplier) {
+		NVT_LOG("lcm_panel_supplier=%s\n", lcm_panel_supplier);
+		nvt_boot_firmware_name = kzalloc(NVT_FILE_NAME_LENGTH, GFP_KERNEL);
+		if (!nvt_boot_firmware_name) {
+			NVT_LOG("%s: alloc nvt_boot_firmware_name failed\n", __func__);
+			goto nvt_boot_firmware_name_alloc_failed;
+		}
+
+		nvt_mp_firmware_name = kzalloc(NVT_FILE_NAME_LENGTH, GFP_KERNEL);
+		if (!nvt_mp_firmware_name) {
+			NVT_LOG("%s: alloc nvt_mp_firmware_name failed\n", __func__);
+			goto nvt_mp_firmware_name_alloc_failed;
+		}
+
+		snprintf(nvt_boot_firmware_name, NVT_FILE_NAME_LENGTH, "%s_novatek_ts_fw.bin",
+			lcm_panel_supplier);
+		snprintf(nvt_mp_firmware_name, NVT_FILE_NAME_LENGTH, "%s_novatek_ts_mp.bin",
+			lcm_panel_supplier);
+	}
+	else
+		NVT_LOG("lcm_panel_supplier NULL\n");
+
+	NVT_LOG("boot firmware %s, mp firmware %s", nvt_boot_firmware_name, nvt_mp_firmware_name);
+#endif
+
 	ret = of_property_read_u32(np, "novatek,def-build-id", &ts->build_id);
 	if (ret) {
 		ts->build_id = 0;
@@ -1112,6 +1148,15 @@ static int32_t nvt_parse_dt(struct device *dev)
 	}
 
 	return ret;
+
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+nvt_mp_firmware_name_alloc_failed:
+	kfree(nvt_boot_firmware_name);
+	nvt_boot_firmware_name = NULL;
+nvt_boot_firmware_name_alloc_failed:
+	return ret;
+#endif
+
 }
 #else
 static int32_t nvt_parse_dt(struct device *dev)
@@ -1211,7 +1256,10 @@ static void nvt_esd_check_func(struct work_struct *work)
 		mutex_lock(&ts->lock);
 		NVT_ERR("do ESD recovery, timer = %d, retry = %d\n", timer, esd_retry);
 		/* do esd recovery, reload fw */
-		nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+		if(nvt_boot_firmware_name)
+			nvt_update_firmware(nvt_boot_firmware_name);
+		else
+			nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
 		mutex_unlock(&ts->lock);
 		/* update interrupt timer */
 		irq_timer = jiffies;
@@ -1375,7 +1423,10 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
    /* ESD protect by WDT */
    if (nvt_wdt_fw_recovery(point_data)) {
        NVT_ERR("Recover for fw reset, %02X\n", point_data[1]);
-       nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+       if(nvt_boot_firmware_name)
+           nvt_update_firmware(nvt_boot_firmware_name);
+       else
+           nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
        goto XFER_ERROR;
    }
 #endif /* #if NVT_TOUCH_WDT_RECOVERY */
@@ -2352,6 +2403,15 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 		}
 	}
 
+	if (!nvt_boot_firmware_name) {
+		kfree(nvt_boot_firmware_name);
+		nvt_boot_firmware_name = NULL;
+	}
+	if (!nvt_mp_firmware_name) {
+		kfree(nvt_mp_firmware_name);
+		nvt_mp_firmware_name = NULL;
+	}
+
 	if (ts->input_dev) {
 		input_unregister_device(ts->input_dev);
 		ts->input_dev = NULL;
@@ -2656,6 +2716,101 @@ static struct tpd_driver_t nvt_device_driver =
 	},
 };
 
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+int nvt_get_panel_by_cmdline(void)
+{
+	//parse panel name from cmdline
+	NVT_LOG("enter\n");
+	if (saved_command_line) {
+		char *sub;
+		char key_prefix[] = "mipi_mot_vid_";
+
+		//NVT_LOG("saved_command_line is %s\n", saved_command_line);
+		sub = strstr(saved_command_line, key_prefix);
+		if (sub) {
+			char *d;
+			int len, len_max = 50;
+
+			d = strstr(sub, " ");
+			if (d) {
+				len = strlen(sub) - strlen(d);
+			} else {
+				len = strlen(sub);
+			}
+
+			strncpy(active_panel_name, sub, min(len, len_max));
+			NVT_LOG("active_panel_name=%s\n", active_panel_name);
+
+		} else {
+			NVT_LOG("active panel not found!");
+			return -1;
+		}
+	} else {
+		NVT_LOG("saved_command_line null!");
+		return -1;
+	}
+
+	return 0;
+}
+
+int nvt_get_active_panel(void)
+{
+	int ret = -1;
+
+	if (strlen(active_panel_name)) {
+		NVT_LOG("already got active_panel_name=%s\n", active_panel_name);
+		return 0;
+	}
+
+	NVT_LOG("enter\n");
+	if (saved_command_line) {
+		ret = nvt_get_panel_by_cmdline();
+	} else {
+		ret = -1;
+	}
+
+	return ret;
+}
+
+static nvt_match_panel_supplier(struct device_node *np) {
+	int ret = -1;
+	int num_of_panel_supplier;
+
+	if (!np)
+		return ret;
+
+	num_of_panel_supplier = of_property_count_strings(np, "novatek,panel-supplier");
+	NVT_LOG("get novatek,panel-supplier count=%d", num_of_panel_supplier);
+	if (num_of_panel_supplier > 1) {
+		nvt_get_active_panel();
+		if (strlen(active_panel_name)) {
+			int j;
+			for (j = 0; j < num_of_panel_supplier; j++) {
+				ret = of_property_read_string_index(np, "novatek,panel-supplier", j, &nvt_device_driver.tpd_panel_supplier);
+				if (ret < 0) {
+					NVT_LOG("cannot parse panel-supplier: %d\n", ret);
+					break;
+				} else if (nvt_device_driver.tpd_panel_supplier && strstr(active_panel_name, nvt_device_driver.tpd_panel_supplier)) {
+					lcm_panel_supplier = nvt_device_driver.tpd_panel_supplier;
+					NVT_LOG("matched panel_supplier: %s", lcm_panel_supplier);
+					ret = 0;
+					break;
+				}
+			}
+		}
+		else {
+			NVT_ERR("active_panel_name null\n");
+		}
+	} else {
+            ret = of_property_read_string(np, "novatek,panel-supplier",
+                    &nvt_device_driver.tpd_panel_supplier);
+			NVT_LOG("get novatek,panel-supplier: %s\n", nvt_device_driver.tpd_panel_supplier);
+	}
+
+	return ret;
+}
+#endif
+
 int nvt_check_dt() {
 	int ret = 0;
         struct device_node *node1 = NULL;
@@ -2664,8 +2819,12 @@ int nvt_check_dt() {
         node1 = of_find_matching_node(node1, nvt_match_table);
         if (node1) {
                 int ret;
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+				ret = nvt_match_panel_supplier(node1);
+#else
                 ret = of_property_read_string(node1, "novatek,panel-supplier",
                         &nvt_device_driver.tpd_panel_supplier);
+#endif
 		NVT_LOG("get novatek,panel_supplier ret=%d, tpd_panel_supplier= %s\n", ret, nvt_device_driver.tpd_panel_supplier);
         } else {
                 NVT_LOG("node not found!\n");

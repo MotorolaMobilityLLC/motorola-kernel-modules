@@ -1763,7 +1763,10 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
 	//---Download MP FW---
-	nvt_update_firmware(MP_UPDATE_FIRMWARE_NAME);
+	if(nvt_mp_firmware_name)
+		nvt_update_firmware(nvt_mp_firmware_name);
+	else
+		nvt_update_firmware(MP_UPDATE_FIRMWARE_NAME);
 
 	if (nvt_get_fw_info()) {
 		mutex_unlock(&ts->lock);
@@ -1787,7 +1790,10 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 
 		if (nvt_mp_parse_dt(np, mpcriteria)) {
 			//---Download Normal FW---
-			nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+			if(nvt_boot_firmware_name)
+				nvt_update_firmware(nvt_boot_firmware_name);
+			else
+				nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
 			mutex_unlock(&ts->lock);
 			NVT_ERR("mp parse device tree failed!\n");
 			return -EINVAL;
@@ -1960,7 +1966,10 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 	}
 
 	//---Download Normal FW---
-	nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
+	if(nvt_boot_firmware_name)
+		nvt_update_firmware(nvt_boot_firmware_name);
+	else
+		nvt_update_firmware(BOOT_UPDATE_FIRMWARE_NAME);
 
 	mutex_unlock(&ts->lock);
 
