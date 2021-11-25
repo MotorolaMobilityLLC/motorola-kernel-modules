@@ -90,6 +90,11 @@ uint32_t SPI_RD_FAST_ADDR = 0;	//read from dtsi
 #define CMD_CHARGER_OFF (0x51)
 #endif
 
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+//#define NVT_CHIP_NT36672A 	"NT36672A"
+#define NVT_CHIP_NT36525B	"NT36525B"
+#endif
+
 char *nvt_boot_firmware_name = NULL;
 char *nvt_mp_firmware_name = NULL;
 
@@ -1846,7 +1851,17 @@ int32_t nvt_fw_class_init(bool create)
 
 	NVT_LOG("enter, create=%d", create);
 	if (create) {
+		bool use_chipinfo = false;
+#ifdef NVT_CONFIG_MULTI_SUPPLIER
+		if (!strcmp(NVT_CHIP_NT36525B, ts->product_id)) {
+			use_chipinfo = true;
+			ret = alloc_chrdev_region(&devno, 0, 1, NVT_CHIP_NT36525B);
+		}
+		else
+			ret = alloc_chrdev_region(&devno, 0, 1, NVT_SPI_NAME);
+#else
 		ret = alloc_chrdev_region(&devno, 0, 1, NVT_SPI_NAME);
+#endif
 
 		if (ret) {
 			NVT_ERR("cant`t allocate chrdev\n");
@@ -1860,7 +1875,11 @@ int32_t nvt_fw_class_init(bool create)
 			return error;
 		}
 
-		ts_class_dev = device_create(touchscreen_class, NULL,
+		if (use_chipinfo)
+			ts_class_dev = device_create(touchscreen_class, NULL,
+				devno, ts, "%s", ts->product_id);
+		else
+			ts_class_dev = device_create(touchscreen_class, NULL,
 				devno,
 				ts, NVT_SPI_NAME);
 
@@ -1878,6 +1897,8 @@ int32_t nvt_fw_class_init(bool create)
 
 		if (error)
 			goto device_destroy;
+		else if (use_chipinfo)
+			NVT_LOG("create /sys/class/touchscreen/%s Succeeded!\n", ts->product_id);
 		else
 			NVT_LOG("create /sys/class/touchscreen/%s Succeeded!\n", NVT_SPI_NAME);
 	} else {
