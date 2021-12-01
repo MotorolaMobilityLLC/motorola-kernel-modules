@@ -72,6 +72,7 @@ struct lm3697 {
 
 	unsigned int brightness;
 	unsigned int max_brightness;
+	unsigned int default_brightness;
 	unsigned int output_config;
 	unsigned int ctrl_a_ramp;
 	unsigned int ctrl_b_ramp;
@@ -456,6 +457,16 @@ static void lm3697_probe_dt(struct device *dev, struct lm3697 *priv)
 			__func__, priv->bl_fscal);
 	}
 
+	rc = of_property_read_u32(np, "lm3697,default-brightness", &temp);
+	if (rc != 0) {
+		priv->default_brightness = priv->max_brightness;
+		pr_err("%s default-brightness not found, set to max %d\n", __func__, priv->default_brightness);
+	}
+	else {
+		priv->default_brightness = temp;
+		pr_info("%s default_brightness=%d\n", __func__, priv->default_brightness);
+	}
+
 	rc = of_property_read_u32(np, "lm3697,ctrl_a_b_brt_cfg", &temp);
 	if (rc) {
 		pr_err("lm3697,ctrl_a_b_brt_cfg read fail!\n");
@@ -625,6 +636,7 @@ static int lm3697_probe(struct i2c_client *client,
 #endif
 	ext_lm3697_data = led;
 	lm3697_init(led);
+	lm3697_set_brightness(led, led->default_brightness);
 
 	ret = sysfs_create_group(&client->dev.kobj, &lm3697_attribute_group);
 	if (ret < 0) {
