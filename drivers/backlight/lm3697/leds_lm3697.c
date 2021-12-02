@@ -58,6 +58,8 @@
 #define KERNEL_ABOVE_4_14
 #endif
 
+#define LM3697_DEBUG	0
+
 struct lm3697 {
 	int enable_gpio;
 	struct i2c_client *client;
@@ -273,9 +275,10 @@ static int lm3697_gpio_init(struct lm3697 *priv)
 	if (gpio_is_valid(priv->enable_gpio)) {
 		ret = gpio_request(priv->enable_gpio, "lm3697_gpio");
 		if (ret < 0) {
-			pr_err("failed to request gpio\n");
+			pr_err("%s: failed to request gpio\n", __func__);
 			return -1;
 		}
+/*
 		ret = gpio_direction_output(priv->enable_gpio, 0);
 		pr_info(" request gpio init\n");
 		if (ret < 0) {
@@ -283,9 +286,13 @@ static int lm3697_gpio_init(struct lm3697 *priv)
 			gpio_free(priv->enable_gpio);
 			return ret;
 		}
+*/
 		gpio_set_value(priv->enable_gpio, true);
-	} else
+		pr_info("%s: enable_gpio true", __func__);
+	} else {
+		pr_err("%s: enable_gpio invalid", __func__);
 		return -EINVAL;
+	}
 
 	return ret;
 }
@@ -294,6 +301,20 @@ static int lm3697_init(struct lm3697 *priv)
 {
 
 	pr_info("LM3697 %s\n", __func__);
+
+#if LM3697_DEBUG
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_OUTPUT_CONFIG, priv->output_config);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_CONTROL_A_RAMP, priv->ctrl_a_ramp);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_CONTROL_B_RAMP, priv->ctrl_b_ramp);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_CONTROL_A_RUN_RAMP, priv->runtime_ramp);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_CONTROL_A_FS_SETTING, priv->bl_fscal);
+
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_CTRL_A_B_BRT_CFG, priv->ctrl_brt_cfg);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_FEEDBACK_ENABLE, priv->feedback_enable);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_BOOST_CTRL, priv->boost_control);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_PWM_CONFIG, priv->pwm_config);
+	pr_info("LM3697 %s:dbg01:0x%2x=0x%02x\n", __func__, LM3697_CTRL_ENABLE, priv->ctrl_bank_en);
+#endif
 
 	lm3697_i2c_write(priv->client, LM3697_OUTPUT_CONFIG, priv->output_config);
 	lm3697_i2c_write(priv->client, LM3697_CONTROL_A_RAMP, priv->ctrl_a_ramp);
@@ -345,6 +366,11 @@ int  lm3697_set_brightness(struct lm3697 *drvdata, int brt_val)
 	lm3697_i2c_write(ext_lm3697_data->client,
 				LM3697_CTRL_A_BRT_MSB,
 				(brt_val >> 3)&0xff);
+
+#if LM3697_DEBUG
+	pr_info("%s LM3697_CTRL_A_BRT_LSB:0x%2x \n", __func__, brt_val&0x0007);
+	pr_info("%s LM3697_CTRL_A_BRT_MSB:0x%2x \n", __func__, (brt_val >> 3)&0xff);
+#endif
 
 	return ret;
 
@@ -410,7 +436,7 @@ static void lm3697_probe_dt(struct device *dev, struct lm3697 *priv)
 	u32 temp;
 
 	priv->enable_gpio = of_get_named_gpio(np, "lm3697,hwen-gpio", 0);
-	pr_info("%s priv->enable_gpio --<%d>\n", __func__, priv->enable_gpio);
+	pr_info("%s priv->enable_gpio --<0x%2x>\n", __func__, priv->enable_gpio);
 
 	rc = of_property_read_u32(np, "lm3697,output-config", &temp);
 	if (rc) {
