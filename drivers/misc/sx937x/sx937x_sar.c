@@ -517,7 +517,7 @@ static ssize_t reg_show(struct class *class,
 		char *buf)
 {
 	u32 *p = (u32*)buf;
-	u16 reg_value = 0;
+
 	psx93XX_t this = global_sx937x;
 	if(this->read_flag){
 		this->read_flag = 0;
@@ -544,7 +544,7 @@ static ssize_t reg_store(struct class *class,
 	int i = 0;
 
 	if( count != 7){
-		LOG_ERR("%s :params error[ count == %d !=2]\n",__func__,count);
+		LOG_ERR("%s :params error[ count == %lu !=2]\n",__func__,count);
 		return -1;
 	}
 	for(i = 0 ; i < count ; i++)
