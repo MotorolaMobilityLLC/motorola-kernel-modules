@@ -77,6 +77,11 @@ struct fts_ts_data *fts_data;
 static int fts_ts_suspend(struct device *dev);
 static int fts_ts_resume(struct device *dev);
 
+#if FTS_FB_PANEL
+char active_panel_name[50] = {0};
+int fts_get_active_panel(void);
+#endif
+
 int fts_check_cid(struct fts_ts_data *ts_data, u8 id_h)
 {
     int i = 0;
@@ -1561,6 +1566,7 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 	if (fts_data->rst_high)
 		FTS_INFO("rst_high is set.");
 
+#if !FTS_FB_PANEL
 	ret = of_property_read_string(np, "focaltech,panel-supplier",
 		&fts_data->panel_supplier);
 	if (ret < 0) {
@@ -1569,6 +1575,7 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 	} else {
 		FTS_INFO("panel supplier is %s", (char *)fts_data->panel_supplier);
 	}
+#endif
 
     FTS_FUNC_EXIT();
     return 0;
@@ -1584,7 +1591,6 @@ static void fts_resume_work(struct work_struct *work)
 
 #if defined(CONFIG_FB)
 #if FTS_FB_PANEL
-char active_panel_name[50] = {0};
 int fts_get_panel_by_cmdline(void)
 {
 	//bringup, parse panel name from cmdline
@@ -1640,25 +1646,50 @@ int fts_get_active_panel(void)
 	return ret;
 }
 
-static int fts_fb_check_dt()
+static int fts_fb_check_dt(struct device_node *np)
 {
 	int ret = 0;
+	int num_of_panel_supplier;
+
+	if (!np)
+		return ret;
 
 	FTS_FUNC_ENTER();
 	ret = fts_get_active_panel();
-	if (ret) {
-		FTS_ERROR("not get active_panel\n");
+	if (ret || !strlen(active_panel_name)) {
+		FTS_ERROR("not get active_panel, ret=%d\n", ret);
 		return ret;
 	}
 
-	if (fts_data->panel_supplier && strlen(active_panel_name) && strstr(active_panel_name, fts_data->panel_supplier)) {
-		FTS_INFO("panel_supplier:%s matched!\n", fts_data->panel_supplier);
-		return 0;
+	num_of_panel_supplier = of_property_count_strings(np, "focaltech,panel-supplier");
+	FTS_INFO("get focaltech,panel-supplier count=%d", num_of_panel_supplier);
+	if (num_of_panel_supplier > 1) {
+		int j;
+		for (j = 0; j < num_of_panel_supplier; j++) {
+			ret = of_property_read_string_index(np, "focaltech,panel-supplier", j, &fts_data->panel_supplier);
+			if (ret < 0) {
+				FTS_INFO("cannot parse panel-supplier: %d\n", ret);
+				break;
+			} else if (fts_data->panel_supplier && strstr(active_panel_name, fts_data->panel_supplier)) {
+				FTS_INFO("matched panel_supplier: %s", fts_data->panel_supplier);
+				return 0;
+			}
+		}
 	} else {
-		if (fts_data->panel_supplier)
-			FTS_INFO(":%s not actived\n", fts_data->panel_supplier);
-		else
-			FTS_INFO("panel_supplier NULL!\n");
+		ret = of_property_read_string(np, "focaltech,panel-supplier",
+			&fts_data->panel_supplier);
+		if (ret < 0) {
+			fts_data->panel_supplier = NULL;
+			FTS_ERROR("Unable to read panel supplier\n");
+		} else if (fts_data->panel_supplier && strstr(active_panel_name, fts_data->panel_supplier)) {
+			FTS_INFO("panel_supplier:%s matched!\n", fts_data->panel_supplier);
+			return 0;
+		} else {
+			if (fts_data->panel_supplier)
+				FTS_INFO(":%s not actived\n", fts_data->panel_supplier);
+			else
+				FTS_INFO("panel_supplier NULL!\n");
+		}
 	}
 
 	return -1;
@@ -1898,6 +1929,14 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     }
 
     if (ts_data->dev->of_node) {
+#if FTS_FB_PANEL
+        ret = fts_fb_check_dt(ts_data->dev->of_node);
+        if(ret) {
+            FTS_ERROR("check fb_check_dt fail");
+            return -ENODEV;
+        }
+#endif
+
         ret = fts_parse_dt(ts_data->dev, ts_data->pdata);
         if (ret)
             FTS_ERROR("device-tree parse fail");
@@ -1907,14 +1946,6 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         ret = drm_check_dt(ts_data->dev->of_node);
         if (ret) {
             FTS_ERROR("parse drm-panel fail");
-        }
-#endif
-#else
-#if FTS_FB_PANEL
-        ret = fts_fb_check_dt();
-        if(ret) {
-            FTS_ERROR("check fb_check_dt fail");
-            return -ENODEV;
         }
 #endif
 #endif
