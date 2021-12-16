@@ -23,3 +23,4 @@ icnl9916_tddi_mmi-objs += cts_sysfs.o
 icnl9916_tddi_mmi-objs += cts_test.o
 icnl9916_tddi_mmi-objs += cts_charger_detect.o
 icnl9916_tddi_mmi-objs += cts_tcs.o
+icnl9916_tddi_mmi-objs += cts_hostcomm.o

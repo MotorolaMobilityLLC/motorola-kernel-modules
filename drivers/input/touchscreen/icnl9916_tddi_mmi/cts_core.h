@@ -14,10 +14,11 @@ enum cts_dev_hw_reg {
 enum cts_dev_boot_mode {
     CTS_DEV_BOOT_MODE_IDLE = 0,
     CTS_DEV_BOOT_MODE_FLASH = 1,
-    CTS_DEV_BOOT_MODE_PRG = 2,
+    CTS_DEV_BOOT_MODE_I2C_PRG_9911C = 2,
+    CTS_DEV_BOOT_MODE_TCH_PRG_9916 = 2,
     CTS_DEV_BOOT_MODE_SRAM = 3,
     CTS_DEV_BOOT_MODE_DDI_PRG = 4,
-    CTS_DEV_BOOT_MODE_SPI_PRG = 5,
+    CTS_DEV_BOOT_MODE_SPI_PRG_9911C = 5,
     CTS_DEV_BOOT_MODE_MASK = 7,
 };
 
@@ -243,6 +244,62 @@ struct cts_device_rtdata {
     bool glove_mode_enabled;
 };
 
+struct cts_dev_ops {
+    int (*get_fw_ver)(const struct cts_device *cts_dev, u16 *fwver);
+    int (*get_lib_ver)(const struct cts_device *cts_dev, u16 *libver);
+    int (*get_ddi_ver)(const struct cts_device *cts_dev, u8 *ddiver);
+    int (*get_res_x)(const struct cts_device *cts_dev, u16 *res_x);
+    int (*get_res_y)(const struct cts_device *cts_dev, u16 *res_y);
+    int (*get_rows)(const struct cts_device *cts_dev, u8 *rows);
+    int (*get_cols)(const struct cts_device *cts_dev, u8 *cols);
+    int (*get_flip_x)(const struct cts_device *cts_dev, bool *flip_x);
+    int (*get_flip_y)(const struct cts_device *cts_dev, bool *flip_y);
+    int (*get_swap_axes)(const struct cts_device *cts_dev, bool *swap_axes);
+    int (*get_int_mode)(const struct cts_device *cts_dev, u8 *int_mode);
+    int (*get_int_keep_time)(const struct cts_device *cts_dev, u16 *int_keep_time);
+    int (*get_esd_method)(const struct cts_device *cts_dev, u8 *esd_method);
+    int (*get_touchinfo)(const struct cts_device *cts_dev, struct cts_device_touch_info *touch_info);
+    int (*get_esd_protection)(const struct cts_device *cts_dev, u8 *esd_protection);
+    int (*get_data_ready_flag)(const struct cts_device *cts_dev, u8 *ready);
+    int (*clr_data_ready_flag)(const struct cts_device *cts_dev);
+    int (*enable_get_rawdata)(const struct cts_device *cts_dev);
+    int (*is_enabled_get_rawdata)(const struct cts_device *cts_dev, u8 *enabled);
+    int (*disable_get_rawdata)(const struct cts_device *cts_dev);
+    int (*enable_get_cneg)(const struct cts_device *cts_dev);
+    int (*disable_get_cneg)(const struct cts_device *cts_dev);
+    int (*is_cneg_ready)(const struct cts_device *cts_dev, u8 *ready);
+    int (*quit_guesture_mode)(const struct cts_device *cts_dev);
+    int (*get_rawdata)(const struct cts_device *cts_dev, u8 *buf);
+    int (*get_diffdata)(const struct cts_device *cts_dev, u8 *buf);
+    int (*get_basedata)(const struct cts_device *cts_dev, u8 *buf);
+    int (*get_cneg)(const struct cts_device *cts_dev, u8 *buf, size_t size);
+    int (*read_hw_reg)(const struct cts_device *cts_dev, u32 addr, u8 *buf, size_t size);
+    int (*write_hw_reg)(const struct cts_device *cts_dev, u32 addr, u8 *buf, size_t size);
+    int (*read_ddi_reg)(const struct cts_device *cts_dev, u32 addr, u8 *regbuf, size_t size);
+    int (*write_ddi_reg)(const struct cts_device *cts_dev, u32 addr, u8 *regbuf, size_t size);
+    int (*read_fw_reg)(const struct cts_device *cts_dev, u32 addr, u8 *buf, size_t size);
+    int (*write_fw_reg)(const struct cts_device *cts_dev, u32 addr, u8 *buf, size_t size);
+    int (*read_reg)(const struct cts_device *cts_dev, uint16_t cmd, u8 *rbuf, size_t rlen);
+    int (*write_reg)(const struct cts_device *cts_dev, uint16_t cmd, u8 *wbuf, size_t wlen);
+    int (*get_fw_id)(const struct cts_device *cts_dev, u16 *fwid);
+    int (*get_workmode)(const struct cts_device *cts_dev, u8 *workmode);
+    int (*set_workmode)(const struct cts_device *cts_dev, u8 workmode);
+    int (*set_openshort_mode)(const struct cts_device *cts_dev, u8 mode);
+    int (*set_tx_vol)(const struct cts_device *cts_dev, u8 txvol);
+    int (*set_short_test_type)(const struct cts_device *cts_dev, u8 short_type);
+    int (*set_openshort_enable)(const struct cts_device *cts_dev, u8 enable);
+    int (*is_openshort_enabled)(const struct cts_device *cts_dev, u8 *enabled);
+    int (*set_esd_enable)(const struct cts_device *cts_dev, u8 enable);
+    int (*set_cneg_enable)(const struct cts_device *cts_dev, u8 enable);
+    int (*set_mnt_enable)(const struct cts_device *cts_dev, u8 enable);
+    int (*is_display_on)(const struct cts_device *cts_dev, u8 *display_on);
+    int (*set_display_on)(const struct cts_device *cts_dev, u8 display_on);
+    int (*is_cneg_enabled)(const struct cts_device *cts_dev, u8 *enabled);
+    int (*is_mnt_enabled)(const struct cts_device *cts_dev, u8 *enabled);
+    int (*set_pwr_mode)(const struct cts_device *cts_dev, u8 pwr_mode);
+	int (*read_sram_normal_mode)(const struct cts_device *cts_dev, u32 addr, void *dst, size_t len, int retry, int delay);
+};
+
 struct cts_device {
     struct cts_platform_data *pdata;
 
@@ -254,6 +311,8 @@ struct cts_device {
 #ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
     char config_fw_name[CFG_CTS_FW_FILE_NAME_MAX_LEN + 1];
 #endif /* CFG_CTS_FW_UPDATE_FILE_LOAD */
+
+    struct cts_dev_ops *ops;
 };
 
 struct cts_platform_data;
@@ -615,6 +674,8 @@ extern int cts_get_basedata(const struct cts_device *cts_dev, void *buf);
 extern int cts_get_compensate_cap(struct cts_device *cts_dev, u8 *cap);
 extern int cts_get_fwid(struct cts_device *cts_dev, u16 *fwid);
 extern int cts_get_hwid(struct cts_device *cts_dev, u32 *hwid);
+extern int cts_read_sram_normal_mode(const struct cts_device *cts_dev,
+        u32 addr, void *dst, size_t len, int retry, int delay);
 
 #ifdef CFG_CTS_GESTURE
 extern void cts_enable_gesture_wakeup(struct cts_device *cts_dev);

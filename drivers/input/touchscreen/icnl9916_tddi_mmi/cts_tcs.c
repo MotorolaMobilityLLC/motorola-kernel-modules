@@ -781,18 +781,6 @@ int cts_tcs_get_touchinfo(const struct cts_device *cts_dev,
 {
     int ret;
 
-    cts_dbg("Get touch info");
-
-    if (cts_dev->rtdata.program_mode) {
-        cts_warn("Get touch info in program mode");
-        return -ENODEV;
-    }
-
-    if (cts_dev->rtdata.suspended) {
-        cts_warn("Get touch info while is suspended");
-        return -ENODEV;
-    }
-
     memset(touch_info, 0, sizeof(*touch_info));
     dump_flag = 0;
     ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_TP_DATA_COORDINATES_RO,
@@ -852,14 +840,14 @@ int cts_tcs_set_tx_vol(const struct cts_device *cts_dev, u8 txvol)
     return -1;
 }
 
-int cts_tcs_is_enabled_get_rawdata(const struct cts_device *cts_dev, u8 *enable)
+int cts_tcs_is_enabled_get_rawdata(const struct cts_device *cts_dev, u8 *enabled)
 {
    int ret;
    u8 buf[1];
 
    ret = cts_tcs_spi_read(cts_dev, TP_STD_CMD_SYS_STS_DAT_TRANS_IN_NORMAL_RW, buf, sizeof(buf));
    if (!ret) {
-       *enable = buf[0];
+       *enabled = buf[0];
        return 0;
    }
 
@@ -1000,4 +988,194 @@ int cts_tcs_set_display_on(const struct cts_device *cts_dev, u8 display_on)
 
     return -1;
 }
+
+int cts_tcs_read_sram_normal_mode(const struct cts_device *cts_dev,
+        u32 addr, void *dst, size_t len, int retry, int delay)
+{
+    struct spi_message msg;
+    struct spi_transfer xfer[2];
+    struct chipone_ts_data *cts_data = container_of(cts_dev,
+        struct chipone_ts_data, cts_dev);
+    u16 crc;
+    int ret;
+    u8 tx[ALIGN(128, 4)];
+    u8 rx[ALIGN(128, 4)];
+    u8 tx1[ALIGN(128, 4)];
+
+    /* Write add */
+    tx[0] = CTS_DEV_NORMAL_MODE_SPIADDR;
+    tx[1] = 0x01;
+    tx[2] = 0x21;
+    tx[3] = 0x04;
+    tx[4] = 0x00;
+    crc = cts_crc16(tx, 5);
+    tx[5] = ((crc >> 0) & 0xFF);
+    tx[6] = ((crc >> 8) & 0xFF);
+    tx[7] = 0x01;
+    tx[8] = ((addr >>  0) & 0xFF);
+    tx[9] = ((addr >>  8) & 0xFF);
+    tx[10] = ((addr >> 16) & 0xFF);
+    crc = cts_crc16(&tx[7], 4);
+    tx[11] = ((crc >> 0) & 0xFF);
+    tx[12] = ((crc >> 8) & 0xFF);
+
+    memset(&xfer[0], 0, sizeof(struct spi_transfer));
+    xfer[0].cs_change = 0,
+    xfer[0].delay_usecs = 0,
+    xfer[0].speed_hz = cts_data->pdata->spi_speed * 1000u,
+    xfer[0].tx_buf = tx,
+    xfer[0].rx_buf = rx,
+    xfer[0].len    = 13,
+    /**
+     * xfer[0].tx_dma = 0,
+     * xfer[0].rx_dma = 0,
+     */
+    xfer[0].bits_per_word = 8,
+
+    spi_message_init(&msg);
+    spi_message_add_tail(&xfer[0],    &msg);
+    ret = spi_sync(cts_data->spi_client, &msg);
+    if (ret) {
+        cts_err("spi sync 1 failed %d", ret);
+    }
+    udelay(100);
+
+    memset(rx, 0, sizeof(rx));
+    memset(&xfer[1], 0, sizeof(struct spi_transfer));
+    xfer[1].cs_change = 0,
+    xfer[1].delay_usecs = 0,
+    xfer[1].speed_hz = cts_data->pdata->spi_speed * 1000u,
+    xfer[1].tx_buf = tx1,
+    xfer[1].rx_buf = rx,
+    xfer[1].len    = 5,
+    /**
+     * xfer[0].tx_dma = 0,
+     * xfer[0].rx_dma = 0,
+     */
+    xfer[1].bits_per_word = 8,
+
+    spi_message_init(&msg);
+    spi_message_add_tail(&xfer[1],    &msg);
+    ret = spi_sync(cts_data->spi_client, &msg);
+    if (ret) {
+        cts_err("spi sync 2 failed %d", ret);
+    }
+    udelay(100);
+
+    memset(tx, 0, sizeof(tx));
+    memset(tx1, 0, sizeof(tx1));
+    memset(rx, 0, sizeof(rx));
+    /* Read data */
+    tx[0] = CTS_DEV_NORMAL_MODE_SPIADDR | 0x01;
+    tx[1] = 0x02;
+    tx[2] = 0x41;
+    tx[3] = ((len >> 0) & 0xFF);
+    tx[4] = ((len >> 8) & 0xFF);
+    crc = cts_crc16(tx, 5);;
+    tx[5] = ((crc >> 0) & 0xFF);
+    tx[6] = ((crc >> 8) & 0xFF);
+
+    memset(&xfer[0], 0, sizeof(struct spi_transfer));
+    xfer[0].cs_change = 0,
+    xfer[0].delay_usecs = 0,
+    xfer[0].speed_hz = cts_data->pdata->spi_speed * 1000u,
+    xfer[0].tx_buf = tx,
+    xfer[0].rx_buf = rx,
+    xfer[0].len    = 7,
+    /**
+     * xfer[0].tx_dma = 0,
+     * xfer[0].rx_dma = 0,
+     */
+    xfer[0].bits_per_word = 8,
+
+    spi_message_init(&msg);
+    spi_message_add_tail(&xfer[0],    &msg);
+    ret = spi_sync(cts_data->spi_client, &msg);
+    if (ret) {
+        cts_err("spi sync 3 failed %d", ret);
+    }
+    udelay(100);
+
+    memset(rx, 0, sizeof(rx));
+    memset(&xfer[1], 0, sizeof(struct spi_transfer));
+    xfer[1].cs_change = 0,
+    xfer[1].delay_usecs = 0,
+    xfer[1].speed_hz = cts_data->pdata->spi_speed * 1000u,
+    xfer[1].tx_buf = tx1,
+    xfer[1].rx_buf = rx,
+    xfer[1].len    = len + 5,
+    /**
+     * xfer[0].tx_dma = 0,
+     * xfer[0].rx_dma = 0,
+     */
+    xfer[1].bits_per_word = 8,
+
+    spi_message_init(&msg);
+    spi_message_add_tail(&xfer[1],    &msg);
+    ret = spi_sync(cts_data->spi_client, &msg);
+    if (ret) {
+        cts_err("spi sync 4 failed %d", ret);
+    }
+    udelay(100);
+
+    memcpy(dst, rx, len);
+
+    return ret;
+}
+
+struct cts_dev_ops tcs_ops = {
+    .get_fw_ver				= cts_tcs_get_fw_ver,
+    .get_lib_ver			= cts_tcs_get_lib_ver,
+    .get_ddi_ver			= cts_tcs_get_ddi_ver,
+    .get_res_x				= cts_tcs_get_res_x,
+    .get_res_y				= cts_tcs_get_res_y,
+    .get_rows				= cts_tcs_get_rows,
+    .get_cols				= cts_tcs_get_cols,
+    .get_flip_x				= cts_tcs_get_flip_x,
+    .get_flip_y				= cts_tcs_get_flip_y,
+    .get_swap_axes			= cts_tcs_get_swap_axes,
+    .get_int_mode			= cts_tcs_get_int_mode,
+    .get_int_keep_time		= cts_tcs_get_int_keep_time,
+    .get_esd_method			= cts_tcs_get_esd_method,
+    .get_touchinfo			= cts_tcs_get_touchinfo,
+    .get_esd_protection		= cts_tcs_get_esd_protection,
+    .get_data_ready_flag	= cts_tcs_get_data_ready_flag,
+    .clr_data_ready_flag	= cts_tcs_clr_data_ready_flag,
+    .enable_get_rawdata		= cts_tcs_enable_get_rawdata,
+    .is_enabled_get_rawdata	= cts_tcs_is_enabled_get_rawdata,
+    .disable_get_rawdata	= cts_tcs_disable_get_rawdata,
+    .enable_get_cneg		= cts_tcs_enable_get_cneg,
+    .disable_get_cneg		= cts_tcs_disable_get_cneg,
+    .is_cneg_ready			= cts_tcs_is_cneg_ready,
+    .quit_guesture_mode		= cts_tcs_quit_guesture_mode,
+    .get_rawdata			= cts_tcs_get_rawdata,
+    .get_diffdata			= cts_tcs_get_diffdata,
+    .get_basedata			= cts_tcs_get_basedata,
+    .get_cneg				= cts_tcs_get_cneg,
+    .read_hw_reg			= cts_tcs_read_hw_reg,
+    .write_hw_reg			= cts_tcs_write_hw_reg,
+    .read_ddi_reg			= cts_tcs_read_ddi_reg,
+    .write_ddi_reg			= cts_tcs_write_ddi_reg,
+    .read_fw_reg			= cts_tcs_read_fw_reg,
+    .write_fw_reg			= cts_tcs_write_fw_reg,
+    .read_reg				= cts_tcs_read_reg,
+    .write_reg				= cts_tcs_write_reg,
+    .get_fw_id				= cts_tcs_get_fw_id,
+    .get_workmode			= cts_tcs_get_workmode,
+    .set_workmode			= cts_tcs_set_workmode,
+    .set_openshort_mode		= cts_tcs_set_openshort_mode,
+    .set_tx_vol				= cts_tcs_set_tx_vol,
+    .set_short_test_type	= cts_tcs_set_short_test_type,
+    .set_openshort_enable	= cts_tcs_set_openshort_enable,
+    .is_openshort_enabled	= cts_tcs_is_openshort_enabled,
+    .set_esd_enable			= cts_tcs_set_esd_enable,
+    .set_cneg_enable		= cts_tcs_set_cneg_enable,
+    .set_mnt_enable			= cts_tcs_set_mnt_enable,
+    .is_display_on			= cts_tcs_is_display_on,
+    .set_display_on			= cts_tcs_set_display_on,
+    .is_cneg_enabled		= cts_tcs_is_cneg_enabled,
+    .is_mnt_enabled			= cts_tcs_is_mnt_enabled,
+    .set_pwr_mode			= cts_tcs_set_pwr_mode,
+    .read_sram_normal_mode  = cts_tcs_read_sram_normal_mode,
+};
 

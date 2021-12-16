@@ -53,13 +53,13 @@ static const struct cts_flash cts_flashes[] = {
  * static const struct cts_flash *find_flash_by_jedec_id(u32 jedec_id)
  * {
  *     int i;
- *
+ * 
  *     for (i = 0; i < ARRAY_SIZE(cts_flashes); i++) {
  *         if (cts_flashes[i].jedec_id == jedec_id) {
  *             return &cts_flashes[i];
  *         }
  *     }
- *
+ * 
  *     return NULL;
  * }
  */
