@@ -5,7 +5,6 @@
 #include "cts_core.h"
 #include "cts_firmware.h"
 #include "cts_sysfs.h"
-#include "cts_tcs.h"
 
 #ifdef CFG_CTS_FW_LOG_REDIRECT
 size_t cts_plat_get_max_fw_log_size(struct cts_platform_data *pdata)
@@ -401,7 +400,7 @@ int cts_plat_is_normal_mode(struct cts_platform_data *pdata)
      *     &fwid, 2, 3, 10);
      * fwid = be16_to_cpu(fwid);
     */
-    ret = cts_tcs_get_fw_id(pdata->cts_dev, &fwid);
+    ret = pdata->cts_dev->ops->get_fw_id(pdata->cts_dev, &fwid);
 
     if (ret || !cts_is_fwid_valid(fwid)) {
         return false;
