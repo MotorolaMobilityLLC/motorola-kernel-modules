@@ -41,8 +41,10 @@
 #define CFG_CTS_FW_FILE_NAME_VENDOR         "chipone"
 #endif /*CFG_CTS_FW_UPDATE_FILE_LOAD*/
 
-#define CFG_CTS_FIRMWARE_FILENAME           "ICNL9911.bin"
-#define CFG_CTS_FIRMWARE_FILEPATH           "/vendor/firmware/ICNL9911.bin"
+#define CFG_CTS_FIRMWARE_FILENAME_9911           "ICNL9911.bin"
+#define CFG_CTS_FIRMWARE_FILENAME_9916           "ICNL9916.bin"
+#define CFG_CTS_FIRMWARE_FILEPATH_9911           "/vendor/firmware/ICNL9911.bin"
+#define CFG_CTS_FIRMWARE_FILEPATH_9916           "/vendor/firmware/ICNL9916.bin"
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
 /* IC type support */

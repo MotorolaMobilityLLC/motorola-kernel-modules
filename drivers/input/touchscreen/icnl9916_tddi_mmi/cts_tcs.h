@@ -50,13 +50,11 @@ int cts_tcs_get_touchinfo(const struct cts_device *cts_dev,
         struct cts_device_touch_info *touch_info);
 int cts_tcs_get_esd_protection(const struct cts_device *cts_dev,
         u8 *esd_protection);
-int cts_tcs_get_monitor_mode(const struct cts_device *cts_dev,
-        u8 *monitor_mode);
 
 int cts_tcs_get_data_ready_flag(const struct cts_device *cts_dev, u8 *ready);
 int cts_tcs_clr_data_ready_flag(const struct cts_device *cts_dev);
 int cts_tcs_enable_get_rawdata(const struct cts_device *cts_dev);
-int cts_tcs_is_enabled_get_rawdata(const struct cts_device *cts_dev, u8 *enable);
+int cts_tcs_is_enabled_get_rawdata(const struct cts_device *cts_dev, u8 *enabled);
 int cts_tcs_disable_get_rawdata(const struct cts_device *cts_dev);
 int cts_tcs_enable_get_cneg(const struct cts_device *cts_dev);
 int cts_tcs_disable_get_cneg(const struct cts_device *cts_dev);
@@ -104,6 +102,10 @@ int cts_tcs_set_display_on(const struct cts_device *cts_dev, u8 display_on);
 int cts_tcs_is_cneg_enabled(const struct cts_device *cts_dev, u8 *enabled);
 int cts_tcs_is_mnt_enabled(const struct cts_device *cts_dev, u8 *enabled);
 int cts_tcs_set_pwr_mode(const struct cts_device *cts_dev, u8 pwr_mode);
+
+int cts_tcs_read_sram_normal_mode(const struct cts_device *cts_dev,
+        u32 addr, void *dst, size_t len, int retry, int delay);
+
 
 enum TcsCmdIndex
 {
@@ -204,6 +206,8 @@ static TcsCmdValue_t TcsCmdValue[] =
     { 0,  1, 22,  0,  1,  1 }, /* TP_STD_CMD_TP_DATA_WR_DDI_REG_SEQUENCE_WO */
 };
 #endif /* _CTS_TCS_C_ */
+
+extern struct cts_dev_ops tcs_ops;
 
 #endif /* _CTS_TCS_H_ */
 
