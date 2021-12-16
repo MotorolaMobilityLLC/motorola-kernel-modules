@@ -7,7 +7,6 @@
 #include "cts_sfctrl.h"
 #include "cts_spi_flash.h"
 #include "cts_firmware.h"
-#include "cts_tcs.h"
 
 #ifdef CONFIG_CTS_SYSFS
 
@@ -31,6 +30,7 @@ char *argv[MAX_ARG_NUM];
 
 static int jitter_test_frame = 10;
 static s16 *manualdiff_base;
+static int manualdiff_base_updated = 0;
 
 static u16 speed = 9600;
 
@@ -93,7 +93,7 @@ static ssize_t write_firmware_register_store(struct device *dev,
         }
     }
 
-    ret = cts_fw_reg_writesb(cts_dev, addr, data, argc - 1);
+    ret = cts_dev->ops->write_fw_reg(cts_dev, addr, data, argc - 1);
     if (ret) {
         cts_err("Write firmware register addr: 0x%04x size: %d failed",
             addr, argc - 1);
@@ -368,8 +368,7 @@ static ssize_t read_firmware_register_show(struct device *dev,
 
     cts_info("Read firmware register from 0x%04x size %u", addr, size);
     cts_lock_device(cts_dev);
-    /* ret = cts_fw_reg_readsb(cts_dev, addr, data, (size_t) size); */
-    ret = cts_tcs_read_fw_reg(cts_dev, addr, data, (size_t) size);
+    ret = cts_dev->ops->read_fw_reg(cts_dev, addr, data, (size_t) size);
     cts_unlock_device(cts_dev);
     if (ret) {
         count = snprintf(buf, PAGE_SIZE,
@@ -456,7 +455,9 @@ static ssize_t read_hw_reg_show(struct device *dev,
     cts_info("Read hw register from 0x%04x size %u", addr, size);
     cts_lock_device(cts_dev);
 
-#if 0
+	if ((cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911C) ||
+		(cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911S) ||
+		(cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911)) {
     for (i = 0; i < size; i++) {
         ret =
             cts_fw_reg_writel_retry(cts_dev, HW_STUB_ADDR, addr + i, 3,
@@ -476,9 +477,9 @@ static ssize_t read_hw_reg_show(struct device *dev,
             goto err_free_data;
         }
     }
-#endif
+	}
 
-#if 1
+	if (cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9916) {
     if (cts_dev->rtdata.program_mode) {
         for (i = 0; i < size; i++) {
             ret = cts_dev_readb(cts_dev, addr + i, data + i, 3, 10);
@@ -488,13 +489,13 @@ static ssize_t read_hw_reg_show(struct device *dev,
             }
         }
     } else {
-        ret = cts_tcs_read_hw_reg(cts_dev, addr, data, size);
+        ret = cts_dev->ops->read_hw_reg(cts_dev, addr, data, size);
         if (ret < 0) {
             count = snprintf(buf, PAGE_SIZE, "Read hw register error\n");
             goto err_free_data;
         }
     }
-#endif
+	}
 
     remaining = size;
     for (i = 0; i < size && count <= PAGE_SIZE; i += PRINT_ROW_SIZE) {
@@ -579,7 +580,10 @@ static ssize_t write_hw_reg_store(struct device *dev,
     }
 
     cts_lock_device(cts_dev);
-#if 0
+
+	if ((cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911C) ||
+		(cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911S) ||
+		(cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9911)) {
     for (i = 0; i < argc - 1; i++) {
         ret =
             cts_fw_reg_writel_retry(cts_dev, HW_STUB_ADDR, addr + i, 3,
@@ -596,8 +600,9 @@ static ssize_t write_hw_reg_store(struct device *dev,
             break;
         }
     }
-#endif
-#if 1
+	}
+
+	if (cts_dev->hwdata->hwid == CTS_DEV_HWID_ICNL9916) {
     if (cts_dev->rtdata.program_mode) {
         for (i = 0; i < argc - 1; i++) {
             ret = cts_dev_writeb(cts_dev, addr + i, data[i], 3, 10);
@@ -607,12 +612,13 @@ static ssize_t write_hw_reg_store(struct device *dev,
             }
         }
     } else {
-        ret = cts_tcs_write_hw_reg(cts_dev, addr, data, argc - 1);
+        ret = cts_dev->ops->write_hw_reg(cts_dev, addr, data, argc - 1);
         if (ret < 0) {
             cts_err("Write hw register error");
         }
     }
-#endif
+	}
+
     cts_unlock_device(cts_dev);
 free_data:
     kfree(data);
@@ -697,8 +703,7 @@ static ssize_t esd_protection_show(struct device *dev,
     u8 esd_protection;
 
     cts_lock_device(cts_dev);
-    ret = cts_tcs_get_esd_protection(cts_dev, &esd_protection);
-    /*cts_fw_reg_readb(&cts_data->cts_dev, 0x8000 + 342, &esd_protection);*/
+    ret = cts_dev->ops->get_esd_protection(cts_dev, &esd_protection);
     cts_unlock_device(cts_dev);
     if (ret) {
         return snprintf(buf, PAGE_SIZE,
@@ -719,8 +724,7 @@ static ssize_t monitor_mode_show(struct device *dev,
     u8 value;
 
     cts_lock_device(cts_dev);
-    /* ret = cts_fw_reg_readb(&cts_data->cts_dev, 0x8000 + 344, &value); */
-    ret = cts_tcs_is_mnt_enabled(cts_dev, &value);
+    ret = cts_dev->ops->is_mnt_enabled(cts_dev, &value);
     cts_unlock_device(cts_dev);
     if (ret) {
         return snprintf(buf, PAGE_SIZE,
@@ -790,8 +794,7 @@ static ssize_t auto_compensate_show(struct device *dev,
     u8 value;
 
     cts_lock_device(cts_dev);
-    /*ret = cts_fw_reg_readb(&cts_data->cts_dev, 0x8000 + 276, &value);*/
-    ret = cts_tcs_is_cneg_enabled(&cts_data->cts_dev, &value);
+    ret = cts_dev->ops->is_cneg_enabled(&cts_data->cts_dev, &value);
     cts_unlock_device(cts_dev);
     if (ret) {
         return snprintf(buf, PAGE_SIZE,
@@ -1644,8 +1647,7 @@ static ssize_t rawdata_show(struct device *dev,
     }
 
     cts_lock_device(cts_dev);
-    /*ret = cts_enable_get_rawdata(cts_dev);*/
-    ret = cts_tcs_enable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->enable_get_rawdata(cts_dev);
     if (ret) {
         count +=
             snprintf(buf, PAGE_SIZE, "Enable read raw data failed %d\n",
@@ -1655,7 +1657,7 @@ static ssize_t rawdata_show(struct device *dev,
 
     /**
      * ret = cts_send_command(cts_dev, CTS_CMD_QUIT_GESTURE_MONITOR);
-     * ret = cts_tcs_quit_guesture_mode(cts_dev);
+     * ret = cts_dev->ops->quit_guesture_mode(cts_dev);
      * if (ret) {
      *    count +=
      *        snprintf(buf, PAGE_SIZE,
@@ -1672,7 +1674,7 @@ static ssize_t rawdata_show(struct device *dev,
         data_valid = false;
         /*Fall through to disable get rawdata*/
     }
-    ret = cts_tcs_disable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->disable_get_rawdata(cts_dev);
     if (ret) {
         count += snprintf(buf, PAGE_SIZE,
             "Disable read raw data failed %d\n", ret);
@@ -1755,7 +1757,7 @@ static ssize_t diffdata_show(struct device *dev,
     }
 
     cts_lock_device(cts_dev);
-    ret = cts_tcs_enable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->enable_get_rawdata(cts_dev);
     if (ret) {
         cts_err("Enable read diff data failed %d", ret);
         goto err_free_diffdata;
@@ -1763,7 +1765,7 @@ static ssize_t diffdata_show(struct device *dev,
 
     /**
      * ret = cts_send_command(cts_dev, CTS_CMD_QUIT_GESTURE_MONITOR);
-     * ret = cts_tcs_quit_guesture_mode(cts_dev);
+     * ret = cts_dev->ops->quit_guesture_mode(cts_dev);
      * if (ret) {
      *    cts_err("Send cmd QUIT_GESTURE_MONITOR failed %d", ret);
      *    goto err_free_diffdata;
@@ -1777,7 +1779,7 @@ static ssize_t diffdata_show(struct device *dev,
         data_valid = false;
         /*Fall through to disable get diffdata*/
     }
-    ret = cts_tcs_disable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->disable_get_rawdata(cts_dev);
     if (ret) {
         cts_err("Disable read diff data failed %d", ret);
         /*Fall through to show diffdata*/
@@ -1888,8 +1890,18 @@ static ssize_t manualdiffdata_show(struct device *dev,
         return -ENOMEM;
     }
 
+	if (!manualdiff_base && (DIFFDATA_BUFFER_SIZE(cts_dev) > 0)) {
+		manualdiff_base = (s16 *) kzalloc(DIFFDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
+		if (manualdiff_base == NULL) {
+			cts_err("Malloc manualdiff_base failed");
+			filp_close(file, NULL);
+			kfree(rawdata);
+			goto err_free_diffdata;
+		}
+	}
+
     cts_lock_device(cts_dev);
-    ret = cts_tcs_enable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->enable_get_rawdata(cts_dev);
     if (ret) {
         cts_err("Enable read raw data failed %d", ret);
         goto err_free_diffdata;
@@ -1905,6 +1917,14 @@ static ssize_t manualdiffdata_show(struct device *dev,
      */
 
     cts_info("frame %d, file:%s", frame, argv[1]);
+
+	if (!manualdiff_base_updated) {
+	    ret = cts_get_rawdata(cts_dev, manualdiff_base);
+        if (ret) {
+            cts_err("Get raw data failed %d", ret);
+        }
+	}
+
     for (i = 0; i < frame; i++) {
         ret = cts_get_rawdata(cts_dev, rawdata);
         if (ret) {
@@ -1981,7 +2001,7 @@ static ssize_t manualdiffdata_show(struct device *dev,
         filp_close(file, NULL);
     }
 
-    ret = cts_tcs_disable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->disable_get_rawdata(cts_dev);
     if (ret) {
         cts_err("Disable read raw data failed %d", ret);
         /*Fall through to show diffdata*/
@@ -2006,7 +2026,7 @@ static ssize_t manualdiffdata_store(struct device *dev,
 
     cts_lock_device(cts_dev);
     if (strncasecmp("updatebase", argv[0], 10) == 0) {
-        ret = cts_tcs_enable_get_rawdata(cts_dev);
+        ret = cts_dev->ops->enable_get_rawdata(cts_dev);
         if (ret) {
             cts_err("Enable read raw data failed %d", ret);
             goto err_manual_diff_store;
@@ -2020,14 +2040,22 @@ static ssize_t manualdiffdata_store(struct device *dev,
          * }
          * msleep(50);
          */
+        if (!manualdiff_base && (DIFFDATA_BUFFER_SIZE(cts_dev) > 0)) {
+            manualdiff_base = (s16 *) kzalloc(DIFFDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
+            if (manualdiff_base == NULL) {
+                cts_err("Malloc manualdiff_base failed");
+                goto err_manual_diff_store;
+            }
+	    }
         if (manualdiff_base != NULL) {
             ret = cts_get_rawdata(cts_dev, manualdiff_base);
             if (ret) {
                 cts_err("Get raw data failed %d", ret);
             }
+			manualdiff_base_updated = 1;
         }
         /* cts_info("update base successful"); */
-        ret = cts_tcs_disable_get_rawdata(cts_dev);
+        ret = cts_dev->ops->disable_get_rawdata(cts_dev);
         if (ret) {
             cts_err("Disable read raw data failed %d", ret);
         }
@@ -2104,7 +2132,7 @@ static ssize_t jitter_show(struct device *dev,
         rawdata_max[i] = -32768;
     }
 
-    ret = cts_tcs_enable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->enable_get_rawdata(cts_dev);
     if (ret) {
         cts_err("Enable read raw data failed %d", ret);
         goto err_free_rawdata_max;
@@ -2137,7 +2165,7 @@ static ssize_t jitter_show(struct device *dev,
         }
         /* msleep(1); */
     }
-    ret = cts_tcs_disable_get_rawdata(cts_dev);
+    ret = cts_dev->ops->disable_get_rawdata(cts_dev);
     if (ret) {
         cts_err("Disable read raw data failed %d", ret);
     }
@@ -2708,10 +2736,12 @@ int cts_sysfs_add_device(struct device *dev)
         return ret;
     }
 
-    manualdiff_base = (s16 *) kzalloc(DIFFDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
-    if (manualdiff_base == NULL) {
-        cts_err("Malloc manualdiff_base failed");
-        return -ENOMEM;
+    if (DIFFDATA_BUFFER_SIZE(cts_dev) > 0) {
+        manualdiff_base = (s16 *) kzalloc(DIFFDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
+        if (manualdiff_base == NULL) {
+            cts_err("Malloc manualdiff_base failed");
+            return -ENOMEM;
+        }
     }
 
     ret = sysfs_create_link(NULL, &dev->kobj, "chipone-tddi");

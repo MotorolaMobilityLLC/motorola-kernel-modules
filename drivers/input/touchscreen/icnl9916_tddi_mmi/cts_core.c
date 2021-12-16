@@ -8,7 +8,6 @@
 #include "cts_sysfs.h"
 #include "cts_firmware.h"
 #include "cts_charger_detect.h"
-#include "cts_tcs.h"
 
 static DEFINE_RT_MUTEX(dev_lock);
 
@@ -765,138 +764,34 @@ int cts_sram_writesb_check_crc_retry(const struct cts_device *cts_dev,
     return ret;
 }
 
-static int cts_read_sram_normal_mode(const struct cts_device *cts_dev,
+int cts_read_sram_normal_mode(const struct cts_device *cts_dev,
         u32 addr, void *dst, size_t len, int retry, int delay)
 {
-    struct spi_message msg;
-    struct spi_transfer xfer[2];
-    struct chipone_ts_data *cts_data = container_of(cts_dev,
-        struct chipone_ts_data, cts_dev);
-    u16 crc;
-    int ret;
-    u8 tx[ALIGN(128, 4)];
-    u8 rx[ALIGN(128, 4)];
-    u8 tx1[ALIGN(128, 4)];
+	int i, ret;
 
-    /* Write add */
-    tx[0] = CTS_DEV_NORMAL_MODE_SPIADDR;
-    tx[1] = 0x01;
-    tx[2] = 0x21;
-    tx[3] = 0x04;
-    tx[4] = 0x00;
-    crc = cts_crc16(tx, 5);
-    tx[5] = ((crc >> 0) & 0xFF);
-    tx[6] = ((crc >> 8) & 0xFF);
-    tx[7] = 0x01;
-    tx[8] = ((addr >>  0) & 0xFF);
-    tx[9] = ((addr >>  8) & 0xFF);
-    tx[10] = ((addr >> 16) & 0xFF);
-    crc = cts_crc16(&tx[7], 4);
-    tx[11] = ((crc >> 0) & 0xFF);
-    tx[12] = ((crc >> 8) & 0xFF);
+	for (i = 0; i < len; i++) {
+		ret = cts_dev_writel(cts_dev,
+				     CTS_DEVICE_FW_REG_DEBUG_INTF, addr, retry,
+				     delay);
+		if (ret) {
+			cts_err("Write addr to rDEBUG_INTF failed %d", ret);
+			return ret;
+		}
 
-    memset(&xfer[0], 0, sizeof(struct spi_transfer));
-    xfer[0].cs_change = 0,
-    xfer[0].delay_usecs = 0,
-    xfer[0].speed_hz = cts_data->pdata->spi_speed * 1000u,
-    xfer[0].tx_buf = tx,
-    xfer[0].rx_buf = rx,
-    xfer[0].len    = 13,
-    /**
-     * xfer[0].tx_dma = 0,
-     * xfer[0].rx_dma = 0,
-     */
-    xfer[0].bits_per_word = 8,
+		ret = cts_dev_readb(cts_dev,
+				    CTS_DEVICE_FW_REG_DEBUG_INTF + 4,
+				    (u8 *) dst, retry, delay);
+		if (ret) {
+			cts_err("Read value from rDEBUG_INTF + 4 failed %d",
+				ret);
+			return ret;
+		}
 
-    spi_message_init(&msg);
-    spi_message_add_tail(&xfer[0],    &msg);
-    ret = spi_sync(cts_data->spi_client, &msg);
-    if (ret) {
-        cts_err("spi sync 1 failed %d", ret);
-    }
-    udelay(100);
+		addr++;
+		dst++;
+	}
 
-    memset(rx, 0, sizeof(rx));
-    memset(&xfer[1], 0, sizeof(struct spi_transfer));
-    xfer[1].cs_change = 0,
-    xfer[1].delay_usecs = 0,
-    xfer[1].speed_hz = cts_data->pdata->spi_speed * 1000u,
-    xfer[1].tx_buf = tx1,
-    xfer[1].rx_buf = rx,
-    xfer[1].len    = 5,
-    /**
-     * xfer[0].tx_dma = 0,
-     * xfer[0].rx_dma = 0,
-     */
-    xfer[1].bits_per_word = 8,
-
-    spi_message_init(&msg);
-    spi_message_add_tail(&xfer[1],    &msg);
-    ret = spi_sync(cts_data->spi_client, &msg);
-    if (ret) {
-        cts_err("spi sync 2 failed %d", ret);
-    }
-    udelay(100);
-
-    memset(tx, 0, sizeof(tx));
-    memset(tx1, 0, sizeof(tx1));
-    memset(rx, 0, sizeof(rx));
-    /* Read data */
-    tx[0] = CTS_DEV_NORMAL_MODE_SPIADDR | 0x01;
-    tx[1] = 0x02;
-    tx[2] = 0x41;
-    tx[3] = ((len >> 0) & 0xFF);
-    tx[4] = ((len >> 8) & 0xFF);
-    crc = cts_crc16(tx, 5);;
-    tx[5] = ((crc >> 0) & 0xFF);
-    tx[6] = ((crc >> 8) & 0xFF);
-
-    memset(&xfer[0], 0, sizeof(struct spi_transfer));
-    xfer[0].cs_change = 0,
-    xfer[0].delay_usecs = 0,
-    xfer[0].speed_hz = cts_data->pdata->spi_speed * 1000u,
-    xfer[0].tx_buf = tx,
-    xfer[0].rx_buf = rx,
-    xfer[0].len    = 7,
-    /**
-     * xfer[0].tx_dma = 0,
-     * xfer[0].rx_dma = 0,
-     */
-    xfer[0].bits_per_word = 8,
-
-    spi_message_init(&msg);
-    spi_message_add_tail(&xfer[0],    &msg);
-    ret = spi_sync(cts_data->spi_client, &msg);
-    if (ret) {
-        cts_err("spi sync 3 failed %d", ret);
-    }
-    udelay(100);
-
-    memset(rx, 0, sizeof(rx));
-    memset(&xfer[1], 0, sizeof(struct spi_transfer));
-    xfer[1].cs_change = 0,
-    xfer[1].delay_usecs = 0,
-    xfer[1].speed_hz = cts_data->pdata->spi_speed * 1000u,
-    xfer[1].tx_buf = tx1,
-    xfer[1].rx_buf = rx,
-    xfer[1].len    = len + 5,
-    /**
-     * xfer[0].tx_dma = 0,
-     * xfer[0].rx_dma = 0,
-     */
-    xfer[1].bits_per_word = 8,
-
-    spi_message_init(&msg);
-    spi_message_add_tail(&xfer[1],    &msg);
-    ret = spi_sync(cts_data->spi_client, &msg);
-    if (ret) {
-        cts_err("spi sync 4 failed %d", ret);
-    }
-    udelay(100);
-
-    memcpy(dst, rx, len);
-
-    return ret;
+	return 0;
 }
 
 int cts_sram_readb_retry(const struct cts_device *cts_dev,
@@ -1403,7 +1298,7 @@ static int cts_get_touchinfo(const struct cts_device *cts_dev,
         return -ENODEV;
     }
 
-    return cts_tcs_get_touchinfo(cts_dev, touch_info);
+    return cts_dev->ops->get_touchinfo(cts_dev, touch_info);
 }
 
 int cts_get_panel_param(const struct cts_device *cts_dev,
@@ -1505,7 +1400,7 @@ int cts_get_rawdata(const struct cts_device *cts_dev, void *buf)
     /** - Wait data ready flag set */
     for (i = 0; i < 100; i++) {
         mdelay(10);
-        ret = cts_tcs_get_data_ready_flag(cts_dev, &ready);
+        ret = cts_dev->ops->get_data_ready_flag(cts_dev, &ready);
         if (ret) {
             cts_err("Get data ready flag failed %d", ret);
             continue;
@@ -1521,7 +1416,7 @@ int cts_get_rawdata(const struct cts_device *cts_dev, void *buf)
     /* Read rawdata */
 read_rawdata:
     do {
-        ret = cts_tcs_get_rawdata(cts_dev, buf);
+        ret = cts_dev->ops->get_rawdata(cts_dev, buf);
         if (ret) {
             cts_err("Read rawdata failed %d", ret);
         } else {
@@ -1530,7 +1425,7 @@ read_rawdata:
     } while (--retries > 0);
 
     for (i = 0; i < 5; i++) {
-        int r = cts_tcs_clr_data_ready_flag(cts_dev);
+        int r = cts_dev->ops->clr_data_ready_flag(cts_dev);
         if (r) {
             cts_err("Clear data ready flag failed %d", r);
         } else {
@@ -1566,7 +1461,7 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
     /** - Wait data ready flag set */
     for (i = 0; i < 1000; i++) {
         mdelay(1);
-        ret = cts_tcs_get_data_ready_flag(cts_dev, &ready);
+        ret = cts_dev->ops->get_data_ready_flag(cts_dev, &ready);
         if (ret) {
             cts_err("Get data ready flag failed %d", ret);
             goto get_diff_free_buf;
@@ -1580,7 +1475,7 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
         goto get_diff_free_buf;
     }
     do {
-        ret = cts_tcs_get_diffdata(cts_dev, cache_buf);
+        ret = cts_dev->ops->get_diffdata(cts_dev, cache_buf);
         if (ret) {
             cts_err("Read diffdata failed %d", ret);
         } else {
@@ -1602,7 +1497,7 @@ int cts_get_diffdata(const struct cts_device *cts_dev, void *buf)
     }
 
     for (i = 0; i < 5; i++) {
-        int r = cts_tcs_clr_data_ready_flag(cts_dev);
+        int r = cts_dev->ops->clr_data_ready_flag(cts_dev);
         if (r) {
             cts_err("Clear data ready flag failed %d", r);
         } else {
@@ -1640,7 +1535,7 @@ int cts_get_basedata(const struct cts_device *cts_dev, void *buf)
     /** - Wait data ready flag set */
     for (i = 0; i < 1000; i++) {
         mdelay(1);
-        ret = cts_tcs_get_data_ready_flag(cts_dev, &ready);
+        ret = cts_dev->ops->get_data_ready_flag(cts_dev, &ready);
         if (ret) {
             cts_err("Get data ready flag failed %d", ret);
             goto get_diff_free_buf;
@@ -1654,7 +1549,7 @@ int cts_get_basedata(const struct cts_device *cts_dev, void *buf)
         goto get_diff_free_buf;
     }
     do {
-        ret = cts_tcs_get_basedata(cts_dev, cache_buf);
+        ret = cts_dev->ops->get_basedata(cts_dev, cache_buf);
         if (ret) {
             cts_err("Read basedata failed %d", ret);
         } else {
@@ -1675,7 +1570,7 @@ int cts_get_basedata(const struct cts_device *cts_dev, void *buf)
     }
 
     for (i = 0; i < 5; i++) {
-        int r = cts_tcs_clr_data_ready_flag(cts_dev);
+        int r = cts_dev->ops->clr_data_ready_flag(cts_dev);
         if (r) {
             cts_err("Clear data ready flag failed %d", r);
         } else {
@@ -1747,69 +1642,69 @@ static int cts_init_fwdata(struct cts_device *cts_dev)
         return -EINVAL;
     }
 
-    ret = cts_tcs_get_fw_ver(cts_dev, &fwdata->version);
+    ret = cts_dev->ops->get_fw_ver(cts_dev, &fwdata->version);
     if (ret < 0) {
         cts_err("get_fw_ver failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_lib_ver(cts_dev, &fwdata->lib_version);
+    ret = cts_dev->ops->get_lib_ver(cts_dev, &fwdata->lib_version);
     if (ret < 0) {
         cts_err("get_lib_ver failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_ddi_ver(cts_dev, &fwdata->ddi_version);
+    ret = cts_dev->ops->get_ddi_ver(cts_dev, &fwdata->ddi_version);
     if (ret < 0) {
         cts_err("get_ddi_ver failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_res_x(cts_dev, &fwdata->res_x);
+    ret = cts_dev->ops->get_res_x(cts_dev, &fwdata->res_x);
     if (ret < 0) {
         cts_err("get_res_x failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_res_y(cts_dev, &fwdata->res_y);
+    ret = cts_dev->ops->get_res_y(cts_dev, &fwdata->res_y);
     if (ret < 0) {
         cts_err("get_res_y failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_rows(cts_dev, &fwdata->rows);
+    ret = cts_dev->ops->get_rows(cts_dev, &fwdata->rows);
     if (ret < 0) {
         cts_err("get_rows failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_cols(cts_dev, &fwdata->cols);
+    ret = cts_dev->ops->get_cols(cts_dev, &fwdata->cols);
     if (ret < 0) {
         cts_err("get_cols failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_flip_x(cts_dev, &fwdata->flip_x);
+    ret = cts_dev->ops->get_flip_x(cts_dev, &fwdata->flip_x);
     if (ret < 0) {
         cts_err("get_flip_x failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_flip_y(cts_dev, &fwdata->flip_y);
+    ret = cts_dev->ops->get_flip_y(cts_dev, &fwdata->flip_y);
     if (ret < 0) {
         cts_err("get_flip_y failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_swap_axes(cts_dev, &fwdata->swap_axes);
+    ret = cts_dev->ops->get_swap_axes(cts_dev, &fwdata->swap_axes);
     if (ret < 0) {
         cts_err("get_swap_axes failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_int_mode(cts_dev, &fwdata->int_mode);
+    ret = cts_dev->ops->get_int_mode(cts_dev, &fwdata->int_mode);
     if (ret < 0) {
         cts_err("get_int_mode failed");
         return -EINVAL;
     }
-    ret = cts_tcs_get_int_keep_time(cts_dev, &fwdata->int_keep_time);
+    ret = cts_dev->ops->get_int_keep_time(cts_dev, &fwdata->int_keep_time);
     if (ret < 0) {
         cts_err("get_int_keep_time failed");
         return -EINVAL;
     }
     fwdata->rawdata_target = 2000;
 
-    ret = cts_tcs_get_esd_method(cts_dev, &fwdata->esd_method);
+    ret = cts_dev->ops->get_esd_method(cts_dev, &fwdata->esd_method);
     if (ret < 0) {
         cts_err("get_esd_method failed");
         return -EINVAL;
@@ -1976,7 +1871,7 @@ int cts_suspend_device(struct cts_device *cts_dev)
     //    cts_dev->rtdata.gesture_wakeup_enabled ?
     //    CTS_CMD_SUSPEND_WITH_GESTURE : CTS_CMD_SUSPEND);
     buf = cts_dev->rtdata.gesture_wakeup_enabled ? 2 : 3;
-	ret = cts_tcs_set_pwr_mode(cts_dev, buf);
+	ret = cts_dev->ops->set_pwr_mode(cts_dev, buf);
     if (ret) {
         cts_err("Suspend device failed %d", ret);
 
@@ -2139,35 +2034,38 @@ int cts_enter_program_mode(struct cts_device *cts_dev)
         return ret;
     }
 #ifdef CONFIG_CTS_I2C_HOST
-    if (boot_mode != CTS_DEV_BOOT_MODE_PRG)
+    if (boot_mode == CTS_DEV_BOOT_MODE_TCH_PRG_9916) ||
+		(boot_mode == CTS_DEV_BOOT_MODE_I2C_PRG_9911C))
 #else
-    if (boot_mode != CTS_DEV_BOOT_MODE_PRG)
+    if ((boot_mode == CTS_DEV_BOOT_MODE_TCH_PRG_9916) ||
+		(boot_mode == CTS_DEV_BOOT_MODE_SPI_PRG_9911C))
 #endif
     {
-        cts_err("BOOT_MODE readback %u != I2C/SPI PROMGRAM mode", boot_mode);
-        return -EFAULT;
-    }
-
-    return 0;
+        return 0;
+	}
+    cts_err("BOOT_MODE readback %u != I2C/SPI PROMGRAM mode", boot_mode);
+    return -EFAULT;
 }
 
 const char *cts_dev_boot_mode2str(u8 boot_mode)
 {
-#define case_boot_mode(mode) \
-    case CTS_DEV_BOOT_MODE_ ## mode: return #mode "-BOOT"
-
-    switch (boot_mode) {
-        case_boot_mode(IDLE);
-        case_boot_mode(FLASH);
-        case_boot_mode(PRG);
-        case_boot_mode(SRAM);
-        case_boot_mode(DDI_PRG);
-        case_boot_mode(SPI_PRG);
-    default:
-        return "INVALID";
-    }
-
-#undef case_boot_mode
+	switch (boot_mode) {
+		case CTS_DEV_BOOT_MODE_IDLE:
+			return "IDLE-BOOT";
+		case CTS_DEV_BOOT_MODE_FLASH:
+			return "FLASH-BOOT";
+		case CTS_DEV_BOOT_MODE_SRAM:
+			return "SRAM-BOOT";
+		/* case CTS_DEV_BOOT_MODE_I2C_PRG_9911C: */
+		case CTS_DEV_BOOT_MODE_TCH_PRG_9916:
+			return "I2C-PRG-BOOT/TCH-PRG-BOOT";
+		case CTS_DEV_BOOT_MODE_DDI_PRG:
+			return "DDI-PRG-BOOT";
+		case CTS_DEV_BOOT_MODE_SPI_PRG_9911C:
+			return "SPI-PROG-BOOT/INVALID-BOOT";
+		default:
+			return "INVALID";
+	}
 }
 
 int cts_enter_normal_mode(struct cts_device *cts_dev)
@@ -2226,11 +2124,12 @@ int cts_enter_normal_mode(struct cts_device *cts_dev)
         } else {
             break;
         }
-        ret = cts_get_fwid(cts_dev, &fwid);
+        ret = cts_dev->ops->get_fw_id(cts_dev, &fwid);
         if (ret) {
             cts_err("Get firmware id failed %d, retries %d", ret, retries);
         } else {
-            if (fwid == CTS_DEV_FWID_ICNL9911
+            if (fwid == CTS_DEV_FWID_ICNL9916
+			||	fwid == CTS_DEV_FWID_ICNL9911
             ||  fwid == CTS_DEV_FWID_ICNL9911S
             ||  fwid == CTS_DEV_FWID_ICNL9911C) {
                 cts_info("Get firmware id successful 0x%02x", fwid);
@@ -2534,6 +2433,9 @@ err_out:
     return ret;
 }
 
+extern struct cts_dev_ops tcs_ops;
+extern struct cts_dev_ops hostcomm_ops;
+
 int cts_probe_device(struct cts_device *cts_dev)
 {
     int ret, retries = 0;
@@ -2542,7 +2444,34 @@ int cts_probe_device(struct cts_device *cts_dev)
     u16 device_fw_ver = 0;
     cts_info("Probe device");
 
-read_fwid:
+	cts_dev->ops = &tcs_ops;
+
+read_hwid:
+    /** - Try to read hardware id,
+    it will enter program mode as normal */
+    ret = cts_get_hwid(cts_dev, &hwid);
+    if (ret || hwid == CTS_DEV_HWID_INVALID) {
+	    retries++;
+
+	    cts_err("Get hardware id failed %d retries %d", ret, retries);
+
+        if (retries < 3) {
+	        cts_plat_reset_device(cts_dev->pdata);
+	        goto read_hwid;
+	    } else {
+		    return -ENODEV;
+	    }
+    }
+
+	if (hwid == CTS_DEV_HWID_ICNL9916) {
+		cts_dev->ops = &tcs_ops;
+	} else if ((hwid == CTS_DEV_HWID_ICNL9911C) ||
+		(hwid == CTS_DEV_HWID_ICNL9911S) ||
+		(hwid == CTS_DEV_HWID_ICNL9911)) {
+		cts_dev->ops = &hostcomm_ops;
+	}
+
+//read_fwid:
 #ifdef CONFIG_CTS_I2C_HOST
     if (!cts_plat_is_i2c_online
         (cts_dev->pdata, CTS_DEV_NORMAL_MODE_I2CADDR)) {
@@ -2555,7 +2484,7 @@ read_fwid:
 #endif
     {
         cts_init_rtdata_with_normal_mode(cts_dev);
-        ret = cts_get_fwid(cts_dev, &fwid);
+        ret = cts_dev->ops->get_fw_id(cts_dev, &fwid);
         if (ret) {
             cts_err("Get firmware id failed %d, retries %d", ret,
                 retries);
@@ -2570,22 +2499,6 @@ read_fwid:
                 cts_info("Device firmware version: %04x", device_fw_ver);
             }
             goto init_hwdata;
-        }
-    }
-
-    /** - Try to read hardware id,
-    it will enter program mode as normal */
-    ret = cts_get_hwid(cts_dev, &hwid);
-    if (ret || hwid == CTS_DEV_HWID_INVALID) {
-        retries++;
-
-        cts_err("Get hardware id failed %d retries %d", ret, retries);
-
-        if (retries < 3) {
-            cts_plat_reset_device(cts_dev->pdata);
-            goto read_fwid;
-        } else {
-            return -ENODEV;
         }
     }
 
@@ -2927,8 +2840,8 @@ int cts_get_compensate_cap(struct cts_device *cts_dev, u8 *cap)
 
     cts_info("Get compensate cap");
 
-    /*ret = cts_send_command(cts_dev,CTS_CMD_ENABLE_READ_CNEG);*/
-    ret = cts_tcs_enable_get_cneg(cts_dev);
+
+    ret = cts_dev->ops->enable_get_cneg(cts_dev);
     if (ret) {
         cts_err("Enable read compensate cap failed %d",ret);
         return ret;
@@ -2942,7 +2855,7 @@ int cts_get_compensate_cap(struct cts_device *cts_dev, u8 *cap)
         /*  ret = cts_fw_reg_readb(cts_dev,
          *      CTS_DEVICE_FW_REG_COMPENSATE_CAP_READY, &ready);
          */
-        ret = cts_tcs_is_cneg_ready(cts_dev, &ready);
+        ret = cts_dev->ops->is_cneg_ready(cts_dev, &ready);
         if (ret) {
             cts_err("Read compensate cap ready flag failed %d", ret);
         } else {
@@ -2962,7 +2875,7 @@ read_compensate_cap:
      *       CTS_DEVICE_FW_REG_COMPENSATE_CAP, cap,
      *          cts_dev->hwdata->num_row * cts_dev->hwdata->num_col, 500);
      */
-    ret = cts_tcs_get_cneg(cts_dev, cap,
+    ret = cts_dev->ops->get_cneg(cts_dev, cap,
         cts_dev->hwdata->num_row * cts_dev->hwdata->num_col);
     if (ret) {
         cts_err("Read compensate cap failed %d",ret);
@@ -2974,7 +2887,7 @@ read_compensate_cap:
         u8  ready;
 
         /* r = cts_send_command(cts_dev,CTS_CMD_DISABLE_READ_CNEG);*/
-        r = cts_tcs_disable_get_cneg(cts_dev);
+        r = cts_dev->ops->disable_get_cneg(cts_dev);
         if (r) {
             cts_err("Send cmd DISABLE_READ_CNEG failed %d", r);
             continue;
@@ -2984,7 +2897,7 @@ read_compensate_cap:
         /** r = cts_fw_reg_readb(cts_dev,
          *      CTS_DEVICE_FW_REG_COMPENSATE_CAP_READY, &ready);
          */
-        r = cts_tcs_is_cneg_ready(cts_dev, &ready);
+        r = cts_dev->ops->is_cneg_ready(cts_dev, &ready);
         if (r) {
             cts_err("Read compensate cap ready flag failed %d", r);
             continue;

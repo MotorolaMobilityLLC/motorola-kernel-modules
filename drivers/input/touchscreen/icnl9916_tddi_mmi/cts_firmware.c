@@ -670,15 +670,28 @@ const struct cts_firmware *cts_request_firmware(const struct cts_device
 
 #ifdef CFG_CTS_FIRMWARE_IN_FS
     /* Check firmware in file system when probe only when build to .ko */
-    if (is_filesystem_mounted(CFG_CTS_FIRMWARE_FILEPATH)) {
-        firmware_from_file = cts_request_newer_firmware_from_fs(cts_dev,
+    if (hwid == CTS_DEV_HWID_ICNL9911C) {
+        if (is_filesystem_mounted(CFG_CTS_FIRMWARE_FILEPATH_9911)) {
+            firmware_from_file = cts_request_newer_firmware_from_fs(cts_dev,
 #ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
-            cts_dev->config_fw_name[0] ? cts_dev->config_fw_name :
-            CFG_CTS_FIRMWARE_FILENAME,
+                cts_dev->config_fw_name[0] ? cts_dev->config_fw_name :
+                CFG_CTS_FIRMWARE_FILENAME_9911,
 #else /* CFG_CTS_FW_UPDATE_FILE_LOAD */
-            CFG_CTS_FIRMWARE_FILENAME,
+                CFG_CTS_FIRMWARE_FILENAME_9911,
 #endif /* CFG_CTS_FW_UPDATE_FILE_LOAD */
-            firmware_builtin ? FIRMWARE_VERSION(firmware_builtin) : curr_firmware_ver);
+                firmware_builtin ? FIRMWARE_VERSION(firmware_builtin) : curr_firmware_ver);
+        }
+    } else if (hwid == CTS_DEV_HWID_ICNL9916) {
+        if (is_filesystem_mounted(CFG_CTS_FIRMWARE_FILEPATH_9916)) {
+            firmware_from_file = cts_request_newer_firmware_from_fs(cts_dev,
+#ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
+                cts_dev->config_fw_name[0] ? cts_dev->config_fw_name :
+                CFG_CTS_FIRMWARE_FILENAME_9916,
+#else /* CFG_CTS_FW_UPDATE_FILE_LOAD */
+                CFG_CTS_FIRMWARE_FILENAME_9916,
+#endif /* CFG_CTS_FW_UPDATE_FILE_LOAD */
+                firmware_builtin ? FIRMWARE_VERSION(firmware_builtin) : curr_firmware_ver);
+        }
     }
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 

@@ -5,7 +5,6 @@
 #include "cts_core.h"
 #include "cts_firmware.h"
 #include "cts_test.h"
-#include "cts_tcs.h"
 
 #ifdef CONFIG_CTS_LEGACY_TOOL
 
@@ -148,13 +147,13 @@ static ssize_t cts_tool_read(struct file *file,
 
     switch (cmd->cmd) {
     case CTS_TOOL_CMD_TCS_READ_HW_CMD:
-        cts_tcs_read_hw_reg(cts_dev, get_unaligned_le32(cmd->addr), cmd->data, cmd->data_len);
+        cts_dev->ops->read_hw_reg(cts_dev, get_unaligned_le32(cmd->addr), cmd->data, cmd->data_len);
         break;
     case CTS_TOOL_CMD_TCS_READ_DDI_CMD:
-        cts_tcs_read_ddi_reg(cts_dev, get_unaligned_le32(cmd->addr), cmd->data, cmd->data_len);
+        cts_dev->ops->read_ddi_reg(cts_dev, get_unaligned_le32(cmd->addr), cmd->data, cmd->data_len);
         break;
     case CTS_TOOL_CMD_TCS_READ_FW_CMD:
-        cts_tcs_read_reg(cts_dev, get_unaligned_le16(cmd->tcs), cmd->data, cmd->data_len);
+        cts_dev->ops->read_reg(cts_dev, get_unaligned_le16(cmd->tcs), cmd->data, cmd->data_len);
         break;
     case CTS_TOOL_CMD_GET_PANEL_PARAM:
         cts_info("Get panel param len: %u", cmd->data_len);
@@ -413,25 +412,25 @@ static ssize_t cts_tool_write(struct file *file,
 
     switch (cmd->cmd) {
     case CTS_TOOL_CMD_TCS_WRITE_HW_CMD:
-        cts_tcs_write_hw_reg(cts_dev, get_unaligned_le32(cmd->addr),
+        cts_dev->ops->write_hw_reg(cts_dev, get_unaligned_le32(cmd->addr),
             cmd->data, cmd->data_len);
         break;
     case CTS_TOOL_CMD_TCS_WRITE_DDI_CMD:
-        cts_tcs_write_ddi_reg(cts_dev, get_unaligned_le32(cmd->addr),
+        cts_dev->ops->write_ddi_reg(cts_dev, get_unaligned_le32(cmd->addr),
             cmd->data, cmd->data_len);
         break;
     case CTS_TOOL_CMD_TCS_WRITE_FW_CMD:
-        cts_tcs_write_reg(cts_dev, get_unaligned_le16(cmd->tcs), cmd->data, cmd->data_len);
+        cts_dev->ops->write_reg(cts_dev, get_unaligned_le16(cmd->tcs), cmd->data, cmd->data_len);
         break;
     case CTS_TOOL_CMD_TCS_ENABLE_GET_RAWDATA_CMD:
         cts_info("Enable touch data");
-        ret = cts_tcs_enable_get_rawdata(cts_dev);
+        ret = cts_dev->ops->enable_get_rawdata(cts_dev);
         if (ret)
             cts_err("Enable get touch data failed");
 	break;
     case CTS_TOOL_CMD_TCS_DISABLE_GET_RAWDATA_CMD:
         cts_info("Disable touch data");
-        ret = cts_tcs_disable_get_rawdata(cts_dev);
+        ret = cts_dev->ops->disable_get_rawdata(cts_dev);
         if (ret)
             cts_err("Disable get touch data failed");
         break;
