@@ -1091,12 +1091,44 @@ static void sx937x_exit_platform_hw(struct i2c_client *client)
 	return;
 }
 
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+static int power_on_chip(psx93XX_t this)
+{
+	int ret = 0;
+
+	psx937x_t pDevice = global_sx937x->pDevice;
+	psx937x_platform_data_t pdata = pDevice->hw;
+	ret = regulator_enable(pdata->cap_vdd);
+
+	if (ret) {
+		regulator_put(pdata->cap_vdd);
+		LOG_ERR("Error %d enable regulator\n", ret);
+		return ret;
+	}
+
+	msleep(20);
+	ret = this->init(this);
+	pdata->cap_vdd_en = true;
+
+	return ret;
+}
+#endif
+
 static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 		unsigned int enable)
 {
 	bool disableFlag = true;
 	int i = 0;
 	u32 temp = 0x0;
+
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+	psx937x_t pDevice = global_sx937x->pDevice;
+	psx937x_platform_data_t pdata = pDevice->hw;
+
+	if (enable && !pdata->cap_vdd_en)
+		if ( power_on_chip(global_sx937x) != 0)
+			return -1;
+#endif
 
 	for (i = 0; i < ARRAY_SIZE(psmtcButtons); i++) {
 		if (strcmp(sensors_cdev->name, psmtcButtons[i].name) == 0) {
@@ -1136,6 +1168,16 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 		temp = temp & 0xFFFFFF00;
 		LOG_DBG("set reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
 		sx937x_i2c_write_16bit(global_sx937x, SX937X_GENERAL_SETUP, temp);
+
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+		if (pdata->cap_vdd_en) {
+			msleep(20);
+			regulator_disable(pdata->cap_vdd);
+			LOG_INFO("cap_vdd disable\n");
+			pdata->cap_vdd_en = false;
+		}
+#endif
+
 	}
 	return 0;
 }
