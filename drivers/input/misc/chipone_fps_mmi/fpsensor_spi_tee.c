@@ -501,7 +501,7 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
     case FPSENSOR_IOC_RESET:
         fpsensor_debug(DEBUG_LOG, "%s: chip reset command\n", __func__);
-        fpsensor_hw_reset(1250);
+        fpsensor_hw_reset(4000);
         break;
 
     case FPSENSOR_IOC_ENABLE_IRQ:
@@ -914,8 +914,8 @@ int fpsensor_detect_hwid(fpsensor_data_t *fpsensor_dev)
     unsigned char chipid_tx[4] = {0};
     unsigned char chipid_rx[4] = {0};
 
-    fpsensor_hw_reset(1250);
-	fpsensor_dev->spi_freq_khz = 6000u;
+    fpsensor_hw_reset(4000);
+    fpsensor_dev->spi_freq_khz = 6000u;
     fpsensor_spi_setup(fpsensor_dev);
 
     do {
