@@ -249,6 +249,7 @@ struct goodix_module {
 
 /*
  * struct goodix_ts_board_data -  board data
+ * @svdd_name: name of stylus regulator
  * @avdd_name: name of analoy regulator
  * @iovdd_name: name of analoy regulator
  * @reset_gpio: reset gpio number
@@ -261,10 +262,12 @@ struct goodix_module {
  */
 struct goodix_ts_board_data {
 	char ic_name[GOODIX_MAX_STR_LABLE_LEN];
+	char svdd_name[GOODIX_MAX_STR_LABLE_LEN];
 	char avdd_name[GOODIX_MAX_STR_LABLE_LEN];
 	char iovdd_name[GOODIX_MAX_STR_LABLE_LEN];
 	int reset_gpio;
 	int irq_gpio;
+	int svdd_gpio;
 	int avdd_gpio;
 	int iovdd_gpio;
 	unsigned int  irq_flags;
@@ -410,6 +413,7 @@ struct goodix_bus_interface {
 
 struct goodix_ts_hw_ops {
 	int (*power_on)(struct goodix_ts_core *cd, bool on);
+	int (*stylus_power_on)(struct goodix_ts_core *cd, bool on);
 	int (*dev_confirm)(struct goodix_ts_core *cd);
 	int (*resume)(struct goodix_ts_core *cd);
 	int (*suspend)(struct goodix_ts_core *cd);
@@ -474,6 +478,7 @@ struct goodix_ts_core {
 	struct goodix_ic_config *ic_configs[GOODIX_MAX_CONFIG_GROUP];
 	struct regulator *avdd;
 	struct regulator *iovdd;
+	struct regulator *svdd;
 
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *pin_sta_active;
@@ -513,7 +518,9 @@ struct goodix_ts_core {
 	int update_status;
 	int gesture_enabled;
 	const char *supplier;
+#if 0 //FIXME
 	bool need_update_cfg;
+#endif
 };
 
 /* external module structures */
