@@ -172,7 +172,7 @@ static int goodix_i2c_probe(struct i2c_client *client,
 	int ret = 0;
 
 	ts_info("goodix i2c probe in");
-#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+#if 0 // FIXME
 	if (client->dev.of_node && !mmi_device_is_available(client->dev.of_node)) {
 		ts_err("mmi: device not supported\n");
 		return -ENODEV;
@@ -265,11 +265,11 @@ static struct i2c_driver goodix_i2c_driver = {
 
 int goodix_i2c_bus_init(void)
 {
-#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+#if 0 // FIXME
 	struct device_node *node;
 #endif
 	ts_info("Goodix i2c driver init");
-#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+#if 0 // FIXME
 	node = mmi_check_dynamic_device_node("goodix_ts_i2c");
 	if (!node || mmi_device_is_available(node))
 #endif

@@ -998,6 +998,15 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->iovdd_gpio = r;
 	}
 
+	r = of_get_named_gpio(node, "goodix,svdd-gpio", 0);
+	if (r < 0) {
+		ts_info("can't find svdd-gpio, use other power supply");
+		board_data->svdd_gpio = 0;
+	} else {
+		ts_info("get svdd-gpio[%d] from dt", r);
+		board_data->svdd_gpio = r;
+	}
+
 	r = of_get_named_gpio(node, "goodix,reset-gpio", 0);
 	if (r < 0) {
 		ts_err("invalid reset-gpio in dt: %d", r);
@@ -1045,6 +1054,19 @@ static int goodix_parse_dt(struct device_node *node,
 			ts_info("invalied iovdd name length: %ld > %ld",
 				strlen(name_tmp),
 				sizeof(board_data->iovdd_name));
+	}
+
+	memset(board_data->svdd_name, 0, sizeof(board_data->svdd_name));
+	r = of_property_read_string(node, "goodix,svdd-name", &name_tmp);
+	if (!r) {
+		ts_info("avdd name from dt: %s", name_tmp);
+		if (strlen(name_tmp) < sizeof(board_data->svdd_name))
+			strncpy(board_data->svdd_name,
+				name_tmp, sizeof(board_data->svdd_name));
+		else
+			ts_info("invalied avdd name length: %ld > %ld",
+				strlen(name_tmp),
+				sizeof(board_data->svdd_name));
 	}
 
 	/* get firmware file name */
@@ -1348,6 +1370,42 @@ static int goodix_ts_power_init(struct goodix_ts_core *core_data)
 		ts_info("iovdd name is NULL");
 	}
 
+	if (strlen(ts_bdata->svdd_name)) {
+		core_data->svdd = devm_regulator_get(dev,
+				 ts_bdata->svdd_name);
+		if (IS_ERR_OR_NULL(core_data->svdd)) {
+			ret = PTR_ERR(core_data->svdd);
+			ts_err("Failed to get regulator svdd:%d", ret);
+			core_data->svdd = NULL;
+			return ret;
+		}
+
+		ret = regulator_set_voltage(core_data->svdd, 1800000, 1800000);
+		if (ret) {
+			ts_err("set svdd voltage fail");
+			return 0;
+		}
+
+	} else {
+		ts_info("svdd name is NULL");
+	}
+
+	return ret;
+}
+
+int goodix_ts_stylus_power_on(struct goodix_ts_core *cd,  bool mode)
+{
+	int ret = 0;
+
+	ts_info("Stylus power mode %d", mode);
+
+    if(mode)
+	    ret = cd->hw_ops->stylus_power_on(cd, true);
+    else
+		ret = cd->hw_ops->stylus_power_on(cd, false);
+	if (ret)
+		ts_err("failed stylus power mode %d, ret %d", mode, ret);
+
 	return ret;
 }
 
@@ -1541,6 +1599,15 @@ static int goodix_ts_gpio_setup(struct goodix_ts_core *core_data)
 				GPIOF_OUT_INIT_LOW, "ts_iovdd_gpio");
 		if (r < 0) {
 			ts_err("Failed to request iovdd-gpio, r:%d", r);
+			return r;
+		}
+	}
+
+	if (ts_bdata->svdd_gpio > 0) {
+		r = devm_gpio_request_one(&core_data->pdev->dev, ts_bdata->svdd_gpio,
+				GPIOF_OUT_INIT_HIGH, "ts_svdd_gpio");
+		if (r < 0) {
+			ts_err("Failed to request svdd-gpio, r:%d", r);
 			return r;
 		}
 	}
@@ -2113,7 +2180,7 @@ static int goodix_generic_noti_callback(struct notifier_block *self,
 		hw_ops->irq_enable(cd, 0);
 		break;
 	case NOTIFY_FWUPDATE_SUCCESS:
-#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+#if 0 //FIXME
 		if (cd->need_update_cfg) {
 			if (goodix_get_config_proc(cd)) {
 				ts_info("no valid ic config found");
@@ -2251,18 +2318,18 @@ static int goodix_later_init_thread(void *data)
 	/* setp 2: get config data from config bin */
 	if (goodix_get_config_proc(cd)) {
 		ts_info("no valid ic config found");
-#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+#if 0 //FIXME
 		cd->need_update_cfg = 1;
 #endif
 	} else
 		ts_info("success get valid ic config");
 
-#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
+//#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI //FIXME
 	ret = goodix_do_fw_update(cd->ic_configs[CONFIG_TYPE_NORMAL],
 			UPDATE_MODE_BLOCK | UPDATE_MODE_SRC_REQUEST);
 	if (ret)
 		ts_err("failed do fw update");
-#endif
+//#endif
 	/* setp3: get fw version and ic_info
 	 * at this step we believe that the ic is in normal mode,
 	 * if the version info is invalid there must have some
@@ -2412,10 +2479,29 @@ static int goodix_ts_probe(struct platform_device *pdev)
 			ts_err("Failed to select active pinstate, r:%d", ret);
 	}
 
+	/* Enable the stylus clock regulator supplier */
+	if (core_data->svdd)
+		ret = goodix_ts_stylus_power_on(core_data, true);
+	if (ret)
+		ts_err("failed enable goodix stylus clock regulator supplier");
+
 	/* get stylus clock*/
 	ret = goodix_ts_stylus_clk_init(core_data);
 	if (ret)
 		ts_err("failed get goodix stylus clock");
+
+
+    /* For debugging convenience, gpio59 is temporarily turned on by default,
+        it will be turned off later */
+	if (IS_ERR_OR_NULL(core_data->stylus_clk_active)) {//FIXME
+		ts_err("stylus_clk_active is NULL\n");
+    } else {
+	    ret = pinctrl_select_state(core_data->pinctrl,
+				    core_data->stylus_clk_active);
+	    if (ret < 0) {
+		    ts_err("Failed to select active stylus clk state, ret:%d", ret);
+        }
+    }
 
 	/* confirm it's goodix touch dev or not */
 	ret = core_data->hw_ops->dev_confirm(core_data);

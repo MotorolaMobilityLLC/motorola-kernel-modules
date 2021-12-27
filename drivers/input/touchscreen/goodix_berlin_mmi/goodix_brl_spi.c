@@ -201,7 +201,7 @@ static int goodix_spi_probe(struct spi_device *spi)
 
 	ts_info("goodix spi probe in");
 
-#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+#if 0 // FIXME
 	if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
 		ts_err("%s mmi: device not supported\n", __func__);
 		return -ENODEV;
