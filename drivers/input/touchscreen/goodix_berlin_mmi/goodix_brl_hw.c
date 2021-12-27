@@ -219,6 +219,27 @@ power_off:
 	return ret;
 }
 
+static int brl_stylus_power_on(struct goodix_ts_core *cd, bool on)
+{
+	int ret = 0;
+
+	if (on) {
+		if (cd->svdd) {
+			ret = regulator_enable(cd->svdd);
+			if (ret < 0) {
+				ts_err("Failed to enable svdd:%d", ret);
+				goto power_off;
+			}
+		}
+		return 0;
+	}
+
+power_off:
+	if (cd->svdd)
+		regulator_disable(cd->svdd);
+	return ret;
+}
+
 #define GOODIX_SLEEP_CMD	0x84
 int brl_suspend(struct goodix_ts_core *cd)
 {
@@ -1408,6 +1429,7 @@ exit:
 
 static struct goodix_ts_hw_ops brl_hw_ops = {
 	.power_on = brl_power_on,
+	.stylus_power_on = brl_stylus_power_on,
 	.dev_confirm = brl_dev_confirm,
 	.resume = brl_resume,
 	.suspend = brl_suspend,
