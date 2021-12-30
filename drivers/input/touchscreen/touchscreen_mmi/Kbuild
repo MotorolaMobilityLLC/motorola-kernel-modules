@@ -1,6 +1,8 @@
 # add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/gpu/drm/mediatek/mediatek_v2/
 
 ifneq ($(filter m y, $(CONFIG_PANEL_NOTIFICATIONS)),)
 	EXTRA_CFLAGS += -DCONFIG_PANEL_NOTIFICATIONS
@@ -14,8 +16,20 @@ endif
 ifneq ($(filter m y, $(CONFIG_TOUCHCLASS_MMI_GESTURE_POISON_EVENT)),)
 	EXTRA_CFLAGS += -DTS_MMI_TOUCH_GESTURE_POISON_EVENT
 endif
+ifneq ($(filter m y, $(CONFIG_TOUCHCLASS_MMI_MULTIWAY_UPDATE_FW)),)
+	EXTRA_CFLAGS += -DTS_MMI_TOUCH_MULTIWAY_UPDATE_FW
+endif
 ifneq ($(filter m y, $(CONFIG_DRM_PANEL_NOTIFICATIONS)),)
 	EXTRA_CFLAGS += -DCONFIG_DRM_PANEL_NOTIFICATIONS
+endif
+ifneq ($(filter m y, $(CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCONFIG_DRM_PANEL_EVENT_NOTIFICATIONS
+endif
+ifneq ($(filter m y, $(CONFIG_TOUCH_PANEL_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCONFIG_PANEL_NOTIFICATIONS
+endif
+ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCONFIG_MTK_PANEL_NOTIFICATIONS
 endif
 ifneq ($(filter m y, $(CONFIG_TS_KERNEL_USE_GKI)),)
 	EXTRA_CFLAGS += -DCONFIG_TS_KERNEL_USE_GKI
@@ -24,5 +38,6 @@ endif
 obj-m := touchscreen_mmi.o
 touchscreen_mmi-objs := touchscreen_mmi_class.o touchscreen_mmi_panel.o touchscreen_mmi_notif.o touchscreen_mmi_gesture.o
 
-KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
-KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_relay/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(KBUILD_EXTMOD)/../../sensors_class.ko_intermediates/LINKED/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(KBUILD_EXTMOD)/../../mmi_relay.ko_intermediates/LINKED/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/../../kernel/msm-$(MODULE_KERNEL_VERSION)/Module.symvers
