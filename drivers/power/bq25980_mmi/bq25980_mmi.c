@@ -20,14 +20,19 @@
 #include <linux/of_gpio.h>
 
 #include "bq25980_charger.h"
-
-//undef because of pinctrl
-//#define CONFIG_INTERRUPT_AS_GPIO
+#include <charger_class.h>
 
 struct bq25980_state {
 	bool dischg;
 	bool ovp;
 	bool ocp;
+	bool vac_ovp;
+	bool bat_ovp;
+	bool vout_ovp;
+	bool vbus_ovp;
+	bool bat_ocp;
+	bool bus_ocp;
+	bool bus_ucp;
 	bool wdt;
 	bool tflt;
 	bool online;
@@ -112,6 +117,8 @@ struct bq25980_chip_info {
 	int adc_vbat_volt_step;
 	int adc_vbus_volt_step;
 	int adc_vbus_volt_offset;
+	int adc_vout_volt_step;
+	int adc_vout_volt_offset;
 };
 
 struct bq25980_init_data {
@@ -144,9 +151,10 @@ struct bq25980_device {
 	int mode;
 	int device_id;
 	struct power_supply_desc psy_desc;
-	struct pinctrl *irq_pinctrl;
-	bool usb_present;
-	int irq_counts;
+	int reg_addr;
+	int reg_data;
+	struct charger_device *chg_dev;
+	struct charger_properties chg_prop;
 	bool irq_waiting;
 	bool irq_disabled;
 	bool resume_completed;
@@ -199,7 +207,7 @@ static struct reg_default bq25960_reg_init_val[] = {
 	{BQ25980_TDIE_ALM,	0x78},//0x78:85C
 	{BQ25980_TSBUS_FLT,	0x15},
 	{BQ25980_TSBAT_FLG,	0x15},
-	{BQ25980_VAC_CONTROL,	0x48},//0x48:12V*2
+	{BQ25980_VAC_CONTROL,	0xb4},//0xb4:18v*2 for vacovp
 	{BQ25980_CHRGR_CTRL_2,	0x00},
 	{BQ25980_CHRGR_CTRL_3,	0x94},//0x94:watchdog disable 5s,500kHz
 	{BQ25980_CHRGR_CTRL_4,	0x81},//5m oum battery sense resister
@@ -212,7 +220,7 @@ static struct reg_default bq25960_reg_init_val[] = {
 	{BQ25980_MASK5,		0x80},
 
 	{BQ25980_ADC_CONTROL1,	0x84},//sample 14 bit
-	{BQ25980_ADC_CONTROL2,	0xE6},
+	{BQ25980_ADC_CONTROL2,	0x06}, //0x26: enable vac1 vac2 adc and vout adc
 
 };
 
@@ -381,23 +389,6 @@ static struct reg_default bq25960_reg_defs[] = {
 	{BQ25980_CHRGR_CTRL_6, 0x0},
 };
 
-static int bq25980_reg_init(struct bq25980_device *bq);
-//static int bq25980_watchdog_time[BQ25980_NUM_WD_VAL] = {5000, 10000, 50000,
-//							300000};
-
-static void dump_reg(struct bq25980_device *bq, int start, int end)
-{
-	int ret;
-	unsigned int val;
-	int addr;
-
-	for (addr = start; addr <= end; addr++) {
-		ret = regmap_read(bq->regmap, addr, &val);
-		if (!ret)
-			dev_err(bq->dev, "Reg[%02X] = 0x%02X\n", addr, val);
-	}
-}
-
 static void dump_all_reg(struct bq25980_device *bq)
 {
 	int ret;
@@ -410,19 +401,7 @@ static void dump_all_reg(struct bq25980_device *bq)
 			dev_err(bq->dev, "Reg[%02X] = 0x%02X\n", addr, val);
 	}
 }
-/*
-static int bq25980_get_adc_enable(struct bq25980_device *bq)
-{
-	unsigned int reg_code;
-	int ret;
 
-	ret = regmap_read(bq->regmap, BQ25980_ADC_CONTROL1, &reg_code);
-	if (ret)
-		return ret;
-
-	return !!(reg_code & BQ25980_ADC_EN);
-}
-*/
 static int bq25980_set_adc_enable(struct bq25980_device *bq, bool enable)
 {
 	int ret;
@@ -439,102 +418,8 @@ static int bq25980_set_adc_enable(struct bq25980_device *bq, bool enable)
 	return ret;
 }
 
-/*
-static int bq25980_get_input_curr_lim(struct bq25980_device *bq)
-{
-	unsigned int busocp_reg_code;
-	int ret;
 
-	ret = regmap_read(bq->regmap, BQ25980_BUSOCP, &busocp_reg_code);
-	if (ret)
-		return ret;
 
-	return (busocp_reg_code * bq->chip_info->busocp_step) + bq->chip_info->busocp_offset;
-}
-
-static int bq25980_set_hiz(struct bq25980_device *bq, int setting)
-{
-	return regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-			BQ25980_EN_HIZ, setting);
-}*/
-/*
-static int bq25980_set_input_curr_lim(struct bq25980_device *bq, int busocp)
-{
-	unsigned int busocp_reg_code;
-
-	if (!busocp)
-		return bq25980_set_hiz(bq, BQ25980_ENABLE_HIZ);
-
-	bq25980_set_hiz(bq, BQ25980_DISABLE_HIZ);
-
-	if (bq->state.bypass) {
-		busocp = max(busocp, bq->chip_info->busocp_byp_min);
-		busocp = min(busocp, bq->chip_info->busocp_byp_max);
-	} else {
-		busocp = max(busocp, bq->chip_info->busocp_sc_min);
-		busocp = min(busocp, bq->chip_info->busocp_sc_max);
-	}
-	
-	busocp_reg_code = (busocp - bq->chip_info->busocp_offset)
-						/ bq->chip_info->busocp_step;
-
-	return regmap_write(bq->regmap, BQ25980_BUSOCP, busocp_reg_code);
-}
-
-static int bq25980_get_input_volt_lim(struct bq25980_device *bq)
-{
-	unsigned int busovp_reg_code;
-	unsigned int busovp_offset;
-	unsigned int busovp_step;
-	int ret;
-
-	if (bq->state.bypass) {
-		busovp_step = bq->chip_info->busovp_byp_step;
-		busovp_offset = bq->chip_info->busovp_byp_offset;
-	} else {
-		busovp_step = bq->chip_info->busovp_sc_step;
-		busovp_offset = bq->chip_info->busovp_sc_offset;
-	}
-
-	ret = regmap_read(bq->regmap, BQ25980_BUSOVP, &busovp_reg_code);
-	if (ret)
-		return ret;
-
-	return (busovp_reg_code * busovp_step) + busovp_offset;
-}
-
-static int bq25980_set_input_volt_lim(struct bq25980_device *bq, int busovp)
-{
-	unsigned int busovp_reg_code;
-	unsigned int busovp_step;
-	unsigned int busovp_offset;
-	int ret;
-
-	if (bq->state.bypass) {
-		busovp_step = bq->chip_info->busovp_byp_step;
-		busovp_offset = bq->chip_info->busovp_byp_offset;
-		if (busovp > bq->chip_info->busovp_byp_max)
-			busovp = bq->chip_info->busovp_byp_max;
-		else if (busovp < bq->chip_info->busovp_byp_min)
-			busovp = bq->chip_info->busovp_byp_min;
-	} else {
-		busovp_step = bq->chip_info->busovp_sc_step;
-		busovp_offset = bq->chip_info->busovp_sc_offset;
-		if (busovp > bq->chip_info->busovp_sc_max)
-			busovp = bq->chip_info->busovp_sc_max;
-		else if (busovp < bq->chip_info->busovp_sc_min)
-			busovp = bq->chip_info->busovp_sc_min;
-	}
-
-	busovp_reg_code = (busovp - busovp_offset) / busovp_step;
-
-	ret = regmap_write(bq->regmap, BQ25980_BUSOVP, busovp_reg_code);
-	if (ret)
-		return ret;
-
-	return regmap_write(bq->regmap, BQ25980_BUSOVP_ALM, busovp_reg_code);
-}
-*/
 static int bq25980_get_const_charge_curr(struct bq25980_device *bq)
 {
 	unsigned int batocp_reg_code;
@@ -547,26 +432,7 @@ static int bq25980_get_const_charge_curr(struct bq25980_device *bq)
 	return (batocp_reg_code & BQ25980_BATOCP_MASK) *
 						BQ25980_BATOCP_STEP_uA;
 }
-/*
-static int bq25980_set_const_charge_curr(struct bq25980_device *bq, int batocp)
-{
-	unsigned int batocp_reg_code;
-	int ret;
 
-	batocp = max(batocp, BQ25980_BATOCP_MIN_uA);
-	batocp = min(batocp, bq->chip_info->batocp_max);
-
-	batocp_reg_code = batocp / BQ25980_BATOCP_STEP_uA;
-
-	ret = regmap_update_bits(bq->regmap, BQ25980_BATOCP,
-				BQ25980_BATOCP_MASK, batocp_reg_code);
-	if (ret)
-		return ret;
-
-	return regmap_update_bits(bq->regmap, BQ25980_BATOCP_ALM,
-				BQ25980_BATOCP_MASK, batocp_reg_code);
-}
-*/
 static int bq25980_get_const_charge_volt(struct bq25980_device *bq)
 {
 	unsigned int batovp_reg_code;
@@ -579,46 +445,7 @@ static int bq25980_get_const_charge_volt(struct bq25980_device *bq)
 	return ((batovp_reg_code * bq->chip_info->batovp_step) +
 			bq->chip_info->batovp_offset);
 }
-/*
-static int bq25980_set_const_charge_volt(struct bq25980_device *bq, int batovp)
-{
-	unsigned int batovp_reg_code;
-	int ret;
 
-	if (batovp < bq->chip_info->batovp_min)
-		batovp = bq->chip_info->batovp_min;
-
-	if (batovp > bq->chip_info->batovp_max)
-		batovp = bq->chip_info->batovp_max;
-
-	batovp_reg_code = (batovp - bq->chip_info->batovp_offset) /
-						bq->chip_info->batovp_step;
-
-	ret = regmap_write(bq->regmap, BQ25980_BATOVP, batovp_reg_code);
-	if (ret)
-		return ret;
-
-	return regmap_write(bq->regmap, BQ25980_BATOVP_ALM, batovp_reg_code);
-}*/
-/*
-static int bq25980_set_bypass(struct bq25980_device *bq, bool en_bypass)
-{
-	int ret;
-
-	if (en_bypass)
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-					BQ25980_EN_BYPASS, BQ25980_EN_BYPASS);
-	else
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-					BQ25980_EN_BYPASS, en_bypass);
-	if (ret)
-		return ret;
-
-	bq->state.bypass = en_bypass;
-
-	return 0;
-}
-*/
 static int bq25980_set_chg_en(struct bq25980_device *bq, bool en_chg)
 {
 	int ret;
@@ -637,6 +464,20 @@ static int bq25980_set_chg_en(struct bq25980_device *bq, bool en_chg)
 	return 0;
 }
 
+
+static int bq25980_is_chg_en(struct bq25980_device *bq, bool *en_chg)
+{
+	unsigned int chg_ctrl_2;
+	int ret;
+
+	ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &chg_ctrl_2);
+	if (ret)
+		return ret;
+	*en_chg = chg_ctrl_2 & BQ25980_CHG_EN;
+
+	return 0;
+}
+
 static int bq25980_get_adc_ibus(struct bq25980_device *bq)
 {
 	int ibus_adc_lsb, ibus_adc_msb;
@@ -644,12 +485,16 @@ static int bq25980_get_adc_ibus(struct bq25980_device *bq)
 	int ret;
 
 	ret = regmap_read(bq->regmap, BQ25980_IBUS_ADC_MSB, &ibus_adc_msb);
-	if (ret)
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_IBUS_ADC_MSB fail ret = %d\n", ret);
 		return ret;
+	}
 
 	ret = regmap_read(bq->regmap, BQ25980_IBUS_ADC_LSB, &ibus_adc_lsb);
-	if (ret)
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_IBUS_ADC_LSB fail ret = %d\n", ret);
 		return ret;
+	}
 
 	ibus_adc = (ibus_adc_msb << 8) | ibus_adc_lsb;
 
@@ -666,38 +511,42 @@ static int bq25980_get_adc_vbus(struct bq25980_device *bq)
 	int ret;
 
 	ret = regmap_read(bq->regmap, BQ25980_VBUS_ADC_MSB, &vbus_adc_msb);
-	if (ret)
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBUS_ADC_MSB fail ret = %d\n", ret);
 		return ret;
-
+	}
 	ret = regmap_read(bq->regmap, BQ25980_VBUS_ADC_LSB, &vbus_adc_lsb);
-	if (ret)
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBUS_ADC_LSB fail ret = %d\n", ret);
 		return ret;
+	}
 
 	vbus_adc = (vbus_adc_msb << 8) | vbus_adc_lsb;
 
 	return bq->chip_info->adc_vbus_volt_offset + vbus_adc * bq->chip_info->adc_vbus_volt_step /10;
 }
 
-static int bq25980_get_ibat_adc(struct bq25980_device *bq)
+static int bq25980_get_adc_vout(struct bq25980_device *bq)
 {
+	int vout_adc_lsb, vout_adc_msb;
+	u16 vout_adc;
 	int ret;
-	int ibat_adc_lsb, ibat_adc_msb;
-	int ibat_adc;
 
-	ret = regmap_read(bq->regmap, BQ25980_IBAT_ADC_MSB, &ibat_adc_msb);
-	if (ret)
+	ret = regmap_read(bq->regmap, BQ25980_VOUT_ADC_MSB, &vout_adc_msb);
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VOUT_ADC_MSB fail ret = %d\n", ret);
 		return ret;
+	}
 
-	ret = regmap_read(bq->regmap, BQ25980_IBAT_ADC_LSB, &ibat_adc_lsb);
-	if (ret)
+	ret = regmap_read(bq->regmap, BQ25980_VOUT_ADC_LSB, &vout_adc_lsb);
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VOUT_ADC_LSB fail ret = %d\n", ret);
 		return ret;
+	}
 
-	ibat_adc = (ibat_adc_msb << 8) | ibat_adc_lsb;
+	vout_adc = (vout_adc_msb << 8) | vout_adc_lsb;
 
-	if (ibat_adc_msb & BQ25980_ADC_POLARITY_BIT)
-		return ((ibat_adc ^ 0xffff) + 1) * BQ25960_ADC_CURR_STEP_uA;
-
-	return ibat_adc * BQ25960_ADC_CURR_STEP_uA;
+	return bq->chip_info->adc_vout_volt_offset + vout_adc * bq->chip_info->adc_vout_volt_step /10;
 }
 
 static int bq25980_get_adc_vbat(struct bq25980_device *bq)
@@ -707,16 +556,46 @@ static int bq25980_get_adc_vbat(struct bq25980_device *bq)
 	int ret;
 
 	ret = regmap_read(bq->regmap, BQ25980_VBAT_ADC_MSB, &vsys_adc_msb);
-	if (ret)
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBAT_ADC_MSB fail ret = %d\n", ret);
 		return ret;
+	}
 
 	ret = regmap_read(bq->regmap, BQ25980_VBAT_ADC_LSB, &vsys_adc_lsb);
-	if (ret)
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBAT_ADC_LSB fail ret = %d\n", ret);
 		return ret;
+	}
 
 	vsys_adc = (vsys_adc_msb << 8) | vsys_adc_lsb;
 
 	return vsys_adc * bq->chip_info->adc_vbat_volt_step / 10;
+}
+
+static int bq25980_notify_state(struct bq25980_device *bq,
+				struct bq25980_state *state)
+{
+
+	if (state->vbus_ovp)
+		charger_dev_notify(bq->chg_dev,
+			CHARGER_DEV_NOTIFY_VBUS_OVP);
+	else if  (state->bat_ovp)
+		charger_dev_notify(bq->chg_dev,
+			CHARGER_DEV_NOTIFY_BAT_OVP);
+	else if  (state->vout_ovp)
+		charger_dev_notify(bq->chg_dev,
+			CHARGER_DEV_NOTIFY_VOUTOVP);
+	else if  (state->bus_ocp)
+		charger_dev_notify(bq->chg_dev,
+			CHARGER_DEV_NOTIFY_IBUSOCP);
+	else if  (state->bat_ocp)
+		charger_dev_notify(bq->chg_dev,
+			CHARGER_DEV_NOTIFY_IBATOCP);
+	else if  (state->bus_ucp)
+		charger_dev_notify(bq->chg_dev,
+			CHARGER_DEV_NOTIFY_IBUSUCP_FALL);
+
+	return 0;
 }
 
 static int bq25980_get_state(struct bq25980_device *bq,
@@ -755,10 +634,13 @@ static int bq25980_get_state(struct bq25980_device *bq,
 		return ret;
 
 	state->dischg = ibat_adc_msb & BQ25980_ADC_POLARITY_BIT;
-	state->ovp = (stat1 & BQ25980_STAT1_OVP_MASK) |
-		(stat3 & BQ25980_STAT3_OVP_MASK);
-	state->ocp = (stat1 & BQ25980_STAT1_OCP_MASK) |
-		(stat2 & BQ25980_STAT2_OCP_MASK);
+	state->vac_ovp = stat3 & BQ25980_STAT3_OVP_MASK;
+	state->bat_ovp = stat1 & BQ25980_STAT1_BATOVP_MASK;
+	state->vout_ovp = stat1 & BQ25980_STAT1_VOUTOVP_MASK;
+	state->vbus_ovp = stat1 & BQ25980_STAT1_VBUSOVP_MASK;
+	state->bus_ocp = stat2 & BQ25980_STAT2_OCP_MASK;
+	state->bat_ocp = stat1 & BQ25980_STAT1_OCP_MASK;
+	state->bus_ucp = stat2 & BQ25980_STAT2_BUSUCP_MASK;
 	state->tflt = stat4 & BQ25980_STAT4_TFLT_MASK;
 	state->wdt = stat4 & BQ25980_WD_STAT;
 	state->online = stat3 & BQ25980_PRESENT_MASK;
@@ -766,81 +648,12 @@ static int bq25980_get_state(struct bq25980_device *bq,
 	state->hiz = chg_ctrl_2 & BQ25980_EN_HIZ;
 	state->bypass = chg_ctrl_2 & BQ25980_EN_BYPASS;
 
-	return 0;
-}
-#if 0
-static int bq25980_set_battery_property(struct power_supply *psy,
-				enum power_supply_property psp,
-				const union power_supply_propval *val)
-{
-	struct bq25980_device *bq = power_supply_get_drvdata(psy);
-	int ret = 0;
+	dev_info(bq->dev, "dc=%d,ovp=%d,%d,%d,%d,ocp=%d,%d,ucp=%d,t=%d,wdt=%d,online=%d,ce=%d,hiz=%d,bypass=%d\n",
+			state->dischg, state->vac_ovp, state->bat_ovp,
+			state->vout_ovp, state->vbus_ovp,  state->bus_ocp,
+			state->bat_ocp, state->bus_ucp, state->tflt, state->wdt,
+			state->online, state->ce, state->hiz, state->bypass);
 
-	if (ret)
-		return ret;
-
-	switch (psp) {
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
-		ret = bq25980_set_const_charge_curr(bq, val->intval);
-		if (ret)
-			return ret;
-		break;
-
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
-		ret = bq25980_set_const_charge_volt(bq, val->intval);
-		if (ret)
-			return ret;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int bq25980_get_battery_property(struct power_supply *psy,
-				enum power_supply_property psp,
-				union power_supply_propval *val)
-{
-	struct bq25980_device *bq = power_supply_get_drvdata(psy);
-	int ret = 0;
-
-	switch (psp) {
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
-		val->intval = bq->init_data.ichg_max;
-		break;
-
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX:
-		val->intval = bq->init_data.vreg_max;
-		break;
-
-	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		ret = bq25980_get_ibat_adc(bq);
-		val->intval = ret;
-		break;
-
-	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		ret = bq25980_get_adc_vbat(bq);
-		if (ret < 0)
-			return ret;
-
-		val->intval = ret;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-#endif
-static int bq25980_set_present(struct bq25980_device *bq, bool present)
-{
-	bq->usb_present = present;
-
-	if (present)
-		bq25980_reg_init(bq);
 	return 0;
 }
 
@@ -848,55 +661,11 @@ static int bq25980_set_charger_property(struct power_supply *psy,
 		enum power_supply_property prop,
 		const union power_supply_propval *val)
 {
-	struct bq25980_device *bq = power_supply_get_drvdata(psy);
-	int ret = -EINVAL;
-
 	switch (prop) {
-/*
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
-		ret = bq25980_set_input_curr_lim(bq, val->intval);
-		if (ret)
-			return ret;
 		break;
 
 	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT:
-		ret = bq25980_set_input_volt_lim(bq, val->intval);
-		if (ret)
-			return ret;
-		break;
-*/
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		dev_err(bq->dev,"%s,POWER_SUPPLY_PROP_CHARGING_ENABLED prop:%d,value:%d\n",__func__,prop,val->intval);
-		ret = bq25980_set_chg_en(bq, val->intval);
-		if (ret)
-			return ret;
-		break;
-/*
-	case POWER_SUPPLY_PROP_TI_ADC:
-		ret = bq25980_set_adc_enable(bq, val->intval);
-		if (ret)
-			return ret;
-		break;
-
-	case POWER_SUPPLY_PROP_TI_BYPASS:
-		ret = bq25980_set_bypass(bq, val->intval);
-		if (ret)
-			return ret;
-		if (val->intval)
-			ret = bq25980_set_input_curr_lim(bq, bq->chip_info->busocp_byp_def);
-		else
-			ret = bq25980_set_input_curr_lim(bq, bq->chip_info->busocp_sc_def);
-		if (ret)
-			return ret;
-		break;
-*/
-	case POWER_SUPPLY_PROP_PRESENT:
-		bq25980_set_present(bq, !!val->intval);
-//		sc_info("set present :%d\n", val->intval);
-		dev_err(bq->dev,"%s,POWER_SUPPLY_PROP_PRESENT prop:%d,value:%d\n",__func__,prop,val->intval);
-		break;
-	case POWER_SUPPLY_PROP_UPDATE_NOW:
-		dev_err(bq->dev,"%s,POWER_SUPPLY_PROP_UPDATE_NOW prop:%d,value:%d\n",__func__,prop,val->intval);
 		break;
 	default:
 		return -EINVAL;
@@ -912,51 +681,25 @@ static int bq25980_get_charger_property(struct power_supply *psy,
 	struct bq25980_device *bq = power_supply_get_drvdata(psy);
 	struct bq25980_state state;
 	int ret = 0;
-	unsigned int chg_ctrl_2 = 0;
 	unsigned int stat1 = 0;
 	unsigned int stat2 = 0;
 	unsigned int stat3 = 0;
 	unsigned int stat4 = 0;
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_CHIP_VERSION:
 	case POWER_SUPPLY_PROP_MANUFACTURER:
 		val->strval = BQ25980_MANUFACTURER;
 		break;
 	case POWER_SUPPLY_PROP_MODEL_NAME:
 		val->strval = bq->model_name;
 		break;
-/*	case POWER_SUPPLY_PROP_ONLINE:
+	case POWER_SUPPLY_PROP_ONLINE:
 		ret = regmap_read(bq->regmap, BQ25980_STAT3, &stat3);
 		if (ret)
 			return ret;
 
 		state.online = stat3 & BQ25980_PRESENT_MASK;
 		val->intval = state.online;
-		break;
-	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT:
-		ret = bq25980_get_input_volt_lim(bq);
-		if (ret < 0)
-			return ret;
-		val->intval = ret;
-		break;
-
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
-		ret = bq25980_get_input_curr_lim(bq);
-		if (ret < 0)
-			return ret;
-
-		val->intval = ret;
-		break;
-*/
-	case POWER_SUPPLY_PROP_CP_STATUS1:
-		val->intval = 0;
-		/*
-			((sc->bat_ovp_fault << SC8549_VBAT_OVP_FLAG_SHIFT)
-					   | (sc->bat_ocp_fault << SC8549_IBAT_OCP_FLAG_SHIFT)
-					   | (sc->bus_ovp_fault << SC8549_VBUS_OVP_FLAG_SHIFT)
-					   | (sc->bus_ocp_fault << SC8549_IBUS_OCP_FLAG_SHIFT));
-					   */
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = POWER_SUPPLY_HEALTH_GOOD;
@@ -993,7 +736,7 @@ static int bq25980_get_charger_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		ret = bq25980_get_ibat_adc(bq);
+		ret = bq25980_get_adc_ibus(bq);
 		if (ret < 0)
 			return ret;
 
@@ -1023,59 +766,10 @@ static int bq25980_get_charger_property(struct power_supply *psy,
 
 		val->intval = ret;
 		break;
-	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED:
-		ret = bq25980_get_adc_vbus(bq);
-		if (ret < 0)
-			return ret;
-
-		val->intval = ret;
-		break;
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_NOW:
-		ret = bq25980_get_adc_ibus(bq);
-		if (ret < 0)
-			return ret;
-
-		val->intval = ret;
-		//dump_all_reg(bq);
-		break;
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &chg_ctrl_2);
-		if (ret)
-			return ret;
-
-		state.ce = chg_ctrl_2 & BQ25980_CHG_EN;
-		val->intval = state.ce;
-		break;
-/*
-	case POWER_SUPPLY_PROP_TI_ADC:
-		ret = bq25980_get_adc_enable(bq);
-		if (ret < 0)
-			return ret;
-
-		val->intval = ret;
-		break;
-
-	case POWER_SUPPLY_PROP_TI_BYPASS:
-		ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &chg_ctrl_2);
-		if (ret)
-			return ret;
-
-		state.bypass = chg_ctrl_2 & BQ25980_EN_BYPASS;
-		val->intval = state.bypass;
-		break;
-*/
-	case POWER_SUPPLY_PROP_PRESENT:
-		val->intval = bq->usb_present;
-		break;
-	case POWER_SUPPLY_PROP_UPDATE_NOW:
-		break;
-	case POWER_SUPPLY_PROP_CP_IRQ_STATUS:
-		val->intval = bq->irq_counts;
-		break;
 	default:
 		return -EINVAL;
 	}
-//	dev_err(bq->dev,"%s,psp:%d,value:%d\n",__func__,psp,val->intval);
+
 	return 0;
 }
 
@@ -1089,8 +783,13 @@ static bool bq25980_state_changed(struct bq25980_device *bq,
 	mutex_unlock(&bq->lock);
 
 	return (old_state.dischg != new_state->dischg ||
-		old_state.ovp != new_state->ovp ||
-		old_state.ocp != new_state->ocp ||
+		old_state.vac_ovp != new_state->vac_ovp ||
+		old_state.bat_ovp != new_state->bat_ovp ||
+		old_state.vout_ovp != new_state->vout_ovp ||
+		old_state.vbus_ovp != new_state->vbus_ovp ||
+		old_state.bat_ocp != new_state->bat_ocp ||
+		old_state.bus_ocp != new_state->bus_ocp ||
+		old_state.bus_ucp != new_state->bus_ucp ||
 		old_state.online != new_state->online ||
 		old_state.wdt != new_state->wdt ||
 		old_state.tflt != new_state->tflt ||
@@ -1119,11 +818,6 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 	}
 	bq->irq_waiting = false;
 
-	if(bq->irq_counts > INT_MAX -1)
-		bq->irq_counts = 0;
-	else
-		bq->irq_counts++;
-
 	dump_all_reg(bq);
 	mutex_unlock(&bq->irq_complete);
 
@@ -1136,6 +830,7 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 
 	mutex_lock(&bq->lock);
 	bq->state = state;
+	bq25980_notify_state(bq, &state);
 	mutex_unlock(&bq->lock);
 
 	power_supply_changed(bq->charger);
@@ -1147,72 +842,31 @@ irq_out:
 static enum power_supply_property bq25980_power_supply_props[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_MODEL_NAME,
-	//POWER_SUPPLY_PROP_ONLINE,
+	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_HEALTH,
-//	POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT,
-//	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+	POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT,
+	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
-	POWER_SUPPLY_PROP_CHARGING_ENABLED,
-/*
-	POWER_SUPPLY_PROP_TI_ADC,
-	POWER_SUPPLY_PROP_TI_BYPASS,
-*/
-
-	POWER_SUPPLY_PROP_CP_STATUS1,
-	POWER_SUPPLY_PROP_PRESENT,
-	POWER_SUPPLY_PROP_CHARGING_ENABLED,
-	POWER_SUPPLY_PROP_VOLTAGE_NOW,
-	POWER_SUPPLY_PROP_CURRENT_NOW,
-	POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
-	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
-	POWER_SUPPLY_PROP_CP_IRQ_STATUS,
-	POWER_SUPPLY_PROP_CHIP_VERSION,
-};
-#if 0
-static enum power_supply_property bq25980_battery_props[] = {
-	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
-	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
-	POWER_SUPPLY_PROP_CURRENT_NOW,
-	POWER_SUPPLY_PROP_VOLTAGE_NOW,
-};
-#endif
-static char *bq25980_charger_supplied_to[] = {
-	"main-battery",
 };
 
 static int bq25980_property_is_writeable(struct power_supply *psy,
 					 enum power_supply_property prop)
 {
 	switch (prop) {
-//	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
+	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-//	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT:
-	case POWER_SUPPLY_PROP_PRESENT:
-	case POWER_SUPPLY_PROP_UPDATE_NOW:
-	//	case POWER_SUPPLY_PROP_TI_ADC:
-//	case POWER_SUPPLY_PROP_TI_BYPASS:
+	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT:
 		return true;
 	default:
 		return false;
 	}
 }
 
-#if 0
-static struct power_supply_desc bq25980_battery_desc = {
-	.name			= "bq25980-battery",
-	.type			= POWER_SUPPLY_TYPE_BATTERY,
-	.get_property		= bq25980_get_battery_property,
-	.set_property		= bq25980_set_battery_property,
-	.properties		= bq25980_battery_props,
-	.num_properties		= ARRAY_SIZE(bq25980_battery_props),
-	.property_is_writeable	= bq25980_property_is_writeable,
-};
-#endif
+
 
 static bool bq25980_is_volatile_reg(struct device *dev, unsigned int reg)
 {
@@ -1338,12 +992,14 @@ static const struct bq25980_chip_info bq25980_chip_info_tbl[] = {
 		.adc_vbat_volt_step = BQ25960_ADC_VOLT_STEP_deciuV,
 		.adc_vbus_volt_step = BQ25960_ADC_VOLT_STEP_deciuV,
 		.adc_vbus_volt_offset = 0,
+		.adc_vout_volt_step = BQ25960_ADC_VOLT_STEP_deciuV,
+		.adc_vout_volt_offset = 0,
 	},
 
 	[BQ25975] = {
 		.model_id = BQ25975,
 		.regmap_config = &bq25975_regmap_config,
-	
+
 		.busocp_sc_def = BQ25975_BUSOCP_DFLT_uA,
 		.busocp_byp_def = BQ25975_BUSOCP_DFLT_uA,
 		.busocp_sc_min = BQ25960_BUSOCP_MIN_uA,
@@ -1352,7 +1008,7 @@ static const struct bq25980_chip_info bq25980_chip_info_tbl[] = {
 		.busocp_byp_max = BQ25975_BUSOCP_BYP_MAX_uA,
 		.busocp_step = BQ25960_BUSOCP_STEP_uA,
 		.busocp_offset = BQ25960_BUSOCP_OFFSET_uA,
-	
+
 		.busovp_sc_def = BQ25975_BUSOVP_DFLT_uV,
 		.busovp_byp_def = BQ25975_BUSOVP_BYPASS_DFLT_uV,
 		.busovp_sc_step = BQ25975_BUSOVP_SC_STEP_uV,
@@ -1363,13 +1019,13 @@ static const struct bq25980_chip_info bq25980_chip_info_tbl[] = {
 		.busovp_sc_max = BQ25975_BUSOVP_SC_MAX_uV,
 		.busovp_byp_min = BQ25975_BUSOVP_BYP_MIN_uV,
 		.busovp_byp_max = BQ25975_BUSOVP_BYP_MAX_uV,
-	
+
 		.batovp_def = BQ25975_BATOVP_DFLT_uV,
 		.batovp_max = BQ25975_BATOVP_MAX_uV,
 		.batovp_min = BQ25975_BATOVP_MIN_uV,
 		.batovp_step = BQ25975_BATOVP_STEP_uV,
 		.batovp_offset = BQ25975_BATOVP_OFFSET_uV,
-	
+
 		.batocp_def = BQ25980_BATOCP_DFLT_uA,
 		.batocp_max = BQ25980_BATOCP_MAX_uA,
 
@@ -1388,27 +1044,24 @@ static int bq25980_power_supply_init(struct bq25980_device *bq,
 	struct power_supply_config psy_cfg = { .drv_data = bq,
 						.of_node = dev->of_node, };
 
-	psy_cfg.supplied_to = bq25980_charger_supplied_to;
-	psy_cfg.num_supplicants = ARRAY_SIZE(bq25980_charger_supplied_to);
-
 	switch (driver_data) {
 	case BQ25980_MASTER:
-		bq->psy_desc.name = "bq25980-master";
+		bq->psy_desc.name = "cp-master";
 		break;
 	case BQ25980_SLAVE:
-		bq->psy_desc.name = "bq25980-slave";
+		bq->psy_desc.name = "cp-slave";
 		break;
 	case BQ25980_STANDALONE:
-		bq->psy_desc.name = "bq25980-standalone";
+		bq->psy_desc.name = "cp-standalone";
 		break;
 	case BQ25960_MASTER:
-		bq->psy_desc.name = "bq25960-master";
+		bq->psy_desc.name = "cp-master";
 		break;
 	case BQ25960_SLAVE:
-		bq->psy_desc.name = "bq25960-slave";
+		bq->psy_desc.name = "cp-slave";
 		break;
 	case BQ25960_STANDALONE:
-		bq->psy_desc.name = "bq25960-standalone";
+		bq->psy_desc.name = "cp-standalone";
 		break;
 	default:
 		return -EINVAL;
@@ -1428,17 +1081,7 @@ static int bq25980_power_supply_init(struct bq25980_device *bq,
 		dev_err(bq->dev, "bq register power supply fail");
 		return -EINVAL;
 	}
-/*
-	if (bq->mode != BQ_SLAVE) {
-		bq->battery = devm_power_supply_register(bq->dev,
-						      &bq25980_battery_desc,
-						      &psy_cfg);
-		if (IS_ERR(bq->battery)) {
-			dev_err(bq->dev, "battery register power supply fail");
-			return -EINVAL;
-		}
-	}
-*/	
+
 	return 0;
 }
 
@@ -1460,69 +1103,7 @@ static int bq25980_reg_init(struct bq25980_device *bq)
 	}
 	return 0;
 }
-#if 0
-static int bq25980_hw_init(struct bq25980_device *bq)
-{
-	struct power_supply_battery_info bat_info = { };
-	int wd_reg_val;
-	int ret = 0;
-	int curr_val;
-	int volt_val;
-	int i;
 
-	if (!bq->watchdog_timer) {
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_3,
-					 BQ25980_WATCHDOG_DIS,
-					 BQ25980_WATCHDOG_DIS);
-	} else {
-		for (i = 0; i < BQ25980_NUM_WD_VAL; i++) {
-			if (bq->watchdog_timer > bq25980_watchdog_time[i] &&
-			    bq->watchdog_timer < bq25980_watchdog_time[i + 1]) {
-				wd_reg_val = i;
-				break;
-			}
-		}
-
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_3,
-					BQ25980_WATCHDOG_MASK, wd_reg_val);
-	}
-	if (ret)
-		return ret;
-
-	ret = power_supply_get_battery_info(bq->charger, &bat_info);
-	if (ret) {
-		dev_warn(bq->dev, "battery info missing\n");
-		return -EINVAL;
-	}
-
-	bq->init_data.ichg_max = bat_info.constant_charge_current_max_ua;
-	bq->init_data.vreg_max = bat_info.constant_charge_voltage_max_uv;
-
-	if (bq->state.bypass) {
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-					BQ25980_EN_BYPASS, BQ25980_EN_BYPASS);
-		if (ret)
-			return ret;
-
-		curr_val = bq->init_data.bypass_ilim;
-		volt_val = bq->init_data.bypass_vlim;
-	} else {
-		curr_val = bq->init_data.sc_ilim;
-		volt_val = bq->init_data.sc_vlim;
-	}
-
-	ret = bq25980_set_input_curr_lim(bq, curr_val);
-	if (ret)
-		return ret;
-
-	ret = bq25980_set_input_volt_lim(bq, volt_val);
-	if (ret)
-		return ret;
-
-	return regmap_update_bits(bq->regmap, BQ25980_ADC_CONTROL1,
-				 BQ25980_ADC_EN, BQ25980_ADC_EN);
-}
-#endif
 static int bq25980_parse_dt(struct bq25980_device *bq)
 {
 	int ret;
@@ -1606,32 +1187,12 @@ static int bq25980_check_work_mode(struct bq25980_device *bq)
 		dev_err(bq->dev, "dts mode %d mismatch with hardware mode %d\n", bq->mode, val);
 		return -EINVAL;
 	}
-	
+
 	dev_info(bq->dev, "work mode:%s\n", bq->mode == BQ_STANDALONE ? "Standalone" :
 			(bq->mode == BQ_SLAVE ? "Slave" : "Master"));
 	return 0;
 }
 
-static int bq25980_check_device_id(struct bq25980_device *bq)
-{
-#if 0 //IC device id not confirmed
-	int ret;
-	int val;
-
-	ret = regmap_read(bq->regmap, BQ25980_DEVICE_INFO, &val);
-	if (ret) {
-		dev_err(bq->dev, "Failed to read device id\n");
-		return ret;
-	}
-
-	val = (val & BQ25980_DEVICE_ID_MASK);
-	if (bq->device_id != val) {
-		dev_err(bq->dev, "dts id %d mismatch with hardware id %d\n", bq->device_id, val);
-		return -EINVAL;
-	}
-#endif
-	return 0;
-}
 
 static int bq25980_parse_dt_id(struct bq25980_device *bq, int driver_data)
 {
@@ -1667,6 +1228,316 @@ static int bq25980_parse_dt_id(struct bq25980_device *bq, int driver_data)
 	}
 
 	return 0;
+}
+
+static ssize_t show_reg_addr(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "reg addr 0x%08x\n", bq->reg_addr);
+}
+
+static ssize_t store_reg_addr(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int tmp;
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	tmp = simple_strtoul(buf, NULL, 0);
+	bq->reg_addr = tmp;
+
+	return count;
+}
+static DEVICE_ATTR(reg_addr, 0664, show_reg_addr, store_reg_addr);
+
+
+static ssize_t show_reg_data(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ret;
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	ret = regmap_read(bq->regmap, bq->reg_addr, &bq->reg_data);;
+	return sprintf(buf, "reg addr 0x%08x -> 0x%08x\n", bq->reg_addr, bq->reg_data);
+}
+
+static ssize_t store_reg_data(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int tmp;
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	tmp = simple_strtoul(buf, NULL, 0);
+	bq->reg_data = tmp;
+	regmap_write(bq->regmap, bq->reg_addr, bq->reg_data);
+
+	return count;
+}
+static DEVICE_ATTR(reg_data, 0664, show_reg_data, store_reg_data);
+
+static ssize_t show_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ret;
+	int state = 0;
+	bool enable;
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980: chip not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+
+	ret = bq25980_is_chg_en(bq, &enable);
+	if (ret < 0) {
+		pr_err("bq25980: bq25980_is_chg_en not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+	state = enable;
+end:
+	return sprintf(buf, "%d\n", state);
+}
+
+static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int ret;
+	bool enable;
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	enable = simple_strtoul(buf, NULL, 0);
+	ret = bq25980_set_chg_en(bq, enable);
+	if (ret) {
+		pr_err("bq25980 Couldn't %s charging rc=%d\n",
+			   enable ? "enable" : "disable", (int)ret);
+		return ret;
+	}
+
+	pr_info("bq25980  %s charging \n",
+			   enable ? "enable" : "disable");
+
+	return count;
+}
+static DEVICE_ATTR(force_chg_auto_enable, 0664, show_force_chg_auto_enable, store_force_chg_auto_enable);
+
+static ssize_t show_reg_dump(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ret;
+	unsigned int val;
+	int addr;
+	ssize_t size = 0;
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	for (addr = 0; addr <= 0x3a; addr++) {
+		ret = regmap_read(bq->regmap, addr, &val);
+		if (!ret)
+			dev_err(bq->dev, "Reg[%02X] = 0x%02X\n", addr, val);
+		size += snprintf(buf + size, PAGE_SIZE - size,
+				"reg addr 0x%08x -> 0x%08x\n", addr,val);
+	}
+
+	return size;
+}
+static DEVICE_ATTR(reg_dump, 0664, show_reg_dump, NULL);
+
+static void bq25980_create_device_node(struct device *dev)
+{
+    device_create_file(dev, &dev_attr_force_chg_auto_enable);
+    device_create_file(dev, &dev_attr_reg_addr);
+    device_create_file(dev, &dev_attr_reg_data);
+    device_create_file(dev, &dev_attr_reg_dump);
+}
+
+static int bq25980_enable_chg(struct charger_device *chg_dev, bool en)
+{
+	int ret;
+	struct bq25980_device *bq = charger_get_data(chg_dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	dev_info(bq->dev, "%s %d\n", __func__, en);
+	ret = bq25980_set_chg_en(bq, en);
+	if (ret) {
+		dev_err(bq->dev, "%s enbale fail%d\n", __func__, en);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int bq25980_is_chg_enabled(struct charger_device *chg_dev, bool *en)
+{
+	int ret;
+	struct bq25980_device *bq = charger_get_data(chg_dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	ret = bq25980_is_chg_en(bq, en);
+	if (ret < 0) {
+		dev_err(bq->dev, "%s get chg en fail %d\n", __func__, *en);
+		return ret;
+	}
+	dev_info(bq->dev, "%s %d\n", __func__, *en);
+
+	return 0;
+}
+
+static int bq25980_get_adc(struct charger_device *chg_dev, enum adc_channel chan,
+			  int *min, int *max)
+{
+	int tmp;
+	struct bq25980_device *bq  = charger_get_data(chg_dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+
+	switch (chan) {
+		case ADC_CHANNEL_VBUS:
+			tmp = bq25980_get_adc_vbus(bq);
+			if (tmp < 0)
+				return tmp;
+			*max = tmp;
+			break;
+		case ADC_CHANNEL_IBUS:
+			tmp = bq25980_get_adc_ibus(bq);
+			if (tmp < 0)
+				return tmp;
+			*max = tmp;
+			break;
+		case ADC_CHANNEL_VBAT:
+			tmp = bq25980_get_adc_vbat(bq);
+			if (tmp < 0)
+				return tmp;
+			*max = tmp;
+			break;
+		case ADC_CHANNEL_TEMP_JC:
+			/*cp die temp*/
+			*max = 25;
+			break;
+		case ADC_CHANNEL_VOUT:
+			tmp = bq25980_get_adc_vout(bq);
+			if (tmp < 0)
+				return tmp;
+			*max = tmp;
+			break;	
+		default:
+			return -ENOTSUPP;
+			break;
+	}
+	*min = *max;
+
+	return 0;
+}
+
+static int bq25980_is_vbuslowerr(struct charger_device *chg_dev, bool *err)
+{
+	*err = 0;
+	return 0;
+}
+
+static int bq25980_get_adc_accuracy(struct charger_device *chg_dev,
+				   enum adc_channel chan, int *min, int *max)
+{
+	*min = *max = 0;
+
+	return 0;
+}
+
+static int bq25980_set_vbusovp(struct charger_device *chg_dev, u32 uV)
+{
+	return 0;
+}
+
+static int bq25980_set_ibusocp(struct charger_device *chg_dev, u32 uA)
+{
+	return 0;
+}
+
+static int bq25980_set_vbatovp(struct charger_device *chg_dev, u32 uV)
+{
+	return 0;
+}
+
+static int bq25980_set_ibatocp(struct charger_device *chg_dev, u32 uA)
+{
+	return 0;
+}
+
+static int bq25980_init_chip(struct charger_device *chg_dev)
+{
+	return 0;
+}
+
+static int bq25980_set_vbatovp_alarm(struct charger_device *chg_dev, u32 uV)
+{
+	return 0;
+}
+
+static int bq25980_reset_vbatovp_alarm(struct charger_device *chg_dev)
+{
+	return 0;
+}
+
+static int bq25980_reset_vbusovp_alarm(struct charger_device *chg_dev)
+{
+	return 0;
+}
+
+static int bq25980_set_vbusovp_alarm(struct charger_device *chg_dev, u32 uV)
+{
+	return 0;
+}
+
+static const struct charger_ops bq25980_chg_ops = {
+	.enable = bq25980_enable_chg,
+	.is_enabled = bq25980_is_chg_enabled,
+	.get_adc = bq25980_get_adc,
+	.set_vbusovp = bq25980_set_vbusovp,
+	.set_ibusocp = bq25980_set_ibusocp,
+	.set_vbatovp = bq25980_set_vbatovp,
+	.set_ibatocp = bq25980_set_ibatocp,
+	.init_chip = bq25980_init_chip,
+	.set_vbatovp_alarm = bq25980_set_vbatovp_alarm,
+	.reset_vbatovp_alarm = bq25980_reset_vbatovp_alarm,
+	.set_vbusovp_alarm = bq25980_set_vbusovp_alarm,
+	.reset_vbusovp_alarm = bq25980_reset_vbusovp_alarm,
+	.is_vbuslowerr = bq25980_is_vbuslowerr,
+	.get_adc_accuracy = bq25980_get_adc_accuracy,
+};
+
+static int bq25980_register_chgdev(struct bq25980_device *bq)
+{
+	bq->chg_prop.alias_name = bq->psy_desc.name;
+	bq->chg_dev = charger_device_register("primary_dvchg", bq->dev,
+						bq, &bq25980_chg_ops,
+						&bq->chg_prop);
+	return bq->chg_dev ? 0 : -EINVAL;
 }
 
 static int bq25980_probe(struct i2c_client *client,
@@ -1710,10 +1581,6 @@ static int bq25980_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, bq);
 
-	ret = bq25980_check_device_id(bq);
-	if (ret)
-		goto free_mem;
-
 	ret = bq25980_check_work_mode(bq);
 	if (ret)
 		goto free_mem;
@@ -1743,14 +1610,6 @@ static int bq25980_probe(struct i2c_client *client,
 		goto free_mem;
 	}
 	client->irq = irqn;
-#else
-
-	bq->irq_pinctrl =
-		pinctrl_get_select(bq->dev, "bq25960_int_default");
-	if (!bq->irq_pinctrl) {
-		dev_err(bq->dev,"Couldn't set pinctrl bq25960_int_default\n");
-		goto free_mem;
-	}
 #endif
 
 	if (client->irq) {
@@ -1764,7 +1623,7 @@ static int bq25980_probe(struct i2c_client *client,
 				   client->irq, ret);
 			goto free_mem;
 		}
-		//enable_irq_wake(client->irq);
+		enable_irq_wake(client->irq);
 	}
 
 	ret = bq25980_power_supply_init(bq, dev, id->driver_data);
@@ -1776,8 +1635,14 @@ static int bq25980_probe(struct i2c_client *client,
 		dev_err(dev, "Cannot initialize the chip.\n");
 		goto free_psy;
 	}
+	ret = bq25980_register_chgdev(bq);
+	if (ret < 0) {
+		dev_err(dev, "%s reg chgdev fail(%d)\n", __func__, ret);
+		goto free_psy;
+	}
 
-	dump_reg(bq,0x00,0x37);
+	bq25980_create_device_node(bq->dev);
+	dump_all_reg(bq);
 	printk("-------bq25980 driver probe success--------\n");
 	return 0;
 free_psy:
