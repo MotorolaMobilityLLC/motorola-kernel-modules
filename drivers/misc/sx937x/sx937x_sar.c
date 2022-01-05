@@ -1473,7 +1473,7 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.type = SENSOR_TYPE_MOTO_CAPSENSE;
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.max_range = "5";
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.resolution = "5.0";
-					pButtonInformationData->buttons[i].sensors_capsensor_cdev.sensor_power = "3";
+					pButtonInformationData->buttons[i].sensors_capsensor_cdev.sensor_power = "0.1";
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.min_delay = 0;
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.fifo_reserved_event_count = 0;
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.fifo_max_event_count = 0;
