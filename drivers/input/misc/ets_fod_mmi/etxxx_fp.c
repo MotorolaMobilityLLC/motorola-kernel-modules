@@ -622,12 +622,12 @@ int do_egisfp_reset_set(struct egisfp_dev_t *egis_dev, int reset_high_low)
 	if (reset_high_low)
 	{
 		ret = pinctrl_select_state(egis_dev->pinctrl, egis_dev->reset_high);
-		mdelay(Rst_on_delay);
+		//mdelay(Rst_on_delay);
 	}
 	else
 	{
 		ret = pinctrl_select_state(egis_dev->pinctrl, egis_dev->reset_low);
-		mdelay(Rst_off_delay);
+		//mdelay(Rst_off_delay);
 	}
 
 	if (ret)
