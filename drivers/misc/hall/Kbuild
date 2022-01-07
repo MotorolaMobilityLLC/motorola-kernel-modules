@@ -1,0 +1,22 @@
+ifeq (,$(KERNEL_DIR_PATH))
+    KERNEL_DIR_PATH = $(shell find $(ANDROID_BUILD_TOP)/kernel/ -name "msm-*" -type d | head -1 | grep -i "kernel/msm-*")
+
+    ifeq (,$(KERNEL_DIR_PATH))
+        KERNEL_DIR_1_Level := true
+        KERNEL_DIR_PATH = $(shell find $(ANDROID_BUILD_TOP)/kernel* -type d -name  "kernel-*" | head -1)
+    endif
+else
+    KERNEL_DIR_1_Level := true
+endif
+
+KERNEL_VERSION_NAME = $(shell basename $(KERNEL_DIR_PATH))
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+
+
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+
+obj-m += hall_pen.o
+obj-m += hall_folio.o
