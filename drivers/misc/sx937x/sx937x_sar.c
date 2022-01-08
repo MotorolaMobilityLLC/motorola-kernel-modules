@@ -217,7 +217,7 @@ static int sx937x_Hardware_Check(psx93XX_t this)
 
 static int sx937x_global_variable_init(psx93XX_t this)
 {
-	this->irq_disabled = 0;
+	//this->irq_disabled = 0;
 	this->failStatusCode = 0;
 	this->reg_in_dts = true;
 	return 0;
@@ -512,16 +512,49 @@ static ssize_t sx937x_register_read_show(struct class *class,
 	return sprintf(buf, "Register(0x%2x) data(0x%4x)\n", sx937x_temp_regist, sx937x_temp_val);
 }
 
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+static int power_on_chip(psx93XX_t this)
+{
+	int ret = 0;
+
+	psx937x_t pDevice = global_sx937x->pDevice;
+	psx937x_platform_data_t pdata = pDevice->hw;
+	ret = regulator_enable(pdata->cap_vdd);
+
+	if (ret) {
+		regulator_put(pdata->cap_vdd);
+		LOG_ERR("Error %d enable regulator\n", ret);
+		return ret;
+	}
+
+	msleep(20);
+	ret = this->init(this);
+	pdata->cap_vdd_en = true;
+
+	return ret;
+}
+#endif
+
+
 static ssize_t reg_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
 {
 	u32 *p = (u32*)buf;
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+	psx937x_t pDevice = global_sx937x->pDevice;
+	psx937x_platform_data_t pdata = pDevice->hw;
+
+	if (!pdata->cap_vdd_en)
+		if ( power_on_chip(global_sx937x) != 0)
+			return -1;
+#endif
 
 	psx93XX_t this = global_sx937x;
 	if(this->read_flag){
 		this->read_flag = 0;
-		sx937x_i2c_read_16bit(this, this->read_reg, p);
+		if (sx937x_i2c_read_16bit(this, this->read_reg, p) < 0)
+			return -1;
 		LOG_DBG("%s : read_reg = 0x%x, val = 0x%x\n",__func__,this->read_reg,*p);
 		return 4;
 	}
@@ -543,6 +576,15 @@ static ssize_t reg_store(struct class *class,
 	u32 val = 0;
 	int i = 0;
 
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+	psx937x_t pDevice = global_sx937x->pDevice;
+	psx937x_platform_data_t pdata = pDevice->hw;
+
+	if (!pdata->cap_vdd_en)
+		if ( power_on_chip(global_sx937x) != 0)
+			return -1;
+#endif
+
 	if( count != 7){
 		LOG_ERR("%s :params error[ count == %lu !=2]\n",__func__,count);
 		return -1;
@@ -552,7 +594,8 @@ static ssize_t reg_store(struct class *class,
 	if(buf[6] == 0){
 		regaddr = ((u16)buf[0]<<8) | (u16)buf[1];
 		val= ((u32)buf[2]<<24) | ((u32)buf[3]<<16) | ((u32)buf[4]<<8) | ((u32)buf[5]);
-		sx937x_i2c_write_16bit(this, regaddr, val);
+		if (sx937x_i2c_write_16bit(this, regaddr, val) < 0)
+			return -1;
 	} else if(buf[6] == 1) {
 		this->read_reg = ((u16)buf[0]<<8) | (u16)buf[1];
 		this->read_flag = 1;
@@ -742,8 +785,10 @@ static int initialize(psx93XX_t this)
 	{
 		LOG_INFO("SX937x income initialize\n");
 		/* prepare reset by disabling any irq handling */
-		this->irq_disabled = 1;
-		disable_irq(this->irq);
+		if (this->irq_disabled == 0) {
+			this->irq_disabled = 1;
+			disable_irq(this->irq);
+		}
 		/* perform a reset */
 		for ( retry = 10; retry > 0; retry-- ) {
 			if (sx937x_i2c_write_16bit(this, SX937X_DEVICE_RESET, 0xDE) >= 0)
@@ -759,8 +804,10 @@ static int initialize(psx93XX_t this)
 		sx937x_reg_init(this);
 
 		/* re-enable interrupt handling */
-		enable_irq(this->irq);
-
+		if (this->irq_disabled == 1) {
+			enable_irq(this->irq);
+			this->irq_disabled = 0;
+		}
 		/* make sure no interrupts are pending since enabling irq will only
 		 * work on next falling edge */
 		read_regStat(this);
@@ -1091,29 +1138,6 @@ static void sx937x_exit_platform_hw(struct i2c_client *client)
 	return;
 }
 
-#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
-static int power_on_chip(psx93XX_t this)
-{
-	int ret = 0;
-
-	psx937x_t pDevice = global_sx937x->pDevice;
-	psx937x_platform_data_t pdata = pDevice->hw;
-	ret = regulator_enable(pdata->cap_vdd);
-
-	if (ret) {
-		regulator_put(pdata->cap_vdd);
-		LOG_ERR("Error %d enable regulator\n", ret);
-		return ret;
-	}
-
-	msleep(20);
-	ret = this->init(this);
-	pdata->cap_vdd_en = true;
-
-	return ret;
-}
-#endif
-
 static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 		unsigned int enable)
 {
@@ -1170,6 +1194,10 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 		sx937x_i2c_write_16bit(global_sx937x, SX937X_GENERAL_SETUP, temp);
 
 #ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+		if (global_sx937x->irq_disabled == 0) {
+			global_sx937x->irq_disabled = 1;
+			disable_irq(global_sx937x->irq);
+		}
 		if (pdata->cap_vdd_en) {
 			msleep(20);
 			regulator_disable(pdata->cap_vdd);
@@ -1745,8 +1773,20 @@ static void sx93XX_schedule_work(psx93XX_t this, unsigned long delay)
 static irqreturn_t sx93XX_irq(int irq, void *pvoid)
 {
 	psx93XX_t this = 0;
+
 	if (pvoid)
 	{
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+                if (!global_sx937x)
+			return IRQ_HANDLED;
+		psx937x_t pDevice = global_sx937x->pDevice;
+		psx937x_platform_data_t pdata = pDevice->hw;
+
+		if (!pdata->cap_vdd_en) {
+			LOG_ERR("sx937x didn't enable\n");
+			return IRQ_HANDLED;
+		}
+#endif
 		this = (psx93XX_t)pvoid;
 		if ((!this->get_nirq_low) || this->get_nirq_low())
 		{
