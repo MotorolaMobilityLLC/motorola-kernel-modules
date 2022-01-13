@@ -76,7 +76,7 @@ void check_and_send(void)
 	int report_val = 0;
 	for (i = 0; i < hall_sensor_dev->gpio_num; i++)
 	{
-		LOG_DBG("hall report gpio%d = %d", i, gpio_get_value(hall_sensor_dev->gpio_list[i].gpio));
+		LOG_INFO("hall report gpio%d = %d", i, gpio_get_value(hall_sensor_dev->gpio_list[i].gpio));
 		if (gpio_get_value(hall_sensor_dev->gpio_list[i].gpio) > 0)
 			report_val |= hall_sensor_dev->gpio_list[i].gpio_high_report_val;
 		else if (gpio_get_value(hall_sensor_dev->gpio_list[i].gpio) == 0)
@@ -96,7 +96,7 @@ void hall_enable(bool enable)
 	int i;
 	if (enable && !hall_sensor_dev->enable)
 	{
-		LOG_INFO("hall_sensor enable");
+		LOG_INFO("hall_pen_sensor enable");
 		for (i = 0; i < hall_sensor_dev->gpio_num; i++)
 		{
 			enable_irq(hall_sensor_dev->gpio_list[i].irq);
@@ -107,7 +107,7 @@ void hall_enable(bool enable)
 	}
 	else if (!enable && hall_sensor_dev->enable)
 	{
-		LOG_INFO("hall_sensor disable");
+		LOG_INFO("hall_pen_sensor disable");
 		for (i = 0; i < hall_sensor_dev->gpio_num; i++)
 		{
 			disable_irq(hall_sensor_dev->gpio_list[i].irq);
@@ -145,6 +145,12 @@ static ssize_t hall_enable_store(struct class *class,
 	return count;
 }
 
+static ssize_t hall_enable_show(struct class *class,
+		struct class_attribute *attr,
+		char *buf)
+{
+	return sprintf(buf, "pen:%d\n", hall_sensor_dev->enable);
+}
 static ssize_t hall_rawdata_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
@@ -153,7 +159,7 @@ static ssize_t hall_rawdata_show(struct class *class,
 }
 
 static struct class_attribute class_attr_enable =
-__ATTR(enable, 0660, NULL, hall_enable_store);
+__ATTR(enable, 0660, hall_enable_show, hall_enable_store);
 static struct class_attribute class_attr_rawdata =
 __ATTR(rawdata, 0660, hall_rawdata_show, NULL);
 
