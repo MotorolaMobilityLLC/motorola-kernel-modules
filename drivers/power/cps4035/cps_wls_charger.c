@@ -31,7 +31,7 @@
 #include <linux/miscdevice.h>
 #include <linux/kthread.h>
 #include <linux/kernel.h>
-
+#include <linux/firmware.h>
 #include <linux/init.h>
 #include <linux/sched.h> 
 #include <linux/timer.h>
@@ -265,7 +265,267 @@ static const struct regmap_config cps4035L_regmap_config = {
     .reg_bits = 16,
     .val_bits = 8,
 };
-    
+
+static u8 CPS4035_BOOTLOADER[0x800] = {
+	// CPS4035_BL_V1.2_CRC_6923
+	0x70, 0x1E, 0x00, 0x20, 0xD9, 0x01, 0x00, 0x20,
+	0x51, 0x01, 0x00, 0x20, 0xE9, 0x01, 0x00, 0x20,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x55, 0x01, 0x00, 0x20,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x57, 0x01, 0x00, 0x20, 0x59, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x5B, 0x01, 0x00, 0x20, 0x5B, 0x01, 0x00, 0x20,
+	0x1F, 0xB5, 0x1F, 0xBD, 0x01, 0x02, 0x00, 0x00,
+	0xC4, 0x04, 0x00, 0x00, 0x00, 0xF0, 0x02, 0xF8,
+	0x00, 0xF0, 0x2E, 0xF8, 0x0C, 0xA0, 0x30, 0xC8,
+	0x08, 0x38, 0x24, 0x18, 0x2D, 0x18, 0xA2, 0x46,
+	0x67, 0x1E, 0xAB, 0x46, 0x54, 0x46, 0x5D, 0x46,
+	0xAC, 0x42, 0x01, 0xD1, 0x00, 0xF0, 0x20, 0xF8,
+	0x7E, 0x46, 0x0F, 0x3E, 0x0F, 0xCC, 0xB6, 0x46,
+	0x01, 0x26, 0x33, 0x42, 0x00, 0xD0, 0xFB, 0x1A,
+	0xA2, 0x46, 0xAB, 0x46, 0x33, 0x43, 0x18, 0x47,
+	0xA8, 0x03, 0x00, 0x00, 0xB8, 0x03, 0x00, 0x00,
+	0x00, 0x23, 0x00, 0x24, 0x00, 0x25, 0x00, 0x26,
+	0x10, 0x3A, 0x01, 0xD3, 0x78, 0xC1, 0xFB, 0xD8,
+	0x52, 0x07, 0x00, 0xD3, 0x30, 0xC1, 0x00, 0xD5,
+	0x0B, 0x60, 0x70, 0x47, 0x10, 0xB5, 0x10, 0xBD,
+	0x00, 0xF0, 0x26, 0xF8, 0x11, 0x46, 0xFF, 0xF7,
+	0xC3, 0xFF, 0x00, 0xF0, 0x25, 0xF9, 0x00, 0xF0,
+	0x3E, 0xF8, 0x03, 0xB4, 0xFF, 0xF7, 0xF2, 0xFF,
+	0x03, 0xBC, 0x00, 0xF0, 0x02, 0xF9, 0x00, 0x00,
+	0xFE, 0xE7, 0xFE, 0xE7, 0xFE, 0xE7, 0xFE, 0xE7,
+	0xFE, 0xE7, 0xFE, 0xE7, 0x02, 0x48, 0x03, 0x49,
+	0x03, 0x4A, 0x04, 0x4B, 0x70, 0x47, 0x00, 0x00,
+	0x70, 0x19, 0x00, 0x20, 0x70, 0x1E, 0x00, 0x20,
+	0x70, 0x1A, 0x00, 0x20, 0x70, 0x1A, 0x00, 0x20,
+	0x70, 0x47, 0x70, 0x47, 0x70, 0x47, 0x70, 0x47,
+	0x75, 0x46, 0x00, 0xF0, 0x25, 0xF8, 0xAE, 0x46,
+	0x05, 0x00, 0x69, 0x46, 0x53, 0x46, 0xC0, 0x08,
+	0xC0, 0x00, 0x85, 0x46, 0x18, 0xB0, 0x20, 0xB5,
+	0xFF, 0xF7, 0xE0, 0xFF, 0x60, 0xBC, 0x00, 0x27,
+	0x49, 0x08, 0xB6, 0x46, 0x00, 0x26, 0xC0, 0xC5,
+	0xC0, 0xC5, 0xC0, 0xC5, 0xC0, 0xC5, 0xC0, 0xC5,
+	0xC0, 0xC5, 0xC0, 0xC5, 0xC0, 0xC5, 0x40, 0x3D,
+	0x49, 0x00, 0x8D, 0x46, 0x70, 0x47, 0x10, 0xB5,
+	0x04, 0x46, 0xC0, 0x46, 0xC0, 0x46, 0x20, 0x46,
+	0xFF, 0xF7, 0xBB, 0xFF, 0x10, 0xBD, 0x00, 0x00,
+	0x00, 0x48, 0x70, 0x47, 0x10, 0x19, 0x00, 0x20,
+	0x01, 0x48, 0x80, 0x47, 0x01, 0x48, 0x00, 0x47,
+	0x51, 0x03, 0x00, 0x20, 0xCD, 0x00, 0x00, 0x20,
+	0x02, 0x48, 0x04, 0x22, 0x41, 0x68, 0x51, 0x40,
+	0x41, 0x60, 0xFB, 0xE7, 0x00, 0x00, 0x01, 0x40,
+	0x4B, 0x4E, 0x00, 0x25, 0x4B, 0x48, 0x01, 0x68,
+	0x00, 0x29, 0xFB, 0xD0, 0x00, 0x22, 0x02, 0x60,
+	0x49, 0x48, 0x14, 0x46, 0x01, 0x23, 0x02, 0x68,
+	0x5B, 0x02, 0x9A, 0x42, 0x01, 0xDD, 0x40, 0x20,
+	0x84, 0xE0, 0x66, 0x22, 0x32, 0x60, 0x90, 0x29,
+	0x24, 0xD0, 0x06, 0xDC, 0x10, 0x29, 0x47, 0xD0,
+	0x20, 0x29, 0x5B, 0xD0, 0x80, 0x29, 0x04, 0xD1,
+	0x33, 0xE0, 0xB0, 0x29, 0x04, 0xD0, 0xC0, 0x29,
+	0x71, 0xD0, 0x40, 0x20, 0x30, 0x60, 0xEA, 0xE7,
+	0x3C, 0x48, 0x84, 0x68, 0x80, 0x14, 0x84, 0x42,
+	0x02, 0xDD, 0x3B, 0x48, 0x04, 0x60, 0x63, 0xE0,
+	0x01, 0x20, 0x21, 0x1F, 0x40, 0x07, 0x00, 0xF0,
+	0x7D, 0xF8, 0x37, 0x49, 0x37, 0x4A, 0x08, 0x60,
+	0xA2, 0x18, 0xD2, 0x6F, 0x4A, 0x60, 0x90, 0x42,
+	0x56, 0xD1, 0x5A, 0xE0, 0xC0, 0x20, 0x84, 0x68,
+	0x00, 0x2C, 0x51, 0xDB, 0x09, 0x20, 0xC0, 0x02,
+	0x84, 0x42, 0x4D, 0xDC, 0xC8, 0x2C, 0x4B, 0xDB,
+	0x21, 0x1F, 0x00, 0x20, 0x00, 0xF0, 0x66, 0xF8,
+	0x01, 0x46, 0x2B, 0x48, 0x80, 0x3C, 0x01, 0x60,
+	0xE2, 0x6F, 0x42, 0x60, 0x91, 0x42, 0x3F, 0xD1,
+	0x43, 0xE0, 0x00, 0x22, 0x28, 0x49, 0x29, 0x48,
+	0x00, 0xF0, 0xAE, 0xF8, 0x07, 0x46, 0x27, 0x48,
+	0x00, 0x22, 0x27, 0x49, 0x00, 0x1D, 0x00, 0xF0,
+	0xA7, 0xF8, 0x38, 0x43, 0x04, 0x46, 0x2B, 0xE0,
+	0x09, 0x21, 0xC9, 0x02, 0x8D, 0x42, 0x2B, 0xDA,
+	0x00, 0x27, 0x09, 0xE0, 0x1C, 0x48, 0xB9, 0x00,
+	0x41, 0x58, 0x01, 0x22, 0x28, 0x46, 0x00, 0xF0,
+	0x97, 0xF8, 0x04, 0x43, 0x2D, 0x1D, 0x7F, 0x1C,
+	0x15, 0x48, 0x00, 0x68, 0x87, 0x42, 0xF1, 0xDB,
+	0x15, 0x48, 0x14, 0xE0, 0x09, 0x21, 0xC9, 0x02,
+	0x8D, 0x42, 0x15, 0xDA, 0x00, 0x27, 0x09, 0xE0,
+	0x16, 0x48, 0xB9, 0x00, 0x41, 0x58, 0x01, 0x22,
+	0x28, 0x46, 0x00, 0xF0, 0x81, 0xF8, 0x04, 0x43,
+	0x2D, 0x1D, 0x7F, 0x1C, 0x0A, 0x48, 0x00, 0x68,
+	0x87, 0x42, 0xF1, 0xDB, 0x0F, 0x48, 0x05, 0x60,
+	0x60, 0x1C, 0x80, 0xD0, 0x00, 0x2C, 0x04, 0xD0,
+	0xAA, 0x20, 0x03, 0xE0, 0xFF, 0xE7, 0x06, 0x48,
+	0x05, 0x68, 0x55, 0x20, 0x30, 0x60, 0x69, 0xE7,
+	0x04, 0x18, 0x00, 0x20, 0x00, 0x18, 0x00, 0x20,
+	0x08, 0x18, 0x00, 0x20, 0xC0, 0x00, 0x00, 0x20,
+	0x00, 0x08, 0x00, 0x20, 0x80, 0xFF, 0xFF, 0x1F,
+	0x85, 0xE1, 0x24, 0x57, 0xF8, 0x47, 0x00, 0x00,
+	0x4E, 0x87, 0x55, 0x74, 0x00, 0x10, 0x00, 0x20,
+	0x70, 0x47, 0xFE, 0xE7, 0x70, 0xB5, 0x04, 0x46,
+	0x00, 0x20, 0x0A, 0x4D, 0x02, 0x46, 0x0E, 0xE0,
+	0xA3, 0x5C, 0x1B, 0x02, 0x58, 0x40, 0x00, 0x23,
+	0x06, 0x04, 0x02, 0xD5, 0x40, 0x00, 0x68, 0x40,
+	0x00, 0xE0, 0x40, 0x00, 0x5B, 0x1C, 0x80, 0xB2,
+	0x08, 0x2B, 0xF5, 0xDB, 0x52, 0x1C, 0x8A, 0x42,
+	0xEE, 0xDB, 0x70, 0xBD, 0x21, 0x10, 0x00, 0x00,
+	0x14, 0x49, 0x13, 0x48, 0x08, 0x60, 0x14, 0x49,
+	0x40, 0x1E, 0x08, 0x60, 0x13, 0x48, 0x00, 0x24,
+	0x04, 0x60, 0x13, 0x48, 0x04, 0x60, 0x00, 0xF0,
+	0x6F, 0xF8, 0x12, 0x48, 0x04, 0x60, 0x12, 0x48,
+	0x04, 0x83, 0x10, 0x48, 0x80, 0x30, 0x04, 0x62,
+	0x10, 0x49, 0x04, 0x20, 0x48, 0x60, 0x08, 0x61,
+	0xC8, 0x61, 0x47, 0x21, 0x09, 0x02, 0x0E, 0x4B,
+	0x00, 0x20, 0x82, 0x00, 0x8C, 0x58, 0x40, 0x1C,
+	0x9C, 0x50, 0x40, 0x28, 0xF9, 0xDB, 0x0B, 0x48,
+	0x80, 0x69, 0xFF, 0xF7, 0x11, 0xFF, 0x00, 0x00,
+	0x01, 0x02, 0x00, 0x00, 0x0C, 0x18, 0x00, 0x20,
+	0x08, 0x18, 0x00, 0x20, 0x00, 0x18, 0x00, 0x20,
+	0x04, 0x18, 0x00, 0x20, 0x00, 0x00, 0x04, 0x40,
+	0xC0, 0x21, 0x01, 0x40, 0x00, 0x00, 0x01, 0x40,
+	0x10, 0x18, 0x00, 0x20, 0x00, 0x20, 0x01, 0x40,
+	0x18, 0xB5, 0x09, 0x24, 0x1B, 0x4B, 0xE4, 0x02,
+	0xA0, 0x42, 0x29, 0xDA, 0x01, 0x2A, 0x0C, 0xD1,
+	0x47, 0x22, 0x12, 0x02, 0x90, 0x42, 0x08, 0xDB,
+	0x81, 0x1A, 0xCA, 0x17, 0x92, 0x0F, 0x51, 0x18,
+	0x89, 0x08, 0x15, 0x4A, 0x89, 0x00, 0x89, 0x18,
+	0x09, 0x68, 0x03, 0xC3, 0x0A, 0x20, 0x08, 0x3B,
+	0x00, 0x90, 0x41, 0x1E, 0x00, 0x91, 0x01, 0xD3,
+	0x08, 0x46, 0xFA, 0xE7, 0x08, 0x22, 0x32, 0x21,
+	0x1A, 0x61, 0x00, 0x91, 0x00, 0x98, 0x44, 0x1E,
+	0x00, 0x94, 0xFB, 0xD2, 0x0B, 0x48, 0x5A, 0x61,
+	0x00, 0x90, 0xD8, 0x68, 0x82, 0x06, 0x05, 0xD5,
+	0x00, 0x98, 0x42, 0x1E, 0x00, 0x92, 0xF8, 0xD2,
+	0x01, 0x20, 0x18, 0xBD, 0x40, 0x06, 0xC0, 0x0F,
+	0x00, 0x91, 0x4A, 0x1E, 0x00, 0x92, 0xF8, 0xD3,
+	0x11, 0x46, 0xFA, 0xE7, 0x00, 0x20, 0x01, 0x40,
+	0x10, 0x18, 0x00, 0x20, 0x50, 0xC3, 0x00, 0x00,
+	0x30, 0xB5, 0x0A, 0x49, 0x8F, 0x23, 0x07, 0x4A,
+	0x07, 0x48, 0xDB, 0x01, 0xC8, 0x61, 0x00, 0x20,
+	0x84, 0x00, 0x1D, 0x59, 0x40, 0x1C, 0x15, 0x51,
+	0x0E, 0x28, 0xF9, 0xDB, 0x00, 0x20, 0xC8, 0x61,
+	0x30, 0xBD, 0x00, 0x00, 0x00, 0xF0, 0x00, 0x40,
+	0x50, 0x12, 0x00, 0x00, 0x40, 0xE8, 0x00, 0x40,
+	0xC0, 0x04, 0x00, 0x20, 0x00, 0x08, 0x00, 0x20,
+	0x70, 0x16, 0x00, 0x00, 0x10, 0x01, 0x00, 0x20,
+	0x23, 0x69, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
 /*
 return -1 means fail, 0 means success
 */
@@ -462,318 +722,17 @@ uint16_t get_crc(u8 *buf, int len){
     return crc_in;
 }
 
-
-
-static int fp_size(struct file *f)
-{
-    int error = -EBADF;
-    struct kstat stat;
-
-    error = vfs_getattr(&f->f_path, &stat,STATX_SIZE,AT_STATX_SYNC_AS_STAT);
-
-    if (error == 0)
-    {
-        return stat.size;
-    }
-    else
-    {
-        pr_err("get file file stat error\n");
-        return error;
-    }
-}
-
-static int cps_file_read(char *filename, char **buf)
-{
-    struct file *fp;
-    mm_segment_t fs;
-    int size = 0;
-    loff_t pos = 0;
-
-    fp = filp_open(filename, O_RDONLY, 0);
-    if (IS_ERR(fp))
-    {
-        pr_err("open %s file error\n", filename);
-        goto end;
-    }
-
-    fs = get_fs();
-    set_fs(KERNEL_DS);
-    size = fp_size(fp);
-    if (size <= 0)
-    {
-        pr_err("load file:%s error\n", filename);
-        goto error;
-    }
-
-    *buf = kzalloc(size + 1, GFP_KERNEL);
-    vfs_read(fp, *buf, size, &pos);
-
-error:
-    filp_close(fp, NULL);
-    set_fs(fs);
-end:
-    return size;
-}
-
-static unsigned char chartoBcd(char iChar)
-{
-    unsigned char mBCD = 0;
-
-    if (iChar >= '0' && iChar <= '9') mBCD = iChar - '0';
-      else if (iChar >= 'A' && iChar <= 'F') mBCD = iChar - 'A' + 0x0a;
-      else if (iChar >= 'a' && iChar <= 'f') mBCD = iChar - 'a' + 0x0a;
-
-    return mBCD;
-}
-
-static unsigned char* file_parse(char *buf, int size,
-                                       unsigned char *file, int *file_length)
-{
-    int  i = 0, j = 0;
-    int file_index = 0;
-    char temp;
-
-    if (!buf || !file)
-        return NULL;
-    for(i = 0; i < size; i++){
-        if(buf[i] == '\n' || buf[i] == ' ' || buf[i] == '\r') {
-          file_index = 0;
-          continue;
-        } else{
-            if (file_index == 1) {
-                file_index++;
-                file[j++] = (unsigned char)((chartoBcd(temp) << 4) + chartoBcd(buf[i]));
-            } else if (file_index == 0) {
-                file_index++;
-                temp = buf[i];
-            }
-        }
-
-    }
-    // file[j] = '\0';
-    *file_length = j;
-
-    return file;
-}
-
-static int bootloader_load(unsigned char *bootloader, int *bootloader_length)
-{
-    char *buf = NULL;
-    int size = 0;
-
-    size = cps_file_read(BOOTLOADER_FILE_NAME, &buf);
-    if (size > 0){
-
-        if (bootloader == NULL){
-            kfree(buf);
-            pr_err("file alloc error.\n");
-            return -EINVAL;
-        }
-
-        if(file_parse(buf, size, bootloader, bootloader_length) == NULL){
-            kfree(buf);
-            pr_err("file parse error\n");
-            return -EINVAL;
-        }
-        kfree(buf);
-    }
-
-    return 0;
-}
-
-static int firmware_load(unsigned char *firmeware, int *firmeware_length)
-{
-    char *buf = NULL;
-    int size = 0;
-
-    size = cps_file_read(FIRMWARE_FILE_NAME, &buf);
-    if (size > 0){
-
-        if (firmeware == NULL){
-            kfree(buf);
-            pr_err("file alloc error.\n");
-            return -EINVAL;
-        }
-
-        if(file_parse(buf, size, firmeware, firmeware_length) == NULL){
-            kfree(buf);
-            pr_err("file parse error\n");
-            return -EINVAL;
-        }
-        kfree(buf);
-    }
-
-    return 0;
-}
-
-
-
-static int update_firmware(void)
-{
-    int ret, write_count, k;
-    int bootloader_length, firmware_length;
-    int buff0_flag = 0, buff1_flag = 0;
-    unsigned char *bootloader_buf;
-    unsigned char *firmware_buf;
-    unsigned char *p;
-    int result;
-    
-    bootloader_buf = kzalloc(0x800, GFP_KERNEL);  // 2K buffer
-    firmware_buf = kzalloc(0x4800, GFP_KERNEL);  // 18K buffer
-
-    ret = bootloader_load(bootloader_buf, &bootloader_length);//load bootloader
-    if (ret != 0) {
-        cps_wls_log(CPS_LOG_DEBG, "[%s] ---- bootloader get error %d\n", __func__, ret);
-        goto update_fail;
-    }
-
-    if(CPS_WLS_FAIL == cps_wls_h_write_reg(REG_PASSWORD, PASSWORD))   goto update_fail;//set password
-    if(CPS_WLS_FAIL == cps_wls_h_write_reg(REG_RESET_MCU, CPS_4035_RESET))   goto update_fail;//reset mcu
-
-    if(CPS_WLS_FAIL == cps_wls_write_word(0x40012334, 0x00))    goto update_fail;//enable MTP write
-    if(CPS_WLS_FAIL == cps_wls_program_sram(0x20000000, bootloader_buf, bootloader_length))  goto update_fail;//program sram
-    if(CPS_WLS_FAIL == cps_wls_write_word(0x400400A0, 0x000000ff))    goto update_fail;//remap enable
-    if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00008000))    goto update_fail;//trim disable
-    cps_wls_write_word(0x40040070, 0x61A00000);//sys-restart
-    cps_wls_log(CPS_LOG_DEBG, "[%s] ---- system restart\n", __func__);
-
-
-    msleep(100);
-    if(CPS_WLS_FAIL == cps_wls_h_write_reg(REG_PASSWORD, PASSWORD))   goto update_fail;//set password
-    cps_wls_h_write_reg(REG_WRITE_MODE, PROGRAM_WRITE_MODE);
-    //=========================================================
-    // cali bootloader code
-    //=========================================================
-    cps_wls_program_cmd_send(CACL_CRC_TEST);
-    result = cps_wls_program_wait_cmd_done();
-
-    if(result != CPS_WLS_SUCCESS)
-    {
-        cps_wls_log(CPS_LOG_ERR, "[%s] ---- bootloader crc fail\n", __func__);
-        goto update_fail;
-    }
-    cps_wls_log(CPS_LOG_DEBG, "[%s] ---- load bootloader successful\n", __func__);
-
-
-    //=========================================================
-    // LOAD firmware to MTP
-    //=========================================================
-    memset(firmware_buf, 0, 0x4800);
-    ret = firmware_load(firmware_buf, &firmware_length);//load bootloader
-    if (ret != 0) {
-        cps_wls_log(CPS_LOG_ERR, "[%s] ---- firmware get error %d\n", __func__, ret);
-        goto update_fail;
-    }
-    //set start addr
-    cps_wls_write_word(ADDR_BUFFER0, 0x0000);
-    cps_wls_program_cmd_send(PGM_ADDR_SET);
-    cps_wls_program_wait_cmd_done();
-
-    //set write buffer size   defalt 64 word
-    cps_wls_write_word(ADDR_BUF_SIZE, CPS_PROGRAM_BUFFER_SIZE);
-    write_count = 0;
-    start_write_app_code:
-    p = firmware_buf;
-    write_count++;
-    //goto program mode
-    cps_wls_write_word(0x40012120, 0x1250);
-    cps_wls_write_word(0x40012ee8, 0xD148);
-
-    for (k = 0; k < (18 * 1024 / 4) / CPS_PROGRAM_BUFFER_SIZE; k++)
-    {
-        if (buff0_flag == 0)
-        {
-            //write buf0
-            cps_wls_program_sram(ADDR_BUFFER0, p, CPS_PROGRAM_BUFFER_SIZE*4);
-            p = p + CPS_PROGRAM_BUFFER_SIZE*4;
-            if (buff1_flag == 1)
-            {
-                //wait finish
-                cps_wls_program_wait_cmd_done();
-                buff1_flag = 0;
-            }
-
-            //write buff 0 CMD
-            cps_wls_program_cmd_send(PGM_BUFFER0);
-            buff0_flag = 1;
-            continue;
-        }
-        if (buff1_flag == 0)
-        {
-            //write buf1
-            cps_wls_program_sram(ADDR_BUFFER1, p, CPS_PROGRAM_BUFFER_SIZE*4);
-            p = p + CPS_PROGRAM_BUFFER_SIZE*4;
-            if (buff0_flag == 1)
-            {
-                //wait finish
-                cps_wls_program_wait_cmd_done();
-                buff0_flag = 0;
-                                
-            }
-
-            //write buff 0 CMD
-            cps_wls_program_cmd_send(PGM_BUFFER1);
-            buff1_flag = 1;
-            continue;
-        }
-    }
-    if (buff0_flag == 1)
-    {
-        //wait finish
-        cps_wls_program_wait_cmd_done();
-        buff0_flag = 0;
-    }
-
-    if (buff1_flag == 1)
-    {
-        //wait finish
-        cps_wls_program_wait_cmd_done();
-        buff1_flag = 0;
-    }
-
-    //exit program mode
-    cps_wls_write_word(0x40012120, 0x0000);
-    cps_wls_write_word(0x40012ee8, 0x0000);
-
-
-    //=========================================================
-    // cali app crc
-    //=========================================================
-    cps_wls_program_cmd_send(CACL_CRC_APP);
-    result = cps_wls_program_wait_cmd_done();
-
-    if(result != CPS_WLS_SUCCESS)
-    {
-        cps_wls_log(CPS_LOG_ERR, "[%s] ---- TEST APP CRC fail", __func__); 
-        if(write_count < 3) goto start_write_app_code;
-        else goto update_fail;   
-    }
-
-    //=========================================================
-    // write mcu&trim flag
-    //=========================================================
-    //goto program mode
-    cps_wls_write_word(0x40012120, 0x1250);
-    cps_wls_write_word(0x40012ee8, 0xD148);
-    cps_wls_program_cmd_send(PGM_WR_FLAG);
-    cps_wls_program_wait_cmd_done();
-    //exit program mode
-    cps_wls_write_word(0x40012120, 0x0000);
-    cps_wls_write_word(0x40012ee8, 0x0000);
-
-    cps_wls_log(CPS_LOG_DEBG, "[%s] ---- Program successful\n", __func__);
-
-    return CPS_WLS_SUCCESS;
-
-update_fail:
-    cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
-    return CPS_WLS_FAIL;
-}    
-
 //****************************************************************
 //-------------------I2C APT end--------------------
 
 //-------------------CPS4035 system interface-------------------
+static void cps_wls_write_password()
+{
+    cps_wls_log(CPS_LOG_DEBG, "[%s] -------write password\n", __func__);
+    cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
+    cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
+    cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
+}
 
 static int cps_wls_set_cmd(int value)
 {    
@@ -892,9 +851,18 @@ static int cps_wls_get_rx_irect(void)
     return cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
 
+static int cps_wls_get_rx_iout(void)
+{
+    cps_reg_s *cps_reg;
+    cps_wls_write_password();
+    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_IOUT]);
+    return cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
+}
+
 static int cps_wls_get_rx_vout(void)
 {
     cps_reg_s *cps_reg;
+    cps_wls_write_password();
     cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_VOUT]);
     return cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
@@ -1268,6 +1236,7 @@ static int cps_wls_set_tx_huge_metal_threshold(int value)
     return cps_wls_write_reg((int)cps_reg->reg_addr, value, (int)cps_reg->reg_bytes_len);
 }
 #endif
+
 //------------------------------IRQ Handler-----------------------------------
 static int cps_wls_set_int_enable(void)
 {
@@ -1290,23 +1259,41 @@ static int cps_wls_rx_irq_handler(int int_flag)
 
     if (int_flag & RX_INT_POWER_ON)
     {
-        //todo
+        //CPS_RX_MODE_ERR = FALSE;
+        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
     }
     if(int_flag & RX_INT_LDO_OFF)
     {
-        //todo
+        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_OFF");
     }
-    if(int_flag & RX_INT_LDO_ON){}
-    if(int_flag & RX_INT_READY){}
-    if(int_flag & RX_INT_OVP){}
-    if(int_flag & RX_INT_OTP){}
-    if(int_flag & RX_INT_OCP){}
-    if(int_flag & RX_INT_HOCP){}
-    if(int_flag & RX_INT_SCP){}
-    if(int_flag & RX_INT_INHIBIT_HIGH){}
-    if(int_flag & RX_INT_LDO_OFF){}
-    if(int_flag & RX_INT_LDO_OFF){}
-    if(int_flag & RX_INT_LDO_ON){}
+    if(int_flag & RX_INT_LDO_ON){
+         chip->rx_ldo_on = 1;
+         power_supply_changed(chip->wl_psy);
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
+    }
+    if(int_flag & RX_INT_READY){
+        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_READY");
+    }
+    if(int_flag & RX_INT_OVP){
+          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OVP");
+    }
+    if(int_flag & RX_INT_OTP){
+          //int_type |= INT_OTP;
+          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OTP");
+    }
+    if(int_flag & RX_INT_OCP){
+          //wls_event_notify(WLS_EVENT_RX_OCP);
+          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OCP");
+    }
+    if(int_flag & RX_INT_HOCP){
+          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HOCP");
+    }
+    if(int_flag & RX_INT_SCP){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_SCP");
+    }
+    if(int_flag & RX_INT_INHIBIT_HIGH){
+          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_INHIBIT_HIGH");
+    }
 
     return rc;
 }
@@ -1318,24 +1305,39 @@ static int cps_wls_tx_irq_handler(int int_flag)
 
     if (int_flag & TX_INT_PING)
     {
-        //todo
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_PING");
     }
     if(int_flag & TX_INT_SSP)
     {
-        //todo
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_SSP");
     }
-    if(int_flag & TX_INT_IDP){}
-    if(int_flag & TX_INT_CFGP){}
-    if(int_flag & TX_INT_EPT){}
-    if(int_flag & TX_INT_RPP_TO){}
-    if(int_flag & TX_INT_CEP_TO){}
-    if(int_flag & TX_INT_AC_DET){}
-    if(int_flag & TX_INT_INIT){}
-    if(int_flag & TX_INT_RP_TYPR_ERR){}
-
-    if(int_flag & TX_INT_FOD) {}
-    if(int_flag & TX_INT_ASK_PKT) {}
+    if(int_flag & TX_INT_IDP){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_IDP");
+    }
+    if(int_flag & TX_INT_CFGP){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_CFGP");
+    }
+    if(int_flag & TX_INT_EPT){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_EPT");
+    }
+    if(int_flag & TX_INT_RPP_TO){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_RPP_TO");
+    }
+    if(int_flag & TX_INT_CEP_TO){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_CEP_TO");
+    }
+    if(int_flag & TX_INT_AC_DET){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_AC_DET");
+    }
+    if(int_flag & TX_INT_INIT){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_INIT");
+    }
+    if(int_flag & TX_INT_RP_TYPR_ERR){
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_RP_TYPR_ERR");
+    }
+    if(int_flag & TX_INT_ASK_PKT)
     {
+         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_ASK_PKT");
         rc = cps_wls_get_ask_packet(data);
     }
 
@@ -1379,33 +1381,44 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
     {
         cps_wls_tx_irq_handler(int_flag);
     }
-    
+
     return IRQ_HANDLED;
 }
 
+static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
+{
+	struct cps_wls_chrg_chip *chip = dev_id;
+	int tx_detected = gpio_get_value(chip->wls_det_int);
+
+	if (tx_detected) {
+		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
+	} else {
+		cps_wls_log(CPS_LOG_DEBG, "Detected a detach event.\n");
+		chip->rx_ldo_on = false;
+		power_supply_changed(chip->wl_psy);
+	}
+
+	return IRQ_HANDLED;
+}
+
+
+static  int cps_wls_is_ldo_on()
+{
+	return (chip->rx_ldo_on && gpio_get_value(chip->wls_det_int));
+}
+
 static enum power_supply_property cps_wls_chrg_props[] = {
-    POWER_SUPPLY_PROP_CURRENT_MAX,
-    //POWER_SUPPLY_PROP_CHARGING_ENABLED,
     POWER_SUPPLY_PROP_PRESENT,
     POWER_SUPPLY_PROP_ONLINE,
-    //POWER_SUPPLY_PROP_VOUT_NOW,
-    //POWER_SUPPLY_PROP_VRECT,
-    //POWER_SUPPLY_PROP_IRECT,
-   // POWER_SUPPLY_PROP_PROTOCOL,
+    POWER_SUPPLY_PROP_VOLTAGE_MAX,
+    POWER_SUPPLY_PROP_VOLTAGE_NOW,
+    POWER_SUPPLY_PROP_CURRENT_MAX,
+    POWER_SUPPLY_PROP_CURRENT_NOW,
 };
 
 static int cps_wls_chrg_property_is_writeable(struct power_supply *psy,
                                                 enum power_supply_property psp)
 {
-    switch (psp){
-    case POWER_SUPPLY_PROP_CURRENT_MAX:
-   // case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-        return 1;
-
-    default:
-        break;
-    }
-
     return 0;
 }
 
@@ -1413,44 +1426,37 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
             enum power_supply_property psp,
             union power_supply_propval *val)
 {
-    //int ret ;
     switch(psp){
+        case POWER_SUPPLY_PROP_PRESENT:
         case POWER_SUPPLY_PROP_ONLINE:
-            val->intval = 0;
+            val->intval = cps_wls_is_ldo_on();
             break;
-#if 0            
-        case POWER_SUPPLY_PROP_VRECT:
-            ret = cps_wls_get_rx_vrect();
-            if(ret != CPS_WLS_FAIL)
-            {
-                chip->rx_vrect = ret;
-            }
-            val->intval = chip->rx_vrect;
+
+        case POWER_SUPPLY_PROP_TYPE:
+            val->intval = chip->wl_psd.type;
             break;
-        
-        case POWER_SUPPLY_PROP_IRECT:
-            ret = cps_wls_get_rx_irect();
-            if(ret != CPS_WLS_FAIL)
-            {
-                chip->rx_irect = ret;
-            }
-            val->intval = chip->rx_irect;
+
+        case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+            val->intval = 12000000;
             break;
-            
-        case POWER_SUPPLY_PROP_PROTOCOL:       
-            ret = cps_wls_get_rx_neg_pro();
-            if(ret != CPS_WLS_FAIL)
-            {
-                chip->rx_neg_protocol = cps_wls_get_rx_neg_pro();
-            }
-            val->intval = chip->rx_neg_protocol;
+
+        case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+            val->intval = cps_wls_get_rx_vout() * 1000;
             break;
-#endif 
+
+        case POWER_SUPPLY_PROP_CURRENT_MAX:
+            val->intval = 1250000;
+            break;
+
+        case POWER_SUPPLY_PROP_CURRENT_NOW:
+            val->intval = cps_wls_get_rx_iout() * 1000;
+            break;
+
         default:
             return -EINVAL;
             break;
     }
-
+    cps_wls_log(CPS_LOG_ERR, "[%s] psp = %d val = %d.\n", __func__, psp,val->intval);
     return 0;
 }
 
@@ -1458,16 +1464,256 @@ static int cps_wls_chrg_set_property(struct power_supply *psy,
             enum power_supply_property psp,
             const union power_supply_propval *val)
 {
-    int ret = 0;
-    struct cps_wls_chrg_chip *chip = power_supply_get_drvdata(psy);
-    cps_wls_log(CPS_LOG_DEBG, "[%s] psp = %d.\n", __func__, psp);
-    chip->state = 1;
-    return ret;
+    return 0;
 }
 
 static void cps_wls_charger_external_power_changed(struct power_supply *psy)
 {
     ;        
+}
+
+static int cps_get_fw_revision(uint32_t* fw_revision)
+{
+	int status = CPS_WLS_SUCCESS;
+	cps_reg_s *cps_reg;
+	uint32_t fw_major_revision = 0;
+	uint32_t fw_minor_revision = 0;
+	uint32_t fw_version;
+
+	cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
+	cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
+	cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
+
+	cps_reg = (cps_reg_s*)(&cps_comm_reg[CPS_COMM_REG_FW_VER]);
+	fw_version =  cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
+	if(CPS_WLS_SUCCESS != status)
+	{
+		cps_wls_log(CPS_LOG_ERR, "%s failed",__func__);
+	}
+
+	if(CPS_WLS_SUCCESS == status) {
+		fw_version = fw_version >> 16;
+		fw_minor_revision = (fw_version) & 0xFF;
+		fw_major_revision = ((fw_version) >> 8) & 0xFF;
+		fw_version =  (fw_major_revision << 16) | (fw_minor_revision);
+        chip->wls_fw_version = *fw_revision = fw_version;
+	} else
+		*fw_revision = 0;
+
+
+	cps_wls_log(CPS_LOG_ERR, "%s 0x%x, minor 0x%x, major 0x%x",__func__,
+		*fw_revision, fw_minor_revision, fw_major_revision);
+
+	return status;
+}
+
+static void cps_wls_pm_set_awake(int awake)
+{
+	if(!chip->cps_wls_wake_lock->active && awake) {
+        __pm_stay_awake(chip->cps_wls_wake_lock);
+	} else if(chip->cps_wls_wake_lock->active && !awake) {
+		__pm_relax(chip->cps_wls_wake_lock);
+	}
+}
+
+static void cps_wls_set_boost(int val)
+{
+	/* Assume if we turned the boost on we want to stay awake */
+	gpio_set_value(chip->wls_boost_en, val);
+	gpio_set_value(chip->wls_switch_en, val);
+
+	if(val) {
+		cps_wls_pm_set_awake(1);
+	} else {
+		cps_wls_pm_set_awake(0);
+	}
+}
+
+#define CPS_FW_MAJOR_VER_OFFSET		0xc4
+#define CPS_FW_MINOR_VER_OFFSET		0xc5
+static int wireless_fw_update(bool force)
+{
+	int  write_count, k;
+	int buff0_flag = 0, buff1_flag = 0;
+	u32 version;
+	u16 maj_ver, min_ver;
+	u8 *firmware_buf;
+	u8 *p;
+	int result;
+	int rc;
+	u32 fw_revision;
+	const struct firmware *fw;
+
+	cps_wls_set_boost(0);
+	msleep(20);//20ms
+	cps_wls_set_boost(1);
+	msleep(100);//100ms
+
+	firmware_buf = kzalloc(0x4800, GFP_KERNEL);  // 18K buffer
+	rc = firmware_request_nowarn(&fw, chip->wls_fw_name, chip->dev);
+	if (rc) {
+		cps_wls_log(CPS_LOG_ERR,"Couldn't get firmware  rc=%d\n", rc);
+		goto update_fail;
+	}
+
+	maj_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MAJOR_VER_OFFSET));
+	maj_ver = maj_ver >> 8;
+	min_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MINOR_VER_OFFSET));
+	min_ver = min_ver >> 8;
+	cps_wls_log(CPS_LOG_DEBG,"maj_var %#x, min_ver %#x\n", maj_ver, min_ver);
+	version = maj_ver << 16 | min_ver;
+	if (force)
+		version = UINT_MAX;
+	cps_wls_log(CPS_LOG_DEBG,"FW size: %zu version: %#x\n", fw->size, version);
+
+	result = cps_get_fw_revision(&fw_revision);
+	if(version == fw_revision) {
+	    cps_wls_log(CPS_LOG_DEBG,"%s bin version %x same as fw version %x,not need update fw\n",__func__,version,fw_revision);
+	    goto free_bug;
+	}
+
+	//CPS4035_BL
+	//bootloader_buf = CPS4035_BOOTLOADER;
+	if(CPS_WLS_FAIL == cps_wls_h_write_reg(REG_PASSWORD, PASSWORD))   goto update_fail;//set password
+	if(CPS_WLS_FAIL == cps_wls_h_write_reg(REG_RESET_MCU, CPS_4035_RESET))   goto update_fail;//reset mcu
+	if(CPS_WLS_FAIL == cps_wls_write_word(0x40012334, 0x00))    goto update_fail;//enable MTP write
+	if(CPS_WLS_FAIL == cps_wls_program_sram(0x20000000, CPS4035_BOOTLOADER, 0x800))  goto update_fail;//program sram
+	if(CPS_WLS_FAIL == cps_wls_write_word(0x400400A0, 0x000000ff))    goto update_fail;//remap enable
+	if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00008000))    goto update_fail;//trim disable
+	cps_wls_write_word(0x40040070, 0x61A00000);//sys-restart
+	cps_wls_log(CPS_LOG_DEBG, " ---- system restart\n");
+	msleep(100);
+
+	if(CPS_WLS_FAIL == cps_wls_h_write_reg(REG_PASSWORD, PASSWORD))   goto update_fail;//set password
+	cps_wls_h_write_reg(REG_WRITE_MODE, PROGRAM_WRITE_MODE);
+	//=========================================================
+	// cali bootloader code
+	//=========================================================
+	cps_wls_program_cmd_send(CACL_CRC_TEST);
+	result = cps_wls_program_wait_cmd_done();
+
+	if(result != CPS_WLS_SUCCESS)
+	{
+	    cps_wls_log(CPS_LOG_ERR, "[%s] ---- bootloader crc fail\n", __func__);
+	    goto update_fail;
+	}
+	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- load bootloader successful\n", __func__);
+
+	//=========================================================
+	// LOAD firmware to MTP
+	//=========================================================
+	memset(firmware_buf, 0, 0x4800);
+	memcpy(firmware_buf,fw->data,fw->size);
+	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- load fw size %x\n", __func__,(int)fw->size);
+	//firmware_buf = fw->data;
+	//set start addr
+	cps_wls_write_word(ADDR_BUFFER0, 0x0000);
+	cps_wls_program_cmd_send(PGM_ADDR_SET);
+	cps_wls_program_wait_cmd_done();
+
+	//set write buffer size   defalt 64 word
+	cps_wls_write_word(ADDR_BUF_SIZE, CPS_PROGRAM_BUFFER_SIZE);
+	write_count = 0;
+start_write_app_code:
+	p = firmware_buf;
+	write_count++;
+	//goto program mode
+	cps_wls_write_word(0x40012120, 0x1250);
+	cps_wls_write_word(0x40012ee8, 0xD148);
+
+	for (k = 0; k < (18 * 1024 / 4) / CPS_PROGRAM_BUFFER_SIZE; k++)
+	{
+	    if (buff0_flag == 0)
+	    {
+	        //write buf0
+	        cps_wls_program_sram(ADDR_BUFFER0, p, CPS_PROGRAM_BUFFER_SIZE*4);
+	        p = p + CPS_PROGRAM_BUFFER_SIZE*4;
+	        if (buff1_flag == 1)
+	        {
+	            //wait finish
+	            cps_wls_program_wait_cmd_done();
+	            buff1_flag = 0;
+	        }
+
+	        //write buff 0 CMD
+	        cps_wls_program_cmd_send(PGM_BUFFER0);
+	        buff0_flag = 1;
+	        continue;
+	    }
+	    if (buff1_flag == 0)
+	    {
+	        //write buf1
+	        cps_wls_program_sram(ADDR_BUFFER1, p, CPS_PROGRAM_BUFFER_SIZE*4);
+	        p = p + CPS_PROGRAM_BUFFER_SIZE*4;
+	        if (buff0_flag == 1)
+	        {
+                //wait finish
+                cps_wls_program_wait_cmd_done();
+                buff0_flag = 0;
+	        }
+
+	        //write buff 0 CMD
+	        cps_wls_program_cmd_send(PGM_BUFFER1);
+	        buff1_flag = 1;
+	        continue;
+	    }
+	}
+	if (buff0_flag == 1)
+	{
+	    //wait finish
+	    cps_wls_program_wait_cmd_done();
+	    buff0_flag = 0;
+	}
+
+	if (buff1_flag == 1)
+	{
+         //wait finish
+        cps_wls_program_wait_cmd_done();
+        buff1_flag = 0;
+	}
+
+	//exit program mode
+	cps_wls_write_word(0x40012120, 0x0000);
+	cps_wls_write_word(0x40012ee8, 0x0000);
+
+
+	//=========================================================
+	// cali app crc
+	//=========================================================
+	cps_wls_program_cmd_send(CACL_CRC_APP);
+	result = cps_wls_program_wait_cmd_done();
+
+	if(result != CPS_WLS_SUCCESS)
+	{
+        cps_wls_log(CPS_LOG_ERR, "[%s] ---- TEST APP CRC fail", __func__);
+        if(write_count < 3) goto start_write_app_code;
+        else goto update_fail;
+	}
+
+	//=========================================================
+	// write mcu&trim flag
+	//=========================================================
+	//goto program mode
+	cps_wls_write_word(0x40012120, 0x1250);
+	cps_wls_write_word(0x40012ee8, 0xD148);
+	cps_wls_program_cmd_send(PGM_WR_FLAG);
+	cps_wls_program_wait_cmd_done();
+	//exit program mode
+	cps_wls_write_word(0x40012120, 0x0000);
+	cps_wls_write_word(0x40012ee8, 0x0000);
+
+	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- Program successful\n", __func__);
+
+free_bug:
+	cps_wls_set_boost(0);//disable power, after FW updating, need a power reset
+	msleep(20);//20ms
+	kfree(firmware_buf);
+	release_firmware(fw);
+	return CPS_WLS_SUCCESS;
+
+update_fail:
+    cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
+    return CPS_WLS_FAIL;
 }
 
 //-----------------------------reg addr----------------------------------
@@ -1506,20 +1752,49 @@ static ssize_t store_reg_data(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR(reg_data, 0664, show_reg_data, store_reg_data);
 
-static ssize_t store_update_fw(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t wireless_fw_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    int tmp;
-    tmp = simple_strtoul(buf, NULL, 0);
-    
-    if(tmp != 0)
-    {
-        cps_wls_log(CPS_LOG_DEBG, "[%s] -------start update fw\n", __func__);
-        update_firmware();
-    }
-    
-    return count;
+
+	int rc;
+	uint32_t  fw_version;
+	rc = cps_get_fw_revision(&fw_version);
+
+	return sprintf(buf, "%08x\n", fw_version);
 }
-static DEVICE_ATTR(update_fw, 0664, NULL, store_update_fw);
+
+static DEVICE_ATTR(wireless_fw_version, 0664, wireless_fw_version_show, NULL);
+
+static ssize_t wireless_fw_force_update_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	bool val;
+	int rc;
+
+	if (kstrtobool(buf, &val) || !val)
+		return -EINVAL;
+
+	rc = wireless_fw_update(true);
+	if (rc < 0)
+		return rc;
+
+	return count;
+}
+static DEVICE_ATTR(wireless_fw_force_update, 0664, NULL, wireless_fw_force_update_store);
+
+static ssize_t wireless_fw_update_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	bool val;
+	int rc;
+
+	if (kstrtobool(buf, &val) || !val)
+		return -EINVAL;
+
+	rc = wireless_fw_update(false);
+	if (rc < 0)
+		return rc;
+
+	return count;
+}
+static DEVICE_ATTR(wireless_fw_update, 0664, NULL, wireless_fw_update_store);
 
 static ssize_t store_write_password(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -1574,12 +1849,149 @@ static ssize_t show_tx_vrect(struct device *dev, struct device_attribute *attr, 
 }
 static DEVICE_ATTR(get_tx_vrect, 0444, show_tx_vrect, NULL);
 
+static ssize_t tx_mode_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long tx_mode;
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &tx_mode);
+	if (r) {
+		cps_wls_log(CPS_LOG_ERR,"Invalid tx_mode = %lu\n", tx_mode);
+		return -EINVAL;
+	}
+
+	cps_wls_set_boost(tx_mode);
+	if (tx_mode) {
+	    cps_wls_enable_tx_mode();
+	} else {
+	    cps_wls_disable_tx_mode();
+	}
+
+	chip->tx_mode = tx_mode;
+	if (chip->wl_psy)
+		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "tx_mode");
+
+	return r ? r : count;
+}
+
+static ssize_t tx_mode_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"PEN: chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "%d\n", chip->tx_mode);
+}
+static DEVICE_ATTR(tx_mode, S_IRUGO|S_IWUSR, tx_mode_show, tx_mode_store);
+
+static ssize_t rx_connected_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "%d\n", chip->rx_ldo_on);
+}
+
+static DEVICE_ATTR(rx_connected, S_IRUGO,
+		rx_connected_show,
+		NULL);
+
+static ssize_t wls_input_current_limit_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long wls_curr_max;
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &wls_curr_max);
+	if (r) {
+		cps_wls_log(CPS_LOG_ERR, "Invalid TCMD = %lu\n", wls_curr_max);
+		return -EINVAL;
+	}
+
+	chip->wls_curr_max = wls_curr_max;
+	return r ? r : count;
+}
+
+static ssize_t wls_input_current_limit_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "%d\n", chip->wls_curr_max);
+}
+static DEVICE_ATTR(wls_input_current_limit, S_IRUGO|S_IWUSR, wls_input_current_limit_show, wls_input_current_limit_store);
+
+static ssize_t folio_mode_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long folio_mode;
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &folio_mode);
+	if (r) {
+		cps_wls_log(CPS_LOG_ERR,"Invalid folio_mode = %lu\n", folio_mode);
+		return -EINVAL;
+	}
+
+	chip->folio_mode = folio_mode;
+
+	return r ? r : count;
+}
+
+static ssize_t folio_mode_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"PEN: chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "%d\n", chip->folio_mode);
+}
+static DEVICE_ATTR(folio_mode, S_IRUGO|S_IWUSR, folio_mode_show, folio_mode_store);
+
 static void cps_wls_create_device_node(struct device *dev)
 {
     device_create_file(dev, &dev_attr_reg_addr);
     device_create_file(dev, &dev_attr_reg_data);
 //-----------------------program---------------------
-    device_create_file(dev, &dev_attr_update_fw);
+    device_create_file(dev, &dev_attr_wireless_fw_version);
+    device_create_file(dev, &dev_attr_wireless_fw_update);
+    device_create_file(dev, &dev_attr_wireless_fw_force_update);
 //-----------------------write password--------------
     device_create_file(dev, &dev_attr_write_password);
 
@@ -1591,6 +2003,11 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_get_tx_vin);
     device_create_file(dev, &dev_attr_get_tx_iin);
     device_create_file(dev, &dev_attr_get_tx_vrect);
+
+    device_create_file(dev, &dev_attr_tx_mode);
+    device_create_file(dev, &dev_attr_rx_connected);
+    device_create_file(dev, &dev_attr_wls_input_current_limit);
+    device_create_file(dev, &dev_attr_folio_mode);
 }
 
 static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
@@ -1605,34 +2022,67 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
     chip->wls_charge_int = of_get_named_gpio(node, "cps_wls_int", 0);
     if(!gpio_is_valid(chip->wls_charge_int))
         return -EINVAL;
+
+   chip->wls_det_int = of_get_named_gpio(node, "cps_det_int", 0);
+    if(!gpio_is_valid(chip->wls_det_int))
+        return -EINVAL;
+
+   chip->wls_switch_en = of_get_named_gpio(node, "cps_wls_switch_en", 0);
+    if(!gpio_is_valid(chip->wls_switch_en))
+        return -EINVAL;
+
+   chip->wls_boost_en = of_get_named_gpio(node, "cps_wls_boost_en", 0);
+    if(!gpio_is_valid(chip->wls_boost_en))
+        return -EINVAL;
+
+    of_property_read_string(node, "wireless-fw-name", &chip->wls_fw_name);
+    cps_wls_log(CPS_LOG_ERR, "[%s]  wls_charge_int %d wls_det_int %d wls_switch_en %d wls_boost_en %d wls_fw_name: %s\n",
+             __func__, chip->wls_charge_int, chip->wls_det_int, chip->wls_switch_en, chip->wls_boost_en,chip->wls_fw_name);
     return 0;
 }
 
 static int cps_wls_gpio_request(struct cps_wls_chrg_chip *chip)
 {
     int ret =0;
-    int irqn = 0;
 
-    if(gpio_is_valid(chip->wls_charge_int)){
-        ret = gpio_request_one(chip->wls_charge_int, GPIOF_DIR_IN, "cps4035_ap_int");
-        if(ret){
-            cps_wls_log(CPS_LOG_ERR, "[%s] int gpio request failed\n", __func__);
-            goto err_irq_gpio;
-        }
-        irqn = gpio_to_irq(chip->wls_charge_int);
-        if(irqn < 0){
-            ret = irqn;
-            cps_wls_log(CPS_LOG_ERR, "[%s] failed to gpio to irq\n", __func__);
-            goto err_irq_gpio;
-        }
-        chip->cps_wls_irq = irqn;
-    }else{
-        cps_wls_log(CPS_LOG_ERR, "[%s] reset gpio not provided\n", __func__);
-        goto err_irq_gpio;
-    }
+	ret = devm_gpio_request_one(chip->dev, chip->wls_charge_int,
+				  GPIOF_IN, "cps4035_ap_int");
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR,"Failed to request int gpio, ret:%d", ret);
+		return ret;
+	}
+	chip->cps_wls_irq = gpio_to_irq(chip->wls_charge_int);
+	if (chip->cps_wls_irq < 0) {
+		cps_wls_log(CPS_LOG_ERR,"failed get irq num %d", chip->cps_wls_irq);
+		return -EINVAL;
+	}
 
-err_irq_gpio:
-    gpio_free(chip->wls_charge_int);
+	ret = devm_gpio_request_one(chip->dev, chip->wls_det_int,
+				  GPIOF_IN, "cps4035_wls_det_int");
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR,"Failed to request det_int gpio, ret:%d", ret);
+		return ret;
+	}
+	chip->wls_det_irq = gpio_to_irq(chip->wls_det_int);
+	if (chip->wls_det_irq < 0) {
+		cps_wls_log(CPS_LOG_ERR,"failed get det irq num %d", chip->wls_det_irq);
+		return -EINVAL;
+	}
+
+
+	ret = devm_gpio_request_one(chip->dev, chip->wls_switch_en,
+				  GPIOF_OUT_INIT_LOW, "cps4035_wls_switch_en");
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR,"Failed to request wls_switch_en gpio, ret:%d", ret);
+		return ret;
+	}
+
+	ret = devm_gpio_request_one(chip->dev, chip->wls_boost_en,
+				  GPIOF_OUT_INIT_LOW, "cps4035_wls_boost_en");
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR,"Failed to request wls_boost_en gpio, ret:%d", ret);
+		return ret;
+	}
 
     return ret;
 }
@@ -1640,10 +2090,11 @@ err_irq_gpio:
 
 static void cps_wls_lock_work_init(struct cps_wls_chrg_chip *chip)
 {
+    char *name = NULL;
     mutex_init(&chip->irq_lock);
     mutex_init(&chip->i2c_lock);
-   // wake_lock_init(&chip->cps_wls_wake_lock, WAKE_LOCK_SUSPEND, "cps_wls_wake_lock");
-    //INIT_DELAYED_WORK(&chip->cps_wls_monitor_work, cps_wls_monitor_work_func);
+    name = devm_kasprintf(chip->dev, GFP_KERNEL, "%s", "cps_wls_wake_lock");
+    chip->cps_wls_wake_lock = wakeup_source_register(NULL, name);
 }
 
 
@@ -1651,22 +2102,19 @@ static void cps_wls_lock_destroy(struct cps_wls_chrg_chip *chip)
 {
     mutex_destroy(&chip->irq_lock);
     mutex_destroy(&chip->i2c_lock);
-   // wake_lock_destroy(&chip->cps_wls_wake_lock);
-    //cancel_delayed_work_sync(&chip->cps_wls_monitor_work);
 }
 
-static void cps_wls_free_gpio(struct cps_wls_chrg_chip *chip)
-{
-    if(gpio_is_valid(chip->wls_charge_int))
-        gpio_free(chip->wls_charge_int);
-}
+static char *wl_psy_supplied_to[] = {
+	"battery",
+	"mtk-master-charger",
+};
 
 static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
 {
-    struct power_supply_config cps_wls_psy_cfg = {};
+    struct power_supply_config cps_wl_psy_cfg = {};
 
     chip->wl_psd.name = CPS_WLS_CHRG_PSY_NAME;
-    chip->wl_psd.type = POWER_SUPPLY_TYPE_UNKNOWN;
+    chip->wl_psd.type = POWER_SUPPLY_TYPE_WIRELESS;
     chip->wl_psd.properties = cps_wls_chrg_props;
     chip->wl_psd.num_properties = ARRAY_SIZE(cps_wls_chrg_props);
     chip->wl_psd.get_property = cps_wls_chrg_get_property;
@@ -1674,17 +2122,18 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
     chip->wl_psd.property_is_writeable= cps_wls_chrg_property_is_writeable;
     chip->wl_psd.external_power_changed = cps_wls_charger_external_power_changed;
 
-    cps_wls_psy_cfg.drv_data = chip;
-    cps_wls_psy_cfg.of_node = chip->dev->of_node;
+    cps_wl_psy_cfg.drv_data = chip;
+    cps_wl_psy_cfg.of_node = chip->dev->of_node;
+    cps_wl_psy_cfg.supplied_to = wl_psy_supplied_to,
+    cps_wl_psy_cfg.num_supplicants = ARRAY_SIZE(wl_psy_supplied_to),
     chip->wl_psy = power_supply_register(chip->dev, 
                               &chip->wl_psd,
-                              &cps_wls_psy_cfg);
+                              &cps_wl_psy_cfg);
     if(IS_ERR(chip->wl_psy)){
         return PTR_ERR(chip->wl_psy);
     }
     return CPS_WLS_SUCCESS;
 }
-
 
 static int cps_wls_chrg_probe(struct i2c_client *client,
                 const struct i2c_device_id *id)
@@ -1729,6 +2178,17 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
         }
         enable_irq_wake(chip->cps_wls_irq);
     }
+
+   if(chip->wls_det_irq){
+        ret = devm_request_threaded_irq(&client->dev, chip->wls_det_irq, NULL,
+           wls_det_irq_handler, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT, "wls_det_irq", chip);
+        if(ret){
+            cps_wls_log(CPS_LOG_ERR, "[%s] request wls_det_irq irq failed ret = %d\n", __func__, ret);
+            goto free_source;
+        }
+        enable_irq_wake(chip->wls_det_irq);
+    }
+
     cps_wls_lock_work_init(chip);
 
     cps_wls_create_device_node(&(client->dev));
@@ -1745,7 +2205,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     return ret;
 
 free_source:
-    cps_wls_free_gpio(chip);
     cps_wls_lock_destroy(chip);
     cps_wls_log(CPS_LOG_ERR, "[%s] error: free resource.\n", __func__);
 
