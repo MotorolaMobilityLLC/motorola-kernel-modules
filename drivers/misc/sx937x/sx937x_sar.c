@@ -59,6 +59,16 @@
 #define SX937x_CONN_ERROR	3
 #define SX937x_I2C_ERROR	4
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+#ifdef CONFIG_SX937X_MTK_KERNEL419_CHARGER_TYPE
+#define USB_POWER_SUPPLY_NAME   "mtk_charger_type"
+#else
+#define USB_POWER_SUPPLY_NAME   "charger"
+#endif
+#else
+#define USB_POWER_SUPPLY_NAME   "usb"
+#endif
+
 /*! \struct sx937x
  * Specialized struct containing input event data, platform data, and
  * last cap state read if needed.
@@ -1262,7 +1272,7 @@ static int ps_notify_callback(struct notifier_block *self,
 	if ((event == PSY_EVENT_PROP_ADDED || event == PSY_EVENT_PROP_CHANGED)
 #endif
 			&& psy && psy->desc->get_property && psy->desc->name &&
-			!strncmp(psy->desc->name, "usb", sizeof("usb")) && data) {
+			!strncmp(psy->desc->name, USB_POWER_SUPPLY_NAME, sizeof(USB_POWER_SUPPLY_NAME)) && data) {
 		LOG_DBG("ps notification: event = %lu\n", event);
 		retval = ps_get_state(psy, &present);
 		if (retval) {
@@ -1569,7 +1579,7 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 		if (err)
 			LOG_ERR("Unable to register ps_notifier: %d\n", err);
 
-		psy = power_supply_get_by_name("usb");
+		psy = power_supply_get_by_name(USB_POWER_SUPPLY_NAME);
 		if (psy) {
 			err = ps_get_state(psy, &pplatData->ps_is_present);
 			if (err) {
