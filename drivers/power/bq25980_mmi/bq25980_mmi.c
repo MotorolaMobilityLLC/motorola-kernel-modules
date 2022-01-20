@@ -693,14 +693,6 @@ static int bq25980_get_charger_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_MODEL_NAME:
 		val->strval = bq->model_name;
 		break;
-	case POWER_SUPPLY_PROP_ONLINE:
-		ret = regmap_read(bq->regmap, BQ25980_STAT3, &stat3);
-		if (ret)
-			return ret;
-
-		state.online = stat3 & BQ25980_PRESENT_MASK;
-		val->intval = state.online;
-		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = POWER_SUPPLY_HEALTH_GOOD;
 
