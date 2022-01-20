@@ -26,7 +26,6 @@
 /* test config */
 #define TOTAL_FRAME_NUM 					1 /* rawdata test frames */
 #define NOISEDATA_TEST_TIMES				1  /* noise test frames */
-#define GTP_SAVE_IN_CSV                     1
 
 #define GOODIX_RESULT_SAVE_PATH				"/data/vendor/touchrec"
 #define GOODIX_TEST_FILE_NAME				"goodix"
