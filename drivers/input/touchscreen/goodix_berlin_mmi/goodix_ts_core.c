@@ -1138,15 +1138,32 @@ static int goodix_parse_dt(struct device_node *node,
 	if (board_data->leather_mode_ctrl)
 		ts_info("support goodix leather mode");
 
+	board_data->film_mode_ctrl = of_property_read_bool(node,
+					"goodix,film_mode-ctrl");
+	if (board_data->film_mode_ctrl)
+		ts_info("support goodix film mode");
+
 	board_data->interpolation_ctrl = of_property_read_bool(node,
 					"goodix,interpolation-ctrl");
 	if (board_data->interpolation_ctrl)
 		ts_info("support goodix interpolation mode");
 
+	board_data->report_rate_ctrl = of_property_read_bool(node,
+					"goodix,report_rate-ctrl");
+	if (board_data->report_rate_ctrl)
+		ts_info("support goodix report rate switch mode");
+
 	board_data->edge_ctrl = of_property_read_bool(node,
 					"goodix,edge-ctrl");
 	if (board_data->edge_ctrl)
 		ts_info("support goodix edge mode");
+
+	if (of_property_read_bool(node, "goodix,gesture-wait-pm")) {
+		ts_info("gesture-wait-pm set");
+		board_data->gesture_wait_pm = true;
+	} else {
+		board_data->gesture_wait_pm = false;
+	}
 
 	return 0;
 }
@@ -1242,7 +1259,10 @@ static int goodix_ts_request_handle(struct goodix_ts_core *cd,
 			  ts_event->request_code);
 	return ret;
 }
-
+#ifdef CONFIG_GTP_FOD
+#define GOODIX_GESTURE_FOD_DOWN			0x46
+#define GOODIX_GESTURE_FOD_UP			0x55
+#endif
 /**
  * goodix_ts_threadirq_func - Bottom half of interrupt
  * This functions is excuted in thread context,
@@ -1259,6 +1279,10 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 	struct goodix_ts_event *ts_event = &core_data->ts_event;
 	struct goodix_ts_esd *ts_esd = &core_data->ts_esd;
 	int ret;
+
+#ifdef CONFIG_GTP_ENABLE_PM_QOS
+	cpu_latency_qos_update_request(&core_data->goodix_pm_qos, 0);
+#endif
 
 	ts_esd->irq_status = true;
 	core_data->irq_trig_cnt++;
@@ -1283,6 +1307,19 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 			/* report touch */
 			goodix_ts_report_finger(core_data->input_dev,
 					&ts_event->touch_data);
+#ifdef CONFIG_GTP_FOD
+		if(ts_event->gesture_type == GOODIX_GESTURE_FOD_DOWN) {
+			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY1, 1);
+			input_sync(core_data->input_dev);
+			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY1, 0);
+			input_sync(core_data->input_dev);
+		} else if(ts_event->gesture_type == GOODIX_GESTURE_FOD_UP) {
+			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY2, 1);
+			input_sync(core_data->input_dev);
+			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY2, 0);
+			input_sync(core_data->input_dev);
+		}
+#endif
 		}
 		if (core_data->board_data.pen_enable &&
 				ts_event->event_type == EVENT_PEN) {
@@ -1297,6 +1334,10 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 	if (!core_data->tools_ctrl_sync && !ts_event->retry)
 		hw_ops->after_event_handler(core_data);
 	ts_event->retry = 0;
+
+#ifdef CONFIG_GTP_ENABLE_PM_QOS
+	cpu_latency_qos_update_request(&core_data->goodix_pm_qos, PM_QOS_DEFAULT_VALUE);
+#endif
 
 	return IRQ_HANDLED;
 }
@@ -1669,6 +1710,10 @@ static int goodix_ts_input_dev_config(struct goodix_ts_core *core_data)
 #endif
 
 	input_set_capability(input_dev, EV_KEY, KEY_POWER);
+#ifdef CONFIG_GTP_FOD
+	input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY1);
+	input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY2);
+#endif
 
 	r = input_register_device(input_dev);
 	if (r < 0) {
@@ -1781,7 +1826,7 @@ static void goodix_ts_esd_work(struct work_struct *work)
 exit:
 	ts_esd->irq_status = false;
 	if (atomic_read(&ts_esd->esd_on))
-		schedule_delayed_work(&ts_esd->esd_work, 2 * HZ);
+		schedule_delayed_work(&ts_esd->esd_work, 1 * HZ);
 }
 
 /**
@@ -1799,7 +1844,7 @@ static void goodix_ts_esd_on(struct goodix_ts_core *cd)
 		return;
 
 	atomic_set(&ts_esd->esd_on, 1);
-	if (!schedule_delayed_work(&ts_esd->esd_work, 2 * HZ)) {
+	if (!schedule_delayed_work(&ts_esd->esd_work, 1 * HZ)) {
 		ts_info("esd work already in workqueue");
 	}
 	ts_info("esd on");
@@ -2155,6 +2200,36 @@ static int goodix_ts_pm_resume(struct device *dev)
 
 	return goodix_ts_resume(core_data);
 }
+#elif defined (CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI)
+static int goodix_ts_pm_suspend(struct device *dev)
+{
+	struct goodix_ts_core *core_data =
+		dev_get_drvdata(dev);
+
+	ts_debug("CALL BACK TP PM SUSPEND");
+
+	atomic_set(&core_data->pm_resume, 0);
+
+	return 0;
+}
+/**
+ * goodix_ts_pm_resume - PM resume function
+ * Called by kernel during system wakeup
+ */
+static int goodix_ts_pm_resume(struct device *dev)
+{
+	struct goodix_ts_core *core_data =
+		dev_get_drvdata(dev);
+
+	ts_debug("CALL BACK TP PM RESUME");
+
+	atomic_set(&core_data->pm_resume, 1);
+
+	if (core_data->board_data.gesture_wait_pm)
+		wake_up_interruptible(&core_data->pm_wq);
+
+	return 0;
+}
 #endif
 #endif
 
@@ -2249,7 +2324,7 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 	/* create procfs files */
 	goodix_ts_procfs_init(cd);
 
-#ifdef GOODIX_ESD_ENABLE
+#ifdef  CONFIG_GOODIX_ESD_ENABLE
 	/* esd protector */
 	goodix_ts_esd_init(cd);
 #endif
@@ -2470,6 +2545,13 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		goto err_out;
 	}
 
+	/* confirm it's goodix touch dev or not */
+	ret = core_data->hw_ops->dev_confirm(core_data);
+	if (ret) {
+		ts_err("goodix device confirm failed");
+		goto err_out;
+	}
+
 	/* Pinctrl handle is optional. */
 	ret = goodix_ts_pinctrl_init(core_data);
 	if (!ret && core_data->pinctrl) {
@@ -2503,13 +2585,6 @@ static int goodix_ts_probe(struct platform_device *pdev)
         }
     }
 
-	/* confirm it's goodix touch dev or not */
-	ret = core_data->hw_ops->dev_confirm(core_data);
-	if (ret) {
-		ts_err("goodix device confirm failed");
-		goto err_out;
-	}
-
 	/* generic notifier callback */
 	core_data->ts_notifier.notifier_call = goodix_generic_noti_callback;
 	goodix_ts_register_notifier(&core_data->ts_notifier);
@@ -2532,6 +2607,10 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	}
 #endif
 
+#ifdef CONFIG_GTP_ENABLE_PM_QOS
+	cpu_latency_qos_add_request(&core_data->goodix_pm_qos, PM_QOS_DEFAULT_VALUE);
+#endif
+
 	/* Try start a thread to get config-bin info */
 	ret = goodix_start_later_init(core_data);
 	if (ret) {
@@ -2546,6 +2625,10 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err_register_gesture_wakelock;
 	}
+
+	if (core_data->board_data.gesture_wait_pm)
+		init_waitqueue_head(&core_data->pm_wq);
+	atomic_set(&core_data->pm_resume, 1);
 
 	/* debug node init */
 	goodix_tools_init();
@@ -2571,6 +2654,14 @@ static int goodix_ts_remove(struct platform_device *pdev)
 	struct goodix_ts_core *core_data = platform_get_drvdata(pdev);
 	struct goodix_ts_hw_ops *hw_ops = core_data->hw_ops;
 	struct goodix_ts_esd *ts_esd = &core_data->ts_esd;
+
+#ifdef CONFIG_GTP_ENABLE_PM_QOS
+	cpu_latency_qos_remove_request(&core_data->goodix_pm_qos);
+#endif
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+	ts_info("%s:goodix_ts_mmi_dev_register",__func__);
+	goodix_ts_mmi_dev_unregister(pdev);
+#endif
 
 	goodix_ts_unregister_notifier(&core_data->ts_notifier);
 	goodix_tools_exit();
@@ -2602,6 +2693,9 @@ static int goodix_ts_remove(struct platform_device *pdev)
 static const struct dev_pm_ops dev_pm_ops = {
 #if !defined(CONFIG_FB) && !defined(CONFIG_HAS_EARLYSUSPEND) \
 		&& !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+	.suspend = goodix_ts_pm_suspend,
+	.resume = goodix_ts_pm_resume,
+#elif defined (CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI)
 	.suspend = goodix_ts_pm_suspend,
 	.resume = goodix_ts_pm_resume,
 #endif

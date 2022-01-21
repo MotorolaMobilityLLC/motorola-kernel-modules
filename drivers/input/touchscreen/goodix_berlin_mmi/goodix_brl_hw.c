@@ -202,7 +202,6 @@ static int brl_power_on(struct goodix_ts_core *cd, bool on)
 		if (ret < 0)
 			goto power_off;
 
-		msleep(GOODIX_NORMAL_RESET_DELAY_MS);
 		return 0;
 	}
 
@@ -264,7 +263,11 @@ int brl_gesture(struct goodix_ts_core *cd, int gesture_type)
 	struct goodix_ts_cmd cmd;
 
 	cmd.cmd = GOODIX_GESTURE_CMD;
+#ifdef CONFIG_GTP_FOD
+	cmd.len = 6;
+#else
 	cmd.len = 5;
+#endif
 	cmd.data[0] = gesture_type;
 	if (cd->hw_ops->send_cmd(cd, &cmd))
 		ts_err("failed send gesture cmd");
@@ -299,6 +302,8 @@ static int brl_dev_confirm(struct goodix_ts_core *cd)
 		ret = -EINVAL;
 		ts_err("device confirm failed, rx_buf:%*ph", 8, rx_buf);
 	}
+
+	msleep(GOODIX_NORMAL_RESET_DELAY_MS);
 
 	ts_info("device connected");
 	return ret;
@@ -1062,7 +1067,11 @@ static void goodix_parse_pen(struct goodix_pen_data *pen_data,
 		pen_data->keys[i].status = TS_TOUCH;
 	}
 }
-
+#ifdef   CONFIG_GTP_FOD
+#define  GOODIX_FP_EVENTS                   0x8
+#define  GOODIX_GESTURE_FOD_DOWN			0x46
+#define  GOODIX_GESTURE_FOD_UP			    0x55
+#endif
 static int goodix_touch_handler(struct goodix_ts_core *cd,
 				struct goodix_ts_event *ts_event,
 				u8 *pre_buf, u32 pre_buf_len)
@@ -1078,7 +1087,10 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 	u8 point_type = 0;
 	static u8 pre_finger_num;
 	static u8 pre_pen_num;
-
+#ifdef CONFIG_GTP_FOD
+	int  fp_flags = 0;
+	static int pre_flags = 0;
+#endif
 	/* clean event buffer */
 	memset(ts_event, 0, sizeof(*ts_event));
 	/* copy pre-data to buffer */
@@ -1125,7 +1137,17 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 			}
 		}
 	}
-
+#ifdef CONFIG_GTP_FOD
+	ts_debug("touch pre_buf[0]=0x%x", pre_buf[0]);
+	fp_flags = pre_buf[0] & GOODIX_FP_EVENTS;
+	if(pre_flags != fp_flags) {
+		if(fp_flags)
+			ts_event->gesture_type =  GOODIX_GESTURE_FOD_DOWN;
+		else
+			ts_event->gesture_type =  GOODIX_GESTURE_FOD_UP;
+	}
+	pre_flags = fp_flags;
+#endif
 	if (touch_num > 0 && (point_type == POINT_TYPE_STYLUS
 				|| point_type == POINT_TYPE_STYLUS_HOVER)) {
 		/* stylus info */
@@ -1152,9 +1174,21 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 		}
 	}
 
-	/* process custom info */
-	if (buffer[3] & 0x01)
-		ts_debug("TODO add custom info process function");
+	/* Need to resend the stylus cmd after abnormal reseting */
+	if (cd->board_data.stylus_mode_ctrl && cd->get_mode.stylus_mode
+				&& cd->set_mode.stylus_mode) {
+		if ((buffer[3] & 0x20) == 0) {
+			struct goodix_ts_cmd stylus_cmd;
+			stylus_cmd.cmd = 0xA4;
+			stylus_cmd.len = 5;
+			stylus_cmd.data[0] = 0x01;
+			ret = brl_send_cmd(cd, &stylus_cmd);
+			if (ret < 0)
+				ts_err("Failed to send stylus enable command\n");
+			else
+				ts_info("IC abnormal reset, resend stylus enable command\n");
+		}
+	}
 
 	return 0;
 }
@@ -1202,6 +1236,10 @@ static int brl_event_handler(struct goodix_ts_core *cd,
 	if (event_status & GOODIX_GESTURE_EVENT) {
 		ts_event->event_type = EVENT_GESTURE;
 		ts_event->gesture_type = pre_buf[4];
+#ifdef CONFIG_GTP_FOD
+		memcpy(ts_event->gesture_data, &pre_buf[8],
+				GOODIX_GESTURE_DATA_LEN);
+#endif
 	}
 	return 0;
 }

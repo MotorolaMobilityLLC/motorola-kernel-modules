@@ -33,6 +33,10 @@ static void inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_devic
 #define ENTER_LEATHER_MODE         0x01
 #define EXIT_LEATHER_MODE          0x00
 
+#define FILM_MODE_SWITCH_CMD       0x27
+#define ENTER_FILM_MODE            0x01
+#define EXIT_FILM_MODE             0x00
+
 #define EDGE_SWITCH_CMD            0x17
 #define ROTATE_DEFAULT_0           0x00
 #define ROTATE_LEFT_90             0X40
@@ -42,6 +46,11 @@ static void inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_devic
 #define BIG_EDGE                   0x80
 
 #define STYLUS_MODE_SWITCH_CMD     0xA4
-#define INTERPOLATION_SWITCH_CMD   0xC2
+
+#define INTERPOLATION_SWITCH_CMD   0xC1
+#define REPORT_RATE_DEFAULT        0x00
+#define REPORT_RATE_720HZ          0x01
+#define REPORT_RATE_480HZ          0x02
+#define REPORT_RATE_576HZ          0x03
 
 #endif
