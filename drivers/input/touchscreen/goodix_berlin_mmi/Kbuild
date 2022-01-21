@@ -14,7 +14,6 @@ goodix_brl_mmi-objs := \
 					goodix_cfg_bin.o \
 					goodix_ts_utils.o \
 					goodix_brl_fwupdate.o \
-					goodix_ts_gesture.o \
 					goodix_ts_inspect.o \
 					goodix_ts_tools.o
 
@@ -34,9 +33,23 @@ ifneq ($(filter m y,$(CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI)),)
     EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_GOODIX_BRL_SPI
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_FOD)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_FOD
+    goodix_brl_mmi-objs += goodix_ts_gesture_fod.o
+else
+    goodix_brl_mmi-objs += goodix_ts_gesture.o
+endif
 ifneq ($(filter m y,$(CONFIG_GTP_LIMIT_USE_SUPPLIER)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_LIMIT_USE_SUPPLIER
     EXTRA_CFLAGS += -DGTP_SAVE_IN_CSV
+endif
+
+ifneq ($(filter m y,$(CONFIG_GTP_ENABLE_PM_QOS)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_ENABLE_PM_QOS
+endif
+
+ifneq ($(filter m y,$(CONFIG_GOODIX_ESD_ENABLE)),)
+    EXTRA_CFLAGS += -DCONFIG_GOODIX_ESD_ENABLE
 endif
 
 ifneq ($(filter m y,$(CONFIG_TARGET_BUILD_FACROTY)),)
