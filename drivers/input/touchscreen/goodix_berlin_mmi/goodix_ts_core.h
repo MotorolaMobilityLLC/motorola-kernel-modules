@@ -29,6 +29,10 @@
 #include "mtk_disp_notify.h"
 #endif
 
+#ifdef CONFIG_GTP_ENABLE_PM_QOS
+#include <linux/pm_qos.h>
+#endif
+
 #define GOODIX_CORE_DRIVER_NAME			"goodix_ts"
 #define GOODIX_PEN_DRIVER_NAME			"goodix_ts,pen"
 #define GOODIX_DRIVER_VERSION			"v1.2.3"
@@ -37,8 +41,10 @@
 #define GOODIX_MAX_PEN_KEY 				2
 #define GOODIX_PEN_MAX_TILT				90
 #define GOODIX_CFG_MAX_SIZE				4096
+#define GOODIX_FW_MAX_SIEZE				(300 * 1024)
 #define GOODIX_MAX_STR_LABLE_LEN		64
 #define GOODIX_MAX_FRAMEDATA_LEN		1700
+#define GOODIX_GESTURE_DATA_LEN			16
 
 #define GOODIX_NORMAL_RESET_DELAY_MS	100
 #define GOODIX_HOLD_CPU_RESET_DELAY_MS  5
@@ -54,6 +60,12 @@
 #define PINCTRL_STYLUS_CLK_SUSPEND		"stylus_clk_suspend"
 #define STYLUS_CLK_SRC_GPIO				"stylus_clk_gpio"
 #define STYLUS_CLK_SRC_PMIC				"stylus_clk_pmic"
+
+enum GOODIX_GESTURE_TYP {
+	GESTURE_SINGLE_TAP = (1 << 0),
+	GESTURE_DOUBLE_TAP = (1 << 1),
+	GESTURE_FOD_PRESS  = (1 << 2)
+};
 
 enum CORD_PROB_STA {
 	CORE_MODULE_UNPROBED = 0,
@@ -285,9 +297,12 @@ struct goodix_ts_board_data {
 
 	bool sensitivity_ctrl;
 	bool stylus_mode_ctrl;
+	bool film_mode_ctrl;
 	bool leather_mode_ctrl;
 	bool interpolation_ctrl;
+	bool report_rate_ctrl;
 	bool edge_ctrl;
+	bool gesture_wait_pm;
 };
 
 enum goodix_fw_update_mode {
@@ -393,6 +408,9 @@ struct goodix_ts_event {
 	u8 gesture_type;
 	struct goodix_touch_data touch_data;
 	struct goodix_pen_data pen_data;
+#ifdef CONFIG_GTP_FOD
+	u8 gesture_data[GOODIX_GESTURE_DATA_LEN];
+#endif
 };
 
 enum goodix_ic_bus_type {
@@ -461,6 +479,15 @@ struct goodix_ic_config {
 	u8 data[GOODIX_CFG_MAX_SIZE];
 };
 
+struct goodix_mode_info {
+	int film_mode;
+	int leather_mode;
+	int stylus_mode;
+	int interpolation;
+	int report_rate_mode;
+	int edge_mode[2];
+};
+
 struct goodix_ts_core {
 	int init_stage;
 	struct platform_device *pdev;
@@ -498,6 +525,9 @@ struct goodix_ts_core {
 	struct wakeup_source *gesture_wakelock;
 	struct notifier_block ts_notifier;
 	struct goodix_ts_esd ts_esd;
+#ifdef CONFIG_GTP_ENABLE_PM_QOS
+	struct pm_qos_request goodix_pm_qos;
+#endif
 
 #ifdef CONFIG_FB
 	struct notifier_block fb_notifier;
@@ -506,11 +536,11 @@ struct goodix_ts_core {
 	struct notifier_block disp_notifier;
 #endif
 
-	int leather_mode;
-	int stylus_mode;
-	int interpolation;
-	int edge_mode[2];
+	int refresh_rate;
 	struct clk *stylus_clk;
+	struct goodix_mode_info set_mode;
+	struct goodix_mode_info get_mode;
+	struct mutex mode_lock;
 
 	/* touchscreen_mmi */
 	struct ts_mmi_class_methods *imports;
@@ -521,6 +551,11 @@ struct goodix_ts_core {
 #if 0 //FIXME
 	bool need_update_cfg;
 #endif
+#ifdef CONFIG_GTP_FOD
+	unsigned char gesture_type;
+#endif
+	atomic_t pm_resume;
+	wait_queue_head_t pm_wq;
 };
 
 /* external module structures */
