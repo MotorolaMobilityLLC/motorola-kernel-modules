@@ -79,7 +79,7 @@
 #define AW_READ_BIN_FLEXBALLY
 #define AW_CHECK_QUALIFY
 /* #define AW_DOUBLE */
-/* #define AW_DURATION_DECIDE_WAVEFORM */
+#define AW_DURATION_DECIDE_WAVEFOR
 /* #define AW_OSC_MULTI_CALI */
 /* #define AW_BOOT_OSC_CALI */
 /* #define AW_ENABLE_RTP_PRINT_LOG */
