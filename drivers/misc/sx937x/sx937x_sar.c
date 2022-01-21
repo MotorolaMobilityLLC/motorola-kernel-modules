@@ -1195,7 +1195,11 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 			break;
 		}
 	}
-	if (disableFlag&&pdata->cap_vdd_en) {
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+	if (disableFlag && pdata->cap_vdd_en) {
+#else
+	if (disableFlag) {
+#endif
 		LOG_INFO("disable all chs\n");
 		sx937x_i2c_read_16bit(global_sx937x, SX937X_GENERAL_SETUP, &temp);
 		LOG_DBG("read reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
