@@ -1519,9 +1519,10 @@ static void cps_wls_pm_set_awake(int awake)
 static void cps_wls_set_boost(int val)
 {
 	/* Assume if we turned the boost on we want to stay awake */
+	/*
 	gpio_set_value(chip->wls_boost_en, val);
 	gpio_set_value(chip->wls_switch_en, val);
-
+	*/
 	if(val) {
 		cps_wls_pm_set_awake(1);
 	} else {
@@ -2027,17 +2028,9 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
     if(!gpio_is_valid(chip->wls_det_int))
         return -EINVAL;
 
-   chip->wls_switch_en = of_get_named_gpio(node, "cps_wls_switch_en", 0);
-    if(!gpio_is_valid(chip->wls_switch_en))
-        return -EINVAL;
-
-   chip->wls_boost_en = of_get_named_gpio(node, "cps_wls_boost_en", 0);
-    if(!gpio_is_valid(chip->wls_boost_en))
-        return -EINVAL;
-
     of_property_read_string(node, "wireless-fw-name", &chip->wls_fw_name);
-    cps_wls_log(CPS_LOG_ERR, "[%s]  wls_charge_int %d wls_det_int %d wls_switch_en %d wls_boost_en %d wls_fw_name: %s\n",
-             __func__, chip->wls_charge_int, chip->wls_det_int, chip->wls_switch_en, chip->wls_boost_en,chip->wls_fw_name);
+    cps_wls_log(CPS_LOG_ERR, "[%s]  wls_charge_int %d wls_det_int %d wls_fw_name: %s\n",
+             __func__, chip->wls_charge_int, chip->wls_det_int, chip->wls_fw_name);
     return 0;
 }
 
@@ -2067,21 +2060,6 @@ static int cps_wls_gpio_request(struct cps_wls_chrg_chip *chip)
 	if (chip->wls_det_irq < 0) {
 		cps_wls_log(CPS_LOG_ERR,"failed get det irq num %d", chip->wls_det_irq);
 		return -EINVAL;
-	}
-
-
-	ret = devm_gpio_request_one(chip->dev, chip->wls_switch_en,
-				  GPIOF_OUT_INIT_LOW, "cps4035_wls_switch_en");
-	if (ret < 0) {
-		cps_wls_log(CPS_LOG_ERR,"Failed to request wls_switch_en gpio, ret:%d", ret);
-		return ret;
-	}
-
-	ret = devm_gpio_request_one(chip->dev, chip->wls_boost_en,
-				  GPIOF_OUT_INIT_LOW, "cps4035_wls_boost_en");
-	if (ret < 0) {
-		cps_wls_log(CPS_LOG_ERR,"Failed to request wls_boost_en gpio, ret:%d", ret);
-		return ret;
 	}
 
     return ret;
