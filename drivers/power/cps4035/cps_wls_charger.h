@@ -197,8 +197,6 @@ struct cps_wls_chrg_chip {
     int rx_ldo_on;
     int wls_det_int;
     int wls_det_irq;
-    int wls_switch_en;
-    int wls_boost_en;
     const char *wls_fw_name;
     uint32_t wls_fw_version;
     u32 tx_mode;
