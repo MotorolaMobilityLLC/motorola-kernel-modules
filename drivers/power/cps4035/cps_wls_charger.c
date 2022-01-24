@@ -43,7 +43,7 @@
 #else
 #include <linux/wakelock.h>
 #endif
-
+#include "mtk_charger.h"
 #include <cps_wls_charger.h>
 #define BOOTLOADER_FILE_NAME "/data/misc/cps/bootloader.hex"
 #define FIRMWARE_FILE_NAME   "/data/misc/cps/firmware.hex"
@@ -1237,6 +1237,29 @@ static int cps_wls_set_tx_huge_metal_threshold(int value)
 }
 #endif
 
+static int mmi_mux_wls_chg_chan(enum mmi_mux_channel channel, bool on)
+{
+	struct mtk_charger *info = NULL;
+	struct power_supply *chg_psy = NULL;
+
+	chg_psy = power_supply_get_by_name("mtk-master-charger");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s mmi_mux Couldn't get chg_psy\n",__func__);
+		return CPS_WLS_FAIL;
+	} else {
+		info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
+	}
+
+	cps_wls_log(CPS_LOG_DEBG,"mmi_mux open wls chg chan = %d on = %d\n", channel, on);
+
+	if (info->algo.do_mux)
+		info->algo.do_mux(info, channel, on);
+	else
+		cps_wls_log(CPS_LOG_ERR,"mmi_mux get info->algo.do_mux fail\n");
+
+	return CPS_WLS_SUCCESS;
+}
+
 //------------------------------IRQ Handler-----------------------------------
 static int cps_wls_set_int_enable(void)
 {
@@ -1268,6 +1291,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
     }
     if(int_flag & RX_INT_LDO_ON){
          chip->rx_ldo_on = 1;
+         mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, true);
          power_supply_changed(chip->wl_psy);
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
     }
@@ -1393,8 +1417,11 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	if (tx_detected) {
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
 	} else {
-		cps_wls_log(CPS_LOG_DEBG, "Detected a detach event.\n");
-		chip->rx_ldo_on = false;
+		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
+		if (chip->rx_ldo_on) {
+			chip->rx_ldo_on = false;
+			cps_mux_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
+		}
 		power_supply_changed(chip->wl_psy);
 	}
 
@@ -1519,10 +1546,17 @@ static void cps_wls_pm_set_awake(int awake)
 static void cps_wls_set_boost(int val)
 {
 	/* Assume if we turned the boost on we want to stay awake */
-	/*
-	gpio_set_value(chip->wls_boost_en, val);
-	gpio_set_value(chip->wls_switch_en, val);
-	*/
+	if(val) {
+		cps_wls_pm_set_awake(1);
+	} else {
+		cps_wls_pm_set_awake(0);
+	}
+}
+
+static void cps_wls_fw_set_boost(int val)
+{
+	/* Assume if we turned the boost on we want to stay awake */
+	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FW_UPDATE, !!val);
 	if(val) {
 		cps_wls_pm_set_awake(1);
 	} else {
@@ -1545,9 +1579,9 @@ static int wireless_fw_update(bool force)
 	u32 fw_revision;
 	const struct firmware *fw;
 
-	cps_wls_set_boost(0);
+	cps_wls_fw_set_boost(0);
 	msleep(20);//20ms
-	cps_wls_set_boost(1);
+	cps_wls_fw_set_boost(1);
 	msleep(100);//100ms
 
 	firmware_buf = kzalloc(0x4800, GFP_KERNEL);  // 18K buffer
@@ -1706,7 +1740,7 @@ start_write_app_code:
 	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- Program successful\n", __func__);
 
 free_bug:
-	cps_wls_set_boost(0);//disable power, after FW updating, need a power reset
+	cps_wls_fw_set_boost(0);//disable power, after FW updating, need a power reset
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	release_firmware(fw);
@@ -1870,11 +1904,16 @@ static ssize_t tx_mode_store(struct device *dev,
 
 	cps_wls_set_boost(tx_mode);
 	if (tx_mode) {
-	    cps_wls_enable_tx_mode();
+		cps_wls_log(CPS_LOG_ERR,"mmi_mux wls tx start\n");
+		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, true);
+		/* bootst voltage need 10ms to stable and cps need 30ms to stable*/
+		msleep(100);
+		cps_wls_enable_tx_mode();
 	} else {
-	    cps_wls_disable_tx_mode();
+		cps_wls_log(CPS_LOG_ERR,"mmi_mux wls tx end\n");
+		cps_wls_disable_tx_mode();
+		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
 	}
-
 	chip->tx_mode = tx_mode;
 	if (chip->wl_psy)
 		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "tx_mode");
@@ -2113,6 +2152,36 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
     return CPS_WLS_SUCCESS;
 }
 
+static int wireless_en(void *input, bool en)
+{
+	int ret = 0;
+
+	cps_wls_log(CPS_LOG_ERR,"wls: wls_en %d\n",en);
+	ret = mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, en);
+
+	return ret;
+}
+
+static int wireless_get_chip_id(void *input)
+{
+	return cps_wls_get_chip_id();
+}
+
+static int  wls_tcmd_register(struct cps_wls_chrg_chip *cm)
+{
+	int ret;
+
+	cm->wls_tcmd_client.data = cm;
+	cm->wls_tcmd_client.client_id = MOTO_CHG_TCMD_CLIENT_WLS;
+
+	cm->wls_tcmd_client.get_chip_id = wireless_get_chip_id;
+	cm->wls_tcmd_client.wls_en = wireless_en;
+
+	ret = moto_chg_tcmd_register(&cm->wls_tcmd_client);
+
+	return ret;
+}
+
 static int cps_wls_chrg_probe(struct i2c_client *client,
                 const struct i2c_device_id *id)
 {
@@ -2178,7 +2247,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     }
 
    // wake_lock(&chip->cps_wls_wake_lock);
-
+    wls_tcmd_register(chip);
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger addr low probe successful!\n", __func__);
     return ret;
 
