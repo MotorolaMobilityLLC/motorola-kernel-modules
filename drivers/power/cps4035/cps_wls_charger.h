@@ -202,6 +202,7 @@ struct cps_wls_chrg_chip {
     u32 tx_mode;
     u32 wls_curr_max;
     u32 folio_mode;
+    struct moto_chg_tcmd_client wls_tcmd_client;
 };
         
 typedef enum ept_reason
