@@ -37,7 +37,7 @@ static bool is_single_cali = false; /*if mutli_dev cali false, single dev true*/
 static const char *cali_str[CALI_STR_MAX] = {"none", "start_cali", "cali_re",
 	"cali_f0", "store_re", "show_re", "show_r0", "show_cali_f0", "show_f0",
 	"show_te", "show_st", "dev_sel", "get_ver", "get_dev_num",
-	"cali_q_f0", "show_q_f0"
+	"cali_q_f0", "show_q_f0", "get_re_range"
 };
 
 static char *ch_name[AW_DEV_CH_MAX] = {"pri_l", "pri_r", "sec_l", "sec_r"};
@@ -185,6 +185,68 @@ int aw_cali_read_re_from_nvram(int32_t *cali_re, int32_t channel)
 #endif
 }
 
+static void aw_run_mute_for_cali(struct aw_device *aw_dev, int8_t cali_result)
+{
+	struct aw_mute_desc *mute_desc = &aw_dev->mute_desc;
+
+	aw_dev_dbg(aw_dev->dev, "enter, cali_result: %d", cali_result);
+	if (aw_dev->cali_desc.cali_check_st) {
+		if (cali_result == CALI_RESULT_ERROR) {
+			aw_dev->ops.aw_i2c_write_bits(aw_dev, mute_desc->reg,
+					mute_desc->mask, mute_desc->enable);
+		} else if (cali_result == CALI_RESULT_NORMAL){
+			aw_dev->ops.aw_i2c_write_bits(aw_dev, mute_desc->reg,
+					mute_desc->mask, mute_desc->disable);
+		}
+	} else {
+		aw_dev_info(aw_dev->dev, "cali check disable");
+	}
+	aw_dev_info(aw_dev->dev, "done");
+}
+
+static int aw_cali_svc_get_dev_re_range(struct aw_device *aw_dev,
+						uint32_t *data_buf)
+{
+	data_buf[RE_MIN_FLAG] = aw_dev->re_min;
+	data_buf[RE_MAX_FLAG] = aw_dev->re_max;
+
+	return 0;
+}
+
+static int aw_cali_svc_get_devs_re_range(struct aw_device *aw_dev,
+						uint32_t *data_buf, int num)
+{
+	int ret, cnt = 0;
+	struct list_head *dev_list = NULL;
+	struct list_head *pos = NULL;
+	struct aw_device *local_dev = NULL;
+
+	/*get dev list*/
+	ret = aw_dev_get_list_head(&dev_list);
+	if (ret) {
+		aw_dev_err(aw_dev->dev, "get dev list failed");
+		return ret;
+	}
+
+	list_for_each(pos, dev_list) {
+		local_dev = container_of(pos, struct aw_device, list_node);
+		if (local_dev->channel < num) {
+			/*buf[0]:pri_l_re_min, buf[1]:pri_l_re_min, buf[2]:pri_r_re_min, buf[3]:pri_r_re_min*/
+			data_buf[RE_MIN_FLAG + local_dev->channel * 2] =
+				local_dev->re_min;
+			data_buf[RE_MAX_FLAG + local_dev->channel * 2] =
+				local_dev->re_max;
+			cnt++;
+		} else {
+			aw_dev_err(local_dev->dev, "channel num[%d] overflow buf num[%d]",
+						local_dev->channel, num);
+			return -EINVAL;
+		}
+	}
+
+	return cnt;
+}
+
 int aw_cali_store_cali_re(struct aw_device *aw_dev, int32_t re)
 {
 	int ret = 0;
@@ -192,14 +254,26 @@ int aw_cali_store_cali_re(struct aw_device *aw_dev, int32_t re)
 	if ((re >= aw_dev->re_min) && (re <= aw_dev->re_max)) {
 		aw_dev->cali_desc.cali_re = re;
 		ret = aw_cali_write_re_to_nvram(re, aw_dev->channel);
-		if (ret)
+		if (ret) {
 			aw_dev_err(aw_dev->dev, "write re to nvram failed!");
+			goto store_cali_re_failed;
+		}
 	} else {
 		aw_dev_err(aw_dev->dev, "invalid cali re %d !", re);
-		return -EINVAL;
+		goto store_cali_re_failed;
 	}
 
+	if (aw_dev->cali_desc.cali_check_st)
+		aw_dev->cali_desc.cali_result = CALI_RESULT_NORMAL;
+
 	aw_dev_info(aw_dev->dev, "store cali re is %d", re);
+	return 0;
+
+store_cali_re_failed:
+	if (aw_dev->cali_desc.cali_check_st) {
+		aw_dev->cali_desc.cali_result = CALI_RESULT_ERROR;
+		aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+	}
 	return ret;
 }
 
@@ -222,15 +296,19 @@ int aw_cali_svc_get_cali_status(void)
 
 static int aw_cali_svc_dev_get_re(struct aw_device *aw_dev)
 {
-	int32_t re[AW_CALI_READ_TIMES];
 	int ret, i;
+	int32_t re[AW_CALI_READ_TIMES];
 	int32_t sum = 0;
 
 	for (i = 0; i < AW_CALI_READ_TIMES; i++) {
 		ret = aw_dsp_read_r0(aw_dev, &re[i]);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "get re failed!");
-			return ret;
+			if (aw_dev->cali_desc.cali_check_st) {
+				aw_dev->cali_desc.cali_result = CALI_RESULT_ERROR;
+				aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+			}
+			return ret;;
 		}
 		sum += re[i];
 		usleep_range(AW_10000_US, AW_10000_US + 10);
@@ -239,19 +317,14 @@ static int aw_cali_svc_dev_get_re(struct aw_device *aw_dev)
 
 	aw_dev->cali_desc.cali_re = re[0];
 
-	if ((aw_dev->cali_desc.cali_re >= aw_dev->re_min) &&
-			(aw_dev->cali_desc.cali_re <= aw_dev->re_max)) {
-		ret = aw_cali_write_re_to_nvram(aw_dev->cali_desc.cali_re, aw_dev->channel);
-		if (ret)
-			aw_dev_err(aw_dev->dev, "write re to nvram failed!");
-	}
+	ret = aw_cali_store_cali_re(aw_dev, aw_dev->cali_desc.cali_re);
 	return ret;
 }
 
 static int aw_cali_svc_dev_get_f0(struct aw_device *aw_dev)
 {
-	int32_t f0[AW_CALI_READ_TIMES];
 	int ret, i;
+	int32_t f0[AW_CALI_READ_TIMES];
 	int32_t sum = 0;
 
 	for (i = 0; i < AW_CALI_READ_TIMES; i++) {
@@ -271,8 +344,8 @@ static int aw_cali_svc_dev_get_f0(struct aw_device *aw_dev)
 
 static int aw_cali_svc_dev_get_f0_q(struct aw_device *aw_dev)
 {
-	int32_t f0[AW_CALI_READ_TIMES], q[AW_CALI_READ_TIMES];
 	int ret, i;
+	int32_t f0[AW_CALI_READ_TIMES], q[AW_CALI_READ_TIMES];
 	int32_t sum_f0 = 0, sum_q = 0;
 
 	for (i = 0; i < AW_CALI_READ_TIMES; i++) {
@@ -343,6 +416,8 @@ static int aw_cali_svc_dev_cali_re(struct aw_device *aw_dev, unsigned int flag)
 {
 	int ret;
 
+	aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+
 	ret = aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_RE, true, flag);
 	if (ret < 0)
 		goto exit;
@@ -352,56 +427,86 @@ static int aw_cali_svc_dev_cali_re(struct aw_device *aw_dev, unsigned int flag)
 
 	/*dev get echo cali re*/
 	ret = aw_cali_svc_dev_get_re(aw_dev);
-	if (ret < 0)
-		goto exit;
 exit:
 	aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_RE, false, flag);
+	return ret;
+}
+
+static int aw_cali_svc_devs_get_cali_cali_data(struct list_head *dev_list,
+						unsigned int data_type)
+{
+	int ret = -1;
+	struct list_head *pos = NULL;
+	struct aw_device *local_dev = NULL;
+
+	list_for_each(pos, dev_list) {
+		local_dev = container_of(pos, struct aw_device, list_node);
+		if (data_type == CALI_DATA_RE) {
+			ret = aw_cali_svc_dev_get_re(local_dev);
+		} else if (data_type == CALI_DATA_F0) {
+			ret = aw_cali_svc_dev_get_f0(local_dev);
+		} else if (data_type == CALI_DATA_F0_Q) {
+			ret = aw_cali_svc_dev_get_f0_q(local_dev);
+		} else {
+			aw_dev_err(local_dev->dev, "unsupport cali data type :%d", data_type);
+			return -EINVAL;
+		}
+		if (ret < 0) {
+			aw_dev_err(local_dev->dev, "get cali data type[%d] failed", data_type);
+			return ret;
+		}
+	}
+
+	return ret;
+}
+
+static int aw_cali_svc_devs_cali_mode_enable(struct list_head *dev_list,
+						int type, unsigned int flag,
+						bool is_enable)
+{
+	int ret;
+	struct list_head *pos = NULL;
+	struct aw_device *local_dev = NULL;
+
+	list_for_each(pos, dev_list) {
+		local_dev = container_of(pos, struct aw_device, list_node);
+		if (is_enable)
+			aw_run_mute_for_cali(local_dev, CALI_RESULT_NORMAL);
+		ret = aw_cali_svc_dev_cali_mode_en(local_dev, type, is_enable, flag);
+		if (ret < 0)
+			return ret;
+		if (!is_enable && (type == CALI_TYPE_F0))
+			aw_run_mute_for_cali(local_dev, local_dev->cali_desc.cali_result);
+	}
 
 	return ret;
 }
 
 static int aw_cali_svc_devs_cali_re(struct aw_device *aw_dev, unsigned int flag)
 {
-	struct list_head *dev_list = NULL;
-	struct list_head *pos = NULL;
-	struct aw_device *local_dev = NULL;
 	int ret;
+	struct list_head *dev_list = NULL;
 
-	/* get dev list */
+	aw_dev_info(aw_dev->dev, "enter");
+
 	ret = aw_dev_get_list_head(&dev_list);
 	if (ret) {
-		aw_dev_err(aw_dev->dev, "get dev list failed");
+		aw_dev_err(aw_dev->dev, " get dev list failed");
 		return ret;
 	}
 
-	/* enable all dev cali mode */
-	list_for_each (pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		ret = aw_cali_svc_dev_cali_mode_en(local_dev, CALI_TYPE_RE, true, flag);
-		if (ret < 0)
-			goto exit;
-	}
+	ret = aw_cali_svc_devs_cali_mode_enable(dev_list, CALI_TYPE_RE, flag, true);
+	if (ret < 0)
+		goto exit;
 
-	/* wait time */
 	msleep(g_cali_re_time);
 
-	/* dev get echo cali re */
-	list_for_each(pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		ret = aw_cali_svc_dev_get_re(local_dev);
-		if (ret < 0)
-			goto exit;
-	}
-
+	ret = aw_cali_svc_devs_get_cali_cali_data(dev_list, CALI_DATA_RE);
 exit:
-	list_for_each (pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		/* close cali mode */
-		aw_cali_svc_dev_cali_mode_en(local_dev, CALI_TYPE_RE, false, flag);
-	}
-
+	aw_cali_svc_devs_cali_mode_enable(dev_list, CALI_TYPE_RE, flag, false);
 	return ret;
 }
+
 
 static int aw_cali_svc_cali_re(struct aw_device *aw_dev, bool is_single, unsigned int flag)
 {
@@ -416,6 +521,8 @@ static int aw_cali_svc_dev_cali_f0(struct aw_device *aw_dev, unsigned int flag)
 {
 	int ret;
 
+	aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+
 	ret = aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, true, flag);
 	if (ret < 0)
 		goto exit;
@@ -423,23 +530,18 @@ static int aw_cali_svc_dev_cali_f0(struct aw_device *aw_dev, unsigned int flag)
 	/*wait time*/
 	msleep(5 * 1000);
 
-	/*dev get echo cali re*/
+	/*dev get cali f0*/
 	ret = aw_cali_svc_dev_get_f0(aw_dev);
-	if (ret < 0)
-		goto exit;
-
 exit:
 	aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, false, flag);
-
+	aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
 	return ret;
 }
 
 static int aw_cali_svc_devs_cali_f0(struct aw_device *aw_dev, unsigned int flag)
 {
-	struct list_head *dev_list = NULL;
-	struct list_head *pos = NULL;
-	struct aw_device *local_dev = NULL;
 	int ret;
+	struct list_head *dev_list = NULL;
 
 	ret = aw_dev_get_list_head(&dev_list);
 	if (ret) {
@@ -447,32 +549,16 @@ static int aw_cali_svc_devs_cali_f0(struct aw_device *aw_dev, unsigned int flag)
 		return ret;
 	}
 
-	list_for_each (pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		/* set mode status */
-		ret = aw_cali_svc_dev_cali_mode_en(local_dev, CALI_TYPE_F0, true, flag);
-		if (ret < 0)
-			goto exit;
-	}
+	ret = aw_cali_svc_devs_cali_mode_enable(dev_list, CALI_TYPE_F0, flag, true);
+	if (ret < 0)
+		goto exit;
 
 	/*wait time*/
 	msleep(5 * 1000);
 
-	/*dev get echo cali re*/
-	list_for_each(pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		ret = aw_cali_svc_dev_get_f0(local_dev);
-		if (ret < 0)
-			goto exit;
-	}
-
+	ret = aw_cali_svc_devs_get_cali_cali_data(dev_list, CALI_DATA_F0);
 exit:
-	list_for_each (pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		/*close cali*/
-		aw_cali_svc_dev_cali_mode_en(local_dev, CALI_TYPE_F0, false, flag);
-	}
-
+	aw_cali_svc_devs_cali_mode_enable(dev_list, CALI_TYPE_F0, flag, false);
 	return ret;
 }
 
@@ -489,6 +575,8 @@ static int aw_cali_svc_dev_cali_f0_q(struct aw_device *aw_dev, unsigned int flag
 {
 	int ret;
 
+	aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+
 	ret = aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, true, flag);
 	if (ret < 0)
 		goto exit;
@@ -497,24 +585,19 @@ static int aw_cali_svc_dev_cali_f0_q(struct aw_device *aw_dev, unsigned int flag
 	/*wait time*/
 	msleep(5 * 1000);
 
-	/*dev get echo cali re*/
+	/*dev get cali f0 q*/
 	ret = aw_cali_svc_dev_get_f0_q(aw_dev);
-	if (ret < 0)
-		goto exit;
-
 exit:
 	aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, false, flag);
-
+	aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
 	return ret;
 
 }
 
 static int aw_cali_svc_devs_cali_f0_q(struct aw_device *aw_dev, unsigned int flag)
 {
-	struct list_head *dev_list = NULL;
-	struct list_head *pos = NULL;
-	struct aw_device *local_dev = NULL;
 	int ret;
+	struct list_head *dev_list = NULL;
 
 	ret = aw_dev_get_list_head(&dev_list);
 	if (ret) {
@@ -522,32 +605,17 @@ static int aw_cali_svc_devs_cali_f0_q(struct aw_device *aw_dev, unsigned int fla
 		return ret;
 	}
 
-
-	list_for_each (pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		/*set mode status*/
-		ret = aw_cali_svc_dev_cali_mode_en(local_dev, CALI_TYPE_F0, true, flag);
-		if (ret < 0)
-			goto exit;
-	}
+	ret = aw_cali_svc_devs_cali_mode_enable(dev_list, CALI_TYPE_F0, flag, true);
+	if (ret < 0)
+		goto exit;
 
 	/*wait time*/
 	msleep(5 * 1000);
 
-	/*dev get echo cali re*/
-	list_for_each(pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		ret = aw_cali_svc_dev_get_f0_q(local_dev);
-		if (ret < 0)
-			goto exit;
-	}
-
+	/*dev get cali f0 q*/
+	ret = aw_cali_svc_devs_get_cali_cali_data(dev_list, CALI_DATA_F0_Q);
 exit:
-	list_for_each (pos, dev_list) {
-		local_dev = container_of(pos, struct aw_device, list_node);
-		aw_cali_svc_dev_cali_mode_en(local_dev, CALI_TYPE_F0, false, flag);
-	}
-
+	aw_cali_svc_devs_cali_mode_enable(dev_list, CALI_TYPE_F0, flag, false);
 	return ret;
 }
 
@@ -613,10 +681,10 @@ int aw_cali_svc_cali_cmd(struct aw_device *aw_dev, int cali_cmd, bool is_single,
 
 int aw_cali_svc_get_devs_cali_re(struct aw_device *aw_dev, int32_t *re_buf, int num)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 
 	/* get dev list */
 	ret = aw_dev_get_list_head(&dev_list);
@@ -642,10 +710,10 @@ int aw_cali_svc_get_devs_cali_re(struct aw_device *aw_dev, int32_t *re_buf, int 
 
 int aw_cali_svc_get_devs_r0(struct aw_device *aw_dev, int32_t *re_buf, int num)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 
 	/* get dev list */
 	ret = aw_dev_get_list_head(&dev_list);
@@ -673,10 +741,10 @@ int aw_cali_svc_get_devs_r0(struct aw_device *aw_dev, int32_t *re_buf, int num)
 
 int aw_cali_svc_get_devs_te(struct aw_device *aw_dev, int32_t *te_buf, int num)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 
 	/* get dev list */
 	ret = aw_dev_get_list_head(&dev_list);
@@ -705,10 +773,10 @@ int aw_cali_svc_get_devs_te(struct aw_device *aw_dev, int32_t *te_buf, int num)
 
 int aw_cali_svc_get_devs_st(struct aw_device *aw_dev, int32_t *st_buf, int num)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 
 	/*get dev list*/
 	ret = aw_dev_get_list_head(&dev_list);
@@ -736,10 +804,10 @@ int aw_cali_svc_get_devs_st(struct aw_device *aw_dev, int32_t *st_buf, int num)
 
 int aw_cali_svc_get_devs_cali_f0(struct aw_device *aw_dev, int32_t *f0_buf, int num)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 
 	/*get dev list*/
 	ret = aw_dev_get_list_head(&dev_list);
@@ -764,10 +832,10 @@ int aw_cali_svc_get_devs_cali_f0(struct aw_device *aw_dev, int32_t *f0_buf, int 
 
 int aw_cali_svc_get_devs_f0(struct aw_device *aw_dev, int32_t *f0_buf, int num)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 
 	/* get dev list */
 	ret = aw_dev_get_list_head(&dev_list);
@@ -796,10 +864,10 @@ int aw_cali_svc_get_devs_f0(struct aw_device *aw_dev, int32_t *f0_buf, int num)
 int aw_cali_svc_get_devs_cali_f0_q(struct aw_device *aw_dev,
 			int32_t *f0_buf, int32_t *q_buf, int num)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 
 	/*get dev list*/
 	ret = aw_dev_get_list_head(&dev_list);
@@ -824,9 +892,9 @@ int aw_cali_svc_get_devs_cali_f0_q(struct aw_device *aw_dev,
 
 static int aw_cali_svc_set_devs_re_str(struct aw_device *aw_dev, const char *re_str)
 {
+	int ret, cnt = 0;
 	struct list_head *dev_list, *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, cnt = 0;
 	int re_data[AW_DEV_CH_MAX] = {0};
 
 	/* get dev list */
@@ -930,9 +998,9 @@ static ssize_t aw_cali_attr_time_show(struct device *dev,
 static ssize_t aw_cali_attr_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	int ret;
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 	struct aw_device *aw_dev = aw882xx->aw_pa;
-	int ret;
 
 	ret = aw_cali_svc_get_cmd_form_str(aw_dev, buf);
 	if (ret < 0) {
@@ -963,9 +1031,9 @@ static ssize_t aw_cali_attr_store(struct device *dev,
 static ssize_t aw_cali_attr_re_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	int ret;
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 	struct aw_device *aw_dev = aw882xx->aw_pa;
-	int ret;
 	int data = 0;
 
 	if (is_single_cali) {
@@ -1114,6 +1182,24 @@ static ssize_t aw_cali_attr_show_f0(struct device *dev,
 	return len;
 }
 
+static ssize_t aw_re_range_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t len = 0;
+	struct aw882xx *aw882xx = dev_get_drvdata(dev);
+	struct aw_device *aw_dev = aw882xx->aw_pa;
+	uint32_t range_buf[RE_RANGE_NUM] = { 0 };
+
+	aw_cali_svc_get_dev_re_range(aw_dev, range_buf);
+
+	len += snprintf(buf + len, PAGE_SIZE - len,
+		"re_min value: [%d] mOhms\n", range_buf[RE_MIN_FLAG]);
+	len += snprintf(buf + len, PAGE_SIZE - len,
+		"re_max value: [%d] mOhms\n", range_buf[RE_MAX_FLAG]);
+
+	return len;
+}
+
 /*set cali time*/
 static DEVICE_ATTR(cali_time, S_IWUSR | S_IRUGO,
 	aw_cali_attr_time_show, aw_cali_attr_time_store);
@@ -1132,7 +1218,9 @@ static DEVICE_ATTR(re_show, S_IRUGO,
 /*show cali_f0*/
 static DEVICE_ATTR(f0_show, S_IRUGO,
 	aw_cali_attr_show_f0, NULL);
-
+/*show re_range*/
+static DEVICE_ATTR(re_range, S_IRUGO,
+	aw_re_range_show, NULL);
 
 static struct attribute *aw_cali_attr[] = {
 	&dev_attr_cali_time.attr,
@@ -1141,6 +1229,7 @@ static struct attribute *aw_cali_attr[] = {
 	&dev_attr_cali_f0.attr,
 	&dev_attr_re_show.attr,
 	&dev_attr_f0_show.attr,
+	&dev_attr_re_range.attr,
 	NULL
 };
 
@@ -1205,9 +1294,9 @@ static ssize_t aw_cali_class_time_store(struct class *class,
 
 static ssize_t aw_cali_class_cali_re_show(struct  class *class, struct class_attribute *attr, char *buf)
 {
+	int ret, i;
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, i;
 	ssize_t len = 0;
 	int32_t cali_re[AW_DEV_CH_MAX] = {0};
 
@@ -1241,9 +1330,9 @@ static ssize_t aw_cali_class_cali_re_show(struct  class *class, struct class_att
 static ssize_t aw_cali_class_cali_re_store(struct class *class,
 					struct class_attribute *attr, const char *buf, size_t len)
 {
+	int ret;
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret;
 
 	ret = aw_dev_get_list_head(&dev_list);
 	if (ret) {
@@ -1264,9 +1353,9 @@ static ssize_t aw_cali_class_cali_re_store(struct class *class,
 
 static ssize_t aw_cali_class_cali_f0_show(struct  class *class, struct class_attribute *attr, char *buf)
 {
+	int ret, i;
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, i;
 	ssize_t len = 0;
 	int32_t cali_f0[AW_DEV_CH_MAX] = {0};
 
@@ -1300,9 +1389,9 @@ static ssize_t aw_cali_class_cali_f0_show(struct  class *class, struct class_att
 static ssize_t aw_cali_class_cali_f0_store(struct class *class,
 				struct class_attribute *attr, const char *buf, size_t len)
 {
+	int ret;
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret;
 
 	ret = aw_dev_get_list_head(&dev_list);
 	if (ret) {
@@ -1319,9 +1408,9 @@ static ssize_t aw_cali_class_cali_f0_store(struct class *class,
 
 static ssize_t aw_cali_class_f0_show(struct  class *class, struct class_attribute *attr, char *buf)
 {
+	int ret, i;
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, i;
 	ssize_t len = 0;
 	int32_t cali_f0[AW_DEV_CH_MAX] = {0};
 
@@ -1347,9 +1436,9 @@ static ssize_t aw_cali_class_f0_show(struct  class *class, struct class_attribut
 
 static ssize_t aw_cali_class_re_show(struct  class *class, struct class_attribute *attr, char *buf)
 {
+	int ret, i;
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret, i;
 	ssize_t len = 0;
 	int32_t cali_re[AW_DEV_CH_MAX] = {0};
 
@@ -1369,6 +1458,39 @@ static ssize_t aw_cali_class_re_show(struct  class *class, struct class_attribut
 			len += snprintf(buf+len, PAGE_SIZE-len, "%s:%d mOhms ", ch_name[i], cali_re[i]);
 		len += snprintf(buf+len, PAGE_SIZE-len, " \n");
 	}
+
+	return len;
+}
+
+static ssize_t aw_class_re_range_show(struct  class *class, struct class_attribute *attr, char *buf)
+{
+	int ret, i;
+	ssize_t len = 0;
+	struct list_head *dev_list = NULL;
+	struct aw_device *local_dev = NULL;
+	uint32_t re_value[AW_DEV_RE_RANGE] = { 0 };
+
+	aw_pr_info("enter");
+
+	ret = aw_dev_get_list_head(&dev_list);
+	if (ret < 0) {
+		aw_pr_err("get dev list failed");
+		return ret;
+	}
+
+	local_dev = list_first_entry(dev_list, struct aw_device, list_node);
+	ret = aw_cali_svc_get_devs_re_range(local_dev, re_value, AW_DEV_CH_MAX);
+	if (ret <= 0) {
+		aw_dev_err(local_dev->dev, "get re range failed");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < ret; i++) {
+		len += snprintf(buf+len, PAGE_SIZE-len, "%s:re_min:%d mOhms re_max:%d mOhms ",
+			ch_name[i], re_value[RE_MIN_FLAG + i * RE_RANGE_NUM],
+			re_value[RE_MAX_FLAG + i * RE_RANGE_NUM]);
+	}
+	len += snprintf(buf+len, PAGE_SIZE-len, " \n");
 
 	return len;
 }
@@ -1393,6 +1515,9 @@ static struct class_attribute class_attr_f0_show = \
 		__ATTR(f0_show, S_IRUGO, \
 		aw_cali_class_f0_show, NULL);
 
+static struct class_attribute class_att_re_range = \
+		__ATTR(re_range, S_IRUGO, \
+		aw_class_re_range_show, NULL);
 
 static struct class aw_cali_class = {
 	.name = "smartpa",
@@ -1433,10 +1558,14 @@ static void aw_cali_class_attr_init(struct aw_device *aw_dev)
 	if (ret) {
 		aw_dev_info(aw_dev->dev, "creat class_attr_f0_show fail");
 	}
+	ret = class_create_file(&aw_cali_class, &class_att_re_range);
+	if (ret)
+		aw_dev_err(aw_dev->dev, "creat class_att_re_range fail");
 }
 
 static void aw_cali_class_attr_deinit(struct aw_device *aw_dev)
 {
+	class_remove_file(&aw_cali_class, &class_att_re_range);
 	class_remove_file(&aw_cali_class, &class_attr_re25_calib);
 	class_remove_file(&aw_cali_class, &class_attr_f0_calib);
 	class_remove_file(&aw_cali_class, &class_attr_cali_time);
@@ -1451,10 +1580,10 @@ static void aw_cali_class_attr_deinit(struct aw_device *aw_dev)
 /*****************************misc node******************************************************/
 static int aw_cali_misc_open(struct inode *inode, struct file *file)
 {
+	int ret;
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret;
 
 	ret = aw_dev_get_list_head(&dev_list);
 	if (ret) {
@@ -1498,8 +1627,8 @@ static int aw_cali_misc_release(struct inode *inode, struct file *file)
 
 static int aw_cali_misc_params_ptr(struct aw_device *aw_dev, struct ptr_params_data *p_params)
 {
-	char *p_data = NULL;
 	int ret = 0;
+	char *p_data = NULL;
 
 	if (p_params->data == NULL || (!p_params->len)) {
 		aw_dev_err(aw_dev->dev, "p_params error");
@@ -1540,10 +1669,10 @@ exit:
 static int aw_cali_misc_ops_write(struct aw_device *aw_dev,
 			unsigned int cmd, unsigned long arg)
 {
+	int ret = 0;
 	unsigned int data_len = _IOC_SIZE(cmd);
 	char *data_ptr = NULL;
 	int32_t data = 0;
-	int ret = 0;
 
 	data_ptr = kzalloc(data_len, GFP_KERNEL);
 	if (!data_ptr) {
@@ -1558,6 +1687,12 @@ static int aw_cali_misc_ops_write(struct aw_device *aw_dev,
 
 	switch (cmd) {
 		case AW_IOCTL_ENABLE_CALI: {
+			if (aw_dev->cali_desc.cali_check_st) {
+				if (data_ptr[0])
+					aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+				else
+					aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+			}
 			aw_cali_svc_set_cali_status(aw_dev, data_ptr[0]);
 		} break;
 		case AW_IOCTL_SET_CALI_CFG: {
@@ -1603,10 +1738,10 @@ exit:
 static int aw_cali_misc_ops_read(struct aw_device *aw_dev,
 			unsigned int cmd, unsigned long arg)
 {
+	int ret = 0;
 	int16_t data_len = _IOC_SIZE(cmd);
 	char *data_ptr = NULL;
 	int32_t *data_32_ptr = NULL;
-	int ret = 0;
 
 	data_ptr = kzalloc(data_len, GFP_KERNEL);
 	if (!data_ptr) {
@@ -1636,6 +1771,10 @@ static int aw_cali_misc_ops_read(struct aw_device *aw_dev,
 			data_32_ptr = (int32_t *)data_ptr;
 			ret = aw_dsp_read_f0_q(aw_dev, &data_32_ptr[0], &data_32_ptr[1]);
 		} break;
+		case AW_IOCTL_GET_RE_RANGE: {
+			data_32_ptr = (uint32_t *)data_ptr;
+			ret = aw_cali_svc_get_dev_re_range(aw_dev, data_32_ptr);
+		} break;
 		default:{
 			aw_dev_err(aw_dev->dev, "unsupported  cmd %d", cmd);
 			ret = -EINVAL;
@@ -1653,10 +1792,10 @@ static int aw_cali_misc_ops_read(struct aw_device *aw_dev,
 
 static int aw_cali_misc_read_dsp(struct aw_device *aw_dev, aw_ioctl_msg_t *msg)
 {
+	int ret;
 	char __user *user_data = (char __user *)msg->data_buf;
 	uint32_t dsp_msg_id = (uint32_t)msg->opcode_id;
 	int data_len = msg->data_len;
-	int ret;
 	char *data_ptr = NULL;
 
 	data_ptr = kzalloc(data_len, GFP_KERNEL);
@@ -1681,10 +1820,10 @@ exit:
 
 static int aw_cali_misc_write_dsp(struct aw_device *aw_dev, aw_ioctl_msg_t *msg)
 {
+	int ret;
 	char __user *user_data = (char __user *)msg->data_buf;
 	uint32_t dsp_msg_id = (uint32_t)msg->opcode_id;
 	int data_len = msg->data_len;
-	int ret;
 	char *data_ptr = NULL;
 
 	data_ptr = kzalloc(data_len, GFP_KERNEL);
@@ -1758,6 +1897,7 @@ static int aw_cali_misc_ops(struct aw_device *aw_dev,
 	case AW_IOCTL_GET_CALI_RE:
 	case AW_IOCTL_GET_VMAX:
 	case AW_IOCTL_GET_F0_Q:
+	case AW_IOCTL_GET_RE_RANGE:
 		ret = aw_cali_misc_ops_read(aw_dev, cmd, arg);
 		break;
 	case AW_IOCTL_MSG: {
@@ -1812,13 +1952,14 @@ static long aw_cali_misc_compat_ioctl(struct file *file,
 
 static ssize_t aw_cali_misc_read(struct file *filp, char __user *buf, size_t size, loff_t *pos)
 {
-	int len = 0;
 	int i, ret;
+	int len = 0;
 	struct aw_device *aw_dev = (struct aw_device *)filp->private_data;
 	char local_buf[128] = { 0 };
 	unsigned int dev_num;
 	int32_t temp_data[AW_DEV_CH_MAX << 1] = {0};
 	int32_t temp_data1[AW_DEV_CH_MAX << 1] = {0};
+	uint32_t re_value[AW_DEV_RE_RANGE] = { 0 };
 
 	aw_dev_info(aw_dev->dev, "enter");
 
@@ -1936,10 +2077,25 @@ static ssize_t aw_cali_misc_read(struct file *filp, char __user *buf, size_t siz
 			return ret;
 		} else {
 			for (i = 0; i < ret; i++)
-				len += snprintf(local_buf+len, sizeof(local_buf)-len,
+				len += snprintf(local_buf + len, sizeof(local_buf)-len,
 						"%s:f0:%d q:%d", ch_name[i], temp_data[i], temp_data1[i]);
 
 			len += snprintf(local_buf+len, sizeof(local_buf) - len, "\n");
+		}
+	} break;
+	case CALI_STR_SHOW_RE_RANGE: {
+		ret = aw_cali_svc_get_devs_re_range(aw_dev, re_value, AW_DEV_CH_MAX);
+		if (ret <= 0) {
+			aw_dev_err(aw_dev->dev, "get re range failed");
+			return -EINVAL;
+		} else {
+			for (i = 0; i < ret; i++)
+				len += snprintf(local_buf + len, sizeof(local_buf) - len,
+					"%s:re_min:%d re_max:%d ",
+					ch_name[i], re_value[RE_MIN_FLAG + i * RE_RANGE_NUM],
+					re_value[RE_MAX_FLAG + i * RE_RANGE_NUM]);
+
+		len += snprintf(local_buf + len, sizeof(local_buf) - len, "\n");
 		}
 	} break;
 	default: {
@@ -1967,12 +2123,12 @@ static ssize_t aw_cali_misc_read(struct file *filp, char __user *buf, size_t siz
 
 static int aw_cali_misc_switch_dev(struct file *filp, struct aw_device *aw_dev, char *cmd_buf)
 {
+	int ret;
 	int i;
 	char dev_select[50] = { 0 };
 	struct list_head *dev_list = NULL;
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
-	int ret;
 
 	/* get sel dev str */
 	sscanf(cmd_buf, "dev_sel:%s", dev_select);
@@ -2010,9 +2166,9 @@ static int aw_cali_misc_switch_dev(struct file *filp, struct aw_device *aw_dev, 
 
 static ssize_t aw_cali_misc_write(struct file *filp, const char __user *buf, size_t size, loff_t *pos)
 {
+	int ret = 0;
 	char *kernel_buf = NULL;
 	struct aw_device *aw_dev = (struct aw_device *)filp->private_data;
-	int ret = 0;
 
 	aw_dev_info(aw_dev->dev, "enter, write size:%d", (int)size);
 
@@ -2069,7 +2225,8 @@ static ssize_t aw_cali_misc_write(struct file *filp, const char __user *buf, siz
 	case CALI_STR_SHOW_ST:
 	case CALI_STR_VER:
 	case CALI_STR_DEV_NUM:
-	case CALI_STR_SHOW_F0_Q:{
+	case CALI_STR_SHOW_F0_Q:
+	case CALI_STR_SHOW_RE_RANGE:{
 		g_msic_wr_flag = ret;
 		ret = 0;
 	} break;
@@ -2146,31 +2303,35 @@ static void aw_cali_misc_deinit(struct aw_device *aw_dev)
 /*****************************misc node******************************************************/
 static void aw_cali_parse_dt(struct aw_device *aw_dev)
 {
-	struct device_node *np = aw_dev->dev->of_node;
 	int ret = -1;
+	struct device_node *np = aw_dev->dev->of_node;
 	const char *cali_mode_str = NULL;
+	uint32_t cali_check = CALI_CHECK_DISABLE;
 	struct aw_cali_desc *desc = &aw_dev->cali_desc;
+
+	ret = of_property_read_u32(np, "aw-cali-check", &cali_check);
+	if (ret < 0) {
+		aw_dev_info(aw_dev->dev, "cali-check get failed ,default turn off");
+		cali_check = CALI_CHECK_DISABLE;
+	}
+
+	desc->cali_check_st = cali_check;
+	aw_dev_info(aw_dev->dev, "cali check :%s",
+			(desc->cali_check_st) ? "enable" : "disable");
 
 	ret = of_property_read_string(np, "aw-cali-mode", &cali_mode_str);
 	if (ret < 0) {
-		aw_dev_info(aw_dev->dev, " aw-cali-mode get failed ,user default misc way");
-		desc->mode = AW_CALI_MODE_MISC;
+		desc->mode = AW_CALI_MODE_ALL;
+		aw_dev_info(aw_dev->dev, "cali function in use");
 		return;
 	}
 
 	if (!strcmp(cali_mode_str, "none"))
 		desc->mode = AW_CALI_MODE_NONE;
-	else if (!strcmp(cali_mode_str, "aw_class"))
-		desc->mode = AW_CALI_MODE_CLASS;
-	else if (!strcmp(cali_mode_str, "aw_attr"))
-		desc->mode = AW_CALI_MODE_ATTR;
-	else if (!strcmp(cali_mode_str, "aw_cali_all"))
-		desc->mode = AW_CALI_MODE_ALL;
 	else
-		desc->mode = AW_CALI_MODE_MISC; /*default misc*/
+		desc->mode = AW_CALI_MODE_ALL;
 
-	aw_dev_info(aw_dev->dev, "cali mode str:%s num:%d",
-			cali_mode_str, desc->mode);
+	aw_dev_info(aw_dev->dev, "cali mode is %d", desc->mode);
 }
 
 int aw_cali_parse_re_dt(struct aw_device *aw_dev)
@@ -2213,18 +2374,18 @@ int aw_cali_init(struct aw_cali_desc *cali_desc)
 
 	aw_cali_parse_dt(aw_dev);
 
-	if (cali_desc->mode == AW_CALI_MODE_ATTR) {
-		aw_cali_attr_init(aw_dev);
-	} else if (cali_desc->mode == AW_CALI_MODE_CLASS) {
-		aw_cali_class_attr_init(aw_dev);
-	} else if (cali_desc->mode == AW_CALI_MODE_ALL) {
+	if (cali_desc->mode == AW_CALI_MODE_ALL) {
 		aw_cali_attr_init(aw_dev);
 		aw_cali_class_attr_init(aw_dev);
+	} else {
+		aw_dev_info(aw_dev->dev, "cali mode is %d", cali_desc->mode);
 	}
 
 	aw_cali_misc_init(aw_dev);
 
 	ret = aw_cali_parse_re_dt(aw_dev);
+
+	cali_desc->cali_result = CALI_RESULT_NONE;
 
 	return ret;
 }
@@ -2234,11 +2395,7 @@ void aw_cali_deinit(struct aw_cali_desc *cali_desc)
 	struct aw_device *aw_dev =
 		container_of(cali_desc, struct aw_device, cali_desc);
 
-	if (cali_desc->mode == AW_CALI_MODE_ATTR) {
-		aw_cali_attr_deinit(aw_dev);
-	} else if (cali_desc->mode == AW_CALI_MODE_CLASS) {
-		aw_cali_class_attr_deinit(aw_dev);
-	} else if (cali_desc->mode == AW_CALI_MODE_ALL) {
+	if (cali_desc->mode == AW_CALI_MODE_ALL) {
 		aw_cali_attr_deinit(aw_dev);
 		aw_cali_class_attr_deinit(aw_dev);
 	}
