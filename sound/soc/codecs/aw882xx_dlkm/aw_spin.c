@@ -61,10 +61,10 @@ int aw_dev_set_channal_mode(struct aw_device *aw_dev,
 static int aw_reg_write_spin(struct aw_device *aw_dev,
 				uint32_t spin_val, bool mixer_en)
 {
+	int ret;
 	struct aw_device *local_dev = NULL;
 	struct list_head *pos = NULL;
 	struct list_head *dev_list = NULL;
-	int ret;
 
 	if ((g_spin_mode == AW_REG_MIXER_SPIN_MODE) && (mixer_en)) {
 		ret = aw_dsp_set_mixer_en(aw_dev, AW_AUDIO_MIX_ENABLE);

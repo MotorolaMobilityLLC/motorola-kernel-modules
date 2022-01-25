@@ -18,6 +18,8 @@
 #define AW_CALI_RE_DEFAULT_MAX		(50000)
 #define AW_CALI_RE_DEFAULT_MIN		(1000)
 
+#define AW_DEV_RE_RANGE	(RE_RANGE_NUM * AW_DEV_CH_MAX)
+
 struct aw_device;
 
 enum afe_module_type {
@@ -52,6 +54,33 @@ enum {
 	AW_IOCTL_MSG_WR_DSP
 };
 
+enum {
+	CALI_CHECK_DISABLE = 0,
+	CALI_CHECK_ENABLE = 1,
+};
+
+enum {
+	CALI_RESULT_NONE = 0,
+	CALI_RESULT_NORMAL = 1,
+	CALI_RESULT_ERROR = -1,
+};
+
+enum {
+	RE_MIN_FLAG = 0,
+	RE_MAX_FLAG = 1,
+	RE_RANGE_NUM = 2,
+};
+
+enum {
+	CALI_DATA_RE = 0,
+	CALI_DATA_F0,
+	CALI_DATA_F0_Q,
+};
+
+struct re_data {
+	uint32_t re_range[2];
+};
+
 #define AW_IOCTL_MSG_VERSION (0)
 typedef struct {
 	int32_t type;
@@ -79,12 +108,10 @@ typedef struct {
 #define AW_IOCTL_SET_DSP_HMUTE			_IOWR(AW_IOCTL_MAGIC, 14, int32_t)
 #define AW_IOCTL_SET_CALI_CFG_FLAG		_IOWR(AW_IOCTL_MAGIC, 15, int32_t)
 #define AW_IOCTL_MSG				_IOWR(AW_IOCTL_MAGIC, 16, aw_ioctl_msg_t)
+#define AW_IOCTL_GET_RE_RANGE			_IOWR(AW_IOCTL_MAGIC, 17, struct re_data)
 
 enum{
 	AW_CALI_MODE_NONE = 0,
-	AW_CALI_MODE_ATTR,
-	AW_CALI_MODE_CLASS,
-	AW_CALI_MODE_MISC,
 	AW_CALI_MODE_ALL,
 	AW_CALI_MODE_MAX,
 };
@@ -124,6 +151,7 @@ enum {
 	CALI_STR_DEV_NUM,
 	CALI_STR_CALI_F0_Q,
 	CALI_STR_SHOW_F0_Q,
+	CALI_STR_SHOW_RE_RANGE,
 	CALI_STR_MAX,
 };
 
@@ -133,6 +161,8 @@ struct aw_cali_desc {
 	int32_t cali_re;		/*set cali_re*/
 	int32_t cali_f0;		/*store cali_f0*/
 	int32_t cali_q;			/*store cali q*/
+	int8_t cali_result;
+	uint8_t cali_check_st;
 };
 
 int aw_cali_init(struct aw_cali_desc *cali_desc);
