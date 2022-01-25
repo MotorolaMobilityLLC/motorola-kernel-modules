@@ -1,7 +1,6 @@
 #ifndef __AW_PID_2071_REG_H__
 #define __AW_PID_2071_REG_H__
 
-#define AW_PID_2071_ACF_FILE		"aw882xx_pid_2071_acf.bin"
 #define AW_PID_2071_MONITOR_FILE	"aw882xx_pid_2071_monitor.bin"
 
 /* registers list */

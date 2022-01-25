@@ -1,7 +1,6 @@
 #ifndef __AW_PID_2055A_REG_H__
 #define __AW_PID_2055A_REG_H__
 
-#define AW_PID_2055A_ACF_FILE		"aw882xx_pid_2055a_acf.bin"
 #define AW_PID_2055A_MONITOR_FILE	"aw882xx_pid_2055a_monitor.bin"
 
 /* registers list */
@@ -2025,12 +2024,10 @@ const unsigned char aw_pid_2055a_reg_access[AW_PID_2055A_REG_MAX] = {
  *******************************************/
 #define AW_PID_2055A_VOL_STEP		(6 * 8)
 #define AW_PID_2055A_VERSION_VALUE	(0x6708)
-
 /********************************************
  * Init check
  *******************************************/
 #define AW_PID_2055A_INIT_CHECK_REG		(0x73)
 #define AW_PID_2055A_INIT_CHECK_VALUE		(0x1D40)
-
 
 #endif  /* #ifndef  __AW_PID_2055A_REG_H__ */

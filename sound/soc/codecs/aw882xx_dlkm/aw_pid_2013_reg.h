@@ -1,7 +1,6 @@
 #ifndef __AW_PID_2013_REG_H__
 #define __AW_PID_2013_REG_H__
 
-#define AW_PID_2013_ACF_FILE		"aw882xx_pid_2013_acf.bin"
 #define AW_PID_2013_MONITOR_FILE	"aw882xx_pid_2013_monitor.bin"
 
 /* registers list */

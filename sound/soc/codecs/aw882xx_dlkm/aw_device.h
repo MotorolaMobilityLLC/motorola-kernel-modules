@@ -24,8 +24,8 @@ enum {
 struct aw_device;
 
 enum {
-	AW_DEV_TYPE_OK = 0,
-	AW_DEV_TYPE_NONE = 1,
+	AW_DEV_TYPE_NONE = 0,
+	AW_DEV_TYPE_OK,
 };
 
 enum {
@@ -50,6 +50,12 @@ enum AW_DEV_STATUS {
 enum AW_DEV_FW_STATUS {
 	AW_DEV_FW_FAILED = 0,
 	AW_DEV_FW_OK,
+};
+
+
+enum {
+	AW_EXT_DSP_WRITE_NONE = 0,
+	AW_EXT_DSP_WRITE,
 };
 
 enum AW_SPIN_KCONTROL_STATUS {
@@ -79,6 +85,13 @@ struct aw_int_desc {
 	unsigned int st_reg;			/*interrupt status reg*/
 	unsigned int mask_default;		/*default mask close all*/
 	unsigned int int_mask;			/*set mask*/
+};
+
+struct aw_work_mode {
+	unsigned int reg;
+	unsigned int mask;
+	unsigned int spk_val;
+	unsigned int rcv_val;
 };
 
 struct aw_soft_rst {
@@ -209,11 +222,6 @@ struct aw_ipeak_desc {
 	unsigned int mask;
 };
 
-struct aw_container {
-	int len;
-	uint8_t data[];
-};
-
 struct aw_spin_ch {
 	uint16_t rx_val;
 	uint16_t tx_val;
@@ -236,6 +244,8 @@ struct aw_spin_desc {
 struct aw_device {
 	int index;
 	int status;
+	unsigned int chip_id;
+	unsigned int monitor_start;
 	int bstcfg_enable;
 	int frcset_en;
 	int bop_en;
@@ -251,11 +261,11 @@ struct aw_device {
 
 	struct device *dev;
 	struct i2c_client *i2c;
-	char acf_name[AW_NAME_MAX];
 	char monitor_name[AW_NAME_MAX];
 	void *private_data;
 
 	struct aw_int_desc int_desc;
+	struct aw_work_mode work_mode;
 	struct aw_pwd_desc pwd_desc;
 	struct aw_amppd_desc amppd_desc;
 	struct aw_mute_desc mute_desc;
@@ -281,7 +291,6 @@ struct aw_device {
 };
 
 
-int aw_dev_load_acf_check(struct aw_container *aw_cfg);
 void aw_dev_deinit(struct aw_device *aw_dev);
 int aw_device_init(struct aw_device *aw_dev, struct aw_container *aw_cfg);
 int aw_device_start(struct aw_device *aw_dev);
@@ -289,13 +298,12 @@ int aw_device_stop(struct aw_device *aw_dev);
 int aw_dev_reg_update(struct aw_device *aw_dev, bool force);
 int aw_device_irq_reinit(struct aw_device *aw_dev);
 
+struct mutex *aw_dev_get_ext_dsp_prof_wr_lock(void);
+char *aw_dev_get_ext_dsp_prof_write(void);
+
+
 /*profile*/
 int aw_dev_prof_update(struct aw_device *aw_dev, bool force);
-int aw_dev_get_profile_count(struct aw_device *aw_dev);
-int aw_dev_get_profile_name(struct aw_device *aw_dev, char *name, int index);
-int aw_dev_check_profile_index(struct aw_device *aw_dev, int index);
-int aw_dev_get_profile_index(struct aw_device *aw_dev);
-int aw_dev_set_profile_index(struct aw_device *aw_dev, int index);
 
 /*re*/
 int aw_dev_get_cali_re(struct aw_device *aw_dev, int32_t *cali_re);

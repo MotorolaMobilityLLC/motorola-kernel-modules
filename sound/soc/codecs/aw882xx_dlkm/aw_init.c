@@ -36,7 +36,7 @@
 #include "aw_pid_2013_reg.h"
 #include "aw_pid_2032_reg.h"
 #include "aw_pid_2055a_reg.h"
-#include "aw_pid_2055b_reg.h"
+#include "aw_pid_2055_reg.h"
 #include "aw_pid_2071_reg.h"
 #include "aw_pid_2113_reg.h"
 #include "aw_log.h"
@@ -184,17 +184,9 @@ static unsigned int aw_pid_1852_get_irq_type(struct aw_device *aw_dev,
 static int aw_pid_1852_dev_init(struct aw882xx *aw882xx, int index)
 {
 	int ret;
-	struct aw_device *aw_pa = NULL;
-
-	aw_pa = devm_kzalloc(aw882xx->dev, sizeof(struct aw_device), GFP_KERNEL);
-	if (aw_pa == NULL) {
-		aw_dev_err(aw882xx->dev, "dev kalloc failed");
-		return -ENOMEM;
-	}
+	struct aw_device *aw_pa = aw882xx->aw_pa;
 
 	/* call aw device init func */
-	memset(aw_pa->acf_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->acf_name, AW_PID_1852_ACF_FILE, strlen(AW_PID_1852_ACF_FILE));
 	memset(aw_pa->monitor_name, 0, AW_NAME_MAX);
 	memcpy(aw_pa->monitor_name, AW_PID_1852_MONITOR_FILE, strlen(AW_PID_1852_MONITOR_FILE));
 
@@ -227,6 +219,11 @@ static int aw_pid_1852_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->int_desc.mask_default = AW_PID_1852_SYSINTM_DEFAULT;
 	aw_pa->int_desc.int_mask = AW_PID_1852_SYSINTM_DEFAULT;
 	aw_pa->int_desc.st_reg = AW_PID_1852_SYSINT_REG;
+
+	aw_pa->work_mode.reg = AW_PID_1852_SYSCTRL_REG;
+	aw_pa->work_mode.mask = AW_PID_1852_RCV_MODE_MASK;
+	aw_pa->work_mode.spk_val = AW_PID_1852_RCV_MODE_SPEAKER_MODE_VCOM13PVDD_VALUE;
+	aw_pa->work_mode.rcv_val = AW_PID_1852_RCV_MODE_RECEIVER_MODE_VCOM12PVDD_VALUE;
 
 	aw_pa->pwd_desc.reg = AW_PID_1852_SYSCTRL_REG;
 	aw_pa->pwd_desc.mask = AW_PID_1852_PWDN_MASK;
@@ -462,16 +459,9 @@ static void aw_pid_2013_efver_check(struct aw_device *aw_dev)
 static int aw_pid_2013_dev_init(struct aw882xx *aw882xx, int index)
 {
 	int ret;
-	struct aw_device *aw_pa = NULL;
-	aw_pa = devm_kzalloc(aw882xx->dev, sizeof(struct aw_device), GFP_KERNEL);
-	if (aw_pa == NULL) {
-		aw_dev_err(aw882xx->dev, "dev kalloc failed");
-		return -ENOMEM;
-	}
+	struct aw_device *aw_pa = aw882xx->aw_pa;
 
 	/*call aw device init func*/
-	memset(aw_pa->acf_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->acf_name, AW_PID_2013_ACF_FILE, strlen(AW_PID_2013_ACF_FILE));
 	memset(aw_pa->monitor_name, 0, AW_NAME_MAX);
 	memcpy(aw_pa->monitor_name, AW_PID_2013_MONITOR_FILE, strlen(AW_PID_2013_MONITOR_FILE));
 
@@ -503,6 +493,11 @@ static int aw_pid_2013_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->int_desc.mask_default = AW_PID_2013_SYSINTM_DEFAULT;
 	aw_pa->int_desc.int_mask = AW_PID_2013_SYSINTM_DEFAULT;
 	aw_pa->int_desc.st_reg = AW_PID_2013_SYSINT_REG;
+
+	aw_pa->work_mode.reg = AW_PID_2013_SYSCTRL_REG;
+	aw_pa->work_mode.mask = AW_PID_2013_EN_TRAN_MASK;
+	aw_pa->work_mode.spk_val = AW_PID_2013_EN_TRAN_SPK_VALUE;
+	aw_pa->work_mode.rcv_val = AW_PID_2013_EN_TRAN_RCV_VALUE;
 
 	aw_pa->pwd_desc.reg = AW_PID_2013_SYSCTRL_REG;
 	aw_pa->pwd_desc.mask = AW_PID_2013_PWDN_MASK;
@@ -719,17 +714,9 @@ static unsigned int aw_pid_2032_get_irq_type(struct aw_device *aw_dev,
 static int aw_pid_2032_dev_init(struct aw882xx *aw882xx, int index)
 {
 	int ret;
-	struct aw_device *aw_pa = NULL;
-
-	aw_pa = devm_kzalloc(aw882xx->dev, sizeof(struct aw_device), GFP_KERNEL);
-	if (aw_pa == NULL) {
-		aw_dev_err(aw882xx->dev, "dev kalloc failed");
-		return -ENOMEM;
-	}
+	struct aw_device *aw_pa = aw882xx->aw_pa;
 
 	/* call aw device init func */
-	memset(aw_pa->acf_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->acf_name, AW_PID_2032_ACF_FILE, strlen(AW_PID_2032_ACF_FILE));
 	memset(aw_pa->monitor_name, 0, AW_NAME_MAX);
 	memcpy(aw_pa->monitor_name, AW_PID_2032_MONITOR_FILE, strlen(AW_PID_2032_MONITOR_FILE));
 
@@ -762,6 +749,11 @@ static int aw_pid_2032_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->int_desc.mask_default = AW_PID_2032_SYSINTM_DEFAULT;
 	aw_pa->int_desc.int_mask = AW_PID_2032_SYSINTM_DEFAULT;
 	aw_pa->int_desc.st_reg = AW_PID_2032_SYSINT_REG;
+
+	aw_pa->work_mode.reg = AW_PID_2032_SYSCTRL_REG;
+	aw_pa->work_mode.mask = AW_PID_2032_RCV_MODE_MASK;
+	aw_pa->work_mode.spk_val = AW_PID_2032_RCV_MODE_SPEAKER_VALUE;
+	aw_pa->work_mode.rcv_val = AW_PID_2032_RCV_MODE_RECEIVER_VALUE;
 
 	aw_pa->pwd_desc.reg = AW_PID_2032_SYSCTRL_REG;
 	aw_pa->pwd_desc.mask = AW_PID_2032_PWDN_MASK;
@@ -964,16 +956,10 @@ static unsigned int aw_pid_2055a_get_irq_type(struct aw_device *aw_dev,
 static int aw_pid_2055a_dev_init(struct aw882xx *aw882xx, int index)
 {
 	int ret;
-	struct aw_device *aw_pa = NULL;
-	aw_pa = devm_kzalloc(aw882xx->dev, sizeof(struct aw_device), GFP_KERNEL);
-	if (aw_pa == NULL) {
-		aw_dev_err(aw882xx->dev, "dev kalloc failed");
-		return -ENOMEM;
-	}
+	struct aw_device *aw_pa = aw882xx->aw_pa;
+	aw_pa->chip_id = PID_2055A_ID;
 
 	/*call aw device init func*/
-	memset(aw_pa->acf_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->acf_name, AW_PID_2055A_ACF_FILE, strlen(AW_PID_2055A_ACF_FILE));
 	memset(aw_pa->monitor_name, 0, AW_NAME_MAX);
 	memcpy(aw_pa->monitor_name, AW_PID_2055A_MONITOR_FILE, strlen(AW_PID_2055A_MONITOR_FILE));
 
@@ -1071,7 +1057,7 @@ static int aw_pid_2055a_dev_init(struct aw882xx *aw882xx, int index)
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
-	
+
 	usleep_range(AW_2000_US, AW_2000_US +10);
 	aw_pa->ops.aw_i2c_write(aw_pa, AW_PID_2055A_INIT_CHECK_REG,
 					AW_PID_2055A_INIT_CHECK_VALUE);
@@ -1083,26 +1069,27 @@ static int aw_pid_2055a_dev_init(struct aw882xx *aw882xx, int index)
 	return ret;
 }
 
+
 /* [9 : 6]: -6DB ; [5 : 0]: 0.125DB  real_value = value * 8 : 0.125db --> 1 */
-static unsigned int aw_pid_2055b_reg_val_to_db(unsigned int value)
+static unsigned int aw_pid_2055_reg_val_to_db(unsigned int value)
 {
-	return ((value >> 6) * AW_PID_2055B_VOL_STEP_DB + (value & 0x3f));
+	return ((value >> 6) * AW_PID_2055_VOL_STEP_DB + (value & 0x3f));
 }
 
 /* [9 : 6]: -6DB ; [5 : 0]: 0.125DB reg_value = value / step << 6 + value % step ; step = 6 * 8 */
-static unsigned int aw_pid_2055b_db_val_to_reg(unsigned int value)
+static unsigned int aw_pid_2055_db_val_to_reg(unsigned int value)
 {
-	return (((value / AW_PID_2055B_VOL_STEP_DB) << 6) + (value % AW_PID_2055B_VOL_STEP_DB));
+	return (((value / AW_PID_2055_VOL_STEP_DB) << 6) + (value % AW_PID_2055_VOL_STEP_DB));
 }
 
-static int aw_pid_2055b_set_volume(struct aw_device *aw_dev, unsigned int value)
+static int aw_pid_2055_set_volume(struct aw_device *aw_dev, unsigned int value)
 {
 	struct aw882xx *aw882xx = (struct aw882xx *)aw_dev->private_data;
 	unsigned int reg_value = 0;
-	unsigned int real_value = aw_pid_2055b_db_val_to_reg(value);
+	unsigned int real_value = aw_pid_2055_db_val_to_reg(value);
 
 	/* cal real value */
-	aw882xx_i2c_read(aw882xx, AW_PID_2055B_SYSCTRL2_REG, &reg_value);
+	aw882xx_i2c_read(aw882xx, AW_PID_2055_SYSCTRL2_REG, &reg_value);
 
 	aw_dev_dbg(aw882xx->dev, "value %d , 0x%x", value, real_value);
 
@@ -1110,83 +1097,83 @@ static int aw_pid_2055b_set_volume(struct aw_device *aw_dev, unsigned int value)
 	real_value = (real_value | (reg_value & 0xfc00));
 
 	/* write value */
-	aw882xx_i2c_write(aw882xx, AW_PID_2055B_SYSCTRL2_REG, real_value);
+	aw882xx_i2c_write(aw882xx, AW_PID_2055_SYSCTRL2_REG, real_value);
 	return 0;
 }
 
-static int aw_pid_2055b_get_volume(struct aw_device *aw_dev, unsigned int *value)
+static int aw_pid_2055_get_volume(struct aw_device *aw_dev, unsigned int *value)
 {
 	unsigned int reg_value = 0;
 	unsigned int real_value = 0;
 	struct aw882xx *aw882xx = (struct aw882xx *)aw_dev->private_data;
 
 	/* read value */
-	aw882xx_i2c_read(aw882xx, AW_PID_2055B_SYSCTRL2_REG, &reg_value);
+	aw882xx_i2c_read(aw882xx, AW_PID_2055_SYSCTRL2_REG, &reg_value);
 
 	/* [9 : 0] volume */
 	real_value = (reg_value & 0x03ff);
 
-	real_value = aw_pid_2055b_reg_val_to_db(real_value);
+	real_value = aw_pid_2055_reg_val_to_db(real_value);
 	*value = real_value;
 
 	return 0;
 }
 
-static bool aw_pid_2055b_check_rd_access(int reg)
+static bool aw_pid_2055_check_rd_access(int reg)
 {
-	if (reg >= AW_PID_2055B_REG_MAX) {
+	if (reg >= AW_PID_2055_REG_MAX) {
 		return false;
 	}
 
-	if (aw_pid_2055b_reg_access[reg] & AW_PID_2055B_REG_RD_ACCESS) {
+	if (aw_pid_2055_reg_access[reg] & AW_PID_2055_REG_RD_ACCESS) {
 		return true;
 	} else {
 		return false;
 	}
 }
 
-static bool aw_pid_2055b_check_wr_access(int reg)
+static bool aw_pid_2055_check_wr_access(int reg)
 {
-	if (reg >= AW_PID_2055B_REG_MAX)
+	if (reg >= AW_PID_2055_REG_MAX)
 		return false;
 
-	if (aw_pid_2055b_reg_access[reg] &
-			AW_PID_2055B_REG_WR_ACCESS)
+	if (aw_pid_2055_reg_access[reg] &
+			AW_PID_2055_REG_WR_ACCESS)
 		return true;
 	else
 		return false;
 }
 
-static int aw_pid_2055b_get_reg_num(void)
+static int aw_pid_2055_get_reg_num(void)
 {
-	return AW_PID_2055B_REG_MAX;
+	return AW_PID_2055_REG_MAX;
 }
 
-static unsigned int aw_pid_2055b_get_irq_type(struct aw_device *aw_dev,
+static unsigned int aw_pid_2055_get_irq_type(struct aw_device *aw_dev,
 					unsigned int value)
 {
 	unsigned int ret = INT_TYPE_NONE;
 
 	/* UVL0 */
-	if (value & (~AW_PID_2055B_UVLI_MASK)) {
+	if (value & (~AW_PID_2055_UVLI_MASK)) {
 		aw_dev_info(aw_dev->dev, "UVLO: occur");
 		ret |= INT_TYPE_UVLO;
 	}
 
 	/* BSTOCM */
-	if (value & (~AW_PID_2055B_BSTOCI_MASK)) {
+	if (value & (~AW_PID_2055_BSTOCI_MASK)) {
 		aw_dev_info(aw_dev->dev, "BSTOCI: occur");
 		ret |= INT_TYPE_BSTOC;
 	}
 
 	/* OCDI */
-	if (value & (~AW_PID_2055B_OCDI_MASK)) {
+	if (value & (~AW_PID_2055_OCDI_MASK)) {
 		aw_dev_info(aw_dev->dev, "OCDI: occur");
 		ret |= INT_TYPE_OCDI;
 	}
 
 	/* OTHI */
-	if (value & (~AW_PID_2055B_OTHI_MASK)) {
+	if (value & (~AW_PID_2055_OTHI_MASK)) {
 		aw_dev_info(aw_dev->dev, "OTHI: occur");
 		ret |= INT_TYPE_OTHI;
 	}
@@ -1194,28 +1181,21 @@ static unsigned int aw_pid_2055b_get_irq_type(struct aw_device *aw_dev,
 	return ret;
 }
 
-static int aw_pid_2055b_dev_init(struct aw882xx *aw882xx, int index)
+static int aw_pid_2055_dev_init(struct aw882xx *aw882xx, int index)
 {
 	int ret;
-	struct aw_device *aw_pa = NULL;
-	aw_pa = devm_kzalloc(aw882xx->dev, sizeof(struct aw_device), GFP_KERNEL);
-	if (aw_pa == NULL) {
-		aw_dev_err(aw882xx->dev, "dev kalloc failed");
-		return -ENOMEM;
-	}
+	struct aw_device *aw_pa = aw882xx->aw_pa;
 
 	/*call aw device init func*/
-	memset(aw_pa->acf_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->acf_name, AW_PID_2055B_ACF_FILE, strlen(AW_PID_2055B_ACF_FILE));
 	memset(aw_pa->monitor_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->monitor_name, AW_PID_2055B_MONITOR_FILE, strlen(AW_PID_2055B_MONITOR_FILE));
+	memcpy(aw_pa->monitor_name, AW_PID_2055_MONITOR_FILE, strlen(AW_PID_2055_MONITOR_FILE));
 
 	aw_pa->prof_info.prof_desc = NULL;
 	aw_pa->prof_info.count = 0;
 	aw_pa->channel = 0;
 	aw_pa->bstcfg_enable = AW_BSTCFG_DISABLE;
 	aw_pa->bop_en = AW_BOP_DISABLE;
-	aw_pa->vol_step = AW_PID_2055B_VOL_STEP;
+	aw_pa->vol_step = AW_PID_2055_VOL_STEP;
 
 	aw_pa->index = index;
 	aw_pa->private_data = (void *)aw882xx;
@@ -1227,88 +1207,98 @@ static int aw_pid_2055b_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->ops.aw_i2c_read = aw882xx_dev_i2c_read;
 	aw_pa->ops.aw_i2c_write = aw882xx_dev_i2c_write;
 	aw_pa->ops.aw_i2c_write_bits = aw882xx_dev_i2c_write_bits;
-	aw_pa->ops.aw_get_volume = aw_pid_2055b_get_volume;
-	aw_pa->ops.aw_set_volume = aw_pid_2055b_set_volume;
-	aw_pa->ops.aw_reg_val_to_db = aw_pid_2055b_reg_val_to_db;
-	aw_pa->ops.aw_check_rd_access = aw_pid_2055b_check_rd_access;
-	aw_pa->ops.aw_check_wr_access = aw_pid_2055b_check_wr_access;
-	aw_pa->ops.aw_get_reg_num = aw_pid_2055b_get_reg_num;
-	aw_pa->ops.aw_get_irq_type =aw_pid_2055b_get_irq_type;
+	aw_pa->ops.aw_get_volume = aw_pid_2055_get_volume;
+	aw_pa->ops.aw_set_volume = aw_pid_2055_set_volume;
+	aw_pa->ops.aw_reg_val_to_db = aw_pid_2055_reg_val_to_db;
+	aw_pa->ops.aw_check_rd_access = aw_pid_2055_check_rd_access;
+	aw_pa->ops.aw_check_wr_access = aw_pid_2055_check_wr_access;
+	aw_pa->ops.aw_get_reg_num = aw_pid_2055_get_reg_num;
+	aw_pa->ops.aw_get_irq_type =aw_pid_2055_get_irq_type;
 
-	aw_pa->int_desc.mask_reg = AW_PID_2055B_SYSINTM_REG;
-	aw_pa->int_desc.mask_default = AW_PID_2055B_SYSINTM_DEFAULT;
-	aw_pa->int_desc.int_mask = AW_PID_2055B_SYSINTM_DEFAULT;
-	aw_pa->int_desc.st_reg = AW_PID_2055B_SYSINT_REG;
+	aw_pa->int_desc.mask_reg = AW_PID_2055_SYSINTM_REG;
+	aw_pa->int_desc.mask_default = AW_PID_2055_SYSINTM_DEFAULT;
+	aw_pa->int_desc.int_mask = AW_PID_2055_SYSINTM_DEFAULT;
+	aw_pa->int_desc.st_reg = AW_PID_2055_SYSINT_REG;
 
-	aw_pa->pwd_desc.reg = AW_PID_2055B_SYSCTRL_REG;
-	aw_pa->pwd_desc.mask = AW_PID_2055B_PWDN_MASK;
-	aw_pa->pwd_desc.enable = AW_PID_2055B_PWDN_POWER_DOWN_VALUE;
-	aw_pa->pwd_desc.disable = AW_PID_2055B_PWDN_WORKING_VALUE;
+	aw_pa->pwd_desc.reg = AW_PID_2055_SYSCTRL_REG;
+	aw_pa->pwd_desc.mask = AW_PID_2055_PWDN_MASK;
+	aw_pa->pwd_desc.enable = AW_PID_2055_PWDN_POWER_DOWN_VALUE;
+	aw_pa->pwd_desc.disable = AW_PID_2055_PWDN_WORKING_VALUE;
 
-	aw_pa->amppd_desc.reg = AW_PID_2055B_SYSCTRL_REG;
-	aw_pa->amppd_desc.mask = AW_PID_2055B_AMPPD_MASK;
-	aw_pa->amppd_desc.enable = AW_PID_2055B_AMPPD_POWER_DOWN_VALUE;
-	aw_pa->amppd_desc.disable = AW_PID_2055B_AMPPD_WORKING_VALUE;
+	aw_pa->amppd_desc.reg = AW_PID_2055_SYSCTRL_REG;
+	aw_pa->amppd_desc.mask = AW_PID_2055_AMPPD_MASK;
+	aw_pa->amppd_desc.enable = AW_PID_2055_AMPPD_POWER_DOWN_VALUE;
+	aw_pa->amppd_desc.disable = AW_PID_2055_AMPPD_WORKING_VALUE;
 
-	aw_pa->mute_desc.reg = AW_PID_2055B_SYSCTRL_REG;
-	aw_pa->mute_desc.mask = AW_PID_2055B_HMUTE_MASK;
-	aw_pa->mute_desc.enable = AW_PID_2055B_HMUTE_ENABLE_VALUE;
-	aw_pa->mute_desc.disable = AW_PID_2055B_HMUTE_DISABLE_VALUE;
+	aw_pa->mute_desc.reg = AW_PID_2055_SYSCTRL_REG;
+	aw_pa->mute_desc.mask = AW_PID_2055_HMUTE_MASK;
+	aw_pa->mute_desc.enable = AW_PID_2055_HMUTE_ENABLE_VALUE;
+	aw_pa->mute_desc.disable = AW_PID_2055_HMUTE_DISABLE_VALUE;
 
 	aw_pa->uls_hmute_desc.reg = AW_REG_NONE;
+
+	aw_pa->work_mode.reg = AW_PID_2055_SYSCTRL_REG;
+	aw_pa->work_mode.mask = AW_PID_2055_RCV_MODE_MASK;
+	aw_pa->work_mode.spk_val = AW_PID_2055_RCV_MODE_SPEAKER_VALUE;
+	aw_pa->work_mode.rcv_val = AW_PID_2055_RCV_MODE_RECEIVER_VALUE;
 
 	aw_pa->vcalb_desc.vcalb_reg = AW_REG_NONE;
 	aw_pa->vcalb_desc.vcalk_reg = AW_REG_NONE;
 	aw_pa->vcalb_desc.icalk_reg = AW_REG_NONE;
 
-	aw_pa->txen_desc.reg = AW_PID_2055B_I2SCTRL1_REG;
-	aw_pa->txen_desc.mask = AW_PID_2055B_I2STXEN_MASK;
-	aw_pa->txen_desc.enable = AW_PID_2055B_I2STXEN_ENABLE_VALUE;
-	aw_pa->txen_desc.disable = AW_PID_2055B_I2STXEN_DISABLE_VALUE;
+	aw_pa->txen_desc.reg = AW_PID_2055_I2SCTRL1_REG;
+	aw_pa->txen_desc.mask = AW_PID_2055_I2STXEN_MASK;
+	aw_pa->txen_desc.enable = AW_PID_2055_I2STXEN_ENABLE_VALUE;
+	aw_pa->txen_desc.disable = AW_PID_2055_I2STXEN_DISABLE_VALUE;
 
-	aw_pa->sysst_desc.reg = AW_PID_2055B_SYSST_REG;
-	aw_pa->sysst_desc.mask = AW_PID_2055B_SYSST_CHECK_MASK;
-	aw_pa->sysst_desc.st_check = AW_PID_2055B_SYSST_CHECK;
-	aw_pa->sysst_desc.pll_check = AW_PID_2055B_IIS_CHECK;
+	aw_pa->sysst_desc.reg = AW_PID_2055_SYSST_REG;
+	aw_pa->sysst_desc.mask = AW_PID_2055_SYSST_CHECK_MASK;
+	aw_pa->sysst_desc.st_check = AW_PID_2055_SYSST_CHECK;
+	aw_pa->sysst_desc.pll_check = AW_PID_2055_IIS_CHECK;
 
-	aw_pa->spin_desc.rx_desc.reg = AW_PID_2055B_I2SCTRL1_REG;
-	aw_pa->spin_desc.rx_desc.mask = AW_PID_2055B_CHSEL_MASK;
-	aw_pa->spin_desc.rx_desc.left_val = AW_PID_2055B_CHSEL_LEFT_VALUE;
-	aw_pa->spin_desc.rx_desc.right_val = AW_PID_2055B_CHSEL_RIGHT_VALUE;
+	aw_pa->spin_desc.rx_desc.reg = AW_PID_2055_I2SCTRL1_REG;
+	aw_pa->spin_desc.rx_desc.mask = AW_PID_2055_CHSEL_MASK;
+	aw_pa->spin_desc.rx_desc.left_val = AW_PID_2055_CHSEL_LEFT_VALUE;
+	aw_pa->spin_desc.rx_desc.right_val = AW_PID_2055_CHSEL_RIGHT_VALUE;
 
-	aw_pa->spin_desc.tx_desc.reg = AW_PID_2055B_SYSCTRL2_REG;
-	aw_pa->spin_desc.tx_desc.mask = AW_PID_2055B_I2SCHS_MASK;
-	aw_pa->spin_desc.tx_desc.left_val = AW_PID_2055B_I2SCHS_LEFT_VALUE;
-	aw_pa->spin_desc.tx_desc.right_val = AW_PID_2055B_I2SCHS_RIGHT_VALUE;
+	aw_pa->spin_desc.tx_desc.reg = AW_PID_2055_SYSCTRL2_REG;
+	aw_pa->spin_desc.tx_desc.mask = AW_PID_2055_I2SCHS_MASK;
+	aw_pa->spin_desc.tx_desc.left_val = AW_PID_2055_I2SCHS_LEFT_VALUE;
+	aw_pa->spin_desc.tx_desc.right_val = AW_PID_2055_I2SCHS_RIGHT_VALUE;
 
-	aw_pa->voltage_desc.reg = AW_PID_2055B_VBAT_REG;
-	aw_pa->voltage_desc.int_bit = AW_PID_2055B_MONITOR_INT_10BIT;
-	aw_pa->voltage_desc.vbat_range = AW_PID_2055B_MONITOR_VBAT_RANGE;
+	aw_pa->voltage_desc.reg = AW_PID_2055_VBAT_REG;
+	aw_pa->voltage_desc.int_bit = AW_PID_2055_MONITOR_INT_10BIT;
+	aw_pa->voltage_desc.vbat_range = AW_PID_2055_MONITOR_VBAT_RANGE;
 
-	aw_pa->temp_desc.reg = AW_PID_2055B_TEMP_REG;
-	aw_pa->temp_desc.neg_mask = AW_PID_2055B_MONITOR_TEMP_NEG_MASK;
-	aw_pa->temp_desc.sign_mask = AW_PID_2055B_MONITOR_TEMP_SIGN_MASK;
+	aw_pa->temp_desc.reg = AW_PID_2055_TEMP_REG;
+	aw_pa->temp_desc.neg_mask = AW_PID_2055_MONITOR_TEMP_NEG_MASK;
+	aw_pa->temp_desc.sign_mask = AW_PID_2055_MONITOR_TEMP_SIGN_MASK;
 
-	aw_pa->ipeak_desc.reg = AW_PID_2055B_BSTCTRL2_REG;
-	aw_pa->ipeak_desc.mask = AW_PID_2055B_BST_IPEAK_MASK;
+	aw_pa->ipeak_desc.reg = AW_PID_2055_BSTCTRL2_REG;
+	aw_pa->ipeak_desc.mask = AW_PID_2055_BST_IPEAK_MASK;
 
-	aw_pa->volume_desc.reg = AW_PID_2055B_SYSCTRL2_REG;
-	aw_pa->volume_desc.mask = AW_PID_2055B_VOL_MASK;
-	aw_pa->volume_desc.shift = AW_PID_2055B_VOL_START_BIT;
-	aw_pa->volume_desc.mute_volume = AW_PID_2055B_MUTE_VOL;
+	aw_pa->volume_desc.reg = AW_PID_2055_SYSCTRL2_REG;
+	aw_pa->volume_desc.mask = AW_PID_2055_VOL_MASK;
+	aw_pa->volume_desc.shift = AW_PID_2055_VOL_START_BIT;
+	aw_pa->volume_desc.mute_volume = AW_PID_2055_MUTE_VOL;
 
-	aw_pa->cco_mux_desc.reg = AW_PID_2055B_PLLCTRL3_REG;
-	aw_pa->cco_mux_desc.mask = AW_PID_2055B_CCO_MUX_MASK;
-	aw_pa->cco_mux_desc.divided_val = AW_PID_2055B_CCO_MUX_DIVIDED_VALUE;
-	aw_pa->cco_mux_desc.bypass_val = AW_PID_2055B_CCO_MUX_BYPASS_VALUE;
+	aw_pa->cco_mux_desc.reg = AW_PID_2055_PLLCTRL3_REG;
+	aw_pa->cco_mux_desc.mask = AW_PID_2055_CCO_MUX_MASK;
+	aw_pa->cco_mux_desc.divided_val = AW_PID_2055_CCO_MUX_DIVIDED_VALUE;
+	aw_pa->cco_mux_desc.bypass_val = AW_PID_2055_CCO_MUX_BYPASS_VALUE;
 
-	aw_pa->bop_desc.reg = AW_PID_2055B_SADCCTRL3_REG;
-	aw_pa->bop_desc.mask = AW_PID_2055B_BOP_EN_MASK;
-	aw_pa->bop_desc.enable = AW_PID_2055B_BOP_EN_ENABLE_VALUE;
-	aw_pa->bop_desc.disbale = AW_PID_2055B_BOP_EN_DISABLE_VALUE;
+	aw_pa->bop_desc.reg = AW_PID_2055_SADCCTRL3_REG;
+	aw_pa->bop_desc.mask = AW_PID_2055_BOP_EN_MASK;
+	aw_pa->bop_desc.enable = AW_PID_2055_BOP_EN_ENABLE_VALUE;
+	aw_pa->bop_desc.disbale = AW_PID_2055_BOP_EN_DISABLE_VALUE;
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
+
+	usleep_range(AW_2000_US, AW_2000_US +10);
+	aw_pa->ops.aw_i2c_write(aw_pa, AW_PID_2055_INIT_CHECK_REG,
+					AW_PID_2055_INIT_CHECK_VALUE);
+	usleep_range(AW_3000_US, AW_3000_US +10);
 
 	ret = aw_device_probe(aw_pa);
 
@@ -1316,7 +1306,7 @@ static int aw_pid_2055b_dev_init(struct aw882xx *aw882xx, int index)
 	return ret;
 }
 
-static int aw_pid_2055_dev_init(struct aw882xx *aw882xx, int index)
+static int aw_pid_2055_dev_check(struct aw882xx *aw882xx, int index)
 {
 	unsigned int reg_data = 0;
 
@@ -1326,8 +1316,8 @@ static int aw_pid_2055_dev_init(struct aw882xx *aw882xx, int index)
 	aw882xx_i2c_read(aw882xx, AW_PID_2055_VERSION_DIFF_REG, &reg_data);
 	if (reg_data == AW_PID_2055A_VERSION_VALUE)
 		return aw_pid_2055a_dev_init(aw882xx, index);
-	else if (reg_data == AW_PID_2055B_VERSION_VALUE)
-		return aw_pid_2055b_dev_init(aw882xx, index);
+	else if (reg_data == AW_PID_2055_VERSION_VALUE)
+		return aw_pid_2055_dev_init(aw882xx, index);
 	else
 		aw_dev_err(aw882xx->dev, "unsupported 2055 verison, 0x%04x", reg_data);
 
@@ -1447,16 +1437,9 @@ static unsigned int aw_pid_2071_get_irq_type(struct aw_device *aw_dev,
 static int aw_pid_2071_dev_init(struct aw882xx *aw882xx, int index)
 {
 	int ret;
-	struct aw_device *aw_pa = NULL;
-	aw_pa = devm_kzalloc(aw882xx->dev, sizeof(struct aw_device), GFP_KERNEL);
-	if (aw_pa == NULL) {
-		aw_dev_err(aw882xx->dev, "dev kalloc failed");
-		return -ENOMEM;
-	}
+	struct aw_device *aw_pa = aw882xx->aw_pa;
 
 	/*call aw device init func*/
-	memset(aw_pa->acf_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->acf_name, AW_PID_2071_ACF_FILE, strlen(AW_PID_2071_ACF_FILE));
 	memset(aw_pa->monitor_name, 0, AW_NAME_MAX);
 	memcpy(aw_pa->monitor_name, AW_PID_2071_MONITOR_FILE, strlen(AW_PID_2071_MONITOR_FILE));
 
@@ -1489,6 +1472,11 @@ static int aw_pid_2071_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->int_desc.mask_default = AW_PID_2071_SYSINTM_DEFAULT;
 	aw_pa->int_desc.int_mask = AW_PID_2071_SYSINTM_DEFAULT;
 	aw_pa->int_desc.st_reg = AW_PID_2071_SYSINT_REG;
+
+	aw_pa->work_mode.reg = AW_PID_2071_SYSCTRL_REG;
+	aw_pa->work_mode.mask = AW_PID_2071_RCV_MODE_MASK;
+	aw_pa->work_mode.spk_val = AW_PID_2071_RCV_MODE_SPEAKER_VALUE;
+	aw_pa->work_mode.rcv_val = AW_PID_2071_RCV_MODE_RECEIVER_VALUE;
 
 	aw_pa->pwd_desc.reg = AW_PID_2071_SYSCTRL_REG;
 	aw_pa->pwd_desc.mask = AW_PID_2071_PWDN_MASK;
@@ -1744,16 +1732,9 @@ static void aw_pid_2113_reg_force_set(struct aw_device *aw_dev)
 static int aw_pid_2113_dev_init(struct aw882xx *aw882xx, int index)
 {
 	int ret;
-	struct aw_device *aw_pa = NULL;
-	aw_pa = devm_kzalloc(aw882xx->dev, sizeof(struct aw_device), GFP_KERNEL);
-	if (aw_pa == NULL) {
-		aw_dev_err(aw882xx->dev, "dev kalloc failed");
-		return -ENOMEM;
-	}
+	struct aw_device *aw_pa = aw882xx->aw_pa;
 
 	/*call aw device init func*/
-	memset(aw_pa->acf_name, 0, AW_NAME_MAX);
-	memcpy(aw_pa->acf_name, AW_PID_2113_ACF_FILE, strlen(AW_PID_2113_ACF_FILE));
 	memset(aw_pa->monitor_name, 0, AW_NAME_MAX);
 	memcpy(aw_pa->monitor_name, AW_PID_2113_MONITOR_FILE, strlen(AW_PID_2113_MONITOR_FILE));
 
@@ -1788,10 +1769,20 @@ static int aw_pid_2113_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->int_desc.int_mask = AW_PID_2113_SYSINTM_DEFAULT;
 	aw_pa->int_desc.st_reg = AW_PID_2113_SYSINT_REG;
 
+	aw_pa->work_mode.reg = AW_PID_2113_SYSCTRL_REG;
+	aw_pa->work_mode.mask = AW_PID_2113_EN_TRAN_MASK;
+	aw_pa->work_mode.spk_val = AW_PID_2113_EN_TRAN_SPK_VALUE;
+	aw_pa->work_mode.rcv_val = AW_PID_2113_EN_TRAN_RCV_VALUE;
+
 	aw_pa->pwd_desc.reg = AW_PID_2113_SYSCTRL_REG;
 	aw_pa->pwd_desc.mask = AW_PID_2113_PWDN_MASK;
 	aw_pa->pwd_desc.enable = AW_PID_2113_PWDN_POWER_DOWN_VALUE;
 	aw_pa->pwd_desc.disable = AW_PID_2113_PWDN_WORKING_VALUE;
+
+	aw_pa->work_mode.reg = AW_PID_2113_SYSCTRL_REG;
+	aw_pa->work_mode.mask = AW_PID_2113_EN_TRAN_MASK;
+	aw_pa->work_mode.spk_val = AW_PID_2113_EN_TRAN_SPK_VALUE;
+	aw_pa->work_mode.rcv_val = AW_PID_2113_EN_TRAN_RCV_VALUE;
 
 	aw_pa->amppd_desc.reg = AW_PID_2113_SYSCTRL_REG;
 	aw_pa->amppd_desc.mask = AW_PID_2113_AMPPD_MASK;
@@ -1880,12 +1871,12 @@ static int aw_pid_2113_dev_init(struct aw882xx *aw882xx, int index)
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
-	
+
 	usleep_range(AW_2000_US, AW_2000_US +10);
 	aw_pa->ops.aw_i2c_write(aw_pa, AW_PID_2113_INIT_CHECK_REG,
 					AW_PID_2113_INIT_CHECK_VALUE);
 	usleep_range(AW_3000_US, AW_3000_US +10);
-	
+
 	aw_pid_2113_efver_check(aw_pa);
 
 	ret = aw_device_probe(aw_pa);
@@ -1896,7 +1887,7 @@ static int aw_pid_2113_dev_init(struct aw882xx *aw882xx, int index)
 
 int aw882xx_init(struct aw882xx *aw882xx, int index)
 {
-	switch(aw882xx->chip_id) {
+	switch(aw882xx->aw_pa->chip_id) {
 	case PID_1852_ID:
 		return aw_pid_1852_dev_init(aw882xx, index);
 	case PID_2013_ID:
@@ -1904,13 +1895,13 @@ int aw882xx_init(struct aw882xx *aw882xx, int index)
 	case PID_2032_ID:
 		return aw_pid_2032_dev_init(aw882xx, index);
 	case PID_2055_ID:
-		return aw_pid_2055_dev_init(aw882xx, index);
+		return aw_pid_2055_dev_check(aw882xx, index);
 	case PID_2071_ID:
 		return aw_pid_2071_dev_init(aw882xx, index);
 	case PID_2113_ID:
 		return aw_pid_2113_dev_init(aw882xx, index);
 	default:
-		aw_dev_err(aw882xx->dev, "unsupported chip id 0x%04x", aw882xx->chip_id);
+		aw_dev_err(aw882xx->dev, "unsupported chip id 0x%04x", aw882xx->aw_pa->chip_id);
 		break;
 	}
 

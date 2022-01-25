@@ -38,8 +38,8 @@
  *****************************************************/
 static int aw_get_hmute(struct aw_device *aw_dev)
 {
-	unsigned int reg_val = 0;
 	int ret;
+	unsigned int reg_val = 0;
 	struct aw_mute_desc *desc = &aw_dev->mute_desc;
 
 	aw_dev_dbg(aw_dev->dev, "enter");
@@ -59,8 +59,8 @@ static int aw_get_hmute(struct aw_device *aw_dev)
 static int aw_monitor_get_data_form_system(struct aw_device *aw_dev,
 					int *data, int data_type)
 {
-	char name[] = "battery";
 	int ret;
+	char name[] = "battery";
 	union power_supply_propval prop = { 0 };
 	struct power_supply *psy = NULL;
 
@@ -143,10 +143,10 @@ static int aw_monitor_get_temperature(struct aw_device *aw_dev, int *temp)
 
 static int aw_monitor_get_temp_and_vol(struct aw_device *aw_dev)
 {
+	int ret = -1;
 	struct aw_monitor_desc *monitor = &aw_dev->monitor_desc;
 	unsigned int voltage = 0;
 	int current_temp = 0;
-	int ret = -1;
 
 #ifdef AW_DEBUG
 	if (monitor->test_vol == 0) {
@@ -248,11 +248,11 @@ static int aw_monitor_get_data_from_table(struct aw_device *aw_dev,
 
 static int aw_monitor_get_data(struct aw_device *aw_dev)
 {
+	int ret;
 	struct aw_monitor_desc *monitor = &aw_dev->monitor_desc;
 	struct aw_monitor_cfg *monitor_cfg = &monitor->monitor_cfg;
 	struct aw_monitor_trace *vol_trace = &monitor->vol_trace;
 	struct aw_monitor_trace *temp_trace = &monitor->temp_trace;
-	int ret;
 
 	if (monitor_cfg->vol_switch) {
 		ret = aw_monitor_get_data_from_table(aw_dev,
@@ -323,10 +323,10 @@ static void aw_monitor_get_cfg(struct aw_device *aw_dev,
 static void aw_monitor_set_ipeak(struct aw_device *aw_dev,
 				uint16_t ipeak)
 {
+	int ret;
 	struct aw_monitor_cfg *monitor_cfg = &aw_dev->monitor_desc.monitor_cfg;
 	unsigned int reg_val = 0;
 	unsigned int read_reg_val;
-	int ret;
 	struct aw_ipeak_desc *desc = &aw_dev->ipeak_desc;
 
 	if (ipeak == IPEAK_NONE || (!monitor_cfg->ipeak_switch))
@@ -364,10 +364,10 @@ static void aw_monitor_set_ipeak(struct aw_device *aw_dev,
 
 static void aw_monitor_set_gain(struct aw_device *aw_dev, uint16_t gain)
 {
+	int ret;
 	struct aw_monitor_cfg *monitor_cfg = &aw_dev->monitor_desc.monitor_cfg;
 	unsigned int read_volume;
 	unsigned int set_volume;
-	int ret;
 
 	if (gain == GAIN_NONE || (!monitor_cfg->gain_switch))
 		return;
@@ -401,8 +401,8 @@ static void aw_monitor_set_gain(struct aw_device *aw_dev, uint16_t gain)
 static void aw_monitor_set_vmax(struct aw_device *aw_dev,
 						uint32_t vmax)
 {
-	struct aw_monitor_cfg *monitor_cfg = &aw_dev->monitor_desc.monitor_cfg;
 	int ret;
+	struct aw_monitor_cfg *monitor_cfg = &aw_dev->monitor_desc.monitor_cfg;
 
 	if (vmax == VMAX_NONE || (!monitor_cfg->vmax_switch))
 		return;
@@ -423,10 +423,10 @@ static void aw_monitor_set_vmax(struct aw_device *aw_dev,
 
 static int aw_monitor_work(struct aw_device *aw_dev)
 {
+	int ret = -1;
 	struct aw_monitor_desc *monitor = &aw_dev->monitor_desc;
 	struct aw_monitor_cfg *monitor_cfg = &monitor->monitor_cfg;
 	struct aw_table set_table;
-	int ret = -1;
 
 	if (aw_cali_svc_get_cali_status()) {
 		aw_dev_info(aw_dev->dev, "done nothing during calibration");
@@ -478,11 +478,11 @@ void aw_monitor_work_func(struct work_struct *work)
 	struct aw_monitor_cfg *monitor_cfg = &aw_dev->monitor_desc.monitor_cfg;
 	struct aw_monitor_desc *monitor = &aw_dev->monitor_desc;
 
-	aw_dev_dbg(aw_dev->dev, "scene_mode %d, monitor_status:%d, monitor_switch:%d",
-		aw_dev->cur_prof, monitor_cfg->monitor_status, monitor_cfg->monitor_switch);
+	aw_dev_dbg(aw_dev->dev, "monitor_start:%d, monitor_status:%d, monitor_switch:%d",
+			aw_dev->monitor_start, monitor_cfg->monitor_status,
+			monitor_cfg->monitor_switch);
 
-	if ((aw_dev->prof_info.prof_desc[aw_dev->cur_prof].id != AW_PROFILE_RECEIVER) &&
-		(monitor_cfg->monitor_status == AW_MON_CFG_OK) &&
+	if ((monitor_cfg->monitor_status == AW_MON_CFG_OK) && (aw_dev->monitor_start) &&
 		monitor_cfg->monitor_switch) {
 		if (!aw_get_hmute(aw_dev)) {
 			aw_monitor_work(aw_dev);
@@ -940,9 +940,9 @@ static int aw_monitor_parse_data_v_0_1_1(struct aw_device *aw_dev,
 int aw_monitor_parse_fw(struct aw_monitor_desc *monitor_desc,
 				uint8_t *data, uint32_t data_len)
 {
+	int ret;
 	struct aw_monitor_hdr *monitor_hdr = NULL;
 	struct aw_device *aw_dev = NULL;
-	int ret;
 
 	if (monitor_desc == NULL || data == NULL) {
 		pr_err("monitor_desc or data is NULL");
@@ -991,9 +991,9 @@ static void aw_monitor_free_firmware(struct aw_device *aw_dev)
 
 static int aw_monitor_real_time_update_monitor(struct aw_device *aw_dev)
 {
+	int ret;
 	const struct firmware *cont = NULL;
 	struct aw_container *aw_monitor_cnt = NULL;
-	int ret;
 
 	ret = request_firmware(&cont, aw_dev->monitor_name, aw_dev->dev);
 	if (ret < 0) {
@@ -1032,10 +1032,10 @@ static int aw_monitor_real_time_update_monitor(struct aw_device *aw_dev)
 static ssize_t aw_vol_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	int ret = -1;
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 	struct aw_device *aw_dev = aw882xx->aw_pa;
 	uint32_t vol = 0;
-	int ret = -1;
 
 	if (count == 0)
 		return 0;
@@ -1066,10 +1066,10 @@ static ssize_t aw_vol_show(struct device *dev,
 static ssize_t aw_temp_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	int ret = -1;
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 	struct aw_device *aw_dev = aw882xx->aw_pa;
 	int32_t temp = 0;
-	int ret = -1;
 
 	if (count == 0)
 		return 0;
@@ -1108,10 +1108,10 @@ static DEVICE_ATTR(temp, S_IWUSR | S_IRUGO,
 static ssize_t aw_monitor_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	int ret = -1;
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 	struct aw_device *aw_dev = aw882xx->aw_pa;
 	uint32_t enable = 0;
-	int ret = -1;
 
 	if (count == 0)
 		return 0;
@@ -1140,7 +1140,6 @@ static ssize_t aw_monitor_show(struct device *dev,
 	struct aw_device *aw_dev = aw882xx->aw_pa;
 	ssize_t len = 0;
 
-
 	len += snprintf(buf+len, PAGE_SIZE-len,
 		"monitor enable: %d\n",
 		aw_dev->monitor_desc.monitor_cfg.monitor_switch);
@@ -1150,10 +1149,10 @@ static ssize_t aw_monitor_show(struct device *dev,
 static ssize_t aw_monitor_update_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	int ret = -1;
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 	struct aw_device *aw_dev = aw882xx->aw_pa;
 	uint32_t update = 0;
-	int ret = -1;
 
 	if (count == 0)
 		return 0;
@@ -1180,7 +1179,6 @@ static DEVICE_ATTR(monitor, S_IWUSR | S_IRUGO,
 	aw_monitor_show, aw_monitor_store);
 static DEVICE_ATTR(monitor_update, S_IWUSR,
 	NULL, aw_monitor_update_store);
-
 
 static struct attribute *aw_monitor_attr[] = {
 	&dev_attr_monitor.attr,

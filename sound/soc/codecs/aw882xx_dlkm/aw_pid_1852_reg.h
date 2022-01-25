@@ -1,7 +1,6 @@
 #ifndef __AW_PID_1852_REG_H__
 #define __AW_PID_1852_REG_H__
 
-#define AW_PID_1852_ACF_FILE		"aw882xx_pid_1852_acf.bin"
 #define AW_PID_1852_MONITOR_FILE 	"aw882xx_pid_1852_monitor.bin"
 
 /* registers list */

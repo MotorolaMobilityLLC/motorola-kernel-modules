@@ -21,6 +21,7 @@
 #define AW_I2C_RETRIES			5	/* 5 times */
 #define AW_I2C_RETRY_DELAY		5	/* 5 ms */
 
+#define ACF_BIN_NAME	"aw882xx_acf.bin"
 
 #define AW882XX_RATES SNDRV_PCM_RATE_8000_48000
 #define AW882XX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
@@ -37,6 +38,7 @@ enum aw882xx_chipid {
 	PID_2013_ID = 0x2013,
 	PID_2032_ID = 0x2032,
 	PID_2055_ID = 0x2055,
+	PID_2055A_ID = 0x2055A,
 	PID_2071_ID = 0x2071,
 	PID_2113_ID = 0x2113,
 };
@@ -145,7 +147,6 @@ struct aw882xx {
 	unsigned char allow_pw;		/* allow power */
 	int reset_gpio;
 	int irq_gpio;
-	unsigned int chip_id;
 	unsigned char fw_status;
 	unsigned char fw_retry_cnt;
 	unsigned char rw_reg_addr;	/* rw attr node store read addr */
