@@ -62,6 +62,8 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
 #ifdef CONFIG_SX937X_MTK_KERNEL419_CHARGER_TYPE
 #define USB_POWER_SUPPLY_NAME   "mtk_charger_type"
+#elif defined(CONFIG_SX937X_MTK_KERNEL5XX_CHARGER_TYPE)
+#define USB_POWER_SUPPLY_NAME   "mtk-master-charger"
 #else
 #define USB_POWER_SUPPLY_NAME   "charger"
 #endif
