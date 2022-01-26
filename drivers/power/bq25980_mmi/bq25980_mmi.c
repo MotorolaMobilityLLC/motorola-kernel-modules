@@ -1524,7 +1524,7 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 
 	if (typec_mos == MMI_DVCHG_MUX_CLOSE) {
 		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-				BQ25980_ENABLE_TYPEC_MOS, 0);
+				BQ25980_DIS_MOS_BOTH | BQ25980_ENABLE_TYPEC_MOS, 0);
 		if (ret) {
 			dev_err(bq->dev, "mmi_mux close typec mos fail ret=%d", ret);
 			return ret;
@@ -1533,7 +1533,7 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 	}
 	if (wls_mos == MMI_DVCHG_MUX_CLOSE) {
 		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-				BQ25980_ENABLE_WLC_MOS, 0);
+				BQ25980_DIS_MOS_BOTH | BQ25980_ENABLE_WLC_MOS, 0);
 		if (ret) {
 			dev_err(bq->dev, "mmi_mux close wls mos fail ret=%d", ret);
 			return ret;
@@ -1555,30 +1555,39 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 			return ret;
 		}
 	} else if (typec_mos == MMI_DVCHG_MUX_OTG_OPEN) {
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+		ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &val);
+		if (ret) {
+			dev_err(bq->dev, "mmi_mux Reg BQ25980_CHRGR_CTRL_2] fail ret=%d", ret);
+			return ret;
+		}
+		dev_err(bq->dev, "mmi_mux typec mos 0xf reg=%d", val);
+		if ((val & (BQ25980_ENABLE_TYPEC_MOS | BQ25980_EN_OTG))
+			!= (BQ25980_ENABLE_TYPEC_MOS | BQ25980_EN_OTG))	 {
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
 				BQ25980_EN_OTG, BQ25980_EN_OTG);
-		if (ret) {
-			dev_err(bq->dev, "mmi_mux  en otg fail ret=%d", ret);
-			return ret;
-		}
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-				BQ25980_DIS_MOS_BOTH, BQ25980_DIS_MOS_BOTH);
-		if (ret) {
-			dev_err(bq->dev, "mmi_mux dis mos both fail ret=%d", ret);
-			return ret;
-		}
-		udelay(1000);
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-				BQ25980_DIS_MOS_BOTH, 0);
-		if (ret) {
-			dev_err(bq->dev, "mmi_mux enable mos both fail ret=%d", ret);
-			return ret;
-		}
-		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
-				BQ25980_ENABLE_TYPEC_MOS, BQ25980_ENABLE_TYPEC_MOS);
-		if (ret) {
-			dev_err(bq->dev, "mmi_mux enable otg typec mos fail ret=%d", ret);
-			return ret;
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux  en otg fail ret=%d", ret);
+				return ret;
+			}
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+					BQ25980_DIS_MOS_BOTH, BQ25980_DIS_MOS_BOTH);
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux dis mos both fail ret=%d", ret);
+				return ret;
+			}
+			udelay(1000);
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+					BQ25980_DIS_MOS_BOTH, 0);
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux enable mos both fail ret=%d", ret);
+				return ret;
+			}
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+					BQ25980_ENABLE_TYPEC_MOS, BQ25980_ENABLE_TYPEC_MOS);
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux enable otg typec mos fail ret=%d", ret);
+				return ret;
+			}
 		}
 	}
 
@@ -1595,6 +1604,16 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 			dev_err(bq->dev, "mmi_mux  open wls mux fail ret=%d", ret);
 			return ret;
 		}
+	}
+
+	if (typec_mos == MMI_DVCHG_MUX_DISABLE || wls_mos == MMI_DVCHG_MUX_DISABLE) {
+		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+				BQ25980_DIS_MOS_BOTH, BQ25980_DIS_MOS_BOTH);
+		if (ret) {
+			dev_err(bq->dev, "mmi_mux dis mos both err ret=%d", ret);
+			return ret;
+		}
+		udelay(1000);
 	}
 
 	ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &val);
