@@ -1420,7 +1420,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
 		if (chip->rx_ldo_on) {
 			chip->rx_ldo_on = false;
-			cps_mux_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
+			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
 		}
 		power_supply_changed(chip->wl_psy);
 	}
