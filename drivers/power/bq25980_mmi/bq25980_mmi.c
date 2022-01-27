@@ -1781,6 +1781,9 @@ static void bq25980_charger_shutdown(struct i2c_client *client)
 	struct bq25980_device *bq = i2c_get_clientdata(client);
 
 	bq25980_set_adc_enable(bq, false);
+
+	regmap_write(bq->regmap, BQ25980_CHRGR_CTRL_2, 0);
+
 	dev_err(bq->dev,"Shutdown Successfully\n");
 }
 
