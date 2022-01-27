@@ -1556,7 +1556,7 @@ static void cps_wls_set_boost(int val)
 static void cps_wls_fw_set_boost(int val)
 {
 	/* Assume if we turned the boost on we want to stay awake */
-	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FW_UPDATE, !!val);
+	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, !!val);
 	if(val) {
 		cps_wls_pm_set_awake(1);
 	} else {
