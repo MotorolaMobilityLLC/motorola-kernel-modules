@@ -9,8 +9,9 @@
 
 #ifndef __CPS_WLS_CHARGER_H__
 #define __CPS_WLS_CHARGER_H__
-
-
+#include <linux/workqueue.h>
+#include "mtk_charger.h"
+#include "smart_pen_charger.h"
 #define CPS_WLS_FAIL    -1
 #define CPS_WLS_SUCCESS 0
 
@@ -24,10 +25,11 @@
 
 #define PASSWORD                0x19E5
 #define CPS_4035_RESET          0x153F
+#define VERIFI_ADDR             0x1F30
 #define HIGH_ADDR               0x2000
 #define WRITE_MODE              0x0004  /*0x0004 : byte write    0x0005 : halfword write    0x0006 : word write*/
 #define PROGRAM_WRITE_MODE      0x0006
-
+#define VERIFI_VAL              0xAA55
 /****************************************************************************
  * BOOTLOADER CMD
 ****************************************************************************/
@@ -135,6 +137,48 @@
 #define AP_RX_CONTROL_BASE_ADDR    0x20001F40
 #define AP_RX_REPORT_BASE_ADDR     0x20001F80
 
+#define QI_HEAD  (0x1f)
+#define QI_CMD_SOC (0xba)
+#define QI_CMD_MAC0 (0xac)
+#define QI_CMD_MAC1 (0xad)
+#define QT_CMD_GID  (0xca)
+#define QT_CMD_ERR  (0xee)
+#define QT_CMD_CHGFULL  (0xcf)
+
+#define QI_ERR_OCP (0x03)
+#define QI_ERR_OVP (0x04)
+#define QI_ERR_OTP (0x05)
+#define QI_ERR_UVP (0x06)
+#define QI_ERR_BATT_OTP (0x07)
+#define QI_ERR_COIL_OTP (0x08)
+#define QI_ERR_CHG_TIMEOUT (0x09)
+#define QI_ERR_CHG_FAILED (0x0a)
+
+#define RX_FOD_GAIN_LEN 16
+#define RX_FOD_CURR_LEN 7
+
+typedef enum {
+	Sys_Op_Mode_AC_Missing = 0,
+	Sys_Op_Mode_BPP = 0x1,
+	Sys_Op_Mode_EPP = 0x2,
+	Sys_Op_Mode_PDDE= 0x4,
+	Sys_Op_Mode_TX = 0x8,
+	Sys_Op_Mode_TX_FOD = 0x9,
+	Sys_Op_Mode_INVALID,
+}Sys_Op_Mode;
+
+#define _CPS_MASK(BITS, POS) \
+	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
+
+#define CPS_MASK(LEFT_BIT_POS, RIGHT_BIT_POS) \
+		_CPS_MASK((LEFT_BIT_POS) - (RIGHT_BIT_POS) + 1, \
+				(RIGHT_BIT_POS))
+
+static uint32_t bpp_fod_array_w_folio[RX_FOD_GAIN_LEN] =
+{80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11};
+
+static uint32_t epp_fod_array_w_folio[RX_FOD_GAIN_LEN] =
+{120, 32, 120, 24, 120, 21, 120, 21, 120, 19, 120, 18, 120, 17, 120, 17};
 /*****************************************************************************
  *  Log
  ****************************************************************************/
@@ -152,6 +196,7 @@
     } while (0)
     
 /*-------------------------------------------------------------------*/
+
 struct cps_wls_chrg_chip {
     struct i2c_client *client;
     struct device *dev;
@@ -195,14 +240,33 @@ struct cps_wls_chrg_chip {
 
     unsigned long flags;
     int rx_ldo_on;
+    int wls_online;
     int wls_det_int;
     int wls_det_irq;
     const char *wls_fw_name;
     uint32_t wls_fw_version;
-    u32 tx_mode;
-    u32 wls_curr_max;
-    u32 folio_mode;
+	/* alarm timer */
+	struct alarm wls_rx_timer;
+	struct timespec64 end_time;
+    unsigned int rx_polling_ns;
+    uint32_t tx_mode;
+    uint32_t wls_input_curr_max;
+    uint32_t folio_mode;
+    bool rx_connected;
     struct moto_chg_tcmd_client wls_tcmd_client;
+    struct moto_wls_chg_ops  wls_chg_ops;
+    Sys_Op_Mode mode_type;
+    uint32_t MaxV;
+    uint32_t MaxI;
+    //struct work_struct wls_rx_work;
+	wait_queue_head_t  wait_que;
+	bool wls_rx_check_thread_timeout;
+	struct wakeup_source *rx_check_wakelock;
+    /*wls pen*/
+    struct moto_wls_pen_ops  wls_pen_ops;
+    uint32_t cps_pen_status;
+    uint32_t cps_pen_soc;
+    bool pen_power_on;
 };
         
 typedef enum ept_reason
@@ -221,4 +285,5 @@ typedef enum ept_reason
     EPT_RS,     
 }ept_reason_e;
 
+static void wls_rx_start_timer(struct cps_wls_chrg_chip *info);
 #endif
