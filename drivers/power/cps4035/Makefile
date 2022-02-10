@@ -9,3 +9,5 @@ modules_install:
 clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) clean
 
+
+KBUILD_EXTRA_SYMBOLS += $(M)/../smart_pen_charger/Module.symvers
