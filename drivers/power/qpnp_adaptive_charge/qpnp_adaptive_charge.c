@@ -31,8 +31,9 @@
 #include <linux/power_supply.h>
 #include <linux/notifier.h>
 #include <linux/moduleparam.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
 #include <linux/qpnp_adaptive_charge.h>
-
+#endif
 
 static struct adap_chg_data {
 	struct power_supply	*batt_psy;
@@ -67,7 +68,42 @@ static int get_ps_int_prop(struct power_supply *psy, enum power_supply_property 
 
 	return val.intval;
 }
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+static int set_ps_int_prop(struct power_supply *psy, enum power_supply_property prop, union power_supply_propval val)
+{
+	int rc;
 
+	if (!psy)
+		return -1;
+
+	rc = power_supply_set_property(psy,
+			prop, &val);
+	if (rc != 0) {
+		pr_err("Error setting prop %d rc = %d\n", prop, rc);
+		return -1;
+	}
+
+	return 0;
+}
+
+static void adaptive_charging_disable_ichg(bool enable)
+{
+	union power_supply_propval val;
+
+	val.intval = enable;
+	set_ps_int_prop(adap_chg_data.usb_psy,
+			POWER_SUPPLY_PROP_INPUT_POWER_LIMIT, val);
+}
+
+static void adaptive_charging_disable_ibat(bool enable)
+{
+	union power_supply_propval val;
+
+	val.intval = enable;
+	set_ps_int_prop(adap_chg_data.usb_psy,
+			POWER_SUPPLY_PROP_CURRENT_MAX, val);
+}
+#endif
 /* Stop charging, no charging icon */
 static void suspend_charging(bool on)
 {
@@ -299,7 +335,17 @@ static int __init qpnp_adap_chg_init(void)
 		pr_err("Failed to get battery power supply\n");
 		goto fail;
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	adap_chg_data.usb_psy = power_supply_get_by_name("mtk-master-charger");
+	if (!adap_chg_data.usb_psy) {
+		pr_err("Failed to get usb power supply\n");
+		goto fail;
+	}
 
+	adap_chg_data.ac_psy = power_supply_get_by_name("wireless");
+	if (!adap_chg_data.ac_psy)
+		pr_info("No ac power supply found\n");
+#else
 	adap_chg_data.usb_psy = power_supply_get_by_name("usb");
 	if (!adap_chg_data.usb_psy) {
 		pr_err("Failed to get usb power supply\n");
@@ -309,7 +355,7 @@ static int __init qpnp_adap_chg_init(void)
 	adap_chg_data.ac_psy = power_supply_get_by_name("ac");
 	if (!adap_chg_data.ac_psy)
 		pr_info("No ac power supply found\n");
-
+#endif
 	adap_chg_data.batt_capacity = get_ps_int_prop(adap_chg_data.batt_psy,
 		POWER_SUPPLY_PROP_CAPACITY);
 	if (adap_chg_data.batt_capacity < 0)
