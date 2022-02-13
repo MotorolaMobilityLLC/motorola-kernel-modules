@@ -117,7 +117,7 @@ static void update(struct adap_chg_data *data)
 		if (lower_limit == -1) {
 			if (data->batt_capacity > (upper_limit + 1)) {
 				suspend_charging(true);
-				stop_charging(false);
+				stop_charging(true);
 			} else if (data->batt_capacity == (upper_limit + 1)) {
 				suspend_charging(false);
 				stop_charging(true);
@@ -129,7 +129,7 @@ static void update(struct adap_chg_data *data)
 		} else {
 			if (data->batt_capacity >= upper_limit) {
 				suspend_charging(true);
-				stop_charging(false);
+				stop_charging(true);
 			} else if (data->batt_capacity <= lower_limit) {
 				suspend_charging(false);
 				stop_charging(false);
