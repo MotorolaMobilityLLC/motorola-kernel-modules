@@ -200,6 +200,7 @@ static int wls_pen_control(uint32_t Ctl)
 		cps_pen_status = PEN_STAT_ATTACHED;
 		RtcTime_clear();
 		wls_pen_ops->wls_pen_attached();
+		msleep(300);
 		chg->pen_events = chg->pen_events | (1 << PEN_EVENT_ATTACHED);
 		wake_up_pen_thread(chg);
 		//pen_event_notify(PEN_EVENT_ATTACHED);
@@ -757,239 +758,243 @@ static int wls_pen_events_thread(void *arg)
 		}
 		/* Select the interesting pending events */
 		events = (unsigned int)(info->pen_events & PEN_WAIT_EVENTS);
-
-		/* get the next event */
-		ev = events & ~(events - 1);
-
-		/* tranlate into event type, spoken by charger detection & ICM */
-		while (!(ev & (1 << ev_t)))
-			ev_t++;
-
-		/* remove from pending list */
-		events &= ~ev;
-
-		/*clear event*/
-		info->pen_events = ~(1 << ev_t) & info->pen_events;
-		wls_pen_log(PEN_LOG_DEBG, "wls_pen thread events:%d ev_t %d\n", events, ev_t);
-		info->wls_pen_thread_timeout = false;
-		/* handle the event */
-		switch (ev_t)
+		while (events)
 		{
-		case PEN_EVENT_ATTACHED:
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_ATTACHED");
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS ask pen mac");
-			wls_pen_ops->wls_ask_pen_mac();
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS Start PenTimer");
-			info->polling_s = 2; //2s
-			info->pen_events = info->pen_events | (1 << PEN_EVENT_TIMER_TO);
-			wls_pen_start_timer(info);
-			break;
-		case PEN_EVENT_DETACHED:
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_DETACHED");
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS Stop PenTimer");
-			alarm_try_to_cancel(&info->wls_pen_timer);
-			break;
-		case PEN_EVENT_CHRG_ENABLE:
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_CHRG_ENABLE");
-			if (!PEN_ATTACHED)
+			wls_pen_log(PEN_LOG_DEBG, "wls_pen thread events:%d pen_event %d\n", events, info->pen_events);
+			/* get the next event */
+			ev = events & ~(events - 1);
+			/* tranlate into event type, spoken by charger detection & ICM */
+			while (!(ev & (1 << ev_t)))
 			{
-				wls_pen_log(PEN_LOG_DEBG, "wls_pen pen has been detached, stop PenTimer");
-				PEN_CHRG_DISABLED = false;
-				alarm_try_to_cancel(&info->wls_pen_timer);
-				break;
+				ev_t++;
 			}
+			/* remove from pending list */
+			events &= ~ev;
 
-			if (PEN_CHRG_DISABLED)
+			/*clear event*/
+			info->pen_events = ~(1 << ev_t) & info->pen_events;
+			wls_pen_log(PEN_LOG_DEBG, "wls_pen thread events:%d ev_t %d pen_ev %d\n", events, ev_t, info->pen_events);
+			info->wls_pen_thread_timeout = false;
+			/* handle the event */
+			switch (ev_t)
 			{
-				if (cps_pen_status == PEN_STAT_ATTACHED)
-				{
-					wls_pen_log(PEN_LOG_DEBG, "wls_pen Wait for pen ready");
-					wls_pen_ops->wls_ask_pen_mac();
-					msleep(2000);
-					//Battman_os_sleep(2000000);
-					info->pen_events = info->pen_events | (1 << PEN_EVENT_CHRG_ENABLE);
-					//pen_event_notify(PEN_EVENT_CHRG_ENABLE);
-					info->polling_s = 0;
-					info->polling_ns = 1 * 1000 * 1000;
-					wls_pen_start_timer(info);
-					break;
-				}
-
-				wls_pen_ops->wls_pen_power_on(true); //enable power cps
-				//Battman_os_sleep_non_deferrable(100000);//100ms
-				msleep(100);//100ms
-				wls_pen_ops->wls_enable_pen_tx(true);
-				RtcTime_clear();
-				cps_pen_status = PEN_STAT_CHARGING;
-				info->pen_data.status = PEN_STAT_CHARGING;
-				//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
-				pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
-
+			case PEN_EVENT_ATTACHED:
+				wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_ATTACHED");
+				wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS ask pen mac");
+				wls_pen_ops->wls_ask_pen_mac();
 				wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS Start PenTimer");
-				//BattMngr_Timer_Start(PenTimer, 2000);
 				info->polling_s = 2; //2s
 				info->pen_events = info->pen_events | (1 << PEN_EVENT_TIMER_TO);
 				wls_pen_start_timer(info);
-			}
-			PEN_CHRG_DISABLED = false;
-			break;
-		case PEN_EVENT_CHRG_DISABLE:
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_CHRG_DISABLE");
-			if (!PEN_ATTACHED)
-			{
-				wls_pen_log(PEN_LOG_DEBG, "wls_pen pen has been detached, stop PenTimer");
-				alarm_try_to_cancel(&info->wls_pen_timer);
-				PEN_CHRG_DISABLED = true;
 				break;
-			}
+			case PEN_EVENT_DETACHED:
+				wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_DETACHED");
+				wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS Stop PenTimer");
+				alarm_try_to_cancel(&info->wls_pen_timer);
+				break;
+			case PEN_EVENT_CHRG_ENABLE:
+				wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_CHRG_ENABLE");
+				if (!PEN_ATTACHED)
+				{
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen pen has been detached, stop PenTimer");
+					PEN_CHRG_DISABLED = false;
+					alarm_try_to_cancel(&info->wls_pen_timer);
+					break;
+				}
 
-			if (!PEN_CHRG_DISABLED)
-			{
+				if (PEN_CHRG_DISABLED)
+				{
+					if (cps_pen_status == PEN_STAT_ATTACHED)
+					{
+						wls_pen_log(PEN_LOG_DEBG, "wls_pen Wait for pen ready");
+						wls_pen_ops->wls_ask_pen_mac();
+						msleep(2000);
+						//Battman_os_sleep(2000000);
+						info->pen_events = info->pen_events | (1 << PEN_EVENT_CHRG_ENABLE);
+						//pen_event_notify(PEN_EVENT_CHRG_ENABLE);
+						info->polling_s = 0;
+						info->polling_ns = 1 * 1000 * 1000;
+						wls_pen_start_timer(info);
+						break;
+					}
+
+					wls_pen_ops->wls_pen_power_on(true); //enable power cps
+					//Battman_os_sleep_non_deferrable(100000);//100ms
+					//msleep(100); //100ms
+					wls_pen_ops->wls_enable_pen_tx(true);
+					RtcTime_clear();
+					msleep(200);
+					cps_pen_status = PEN_STAT_CHARGING;
+					info->pen_data.status = PEN_STAT_CHARGING;
+					//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
+					pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
+
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS Start PenTimer");
+					//BattMngr_Timer_Start(PenTimer, 2000);
+					info->polling_s = 2; //2s
+					info->pen_events = info->pen_events | (1 << PEN_EVENT_TIMER_TO);
+					wls_pen_start_timer(info);
+				}
+				PEN_CHRG_DISABLED = false;
+				break;
+			case PEN_EVENT_CHRG_DISABLE:
+				wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_CHRG_DISABLE");
+				if (!PEN_ATTACHED)
+				{
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen pen has been detached, stop PenTimer");
+					alarm_try_to_cancel(&info->wls_pen_timer);
+					PEN_CHRG_DISABLED = true;
+					break;
+				}
+
+				if (!PEN_CHRG_DISABLED)
+				{
+					if (cps_pen_status == PEN_STAT_ATTACHED)
+					{
+						wls_pen_log(PEN_LOG_DEBG, "wls_pen Wait for pen ready");
+						wls_pen_ops->wls_ask_pen_mac();
+						msleep(2000);
+						//pen_event_notify(PEN_EVENT_CHRG_DISABLE);
+						info->pen_events = info->pen_events | (1 << PEN_EVENT_CHRG_DISABLE);
+						info->polling_s = 0;
+						info->polling_ns = 1 * 1000 * 1000;
+						wls_pen_start_timer(info);
+						break;
+					}
+					wls_pen_ops->wls_enable_pen_tx(false);
+					wls_pen_ops->wls_pen_power_on(false); //enable power cps
+					RtcTime_clear();
+					PEN_CHRG_DISABLED = true;
+					cps_pen_status = PEN_STAT_CHARGE_DISABLED;
+					info->pen_data.status = PEN_STAT_CHARGE_DISABLED;
+					pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
+					//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
+					alarm_try_to_cancel(&info->wls_pen_timer);
+				}
+				break;
+			case PEN_EVENT_TIMER_TO:
+				wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_TIMER_TO");
+				if (!PEN_ATTACHED)
+				{
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen pen has been detached, stop PenTimer");
+					break;
+				}
+
+				if (PEN_CHRG_DISABLED &&
+					(cps_pen_status > PEN_STAT_READY && cps_pen_status != PEN_STAT_CHARGE_DISABLED))
+				{
+					wls_pen_ops->wls_enable_pen_tx(false);
+					wls_pen_ops->wls_pen_power_on(false); //enable power cps
+					RtcTime_clear();
+					cps_pen_status = PEN_STAT_CHARGE_DISABLED;
+					info->pen_data.status = PEN_STAT_CHARGE_DISABLED;
+					pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
+					//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
+					break;
+				}
+
 				if (cps_pen_status == PEN_STAT_ATTACHED)
 				{
-					wls_pen_log(PEN_LOG_DEBG, "wls_pen Wait for pen ready");
-					wls_pen_ops->wls_ask_pen_mac();
-					msleep(2000);
-					//pen_event_notify(PEN_EVENT_CHRG_DISABLE);
-					info->pen_events = info->pen_events | (1 << PEN_EVENT_CHRG_DISABLE);
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen pen status still in PEN_STAT_ATTACHED, re-ask PEN_ATTACHED request");
+					//pen_event_notify(PEN_EVENT_ATTACHED);
+					//info->polling_s = 1; //1s
+					info->pen_events = info->pen_events | (1 << PEN_EVENT_ATTACHED);
 					info->polling_s = 0;
 					info->polling_ns = 1 * 1000 * 1000;
 					wls_pen_start_timer(info);
 					break;
 				}
-				wls_pen_ops->wls_enable_pen_tx(false);
-				wls_pen_ops->wls_pen_power_on(false); //enable power cps
-				RtcTime_clear();
-				PEN_CHRG_DISABLED = true;
-				cps_pen_status = PEN_STAT_CHARGE_DISABLED;
-				info->pen_data.status = PEN_STAT_CHARGE_DISABLED;
-				pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
-				//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
-				alarm_try_to_cancel(&info->wls_pen_timer);
-			}
-			break;
-		case PEN_EVENT_TIMER_TO:
-			wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN_EVENT_TIMER_TO");
-			if (!PEN_ATTACHED)
-			{
-				wls_pen_log(PEN_LOG_DEBG, "wls_pen pen has been detached, stop PenTimer");
-				break;
-			}
 
-			if (PEN_CHRG_DISABLED &&
-				(cps_pen_status > PEN_STAT_READY && cps_pen_status != PEN_STAT_CHARGE_DISABLED))
-			{
-				wls_pen_ops->wls_enable_pen_tx(false);
-				wls_pen_ops->wls_pen_power_on(false); //enable power cps
-				RtcTime_clear();
-				cps_pen_status = PEN_STAT_CHARGE_DISABLED;
-				info->pen_data.status = PEN_STAT_CHARGE_DISABLED;
-				pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
-				//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
-				break;
-			}
-
-			if (cps_pen_status == PEN_STAT_ATTACHED)
-			{
-				wls_pen_log(PEN_LOG_DEBG, "wls_pen pen status still in PEN_STAT_ATTACHED, re-ask PEN_ATTACHED request");
-				//pen_event_notify(PEN_EVENT_ATTACHED);
-				//info->polling_s = 1; //1s
-				info->pen_events = info->pen_events | (1 << PEN_EVENT_ATTACHED);
-				info->polling_s = 0;
-				info->polling_ns = 1 * 1000 * 1000;
-				wls_pen_start_timer(info);
-				break;
-			}
-
-			if (cps_pen_status == PEN_STAT_READY)
-			{
-				wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS cps_pen_status is ready, ask pen soc");
-				wls_pen_ops->wls_ask_pen_soc();
-				if (cps_pen_soc > 0)
+				if (cps_pen_status == PEN_STAT_READY)
 				{
-					cps_pen_status = PEN_STAT_CHARGING;
-					info->pen_data.status = PEN_STAT_CHARGING;
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS cps_pen_status is ready, ask pen soc");
+					wls_pen_ops->wls_ask_pen_soc();
+					if (cps_pen_soc > 0)
+					{
+						cps_pen_status = PEN_STAT_CHARGING;
+						info->pen_data.status = PEN_STAT_CHARGING;
+						pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
+						//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
+					}
+					else
+					{
+						wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS wait for SOC updating!");
+						info->polling_s = 1; //1s
+						goto Start_Timer;
+					}
+				}
+
+				if (cps_pen_status == PEN_STAT_CHARGING)
+				{
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS ask pen soc in charging process");
+					wls_pen_ops->wls_ask_pen_soc();
+					info->polling_s = 60; //60s
+				}
+
+				if (cps_pen_status == PEN_STAT_CHARGE_FULL)
+				{
+					wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN charging full, disable tx mode");
+					wls_pen_ops->wls_pen_power_on(false); //disable power cps
+					wls_pen_ops->wls_enable_pen_tx(false);
+					cps_pen_status = PEN_STAT_DISCHARGING;
+					RtcTime_clear();
+					info->pen_data.status = PEN_STAT_DISCHARGING;
 					pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
 					//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
-				}
-				else
-				{
-					wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS wait for SOC updating!");
-					info->polling_s = 1; //1s
+					info->polling_s = 3600; //5mins
 					goto Start_Timer;
 				}
-			}
 
-			if (cps_pen_status == PEN_STAT_CHARGING)
-			{
-				wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS ask pen soc in charging process");
-				wls_pen_ops->wls_ask_pen_soc();
-				info->polling_s = 60; //60s
-			}
-
-			if (cps_pen_status == PEN_STAT_CHARGE_FULL)
-			{
-				wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN charging full, disable tx mode");
-				wls_pen_ops->wls_pen_power_on(false); //disable power cps
-				wls_pen_ops->wls_enable_pen_tx(false);
-				cps_pen_status = PEN_STAT_DISCHARGING;
-				RtcTime_clear();
-				info->pen_data.status = PEN_STAT_DISCHARGING;
-				pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
-				//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
-				info->polling_s = 3600; //5mins
-				goto Start_Timer;
-			}
-
-			if (cps_pen_status == PEN_STAT_DISCHARGING)
-			{
-
-				if (cps_pen_soc < 80)
+				if (cps_pen_status == PEN_STAT_DISCHARGING)
 				{
-					wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS pen soc %d, power on cps", cps_pen_soc);
-					wls_pen_ops->wls_pen_power_on(true); //enable power cps
-					//msleep(100);//100ms
-					//cps_wls_enable_pen_tx_mode();
-					wls_pen_ops->wls_enable_pen_tx(true);
-					RtcTime_clear();
-					cps_pen_status = PEN_STAT_CHARGING;
-					info->pen_data.status = PEN_STAT_CHARGING;
-					pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
-					//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
-				}
-				else
-				{
-					if (maintain_time(3600))
+
+					if (cps_pen_soc < 80)
 					{
-						wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN DISCHARGING has been going on for 1 hours, need to recheck pen soc");
+						wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS pen soc %d, power on cps", cps_pen_soc);
 						wls_pen_ops->wls_pen_power_on(true); //enable power cps
 						//msleep(100);//100ms
 						//cps_wls_enable_pen_tx_mode();
 						wls_pen_ops->wls_enable_pen_tx(true);
-						wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS ask pen soc, and wait 2s for geting new soc");
-						msleep(100); //100ms
-						wls_pen_ops->wls_ask_pen_soc();
 						RtcTime_clear();
-						info->polling_s = 60; //wait new soc within 1mins
+						cps_pen_status = PEN_STAT_CHARGING;
+						info->pen_data.status = PEN_STAT_CHARGING;
+						pen_charger_handle_event(info, NOTIFY_EVENT_PEN_STATUS);
+						//wls_send_oem_notification(NOTIFY_EVENT_PEN_STATUS, cps_pen_status);
 					}
 					else
 					{
-						wls_pen_log(PEN_LOG_DEBG, "wls_pen pen power off again due to soc %d > 80", cps_pen_soc);
-						wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS pen soc %d, power off cps", cps_pen_soc);
-						wls_pen_ops->wls_pen_power_on(false); //disable power cps
-						wls_pen_ops->wls_enable_pen_tx(false);
-						cps_pen_status = PEN_STAT_DISCHARGING;
-						info->polling_s = 600; // Recheck after 10mins
+						if (maintain_time(3600))
+						{
+							wls_pen_log(PEN_LOG_DEBG, "wls_pen PEN DISCHARGING has been going on for 1 hours, need to recheck pen soc");
+							wls_pen_ops->wls_pen_power_on(true); //enable power cps
+							//msleep(100);//100ms
+							//cps_wls_enable_pen_tx_mode();
+							wls_pen_ops->wls_enable_pen_tx(true);
+							wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS ask pen soc, and wait 2s for geting new soc");
+							msleep(200); //100ms
+							wls_pen_ops->wls_ask_pen_soc();
+							RtcTime_clear();
+							info->polling_s = 60; //wait new soc within 1mins
+						}
+						else
+						{
+							wls_pen_log(PEN_LOG_DEBG, "wls_pen pen power off again due to soc %d > 80", cps_pen_soc);
+							wls_pen_log(PEN_LOG_DEBG, "wls_pen CPS_WLS pen soc %d, power off cps", cps_pen_soc);
+							wls_pen_ops->wls_pen_power_on(false); //disable power cps
+							wls_pen_ops->wls_enable_pen_tx(false);
+							cps_pen_status = PEN_STAT_DISCHARGING;
+							info->polling_s = 600; // Recheck after 10mins
+						}
 					}
 				}
-			}
-		Start_Timer:
-			info->pen_events = info->pen_events | (1 << PEN_EVENT_TIMER_TO);
-			wls_pen_start_timer(info);
+			Start_Timer:
+				info->pen_events = info->pen_events | (1 << PEN_EVENT_TIMER_TO);
+				wls_pen_start_timer(info);
 
-			break;
-		default:
-			break;
+				break;
+			default:
+				break;
+			}
 		}
 		__pm_relax(info->pen_wakelock);
 	}
@@ -1021,7 +1026,7 @@ static int pen_charger_probe(struct platform_device *pdev)
 	wls_pen_init_timer(chg);
 	chg->polling_s = PEN_INTERVAL;
 	chg->polling_ns = 0;
-	chg->pen_events = 1 << PEN_STAT_DETACHED;
+	chg->pen_events = 0;
 	kthread_run(wls_pen_events_thread, chg, "wls_pen_thread");
 	return 0;
 }
