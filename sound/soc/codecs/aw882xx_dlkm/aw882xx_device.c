@@ -17,12 +17,12 @@
 #include <linux/uaccess.h>
 
 
-#include "aw_log.h"
-#include "aw_device.h"
-#include "aw_dsp.h"
+#include "aw882xx_log.h"
+#include "aw882xx_device.h"
+#include "aw882xx_dsp.h"
 /*#include "aw_afe.h"*/
-#include "aw_bin_parse.h"
-#include "aw_spin.h"
+#include "aw882xx_bin_parse.h"
+#include "aw882xx_spin.h"
 
 #define AW_DEV_SYSST_CHECK_MAX   (10)
 
@@ -50,12 +50,12 @@ static void aw_dev_reg_dump(struct aw_device *aw_dev)
 	}
 }
 
-char *aw_dev_get_ext_dsp_prof_write(void)
+char *aw882xx_dev_get_ext_dsp_prof_write(void)
 {
 	return (&ext_dsp_prof_write);
 }
 
-struct mutex *aw_dev_get_ext_dsp_prof_wr_lock(void)
+struct mutex *aw882xx_dev_get_ext_dsp_prof_wr_lock(void)
 {
 	return (&g_ext_dsp_prof_wr_lock);
 }
@@ -66,14 +66,14 @@ static int aw_dev_dsp_fw_update(struct aw_device *aw_dev)
 	int  ret;
 	struct aw_sec_data_desc *dsp_data;
 
-	char *prof_name = aw_dev_get_prof_name(aw_dev, aw_dev->set_prof);
+	char *prof_name = aw882xx_dev_get_prof_name(aw_dev, aw_dev->set_prof);
 
 	if (prof_name == NULL) {
 		aw_dev_err(aw_dev->dev, "get prof name failed");
 		return -EINVAL;
 	}
 
-	dsp_data = aw_dev_get_prof_data(aw_dev,
+	dsp_data = aw882xx_dev_get_prof_data(aw_dev,
 		aw_dev->set_prof, AW_PROFILE_DATA_TYPE_DSP);
 	if (dsp_data == NULL ||
 		dsp_data->data == NULL ||
@@ -84,7 +84,7 @@ static int aw_dev_dsp_fw_update(struct aw_device *aw_dev)
 
 	mutex_lock(&g_ext_dsp_prof_wr_lock);
 	if (ext_dsp_prof_write == AW_EXT_DSP_WRITE_NONE) {
-		ret = aw_dsp_write_params(aw_dev, dsp_data->data, dsp_data->len);
+		ret = aw882xx_dsp_write_params(aw_dev, dsp_data->data, dsp_data->len);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "dsp params update failed !");
 			mutex_unlock(&g_ext_dsp_prof_wr_lock);
@@ -101,6 +101,111 @@ static int aw_dev_dsp_fw_update(struct aw_device *aw_dev)
 }
 */
 
+static int aw_dev_get_icalk(struct aw_device *aw_dev, int16_t *icalk)
+{
+	int ret = -1;
+	unsigned int reg_val = 0;
+	uint16_t reg_icalk = 0;
+	uint16_t reg_icalkl = 0;
+	struct aw_vcalb_desc *desc = &aw_dev->vcalb_desc;
+
+	if (desc->icalkl_reg == AW_REG_NONE) {
+		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->icalk_reg, &reg_val);
+		reg_icalk = (uint16_t)reg_val & (~desc->icalk_reg_mask);
+	} else {
+		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->icalk_reg, &reg_val);
+		reg_icalk = (uint16_t)reg_val & (~desc->icalk_reg_mask);
+		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->icalkl_reg, &reg_val);
+		reg_icalkl = (uint16_t)reg_val & (~desc->icalkl_reg_mask);
+		if (aw_dev->efuse_check == AW_EF_OR_CHECK)
+			reg_icalk = (reg_icalk >> desc->icalk_shift) | (reg_icalkl >> desc->icalkl_shift);
+		else
+			reg_icalk = (reg_icalk >> desc->icalk_shift) & (reg_icalkl >> desc->icalkl_shift);
+	}
+
+	if (reg_icalk & (~desc->icalk_sign_mask))
+		reg_icalk = reg_icalk | (~desc->icalk_neg_mask);
+
+	*icalk = (int16_t)reg_icalk;
+
+	return ret;
+}
+
+static int aw_dev_get_vcalk(struct aw_device *aw_dev, int16_t *vcalk)
+{
+	int ret = -1;
+	unsigned int reg_val = 0;
+	uint16_t reg_vcalk = 0;
+	uint16_t reg_vcalkl = 0;
+	struct aw_vcalb_desc *desc = &aw_dev->vcalb_desc;
+
+	if (desc->vcalkl_reg == AW_REG_NONE) {
+		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->vcalk_reg, &reg_val);
+		reg_vcalk = (uint16_t)reg_val & (~desc->vcalk_reg_mask);
+	} else {
+		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->vcalk_reg, &reg_val);
+		reg_vcalk = (uint16_t)reg_val & (~desc->vcalk_reg_mask);
+		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->vcalkl_reg, &reg_val);
+		reg_vcalkl = (uint16_t)reg_val & (~desc->vcalkl_reg_mask);
+		if (aw_dev->efuse_check == AW_EF_OR_CHECK)
+			reg_vcalk = (reg_vcalk >> desc->vcalk_shift) | (reg_vcalkl >> desc->vcalkl_shift);
+		else
+			reg_vcalk = (reg_vcalk >> desc->vcalk_shift) & (reg_vcalkl >> desc->vcalkl_shift);
+	}
+
+	if (reg_vcalk & (~desc->vcalk_sign_mask))
+		reg_vcalk = reg_vcalk | (~desc->vcalk_neg_mask);
+
+	*vcalk = (int16_t)reg_vcalk;
+
+	return ret;
+}
+
+static int aw_dev_set_vcalb(struct aw_device *aw_dev)
+{
+	int ret = -1;
+	unsigned int reg_val;
+	int vcalb;
+	int icalk;
+	int vcalk;
+	int16_t icalk_val = 0;
+	int16_t vcalk_val = 0;
+
+	struct aw_vcalb_desc *desc = &aw_dev->vcalb_desc;
+
+	if (desc->icalk_reg == AW_REG_NONE || desc->vcalb_reg == AW_REG_NONE) {
+		aw_dev_info(aw_dev->dev, "REG None!");
+		return 0;
+	}
+
+	ret = aw_dev_get_icalk(aw_dev, &icalk_val);
+	if (ret < 0)
+		return ret;
+
+	ret = aw_dev_get_vcalk(aw_dev, &vcalk_val);
+	if (ret < 0)
+		return ret;
+
+	icalk = desc->cabl_base_value + desc->icalk_value_factor * icalk_val;
+	vcalk = desc->cabl_base_value + desc->vcalk_value_factor * vcalk_val;
+	if (!vcalk) {
+		aw_dev_err(aw_dev->dev, "vcalk is 0");
+		return -EINVAL;
+	}
+
+	vcalb = desc->vcal_factor * icalk / vcalk;
+
+	reg_val = (unsigned int)vcalb;
+	aw_dev_info(aw_dev->dev, "icalk=%d, vcalk=%d, vcalb=%d, reg_val=0x%04x",
+			icalk, vcalk, vcalb, reg_val);
+
+	ret =  aw_dev->ops.aw_i2c_write(aw_dev, desc->vcalb_reg, reg_val);
+
+	aw_dev_info(aw_dev->dev, "done");
+
+	return ret;
+}
+
 /*pwd enable update reg*/
 static int aw_dev_reg_fw_update(struct aw_device *aw_dev)
 {
@@ -110,6 +215,7 @@ static int aw_dev_reg_fw_update(struct aw_device *aw_dev)
 	unsigned int reg_val = 0;
 	unsigned int read_val;
 	unsigned int init_volume = 0;
+	unsigned int efcheck_val = 0;
 	struct aw_int_desc *int_desc = &aw_dev->int_desc;
 	struct aw_profctrl_desc *profctrl_desc = &aw_dev->profctrl_desc;
 	struct aw_bstctrl_desc *bstctrl_desc = &aw_dev->bstctrl_desc;
@@ -119,14 +225,14 @@ static int aw_dev_reg_fw_update(struct aw_device *aw_dev)
 	int16_t *data;
 	int data_len;
 
-	char *prof_name = aw_dev_get_prof_name(aw_dev, aw_dev->set_prof);
+	char *prof_name = aw882xx_dev_get_prof_name(aw_dev, aw_dev->set_prof);
 
 	if (prof_name == NULL) {
 		aw_dev_err(aw_dev->dev, "get prof name failed");
 		return -EINVAL;
 	}
 
-	reg_data = aw_dev_get_prof_data(aw_dev, aw_dev->set_prof, AW_PROFILE_DATA_TYPE_REG);
+	reg_data = aw882xx_dev_get_prof_data(aw_dev, aw_dev->set_prof, AW_PROFILE_DATA_TYPE_REG);
 	if (reg_data == NULL)
 		return -EINVAL;
 
@@ -164,6 +270,16 @@ static int aw_dev_reg_fw_update(struct aw_device *aw_dev)
 			read_val &= (~aw_dev->amppd_desc.mask);
 			reg_val &= aw_dev->amppd_desc.mask;
 			reg_val |= read_val;
+		}
+
+		if (reg_addr == aw_dev->efcheck_desc.reg) {
+			efcheck_val = reg_val & (~aw_dev->efcheck_desc.mask);
+			if (efcheck_val == aw_dev->efcheck_desc.or_val)
+				aw_dev->efuse_check = AW_EF_OR_CHECK;
+			else
+				aw_dev->efuse_check = AW_EF_AND_CHECK;
+
+			aw_dev_info(aw_dev->dev, "efuse check: %d", aw_dev->efuse_check);
 		}
 
 		if (reg_addr == work_mode->reg) {
@@ -214,7 +330,12 @@ static int aw_dev_reg_fw_update(struct aw_device *aw_dev)
 			break;
 	}
 
-	aw_spin_set_record_val(aw_dev);
+	aw882xx_spin_set_record_val(aw_dev);
+	ret = aw_dev_set_vcalb(aw_dev);
+	if (ret < 0) {
+		aw_dev_err(aw_dev->dev, "can't set vcalb");
+		return ret;
+	}
 
 	aw_dev->ops.aw_get_volume(aw_dev, &init_volume);
 	aw_dev->volume_desc.init_volume = init_volume;
@@ -349,106 +470,8 @@ static void aw_dev_uls_hmute(struct aw_device *aw_dev, bool uls_hmute)
 	aw_dev_info(aw_dev->dev, "done");
 }
 
-static int aw_dev_get_icalk(struct aw_device *aw_dev, int16_t *icalk)
-{
-	int ret = -1;
-	unsigned int reg_val = 0;
-	uint16_t reg_icalk = 0;
-	uint16_t reg_icalkl = 0;
-	struct aw_vcalb_desc *desc = &aw_dev->vcalb_desc;
 
-	if (desc->icalkl_reg == AW_REG_NONE) {
-		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->icalk_reg, &reg_val);
-		reg_icalk = (uint16_t)reg_val & (~desc->icalk_reg_mask);
-	} else {
-		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->icalk_reg, &reg_val);
-		reg_icalk = (uint16_t)reg_val & (~desc->icalk_reg_mask);
-		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->icalkl_reg, &reg_val);
-		reg_icalkl = (uint16_t)reg_val & (~desc->icalkl_reg_mask);
-		reg_icalk = (reg_icalk >> desc->icalk_shift) | (reg_icalkl >> desc->icalkl_shift);
-	}
-
-	if (reg_icalk & (~desc->icalk_sign_mask))
-		reg_icalk = reg_icalk | (~desc->icalk_neg_mask);
-
-	*icalk = (int16_t)reg_icalk;
-
-	return ret;
-}
-
-static int aw_dev_get_vcalk(struct aw_device *aw_dev, int16_t *vcalk)
-{
-	int ret = -1;
-	unsigned int reg_val = 0;
-	uint16_t reg_vcalk = 0;
-	uint16_t reg_vcalkl = 0;
-	struct aw_vcalb_desc *desc = &aw_dev->vcalb_desc;
-
-	if (desc->vcalkl_reg == AW_REG_NONE) {
-		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->vcalk_reg, &reg_val);
-		reg_vcalk = (uint16_t)reg_val & (~desc->vcalk_reg_mask);
-	} else {
-		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->vcalk_reg, &reg_val);
-		reg_vcalk = (uint16_t)reg_val & (~desc->vcalk_reg_mask);
-		ret = aw_dev->ops.aw_i2c_read(aw_dev, desc->vcalkl_reg, &reg_val);
-		reg_vcalkl = (uint16_t)reg_val & (~desc->vcalkl_reg_mask);
-		reg_vcalk = (reg_vcalk >> desc->vcalk_shift) | (reg_vcalkl >> desc->vcalkl_shift);
-	}
-
-	if (reg_vcalk & (~desc->vcalk_sign_mask))
-		reg_vcalk = reg_vcalk | (~desc->vcalk_neg_mask);
-
-	*vcalk = (int16_t)reg_vcalk;
-
-	return ret;
-}
-
-static int aw_dev_set_vcalb(struct aw_device *aw_dev)
-{
-	int ret = -1;
-	unsigned int reg_val;
-	int vcalb;
-	int icalk;
-	int vcalk;
-	int16_t icalk_val = 0;
-	int16_t vcalk_val = 0;
-
-	struct aw_vcalb_desc *desc = &aw_dev->vcalb_desc;
-
-	if (desc->icalk_reg == AW_REG_NONE || desc->vcalb_reg == AW_REG_NONE) {
-		aw_dev_info(aw_dev->dev, "REG None!");
-		return 0;
-	}
-
-	ret = aw_dev_get_icalk(aw_dev, &icalk_val);
-	if (ret < 0)
-		return ret;
-
-	ret = aw_dev_get_vcalk(aw_dev, &vcalk_val);
-	if (ret < 0)
-		return ret;
-
-	icalk = desc->cabl_base_value + desc->icalk_value_factor * icalk_val;
-	vcalk = desc->cabl_base_value + desc->vcalk_value_factor * vcalk_val;
-	if (!vcalk) {
-		aw_dev_err(aw_dev->dev, "vcalk is 0");
-		return -EINVAL;
-	}
-
-	vcalb = desc->vcal_factor * icalk / vcalk;
-
-	reg_val = (unsigned int)vcalb;
-	aw_dev_info(aw_dev->dev, "icalk=%d, vcalk=%d, vcalb=%d, reg_val=0x%04x",
-			icalk, vcalk, vcalb, reg_val);
-
-	ret =  aw_dev->ops.aw_i2c_write(aw_dev, desc->vcalb_reg, reg_val);
-
-	aw_dev_info(aw_dev->dev, "done");
-
-	return ret;
-}
-
-int aw_dev_get_int_status(struct aw_device *aw_dev, uint16_t *int_status)
+int aw882xx_dev_get_int_status(struct aw_device *aw_dev, uint16_t *int_status)
 {
 	int ret = -1;
 	unsigned int reg_val = 0;
@@ -463,18 +486,18 @@ int aw_dev_get_int_status(struct aw_device *aw_dev, uint16_t *int_status)
 	return ret;
 }
 
-void aw_dev_clear_int_status(struct aw_device *aw_dev)
+void aw882xx_dev_clear_int_status(struct aw_device *aw_dev)
 {
 	uint16_t int_status = 0;
 
 	/*read int status and clear*/
-	aw_dev_get_int_status(aw_dev, &int_status);
+	aw882xx_dev_get_int_status(aw_dev, &int_status);
 	/*make suer int status is clear*/
-	aw_dev_get_int_status(aw_dev, &int_status);
+	aw882xx_dev_get_int_status(aw_dev, &int_status);
 	aw_dev_info(aw_dev->dev, "done");
 }
 
-int aw_dev_set_intmask(struct aw_device *aw_dev, bool flag)
+int aw882xx_dev_set_intmask(struct aw_device *aw_dev, bool flag)
 {
 	struct aw_int_desc *desc = &aw_dev->int_desc;
 	int ret = -1;
@@ -498,7 +521,7 @@ static int aw_dev_mode1_pll_check(struct aw_device *aw_dev)
 
 	for (i = 0; i < AW_DEV_SYSST_CHECK_MAX; i++) {
 		aw_dev->ops.aw_i2c_read(aw_dev, desc->reg, &reg_val);
-		if (reg_val & desc->pll_check) {
+		if ((reg_val & desc->pll_check) == desc->pll_check) {
 			ret = 0;
 			break;
 		} else {
@@ -508,7 +531,7 @@ static int aw_dev_mode1_pll_check(struct aw_device *aw_dev)
 		}
 	}
 	if (ret < 0)
-		aw_dev_err(aw_dev->dev, "check fail");
+		aw_dev_err(aw_dev->dev, "pll&clk check fail");
 	else
 		aw_dev_info(aw_dev->dev, "done");
 
@@ -531,12 +554,12 @@ static int aw_dev_mode2_pll_check(struct aw_device *aw_dev)
 
 	/* change mode2 */
 	aw_dev->ops.aw_i2c_write_bits(aw_dev, cco_mux_desc->reg,
-				cco_mux_desc->mask, cco_mux_desc->bypass_val);
+				cco_mux_desc->mask, cco_mux_desc->divided_val);
 	ret = aw_dev_mode1_pll_check(aw_dev);
 
 	/* change mode1 */
 	aw_dev->ops.aw_i2c_write_bits(aw_dev, cco_mux_desc->reg,
-				cco_mux_desc->mask, cco_mux_desc->divided_val);
+				cco_mux_desc->mask, cco_mux_desc->bypass_val);
 	if (ret == 0) {
 		usleep_range(AW_2000_US, AW_2000_US + 10);
 		ret = aw_dev_mode1_pll_check(aw_dev);
@@ -588,17 +611,17 @@ static int aw_dev_sysst_check(struct aw_device *aw_dev)
 	return ret;
 }
 
-int aw_dev_get_fade_vol_step(struct aw_device *aw_dev)
+int aw882xx_dev_get_fade_vol_step(struct aw_device *aw_dev)
 {
 	return aw_dev->vol_step;
 }
 
-void aw_dev_set_fade_vol_step(struct aw_device *aw_dev, unsigned int step)
+void aw882xx_dev_set_fade_vol_step(struct aw_device *aw_dev, unsigned int step)
 {
 	aw_dev->vol_step = step;
 }
 
-void aw_dev_get_fade_time(unsigned int *time, bool fade_in)
+void aw882xx_dev_get_fade_time(unsigned int *time, bool fade_in)
 {
 	if (fade_in)
 		*time = g_fade_in_time;
@@ -606,7 +629,7 @@ void aw_dev_get_fade_time(unsigned int *time, bool fade_in)
 		*time = g_fade_out_time;
 }
 
-void aw_dev_set_fade_time(unsigned int time, bool fade_in)
+void aw882xx_dev_set_fade_time(unsigned int time, bool fade_in)
 {
 	if (fade_in)
 		g_fade_in_time = time;
@@ -615,7 +638,7 @@ void aw_dev_set_fade_time(unsigned int time, bool fade_in)
 }
 
 /*init aw_device*/
-void aw_dev_deinit(struct aw_device *aw_dev)
+void aw882xx_dev_deinit(struct aw_device *aw_dev)
 {
 	if (aw_dev == NULL)
 		return;
@@ -627,34 +650,35 @@ void aw_dev_deinit(struct aw_device *aw_dev)
 	}
 }
 
-int aw_dev_get_cali_re(struct aw_device *aw_dev, int32_t *cali_re)
+int aw882xx_dev_get_cali_re(struct aw_device *aw_dev, int32_t *cali_re)
 {
 
-	return aw_dsp_read_cali_re(aw_dev, cali_re);
+	return aw882xx_dsp_read_cali_re(aw_dev, cali_re);
 }
 
-int aw_dev_dc_status(struct aw_device *aw_dev)
+int aw882xx_dev_dc_status(struct aw_device *aw_dev)
 {
-	return aw_dsp_get_dc_status(aw_dev);
+	return aw882xx_dsp_get_dc_status(aw_dev);
 }
 
-int aw_dev_status(struct aw_device *aw_dev)
+int aw882xx_dev_status(struct aw_device *aw_dev)
 {
 	return aw_dev->status;
 }
 
-int aw_dev_init_cali_re(struct aw_device *aw_dev)
+int aw882xx_dev_init_cali_re(struct aw_device *aw_dev)
 {
 	int ret = 0;
 	struct aw_cali_desc *cali_desc = &aw_dev->cali_desc;
 
 	if (cali_desc->mode) {
 		if (cali_desc->cali_re == AW_ERRO_CALI_VALUE) {
-			ret = aw_cali_read_re_from_nvram(&cali_desc->cali_re, aw_dev->channel);
+			ret = aw882xx_cali_read_re_from_nvram(&cali_desc->cali_re, aw_dev->channel);
 			if (ret) {
 				aw_dev_info(aw_dev->dev, "read nvram cali failed, use default Re");
 				cali_desc->cali_re = AW_ERRO_CALI_VALUE;
 				cali_desc->cali_result = CALI_RESULT_NONE;
+				return 0;
 			}
 
 			if (cali_desc->cali_re < aw_dev->re_min ||
@@ -689,7 +713,7 @@ static void aw_dev_soft_reset(struct aw_device *aw_dev)
 	aw_dev_info(aw_dev->dev, "soft reset done");
 }
 
-int aw_device_irq_reinit(struct aw_device *aw_dev)
+int aw882xx_device_irq_reinit(struct aw_device *aw_dev)
 {
 	int ret;
 
@@ -698,25 +722,22 @@ int aw_device_irq_reinit(struct aw_device *aw_dev)
 	if (ret < 0)
 		return ret;
 
-	/*update vcalb*/
-	aw_dev_set_vcalb(aw_dev);
-
 	return 0;
 }
 
-int aw_device_init(struct aw_device *aw_dev, struct aw_container *aw_cfg)
+int aw882xx_device_init(struct aw_device *aw_dev, struct aw_container *aw_cfg)
 {
 	/*acf_hdr_t *hdr;*/
 	int ret;
 
-	if (aw_dev == NULL || aw_cfg == NULL) {
-		aw_dev_err(aw_dev->dev, "pointer is NULL");
+	if (aw_cfg == NULL) {
+		aw_dev_err(aw_dev->dev, "aw_cfg is NULL");
 		return -ENOMEM;
 	}
 
-	ret = aw_dev_parse_acf(aw_dev, aw_cfg);
+	ret = aw882xx_dev_parse_acf(aw_dev, aw_cfg);
 	if (ret) {
-		aw_dev_deinit(aw_dev);
+		aw882xx_dev_deinit(aw_dev);
 		aw_dev_err(aw_dev->dev, "aw_dev acf load failed");
 		return -EINVAL;
 	}
@@ -729,20 +750,20 @@ int aw_device_init(struct aw_device *aw_dev, struct aw_container *aw_cfg)
 	if (ret < 0)
 		return ret;
 
-	ret = aw_dev_set_vcalb(aw_dev);
-	if (ret < 0) {
-		aw_dev_err(aw_dev->dev, "can't set vcalb");
-		return ret;
+	if (aw_dev->ops.aw_frcset_check) {
+		ret = aw_dev->ops.aw_frcset_check(aw_dev);
+		if (ret)
+			return ret;
 	}
 
 	aw_dev->status = AW_DEV_PW_ON;
-	aw_device_stop(aw_dev);
+	aw882xx_device_stop(aw_dev);
 
 	aw_dev_info(aw_dev->dev, "init done");
 	return 0;
 }
 
-int aw_dev_reg_update(struct aw_device *aw_dev, bool force)
+int aw882xx_dev_reg_update(struct aw_device *aw_dev, bool force)
 {
 	int ret;
 
@@ -769,25 +790,30 @@ static void aw_dev_cali_re_update(struct aw_device *aw_dev)
 {
 	struct aw_cali_desc *desc = &aw_dev->cali_desc;
 
-	if (desc->mode && (desc->cali_re != AW_ERRO_CALI_VALUE))
-		aw_dsp_write_cali_re(aw_dev, desc->cali_re);
+	if (desc->mode && (desc->cali_re != AW_ERRO_CALI_VALUE)) {
+		if ((desc->cali_re >= aw_dev->re_min) &&
+				(desc->cali_re <= aw_dev->re_max))
+			aw882xx_dsp_write_cali_re(aw_dev, desc->cali_re);
+		else
+			aw_dev_err(aw_dev->dev, "cali re is out of range");
+	}
 }
 
-int aw_dev_prof_update(struct aw_device *aw_dev, bool force)
+int aw882xx_dev_prof_update(struct aw_device *aw_dev, bool force)
 {
 	int ret;
 
 	/*if power on need off -- load -- on*/
 	if (aw_dev->status == AW_DEV_PW_ON) {
-		aw_device_stop(aw_dev);
+		aw882xx_device_stop(aw_dev);
 
-		ret = aw_dev_reg_update(aw_dev, force);
+		ret = aw882xx_dev_reg_update(aw_dev, force);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "fw update failed ");
 			return ret;
 		}
 
-		ret = aw_device_start(aw_dev);
+		ret = aw882xx_device_start(aw_dev);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "start failed ");
 			return ret;
@@ -873,7 +899,7 @@ void aw_dev_i2s_enable(struct aw_device *aw_dev, bool flag)
 }
 
 
-int aw_device_start(struct aw_device *aw_dev)
+int aw882xx_device_start(struct aw_device *aw_dev)
 {
 	int ret;
 
@@ -910,7 +936,7 @@ int aw_device_start(struct aw_device *aw_dev)
 		/*close tx feedback*/
 		aw_dev_i2s_enable(aw_dev, false);
 		/*clear interrupt*/
-		aw_dev_clear_int_status(aw_dev);
+		aw882xx_dev_clear_int_status(aw_dev);
 		/*close amppd*/
 		aw_dev_amppd(aw_dev, true);
 		/*power down*/
@@ -940,11 +966,11 @@ int aw_device_start(struct aw_device *aw_dev)
 	}
 
 	/*clear inturrupt*/
-	aw_dev_clear_int_status(aw_dev);
+	aw882xx_dev_clear_int_status(aw_dev);
 	/*set inturrupt mask*/
-	aw_dev_set_intmask(aw_dev, true);
+	aw882xx_dev_set_intmask(aw_dev, true);
 
-	aw_monitor_start(&aw_dev->monitor_desc);
+	aw882xx_monitor_start(&aw_dev->monitor_desc);
 	aw_dev_cali_re_update(aw_dev);
 
 	aw_dev->status = AW_DEV_PW_ON;
@@ -952,7 +978,7 @@ int aw_device_start(struct aw_device *aw_dev)
 	return 0;
 }
 
-int aw_device_stop(struct aw_device *aw_dev)
+int aw882xx_device_stop(struct aw_device *aw_dev)
 {
 	aw_dev_dbg(aw_dev->dev, "enter");
 
@@ -963,12 +989,12 @@ int aw_device_stop(struct aw_device *aw_dev)
 
 	aw_dev->status = AW_DEV_PW_OFF;
 
-	aw_monitor_stop(&aw_dev->monitor_desc);
+	aw882xx_monitor_stop(&aw_dev->monitor_desc);
 	/*clear interrupt*/
-	aw_dev_clear_int_status(aw_dev);
+	aw882xx_dev_clear_int_status(aw_dev);
 
 	/*set defaut int mask*/
-	aw_dev_set_intmask(aw_dev, false);
+	aw882xx_dev_set_intmask(aw_dev, false);
 
 	/*set uls hmute*/
 	aw_dev_uls_hmute(aw_dev, true);
@@ -992,19 +1018,19 @@ int aw_device_stop(struct aw_device *aw_dev)
 	return 0;
 }
 
-int aw_dev_set_afe_module_en(int type, int enable)
+int aw882xx_dev_set_afe_module_en(int type, int enable)
 {
-	return aw_dsp_set_afe_module_en(type, enable);
+	return aw882xx_dsp_set_afe_module_en(type, enable);
 }
 
-int aw_dev_get_afe_module_en(int type, int *status)
+int aw882xx_dev_get_afe_module_en(int type, int *status)
 {
-	return aw_dsp_get_afe_module_en(type, status);
+	return aw882xx_dsp_get_afe_module_en(type, status);
 }
 
-int aw_dev_set_copp_module_en(bool enable)
+int aw882xx_dev_set_copp_module_en(bool enable)
 {
-	return aw_dsp_set_copp_module_en(enable);
+	return aw882xx_dsp_set_copp_module_en(enable);
 }
 
 static void aw_device_parse_sound_channel_dt(struct aw_device *aw_dev)
@@ -1029,11 +1055,11 @@ static void aw_device_parse_sound_channel_dt(struct aw_device *aw_dev)
 static void aw_device_parse_dt(struct aw_device *aw_dev)
 {
 	aw_device_parse_sound_channel_dt(aw_dev);
-	aw_device_parse_topo_id_dt(aw_dev);
-	aw_device_parse_port_id_dt(aw_dev);
+	aw882xx_device_parse_topo_id_dt(aw_dev);
+	aw882xx_device_parse_port_id_dt(aw_dev);
 }
 
-int aw_dev_get_list_head(struct list_head **head)
+int aw882xx_dev_get_list_head(struct list_head **head)
 {
 	if (list_empty(&g_dev_list))
 		return -EINVAL;
@@ -1043,20 +1069,20 @@ int aw_dev_get_list_head(struct list_head **head)
 	return 0;
 }
 
-int aw_device_probe(struct aw_device *aw_dev)
+int aw882xx_device_probe(struct aw_device *aw_dev)
 {
 	int ret;
 	INIT_LIST_HEAD(&aw_dev->list_node);
 
 	aw_device_parse_dt(aw_dev);
-	ret = aw_cali_init(&aw_dev->cali_desc);
+	ret = aw882xx_cali_init(&aw_dev->cali_desc);
 	if (ret)
 		return ret;
 
-	aw_monitor_init(&aw_dev->monitor_desc);
+	aw882xx_monitor_init(&aw_dev->monitor_desc);
 	/*aw_afe_init();*/
 
-	ret = aw_spin_init(&aw_dev->spin_desc);
+	ret = aw882xx_spin_init(&aw_dev->spin_desc);
 	if (ret)
 		return ret;
 
@@ -1067,10 +1093,10 @@ int aw_device_probe(struct aw_device *aw_dev)
 	return 0;
 }
 
-int aw_device_remove(struct aw_device *aw_dev)
+int aw882xx_device_remove(struct aw_device *aw_dev)
 {
-	aw_monitor_deinit(&aw_dev->monitor_desc);
-	aw_cali_deinit(&aw_dev->cali_desc);
+	aw882xx_monitor_deinit(&aw_dev->monitor_desc);
+	aw882xx_cali_deinit(&aw_dev->cali_desc);
 	/*aw_afe_deinit();*/
 	return 0;
 }

@@ -1,5 +1,5 @@
-#ifndef __AWINIC_CALIBRATION_H__
-#define __AWINIC_CALIBRATION_H__
+#ifndef __AW882XX_CALIBRATION_H__
+#define __AW882XX_CALIBRATION_H__
 
 #define AW_CALI_STORE_EXAMPLE
 
@@ -165,10 +165,10 @@ struct aw_cali_desc {
 	uint8_t cali_check_st;
 };
 
-int aw_cali_init(struct aw_cali_desc *cali_desc);
-void aw_cali_deinit(struct aw_cali_desc *cali_desc);
-int aw_cali_svc_get_cali_status(void);
-int aw_cali_read_re_from_nvram(int32_t *cali_re, int32_t ch_index);
+int aw882xx_cali_init(struct aw_cali_desc *cali_desc);
+void aw882xx_cali_deinit(struct aw_cali_desc *cali_desc);
+int aw882xx_cali_svc_get_cali_status(void);
+int aw882xx_cali_read_re_from_nvram(int32_t *cali_re, int32_t ch_index);
 
 
 #endif

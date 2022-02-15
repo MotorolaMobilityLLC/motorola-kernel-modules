@@ -1,5 +1,5 @@
-#ifndef __AW_PID_2113_REG_H__
-#define __AW_PID_2113_REG_H__
+#ifndef __AW882XX_PID_2113_REG_H__
+#define __AW882XX_PID_2113_REG_H__
 
 #define AW_PID_2113_MONITOR_FILE	"aw882xx_pid_2113_monitor.bin"
 
@@ -2273,6 +2273,14 @@ const unsigned char aw_pid_2113_reg_access[AW_PID_2113_REG_MAX] = {
 
 
 /* detail information of registers end */
+
+/********************************************
+ * Efdbmd
+ *******************************************/
+#define AW_PID_2113_EF_DBMD_MASK		(0xfff7)
+#define AW_PID_2113_AND_VALUE			(0x0000)
+#define AW_PID_2113_OR_VALUE			(0x0008)
+
 /********************************************
  * Volume Coefficient
  *******************************************/
@@ -2305,7 +2313,6 @@ const unsigned char aw_pid_2113_reg_access[AW_PID_2113_REG_MAX] = {
 #define AW_PID_2113_TEMH_MASK			(0x83ff)
 #define AW_PID_2113_TEML_MASK			(0x83ff)
 #define AW_PID_2113_DEFAULT_CFG			(0x0000)
-
 /********************************************
  * Init check
  *******************************************/

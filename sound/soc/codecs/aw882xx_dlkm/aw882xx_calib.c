@@ -28,9 +28,9 @@
 #include <sound/soc.h>
 
 #include "aw882xx.h"
-#include "aw_dsp.h"
-#include "aw_log.h"
-#include "aw_calib.h"
+#include "aw882xx_dsp.h"
+#include "aw882xx_log.h"
+#include "aw882xx_calib.h"
 
 static bool is_single_cali = false; /*if mutli_dev cali false, single dev true*/
 
@@ -171,7 +171,7 @@ int aw_cali_write_re_to_nvram(int32_t cali_re, int32_t channel)
 #endif
 }
 
-int aw_cali_read_re_from_nvram(int32_t *cali_re, int32_t channel)
+int aw882xx_cali_read_re_from_nvram(int32_t *cali_re, int32_t channel)
 {
 	/*custom add, if success return value is 0 , else -1*/
 #ifdef AW_CALI_STORE_EXAMPLE
@@ -185,7 +185,7 @@ int aw_cali_read_re_from_nvram(int32_t *cali_re, int32_t channel)
 #endif
 }
 
-static void aw_run_mute_for_cali(struct aw_device *aw_dev, int8_t cali_result)
+static void aw_cali_svc_run_mute(struct aw_device *aw_dev, int8_t cali_result)
 {
 	struct aw_mute_desc *mute_desc = &aw_dev->mute_desc;
 
@@ -195,6 +195,7 @@ static void aw_run_mute_for_cali(struct aw_device *aw_dev, int8_t cali_result)
 			aw_dev->ops.aw_i2c_write_bits(aw_dev, mute_desc->reg,
 					mute_desc->mask, mute_desc->enable);
 		} else if (cali_result == CALI_RESULT_NORMAL){
+			aw_dev->ops.aw_set_volume(aw_dev, aw_dev->volume_desc.init_volume);
 			aw_dev->ops.aw_i2c_write_bits(aw_dev, mute_desc->reg,
 					mute_desc->mask, mute_desc->disable);
 		}
@@ -222,7 +223,7 @@ static int aw_cali_svc_get_devs_re_range(struct aw_device *aw_dev,
 	struct aw_device *local_dev = NULL;
 
 	/*get dev list*/
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -251,28 +252,32 @@ int aw_cali_store_cali_re(struct aw_device *aw_dev, int32_t re)
 {
 	int ret = 0;
 
-	if ((re >= aw_dev->re_min) && (re <= aw_dev->re_max)) {
+	if (((re >= aw_dev->re_min) && (re <= aw_dev->re_max)) ||
+			aw_dev->cali_desc.cali_check_st) {
 		aw_dev->cali_desc.cali_re = re;
 		ret = aw_cali_write_re_to_nvram(re, aw_dev->channel);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "write re to nvram failed!");
 			goto store_cali_re_failed;
 		}
-	} else {
-		aw_dev_err(aw_dev->dev, "invalid cali re %d !", re);
+		aw_dev_info(aw_dev->dev, "store cali re is %d", re);
+	}
+
+	if ((re < aw_dev->re_min) || (re > aw_dev->re_max)) {
+		aw_dev_info(aw_dev->dev, "re[%d] out of range {%d, %d}",
+						re, aw_dev->re_min, aw_dev->re_max);
 		goto store_cali_re_failed;
 	}
 
 	if (aw_dev->cali_desc.cali_check_st)
 		aw_dev->cali_desc.cali_result = CALI_RESULT_NORMAL;
 
-	aw_dev_info(aw_dev->dev, "store cali re is %d", re);
 	return 0;
 
 store_cali_re_failed:
 	if (aw_dev->cali_desc.cali_check_st) {
 		aw_dev->cali_desc.cali_result = CALI_RESULT_ERROR;
-		aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+		aw_cali_svc_run_mute(aw_dev, aw_dev->cali_desc.cali_result);
 	}
 	return ret;
 }
@@ -289,7 +294,7 @@ static void aw_cali_svc_set_cali_status(struct aw_device *aw_dev, int status)
 		(status == 0) ? ("disable") : ("enable"));
 }
 
-int aw_cali_svc_get_cali_status(void)
+int aw882xx_cali_svc_get_cali_status(void)
 {
 	return g_cali_status;
 }
@@ -301,12 +306,12 @@ static int aw_cali_svc_dev_get_re(struct aw_device *aw_dev)
 	int32_t sum = 0;
 
 	for (i = 0; i < AW_CALI_READ_TIMES; i++) {
-		ret = aw_dsp_read_r0(aw_dev, &re[i]);
+		ret = aw882xx_dsp_read_r0(aw_dev, &re[i]);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "get re failed!");
 			if (aw_dev->cali_desc.cali_check_st) {
 				aw_dev->cali_desc.cali_result = CALI_RESULT_ERROR;
-				aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+				aw_cali_svc_run_mute(aw_dev, aw_dev->cali_desc.cali_result);
 			}
 			return ret;;
 		}
@@ -328,7 +333,7 @@ static int aw_cali_svc_dev_get_f0(struct aw_device *aw_dev)
 	int32_t sum = 0;
 
 	for (i = 0; i < AW_CALI_READ_TIMES; i++) {
-		ret = aw_dsp_read_f0(aw_dev, &f0[i]);
+		ret = aw882xx_dsp_read_f0(aw_dev, &f0[i]);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "get f0 failed!");
 			return ret;
@@ -349,7 +354,7 @@ static int aw_cali_svc_dev_get_f0_q(struct aw_device *aw_dev)
 	int32_t sum_f0 = 0, sum_q = 0;
 
 	for (i = 0; i < AW_CALI_READ_TIMES; i++) {
-		ret = aw_dsp_read_f0_q(aw_dev, &f0[i], &q[i]);
+		ret = aw882xx_dsp_read_f0_q(aw_dev, &f0[i], &q[i]);
 		if (ret) {
 			aw_dev_err(aw_dev->dev, "get f0 failed!");
 			return ret;
@@ -378,32 +383,32 @@ static int aw_cali_svc_dev_cali_mode_en(struct aw_device *aw_dev, int type, bool
 
 		if (type == CALI_TYPE_RE) {
 			if (flag & CALI_OPS_HMUTE) {
-				ret = aw_dsp_hmute_en(aw_dev, true);
+				ret = aw882xx_dsp_hmute_en(aw_dev, true);
 				if (ret < 0)
 					return ret;
 			}
 		} else {
 			if (flag & CALI_OPS_NOISE) {
-				ret = aw_dsp_noise_en(aw_dev, true);
+				ret = aw882xx_dsp_noise_en(aw_dev, true);
 				if (ret < 0)
 					return ret;
 			}
 		}
 
-		ret = aw_dsp_cali_en(aw_dev, true);
+		ret = aw882xx_dsp_cali_en(aw_dev, true);
 		if (ret < 0)
 			return ret;
 	} else {
-		aw_dsp_cali_en(aw_dev, false);
+		aw882xx_dsp_cali_en(aw_dev, false);
 
 		if (type == CALI_TYPE_RE) {
 			/*close mute*/
 			if (flag & CALI_OPS_HMUTE)
-				aw_dsp_hmute_en(aw_dev, false);
+				aw882xx_dsp_hmute_en(aw_dev, false);
 		} else {
 			/*close mute*/
 			if (flag & CALI_OPS_NOISE)
-				aw_dsp_noise_en(aw_dev, false);
+				aw882xx_dsp_noise_en(aw_dev, false);
 		}
 
 		/*close cali mode*/
@@ -416,7 +421,7 @@ static int aw_cali_svc_dev_cali_re(struct aw_device *aw_dev, unsigned int flag)
 {
 	int ret;
 
-	aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+	aw_cali_svc_run_mute(aw_dev, CALI_RESULT_NORMAL);
 
 	ret = aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_RE, true, flag);
 	if (ret < 0)
@@ -471,12 +476,12 @@ static int aw_cali_svc_devs_cali_mode_enable(struct list_head *dev_list,
 	list_for_each(pos, dev_list) {
 		local_dev = container_of(pos, struct aw_device, list_node);
 		if (is_enable)
-			aw_run_mute_for_cali(local_dev, CALI_RESULT_NORMAL);
+			aw_cali_svc_run_mute(local_dev, CALI_RESULT_NORMAL);
 		ret = aw_cali_svc_dev_cali_mode_en(local_dev, type, is_enable, flag);
 		if (ret < 0)
 			return ret;
 		if (!is_enable && (type == CALI_TYPE_F0))
-			aw_run_mute_for_cali(local_dev, local_dev->cali_desc.cali_result);
+			aw_cali_svc_run_mute(local_dev, local_dev->cali_desc.cali_result);
 	}
 
 	return ret;
@@ -489,7 +494,7 @@ static int aw_cali_svc_devs_cali_re(struct aw_device *aw_dev, unsigned int flag)
 
 	aw_dev_info(aw_dev->dev, "enter");
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, " get dev list failed");
 		return ret;
@@ -521,7 +526,7 @@ static int aw_cali_svc_dev_cali_f0(struct aw_device *aw_dev, unsigned int flag)
 {
 	int ret;
 
-	aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+	aw_cali_svc_run_mute(aw_dev, CALI_RESULT_NORMAL);
 
 	ret = aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, true, flag);
 	if (ret < 0)
@@ -534,7 +539,7 @@ static int aw_cali_svc_dev_cali_f0(struct aw_device *aw_dev, unsigned int flag)
 	ret = aw_cali_svc_dev_get_f0(aw_dev);
 exit:
 	aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, false, flag);
-	aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+	aw_cali_svc_run_mute(aw_dev, aw_dev->cali_desc.cali_result);
 	return ret;
 }
 
@@ -543,7 +548,7 @@ static int aw_cali_svc_devs_cali_f0(struct aw_device *aw_dev, unsigned int flag)
 	int ret;
 	struct list_head *dev_list = NULL;
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, " get dev list failed");
 		return ret;
@@ -575,7 +580,7 @@ static int aw_cali_svc_dev_cali_f0_q(struct aw_device *aw_dev, unsigned int flag
 {
 	int ret;
 
-	aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+	aw_cali_svc_run_mute(aw_dev, CALI_RESULT_NORMAL);
 
 	ret = aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, true, flag);
 	if (ret < 0)
@@ -589,7 +594,7 @@ static int aw_cali_svc_dev_cali_f0_q(struct aw_device *aw_dev, unsigned int flag
 	ret = aw_cali_svc_dev_get_f0_q(aw_dev);
 exit:
 	aw_cali_svc_dev_cali_mode_en(aw_dev, CALI_TYPE_F0, false, flag);
-	aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+	aw_cali_svc_run_mute(aw_dev, aw_dev->cali_desc.cali_result);
 	return ret;
 
 }
@@ -599,7 +604,7 @@ static int aw_cali_svc_devs_cali_f0_q(struct aw_device *aw_dev, unsigned int fla
 	int ret;
 	struct list_head *dev_list = NULL;
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed ");
 		return ret;
@@ -687,7 +692,7 @@ int aw_cali_svc_get_devs_cali_re(struct aw_device *aw_dev, int32_t *re_buf, int 
 	struct aw_device *local_dev = NULL;
 
 	/* get dev list */
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -716,7 +721,7 @@ int aw_cali_svc_get_devs_r0(struct aw_device *aw_dev, int32_t *re_buf, int num)
 	struct aw_device *local_dev = NULL;
 
 	/* get dev list */
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -725,7 +730,7 @@ int aw_cali_svc_get_devs_r0(struct aw_device *aw_dev, int32_t *re_buf, int num)
 	list_for_each(pos, dev_list) {
 		local_dev = container_of(pos, struct aw_device, list_node);
 		if (local_dev->channel < num) {
-			ret = aw_dsp_read_r0(local_dev, &re_buf[local_dev->channel]);
+			ret = aw882xx_dsp_read_r0(local_dev, &re_buf[local_dev->channel]);
 			if (ret) {
 				aw_dev_err(local_dev->dev, "get re failed!");
 				return ret;
@@ -747,7 +752,7 @@ int aw_cali_svc_get_devs_te(struct aw_device *aw_dev, int32_t *te_buf, int num)
 	struct aw_device *local_dev = NULL;
 
 	/* get dev list */
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -756,7 +761,7 @@ int aw_cali_svc_get_devs_te(struct aw_device *aw_dev, int32_t *te_buf, int num)
 	list_for_each (pos, dev_list) {
 		local_dev = container_of(pos, struct aw_device, list_node);
 		if (local_dev->channel < num) {
-			ret = aw_dsp_read_te(local_dev, &te_buf[local_dev->channel]);
+			ret = aw882xx_dsp_read_te(local_dev, &te_buf[local_dev->channel]);
 			if (ret) {
 				aw_dev_err(local_dev->dev, "get re failed!");
 				return ret;
@@ -779,7 +784,7 @@ int aw_cali_svc_get_devs_st(struct aw_device *aw_dev, int32_t *st_buf, int num)
 	struct aw_device *local_dev = NULL;
 
 	/*get dev list*/
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -788,7 +793,7 @@ int aw_cali_svc_get_devs_st(struct aw_device *aw_dev, int32_t *st_buf, int num)
 	list_for_each(pos, dev_list) {
 		local_dev = container_of(pos, struct aw_device, list_node);
 		if (local_dev->channel < num) {
-			ret = aw_dsp_read_st(local_dev, &st_buf[local_dev->channel << 1], &st_buf[(local_dev->channel << 1) + 1]);
+			ret = aw882xx_dsp_read_st(local_dev, &st_buf[local_dev->channel << 1], &st_buf[(local_dev->channel << 1) + 1]);
 			if (ret) {
 				aw_dev_err(local_dev->dev, "get re failed!");
 				return ret;
@@ -810,7 +815,7 @@ int aw_cali_svc_get_devs_cali_f0(struct aw_device *aw_dev, int32_t *f0_buf, int 
 	struct aw_device *local_dev = NULL;
 
 	/*get dev list*/
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -838,7 +843,7 @@ int aw_cali_svc_get_devs_f0(struct aw_device *aw_dev, int32_t *f0_buf, int num)
 	struct aw_device *local_dev = NULL;
 
 	/* get dev list */
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -847,7 +852,7 @@ int aw_cali_svc_get_devs_f0(struct aw_device *aw_dev, int32_t *f0_buf, int num)
 	list_for_each(pos, dev_list) {
 		local_dev = container_of(pos, struct aw_device, list_node);
 		if (local_dev->channel < num) {
-			ret = aw_dsp_read_f0(local_dev, &f0_buf[local_dev->channel]);
+			ret = aw882xx_dsp_read_f0(local_dev, &f0_buf[local_dev->channel]);
 			if (ret) {
 				aw_dev_err(local_dev->dev, "get re failed!");
 				return ret;
@@ -870,7 +875,7 @@ int aw_cali_svc_get_devs_cali_f0_q(struct aw_device *aw_dev,
 	struct aw_device *local_dev = NULL;
 
 	/*get dev list*/
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -898,7 +903,7 @@ static int aw_cali_svc_set_devs_re_str(struct aw_device *aw_dev, const char *re_
 	int re_data[AW_DEV_CH_MAX] = {0};
 
 	/* get dev list */
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -1300,7 +1305,7 @@ static ssize_t aw_cali_class_cali_re_show(struct  class *class, struct class_att
 	ssize_t len = 0;
 	int32_t cali_re[AW_DEV_CH_MAX] = {0};
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		pr_err("[Awinic] %s: get dev list failed \n", __func__);
 		return ret;
@@ -1334,7 +1339,7 @@ static ssize_t aw_cali_class_cali_re_store(struct class *class,
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		pr_err("[Awinic] %s: get dev list failed \n", __func__);
 		return ret;
@@ -1359,7 +1364,7 @@ static ssize_t aw_cali_class_cali_f0_show(struct  class *class, struct class_att
 	ssize_t len = 0;
 	int32_t cali_f0[AW_DEV_CH_MAX] = {0};
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		pr_err("[Awinic] %s: get dev list failed \n", __func__);
 		return ret;
@@ -1393,7 +1398,7 @@ static ssize_t aw_cali_class_cali_f0_store(struct class *class,
 	struct list_head *dev_list = NULL;
 	struct aw_device *local_dev = NULL;
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		pr_err("[Awinic] %s: get dev list failed \n", __func__);
 		return ret;
@@ -1414,7 +1419,7 @@ static ssize_t aw_cali_class_f0_show(struct  class *class, struct class_attribut
 	ssize_t len = 0;
 	int32_t cali_f0[AW_DEV_CH_MAX] = {0};
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		pr_err("[Awinic] %s: get dev list failed \n", __func__);
 		return ret;
@@ -1442,7 +1447,7 @@ static ssize_t aw_cali_class_re_show(struct  class *class, struct class_attribut
 	ssize_t len = 0;
 	int32_t cali_re[AW_DEV_CH_MAX] = {0};
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		pr_err("[Awinic] %s: get dev list failed \n", __func__);
 		return ret;
@@ -1472,7 +1477,7 @@ static ssize_t aw_class_re_range_show(struct  class *class, struct class_attribu
 
 	aw_pr_info("enter");
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret < 0) {
 		aw_pr_err("get dev list failed");
 		return ret;
@@ -1585,7 +1590,7 @@ static int aw_cali_misc_open(struct inode *inode, struct file *file)
 	struct list_head *pos = NULL;
 	struct aw_device *local_dev = NULL;
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		pr_err("[Awinic] %s: get dev list failed \n", __func__);
 		file->private_data = NULL;
@@ -1650,7 +1655,7 @@ static int aw_cali_misc_params_ptr(struct aw_device *aw_dev, struct ptr_params_d
 		goto exit;
 	}
 
-	ret = aw_dsp_write_params(aw_dev, p_data, p_params->len);
+	ret = aw882xx_dsp_write_params(aw_dev, p_data, p_params->len);
 	if (ret < 0) {
 		aw_dev_err(aw_dev->dev, "write params failed ");
 		ret = -EFAULT;
@@ -1689,40 +1694,40 @@ static int aw_cali_misc_ops_write(struct aw_device *aw_dev,
 		case AW_IOCTL_ENABLE_CALI: {
 			if (aw_dev->cali_desc.cali_check_st) {
 				if (data_ptr[0])
-					aw_run_mute_for_cali(aw_dev, CALI_RESULT_NORMAL);
+					aw_cali_svc_run_mute(aw_dev, CALI_RESULT_NORMAL);
 				else
-					aw_run_mute_for_cali(aw_dev, aw_dev->cali_desc.cali_result);
+					aw_cali_svc_run_mute(aw_dev, aw_dev->cali_desc.cali_result);
 			}
 			aw_cali_svc_set_cali_status(aw_dev, data_ptr[0]);
 		} break;
 		case AW_IOCTL_SET_CALI_CFG: {
-			ret = aw_dsp_write_cali_cfg(aw_dev, data_ptr, data_len);
+			ret = aw882xx_dsp_write_cali_cfg(aw_dev, data_ptr, data_len);
 		} break;
 		case AW_IOCTL_SET_NOISE: {
 			data = *(int32_t *)data_ptr;
-			ret = aw_dsp_noise_en(aw_dev, data);
+			ret = aw882xx_dsp_noise_en(aw_dev, data);
 		} break;
 		case AW_IOCTL_SET_VMAX: {
-			ret = aw_dsp_write_vmax(aw_dev, data_ptr, data_len);
+			ret = aw882xx_dsp_write_vmax(aw_dev, data_ptr, data_len);
 		} break;
 		case AW_IOCTL_SET_PARAM: {
-			ret = aw_dsp_write_params(aw_dev, data_ptr, data_len);
+			ret = aw882xx_dsp_write_params(aw_dev, data_ptr, data_len);
 		} break;
 		case AW_IOCTL_SET_PTR_PARAM_NUM: {
 			ret = aw_cali_misc_params_ptr(aw_dev, (struct ptr_params_data *)data_ptr);
 		} break;
 		case AW_IOCTL_SET_CALI_RE: {
 			ret = aw_cali_store_cali_re(aw_dev, *((int32_t *)data_ptr));
-			/*ret = aw_dsp_write_cali_re(aw_dev, *(int32_t *)data_ptr);*/
+			/*ret = aw882xx_dsp_write_cali_re(aw_dev, *(int32_t *)data_ptr);*/
 		} break;
 		case AW_IOCTL_SET_DSP_HMUTE: {
 			data = *(int32_t *)data_ptr;
-			ret = aw_dsp_hmute_en(aw_dev, data);
+			ret = aw882xx_dsp_hmute_en(aw_dev, data);
 		} break;
 		case AW_IOCTL_SET_CALI_CFG_FLAG: {
 			data = *(int32_t *)data_ptr;
 			/*aw_cali_svc_set_cali_status(aw_dev, data);*/
-			ret = aw_dsp_cali_en(aw_dev, data);
+			ret = aw882xx_dsp_cali_en(aw_dev, data);
 		} break;
 		default:{
 			aw_dev_err(aw_dev->dev, "unsupported  cmd %d", cmd);
@@ -1751,25 +1756,25 @@ static int aw_cali_misc_ops_read(struct aw_device *aw_dev,
 
 	switch (cmd) {
 		case AW_IOCTL_GET_CALI_CFG: {
-			ret = aw_dsp_read_cali_cfg(aw_dev, data_ptr, data_len);
+			ret = aw882xx_dsp_read_cali_cfg(aw_dev, data_ptr, data_len);
 		} break;
 		case AW_IOCTL_GET_CALI_DATA: {
-			ret = aw_dsp_read_cali_data(aw_dev, data_ptr, data_len);
+			ret = aw882xx_dsp_read_cali_data(aw_dev, data_ptr, data_len);
 		} break;
 		case AW_IOCTL_GET_F0: {
 			data_32_ptr = (int32_t *)data_ptr;
-			ret = aw_dsp_read_f0(aw_dev, data_32_ptr);
+			ret = aw882xx_dsp_read_f0(aw_dev, data_32_ptr);
 		} break;
 		case AW_IOCTL_GET_CALI_RE: {
 			data_32_ptr = (int32_t *)data_ptr;
-			ret = aw_dsp_read_cali_re(aw_dev, data_32_ptr);
+			ret = aw882xx_dsp_read_cali_re(aw_dev, data_32_ptr);
 		} break;
 		case AW_IOCTL_GET_VMAX: {
-			ret = aw_dsp_read_vmax(aw_dev, data_ptr, data_len);
+			ret = aw882xx_dsp_read_vmax(aw_dev, data_ptr, data_len);
 		} break;
 		case AW_IOCTL_GET_F0_Q: {
 			data_32_ptr = (int32_t *)data_ptr;
-			ret = aw_dsp_read_f0_q(aw_dev, &data_32_ptr[0], &data_32_ptr[1]);
+			ret = aw882xx_dsp_read_f0_q(aw_dev, &data_32_ptr[0], &data_32_ptr[1]);
 		} break;
 		case AW_IOCTL_GET_RE_RANGE: {
 			data_32_ptr = (uint32_t *)data_ptr;
@@ -1804,7 +1809,7 @@ static int aw_cali_misc_read_dsp(struct aw_device *aw_dev, aw_ioctl_msg_t *msg)
 		return -ENOMEM;
 	}
 
-	ret = aw_dsp_read_msg(aw_dev, dsp_msg_id, data_ptr, data_len);
+	ret = aw882xx_dsp_read_msg(aw_dev, dsp_msg_id, data_ptr, data_len);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, " write failed");
 		goto exit;
@@ -1838,7 +1843,7 @@ static int aw_cali_misc_write_dsp(struct aw_device *aw_dev, aw_ioctl_msg_t *msg)
 		goto exit;
 	}
 
-	ret = aw_dsp_write_msg(aw_dev, dsp_msg_id, data_ptr, data_len);
+	ret = aw882xx_dsp_write_msg(aw_dev, dsp_msg_id, data_ptr, data_len);
 	if (ret)
 		aw_dev_err(aw_dev->dev, "write failed");
 
@@ -1919,7 +1924,7 @@ static long aw_cali_misc_unlocked_ioctl(struct file *file,
 	struct aw_device *aw_dev = NULL;
 
 	if (((_IOC_TYPE(cmd)) != (AW_IOCTL_MAGIC))) {
-		aw_dev_err(aw_dev->dev, " cmd magic err");
+		aw_pr_err("cmd magic err");
 		return -EINVAL;
 	}
 	aw_dev = (struct aw_device *)file->private_data;
@@ -1938,7 +1943,7 @@ static long aw_cali_misc_compat_ioctl(struct file *file,
 	struct aw_device *aw_dev = NULL;
 
 	if (((_IOC_TYPE(cmd)) != (AW_IOCTL_MAGIC))) {
-		aw_dev_err(aw_dev->dev, "cmd magic err");
+		aw_pr_err("cmd magic err");
 		return -EINVAL;
 	}
 	aw_dev = (struct aw_device *)file->private_data;
@@ -2144,7 +2149,7 @@ static int aw_cali_misc_switch_dev(struct file *filp, struct aw_device *aw_dev, 
 	}
 
 	/* get dev list */
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed ");
 		return ret;
@@ -2261,7 +2266,7 @@ static const struct file_operations aw_cali_misc_fops = {
 
 };
 
-struct miscdevice misc_cali = {
+static struct miscdevice misc_cali = {
 	.name = "aw882xx_smartpa",
 	.minor = MISC_DYNAMIC_MINOR,
 	.fops  = &aw_cali_misc_fops,
@@ -2360,7 +2365,7 @@ int aw_cali_parse_re_dt(struct aw_device *aw_dev)
 	return 0;
 }
 
-int aw_cali_init(struct aw_cali_desc *cali_desc)
+int aw882xx_cali_init(struct aw_cali_desc *cali_desc)
 {
 	int ret;
 
@@ -2390,7 +2395,7 @@ int aw_cali_init(struct aw_cali_desc *cali_desc)
 	return ret;
 }
 
-void aw_cali_deinit(struct aw_cali_desc *cali_desc)
+void aw882xx_cali_deinit(struct aw_cali_desc *cali_desc)
 {
 	struct aw_device *aw_dev =
 		container_of(cali_desc, struct aw_device, cali_desc);

@@ -1,9 +1,9 @@
-#ifndef __AWINIC_DEVICE_FILE_H__
-#define __AWINIC_DEVICE_FILE_H__
-#include "aw_data_type.h"
-#include "aw_calib.h"
-#include "aw_monitor.h"
-#include "aw_dsp.h"
+#ifndef __AW882XX_DEVICE_FILE_H__
+#define __AW882XX_DEVICE_FILE_H__
+#include "aw882xx_data_type.h"
+#include "aw882xx_calib.h"
+#include "aw882xx_monitor.h"
+#include "aw882xx_dsp.h"
 
 #define AW_VOLUME_STEP_DB	(6 * 2)
 #define AW_REG_NONE		(0xFF)
@@ -26,6 +26,11 @@ struct aw_device;
 enum {
 	AW_DEV_TYPE_NONE = 0,
 	AW_DEV_TYPE_OK,
+};
+
+enum {
+	AW_EF_AND_CHECK = 0,
+	AW_EF_OR_CHECK,
 };
 
 enum {
@@ -78,6 +83,7 @@ struct aw_device_ops {
 	void (*aw_set_algo)(struct aw_device *aw_dev);
 	unsigned int (*aw_get_irq_type)(struct aw_device *aw_dev, unsigned int value);
 	void (*aw_reg_force_set)(struct aw_device *aw_dev);
+	int (*aw_frcset_check)(struct aw_device *aw_dev);
 };
 
 struct aw_int_desc {
@@ -241,6 +247,13 @@ struct aw_spin_desc {
 	struct aw_reg_ch tx_desc;
 };
 
+struct aw_efcheck_desc {
+	unsigned int reg;
+	unsigned int mask;
+	unsigned int and_val;
+	unsigned int or_val;
+};
+
 struct aw_device {
 	int index;
 	int status;
@@ -249,6 +262,7 @@ struct aw_device {
 	int bstcfg_enable;
 	int frcset_en;
 	int bop_en;
+	int efuse_check;
 	unsigned int mute_st;
 	unsigned int amppd_st;
 
@@ -286,50 +300,51 @@ struct aw_device {
 	struct aw_soft_rst soft_rst;
 	struct aw_spin_desc spin_desc;
 	struct aw_bop_desc bop_desc;
+	struct aw_efcheck_desc efcheck_desc;
 	struct aw_device_ops ops;
 	struct list_head list_node;
 };
 
 
-void aw_dev_deinit(struct aw_device *aw_dev);
-int aw_device_init(struct aw_device *aw_dev, struct aw_container *aw_cfg);
-int aw_device_start(struct aw_device *aw_dev);
-int aw_device_stop(struct aw_device *aw_dev);
-int aw_dev_reg_update(struct aw_device *aw_dev, bool force);
-int aw_device_irq_reinit(struct aw_device *aw_dev);
+void aw882xx_dev_deinit(struct aw_device *aw_dev);
+int aw882xx_device_init(struct aw_device *aw_dev, struct aw_container *aw_cfg);
+int aw882xx_device_start(struct aw_device *aw_dev);
+int aw882xx_device_stop(struct aw_device *aw_dev);
+int aw882xx_dev_reg_update(struct aw_device *aw_dev, bool force);
+int aw882xx_device_irq_reinit(struct aw_device *aw_dev);
 
-struct mutex *aw_dev_get_ext_dsp_prof_wr_lock(void);
-char *aw_dev_get_ext_dsp_prof_write(void);
+struct mutex *aw882xx_dev_get_ext_dsp_prof_wr_lock(void);
+char *aw882xx_dev_get_ext_dsp_prof_write(void);
 
 
 /*profile*/
-int aw_dev_prof_update(struct aw_device *aw_dev, bool force);
+int aw882xx_dev_prof_update(struct aw_device *aw_dev, bool force);
 
 /*re*/
-int aw_dev_get_cali_re(struct aw_device *aw_dev, int32_t *cali_re);
-int aw_dev_init_cali_re(struct aw_device *aw_dev);
-int aw_dev_dc_status(struct aw_device *aw_dev);
+int aw882xx_dev_get_cali_re(struct aw_device *aw_dev, int32_t *cali_re);
+int aw882xx_dev_init_cali_re(struct aw_device *aw_dev);
+int aw882xx_dev_dc_status(struct aw_device *aw_dev);
 
 /*interrupt*/
-int aw_dev_status(struct aw_device *aw_dev);
-int aw_dev_get_int_status(struct aw_device *aw_dev, uint16_t *int_status);
-void aw_dev_clear_int_status(struct aw_device *aw_dev);
-int aw_dev_set_intmask(struct aw_device *aw_dev, bool flag);
+int aw882xx_dev_status(struct aw_device *aw_dev);
+int aw882xx_dev_get_int_status(struct aw_device *aw_dev, uint16_t *int_status);
+void aw882xx_dev_clear_int_status(struct aw_device *aw_dev);
+int aw882xx_dev_set_intmask(struct aw_device *aw_dev, bool flag);
 
 /*fade int / out*/
-void aw_dev_set_fade_vol_step(struct aw_device *aw_dev, unsigned int step);
-int aw_dev_get_fade_vol_step(struct aw_device *aw_dev);
-void aw_dev_get_fade_time(unsigned int *time, bool fade_in);
-void aw_dev_set_fade_time(unsigned int time, bool fade_in);
+void aw882xx_dev_set_fade_vol_step(struct aw_device *aw_dev, unsigned int step);
+int aw882xx_dev_get_fade_vol_step(struct aw_device *aw_dev);
+void aw882xx_dev_get_fade_time(unsigned int *time, bool fade_in);
+void aw882xx_dev_set_fade_time(unsigned int time, bool fade_in);
 
 /*dsp kcontrol*/
-int aw_dev_set_afe_module_en(int type, int enable);
-int aw_dev_get_afe_module_en(int type, int *status);
-int aw_dev_set_copp_module_en(bool enable);
+int aw882xx_dev_set_afe_module_en(int type, int enable);
+int aw882xx_dev_get_afe_module_en(int type, int *status);
+int aw882xx_dev_set_copp_module_en(bool enable);
 
-int aw_device_probe(struct aw_device *aw_dev);
-int aw_device_remove(struct aw_device *aw_dev);
-int aw_dev_get_list_head(struct list_head **head);
+int aw882xx_device_probe(struct aw_device *aw_dev);
+int aw882xx_device_remove(struct aw_device *aw_dev);
+int aw882xx_dev_get_list_head(struct list_head **head);
 
 #endif
 

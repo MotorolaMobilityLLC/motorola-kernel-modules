@@ -28,9 +28,9 @@
 #include <linux/power_supply.h>
 #include <linux/hrtimer.h>
 #include "aw882xx.h"
-#include "aw_dsp.h"
-#include "aw_monitor.h"
-#include "aw_log.h"
+#include "aw882xx_dsp.h"
+#include "aw882xx_monitor.h"
+#include "aw882xx_log.h"
 
 
 /*****************************************************
@@ -413,7 +413,7 @@ static void aw_monitor_set_vmax(struct aw_device *aw_dev,
 		return;
 	}
 
-	ret = aw_dsp_write_vmax(aw_dev, (char *)&vmax, sizeof(uint32_t));
+	ret = aw882xx_dsp_write_vmax(aw_dev, (char *)&vmax, sizeof(uint32_t));
 	if (ret)
 		return;
 
@@ -428,7 +428,7 @@ static int aw_monitor_work(struct aw_device *aw_dev)
 	struct aw_monitor_cfg *monitor_cfg = &monitor->monitor_cfg;
 	struct aw_table set_table;
 
-	if (aw_cali_svc_get_cali_status()) {
+	if (aw882xx_cali_svc_get_cali_status()) {
 		aw_dev_info(aw_dev->dev, "done nothing during calibration");
 		return 0;
 	}
@@ -470,7 +470,7 @@ static int aw_monitor_work(struct aw_device *aw_dev)
 	return 0;
 }
 
-void aw_monitor_work_func(struct work_struct *work)
+static void aw_monitor_work_func(struct work_struct *work)
 {
 	struct aw_device *aw_dev  = container_of(work,
 		struct aw_device, monitor_desc.delay_work.work);
@@ -492,7 +492,7 @@ void aw_monitor_work_func(struct work_struct *work)
 	}
 }
 
-void aw_check_bop_status(struct aw_device *aw_dev)
+static void aw_check_bop_status(struct aw_device *aw_dev)
 {
 	struct aw_bop_desc *bop_desc = &aw_dev->bop_desc;
 	unsigned int reg_val = 0;
@@ -512,7 +512,7 @@ void aw_check_bop_status(struct aw_device *aw_dev)
 	aw_dev_dbg(aw_dev->dev, "check done! bop status is %d", aw_dev->bop_en);
 }
 
-void aw_monitor_start(struct aw_monitor_desc *monitor_desc)
+void aw882xx_monitor_start(struct aw_monitor_desc *monitor_desc)
 {
 	struct aw_device *aw_dev = container_of(monitor_desc,
 			struct aw_device, monitor_desc);
@@ -536,7 +536,7 @@ void aw_monitor_start(struct aw_monitor_desc *monitor_desc)
 				&monitor_desc->delay_work, 0);
 }
 
-int aw_monitor_stop(struct aw_monitor_desc *monitor_desc)
+int aw882xx_monitor_stop(struct aw_monitor_desc *monitor_desc)
 {
 	struct aw_device *aw_dev = container_of(monitor_desc,
 			struct aw_device, monitor_desc);
@@ -937,7 +937,7 @@ static int aw_monitor_parse_data_v_0_1_1(struct aw_device *aw_dev,
 }
 
 
-int aw_monitor_parse_fw(struct aw_monitor_desc *monitor_desc,
+int aw882xx_monitor_parse_fw(struct aw_monitor_desc *monitor_desc,
 				uint8_t *data, uint32_t data_len)
 {
 	int ret;
@@ -1014,7 +1014,7 @@ static int aw_monitor_real_time_update_monitor(struct aw_device *aw_dev)
 	memcpy(aw_monitor_cnt->data, cont->data, cont->size);
 	release_firmware(cont);
 
-	ret = aw_monitor_parse_fw(&aw_dev->monitor_desc,
+	ret = aw882xx_monitor_parse_fw(&aw_dev->monitor_desc,
 			aw_monitor_cnt->data, aw_monitor_cnt->len);
 	if (ret < 0)
 		aw_dev_err(aw_dev->dev, "parse monitor firmware failed!");
@@ -1127,7 +1127,7 @@ static ssize_t aw_monitor_store(struct device *dev,
 	} else {
 		aw_dev->monitor_desc.monitor_cfg.monitor_switch = enable;
 		if (enable)
-			aw_monitor_start(&aw_dev->monitor_desc);
+			aw882xx_monitor_start(&aw_dev->monitor_desc);
 	}
 
 	return count;
@@ -1164,12 +1164,12 @@ static ssize_t aw_monitor_update_store(struct device *dev,
 	aw_dev_info(aw_dev->dev, "monitor update = %d", update);
 
 	if (update) {
-		aw_monitor_stop(&aw_dev->monitor_desc);
+		aw882xx_monitor_stop(&aw_dev->monitor_desc);
 		aw_monitor_free_firmware(aw_dev);
 		ret = aw_monitor_real_time_update_monitor(aw_dev);
 		if (ret < 0)
 			return ret;
-		aw_monitor_start(&aw_dev->monitor_desc);
+		aw882xx_monitor_start(&aw_dev->monitor_desc);
 	}
 
 	return count;
@@ -1194,7 +1194,7 @@ static struct attribute_group aw_monitor_attr_group = {
 	.attrs = aw_monitor_attr,
 };
 
-void aw_monitor_init(struct aw_monitor_desc *monitor_desc)
+void aw882xx_monitor_init(struct aw_monitor_desc *monitor_desc)
 {
 	int ret;
 	struct aw_device *aw_dev = container_of(monitor_desc,
@@ -1214,12 +1214,12 @@ void aw_monitor_init(struct aw_monitor_desc *monitor_desc)
 		aw_dev_err(aw_dev->dev, "error creating sysfs attr files");
 }
 
-void aw_monitor_deinit(struct aw_monitor_desc *monitor_desc)
+void aw882xx_monitor_deinit(struct aw_monitor_desc *monitor_desc)
 {
 	struct aw_device *aw_dev =
 		container_of(monitor_desc, struct aw_device, monitor_desc);
 
-	aw_monitor_stop(monitor_desc);
+	aw882xx_monitor_stop(monitor_desc);
 
 	sysfs_remove_group(&aw_dev->dev->kobj, &aw_monitor_attr_group);
 }

@@ -2,7 +2,7 @@
 #define _AW882XX_H_
 #include <linux/version.h>
 #include <linux/kernel.h>
-#include "aw_device.h"
+#include "aw882xx_device.h"
 
 /*
  * i2c transaction on Linux limited to 64k
