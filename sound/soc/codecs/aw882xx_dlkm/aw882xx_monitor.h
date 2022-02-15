@@ -1,5 +1,5 @@
-#ifndef __AW_MONITOR_H__
-#define __AW_MONITOR_H__
+#ifndef __AW882XX_MONITOR_H__
+#define __AW882XX_MONITOR_H__
 
 /*#define AW_DEBUG*/
 
@@ -162,11 +162,11 @@ struct aw_monitor_desc {
 /******************************************************************
 * aw882xx monitor functions
 *******************************************************************/
-void aw_monitor_start(struct aw_monitor_desc *monitor_desc);
-int aw_monitor_stop(struct aw_monitor_desc *monitor_desc);
-void aw_monitor_init(struct aw_monitor_desc *monitor_desc);
-void aw_monitor_deinit(struct aw_monitor_desc *monitor_desc);
-int aw_monitor_parse_fw(struct aw_monitor_desc *monitor_desc,
+void aw882xx_monitor_start(struct aw_monitor_desc *monitor_desc);
+int aw882xx_monitor_stop(struct aw_monitor_desc *monitor_desc);
+void aw882xx_monitor_init(struct aw_monitor_desc *monitor_desc);
+void aw882xx_monitor_deinit(struct aw_monitor_desc *monitor_desc);
+int aw882xx_monitor_parse_fw(struct aw_monitor_desc *monitor_desc,
 				uint8_t *data, uint32_t data_len);
 
 #endif

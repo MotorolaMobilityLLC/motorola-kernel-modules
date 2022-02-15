@@ -1,5 +1,5 @@
-#ifndef __AW_PID_2055A_REG_H__
-#define __AW_PID_2055A_REG_H__
+#ifndef __AW882XX_PID_2055A_REG_H__
+#define __AW882XX_PID_2055A_REG_H__
 
 #define AW_PID_2055A_MONITOR_FILE	"aw882xx_pid_2055a_monitor.bin"
 

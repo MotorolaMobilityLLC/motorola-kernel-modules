@@ -32,14 +32,14 @@
 #include <linux/uaccess.h>
 
 #include "aw882xx.h"
-#include "aw_pid_1852_reg.h"
-#include "aw_pid_2013_reg.h"
-#include "aw_pid_2032_reg.h"
-#include "aw_pid_2055a_reg.h"
-#include "aw_pid_2055_reg.h"
-#include "aw_pid_2071_reg.h"
-#include "aw_pid_2113_reg.h"
-#include "aw_log.h"
+#include "aw882xx_pid_1852_reg.h"
+#include "aw882xx_pid_2013_reg.h"
+#include "aw882xx_pid_2032_reg.h"
+#include "aw882xx_pid_2055a_reg.h"
+#include "aw882xx_pid_2055_reg.h"
+#include "aw882xx_pid_2071_reg.h"
+#include "aw882xx_pid_2113_reg.h"
+#include "aw882xx_log.h"
 
 int aw882xx_dev_i2c_write_bits(struct aw_device *aw_dev,
 	unsigned char reg_addr, unsigned int mask, unsigned int reg_data)
@@ -302,11 +302,12 @@ static int aw_pid_1852_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->volume_desc.mute_volume = AW_PID_1852_MUTE_VOL;
 
 	aw_pa->bop_desc.reg = AW_REG_NONE;
+	aw_pa->efcheck_desc.reg = AW_REG_NONE;
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
 
-	ret = aw_device_probe(aw_pa);
+	ret = aw882xx_device_probe(aw_pa);
 
 	aw882xx->aw_pa = aw_pa;
 	return ret;
@@ -585,12 +586,13 @@ static int aw_pid_2013_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->volume_desc.mute_volume = AW_PID_2013_MUTE_VOL;
 
 	aw_pa->bop_desc.reg = AW_REG_NONE;
+	aw_pa->efcheck_desc.reg = AW_REG_NONE;
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
 
 	aw_pid_2013_efver_check(aw_pa);
-	ret = aw_device_probe(aw_pa);
+	ret = aw882xx_device_probe(aw_pa);
 
 	aw882xx->aw_pa = aw_pa;
 	return ret;
@@ -832,11 +834,12 @@ static int aw_pid_2032_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->volume_desc.mute_volume = AW_PID_2032_MUTE_VOL;
 
 	aw_pa->bop_desc.reg = AW_REG_NONE;
+	aw_pa->efcheck_desc.reg = AW_REG_NONE;
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
 
-	ret = aw_device_probe(aw_pa);
+	ret = aw882xx_device_probe(aw_pa);
 
 	aw882xx->aw_pa = aw_pa;
 	return ret;
@@ -1054,6 +1057,7 @@ static int aw_pid_2055a_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->cco_mux_desc.bypass_val = AW_PID_2055A_CCO_MUX_BYPASS_VALUE;
 
 	aw_pa->bop_desc.reg = AW_REG_NONE;
+	aw_pa->efcheck_desc.reg = AW_REG_NONE;
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
@@ -1063,7 +1067,7 @@ static int aw_pid_2055a_dev_init(struct aw882xx *aw882xx, int index)
 					AW_PID_2055A_INIT_CHECK_VALUE);
 	usleep_range(AW_3000_US, AW_3000_US +10);
 
-	ret = aw_device_probe(aw_pa);
+	ret = aw882xx_device_probe(aw_pa);
 
 	aw882xx->aw_pa = aw_pa;
 	return ret;
@@ -1295,12 +1299,14 @@ static int aw_pid_2055_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
 
+	aw_pa->efcheck_desc.reg = AW_REG_NONE;
+
 	usleep_range(AW_2000_US, AW_2000_US +10);
 	aw_pa->ops.aw_i2c_write(aw_pa, AW_PID_2055_INIT_CHECK_REG,
 					AW_PID_2055_INIT_CHECK_VALUE);
 	usleep_range(AW_3000_US, AW_3000_US +10);
 
-	ret = aw_device_probe(aw_pa);
+	ret = aw882xx_device_probe(aw_pa);
 
 	aw882xx->aw_pa = aw_pa;
 	return ret;
@@ -1557,12 +1563,14 @@ static int aw_pid_2071_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->volume_desc.shift = AW_PID_2071_VOL_START_BIT;
 	aw_pa->volume_desc.mute_volume = AW_PID_2071_MUTE_VOL;
 
+	aw_pa->efcheck_desc.reg = AW_REG_NONE;
+
 	aw_pa->bop_desc.reg = AW_REG_NONE;
 
 	aw_pa->soft_rst.reg = AW882XX_SOFT_RESET_REG;
 	aw_pa->soft_rst.reg_value = AW882XX_SOFT_RESET_VALUE;
 
-	ret = aw_device_probe(aw_pa);
+	ret = aw882xx_device_probe(aw_pa);
 
 	aw882xx->aw_pa = aw_pa;
 	return ret;
@@ -1677,11 +1685,12 @@ static unsigned int aw_pid_2113_get_irq_type(struct aw_device *aw_dev,
 	return ret;
 }
 
-static void aw_pid_2113_efver_check(struct aw_device *aw_dev)
+static int aw_pid_2113_frcset_check(struct aw_device *aw_dev)
 {
 	unsigned int reg_val = 0;
 	uint16_t temh = 0;
 	uint16_t teml = 0;
+	uint16_t tem = 0;
 
 	aw_dev->ops.aw_i2c_read(aw_dev,
 			AW_PID_2113_EFRH3_REG, &reg_val);
@@ -1691,13 +1700,19 @@ static void aw_pid_2113_efver_check(struct aw_device *aw_dev)
 			AW_PID_2113_EFRL3_REG, &reg_val);
 	teml = ((uint16_t)reg_val & (~AW_PID_2113_TEML_MASK));
 
-	if ((temh | teml) == AW_PID_2113_DEFAULT_CFG)
+	if (aw_dev->efuse_check == AW_EF_OR_CHECK)
+		tem = (temh | teml);
+	else
+		tem = (temh & teml);
+
+	if (tem == AW_PID_2113_DEFAULT_CFG)
 		aw_dev->frcset_en = AW_FRCSET_ENABLE;
 	else
 		aw_dev->frcset_en = AW_FRCSET_DISABLE;
 
 	aw_dev_info(aw_dev->dev, "tem is 0x%04x, frcset_en is %d",
-						(temh | teml), aw_dev->frcset_en);
+						tem, aw_dev->frcset_en);
+	return 0;
 }
 
 static void aw_pid_2113_reg_force_set(struct aw_device *aw_dev)
@@ -1763,6 +1778,7 @@ static int aw_pid_2113_dev_init(struct aw882xx *aw882xx, int index)
 	aw_pa->ops.aw_get_reg_num = aw_pid_2113_get_reg_num;
 	aw_pa->ops.aw_get_irq_type = aw_pid_2113_get_irq_type;
 	aw_pa->ops.aw_reg_force_set = aw_pid_2113_reg_force_set;
+	aw_pa->ops.aw_frcset_check = aw_pid_2113_frcset_check;
 
 	aw_pa->int_desc.mask_reg = AW_PID_2113_SYSINTM_REG;
 	aw_pa->int_desc.mask_default = AW_PID_2113_SYSINTM_DEFAULT;
@@ -1877,9 +1893,12 @@ static int aw_pid_2113_dev_init(struct aw882xx *aw882xx, int index)
 					AW_PID_2113_INIT_CHECK_VALUE);
 	usleep_range(AW_3000_US, AW_3000_US +10);
 
-	aw_pid_2113_efver_check(aw_pa);
+	aw_pa->efcheck_desc.reg = AW_PID_2113_DBGCTRL_REG;
+	aw_pa->efcheck_desc.mask = AW_PID_2113_EF_DBMD_MASK;
+	aw_pa->efcheck_desc.and_val = AW_PID_2113_AND_VALUE;
+	aw_pa->efcheck_desc.or_val = AW_PID_2113_OR_VALUE;
 
-	ret = aw_device_probe(aw_pa);
+	ret = aw882xx_device_probe(aw_pa);
 
 	aw882xx->aw_pa = aw_pa;
 	return ret;
