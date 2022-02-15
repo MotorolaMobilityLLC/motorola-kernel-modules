@@ -3,6 +3,5 @@ EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/kernel-5.10/include
 EXTRA_CFLAGS += -I$(TOP)/kernel-5.10/include/uapi/
 
-aw882xx_dlkm-objs = aw882xx.o aw_bin_parse.o aw_calib.o aw_device.o aw_dsp.o aw_init.o aw_monitor.o aw_spin.o
+aw882xx_dlkm-objs = aw882xx.o aw882xx_bin_parse.o aw882xx_calib.o aw882xx_device.o aw882xx_dsp.o aw882xx_init.o aw882xx_monitor.o aw882xx_spin.o
 obj-m += aw882xx_dlkm.o
-
