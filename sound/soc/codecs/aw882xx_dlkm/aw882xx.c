@@ -32,12 +32,12 @@
 #include <linux/vmalloc.h>
 
 #include "aw882xx.h"
-#include "aw_log.h"
-#include "aw_dsp.h"
-#include "aw_bin_parse.h"
-#include "aw_spin.h"
+#include "aw882xx_log.h"
+#include "aw882xx_dsp.h"
+#include "aw882xx_bin_parse.h"
+#include "aw882xx_spin.h"
 
-#define AW882XX_DRIVER_VERSION "v1.10.0"
+#define AW882XX_DRIVER_VERSION "v1.11.0"
 #define AW882XX_I2C_NAME "aw882xx_smartpa"
 
 #define AW_READ_CHIPID_RETRIES		5	/* 5 times */
@@ -227,7 +227,7 @@ int aw882xx_i2c_write_bits(struct aw882xx *aw882xx,
 		return ret;
 	}
 	reg_val &= mask;
-	reg_val |= reg_data;
+	reg_val |= (reg_data & (~mask));
 	ret = aw882xx_i2c_write(aw882xx, reg_addr, reg_val);
 	if (ret < 0) {
 		aw_dev_err(aw882xx->dev, "i2c read error, ret=%d", ret);
@@ -264,7 +264,7 @@ static int aw882xx_startup(struct snd_pcm_substream *substream,
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		aw_dev_info(aw882xx->dev, "playback enter");
 		/*load cali re*/
-		aw_dev_init_cali_re(aw882xx->aw_pa);
+		aw882xx_dev_init_cali_re(aw882xx->aw_pa);
 	} else {
 		aw_dev_info(aw882xx->dev, "capture enter");
 	}
@@ -364,13 +364,13 @@ static void aw882xx_start_pa(struct aw882xx *aw882xx)
 				return;
 			}
 
-			ret = aw_dev_reg_update(aw882xx->aw_pa, aw882xx->phase_sync);
+			ret = aw882xx_dev_reg_update(aw882xx->aw_pa, aw882xx->phase_sync);
 			if (ret) {
 				aw_dev_err(aw882xx->dev, "fw update failed, cnt:%d", i);
 				continue;
 			}
 
-			ret = aw_device_start(aw882xx->aw_pa);
+			ret = aw882xx_device_start(aw882xx->aw_pa);
 			if (ret) {
 				aw_dev_err(aw882xx->dev, "start failed, cnt:%d", i);
 				continue;
@@ -408,7 +408,7 @@ static int aw882xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 		cancel_delayed_work_sync(&aw882xx->dc_work);
 		cancel_delayed_work_sync(&aw882xx->start_work);
 		mutex_lock(&aw882xx->lock);
-		aw_device_stop(aw882xx->aw_pa);
+		aw882xx_device_stop(aw882xx->aw_pa);
 		mutex_unlock(&aw882xx->lock);
 	} else {
 		if (aw882xx->fw_status == AW_DEV_FW_FAILED) {
@@ -421,7 +421,7 @@ static int aw882xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 		queue_delayed_work(aw882xx->work_queue,
 				&aw882xx->start_work, 0);
 		if (aw882xx->index == 0) {
-			ret = aw_spin_set_record_val(aw882xx->aw_pa);
+			ret = aw882xx_spin_set_record_val(aw882xx->aw_pa);
 			if (ret)
 				aw_dev_err(aw882xx->dev, "set spin error, ret=%d", ret);
 		}
@@ -458,7 +458,7 @@ static int aw882xx_profile_info(struct snd_kcontrol *kcontrol,
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
 	uinfo->count = 1;
 
-	count = aw_dev_get_profile_count(aw882xx->aw_pa);
+	count = aw882xx_dev_get_profile_count(aw882xx->aw_pa);
 	if (count <= 0) {
 		uinfo->value.enumerated.items = 0;
 		aw_dev_err(aw882xx->dev, "get count[%d] failed ", count);
@@ -472,7 +472,7 @@ static int aw882xx_profile_info(struct snd_kcontrol *kcontrol,
 
 	name = uinfo->value.enumerated.name;
 	count = uinfo->value.enumerated.item;
-	ret = aw_dev_get_profile_name(aw882xx->aw_pa, name, count);
+	ret = aw88xx_dev_get_profile_name(aw882xx->aw_pa, name, count);
 	if (ret) {
 		strlcpy(uinfo->value.enumerated.name, "null", strlen("null") + 1);
 		return 0;
@@ -489,8 +489,8 @@ static int aw882xx_profile_get(struct snd_kcontrol *kcontrol,
 	struct aw882xx *aw882xx =
 		aw_componet_codec_ops.codec_get_drvdata(codec);
 
-	ucontrol->value.integer.value[0] = aw_dev_get_profile_index(aw882xx->aw_pa);
-	aw_dev_dbg(codec->dev, "profile index [%d]", aw_dev_get_profile_index(aw882xx->aw_pa));
+	ucontrol->value.integer.value[0] = aw882xx_dev_get_profile_index(aw882xx->aw_pa);
+	aw_dev_dbg(codec->dev, "profile index [%d]", aw882xx_dev_get_profile_index(aw882xx->aw_pa));
 	return 0;
 
 }
@@ -511,7 +511,7 @@ static int aw882xx_profile_set(struct snd_kcontrol *kcontrol,
 	}
 
 	/* check value valid */
-	ret = aw_dev_check_profile_index(aw882xx->aw_pa, ucontrol->value.integer.value[0]);
+	ret = aw882xx_dev_check_profile_index(aw882xx->aw_pa, ucontrol->value.integer.value[0]);
 	if (ret) {
 		aw_dev_info(codec->dev, "unsupported index %d",
 				(int)ucontrol->value.integer.value[0]);
@@ -519,17 +519,17 @@ static int aw882xx_profile_set(struct snd_kcontrol *kcontrol,
 	}
 
 	/*check cur_index == set value*/
-	cur_index = aw_dev_get_profile_index(aw882xx->aw_pa);
+	cur_index = aw882xx_dev_get_profile_index(aw882xx->aw_pa);
 	if (cur_index == ucontrol->value.integer.value[0]) {
 		aw_dev_info(codec->dev, "index no change");
 		return 0;
 	}
 
 	mutex_lock(&aw882xx->lock);
-	aw_dev_set_profile_index(aw882xx->aw_pa, ucontrol->value.integer.value[0]);
+	aw882xx_dev_set_profile_index(aw882xx->aw_pa, ucontrol->value.integer.value[0]);
 	/*pstream = 0 no pcm just set status*/
 	if (aw882xx->pstream && aw882xx->allow_pw)
-		aw_dev_prof_update(aw882xx->aw_pa, aw882xx->phase_sync);
+		aw882xx_dev_prof_update(aw882xx->aw_pa, aw882xx->phase_sync);
 	mutex_unlock(&aw882xx->lock);
 	aw_dev_info(codec->dev, "prof id %d", (int)ucontrol->value.integer.value[0]);
 	return 0;
@@ -583,7 +583,7 @@ static int aw882xx_switch_set(struct snd_kcontrol *kcontrol,
 			cancel_delayed_work_sync(&aw882xx->dc_work);
 			cancel_delayed_work_sync(&aw882xx->start_work);
 			mutex_lock(&aw882xx->lock);
-			aw_device_stop(aw882xx->aw_pa);
+			aw882xx_device_stop(aw882xx->aw_pa);
 			aw882xx->allow_pw = false;
 			mutex_unlock(&aw882xx->lock);
 			aw_dev_info(aw882xx->dev, "stop pa");
@@ -667,7 +667,7 @@ static int aw882xx_monitor_set(struct snd_kcontrol *kcontrol,
 	} else {
 		aw_dev->monitor_desc.monitor_cfg.monitor_switch = ctrl_value;
 		if (ctrl_value)
-			aw_monitor_start(&aw_dev->monitor_desc);
+			aw882xx_monitor_start(&aw_dev->monitor_desc);
 	}
 	return 0;
 }
@@ -765,7 +765,7 @@ static void aw882xx_request_firmware(struct work_struct *work)
 		aw_cfg->len = cont->size;
 		memcpy(aw_cfg->data, cont->data, cont->size);
 		release_firmware(cont);
-		ret = aw_dev_parse_check_acf(aw_cfg);
+		ret = aw882xx_dev_parse_check_acf(aw_cfg);
 		if (ret) {
 			aw_dev_err(aw882xx->dev, "Load [%s] failed ....!", ACF_BIN_NAME);
 			vfree(aw_cfg);
@@ -783,7 +783,7 @@ static void aw882xx_request_firmware(struct work_struct *work)
 
 	mutex_lock(&aw882xx->lock);
 	/*aw device init*/
-	ret = aw_device_init(aw882xx->aw_pa, aw_cfg);
+	ret = aw882xx_device_init(aw882xx->aw_pa, aw_cfg);
 	if (ret < 0) {
 		aw_dev_info(aw882xx->dev, "dev init failed");
 		mutex_unlock(&aw882xx->lock);
@@ -814,15 +814,15 @@ static void aw882xx_dc_prot_work(struct work_struct *work)
 {
 	struct aw882xx *aw882xx = container_of(work, struct aw882xx, dc_work.work);
 	int dc_status = -1;
-	int dev_status = aw_dev_status(aw882xx->aw_pa);
+	int dev_status = aw882xx_dev_status(aw882xx->aw_pa);
 
 	if (aw882xx->dc_flag) {
 		if (dev_status) {
-			dc_status = aw_dev_dc_status(aw882xx->aw_pa);
+			dc_status = aw882xx_dev_dc_status(aw882xx->aw_pa);
 			if (dc_status > 0) {
 				cancel_delayed_work_sync(&aw882xx->start_work);
 				mutex_lock(&aw882xx->lock);
-				aw_device_stop(aw882xx->aw_pa);
+				aw882xx_device_stop(aw882xx->aw_pa);
 				mutex_unlock(&aw882xx->lock);
 			} else {
 				queue_delayed_work(aw882xx->work_queue,
@@ -843,21 +843,21 @@ static void aw882xx_irq_restart(struct aw882xx *aw882xx)
 	mutex_lock(&aw882xx->lock);
 
 	/*stop pa*/
-	aw_device_stop(aw882xx->aw_pa);
+	aw882xx_device_stop(aw882xx->aw_pa);
 
 	/*hw reset*/
 	aw882xx_hw_reset(aw882xx);
 
 	/*aw reinit*/
 	if (aw882xx->fw_status == AW_DEV_FW_OK) {
-		ret = aw_device_irq_reinit(aw882xx->aw_pa);
+		ret = aw882xx_device_irq_reinit(aw882xx->aw_pa);
 		if (ret < 0) {
 			aw_dev_err(aw882xx->dev, "irq reinit failed");
 			goto failed_exit;
 		}
 
 		if (aw882xx->allow_pw && aw882xx->pstream) {
-			ret = aw_device_start(aw882xx->aw_pa);
+			ret = aw882xx_device_start(aw882xx->aw_pa);
 			if (ret) {
 				aw_dev_err(aw882xx->dev, "start failed");
 				goto failed_exit;
@@ -882,7 +882,7 @@ static void aw882xx_interrupt_work(struct work_struct *work)
 	aw_dev_info(aw882xx->dev, "enter");
 
 	/*read reg value*/
-	ret = aw_dev_get_int_status(aw882xx->aw_pa, &reg_value);
+	ret = aw882xx_dev_get_int_status(aw882xx->aw_pa, &reg_value);
 	if (ret < 0) {
 		aw_dev_err(aw882xx->dev, "get init_reg value failed");
 	} else {
@@ -897,10 +897,10 @@ static void aw882xx_interrupt_work(struct work_struct *work)
 	}
 
 	/*clear init reg*/
-	aw_dev_clear_int_status(aw882xx->aw_pa);
+	aw882xx_dev_clear_int_status(aw882xx->aw_pa);
 
 	/*unmask interrupt*/
-	aw_dev_set_intmask(aw882xx->aw_pa, true);
+	aw882xx_dev_set_intmask(aw882xx->aw_pa, true);
 }
 #else
 static void aw882xx_interrupt_work(struct work_struct *work)
@@ -916,7 +916,7 @@ static void aw882xx_interrupt_work(struct work_struct *work)
 	aw_dev_info(aw882xx->dev, "SYSINT is 0x%04x", (uint16_t)reg_value);
 
 	/*unmask interrupt*/
-	aw_dev_set_intmask(aw882xx->aw_pa, true);
+	aw882xx_dev_set_intmask(aw882xx->aw_pa, true);
 }
 #endif
 
@@ -938,7 +938,7 @@ static int aw882xx_set_rx_en(struct snd_kcontrol *kcontrol,
 	ctrl_value = ucontrol->value.integer.value[0];
 
 	if (aw882xx->pstream) {
-		ret = aw_dev_set_afe_module_en(AW_RX_MODULE, ctrl_value);
+		ret = aw882xx_dev_set_afe_module_en(AW_RX_MODULE, ctrl_value);
 		if (ret)
 			aw_dev_err(aw882xx->dev, "dsp_msg error, ret=%d", ret);
 	} else {
@@ -965,7 +965,7 @@ static int aw882xx_get_rx_en(struct snd_kcontrol *kcontrol,
 	aw_dev = aw882xx->aw_pa;
 
 	if (aw882xx->pstream) {
-		ret = aw_dev_get_afe_module_en(AW_RX_MODULE, &ctrl_value);
+		ret = aw882xx_dev_get_afe_module_en(AW_RX_MODULE, &ctrl_value);
 		if (ret)
 			aw_dev_err(aw882xx->dev, "dsp_msg error, ret=%d", ret);
 
@@ -998,7 +998,7 @@ static int aw882xx_set_tx_en(struct snd_kcontrol *kcontrol,
 	ctrl_value = ucontrol->value.integer.value[0];
 
 	if (aw882xx->pstream) {
-		ret = aw_dev_set_afe_module_en(AW_TX_MODULE, ctrl_value);
+		ret = aw882xx_dev_set_afe_module_en(AW_TX_MODULE, ctrl_value);
 		if (ret)
 			aw_dev_err(aw882xx->dev, "dsp_msg error, ret=%d", ret);
 	} else {
@@ -1024,7 +1024,7 @@ static int aw882xx_get_tx_en(struct snd_kcontrol *kcontrol,
 	aw_dev = aw882xx->aw_pa;
 
 	if (aw882xx->pstream) {
-		ret = aw_dev_get_afe_module_en(AW_TX_MODULE, &ctrl_value);
+		ret = aw882xx_dev_get_afe_module_en(AW_TX_MODULE, &ctrl_value);
 		if (ret) {
 			aw_dev_err(aw882xx->dev, "dsp_msg error, ret=%d", ret);
 			ctrl_value = 0;
@@ -1058,7 +1058,7 @@ static int aw882xx_set_copp_en(struct snd_kcontrol *kcontrol,
 	ctrl_value = ucontrol->value.integer.value[0];
 
 	if (aw882xx->pstream) {
-		ret = aw_dev_set_copp_module_en(ctrl_value);
+		ret = aw882xx_dev_set_copp_module_en(ctrl_value);
 		if (ret)
 			aw_dev_err(aw882xx->dev, "dsp_msg error, ret=%d", ret);
 	} else {
@@ -1089,11 +1089,11 @@ void aw882xx_kcontorl_set(struct aw882xx *aw882xx)
 {
 	int ret;
 
-	ret = aw_dev_set_afe_module_en(AW_RX_MODULE, g_algo_rx_en);
+	ret = aw882xx_dev_set_afe_module_en(AW_RX_MODULE, g_algo_rx_en);
 	if (ret)
 		aw_dev_err(aw882xx->dev, "afe set, ret=%d", ret);
 
-	ret = aw_dev_set_copp_module_en(g_algo_copp_en);
+	ret = aw882xx_dev_set_copp_module_en(g_algo_copp_en);
 	if (ret)
 		aw_dev_err(aw882xx->dev, "copp set error, ret=%d", ret);
 }
@@ -1119,7 +1119,7 @@ static int aw882xx_set_spin(struct snd_kcontrol *kcontrol,
 		return -EINVAL;
 	}
 
-	ret = aw_spin_value_set(aw_dev, ctrl_value, aw882xx->pstream);
+	ret = aw882xx_spin_value_set(aw_dev, ctrl_value, aw882xx->pstream);
 	if (ret)
 		aw_dev_err(aw882xx->dev, "set spin error, ret = %d", ret);
 	return ret;
@@ -1137,7 +1137,7 @@ static int aw882xx_get_spin(struct snd_kcontrol *kcontrol,
 	uint32_t ctrl_value = 0;
 
 	aw_dev = aw882xx->aw_pa;
-	ret = aw_spin_value_get(aw_dev, &ctrl_value, aw882xx->pstream);
+	ret = aw882xx_spin_value_get(aw_dev, &ctrl_value, aw882xx->pstream);
 	if (ret) {
 		aw_dev_err(aw882xx->dev, "get spin failed!, ret = %d", ret);
 		ctrl_value = 0;
@@ -1153,7 +1153,7 @@ static int aw882xx_get_fade_in_time(struct snd_kcontrol *kcontrol,
 {
 	unsigned int time;
 
-	aw_dev_get_fade_time(&time, true);
+	aw882xx_dev_get_fade_time(&time, true);
 	ucontrol->value.integer.value[0] = time;
 
 	aw_pr_dbg("step time %ld", ucontrol->value.integer.value[0]);
@@ -1172,7 +1172,7 @@ static int aw882xx_set_fade_in_time(struct snd_kcontrol *kcontrol,
 			ucontrol->value.integer.value[0], mc->max);
 		return 0;
 	}
-	aw_dev_set_fade_time(ucontrol->value.integer.value[0], true);
+	aw882xx_dev_set_fade_time(ucontrol->value.integer.value[0], true);
 
 	aw_pr_dbg("step time %ld", ucontrol->value.integer.value[0]);
 	return 0;
@@ -1183,7 +1183,7 @@ static int aw882xx_get_fade_out_time(struct snd_kcontrol *kcontrol,
 {
 	unsigned int time;
 
-	aw_dev_get_fade_time(&time, false);
+	aw882xx_dev_get_fade_time(&time, false);
 	ucontrol->value.integer.value[0] = time;
 
 	aw_pr_dbg("step time %ld", ucontrol->value.integer.value[0]);
@@ -1203,7 +1203,7 @@ static int aw882xx_set_fade_out_time(struct snd_kcontrol *kcontrol,
 		return 0;
 	}
 
-	aw_dev_set_fade_time(ucontrol->value.integer.value[0], false);
+	aw882xx_dev_set_fade_time(ucontrol->value.integer.value[0], false);
 
 	aw_pr_dbg("step time %ld", ucontrol->value.integer.value[0]);
 
@@ -1399,7 +1399,7 @@ static int aw882xx_codec_probe(aw_snd_soc_codec_t *aw_codec)
 	aw882xx_load_fw(aw882xx);
 
 	/*load cali re*/
-	aw_dev_init_cali_re(aw882xx->aw_pa);
+	aw882xx_dev_init_cali_re(aw882xx->aw_pa);
 
 	return 0;
 }
@@ -1410,7 +1410,7 @@ static void aw882xx_codec_remove(aw_snd_soc_codec_t *aw_codec)
 	struct aw882xx *aw882xx =
 		aw_componet_codec_ops.codec_get_drvdata(aw_codec);
 	aw_dev_info(aw882xx->dev, "enter");
-	aw_dev_deinit(aw882xx->aw_pa);
+	aw882xx_dev_deinit(aw882xx->aw_pa);
 	destroy_workqueue(aw882xx->work_queue);
 	aw882xx->work_queue = NULL;
 }
@@ -1421,7 +1421,7 @@ static int aw882xx_codec_remove(aw_snd_soc_codec_t *aw_codec)
 		aw_componet_codec_ops.codec_get_drvdata(aw_codec);
 
 	aw_dev_info(aw882xx->dev, "enter");
-	aw_dev_deinit(aw882xx->aw_pa);
+	aw882xx_dev_deinit(aw882xx->aw_pa);
 	destroy_workqueue(aw882xx->work_queue);
 	aw882xx->work_queue = NULL;
 	return 0;
@@ -1725,7 +1725,7 @@ static irqreturn_t aw882xx_irq(int irq, void *data)
 	aw_dev_info(aw882xx->dev, "enter");
 
 	/* mask all irq */
-	aw_dev_set_intmask(aw882xx->aw_pa, false);
+	aw882xx_dev_set_intmask(aw882xx->aw_pa, false);
 
 	/* upload workqueue */
 	if (aw882xx->work_queue)
@@ -1823,7 +1823,7 @@ static ssize_t aw882xx_rw_show(struct device *dev,
 	return len;
 }
 
- int aw882xx_awrw_write(struct aw882xx *aw882xx, const char *buf, size_t count)
+static int aw882xx_awrw_write(struct aw882xx *aw882xx, const char *buf, size_t count)
 {
 	int  i, ret;
 	char *data_buf = NULL;
@@ -2022,7 +2022,7 @@ static ssize_t aw882xx_dsp_re_show(struct device *dev,
 	int cali_re;
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 
-	ret = aw_dev_get_cali_re(aw882xx->aw_pa, &cali_re);
+	ret = aw882xx_dev_get_cali_re(aw882xx->aw_pa, &cali_re);
 	if (ret) {
 		len += snprintf(buf + len, PAGE_SIZE - len,
 			"read dsp_re failed!\n");
@@ -2048,7 +2048,7 @@ static ssize_t aw882xx_fade_step_store(struct device *dev,
 			aw_dev_info(aw882xx->dev, "step overflow %d Db", databuf[0]);
 			return count;
 		}
-		aw_dev_set_fade_vol_step(aw882xx->aw_pa, databuf[0]);
+		aw882xx_dev_set_fade_vol_step(aw882xx->aw_pa, databuf[0]);
 	}
 	aw_dev_info(aw882xx->dev, "set step %d Done", databuf[0]);
 
@@ -2062,7 +2062,7 @@ static ssize_t aw882xx_fade_step_show(struct device *dev,
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 
 	len += snprintf(buf + len, PAGE_SIZE - len,
-		"step: %d \n", aw_dev_get_fade_vol_step(aw882xx->aw_pa));
+		"step: %d \n", aw882xx_dev_get_fade_vol_step(aw882xx->aw_pa));
 
 	return len;
 }
@@ -2167,7 +2167,7 @@ static ssize_t aw882xx_algo_ver_show(struct device *dev,
 	char algo_ver_buf[ALGO_VERSION_MAX] = { 0 };
 	struct aw882xx *aw882xx = dev_get_drvdata(dev);
 
-	ret = aw_get_algo_version(aw882xx->aw_pa, algo_ver_buf);
+	ret = aw882xx_get_algo_version(aw882xx->aw_pa, algo_ver_buf);
 	if (ret < 0) {
 		len += snprintf(buf + len, PAGE_SIZE - len,
 				"read algo version failed!\n");
@@ -2328,7 +2328,7 @@ static int aw882xx_i2c_remove(struct i2c_client *i2c)
 	sysfs_remove_group(&i2c->dev.kobj, &aw882xx_attribute_group);
 
 	/*free device resource */
-	aw_device_remove(aw882xx->aw_pa);
+	aw882xx_device_remove(aw882xx->aw_pa);
 
 	/*unregister codec*/
 	aw882xx->codec_ops->unregister_codec(&i2c->dev);
@@ -2354,7 +2354,7 @@ static void aw882xx_i2c_shutdown(struct i2c_client *i2c)
 
 	aw_dev_info(aw882xx->dev, "enter");
 	mutex_lock(&aw882xx->lock);
-	aw_device_stop(aw882xx->aw_pa);
+	aw882xx_device_stop(aw882xx->aw_pa);
 	mutex_unlock(&aw882xx->lock);
 }
 

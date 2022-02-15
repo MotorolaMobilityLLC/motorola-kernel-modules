@@ -31,10 +31,10 @@
 #include <linux/cdev.h>
 #include <linux/list.h>
 #include <linux/string.h>
-#include "aw_bin_parse.h"
-#include "aw_device.h"
-#include "aw_data_type.h"
-#include "aw_log.h"
+#include "aw882xx_bin_parse.h"
+#include "aw882xx_device.h"
+#include "aw882xx_data_type.h"
+#include "aw882xx_log.h"
 
 
 #define AWINIC_CODE_VERSION "V0.0.7-V1.0.4"	/* "code version"-"excel version" */
@@ -664,7 +664,7 @@ static int aw_dev_parse_check_acf_by_hdr_v_1_0_0_0(struct aw_container *aw_cfg)
 }
 
 
-int aw_dev_parse_check_acf(struct aw_container *aw_cfg)
+int aw882xx_dev_parse_check_acf(struct aw_container *aw_cfg)
 {
 	struct aw_cfg_hdr *cfg_hdr = NULL;
 
@@ -788,7 +788,7 @@ static int aw_dev_parse_data_by_sec_type(struct aw_device *aw_dev, struct aw_cfg
 					prof_hdr->data_size,
 					scene_prof_desc);
 	case ACF_SEC_TYPE_MONITOR:
-		return aw_monitor_parse_fw(&aw_dev->monitor_desc,
+		return aw882xx_monitor_parse_fw(&aw_dev->monitor_desc,
 				(uint8_t *)cfg_hdr + prof_hdr->data_offset,
 				prof_hdr->data_size);
 	}
@@ -1089,7 +1089,7 @@ static int aw_dev_parse_drv_type_v_1_0_0_0(struct aw_device *aw_dev,
 			(*cur_scene_id)++;
 			break;
 		case ACF_SEC_TYPE_MONITOR:
-			ret = aw_monitor_parse_fw(&aw_dev->monitor_desc,
+			ret = aw882xx_monitor_parse_fw(&aw_dev->monitor_desc,
 					(uint8_t *)prof_hdr + cfg_dde->data_offset,
 					cfg_dde->data_size);
 			if (ret < 0) {
@@ -1288,7 +1288,7 @@ static int aw_dev_parse_acf_by_hdr_v_1_0_0_0(struct aw_device *aw_dev, struct aw
 	return 0;
 }
 
-int aw_dev_parse_acf(struct aw_device *aw_dev, struct aw_container *aw_cfg)
+int aw882xx_dev_parse_acf(struct aw_device *aw_dev, struct aw_container *aw_cfg)
 {
 	struct aw_cfg_hdr *cfg_hdr = NULL;
 	int ret;
@@ -1322,7 +1322,7 @@ int aw_dev_parse_acf(struct aw_device *aw_dev, struct aw_container *aw_cfg)
 	return 0;
 }
 
-char *aw_dev_get_prof_name(struct aw_device *aw_dev, int index)
+char *aw882xx_dev_get_prof_name(struct aw_device *aw_dev, int index)
 {
 	struct aw_prof_desc *prof_desc = NULL;
 	struct aw_prof_info *prof_info = &aw_dev->prof_info;
@@ -1343,7 +1343,7 @@ char *aw_dev_get_prof_name(struct aw_device *aw_dev, int index)
 	return prof_info->prof_name_list[prof_desc->id];
 }
 
-int aw_dev_get_profile_name(struct aw_device *aw_dev, char *name, int index)
+int aw88xx_dev_get_profile_name(struct aw_device *aw_dev, char *name, int index)
 {
 	int dev_profile_id;
 	struct aw_prof_info *prof_info = &aw_dev->prof_info;
@@ -1366,7 +1366,7 @@ int aw_dev_get_profile_name(struct aw_device *aw_dev, char *name, int index)
 	return 0;
 }
 
-struct aw_sec_data_desc *aw_dev_get_prof_data(struct aw_device *aw_dev, int index, int data_type)
+struct aw_sec_data_desc *aw882xx_dev_get_prof_data(struct aw_device *aw_dev, int index, int data_type)
 {
 	struct aw_sec_data_desc *sec_data = NULL;
 	struct aw_prof_desc *prof_desc = NULL;
@@ -1393,7 +1393,7 @@ struct aw_sec_data_desc *aw_dev_get_prof_data(struct aw_device *aw_dev, int inde
 	return sec_data;
 }
 
-int aw_dev_set_profile_index(struct aw_device *aw_dev, int index)
+int aw882xx_dev_set_profile_index(struct aw_device *aw_dev, int index)
 {
 	struct aw_prof_info *prof_info = &aw_dev->prof_info;
 	struct mutex *ext_dsp_prof_wr_lock = NULL;
@@ -1407,8 +1407,8 @@ int aw_dev_set_profile_index(struct aw_device *aw_dev, int index)
 			prof_info->prof_name_list[prof_info->prof_desc[index].id]);
 	}
 
-	ext_dsp_prof_wr_lock = aw_dev_get_ext_dsp_prof_wr_lock();
-	ext_dsp_prof_write = aw_dev_get_ext_dsp_prof_write();
+	ext_dsp_prof_wr_lock = aw882xx_dev_get_ext_dsp_prof_wr_lock();
+	ext_dsp_prof_write = aw882xx_dev_get_ext_dsp_prof_write();
 
 	mutex_lock(ext_dsp_prof_wr_lock);
 	*ext_dsp_prof_write = AW_EXT_DSP_WRITE_NONE;
@@ -1417,17 +1417,17 @@ int aw_dev_set_profile_index(struct aw_device *aw_dev, int index)
 	return 0;
 }
 
-int aw_dev_get_profile_count(struct aw_device *aw_dev)
+int aw882xx_dev_get_profile_count(struct aw_device *aw_dev)
 {
 	if (aw_dev == NULL) {
-		aw_dev_err(aw_dev->dev, "aw_dev is NULL");
+		aw_pr_err("aw_dev is NULL");
 		return -ENOMEM;
 	}
 
 	return aw_dev->prof_info.count;
 }
 
-int aw_dev_check_profile_index(struct aw_device *aw_dev, int index)
+int aw882xx_dev_check_profile_index(struct aw_device *aw_dev, int index)
 {
 	if ((index >= aw_dev->prof_info.count) || (index < 0))
 		return -EINVAL;
@@ -1435,7 +1435,7 @@ int aw_dev_check_profile_index(struct aw_device *aw_dev, int index)
 		return 0;
 }
 
-int aw_dev_get_profile_index(struct aw_device *aw_dev)
+int aw882xx_dev_get_profile_index(struct aw_device *aw_dev)
 {
 	return aw_dev->set_prof;
 }

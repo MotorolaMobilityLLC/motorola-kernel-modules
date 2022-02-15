@@ -24,9 +24,9 @@
 #include <linux/version.h>
 #include <linux/input.h>
 
-#include "aw_log.h"
+#include "aw882xx_log.h"
 #include "aw882xx.h"
-#include "aw_spin.h"
+#include "aw882xx_spin.h"
 
 static unsigned int g_spin_mode = 0;
 static unsigned int g_spin_value = 0;
@@ -67,14 +67,14 @@ static int aw_reg_write_spin(struct aw_device *aw_dev,
 	struct list_head *dev_list = NULL;
 
 	if ((g_spin_mode == AW_REG_MIXER_SPIN_MODE) && (mixer_en)) {
-		ret = aw_dsp_set_mixer_en(aw_dev, AW_AUDIO_MIX_ENABLE);
+		ret = aw882xx_dsp_set_mixer_en(aw_dev, AW_AUDIO_MIX_ENABLE);
 		if (ret)
 			return ret;
 
 		usleep_range(AW_100000_US, AW_100000_US + 10);
 	}
 
-	ret = aw_dev_get_list_head(&dev_list);
+	ret = aw882xx_dev_get_list_head(&dev_list);
 	if (ret) {
 		aw_dev_err(aw_dev->dev, "get dev list failed");
 		return ret;
@@ -90,7 +90,7 @@ static int aw_reg_write_spin(struct aw_device *aw_dev,
 	}
 
 	if ((g_spin_mode == AW_REG_MIXER_SPIN_MODE) && (mixer_en)) {
-		ret = aw_dsp_set_mixer_en(aw_dev, AW_AUDIO_MIX_DSIABLE);
+		ret = aw882xx_dsp_set_mixer_en(aw_dev, AW_AUDIO_MIX_DSIABLE);
 		if (ret)
 			return ret;
 	}
@@ -98,13 +98,13 @@ static int aw_reg_write_spin(struct aw_device *aw_dev,
 	return 0;
 }
 
-int aw_spin_set_record_val(struct aw_device *aw_dev)
+int aw882xx_spin_set_record_val(struct aw_device *aw_dev)
 {
 	int ret = -1;
 
 	mutex_lock(&g_spin_lock);
 	if (g_spin_mode == AW_ADSP_SPIN_MODE) {
-		ret = aw_dsp_write_spin(g_spin_value);
+		ret = aw882xx_dsp_write_spin(g_spin_value);
 		if (ret) {
 			mutex_unlock(&g_spin_lock);
 			return ret;
@@ -125,7 +125,7 @@ int aw_spin_set_record_val(struct aw_device *aw_dev)
 	return 0;
 }
 
-int aw_spin_value_get(struct aw_device *aw_dev,
+int aw882xx_spin_value_get(struct aw_device *aw_dev,
 				uint32_t *spin_val, bool pstream)
 {
 	int ret = 0;
@@ -134,12 +134,12 @@ int aw_spin_value_get(struct aw_device *aw_dev,
 			(g_spin_mode == AW_REG_MIXER_SPIN_MODE)) || (!pstream))
 		*spin_val = g_spin_value;
 	else if (g_spin_mode == AW_ADSP_SPIN_MODE)
-		ret = aw_dsp_read_spin(spin_val);
+		ret = aw882xx_dsp_read_spin(spin_val);
 
 	return ret;
 }
 
-int aw_spin_value_set(struct aw_device *aw_dev, uint32_t spin_val, bool pstream)
+int aw882xx_spin_value_set(struct aw_device *aw_dev, uint32_t spin_val, bool pstream)
 {
 	int ret = 0;
 
@@ -149,7 +149,7 @@ int aw_spin_value_set(struct aw_device *aw_dev, uint32_t spin_val, bool pstream)
 					(g_spin_mode == AW_REG_MIXER_SPIN_MODE))
 			ret = aw_reg_write_spin(aw_dev, spin_val, true);
 		else if (g_spin_mode == AW_ADSP_SPIN_MODE)
-			ret = aw_dsp_write_spin(spin_val);
+			ret = aw882xx_dsp_write_spin(spin_val);
 		else
 			aw_dev_info(aw_dev->dev, "can't set spin value");
 	} else {
@@ -235,7 +235,7 @@ static int aw_parse_spin_dts(struct aw_device *aw_dev)
 	return 0;
 }
 
-int aw_spin_init(struct aw_spin_desc *spin_desc)
+int aw882xx_spin_init(struct aw_spin_desc *spin_desc)
 {
 	int ret = 0;
 	struct aw_device *aw_dev =

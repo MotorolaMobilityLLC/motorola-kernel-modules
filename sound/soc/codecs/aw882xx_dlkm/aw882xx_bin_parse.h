@@ -1,7 +1,7 @@
-#ifndef __AW_BIN_PARSE_H__
-#define __AW_BIN_PARSE_H__
+#ifndef __AW882XX_BIN_PARSE_H__
+#define __AW882XX_BIN_PARSE_H__
 
-#include "aw_device.h"
+#include "aw882xx_device.h"
 
 #define NULL    ((void *)0)
 #define GET_32_DATA(w, x, y, z) ((unsigned int)((((uint32_t)w) << 24) | (((uint32_t)x) << 16) | (((uint32_t)y) << 8) | ((uint32_t)z)))
@@ -73,17 +73,17 @@ struct aw_bin {
 
 /*******************awinic audio parse acf***********************/
 
-int aw_dev_parse_check_acf(struct aw_container *aw_cfg);
-int aw_dev_parse_acf(struct aw_device *aw_dev, struct aw_container *aw_cfg);
+int aw882xx_dev_parse_check_acf(struct aw_container *aw_cfg);
+int aw882xx_dev_parse_acf(struct aw_device *aw_dev, struct aw_container *aw_cfg);
 
 
-int aw_dev_get_profile_count(struct aw_device *aw_dev);
-int aw_dev_get_profile_name(struct aw_device *aw_dev, char *name, int index);
-int aw_dev_check_profile_index(struct aw_device *aw_dev, int index);
-int aw_dev_get_profile_index(struct aw_device *aw_dev);
-int aw_dev_set_profile_index(struct aw_device *aw_dev, int index);
-char *aw_dev_get_prof_name(struct aw_device *aw_dev, int index);
-struct aw_sec_data_desc *aw_dev_get_prof_data(struct aw_device *aw_dev, int index, int data_type);
+int aw882xx_dev_get_profile_count(struct aw_device *aw_dev);
+int aw88xx_dev_get_profile_name(struct aw_device *aw_dev, char *name, int index);
+int aw882xx_dev_check_profile_index(struct aw_device *aw_dev, int index);
+int aw882xx_dev_get_profile_index(struct aw_device *aw_dev);
+int aw882xx_dev_set_profile_index(struct aw_device *aw_dev, int index);
+char *aw882xx_dev_get_prof_name(struct aw_device *aw_dev, int index);
+struct aw_sec_data_desc *aw882xx_dev_get_prof_data(struct aw_device *aw_dev, int index, int data_type);
 
 
 #endif

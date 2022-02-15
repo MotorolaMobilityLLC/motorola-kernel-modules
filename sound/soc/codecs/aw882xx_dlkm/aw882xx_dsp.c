@@ -11,10 +11,10 @@
 #include <linux/of.h>
 #include <linux/version.h>
 
-#include "aw_device.h"
-#include "aw_dsp.h"
-#include "aw_log.h"
-/*#include "aw_afe.h"*/
+#include "aw882xx_device.h"
+#include "aw882xx_dsp.h"
+#include "aw882xx_log.h"
+/*#include "aw882xx_afe.h"*/
 
 static DEFINE_MUTEX(g_aw_dsp_msg_lock);
 static DEFINE_MUTEX(g_aw_dsp_lock);
@@ -53,10 +53,10 @@ static DEFINE_MUTEX(g_aw_dsp_lock);
 
 #define AW_MSG_ID_SPIN		(0x10013D2E)
 
-int g_tx_topo_id = AW_TX_DEFAULT_TOPO_ID;
-int g_rx_topo_id = AW_RX_DEFAULT_TOPO_ID;
-int g_tx_port_id = AW_TX_DEFAULT_PORT_ID;
-int g_rx_port_id = AW_RX_DEFAULT_PORT_ID;
+static int g_tx_topo_id = AW_TX_DEFAULT_TOPO_ID;
+static int g_rx_topo_id = AW_RX_DEFAULT_TOPO_ID;
+static int g_tx_port_id = AW_TX_DEFAULT_PORT_ID;
+static int g_rx_port_id = AW_RX_DEFAULT_PORT_ID;
 
 enum {
 	MSG_PARAM_ID_0 = 0,
@@ -339,69 +339,42 @@ static int aw_afe_get_topology(uint32_t param_id)
 		return afe_get_topology(g_rx_port_id);
 }
 
-static int aw_check_dsp_ready(uint32_t param_id)
+static void aw_check_dsp_ready(uint32_t param_id)
 {
 	int ret;
 
 	ret = aw_afe_get_topology(param_id);
 
-	aw_pr_dbg("topo_id 0x%x ", ret);
-
 	if (param_id == AW_MSG_ID_TX_SET_ENABLE) {
 		if (ret != g_tx_topo_id)
-			return false;
-		else
-			return true;
+			aw_pr_err("tx topo id is 0x%x", ret);
 	} else {
 		if (ret != g_rx_topo_id)
-			return false;
-		else
-			return true;
+			aw_pr_err("rx topo id is 0x%x", ret);
 	}
 }
 
 static int aw_qcom_write_data_to_dsp(uint32_t param_id, void *data, int size)
 {
 	int ret;
-	int try = 0;
 
+	aw_check_dsp_ready(param_id);
 	mutex_lock(&g_aw_dsp_lock);
-	while (try < AW_DSP_TRY_TIME) {
-		if (aw_check_dsp_ready(param_id)) {
-			ret = aw_send_afe_cal_apr(param_id, data, size, true);
-			mutex_unlock(&g_aw_dsp_lock);
-			return ret;
-		} else {
-			try++;
-			usleep_range(AW_10000_US, AW_10000_US + 10);
-			aw_pr_info("afe topo not ready try again");
-		}
-	}
+	ret = aw_send_afe_cal_apr(param_id, data, size, true);
 	mutex_unlock(&g_aw_dsp_lock);
-
-	return -EINVAL;
+	return ret;
 }
 
 static int aw_qcom_read_data_from_dsp(uint32_t param_id, void *data, int size)
 {
 	int ret;
-	int try = 0;
 
+	aw_check_dsp_ready(param_id);
 	mutex_lock(&g_aw_dsp_lock);
-	while (try < AW_DSP_TRY_TIME) {
-		if (aw_check_dsp_ready(param_id)) {
-			ret = aw_send_afe_cal_apr(param_id, data, size, false);
-			mutex_unlock(&g_aw_dsp_lock);
-			return ret;
-		} else {
-			try++;
-			usleep_range(AW_10000_US, AW_10000_US + 10);
-			aw_pr_info("afe topo not ready try again");
-		}
-	}
+	ret = aw_send_afe_cal_apr(param_id, data, size, false);
 	mutex_unlock(&g_aw_dsp_lock);
 
-	return -EINVAL;
+	return ret;
 }
 
 static int aw_qcom_write_msg_to_dsp(int msg_num, uint32_t msg_id, char *data_ptr, unsigned int size)
@@ -552,7 +525,7 @@ static int aw_write_data_to_dsp(uint32_t param_id, void *data, int size)
 }
 
 /************************* dsp communication function *****************************/
-int aw_dsp_set_afe_module_en(int type, int enable)
+int aw882xx_dsp_set_afe_module_en(int type, int enable)
 {
 	int ret;
 
@@ -571,7 +544,7 @@ int aw_dsp_set_afe_module_en(int type, int enable)
 	return ret;
 }
 
-int aw_dsp_get_afe_module_en(int type, int *status)
+int aw882xx_dsp_get_afe_module_en(int type, int *status)
 {
 	int ret;
 
@@ -590,7 +563,7 @@ int aw_dsp_get_afe_module_en(int type, int *status)
 	return ret;
 }
 
-int aw_dsp_read_te(struct aw_device *aw_dev, int32_t *te)
+int aw882xx_dsp_read_te(struct aw_device *aw_dev, int32_t *te)
 {
 	int ret;
 	int msg_num;
@@ -618,7 +591,7 @@ int aw_dsp_read_te(struct aw_device *aw_dev, int32_t *te)
 	return 0;
 }
 
-int aw_dsp_read_st(struct aw_device *aw_dev, int32_t *r0, int32_t *te)
+int aw882xx_dsp_read_st(struct aw_device *aw_dev, int32_t *r0, int32_t *te)
 {
 	int ret;
 	int msg_num;
@@ -648,7 +621,7 @@ int aw_dsp_read_st(struct aw_device *aw_dev, int32_t *r0, int32_t *te)
 	return 0;
 }
 
-int aw_dsp_read_spin(int *spin_mode)
+int aw882xx_dsp_read_spin(int *spin_mode)
 {
 	int ret;
 	int32_t spin = 0;
@@ -664,7 +637,7 @@ int aw_dsp_read_spin(int *spin_mode)
 	return 0;
 }
 
-int aw_dsp_write_spin(int spin_mode)
+int aw882xx_dsp_write_spin(int spin_mode)
 {
 	int ret;
 	int32_t spin = spin_mode;
@@ -683,7 +656,7 @@ int aw_dsp_write_spin(int spin_mode)
 	return 0;
 }
 
-int aw_dsp_read_r0(struct aw_device *aw_dev, int32_t *r0)
+int aw882xx_dsp_read_r0(struct aw_device *aw_dev, int32_t *r0)
 {
 	uint32_t msg_id;
 	int ret;
@@ -718,7 +691,7 @@ int aw_dsp_read_r0(struct aw_device *aw_dev, int32_t *r0)
 	return 0;
 }
 
-int aw_dsp_read_cali_data(struct aw_device *aw_dev, char *data, unsigned int data_len)
+int aw882xx_dsp_read_cali_data(struct aw_device *aw_dev, char *data, unsigned int data_len)
 {
 	uint32_t msg_id;
 	int ret;
@@ -751,7 +724,7 @@ int aw_dsp_read_cali_data(struct aw_device *aw_dev, char *data, unsigned int dat
 }
 
 
-int aw_dsp_get_dc_status(struct aw_device *aw_dev)
+int aw882xx_dsp_get_dc_status(struct aw_device *aw_dev)
 {
 	int ret;
 	int msg_num;
@@ -778,7 +751,7 @@ int aw_dsp_get_dc_status(struct aw_device *aw_dev)
 	return ret;
 }
 
-int aw_dsp_read_f0_q(struct aw_device *aw_dev, int32_t *f0, int32_t *q)
+int aw882xx_dsp_read_f0_q(struct aw_device *aw_dev, int32_t *f0, int32_t *q)
 {
 	int ret;
 	int msg_num;
@@ -807,7 +780,7 @@ int aw_dsp_read_f0_q(struct aw_device *aw_dev, int32_t *f0, int32_t *q)
 	return ret;
 }
 
-int aw_dsp_read_f0(struct aw_device *aw_dev, int32_t *f0)
+int aw882xx_dsp_read_f0(struct aw_device *aw_dev, int32_t *f0)
 {
 	int ret;
 	uint32_t msg_id;
@@ -839,7 +812,7 @@ int aw_dsp_read_f0(struct aw_device *aw_dev, int32_t *f0)
 	return 0;
 }
 
-int aw_dsp_cali_en(struct aw_device *aw_dev, bool is_enable)
+int aw882xx_dsp_cali_en(struct aw_device *aw_dev, bool is_enable)
 {
 	int ret;
 	int msg_num;
@@ -860,7 +833,7 @@ int aw_dsp_cali_en(struct aw_device *aw_dev, bool is_enable)
 	return 0;
 }
 
-int aw_dsp_hmute_en(struct aw_device *aw_dev, bool is_hmute)
+int aw882xx_dsp_hmute_en(struct aw_device *aw_dev, bool is_hmute)
 {
 	int ret;
 	int32_t hmute = is_hmute;
@@ -881,7 +854,7 @@ int aw_dsp_hmute_en(struct aw_device *aw_dev, bool is_hmute)
 	return 0;
 }
 
-int aw_dsp_read_cali_re(struct aw_device *aw_dev, int32_t *cali_re)
+int aw882xx_dsp_read_cali_re(struct aw_device *aw_dev, int32_t *cali_re)
 {
 	int ret;
 	uint32_t msg_id;
@@ -915,7 +888,7 @@ int aw_dsp_read_cali_re(struct aw_device *aw_dev, int32_t *cali_re)
 	return 0;
 }
 
-int aw_dsp_write_cali_re(struct aw_device *aw_dev, int32_t cali_re)
+int aw882xx_dsp_write_cali_re(struct aw_device *aw_dev, int32_t cali_re)
 {
 	int ret;
 	uint32_t msg_id;
@@ -948,7 +921,7 @@ int aw_dsp_write_cali_re(struct aw_device *aw_dev, int32_t cali_re)
 	return 0;
 }
 
-int aw_dsp_write_params(struct aw_device *aw_dev, char *data, unsigned int data_len)
+int aw882xx_dsp_write_params(struct aw_device *aw_dev, char *data, unsigned int data_len)
 {
 	int ret;
 	uint32_t msg_id;
@@ -974,7 +947,7 @@ int aw_dsp_write_params(struct aw_device *aw_dev, char *data, unsigned int data_
 	return 0;
 }
 
-int aw_dsp_read_vmax(struct aw_device *aw_dev, char *data, unsigned int data_len)
+int aw882xx_dsp_read_vmax(struct aw_device *aw_dev, char *data, unsigned int data_len)
 {
 	int ret;
 	uint32_t msg_id;
@@ -1006,7 +979,7 @@ int aw_dsp_read_vmax(struct aw_device *aw_dev, char *data, unsigned int data_len
 	return 0;
 }
 
-int aw_dsp_write_vmax(struct aw_device *aw_dev, char *data, unsigned int data_len)
+int aw882xx_dsp_write_vmax(struct aw_device *aw_dev, char *data, unsigned int data_len)
 {
 	int ret;
 	uint32_t msg_id;
@@ -1038,7 +1011,7 @@ int aw_dsp_write_vmax(struct aw_device *aw_dev, char *data, unsigned int data_le
 	return 0;
 }
 
-int aw_dsp_noise_en(struct aw_device *aw_dev, bool is_noise)
+int aw882xx_dsp_noise_en(struct aw_device *aw_dev, bool is_noise)
 {
 	int ret;
 	int32_t noise = is_noise;
@@ -1071,7 +1044,7 @@ int aw_dsp_noise_en(struct aw_device *aw_dev, bool is_noise)
 	return 0;
 }
 
-int aw_dsp_read_cali_cfg(struct aw_device *aw_dev, char *data, unsigned int data_len)
+int aw882xx_dsp_read_cali_cfg(struct aw_device *aw_dev, char *data, unsigned int data_len)
 {
 	int ret;
 	uint32_t msg_id;
@@ -1103,7 +1076,7 @@ int aw_dsp_read_cali_cfg(struct aw_device *aw_dev, char *data, unsigned int data
 	return 0;
 }
 
-int aw_dsp_write_cali_cfg(struct aw_device *aw_dev, char *data, unsigned int data_len)
+int aw882xx_dsp_write_cali_cfg(struct aw_device *aw_dev, char *data, unsigned int data_len)
 {
 	int ret;
 	uint32_t msg_id;
@@ -1136,7 +1109,7 @@ int aw_dsp_write_cali_cfg(struct aw_device *aw_dev, char *data, unsigned int dat
 	return 0;
 }
 
-int aw_dsp_read_msg(struct aw_device *aw_dev,
+int aw882xx_dsp_read_msg(struct aw_device *aw_dev,
 	uint32_t msg_id, char *data_ptr, unsigned int data_size)
 {
 	int ret;
@@ -1151,7 +1124,7 @@ int aw_dsp_read_msg(struct aw_device *aw_dev,
 	return aw_read_msg_from_dsp(msg_num, msg_id, data_ptr, data_size);
 }
 
-int aw_dsp_write_msg(struct aw_device *aw_dev,
+int aw882xx_dsp_write_msg(struct aw_device *aw_dev,
 	uint32_t msg_id, char *data_ptr, unsigned int data_size)
 {
 	int ret;
@@ -1166,7 +1139,7 @@ int aw_dsp_write_msg(struct aw_device *aw_dev,
 	return aw_write_msg_to_dsp(msg_num, msg_id, data_ptr, data_size);
 }
 
-int aw_dsp_set_copp_module_en(bool enable)
+int aw882xx_dsp_set_copp_module_en(bool enable)
 {
 	int ret;
 
@@ -1180,7 +1153,7 @@ int aw_dsp_set_copp_module_en(bool enable)
 }
 
 
-int aw_dsp_set_mixer_en(struct aw_device *aw_dev, uint32_t mixer_en)
+int aw882xx_dsp_set_mixer_en(struct aw_device *aw_dev, uint32_t mixer_en)
 {
 	int ret;
 	int msg_num;
@@ -1201,7 +1174,7 @@ int aw_dsp_set_mixer_en(struct aw_device *aw_dev, uint32_t mixer_en)
 
 }
 
-int aw_get_algo_version(struct aw_device *aw_dev, char *algo_ver_buf)
+int aw882xx_get_algo_version(struct aw_device *aw_dev, char *algo_ver_buf)
 {
 	int ret;
 	unsigned int algo_ver = 0;
@@ -1231,7 +1204,7 @@ int aw_get_algo_version(struct aw_device *aw_dev, char *algo_ver_buf)
 	return 0;
 }
 
-void aw_device_parse_topo_id_dt(struct aw_device *aw_dev)
+void aw882xx_device_parse_topo_id_dt(struct aw_device *aw_dev)
 {
 	int ret;
 
@@ -1251,7 +1224,7 @@ void aw_device_parse_topo_id_dt(struct aw_device *aw_dev)
 						g_tx_topo_id, g_rx_topo_id);
 }
 
-void aw_device_parse_port_id_dt(struct aw_device *aw_dev)
+void aw882xx_device_parse_port_id_dt(struct aw_device *aw_dev)
 {
 	int ret;
 
