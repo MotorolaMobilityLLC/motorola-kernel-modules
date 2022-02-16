@@ -1695,10 +1695,23 @@ static int sx937x_remove(struct i2c_client *client)
 static int sx937x_suspend(struct device *dev)
 {
 	psx93XX_t this = dev_get_drvdata(dev);
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+	psx937x_t pDevice = NULL;
+	psx937x_platform_data_t pdata = NULL;
+#endif
+
 	if (this) {
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+		pDevice = this->pDevice;
+		pdata = pDevice->hw;
+		if (pdata->cap_vdd_en) {
+#endif
 		sx937x_i2c_write_16bit(this,SX937X_COMMAND,0xD);//make sx937x in Sleep mode
 		LOG_DBG(LOG_TAG "sx937x suspend:disable irq!\n");
 		disable_irq(this->irq);
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+		}
+#endif
 	}
 	return 0;
 }
@@ -1706,11 +1719,23 @@ static int sx937x_suspend(struct device *dev)
 static int sx937x_resume(struct device *dev)
 {
 	psx93XX_t this = dev_get_drvdata(dev);
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+	psx937x_t pDevice = NULL;
+	psx937x_platform_data_t pdata = NULL;
+#endif
 	if (this) {
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+		pDevice = this->pDevice;
+		pdata = pDevice->hw;
+		if (pdata->cap_vdd_en) {
+#endif
 		LOG_DBG(LOG_TAG "sx937x resume:enable irq!\n");
 		sx93XX_schedule_work(this,0);
 		enable_irq(this->irq);
 		sx937x_i2c_write_16bit(this,SX937X_COMMAND,0xC);//Exit from Sleep mode
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
+		}
+#endif
 	}
 	return 0;
 }
