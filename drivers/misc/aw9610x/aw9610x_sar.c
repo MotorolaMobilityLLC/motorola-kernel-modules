@@ -40,7 +40,7 @@
 #include "base.h"
 
 #define AW9610X_I2C_NAME "aw9610x_sar"
-#define AW9610X_DRIVER_VERSION "v0.1.9"
+#define AW9610X_DRIVER_VERSION "v0.1.9.3"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
 #define USB_POWER_SUPPLY_NAME   "charger"
@@ -698,15 +698,6 @@ aw9610x_cfg_all_loaded(const struct firmware *cont, void *context)
 		return;
 	}
 
-	ret = strcmp(aw9610x->chip_name, aw_bin->header_info[0].chip_type);
-	if (ret != 0) {
-		LOG_ERR("chip name(%s) incompatible with chip type(%s)",aw9610x->chip_name, aw_bin->header_info[0].chip_type);
-
-		kfree(aw_bin);
-		release_firmware(cont);
-		return;
-	}
-
 	aw9610x_bin_valid_loaded(aw9610x, aw_bin);
 	kfree(aw_bin);
 	release_firmware(cont);
@@ -779,8 +770,6 @@ static int32_t aw9610x_init_irq_handle(struct aw9610x *aw9610x)
 {
 	uint8_t cnt = 20;
 	uint32_t reg_data;
-	uint32_t trim0 = 0;
-	uint32_t trim1 = 0;
 
 	LOG_DBG("enter");
 
@@ -788,12 +777,6 @@ static int32_t aw9610x_init_irq_handle(struct aw9610x *aw9610x)
 		aw9610x_i2c_read(aw9610x, REG_HOSTIRQSRC, &reg_data);
 		aw9610x->first_irq_flag = reg_data & 0x01;
 		if (aw9610x->first_irq_flag == 1) {
-			aw9610x_i2c_read(aw9610x, REG_EEDA0, &trim0);
-			aw9610x_i2c_read(aw9610x, REG_EEDA1, &trim1);
-			if ((trim0 + trim1) == 0) {
-				LOG_ERR("aw9610x trim error");
-				return -AW_TRIM_ERROR;
-			}
 			LOG_DBG("cnt = %d", cnt);
 			return AW_SAR_SUCCESS;
 		}
@@ -1794,7 +1777,7 @@ static int32_t aw9610x_parse_dt(struct device *dev, struct aw9610x *aw9610x,
 		return -AW_MULTIPLE_SAR_FAILED;
 	} else {
 		LOG_INFO("sar num = %d", aw9610x->sar_num);
-	}	
+	}
 	val = of_property_read_u32(np, "aw9610x,channel_number", &aw9610x->aw_channel_number);
 	if (val != 0) {
 		LOG_ERR("aw_channel_number failed!");
@@ -1963,7 +1946,7 @@ static int32_t aw9610x_version_init(struct aw9610x *aw9610x)
 
 	aw9610x->chip_name[8] = '\0';
 
-	LOG_INFO("the IC is = %s", aw9610x->chip_name);
+        LOG_INFO("REG_FIRMVERSION = 0x%x", firmvers);
 
 	return AW_SAR_SUCCESS;
 }
