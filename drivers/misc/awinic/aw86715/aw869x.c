@@ -33,21 +33,24 @@
 #include "haptic_hv_reg.h"
 #include "haptic_hv.h"
 
+static void aw869x_vbat_mode_config(struct aw_haptic *, uint8_t);
+
 static int aw869x_check_qualify(struct aw_haptic *aw_haptic)
 {
+	aw_info("enter");
 	return 0;
 }
 
 static void aw869x_ram_init(struct aw_haptic *aw_haptic, bool flag)
 {
 	if (flag == true) {
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   AW869X_BIT_SYSCTRL_RAMINIT_MASK,
-			   AW869X_BIT_SYSCTRL_RAMINIT_EN);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 AW869X_BIT_SYSCTRL_RAMINIT_MASK,
+					 AW869X_BIT_SYSCTRL_RAMINIT_EN);
 	} else {
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   AW869X_BIT_SYSCTRL_RAMINIT_MASK,
-			   AW869X_BIT_SYSCTRL_RAMINIT_OFF);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 AW869X_BIT_SYSCTRL_RAMINIT_MASK,
+					 AW869X_BIT_SYSCTRL_RAMINIT_OFF);
 	}
 }
 
@@ -55,8 +58,9 @@ static void aw869x_play_go(struct aw_haptic *aw_haptic, bool flag)
 {
 	aw_info("enter, flag = %d", flag);
 	if (flag) {
-		i2c_w_bits(aw_haptic, AW869X_REG_GO,
-			   AW869X_BIT_GO_MASK, AW869X_BIT_GO_ENABLE);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_GO,
+					 AW869X_BIT_GO_MASK,
+					 AW869X_BIT_GO_ENABLE);
 		aw_haptic->kpre_enter_time = ktime_get();
 	} else {
 		aw_haptic->kcurrent_time = ktime_get();
@@ -68,18 +72,20 @@ static void aw869x_play_go(struct aw_haptic *aw_haptic, bool flag)
 				aw_haptic->interval_us);
 			usleep_range(2000, 2500);
 		}
-		i2c_w_bits(aw_haptic, AW869X_REG_GO,
-			   AW869X_BIT_GO_MASK, AW869X_BIT_GO_DISABLE);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_GO,
+					 AW869X_BIT_GO_MASK,
+					 AW869X_BIT_GO_DISABLE);
 	}
 }
 
 static uint8_t aw869x_get_glb_state(struct aw_haptic *aw_haptic)
 {
-	uint8_t glb_state_val = 0;
+	uint8_t state = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_GLB_STATE, &glb_state_val,
-		    AW_I2C_BYTE_ONE);
-	return glb_state_val;
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_GLB_STATE, &state,
+			    AW_I2C_BYTE_ONE);
+	aw_dbg("glb state value is 0x%02X", state);
+	return state;
 }
 
 #ifdef AW_CHECK_RAM_DATA
@@ -129,40 +135,42 @@ static int aw869x_container_update(struct aw_haptic *aw_haptic,
 	fifo_adr[2] = (uint8_t)AW869X_FIFO_AF_ADDR_H(aw_haptic->ram.base_addr);
 	fifo_adr[3] = (uint8_t)AW869X_FIFO_AF_ADDR_L(aw_haptic->ram.base_addr);
 	aw_info("base_addr=0x%04x", aw_haptic->ram.base_addr);
-	i2c_w_bytes(aw_haptic, AW869X_REG_BASE_ADDRH, &awinic_cont->data[shift],
-		    AW_I2C_BYTE_TWO);
-	i2c_w_bytes(aw_haptic, AW869X_REG_FIFO_AEH, fifo_adr, AW_I2C_BYTE_FOUR);
-	i2c_r_bytes(aw_haptic, AW869X_REG_FIFO_AEH, fifo_adr, AW_I2C_BYTE_FOUR);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_BASE_ADDRH,
+			     &awinic_cont->data[shift], AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_FIFO_AEH, fifo_adr,
+			     AW_I2C_BYTE_FOUR);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_FIFO_AEH, fifo_adr,
+			    AW_I2C_BYTE_FOUR);
 	ae_thr = (((fifo_adr[0] & 0x0f) << 8) | fifo_adr[1]);
 	aw_info("almost_empty_threshold = %d", ae_thr);
 	af_thr = (((fifo_adr[2] & 0x0f) << 8) | fifo_adr[3]);
 	aw_info("almost_full_threshold = %d", af_thr);
 	/* ram */
 	shift = aw_haptic->ram.baseaddr_shift;
-	i2c_w_bytes(aw_haptic, AW869X_REG_RAMADDRH, &awinic_cont->data[shift],
-		    AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_RAMADDRH,
+			     &awinic_cont->data[shift], AW_I2C_BYTE_TWO);
 	i = aw_haptic->ram.ram_shift;
 	while (i < awinic_cont->len) {
 		if ((awinic_cont->len - i) < AW_RAMDATA_WR_BUFFER_SIZE)
 			len = awinic_cont->len - i;
 		else
 			len = AW_RAMDATA_WR_BUFFER_SIZE;
-		i2c_w_bytes(aw_haptic, AW869X_REG_RAMDATA,
-			    &awinic_cont->data[i], len);
+		haptic_hv_i2c_writes(aw_haptic, AW869X_REG_RAMDATA,
+				     &awinic_cont->data[i], len);
 		i += len;
 	}
 #ifdef AW_CHECK_RAM_DATA
 	/* ram check */
 	shift = aw_haptic->ram.baseaddr_shift;
-	i2c_w_bytes(aw_haptic, AW869X_REG_RAMADDRH, &awinic_cont->data[shift],
-		    AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_RAMADDRH,
+			     &awinic_cont->data[shift], AW_I2C_BYTE_TWO);
 	i = aw_haptic->ram.ram_shift;
 	while (i < awinic_cont->len) {
 		if ((awinic_cont->len - i) < AW_RAMDATA_RD_BUFFER_SIZE)
 			len = awinic_cont->len - i;
 		else
 			len = AW_RAMDATA_RD_BUFFER_SIZE;
-		i2c_r_bytes(aw_haptic, AW869X_REG_RAMDATA,
+		haptic_hv_i2c_reads(aw_haptic, AW869X_REG_RAMDATA,
 				    ram_data, len);
 		ret = aw869x_check_ram_data(aw_haptic, &awinic_cont->data[i],
 					    ram_data, len);
@@ -195,15 +203,15 @@ static void aw869x_bst_mode_config(struct aw_haptic *aw_haptic,
 	switch (boost_mode) {
 	case AW_BST_BOOST_MODE:
 		aw_info("haptic boost mode = boost");
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   AW869X_BIT_SYSCTRL_BST_MODE_MASK,
-			   AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 AW869X_BIT_SYSCTRL_BST_MODE_MASK,
+					 AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
 		break;
 	case AW_BST_BYPASS_MODE:
 		aw_info("haptic boost mode = bypass");
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   AW869X_BIT_SYSCTRL_BST_MODE_MASK,
-			   AW869X_BIT_SYSCTRL_BST_MODE_BYPASS);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 AW869X_BIT_SYSCTRL_BST_MODE_MASK,
+					 AW869X_BIT_SYSCTRL_BST_MODE_BYPASS);
 		break;
 	default:
 		aw_err("boost_mode = %d error", boost_mode);
@@ -215,18 +223,20 @@ static void aw869x_irq_clear(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_SYSINT, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSINT, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	aw_dbg("reg SYSINT=0x%x", reg_val);
 }
 
 static void aw869x_active(struct aw_haptic *aw_haptic)
 {
-	i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-		   AW869X_BIT_SYSCTRL_WORK_MODE_MASK,
-		   AW869X_BIT_SYSCTRL_ACTIVE);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+				 AW869X_BIT_SYSCTRL_WORK_MODE_MASK,
+				 AW869X_BIT_SYSCTRL_ACTIVE);
 	aw869x_irq_clear(aw_haptic);
-	i2c_w_bits(aw_haptic, AW869X_REG_SYSINTM, AW869X_BIT_SYSINTM_UVLO_MASK,
-		   AW869X_BIT_SYSINTM_UVLO_EN);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSINTM,
+				 AW869X_BIT_SYSINTM_UVLO_MASK,
+				 AW869X_BIT_SYSINTM_UVLO_EN);
 }
 
 static void aw869x_play_mode(struct aw_haptic *aw_haptic, uint8_t play_mode)
@@ -235,138 +245,143 @@ static void aw869x_play_mode(struct aw_haptic *aw_haptic, uint8_t play_mode)
 	case AW_STANDBY_MODE:
 		aw_info("enter standby mode");
 		aw_haptic->play_mode = AW_STANDBY_MODE;
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSINTM,
-			   AW869X_BIT_SYSINTM_UVLO_MASK,
-			   AW869X_BIT_SYSINTM_UVLO_OFF);
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   AW869X_BIT_SYSCTRL_WORK_MODE_MASK,
-			   AW869X_BIT_SYSCTRL_STANDBY);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSINTM,
+					 AW869X_BIT_SYSINTM_UVLO_MASK,
+					 AW869X_BIT_SYSINTM_UVLO_OFF);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 AW869X_BIT_SYSCTRL_WORK_MODE_MASK,
+					 AW869X_BIT_SYSCTRL_STANDBY);
 		break;
 	case AW_RAM_MODE:
 		aw_info("enter ram mode");
 		aw_haptic->play_mode = AW_RAM_MODE;
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
-			    AW869X_BIT_SYSCTRL_BST_MODE_MASK),
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_RAM |
-			    AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
+					  AW869X_BIT_SYSCTRL_BST_MODE_MASK),
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_RAM |
+					  AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
+					   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
 		}
 		aw869x_active(aw_haptic);
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RAM_ENABLE);
-			i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-				   (AW869X_BIT_SYSCTRL_BST_MODE_MASK &
-				    AW869X_BIT_SYSCTRL_WORK_MODE_MASK),
-				   (AW869X_BIT_SYSCTRL_BST_MODE_BOOST |
-				    AW869X_BIT_SYSCTRL_STANDBY));
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					    AW869X_BIT_BST_AUTO_BST_RAM_MASK,
+					    AW869X_BIT_BST_AUTO_BST_RAM_ENABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					    (AW869X_BIT_SYSCTRL_BST_MODE_MASK &
+					     AW869X_BIT_SYSCTRL_WORK_MODE_MASK),
+					    (AW869X_BIT_SYSCTRL_BST_MODE_BOOST |
+					     AW869X_BIT_SYSCTRL_STANDBY));
 			aw869x_active(aw_haptic);
 		} else {
-			i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-				   AW869X_BIT_SYSCTRL_BST_MODE_MASK,
-				   AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					     AW869X_BIT_SYSCTRL_BST_MODE_MASK,
+					     AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
 		}
 		usleep_range(2000, 2500);
+		aw869x_vbat_mode_config(aw_haptic, AW_CONT_VBAT_SW_COMP_MODE);
 		break;
 	case AW_RAM_LOOP_MODE:
 		aw_info("enter ram loop mode");
 		aw_haptic->play_mode = AW_RAM_LOOP_MODE;
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
-			    AW869X_BIT_SYSCTRL_BST_MODE_MASK),
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_RAM |
-			    AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
+					  AW869X_BIT_SYSCTRL_BST_MODE_MASK),
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_RAM |
+					  AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
 
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
+					   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
 		}
 		aw869x_active(aw_haptic);
+		aw869x_vbat_mode_config(aw_haptic, AW_CONT_VBAT_SW_COMP_MODE);
 		break;
 	case AW_RTP_MODE:
 		aw_info("enter rtp mode");
 		aw_haptic->play_mode = AW_RTP_MODE;
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
-			    AW869X_BIT_SYSCTRL_BST_MODE_MASK),
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_RTP |
-			    AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
+					  AW869X_BIT_SYSCTRL_BST_MODE_MASK),
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_RTP |
+					  AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
 
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RTP_DISABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					   AW869X_BIT_BST_AUTO_BST_RTP_MASK,
+					   AW869X_BIT_BST_AUTO_BST_RTP_DISABLE);
 		}
 		aw869x_active(aw_haptic);
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RTP_ENABLE);
-			i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-				   (AW869X_BIT_SYSCTRL_BST_MODE_MASK &
-				    AW869X_BIT_SYSCTRL_WORK_MODE_MASK),
-				   (AW869X_BIT_SYSCTRL_BST_MODE_BOOST |
-				    AW869X_BIT_SYSCTRL_STANDBY));
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					    AW869X_BIT_BST_AUTO_BST_RTP_MASK,
+					    AW869X_BIT_BST_AUTO_BST_RTP_ENABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					    (AW869X_BIT_SYSCTRL_BST_MODE_MASK &
+					     AW869X_BIT_SYSCTRL_WORK_MODE_MASK),
+					    (AW869X_BIT_SYSCTRL_BST_MODE_BOOST |
+					     AW869X_BIT_SYSCTRL_STANDBY));
 			aw869x_active(aw_haptic);
 		} else {
-			i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-				   AW869X_BIT_SYSCTRL_BST_MODE_MASK,
-				   AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					     AW869X_BIT_SYSCTRL_BST_MODE_MASK,
+					     AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
 		}
 		usleep_range(2000, 2500);
+		aw869x_vbat_mode_config(aw_haptic, AW_CONT_VBAT_SW_COMP_MODE);
 		break;
 	case AW_TRIG_MODE:
 		aw_info("enter trig mode");
 		aw_haptic->play_mode = AW_TRIG_MODE;
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
-			    AW869X_BIT_SYSCTRL_BST_MODE_MASK),
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_RAM |
-			    AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
+					  AW869X_BIT_SYSCTRL_BST_MODE_MASK),
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_RAM |
+					  AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
 
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
+					   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
 		}
 		aw869x_active(aw_haptic);
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RAM_ENABLE);
-			i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-				   (AW869X_BIT_SYSCTRL_BST_MODE_MASK &
-				    AW869X_BIT_SYSCTRL_WORK_MODE_MASK),
-				   (AW869X_BIT_SYSCTRL_BST_MODE_BOOST |
-				    AW869X_BIT_SYSCTRL_STANDBY));
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					    AW869X_BIT_BST_AUTO_BST_RAM_MASK,
+					    AW869X_BIT_BST_AUTO_BST_RAM_ENABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					    (AW869X_BIT_SYSCTRL_BST_MODE_MASK &
+					     AW869X_BIT_SYSCTRL_WORK_MODE_MASK),
+					    (AW869X_BIT_SYSCTRL_BST_MODE_BOOST |
+					     AW869X_BIT_SYSCTRL_STANDBY));
 			aw869x_active(aw_haptic);
 		} else {
-			i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-				   AW869X_BIT_SYSCTRL_BST_MODE_MASK,
-				   AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					     AW869X_BIT_SYSCTRL_BST_MODE_MASK,
+					     AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
 		}
 		usleep_range(2000, 2500);
+		aw869x_vbat_mode_config(aw_haptic, AW_CONT_VBAT_SW_COMP_MODE);
 		break;
 	case AW_CONT_MODE:
 		aw_info("enter cont mode");
 		aw_haptic->play_mode = AW_CONT_MODE;
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
-			    AW869X_BIT_SYSCTRL_BST_MODE_MASK),
-			   (AW869X_BIT_SYSCTRL_PLAY_MODE_CONT |
-			    AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_MASK &
+					  AW869X_BIT_SYSCTRL_BST_MODE_MASK),
+					 (AW869X_BIT_SYSCTRL_PLAY_MODE_CONT |
+					  AW869X_BIT_SYSCTRL_BST_MODE_BYPASS));
 		if (aw_haptic->auto_boost) {
-			i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-				   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
-				   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
+			haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					   AW869X_BIT_BST_AUTO_BST_RAM_MASK,
+					   AW869X_BIT_BST_AUTO_BST_RAM_DISABLE);
 		}
 		aw869x_active(aw_haptic);
+		aw869x_vbat_mode_config(aw_haptic, AW_CONT_VBAT_HW_COMP_MODE);
 		break;
 	default:
 		aw_err("play mode %d err", play_mode);
@@ -374,21 +389,29 @@ static void aw869x_play_mode(struct aw_haptic *aw_haptic, uint8_t play_mode)
 	}
 }
 
-static void aw869x_stop(struct aw_haptic *aw_haptic)
+static int aw869x_wait_enter_standby(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
-	uint32_t cnt = 100;
+	int count = 100;
 
-	aw869x_play_go(aw_haptic, false);
-	while (cnt--) {
+	while (count--) {
 		reg_val = aw869x_get_glb_state(aw_haptic);
 		if ((reg_val & 0x0f) == AW869X_BIT_GLB_STATE_STANDBY) {
-			aw_info("entered standby! glb_state=0x%02X", reg_val);
-			break;
+			aw_info("entered standby!");
+			return 0;
 		}
+		aw_dbg("wait for standby");
 		usleep_range(2000, 2500);
-		aw_dbg("wait for standby, reg glb_state=0x%02x", reg_val);
 	}
+	aw_err("do not enter standby automatically");
+	return -ERANGE;
+}
+
+static void aw869x_stop(struct aw_haptic *aw_haptic)
+{
+	aw_haptic->play_mode = AW_STANDBY_MODE;
+	aw869x_play_go(aw_haptic, false);
+	aw869x_wait_enter_standby(aw_haptic);
 	aw869x_play_mode(aw_haptic, AW_STANDBY_MODE);
 }
 
@@ -396,19 +419,13 @@ static int aw869x_juge_rtp_going(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 	uint8_t rtp_state = 0;
-	static uint8_t pre_reg_val;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_SYSCTRL, &reg_val, AW_I2C_BYTE_ONE);
-	if ((reg_val & AW869X_BIT_SYSCTRL_PLAY_MODE_RTP)
-		&& (!(reg_val & AW869X_BIT_SYSCTRL_STANDBY)))
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSCTRL, &reg_val,
+			    AW_I2C_BYTE_ONE);
+	if ((reg_val & AW869X_BIT_SYSCTRL_PLAY_MODE_RTP) &&
+	    (!(reg_val & AW869X_BIT_SYSCTRL_STANDBY))) {
 		rtp_state = 1;	/*is going on */
-	if (pre_reg_val != reg_val)
-		aw_dbg("AW869X_REG_SYSCTRL 0x04==%02x rtp_state=%d",
-			reg_val, rtp_state);
-	pre_reg_val = reg_val;
-	if (rtp_state == 1 || aw_haptic->rtp_routine_on) {
 		aw_info("rtp_routine_on");
-		rtp_state = 1;	/*is going on */
 	}
 	return rtp_state;
 }
@@ -416,7 +433,8 @@ static int aw869x_juge_rtp_going(struct aw_haptic *aw_haptic)
 static void aw869x_set_wav_seq(struct aw_haptic *aw_haptic, uint8_t wav,
 			       uint8_t seq)
 {
-	i2c_w_bytes(aw_haptic, AW869X_REG_WAVSEQ1 + wav, &seq, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_WAVSEQ1 + wav, &seq,
+			     AW_I2C_BYTE_ONE);
 }
 
 static void aw869x_get_wav_seq(struct aw_haptic *aw_haptic, uint32_t len)
@@ -426,36 +444,25 @@ static void aw869x_get_wav_seq(struct aw_haptic *aw_haptic, uint32_t len)
 
 	if (len > AW_SEQUENCER_SIZE)
 		len = AW_SEQUENCER_SIZE;
-	i2c_r_bytes(aw_haptic, AW869X_REG_WAVSEQ1, reg_val, len);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_WAVSEQ1, reg_val, len);
 	for (i = 0; i < len; i++)
 		aw_haptic->seq[i] = reg_val[i];
 }
 
-static ssize_t aw869x_get_ram_data(struct aw_haptic *aw_haptic, char *buf)
+static void aw869x_get_ram_data(struct aw_haptic *aw_haptic, char *buf)
 {
-
-	uint8_t ram_data[AW_RAMDATA_RD_BUFFER_SIZE] = {0};
 	int i = 0;
-	int j = 0;
 	int size = 0;
-	ssize_t len = 0;
 
 	while (i < aw_haptic->ram.len) {
 		if ((aw_haptic->ram.len - i) < AW_RAMDATA_RD_BUFFER_SIZE)
 			size = aw_haptic->ram.len - i;
 		else
 			size = AW_RAMDATA_RD_BUFFER_SIZE;
-		i2c_r_bytes(aw_haptic, AW869X_REG_RAMDATA,
-				    ram_data, size);
-		for (j = 0; j < size; j++) {
-			len += snprintf(buf + len, PAGE_SIZE - len,
-					"0x%02X,", ram_data[j]);
-		}
+		haptic_hv_i2c_reads(aw_haptic, AW869X_REG_RAMDATA, buf + i,
+				    size);
 		i += size;
 	}
-	return len;
-
-	return 0;
 }
 
 static void aw869x_get_first_wave_addr(struct aw_haptic *aw_haptic,
@@ -463,8 +470,8 @@ static void aw869x_get_first_wave_addr(struct aw_haptic *aw_haptic,
 {
 	uint8_t reg_array[3] = {0};
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_RAMDATA, reg_array,
-		    AW_I2C_BYTE_THREE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_RAMDATA, reg_array,
+			    AW_I2C_BYTE_THREE);
 	wave_addr[0] = reg_array[1];
 	wave_addr[1] = reg_array[2];
 }
@@ -475,7 +482,8 @@ static void aw869x_set_ram_addr(struct aw_haptic *aw_haptic)
 
 	ram_addr[0] = (uint8_t)AW869X_RAM_ADDR_H(aw_haptic->ram.base_addr);
 	ram_addr[1] = (uint8_t)AW869X_RAM_ADDR_L(aw_haptic->ram.base_addr);
-	i2c_w_bytes(aw_haptic, AW869X_REG_RAMADDRH, ram_addr, AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_RAMADDRH, ram_addr,
+			     AW_I2C_BYTE_TWO);
 }
 
 static void aw869x_set_wav_loop(struct aw_haptic *aw_haptic, uint8_t wav,
@@ -485,12 +493,14 @@ static void aw869x_set_wav_loop(struct aw_haptic *aw_haptic, uint8_t wav,
 
 	if (wav % 2) {
 		tmp = loop << 0;
-		i2c_w_bits(aw_haptic, AW869X_REG_WAVLOOP1 + (wav / 2),
-			   AW869X_BIT_WAVLOOP_SEQNP1_MASK, tmp);
+		haptic_hv_i2c_write_bits(aw_haptic,
+					 AW869X_REG_WAVLOOP1 + (wav / 2),
+					 AW869X_BIT_WAVLOOP_SEQNP1_MASK, tmp);
 	} else {
 		tmp = loop << 4;
-		i2c_w_bits(aw_haptic, AW869X_REG_WAVLOOP1 + (wav / 2),
-			   AW869X_BIT_WAVLOOP_SEQN_MASK, tmp);
+		haptic_hv_i2c_write_bits(aw_haptic,
+					 AW869X_REG_WAVLOOP1 + (wav / 2),
+					 AW869X_BIT_WAVLOOP_SEQN_MASK, tmp);
 	}
 }
 
@@ -500,7 +510,8 @@ static size_t aw869x_get_wav_loop(struct aw_haptic *aw_haptic, char *buf)
 	uint8_t reg_val[4] = {0};
 	size_t count = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_WAVLOOP1, reg_val, AW_I2C_BYTE_FOUR);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_WAVLOOP1, reg_val,
+			    AW_I2C_BYTE_FOUR);
 	for (i = 0; i < AW_SEQUENCER_LOOP_SIZE; i++) {
 		aw_haptic->loop[i * 2 + 0] = (reg_val[i] >> 4) & 0x0F;
 		aw_haptic->loop[i * 2 + 1] = (reg_val[i] >> 0) & 0x0F;
@@ -518,7 +529,8 @@ static uint8_t aw869x_get_prctmode(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_DETCTRL, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_DETCTRL, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	reg_val &= 0x20;
 	return reg_val;
 }
@@ -532,15 +544,20 @@ static void aw869x_set_repeat_seq(struct aw_haptic *aw_haptic, uint8_t seq)
 static void aw869x_set_rtp_data(struct aw_haptic *aw_haptic, uint8_t *data,
 				uint32_t len)
 {
-	i2c_w_bytes(aw_haptic, AW869X_REG_RTP_DATA, data, len);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_RTP_DATA, data, len);
 }
 
-static void aw869x_set_bst_vol(struct aw_haptic *aw_haptic, uint8_t bst_vol)
+static void aw869x_set_bst_vol(struct aw_haptic *aw_haptic, uint32_t bst_vol)
 {
-	if (bst_vol & 0xe0)
-		bst_vol = 0x1f;
-	i2c_w_bits(aw_haptic, AW869X_REG_BSTDBG4,
-		   AW869X_BIT_BSTDBG4_BSTVOL_MASK, (bst_vol << 1));
+	uint8_t reg_val = 0;
+
+	if (bst_vol < AW869X_BST_VOL_MIN)
+		bst_vol = AW869X_BST_VOL_MIN;
+	else if (bst_vol > AW869X_BST_VOL_MAX)
+		bst_vol = AW869X_BST_VOL_MAX;
+	reg_val = AW869X_BST_VOL_FARMULA(bst_vol);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BSTDBG4,
+				 AW869X_BIT_BSTDBG4_BSTVOL_MASK, reg_val);
 }
 
 static void aw869x_set_bst_peak_cur(struct aw_haptic *aw_haptic)
@@ -548,47 +565,48 @@ static void aw869x_set_bst_peak_cur(struct aw_haptic *aw_haptic)
 	switch (aw_haptic->bst_pc) {
 	case AW_BST_PC_L1:
 		aw_info("bst pc = L1");
-		i2c_w_bits(aw_haptic, AW869X_REG_BSTCFG,
-			   AW869X_BIT_BSTCFG_PEAKCUR_MASK,
-			   AW869X_BIT_BSTCFG_PEAKCUR_2A);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BSTCFG,
+					 AW869X_BIT_BSTCFG_PEAKCUR_MASK,
+					 AW869X_BIT_BSTCFG_PEAKCUR_2A);
 		break;
 	case AW_BST_PC_L2:
 		aw_info("bst pc = L2");
-		i2c_w_bits(aw_haptic, AW869X_REG_BSTCFG,
-			   AW869X_BIT_BSTCFG_PEAKCUR_MASK,
-			   AW869X_BIT_BSTCFG_PEAKCUR_3P5A);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BSTCFG,
+					 AW869X_BIT_BSTCFG_PEAKCUR_MASK,
+					 AW869X_BIT_BSTCFG_PEAKCUR_3P5A);
 		break;
 	default:
 		aw_info("bst pc = L1");
-		i2c_w_bits(aw_haptic, AW869X_REG_BSTCFG,
-			   AW869X_BIT_BSTCFG_PEAKCUR_MASK,
-			   AW869X_BIT_BSTCFG_PEAKCUR_2A);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BSTCFG,
+					 AW869X_BIT_BSTCFG_PEAKCUR_MASK,
+					 AW869X_BIT_BSTCFG_PEAKCUR_2A);
 		break;
 	}
 }
 
 static void aw869x_set_gain(struct aw_haptic *aw_haptic, uint8_t gain)
 {
-	i2c_w_bytes(aw_haptic, AW869X_REG_DATDBG, &gain, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_DATDBG, &gain,
+			     AW_I2C_BYTE_ONE);
 }
 
 static void aw869x_set_pwm(struct aw_haptic *aw_haptic, uint8_t mode)
 {
 	switch (mode) {
 	case AW_PWM_48K:
-		i2c_w_bits(aw_haptic, AW869X_REG_PWMDBG,
-			   AW869X_BIT_PWMDBG_PWM_MODE_MASK,
-			   AW869X_BIT_PWMDBG_PWM_48K);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PWMDBG,
+					 AW869X_BIT_PWMDBG_PWM_MODE_MASK,
+					 AW869X_BIT_PWMDBG_PWM_48K);
 		break;
 	case AW_PWM_24K:
-		i2c_w_bits(aw_haptic, AW869X_REG_PWMDBG,
-			   AW869X_BIT_PWMDBG_PWM_MODE_MASK,
-			   AW869X_BIT_PWMDBG_PWM_24K);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PWMDBG,
+					 AW869X_BIT_PWMDBG_PWM_MODE_MASK,
+					 AW869X_BIT_PWMDBG_PWM_24K);
 		break;
 	case AW_PWM_12K:
-		i2c_w_bits(aw_haptic, AW869X_REG_PWMDBG,
-			   AW869X_BIT_PWMDBG_PWM_MODE_MASK,
-			   AW869X_BIT_PWMDBG_PWM_12K);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PWMDBG,
+					 AW869X_BIT_PWMDBG_PWM_MODE_MASK,
+					 AW869X_BIT_PWMDBG_PWM_12K);
 		break;
 	default:
 		break;
@@ -605,34 +623,34 @@ static void aw869x_protect_config(struct aw_haptic *aw_haptic, uint8_t addr,
 {
 	aw_dbg("enter");
 	if (addr == 1) {
-		i2c_w_bits(aw_haptic, AW869X_REG_DETCTRL,
-			   AW869X_BIT_DETCTRL_PROTECT_MASK,
-			   AW869X_BIT_DETCTRL_PROTECT_SHUTDOWN);
-		i2c_w_bits(aw_haptic, AW869X_REG_PWMPRC,
-			   AW869X_BIT_PWMPRC_PRC_MASK,
-			   AW869X_BIT_PWMPRC_PRC_ENABLE);
-		i2c_w_bits(aw_haptic, AW869X_REG_PRLVL,
-			   AW869X_BIT_PRLVL_PR_MASK,
-			   AW869X_BIT_PRLVL_PR_ENABLE);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DETCTRL,
+					 AW869X_BIT_DETCTRL_PROTECT_MASK,
+					 AW869X_BIT_DETCTRL_PROTECT_SHUTDOWN);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PWMPRC,
+					 AW869X_BIT_PWMPRC_PRC_MASK,
+					 AW869X_BIT_PWMPRC_PRC_ENABLE);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PRLVL,
+					 AW869X_BIT_PRLVL_PR_MASK,
+					 AW869X_BIT_PRLVL_PR_ENABLE);
 	} else if (addr == 0) {
-		i2c_w_bits(aw_haptic, AW869X_REG_DETCTRL,
-			   AW869X_BIT_DETCTRL_PROTECT_MASK,
-			   AW869X_BIT_DETCTRL_PROTECT_NO_ACTION);
-		i2c_w_bits(aw_haptic, AW869X_REG_PWMPRC,
-			   AW869X_BIT_PWMPRC_PRC_MASK,
-			   AW869X_BIT_PWMPRC_PRC_DISABLE);
-		i2c_w_bits(aw_haptic, AW869X_REG_PRLVL,
-			   AW869X_BIT_PRLVL_PR_MASK,
-			   AW869X_BIT_PRLVL_PR_DISABLE);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DETCTRL,
+					 AW869X_BIT_DETCTRL_PROTECT_MASK,
+					 AW869X_BIT_DETCTRL_PROTECT_NO_ACTION);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PWMPRC,
+					 AW869X_BIT_PWMPRC_PRC_MASK,
+					 AW869X_BIT_PWMPRC_PRC_DISABLE);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PRLVL,
+					 AW869X_BIT_PRLVL_PR_MASK,
+					 AW869X_BIT_PRLVL_PR_DISABLE);
 	} else if (addr == AW869X_REG_PWMPRC) {
-		i2c_w_bits(aw_haptic, AW869X_REG_PWMPRC,
-			   AW869X_BIT_PWMPRC_PRCTIME_MASK, val);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PWMPRC,
+					 AW869X_BIT_PWMPRC_PRCTIME_MASK, val);
 	} else if (addr == AW869X_REG_PRLVL) {
-		i2c_w_bits(aw_haptic, AW869X_REG_PRLVL,
-			   AW869X_BIT_PRLVL_PRLVL_MASK, val);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PRLVL,
+					 AW869X_BIT_PRLVL_PRLVL_MASK, val);
 	} else if (addr == AW869X_REG_PRTIME) {
-		i2c_w_bits(aw_haptic, AW869X_REG_PRTIME,
-			   AW869X_BIT_PRTIME_PRTIME_MASK, val);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_PRTIME,
+					 AW869X_BIT_PRTIME_PRTIME_MASK, val);
 	}
 }
 
@@ -647,12 +665,12 @@ static void aw869x_offset_cali(struct aw_haptic *aw_haptic)
 	uint32_t cnt = 2000;
 
 	aw869x_ram_init(aw_haptic, true);
-	i2c_w_bits(aw_haptic, AW869X_REG_DETCTRL,
-		   AW869X_BIT_DETCTRL_DIAG_GO_MASK,
-		   AW869X_BIT_DETCTRL_DIAG_GO_ENABLE);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DETCTRL,
+				 AW869X_BIT_DETCTRL_DIAG_GO_MASK,
+				 AW869X_BIT_DETCTRL_DIAG_GO_ENABLE);
 	while (cnt--) {
-		i2c_r_bytes(aw_haptic, AW869X_REG_DETCTRL, &reg_val,
-			    AW_I2C_BYTE_ONE);
+		haptic_hv_i2c_reads(aw_haptic, AW869X_REG_DETCTRL, &reg_val,
+				    AW_I2C_BYTE_ONE);
 		if ((reg_val & 0x01) == 0) {
 			aw869x_ram_init(aw_haptic, false);
 			return;
@@ -669,21 +687,21 @@ static void aw869x_offset_cali(struct aw_haptic *aw_haptic)
  *****************************************************/
 static void aw869x_trig_param_init(struct aw_haptic *aw_haptic)
 {
-	aw_haptic->trig[0].enable = AW869X_TRG1_DISABLE;
-	aw_haptic->trig[0].default_level = AW869X_TRG1_DEFAULT_LEVEL;
-	aw_haptic->trig[0].dual_edge = AW869X_TRG1_DUAL_EDGE;
-	aw_haptic->trig[0].frist_seq = AW869X_TRG1_FIRST_EDGE_SEQ;
-	aw_haptic->trig[0].second_seq = AW869X_TRG1_SECOND_EDGE_SEQ;
-	aw_haptic->trig[1].enable = AW869X_TRG2_DISABLE;
-	aw_haptic->trig[1].default_level = AW869X_TRG2_DEFAULT_LEVEL;
-	aw_haptic->trig[1].dual_edge = AW869X_TRG2_DUAL_EDGE;
-	aw_haptic->trig[1].frist_seq = AW869X_TRG2_FIRST_EDGE_SEQ;
-	aw_haptic->trig[1].second_seq = AW869X_TRG2_SECOND_EDGE_SEQ;
-	aw_haptic->trig[2].enable = AW869X_TRG3_DISABLE;
-	aw_haptic->trig[2].default_level = AW869X_TRG3_DEFAULT_LEVEL;
-	aw_haptic->trig[2].dual_edge = AW869X_TRG3_DUAL_EDGE;
-	aw_haptic->trig[2].frist_seq = AW869X_TRG3_FIRST_EDGE_SEQ;
-	aw_haptic->trig[2].second_seq = AW869X_TRG3_SECOND_EDGE_SEQ;
+	aw_haptic->trig[0].enable = aw_haptic->info.trig_cfg[0];
+	aw_haptic->trig[0].default_level = aw_haptic->info.trig_cfg[1];
+	aw_haptic->trig[0].dual_edge = aw_haptic->info.trig_cfg[2];
+	aw_haptic->trig[0].frist_seq = aw_haptic->info.trig_cfg[3];
+	aw_haptic->trig[0].second_seq = aw_haptic->info.trig_cfg[4];
+	aw_haptic->trig[1].enable = aw_haptic->info.trig_cfg[5];
+	aw_haptic->trig[1].default_level = aw_haptic->info.trig_cfg[6];
+	aw_haptic->trig[1].dual_edge = aw_haptic->info.trig_cfg[7];
+	aw_haptic->trig[1].frist_seq = aw_haptic->info.trig_cfg[8];
+	aw_haptic->trig[1].second_seq = aw_haptic->info.trig_cfg[9];
+	aw_haptic->trig[2].enable = aw_haptic->info.trig_cfg[10];
+	aw_haptic->trig[2].default_level = aw_haptic->info.trig_cfg[11];
+	aw_haptic->trig[2].dual_edge = aw_haptic->info.trig_cfg[12];
+	aw_haptic->trig[2].frist_seq = aw_haptic->info.trig_cfg[13];
+	aw_haptic->trig[2].second_seq = aw_haptic->info.trig_cfg[14];
 }
 
 static void aw869x_trig_param_config(struct aw_haptic *aw_haptic)
@@ -715,13 +733,14 @@ static void aw869x_trig_param_config(struct aw_haptic *aw_haptic)
 		trig_config |= AW869X_BIT_TRGCFG1_TRG3_EDGE_POS_NEG;
 	else
 		trig_config |= AW869X_BIT_TRGCFG1_TRG3_EDGE_POS;
-	i2c_w_bits(aw_haptic, AW869X_REG_TRG_CFG1,
-		   (AW869X_BIT_TRGCFG1_TRG1_POLAR_MASK &
-		    AW869X_BIT_TRGCFG1_TRG2_POLAR_MASK &
-		    AW869X_BIT_TRGCFG1_TRG3_POLAR_MASK &
-		    AW869X_BIT_TRGCFG1_TRG1_EDGE_MASK &
-		    AW869X_BIT_TRGCFG1_TRG2_EDGE_MASK &
-		    AW869X_BIT_TRGCFG1_TRG3_EDGE_MASK), trig_config);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_TRG_CFG1,
+				 (AW869X_BIT_TRGCFG1_TRG1_POLAR_MASK &
+				  AW869X_BIT_TRGCFG1_TRG2_POLAR_MASK &
+				  AW869X_BIT_TRGCFG1_TRG3_POLAR_MASK &
+				  AW869X_BIT_TRGCFG1_TRG1_EDGE_MASK &
+				  AW869X_BIT_TRGCFG1_TRG2_EDGE_MASK &
+				  AW869X_BIT_TRGCFG1_TRG3_EDGE_MASK),
+				  trig_config);
 
 	trig_seq[0] = aw_haptic->trig[0].frist_seq;
 	trig_seq[1] = aw_haptic->trig[1].frist_seq;
@@ -729,32 +748,32 @@ static void aw869x_trig_param_config(struct aw_haptic *aw_haptic)
 	trig_seq[3] = aw_haptic->trig[0].second_seq;
 	trig_seq[4] = aw_haptic->trig[1].second_seq;
 	trig_seq[5] = aw_haptic->trig[2].second_seq;
-	i2c_w_bytes(aw_haptic, AW869X_REG_TRG1_WAV_P, trig_seq,
-		    AW_I2C_BYTE_SIX);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TRG1_WAV_P, trig_seq,
+			     AW_I2C_BYTE_SIX);
 }
 
 static void aw869x_trig_enable_config(struct aw_haptic *aw_haptic)
 {
-	i2c_w_bits(aw_haptic, AW869X_REG_TRG_CFG2,
-		   (AW869X_BIT_TRGCFG2_TRG1_ENABLE_MASK &
-		    AW869X_BIT_TRGCFG2_TRG2_ENABLE_MASK &
-		    AW869X_BIT_TRGCFG2_TRG3_ENABLE_MASK),
-		   ((aw_haptic->trig[0].enable << 0) |
-		    (aw_haptic->trig[1].enable << 1) |
-		    (aw_haptic->trig[2].enable << 2)));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_TRG_CFG2,
+				 (AW869X_BIT_TRGCFG2_TRG1_ENABLE_MASK &
+				  AW869X_BIT_TRGCFG2_TRG2_ENABLE_MASK &
+				  AW869X_BIT_TRGCFG2_TRG3_ENABLE_MASK),
+				 ((aw_haptic->trig[0].enable << 0) |
+				  (aw_haptic->trig[1].enable << 1) |
+				  (aw_haptic->trig[2].enable << 2)));
 }
 
 static void aw869x_auto_bst_enable(struct aw_haptic *aw_haptic, uint8_t flag)
 {
 	aw_haptic->auto_boost = flag;
 	if (flag) {
-		i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-			   AW869X_BIT_BST_AUTO_BST_AUTOSW_MASK,
-			   AW869X_BIT_BST_AUTO_BST_AUTOMATIC_BOOST);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+				       AW869X_BIT_BST_AUTO_BST_AUTOSW_MASK,
+				       AW869X_BIT_BST_AUTO_BST_AUTOMATIC_BOOST);
 	} else {
-		i2c_w_bits(aw_haptic, AW869X_REG_BST_AUTO,
-			   AW869X_BIT_BST_AUTO_BST_AUTOSW_MASK,
-			   AW869X_BIT_BST_AUTO_BST_MANUAL_BOOST);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BST_AUTO,
+					 AW869X_BIT_BST_AUTO_BST_AUTOSW_MASK,
+					 AW869X_BIT_BST_AUTO_BST_MANUAL_BOOST);
 	}
 }
 
@@ -762,7 +781,8 @@ static uint8_t aw869x_get_trim_lra(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_TRIM_LRA, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_TRIM_LRA, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	reg_val &= 0x3F;
 	return reg_val;
 }
@@ -775,13 +795,13 @@ static uint8_t aw869x_get_trim_lra(struct aw_haptic *aw_haptic)
 static void aw869x_vbat_mode_config(struct aw_haptic *aw_haptic, uint8_t flag)
 {
 	if (flag == AW_CONT_VBAT_HW_COMP_MODE) {
-		i2c_w_bits(aw_haptic, AW869X_REG_ADCTEST,
-			   AW869X_BIT_ADCTEST_VBAT_MODE_MASK,
-			   AW869X_BIT_ADCTEST_VBAT_HW_COMP);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_ADCTEST,
+					 AW869X_BIT_ADCTEST_VBAT_MODE_MASK,
+					 AW869X_BIT_ADCTEST_VBAT_HW_COMP);
 	} else {
-		i2c_w_bits(aw_haptic, AW869X_REG_ADCTEST,
-			   AW869X_BIT_ADCTEST_VBAT_MODE_MASK,
-			   AW869X_BIT_ADCTEST_VBAT_SW_COMP);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_ADCTEST,
+					 AW869X_BIT_ADCTEST_VBAT_MODE_MASK,
+					 AW869X_BIT_ADCTEST_VBAT_SW_COMP);
 	}
 }
 
@@ -792,22 +812,23 @@ static void aw869x_get_vbat(struct aw_haptic *aw_haptic)
 
 	aw869x_stop(aw_haptic);
 	aw869x_ram_init(aw_haptic, true);
-	i2c_w_bits(aw_haptic, AW869X_REG_DETCTRL,
-		   AW869X_BIT_DETCTRL_VBAT_GO_MASK,
-		   AW869X_BIT_DETCTRL_VABT_GO_ENABLE);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DETCTRL,
+				 AW869X_BIT_DETCTRL_VBAT_GO_MASK,
+				 AW869X_BIT_DETCTRL_VABT_GO_ENABLE);
 
 	while (1) {
-		i2c_r_bytes(aw_haptic, AW869X_REG_DETCTRL, &reg_val,
-			    AW_I2C_BYTE_ONE);
+		haptic_hv_i2c_reads(aw_haptic, AW869X_REG_DETCTRL, &reg_val,
+				    AW_I2C_BYTE_ONE);
 		if ((reg_val & 0x02) == 0 || cont == 0)
 			break;
 		cont--;
 	}
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_VBATDET, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_VBATDET, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	aw_haptic->vbat = AW869X_VBAT_FORMULA(reg_val);
-	if (aw_haptic->vbat > AW869X_VBAT_MAX) {
-		aw_haptic->vbat = AW869X_VBAT_MAX;
+	if (aw_haptic->vbat > AW_VBAT_MAX) {
+		aw_haptic->vbat = AW_VBAT_MAX;
 		aw_dbg("vbat max limit = %d", aw_haptic->vbat);
 	}
 	if (aw_haptic->vbat < AW_VBAT_MIN) {
@@ -825,16 +846,16 @@ static ssize_t aw869x_get_reg(struct aw_haptic *aw_haptic, ssize_t len,
 	uint8_t reg_array[AW869X_REG_NUM_F0_3 + 1] = {0};
 
 	for (i = 0; i < AW869X_REG_RTP_DATA; i++)
-		i2c_r_bytes(aw_haptic, AW869X_REG_ID, reg_array,
-			    AW869X_REG_RTP_DATA);
+		haptic_hv_i2c_reads(aw_haptic, AW869X_REG_ID, reg_array,
+				    AW869X_REG_RTP_DATA);
 	for (i = AW869X_REG_RTP_DATA + 1; i < AW869X_REG_RAMDATA; i++)
-		i2c_r_bytes(aw_haptic, (AW869X_REG_RTP_DATA + 1),
-			    &reg_array[AW869X_REG_RTP_DATA + 1],
-			    (AW869X_REG_RAMDATA - AW869X_REG_RTP_DATA - 1));
+		haptic_hv_i2c_reads(aw_haptic, (AW869X_REG_RTP_DATA + 1),
+				&reg_array[AW869X_REG_RTP_DATA + 1],
+				(AW869X_REG_RAMDATA - AW869X_REG_RTP_DATA - 1));
 	for (i = AW869X_REG_RAMDATA + 1; i <= AW869X_REG_NUM_F0_3; i++)
-		i2c_r_bytes(aw_haptic, (AW869X_REG_RAMDATA + 1),
-			    &reg_array[AW869X_REG_RAMDATA + 1],
-			    (AW869X_REG_NUM_F0_3 - AW869X_REG_RAMDATA - 1));
+		haptic_hv_i2c_reads(aw_haptic, (AW869X_REG_RAMDATA + 1),
+				&reg_array[AW869X_REG_RAMDATA + 1],
+				(AW869X_REG_NUM_F0_3 - AW869X_REG_RAMDATA - 1));
 	for (i = 0; i <= AW869X_REG_NUM_F0_3; i++)
 		if ((i != AW869X_REG_RTP_DATA) && (i != AW869X_REG_RAMDATA))
 			len += snprintf(buf + len, PAGE_SIZE - len,
@@ -846,37 +867,36 @@ static void aw869x_get_lra_resistance(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 
-	mutex_lock(&aw_haptic->lock);
 	aw869x_stop(aw_haptic);
 	aw869x_ram_init(aw_haptic, true);
-	i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-		   AW869X_BIT_SYSCTRL_BST_MODE_MASK,
-		   AW869X_BIT_SYSCTRL_BST_MODE_BYPASS);
-	i2c_w_bits(aw_haptic, AW869X_REG_ANACTRL,
-		   AW869X_BIT_ANACTRL_HD_PD_MASK,
-		   AW869X_BIT_ANACTRL_HD_HZ_EN);
-	i2c_w_bits(aw_haptic, AW869X_REG_D2SCFG,
-		   AW869X_BIT_D2SCFG_CLK_ADC_MASK,
-		   AW869X_BIT_D2SCFG_CLK_ASC_1P5MHZ);
-	i2c_w_bits(aw_haptic, AW869X_REG_DETCTRL,
-		   (AW869X_BIT_DETCTRL_RL_OS_MASK &
-		    AW869X_BIT_DETCTRL_DIAG_GO_MASK),
-		   (AW869X_BIT_DETCTRL_RL_DETECT |
-		    AW869X_BIT_DETCTRL_DIAG_GO_ENABLE));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+				 AW869X_BIT_SYSCTRL_BST_MODE_MASK,
+				 AW869X_BIT_SYSCTRL_BST_MODE_BYPASS);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_ANACTRL,
+				 AW869X_BIT_ANACTRL_HD_PD_MASK,
+				 AW869X_BIT_ANACTRL_HD_HZ_EN);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_D2SCFG,
+				 AW869X_BIT_D2SCFG_CLK_ADC_MASK,
+				 AW869X_BIT_D2SCFG_CLK_ASC_1P5MHZ);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DETCTRL,
+				 (AW869X_BIT_DETCTRL_RL_OS_MASK &
+				  AW869X_BIT_DETCTRL_DIAG_GO_MASK),
+				 (AW869X_BIT_DETCTRL_RL_DETECT |
+				  AW869X_BIT_DETCTRL_DIAG_GO_ENABLE));
 	usleep_range(3000, 3500);
-	i2c_r_bytes(aw_haptic, AW869X_REG_RLDET, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_RLDET, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	aw_haptic->lra = AW869X_LRA_FORMULA(reg_val);
-	i2c_w_bits(aw_haptic, AW869X_REG_ANACTRL,
-		   AW869X_BIT_ANACTRL_HD_PD_MASK,
-		   AW869X_BIT_ANACTRL_HD_PD_EN);
-	i2c_w_bits(aw_haptic, AW869X_REG_D2SCFG,
-		   AW869X_BIT_D2SCFG_CLK_ADC_MASK,
-		   AW869X_BIT_D2SCFG_CLK_ASC_6MHZ);
-	i2c_w_bits(aw_haptic, AW869X_REG_SYSCTRL,
-		   AW869X_BIT_SYSCTRL_BST_MODE_MASK,
-		   AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_ANACTRL,
+				 AW869X_BIT_ANACTRL_HD_PD_MASK,
+				 AW869X_BIT_ANACTRL_HD_PD_EN);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_D2SCFG,
+				 AW869X_BIT_D2SCFG_CLK_ADC_MASK,
+				 AW869X_BIT_D2SCFG_CLK_ASC_6MHZ);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSCTRL,
+				 AW869X_BIT_SYSCTRL_BST_MODE_MASK,
+				 AW869X_BIT_SYSCTRL_BST_MODE_BOOST);
 	aw869x_ram_init(aw_haptic, false);
-	mutex_unlock(&aw_haptic->lock);
 }
 
 /*****************************************************
@@ -884,34 +904,39 @@ static void aw869x_get_lra_resistance(struct aw_haptic *aw_haptic)
  * f0
  *
  *****************************************************/
-static void aw869x_read_f0(struct aw_haptic *aw_haptic)
+static int aw869x_read_f0(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val[2] = {0};
 	uint32_t f0_reg = 0;
-	uint64_t f0_tmp = 0;
 
+#ifdef AW_LRA_F0_DEFAULT
 	/* lra_f0 */
-	i2c_r_bytes(aw_haptic, AW869X_REG_F_LRA_F0_H, reg_val, AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_F_LRA_F0_H, reg_val,
+			    AW_I2C_BYTE_TWO);
 	f0_reg = (reg_val[0] << 8) | (reg_val[1] << 0);
 	if (!(f0_reg * aw_haptic->info.f0_coeff)) {
+		aw_haptic->f0 = 0;
 		aw_err("lra_f0 is error, f0_reg=0");
-		return;
+		return -ERANGE;
 	}
-	f0_tmp = 1000000000 / (f0_reg * aw_haptic->info.f0_coeff);
-	aw_haptic->f0 = (uint32_t)f0_tmp;
-	aw_info("f0=%d", aw_haptic->f0);
-
+	aw_haptic->f0 = (uint32_t)AW869X_F0_FARMULA(f0_reg,
+						    aw_haptic->info.f0_coeff);
+	aw_info("lra_f0=%d", aw_haptic->f0);
+#else
 	/* cont_f0 */
-	i2c_r_bytes(aw_haptic, AW869X_REG_F_LRA_CONT_H, reg_val,
-		    AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_F_LRA_CONT_H, reg_val,
+			    AW_I2C_BYTE_TWO);
 	f0_reg = (reg_val[0] << 8) | (reg_val[1] << 0);
 	if (!(f0_reg * aw_haptic->info.f0_coeff)) {
+		aw_haptic->f0 = 0;
 		aw_err("cont_f0 is error, f0_reg=0");
-		return;
+		return -ERANGE;
 	}
-	f0_tmp = 1000000000 / (f0_reg * aw_haptic->info.f0_coeff);
-	aw_haptic->cont_f0 = (uint32_t)f0_tmp;
-	aw_info("f0=%d", aw_haptic->cont_f0);
+	aw_haptic->f0 = (uint32_t)AW869X_F0_FARMULA(f0_reg,
+						    aw_haptic->info.f0_coeff);
+	aw_info("cont_f0=%d", aw_haptic->f0);
+#endif
+	return 0;
 }
 
 static void aw869x_read_beme(struct aw_haptic *aw_haptic)
@@ -919,11 +944,11 @@ static void aw869x_read_beme(struct aw_haptic *aw_haptic)
 	uint8_t reg_val = 0;
 	int ret = 0;
 
-	ret = i2c_r_bytes(aw_haptic, AW869X_REG_WAIT_VOL_MP, &reg_val,
-			  AW_I2C_BYTE_ONE);
+	ret = haptic_hv_i2c_reads(aw_haptic, AW869X_REG_WAIT_VOL_MP, &reg_val,
+				  AW_I2C_BYTE_ONE);
 	aw_haptic->max_pos_beme = (reg_val << 0);
-	ret = i2c_r_bytes(aw_haptic, AW869X_REG_WAIT_VOL_MN, &reg_val,
-			  AW_I2C_BYTE_ONE);
+	ret = haptic_hv_i2c_reads(aw_haptic, AW869X_REG_WAIT_VOL_MN, &reg_val,
+				  AW_I2C_BYTE_ONE);
 	aw_haptic->max_neg_beme = (reg_val << 0);
 	aw_info("max_pos_beme=%d", aw_haptic->max_pos_beme);
 	aw_info("max_neg_beme=%d", aw_haptic->max_neg_beme);
@@ -937,26 +962,36 @@ static void aw869x_read_beme(struct aw_haptic *aw_haptic)
 static void aw869x_set_rtp_aei(struct aw_haptic *aw_haptic, bool flag)
 {
 	if (flag) {
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSINTM,
-			   AW869X_BIT_SYSINTM_FF_AE_MASK,
-			   AW869X_BIT_SYSINTM_FF_AE_EN);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSINTM,
+					 AW869X_BIT_SYSINTM_FF_AE_MASK,
+					 AW869X_BIT_SYSINTM_FF_AE_EN);
 	} else {
-		i2c_w_bits(aw_haptic, AW869X_REG_SYSINTM,
-			   AW869X_BIT_SYSINTM_FF_AE_MASK,
-			   AW869X_BIT_SYSINTM_FF_AE_OFF);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSINTM,
+					 AW869X_BIT_SYSINTM_FF_AE_MASK,
+					 AW869X_BIT_SYSINTM_FF_AE_OFF);
 	}
 }
 
 static uint8_t aw869x_rtp_get_fifo_afs(struct aw_haptic *aw_haptic)
 {
-	uint8_t ret = 0;
 	uint8_t reg_val = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_SYSST, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSST, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	reg_val &= AW869X_BIT_SYSST_FF_AFS;
-	ret = reg_val >> 3;
+	reg_val >>= 3;
+	return reg_val;
+}
 
-	return ret;
+static uint8_t aw869x_rtp_get_fifo_aes(struct aw_haptic *aw_haptic)
+{
+	uint8_t reg_val = 0;
+
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSST, &reg_val,
+			    AW_I2C_BYTE_ONE);
+	reg_val &= AW869X_BIT_SYSST_FF_AES;
+	reg_val >>= 4;
+	return reg_val;
 }
 
 static void aw869x_upload_lra(struct aw_haptic *aw_haptic, uint32_t flag)
@@ -968,20 +1003,20 @@ static void aw869x_upload_lra(struct aw_haptic *aw_haptic, uint32_t flag)
 	switch (flag) {
 	case AW_WRITE_ZERO:
 		aw_info("write zero to trim_lra!");
-		i2c_w_bytes(aw_haptic, AW869X_REG_TRIM_LRA, &zero,
-			    AW_I2C_BYTE_ONE);
+		haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TRIM_LRA, &zero,
+				     AW_I2C_BYTE_ONE);
 		break;
 	case AW_F0_CALI_LRA:
 		aw_info("f0_cali_lra=%d", aw_haptic->f0_cali_data);
 		f0 = (uint8_t)aw_haptic->f0_cali_data;
-		i2c_w_bytes(aw_haptic, AW869X_REG_TRIM_LRA, &f0,
-			    AW_I2C_BYTE_ONE);
+		haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TRIM_LRA, &f0,
+				     AW_I2C_BYTE_ONE);
 		break;
 	case AW_OSC_CALI_LRA:
 		aw_info("rtp_cali_lra=%d", aw_haptic->osc_cali_data);
 		osc = (uint8_t)aw_haptic->osc_cali_data;
-		i2c_w_bytes(aw_haptic, AW869X_REG_TRIM_LRA, &osc,
-			    AW_I2C_BYTE_ONE);
+		haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TRIM_LRA, &osc,
+				     AW_I2C_BYTE_ONE);
 		break;
 	default:
 		break;
@@ -994,7 +1029,8 @@ static uint64_t  aw869x_get_theory_time(struct aw_haptic *aw_haptic)
 	uint32_t fre_val = 0;
 	uint64_t  theory_time = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_PWMDBG, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_PWMDBG, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	fre_val = (reg_val & 0x006f) >> 5;
 	if (fre_val == 3)
 		theory_time = (aw_haptic->rtp_len / 12000) * 1000000; /*12K */
@@ -1013,7 +1049,8 @@ static uint8_t aw869x_osc_read_status(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_DBGSTAT, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_DBGSTAT, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	reg_val &= AW869X_BIT_DBGSTAT_FF_EMPTY;
 	return reg_val;
 }
@@ -1033,46 +1070,51 @@ static void aw869x_cont_config(struct aw_haptic *aw_haptic)
 	/* work mode */
 	aw869x_play_mode(aw_haptic, AW_CONT_MODE);
 	/* lpf */
-	i2c_w_bits(aw_haptic, AW869X_REG_DATCTRL,
-		   (AW869X_BIT_DATCTRL_FC_MASK &
-		    AW869X_BIT_DATCTRL_LPF_ENABLE_MASK),
-		   (AW869X_BIT_DATCTRL_FC_1000HZ |
-		    AW869X_BIT_DATCTRL_LPF_ENABLE));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DATCTRL,
+				 (AW869X_BIT_DATCTRL_FC_MASK &
+				  AW869X_BIT_DATCTRL_LPF_ENABLE_MASK),
+				 (AW869X_BIT_DATCTRL_FC_1000HZ |
+				  AW869X_BIT_DATCTRL_LPF_ENABLE));
 	/* cont config */
-	i2c_w_bits(aw_haptic, AW869X_REG_CONT_CTRL,
-		   (AW869X_BIT_CONT_CTRL_ZC_DETEC_MASK &
-		    AW869X_BIT_CONT_CTRL_WAIT_PERIOD_MASK &
-		    AW869X_BIT_CONT_CTRL_MODE_MASK &
-		    AW869X_BIT_CONT_CTRL_EN_CLOSE_MASK &
-		    AW869X_BIT_CONT_CTRL_F0_DETECT_MASK &
-		    AW869X_BIT_CONT_CTRL_O2C_MASK &
-		    AW869X_BIT_CONT_CTRL_AUTO_BRK_MASK),
-		   (AW869X_BIT_CONT_CTRL_ZC_DETEC_ENABLE |
-		    AW869X_BIT_CONT_CTRL_WAIT_1PERIOD |
-		    AW869X_BIT_CONT_CTRL_BY_GO_SIGNAL |
-		    AW869X_BIT_CONT_CTRL_CLOSE_PLAYBACK |
-		    AW869X_BIT_CONT_CTRL_F0_DETECT_DISABLE |
-		    AW869X_BIT_CONT_CTRL_O2C_DISABLE |
-		    AW869X_BIT_CONT_CTRL_AUTO_BRK_ENABLE));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_CONT_CTRL,
+				 (AW869X_BIT_CONT_CTRL_ZC_DETEC_MASK &
+				  AW869X_BIT_CONT_CTRL_WAIT_PERIOD_MASK &
+				  AW869X_BIT_CONT_CTRL_MODE_MASK &
+				  AW869X_BIT_CONT_CTRL_EN_CLOSE_MASK &
+				  AW869X_BIT_CONT_CTRL_F0_DETECT_MASK &
+				  AW869X_BIT_CONT_CTRL_O2C_MASK &
+				  AW869X_BIT_CONT_CTRL_AUTO_BRK_MASK),
+				 (AW869X_BIT_CONT_CTRL_ZC_DETEC_ENABLE |
+				  AW869X_BIT_CONT_CTRL_WAIT_1PERIOD |
+				  AW869X_BIT_CONT_CTRL_BY_GO_SIGNAL |
+				  AW869X_BIT_CONT_CTRL_CLOSE_PLAYBACK |
+				  AW869X_BIT_CONT_CTRL_F0_DETECT_DISABLE |
+				  AW869X_BIT_CONT_CTRL_O2C_DISABLE |
+				  AW869X_BIT_CONT_CTRL_AUTO_BRK_ENABLE));
 	/* TD time */
 	cont_td[0] = (uint8_t)(aw_haptic->info.cont_td >> 8); /* cont_td_h */
 	cont_td[1] = (uint8_t)(aw_haptic->info.cont_td >> 0); /* cont_td_l */
-	i2c_w_bytes(aw_haptic, AW869X_REG_TD_H, cont_td, AW_I2C_BYTE_TWO);
-	i2c_w_bytes(aw_haptic, AW869X_REG_TSET, &aw_haptic->info.tset,
-		    AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TD_H, cont_td,
+			     AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TSET, &aw_haptic->info.tset,
+			     AW_I2C_BYTE_ONE);
 	/* zero cross */
 	cont_zc[0] = (uint8_t)(aw_haptic->info.cont_zc_thr >> 8);/* cont_zc_h */
 	cont_zc[1] = (uint8_t)(aw_haptic->info.cont_zc_thr >> 0);/* cont_zc_l */
-	i2c_w_bytes(aw_haptic, AW869X_REG_ZC_THRSH_H, cont_zc, AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_ZC_THRSH_H, cont_zc,
+			     AW_I2C_BYTE_TWO);
 
-	i2c_w_bits(aw_haptic, AW869X_REG_BEMF_NUM, AW869X_BIT_BEMF_NUM_BRK_MASK,
-		   aw_haptic->info.cont_num_brk);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BEMF_NUM,
+				 AW869X_BIT_BEMF_NUM_BRK_MASK,
+				 aw_haptic->info.cont_num_brk);
 	/* 35*171us=5.985ms */
-	i2c_w_bytes(aw_haptic, AW869X_REG_TIME_NZC, &time_nzc, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TIME_NZC, &time_nzc,
+			     AW_I2C_BYTE_ONE);
 	/* f0 driver level */
 	drv_lvl[0] = aw_haptic->info.cont_drv_lvl;
 	drv_lvl[1] = aw_haptic->info.cont_drv_lvl_ov;
-	i2c_w_bytes(aw_haptic, AW869X_REG_DRV_LVL, drv_lvl, AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_DRV_LVL, drv_lvl,
+			     AW_I2C_BYTE_TWO);
 	/* cont play go */
 	aw869x_play_go(aw_haptic, true);
 }
@@ -1084,11 +1126,9 @@ static void aw869x_cont_config(struct aw_haptic *aw_haptic)
  *****************************************************/
 static int aw869x_get_f0(struct aw_haptic *aw_haptic)
 {
-	uint8_t i = 0;
 	uint8_t reg_val = 0;
 	uint8_t f0_param[5] = {0};
 	uint32_t t_f0_ms = 0;
-	uint32_t f0_cali_cnt = 50;
 	uint32_t t_f0_trace_ms = 0;
 	int ret = 0;
 
@@ -1096,34 +1136,32 @@ static int aw869x_get_f0(struct aw_haptic *aw_haptic)
 	/* f0 calibrate work mode */
 	aw869x_stop(aw_haptic);
 	aw869x_play_mode(aw_haptic, AW_CONT_MODE);
-	i2c_w_bits(aw_haptic, AW869X_REG_CONT_CTRL,
-		   (AW869X_BIT_CONT_CTRL_EN_CLOSE_MASK &
-		    AW869X_BIT_CONT_CTRL_F0_DETECT_MASK),
-		   (AW869X_BIT_CONT_CTRL_OPEN_PLAYBACK |
-		    AW869X_BIT_CONT_CTRL_F0_DETECT_ENABLE));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_CONT_CTRL,
+				 (AW869X_BIT_CONT_CTRL_EN_CLOSE_MASK &
+				  AW869X_BIT_CONT_CTRL_F0_DETECT_MASK),
+				 (AW869X_BIT_CONT_CTRL_OPEN_PLAYBACK |
+				  AW869X_BIT_CONT_CTRL_F0_DETECT_ENABLE));
 	/* LPF */
-	i2c_w_bits(aw_haptic, AW869X_REG_DATCTRL,
-		   (AW869X_BIT_DATCTRL_FC_MASK &
-		    AW869X_BIT_DATCTRL_LPF_ENABLE_MASK),
-		   (AW869X_BIT_DATCTRL_FC_1000HZ |
-		    AW869X_BIT_DATCTRL_LPF_ENABLE));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DATCTRL,
+				 (AW869X_BIT_DATCTRL_FC_MASK &
+				  AW869X_BIT_DATCTRL_LPF_ENABLE_MASK),
+				 (AW869X_BIT_DATCTRL_FC_1000HZ |
+				  AW869X_BIT_DATCTRL_LPF_ENABLE));
 	/* f0 driver level */
-	i2c_w_bytes(aw_haptic, AW869X_REG_DRV_LVL,
-		    &aw_haptic->info.cont_drv_lvl, AW_I2C_BYTE_ONE);
-
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_DRV_LVL,
+			     &aw_haptic->info.cont_drv_lvl, AW_I2C_BYTE_ONE);
 	/* f0 trace parameter */
 	f0_param[1] = aw_haptic->info.f0_trace_parameter[2]; /* f0_repeat_num */
 	f0_param[2] = aw_haptic->info.f0_trace_parameter[3]; /* f0_trace_num */
 	f0_param[3] = aw_haptic->info.f0_trace_parameter[0]; /* f0_pre_num */
 	f0_param[4] = aw_haptic->info.f0_trace_parameter[1]; /* f0_wait_num */
 	f0_param[0] = (f0_param[3] << 4) | (f0_param[4] << 0); /* f0_1 */
-	i2c_w_bytes(aw_haptic, AW869X_REG_NUM_F0_1, f0_param,
-		    AW_I2C_BYTE_THREE);
-
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_NUM_F0_1, f0_param,
+			     AW_I2C_BYTE_THREE);
 	/* clear aw_haptic interrupt */
-	ret = i2c_r_bytes(aw_haptic, AW869X_REG_SYSINT, &reg_val,
-			  AW_I2C_BYTE_ONE);
-	/* play go and start f0 calibration */
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSINT, &reg_val,
+			    AW_I2C_BYTE_ONE);
+	/* play go */
 	aw869x_play_go(aw_haptic, true);
 	/* f0 trace time */
 	if (!aw_haptic->pre_f0) {
@@ -1133,31 +1171,23 @@ static int aw869x_get_f0(struct aw_haptic *aw_haptic)
 	t_f0_ms = 1000 * 10 / aw_haptic->pre_f0;
 	t_f0_trace_ms = t_f0_ms * (f0_param[3] + f0_param[4] +
 		(f0_param[2] + f0_param[4]) * (f0_param[1] - 1));
-
 	usleep_range(t_f0_trace_ms * 1000, t_f0_trace_ms * 1000 + 500);
-	for (i = 0; i < f0_cali_cnt; i++) {
-		reg_val = aw869x_get_glb_state(aw_haptic);
-		/* f0 calibrate done */
-		if ((reg_val & 0x0f) == 0x00) {
-			aw869x_read_f0(aw_haptic);
-			aw869x_read_beme(aw_haptic);
-			break;
-		}
-		usleep_range(10000, 10500);
-		aw_info("f0 cali sleep 10ms");
-	}
-	if (i == f0_cali_cnt)
-		ret = -1;
-	else
-		ret = 0;
-
+	aw869x_wait_enter_standby(aw_haptic);
+	ret = aw869x_read_f0(aw_haptic);
+	aw869x_read_beme(aw_haptic);
 	/* restore default config */
-	i2c_w_bits(aw_haptic, AW869X_REG_CONT_CTRL,
-		   (AW869X_BIT_CONT_CTRL_EN_CLOSE_MASK &
-		    AW869X_BIT_CONT_CTRL_F0_DETECT_MASK),
-		   (AW869X_BIT_CONT_CTRL_CLOSE_PLAYBACK |
-		    AW869X_BIT_CONT_CTRL_F0_DETECT_DISABLE));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_CONT_CTRL,
+				 (AW869X_BIT_CONT_CTRL_EN_CLOSE_MASK &
+				  AW869X_BIT_CONT_CTRL_F0_DETECT_MASK),
+				 (AW869X_BIT_CONT_CTRL_CLOSE_PLAYBACK |
+				  AW869X_BIT_CONT_CTRL_F0_DETECT_DISABLE));
 	return ret;
+}
+
+static int aw869x_ram_get_f0(struct aw_haptic *aw_haptic)
+{
+	aw_err("aw869x no support ram get f0");
+	return -ERANGE;
 }
 
 static int aw869x_set_pref0(struct aw_haptic *aw_haptic, uint32_t f0_pre)
@@ -1173,7 +1203,8 @@ static int aw869x_set_pref0(struct aw_haptic *aw_haptic, uint32_t f0_pre)
 	f0_reg = 1000000000 / (f0_pre * aw_haptic->info.f0_coeff);
 	reg_val[0] = (uint8_t)((f0_reg >> 8) & 0xff);
 	reg_val[1] = (uint8_t)((f0_reg >> 0) & 0xff);
-	i2c_w_bytes(aw_haptic, AW869X_REG_F_PRE_H, reg_val, AW_I2C_BYTE_TWO);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_F_PRE_H, reg_val,
+			     AW_I2C_BYTE_TWO);
 	return 0;
 }
 
@@ -1203,35 +1234,34 @@ static int aw869x_multiple_get_f0(struct aw_haptic *aw_haptic)
 static void aw869x_misc_para_init(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val[8] = {0};
-	int i = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_WAVSEQ1, &reg_val[0],
-		    AW_I2C_BYTE_ONE);
-	aw_haptic->index = reg_val[0] & 0x7F;
-	i2c_r_bytes(aw_haptic, AW869X_REG_DATDBG, reg_val, AW_I2C_BYTE_TWO);
-	aw_haptic->gain = reg_val[0] & 0xFF;
+	/* Get vmax */
 	if (aw_haptic->info.bst_vol_default > 0)
 		aw_haptic->vmax = aw_haptic->info.bst_vol_default;
-	else
-		aw_haptic->vmax = (reg_val[1] >> 1) & 0x1F;
-	i2c_r_bytes(aw_haptic, AW869X_REG_WAVSEQ1, reg_val, AW_I2C_BYTE_EIGHT);
-	for (i = 0; i < AW_SEQUENCER_SIZE; i++)
-		aw_haptic->seq[i] = reg_val[i];
-	i2c_w_bytes(aw_haptic, AW869X_REG_BSTDBG1, aw_haptic->info.bstdbg,
-		    AW_I2C_BYTE_THREE);
-
-	i2c_w_bytes(aw_haptic, AW869X_REG_TSET, &aw_haptic->info.tset,
-		    AW_I2C_BYTE_ONE);
-	i2c_w_bytes(aw_haptic, AW869X_REG_R_SPARE, &aw_haptic->info.r_spare,
-		    AW_I2C_BYTE_ONE);
-	i2c_w_bits(aw_haptic, AW869X_REG_ANADBG, AW869X_BIT_ANADBG_IOC_MASK,
-		   AW869X_BIT_ANADBG_IOC_4P65A);
-	i2c_w_bits(aw_haptic, AW869X_REG_ANACTRL,
-		   AW869X_BIT_ANACTRL_LRA_SRC_MASK,
-		   AW869X_BIT_ANACTRL_LRA_SRC_REG);
+	/* Get gain */
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_DATDBG, reg_val,
+			    AW_I2C_BYTE_ONE);
+	aw_haptic->gain = reg_val[0];
+	/* Get wave_seq */
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_WAVSEQ1, reg_val,
+			    AW_I2C_BYTE_EIGHT);
+	aw_haptic->index = reg_val[0];
+	memcpy(aw_haptic->seq, reg_val, AW_SEQUENCER_SIZE);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_BSTDBG1,
+			     aw_haptic->info.bstdbg, AW_I2C_BYTE_THREE);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TSET, &aw_haptic->info.tset,
+			     AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_R_SPARE,
+			     &aw_haptic->info.r_spare, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_ANADBG,
+				 AW869X_BIT_ANADBG_IOC_MASK,
+				 AW869X_BIT_ANADBG_IOC_4P65A);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_ANACTRL,
+				 AW869X_BIT_ANACTRL_LRA_SRC_MASK,
+				 AW869X_BIT_ANACTRL_LRA_SRC_REG);
 	/* beme config */
-	i2c_w_bytes(aw_haptic, AW869X_REG_BEMF_VTHH_H,
-		    aw_haptic->info.bemf_config, AW_I2C_BYTE_FOUR);
+	haptic_hv_i2c_writes(aw_haptic, AW869X_REG_BEMF_VTHH_H,
+			     aw_haptic->info.bemf_config, AW_I2C_BYTE_FOUR);
 	aw_haptic->pre_f0 = aw_haptic->info.f0_pre;
 	aw869x_set_pref0(aw_haptic, aw_haptic->info.f0_pre);
 }
@@ -1248,20 +1278,25 @@ static void aw869x_interrupt_setup(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_SYSINT, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSINT, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	aw_info("reg SYSINT=0x%x", reg_val);
 	/* edge int mode */
-	i2c_w_bits(aw_haptic, AW869X_REG_DBGCTRL,
-		   AW869X_BIT_DBGCTRL_INT_MODE_MASK,
-		   AW869X_BIT_DBGCTRL_INT_MODE_EDGE);
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_DBGCTRL,
+				 AW869X_BIT_DBGCTRL_INT_MODE_MASK,
+				 AW869X_BIT_DBGCTRL_INT_MODE_EDGE);
 	/* int enable */
-	i2c_w_bits(aw_haptic, AW869X_REG_SYSINTM,
-		   (AW869X_BIT_SYSINTM_BSTERR_MASK &
-		    AW869X_BIT_SYSINTM_OV_MASK & AW869X_BIT_SYSINTM_UVLO_MASK &
-		    AW869X_BIT_SYSINTM_OCD_MASK & AW869X_BIT_SYSINTM_OT_MASK),
-		   (AW869X_BIT_SYSINTM_BSTERR_OFF | AW869X_BIT_SYSINTM_OV_OFF |
-		    AW869X_BIT_SYSINTM_UVLO_EN | AW869X_BIT_SYSINTM_OCD_EN |
-		    AW869X_BIT_SYSINTM_OT_EN));
+	haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_SYSINTM,
+				 (AW869X_BIT_SYSINTM_BSTERR_MASK &
+				  AW869X_BIT_SYSINTM_OV_MASK &
+				  AW869X_BIT_SYSINTM_UVLO_MASK &
+				  AW869X_BIT_SYSINTM_OCD_MASK &
+				  AW869X_BIT_SYSINTM_OT_MASK),
+				 (AW869X_BIT_SYSINTM_BSTERR_OFF |
+				  AW869X_BIT_SYSINTM_OV_OFF |
+				  AW869X_BIT_SYSINTM_UVLO_EN |
+				  AW869X_BIT_SYSINTM_OCD_EN |
+				  AW869X_BIT_SYSINTM_OT_EN));
 }
 
 static int aw869x_get_irq_state(struct aw_haptic *aw_haptic)
@@ -1269,38 +1304,43 @@ static int aw869x_get_irq_state(struct aw_haptic *aw_haptic)
 	uint8_t reg_val = 0;
 	uint8_t dbg_val = 0;
 	uint8_t int_sts = 0;
-	int ret = -1;
+	int ret = 0;
 
-	i2c_r_bytes(aw_haptic, AW869X_REG_SYSST, &int_sts, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSST, &int_sts,
+			    AW_I2C_BYTE_ONE);
 	aw_dbg("reg SYSST=0x%x", int_sts);
-	i2c_r_bytes(aw_haptic, AW869X_REG_SYSINT, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_SYSINT, &reg_val,
+			    AW_I2C_BYTE_ONE);
 	aw_dbg("reg SYSINT=0x%x", reg_val);
-	i2c_r_bytes(aw_haptic, AW869X_REG_DBGSTAT, &dbg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW869X_REG_DBGSTAT, &dbg_val,
+			    AW_I2C_BYTE_ONE);
 	aw_dbg("reg DBGSTAT=0x%x", dbg_val);
 	if (reg_val & AW869X_BIT_SYSINT_OVI) {
-		aw_haptic->rtp_routine_on = 0;
+		ret = AW_IRQ_OV;
 		aw_err("chip ov int error");
 	}
 	if (reg_val & AW869X_BIT_SYSINT_UVLI & int_sts) {
-		aw_haptic->rtp_routine_on = 0;
+		ret = AW_IRQ_UVLO;
 		aw_err("chip uvlo int error");
 	}
 	if (reg_val & AW869X_BIT_SYSINT_OCDI) {
-		aw_haptic->rtp_routine_on = 0;
+		ret = AW_IRQ_OCD;
 		aw_err("chip over current int error");
 	}
 	if (reg_val & AW869X_BIT_SYSINT_OTI) {
-		aw_haptic->rtp_routine_on = 0;
+		ret = AW_IRQ_OT;
 		aw_err("chip over temperature int error");
 	}
 	if (reg_val & AW869X_BIT_SYSINT_DONEI) {
-		aw_haptic->rtp_routine_on = 0;
+		ret = AW_IRQ_DONE;
 		aw_info("chip playback done");
 	}
 	if (reg_val & AW869X_BIT_SYSINT_FF_AEI)
-		ret = 0;
-	if (reg_val & AW869X_BIT_SYSINT_FF_AFI)
+		ret = AW_IRQ_ALMOST_EMPTY;
+	if (reg_val & AW869X_BIT_SYSINT_FF_AFI) {
+		ret = AW_IRQ_ALMOST_FULL;
 		aw_info("aw_haptic rtp mode fifo full empty");
+	}
 	return ret;
 }
 
@@ -1316,15 +1356,12 @@ static void aw869x_parse_dt(struct device *dev, struct aw_haptic *aw_haptic,
 	uint8_t f0_trace_parameter[4];
 	uint8_t bemf_config[4];
 	uint8_t duration_time[3];
+	uint8_t trig_config_temp[15];
 	uint32_t val = 0;
 
 	val = of_property_read_u32(np, "f0_pre", &aw_haptic->info.f0_pre);
 	if (val != 0)
 		aw_info("f0_pre not found");
-	val = of_property_read_u8(np, "aw869x_max_bst_vol",
-				  &aw_haptic->info.max_bst_vol);
-	if (val != 0)
-		aw_info("aw869x_max_bst_vol not found");
 	val = of_property_read_u8(np, "f0_cali_percent",
 				  &aw_haptic->info.f0_cali_percent);
 	if (val != 0)
@@ -1389,6 +1426,18 @@ static void aw869x_parse_dt(struct device *dev, struct aw_haptic *aw_haptic,
 	else
 		memcpy(aw_haptic->info.bemf_config, bemf_config,
 		       sizeof(bemf_config));
+	val = of_property_read_u8_array(np, "aw869x_trig_config",
+					trig_config_temp,
+					ARRAY_SIZE(trig_config_temp));
+	if (val != 0)
+		aw_info("vib_trig_config not found");
+	else
+		memcpy(aw_haptic->info.trig_cfg, trig_config_temp,
+		       sizeof(trig_config_temp));
+	val = of_property_read_u32(np, "aw869x_bst_vol_default",
+				   &aw_haptic->info.bst_vol_default);
+	if (val != 0)
+		aw_info("aw869x_bst_vol_default not found");
 }
 
 static ssize_t aw869x_cont_td_show(struct device *dev,
@@ -1419,8 +1468,8 @@ static ssize_t aw869x_cont_td_store(struct device *dev,
 		aw_haptic->info.cont_td = databuf[0];
 		cont_td[0] = (uint8_t)(databuf[0] >> 8);
 		cont_td[1] = (uint8_t)(databuf[0] >> 0);
-		i2c_w_bytes(aw_haptic, AW869X_REG_TD_H, cont_td,
-			    AW_I2C_BYTE_TWO);
+		haptic_hv_i2c_writes(aw_haptic, AW869X_REG_TD_H, cont_td,
+				     AW_I2C_BYTE_TWO);
 	}
 	return count;
 }
@@ -1457,8 +1506,8 @@ static ssize_t aw869x_cont_drv_store(struct device *dev,
 		aw_haptic->info.cont_drv_lvl_ov = (uint8_t)databuf[1];
 		drv_lvl[0] = (uint8_t)databuf[0];
 		drv_lvl[1] = (uint8_t)databuf[1];
-		i2c_w_bytes(aw_haptic, AW869X_REG_DRV_LVL, drv_lvl,
-			    AW_I2C_BYTE_TWO);
+		haptic_hv_i2c_writes(aw_haptic, AW869X_REG_DRV_LVL, drv_lvl,
+				     AW_I2C_BYTE_TWO);
 	}
 	return count;
 }
@@ -1491,9 +1540,9 @@ static ssize_t aw869x_cont_num_brk_store(struct device *dev,
 		aw_haptic->info.cont_num_brk = databuf[0];
 		if (aw_haptic->info.cont_num_brk > 7)
 			aw_haptic->info.cont_num_brk = 7;
-		i2c_w_bits(aw_haptic, AW869X_REG_BEMF_NUM,
-			   AW869X_BIT_BEMF_NUM_BRK_MASK,
-			   aw_haptic->info.cont_num_brk);
+		haptic_hv_i2c_write_bits(aw_haptic, AW869X_REG_BEMF_NUM,
+					 AW869X_BIT_BEMF_NUM_BRK_MASK,
+					 aw_haptic->info.cont_num_brk);
 	}
 	return count;
 }
@@ -1526,8 +1575,8 @@ static ssize_t aw869x_cont_zc_thr_store(struct device *dev,
 		aw_haptic->info.cont_zc_thr = databuf[0];
 		cont_zc[0] = (uint8_t)(databuf[0] >> 8);
 		cont_zc[1] = (uint8_t)(databuf[0] >> 0);
-		i2c_w_bytes(aw_haptic, AW869X_REG_ZC_THRSH_H, cont_zc,
-			    AW_I2C_BYTE_TWO);
+		haptic_hv_i2c_writes(aw_haptic, AW869X_REG_ZC_THRSH_H, cont_zc,
+				     AW_I2C_BYTE_TWO);
 	}
 	return count;
 }
@@ -1637,7 +1686,6 @@ struct aw_haptic_func aw869x_func_list = {
 	.creat_node = aw869x_creat_node,
 	.cont_config = aw869x_cont_config,
 	.offset_cali = aw869x_offset_cali,
-	.read_f0 = aw869x_read_f0,
 	.check_qualify = aw869x_check_qualify,
 	.get_irq_state = aw869x_get_irq_state,
 	.juge_rtp_going = aw869x_juge_rtp_going,
@@ -1646,6 +1694,7 @@ struct aw_haptic_func aw869x_func_list = {
 	.get_lra_resistance = aw869x_get_lra_resistance,
 	.set_pwm = aw869x_set_pwm,
 	.play_mode = aw869x_play_mode,
+	.ram_get_f0 = aw869x_ram_get_f0,
 	.set_bst_vol = aw869x_set_bst_vol,
 	.interrupt_setup = aw869x_interrupt_setup,
 	.set_repeat_seq = aw869x_set_repeat_seq,
@@ -1675,6 +1724,7 @@ struct aw_haptic_func aw869x_func_list = {
 	.get_glb_state = aw869x_get_glb_state,
 	.get_osc_status = aw869x_osc_read_status,
 	.rtp_get_fifo_afs = aw869x_rtp_get_fifo_afs,
+	.rtp_get_fifo_aes = aw869x_rtp_get_fifo_aes,
 	.get_wav_seq = aw869x_get_wav_seq,
 #ifdef AW869X_MUL_GET_F0
 	.get_f0 = aw869x_multiple_get_f0,
