@@ -1326,7 +1326,7 @@ int goodix_hw_reset(struct goodix_ts_device *dev)
 		ts_info("reg.esd is NULL, skip dynamic esd init");
 	}
 #if GOODIX_CHARGER_DETECT
-	msleep(100);
+	msleep(10);
 	ts_info("goodix_hw_charger in resume");
 	goodix_hw_charger(dev);
 #endif
