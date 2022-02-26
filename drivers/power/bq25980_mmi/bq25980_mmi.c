@@ -210,7 +210,7 @@ static struct reg_default bq25960_reg_init_val[] = {
 	{BQ25980_VAC_CONTROL,	0x6c},//0xb4:14v*2 for vacovp
 	{BQ25980_CHRGR_CTRL_2,	0x00},
 	{BQ25980_CHRGR_CTRL_3,	0x94},//0x94:watchdog disable 5s,500kHz
-	{BQ25980_CHRGR_CTRL_4,	0x81},//5m oum battery sense resister
+	{BQ25980_CHRGR_CTRL_4,	0xf1},//5m oum battery sense resister & ss_timeout is 10s
 	{BQ25980_CHRGR_CTRL_5,	0x60},
 
 	{BQ25980_MASK1,		0x00},
