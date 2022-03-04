@@ -58,18 +58,21 @@
 struct cps_wls_chrg_chip *chip = NULL;
 struct cps_wls_chrg_chip *chip_h = NULL;
 
-static bool PEN_MAC0_READY = false;
 //static uint32 chip->cps_pen_status = PEN_STAT_DETACHED;
 //static bool PEN_POWER_ON = false;
 static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
-static uint32_t cps_pen_mac[6] = {0};
-static uint32_t cps_pen_error = PEN_OK;
+
 static uint32_t fod_i_th_w_folio = 1100;
 static uint32_t fod_ii_th_w_folio = 1100;
 static uint32_t fod_i_th_o_folio = 750;
 static uint32_t fod_ii_th_o_folio = 750;
+#ifdef SMART_PEN_SUPPORT
+static bool PEN_MAC0_READY = false;
+static uint32_t cps_pen_mac[6] = {0};
+static uint32_t cps_pen_error = PEN_OK;
 static struct wls_pen_charger_notify_data *wls_pen_notify = NULL;
+#endif
 
 /*define cps rx reg enum*/
 typedef enum
@@ -1241,6 +1244,7 @@ static int cps_wls_send_fsk_packet(uint8_t *data, uint8_t data_len)
 	return status;
 }
 
+#ifdef SMART_PEN_SUPPORT
 //get crc
 uint8_t get_crc8(uint8_t *buf, uint8_t len){
 
@@ -1499,6 +1503,7 @@ static int cps_wls_get_ask_packet(void)
     kfree(packet_data);
     return status;
 }
+#endif
 
 static int cps_wls_dump_FW_info(void)
 {
@@ -1767,7 +1772,9 @@ static int cps_wls_tx_irq_handler(int int_flag)
     if(int_flag & TX_INT_ASK_PKT)
     {
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_ASK_PKT");
+#ifdef SMART_PEN_SUPPORT
         rc = cps_wls_get_ask_packet();
+#endif
     }
 
     return rc;
@@ -2662,7 +2669,15 @@ static int wireless_en(void *input, bool en)
 
 static int wireless_get_chip_id(void *input)
 {
-	return cps_wls_get_chip_id();
+	int value = 0;
+	cps_wls_tx_enable(true);
+	/*unlock i2c*/
+	cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
+	cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
+	cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
+	value = cps_wls_get_chip_id();
+	cps_wls_tx_enable(false);
+	return value;
 }
 
 static int  wls_tcmd_register(struct cps_wls_chrg_chip *cm)
@@ -2680,6 +2695,7 @@ static int  wls_tcmd_register(struct cps_wls_chrg_chip *cm)
 	return ret;
 }
 
+#ifdef SMART_PEN_SUPPORT
 void cps_wls_pen_attached(void)
 {
     chip->cps_pen_status = PEN_STAT_ATTACHED;
@@ -2763,6 +2779,7 @@ static int  wls_pen_ops_register(struct cps_wls_chrg_chip *cm)
 
 	return ret;
 }
+#endif
 
 #define WLS_RX_CAP_15W 15
 #define WLS_RX_CAP_10W 10
@@ -2836,7 +2853,7 @@ static int cps_wls_rx_power_on()
 	uint32_t chip_id = 0, sys_mode = 0;
 	bool rx_power = false;
 	static int rx_power_cnt = 0;
-
+#ifdef SMART_PEN_SUPPORT
 	if (CPS_RX_MODE_ERR || CPS_TX_MODE || chip->pen_power_on) {
 		cps_wls_log(CPS_LOG_ERR, "CPS_RX_MODE_ERR %d, CPS_TX_MODE %d, PEN_POWER_ON%d",
 			CPS_RX_MODE_ERR, CPS_TX_MODE, chip->pen_power_on);
@@ -2844,6 +2861,15 @@ static int cps_wls_rx_power_on()
 		alarm_try_to_cancel(&info->wls_rx_timer);
 		return false;
 	}
+#else
+	if (CPS_RX_MODE_ERR || CPS_TX_MODE) {
+		cps_wls_log(CPS_LOG_ERR, "CPS_RX_MODE_ERR %d, CPS_TX_MODE %d",
+			CPS_RX_MODE_ERR, CPS_TX_MODE);
+		cps_wls_log(CPS_LOG_ERR, "Stop wls timer, and report wls rx offline");
+		alarm_try_to_cancel(&info->wls_rx_timer);
+		return false;
+	}
+#endif
 
 	sys_mode = cps_wls_get_sys_mode();
 	cps_wls_log(CPS_LOG_DEBG, "CPS_TX_MODE %d, sys_mode RX/TX, mode %d", CPS_TX_MODE, sys_mode);
@@ -2881,14 +2907,14 @@ static int cps_wls_rx_power_on()
 
 static int cps_rx_check_events_thread(void *arg)
 {
-	int status = WLS_PEN_SUCCESS;
+	int status = CPS_WLS_SUCCESS;
 	struct cps_wls_chrg_chip *info = arg;
 
 	while (1) {
 		status = wait_event_interruptible(info->wait_que,
 			(info->wls_rx_check_thread_timeout == true));
 		if (status < 0) {
-			cps_wls_log(PEN_LOG_ERR, "%s: wait event been interrupted\n", __func__);
+			cps_wls_log(CPS_LOG_ERR, "%s: wait event been interrupted\n", __func__);
 			continue;
 		}
 		info->wls_rx_check_thread_timeout = false;
@@ -3021,12 +3047,15 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 
    // wake_lock(&chip->cps_wls_wake_lock);
     wls_tcmd_register(chip);
+#ifdef SMART_PEN_SUPPORT
     wls_pen_notify = devm_kzalloc(&client->dev, sizeof(struct wls_pen_charger_notify_data), GFP_KERNEL);
     wls_pen_ops_register(chip);
-    wls_chg_ops_register(chip);
     chip->cps_pen_status = PEN_STAT_DETACHED;
     chip->cps_pen_soc = 0;
+    pen_charger_psy_init();
+#endif
     chip->rx_connected = false;
+    wls_chg_ops_register(chip);
     chip->wls_input_curr_max = 0;
     chip->MaxV = 12000;
     chip->MaxI = 1250;
@@ -3034,7 +3063,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     init_waitqueue_head(&chip->wait_que);
     wls_rx_init_timer(chip);
     kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
-    pen_charger_psy_init();
 
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger addr low probe successful!\n", __func__);
     return ret;
