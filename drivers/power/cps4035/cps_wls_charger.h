@@ -11,7 +11,9 @@
 #define __CPS_WLS_CHARGER_H__
 #include <linux/workqueue.h>
 #include "mtk_charger.h"
+#ifdef SMART_PEN_SUPPORT
 #include "smart_pen_charger.h"
+#endif
 #define CPS_WLS_FAIL    -1
 #define CPS_WLS_SUCCESS 0
 
@@ -263,26 +265,28 @@ struct cps_wls_chrg_chip {
 	bool wls_rx_check_thread_timeout;
 	struct wakeup_source *rx_check_wakelock;
     /*wls pen*/
+#ifdef SMART_PEN_SUPPORT
     struct moto_wls_pen_ops  wls_pen_ops;
     uint32_t cps_pen_status;
     uint32_t cps_pen_soc;
     bool pen_power_on;
+#endif
 };
-        
+
 typedef enum ept_reason
 {
     EPT_UNKONWN = 0,
     EPT_CC,
-    EPT_IF,       
-    EPT_OT,   
-    EPT_OV,       
-    EPT_OC,       
-    EPT_BF,       
-    EPT_RES1,   
-    EPT_NP,     
-    EPT_RES2,  
-    EPT_NF,     
-    EPT_RS,     
+    EPT_IF,
+    EPT_OT,
+    EPT_OV,
+    EPT_OC,
+    EPT_BF,
+    EPT_RES1,
+    EPT_NP,
+    EPT_RES2,
+    EPT_NF,
+    EPT_RS,
 }ept_reason_e;
 
 static void wls_rx_start_timer(struct cps_wls_chrg_chip *info);
