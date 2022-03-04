@@ -2573,15 +2573,14 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		ts_err("failed get goodix stylus clock");
 
 
-    /* For debugging convenience, gpio59 is temporarily turned on by default,
-        it will be turned off later */
-	if (IS_ERR_OR_NULL(core_data->stylus_clk_active)) {//FIXME
-		ts_err("stylus_clk_active is NULL\n");
+    /* Keep stylus clk suspend for save current drain */
+	if (IS_ERR_OR_NULL(core_data->stylus_clk_suspend)) {
+		ts_err("stylus_clk_suspend is NULL\n");
     } else {
 	    ret = pinctrl_select_state(core_data->pinctrl,
-				    core_data->stylus_clk_active);
+				    core_data->stylus_clk_suspend);
 	    if (ret < 0) {
-		    ts_err("Failed to select active stylus clk state, ret:%d", ret);
+		    ts_err("Failed to select suspend stylus clk state, ret:%d", ret);
         }
     }
 
