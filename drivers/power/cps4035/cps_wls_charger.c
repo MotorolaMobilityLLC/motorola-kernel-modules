@@ -1797,7 +1797,7 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
     struct cps_wls_chrg_chip *chip = chg;
 
     wls_online = cps_wls_rx_power_on();
-    if(!chip->wls_online && wls_online) {
+    if(!chip->wls_online && wls_online && chip->wls_disconnect) {
         chip->wls_online = true;
         mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, true);
         power_supply_changed(chip->wl_psy);
@@ -1864,12 +1864,16 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	int tx_detected = gpio_get_value(chip->wls_det_int);
 
 	if (tx_detected) {
-		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
+		chip->wls_disconnect = false;
+		cps_wls_log(CPS_LOG_DEBG, "Detected an 0 attach event.\n");
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
 		if (chip->rx_ldo_on) {
 			//chip->wls_online = false;
+			chip->wls_disconnect = true;
 			chip->rx_ldo_on = false;
+			//mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
+			//power_supply_changed(chip->wl_psy);
 			//mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
 		}
 	}
@@ -2014,6 +2018,7 @@ static void cps_wls_fw_set_boost(bool val)
 	}
 }
 
+static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info);
 #define CPS_FW_MAJOR_VER_OFFSET		0xc4
 #define CPS_FW_MINOR_VER_OFFSET		0xc5
 static int wireless_fw_update(bool force)
@@ -2030,8 +2035,8 @@ static int wireless_fw_update(bool force)
 	const struct firmware *fw;
 
 	CPS_TX_MODE = true;
-	cps_wls_fw_set_boost(false);
-	msleep(20);//20ms
+	//cps_wls_fw_set_boost(false);
+	//msleep(20);//20mss
 	cps_wls_fw_set_boost(true);
 	msleep(100);//100ms
 
@@ -2223,6 +2228,7 @@ free_bug:
 	kfree(firmware_buf);
 	release_firmware(fw);
 	CPS_TX_MODE = false;
+	wake_up_rx_check_thread(chip);
 	return ret;
 
 update_fail:
@@ -2375,7 +2381,8 @@ static void cps_wls_tx_mode(bool en)
 	} else {
 		cps_wls_log(CPS_LOG_ERR,"mmi_mux wls tx end\n");
 		cps_wls_disable_tx_mode();
-		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
+		if(chip->rx_connected)
+			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
 		chip->rx_connected = false;
 		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "rx_connected");
 	}
@@ -2785,17 +2792,17 @@ static int  wls_pen_ops_register(struct cps_wls_chrg_chip *cm)
 #define WLS_RX_CAP_10W 10
 #define WLS_RX_CAP_8W 8
 #define WLS_RX_CAP_5W 5
-static void cps_wls_voltage_current_select(int *pCurrent)
+static void cps_wls_current_select(int  *icl)
 {
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
 
-    *pCurrent = 1250000;
+    *icl = 1250000;
     if (chg->mode_type == Sys_Op_Mode_BPP)
     {
         chg->MaxV = 12000;
         chg->MaxI = 1000;
-        *pCurrent = 1000000;
+        *icl = 1000000;
     }
     else if (chg->mode_type == Sys_Op_Mode_EPP)
     {
@@ -2805,42 +2812,42 @@ static void cps_wls_voltage_current_select(int *pCurrent)
         {
             chg->MaxV = 12000;
             chg->MaxI = 1250;
-            *pCurrent = 1250000;
+            *icl = 1250000;
         }
         else if (wls_power >= WLS_RX_CAP_10W)
         {
             chg->MaxV = 12000;
             chg->MaxI = 800;
-            *pCurrent = 800000;
+            *icl = 800000;
         }
         else if (wls_power >= WLS_RX_CAP_8W)
         {
             chg->MaxV = 12000;
             chg->MaxI = 650;
-            *pCurrent = 650000;
+            *icl = 650000;
         }
         else if (wls_power >= WLS_RX_CAP_5W)
         {
             chg->MaxV = 12000;
             chg->MaxI = 400;
-            *pCurrent = 400000;
+            *icl = 400000;
         }
         else
         {
             chg->MaxV = 5000;
             chg->MaxI = 1000;
-            *pCurrent = 1000000;
+            *icl = 1000000;
         }
     }
     if (chip->wls_input_curr_max != 0)
-        *pCurrent = chip->wls_input_curr_max * 1000;
+        *icl = chip->wls_input_curr_max * 1000;
 }
 
 static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 {
 	int ret;
 
-	cm->wls_chg_ops.wls_voltage_current_select = cps_wls_voltage_current_select;
+	cm->wls_chg_ops.wls_current_select = cps_wls_current_select;
 
 	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
 
@@ -2923,7 +2930,7 @@ static int cps_rx_check_events_thread(void *arg)
 	return 0;
 }
 
-void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info)
+static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info)
 {
 	if (info == NULL)
 		return;
@@ -3055,6 +3062,8 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     pen_charger_psy_init();
 #endif
     chip->rx_connected = false;
+    chip->wls_online = false;
+    chip->wls_disconnect = true;
     wls_chg_ops_register(chip);
     chip->wls_input_curr_max = 0;
     chip->MaxV = 12000;
