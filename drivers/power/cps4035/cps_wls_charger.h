@@ -11,6 +11,7 @@
 #define __CPS_WLS_CHARGER_H__
 #include <linux/workqueue.h>
 #include "mtk_charger.h"
+#include "moto_wlc.h"
 #ifdef SMART_PEN_SUPPORT
 #include "smart_pen_charger.h"
 #endif
@@ -243,6 +244,7 @@ struct cps_wls_chrg_chip {
     unsigned long flags;
     int rx_ldo_on;
     int wls_online;
+    bool wls_disconnect;
     int wls_det_int;
     int wls_det_irq;
     const char *wls_fw_name;
