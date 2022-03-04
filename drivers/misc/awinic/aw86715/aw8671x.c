@@ -1892,6 +1892,8 @@ static void aw8671x_misc_para_init(struct aw_haptic *aw_haptic)
 	haptic_hv_i2c_write_bits(aw_haptic, AW8671X_REG_SYSCTRL3,
 				 AW8671X_BIT_SYSCTRL3_GAIN_BYPASS_MASK,
 				 aw_haptic->info.gain_bypass << 1);
+	/* brk_bst_md */
+	aw8671x_auto_break_mode(aw_haptic, false);
 
 	/* brk_bst_md */
 	if (!aw_haptic->info.brk_bst_md)
