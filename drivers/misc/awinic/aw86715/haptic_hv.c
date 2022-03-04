@@ -1703,15 +1703,29 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 	if (duration == 0) {
 		aw_info("duration is 0, no work");
 		return;
-	} else if (duration > 100 && duration <= 109) {
-		if (duration - 100 > aw_haptic->ram.ram_num) {
-			aw_err("waveform out of range!");
-			return;
-		}
+	} else if (duration > 0 && duration <= 34) {
 		mutex_lock(&aw_haptic->lock);
 		aw_haptic->state = level;
 		aw_haptic->activate_mode = AW_RAM_MODE;
-		aw_haptic->func->set_wav_seq(aw_haptic, 0,duration - 100);
+		aw_haptic->func->set_wav_seq(aw_haptic, 0, 5);
+		aw_haptic->func->set_wav_seq(aw_haptic, 1, 0);
+		aw_haptic->func->set_wav_loop(aw_haptic, 0, 0);
+		mutex_unlock(&aw_haptic->lock);
+		schedule_work(&aw_haptic->vibrator_work);
+	} else if (duration > 34 && duration <= 67) {
+		mutex_lock(&aw_haptic->lock);
+		aw_haptic->state = level;
+		aw_haptic->activate_mode = AW_RAM_MODE;
+		aw_haptic->func->set_wav_seq(aw_haptic, 0, 3);
+		aw_haptic->func->set_wav_seq(aw_haptic, 1, 0);
+		aw_haptic->func->set_wav_loop(aw_haptic, 0, 0);
+		mutex_unlock(&aw_haptic->lock);
+		schedule_work(&aw_haptic->vibrator_work);
+	} else if (duration > 67 && duration <= 100) {
+		mutex_lock(&aw_haptic->lock);
+		aw_haptic->state = level;
+		aw_haptic->activate_mode = AW_RAM_MODE;
+		aw_haptic->func->set_wav_seq(aw_haptic, 0, 1);
 		aw_haptic->func->set_wav_seq(aw_haptic, 1, 0);
 		aw_haptic->func->set_wav_loop(aw_haptic, 0, 0);
 		mutex_unlock(&aw_haptic->lock);
@@ -1731,7 +1745,7 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 		mutex_lock(&aw_haptic->lock);
 		aw_haptic->state = level;
 		aw_haptic->activate_mode = AW_RAM_LOOP_MODE;
-		aw_haptic->func->set_wav_seq(aw_haptic, 0, 4);
+		aw_haptic->func->set_wav_seq(aw_haptic, 0, 2);
 		aw_haptic->func->set_wav_seq(aw_haptic, 1, 0);
 		aw_haptic->func->set_wav_loop(aw_haptic, 0, 0x0F);
 		aw_haptic->func->set_wav_loop(aw_haptic, 1, 0);
