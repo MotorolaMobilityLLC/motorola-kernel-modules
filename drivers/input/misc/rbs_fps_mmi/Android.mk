@@ -13,10 +13,7 @@ endif
 
 ifeq ($(BOARD_SUPPORT_EGIS_FOD),true)
     KERNEL_CFLAGS += CONFIG_ET721_FOD=y
-    KERNEL_CFLAGS += CONFIG_MMI_RELAY=y
-    LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/mmi_relay.ko
 endif
-
 include $(CLEAR_VARS)
 LOCAL_MODULE := rbs_fps_mmi.ko
 LOCAL_MODULE_TAGS := optional
