@@ -1352,12 +1352,27 @@ static ssize_t show_reg_dump(struct device *dev, struct device_attribute *attr, 
 }
 static DEVICE_ATTR(reg_dump, 0664, show_reg_dump, NULL);
 
+static ssize_t show_vbus(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int vbus;
+	struct bq25980_device *bq = dev_get_drvdata(dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+	vbus = bq25980_get_adc_vbus(bq);
+
+	return sprintf(buf, "%d\n", vbus);
+}
+static DEVICE_ATTR(vbus, 0664, show_vbus, NULL);
+
 static void bq25980_create_device_node(struct device *dev)
 {
     device_create_file(dev, &dev_attr_force_chg_auto_enable);
     device_create_file(dev, &dev_attr_reg_addr);
     device_create_file(dev, &dev_attr_reg_data);
     device_create_file(dev, &dev_attr_reg_dump);
+    device_create_file(dev, &dev_attr_vbus);
 }
 
 static int bq25980_enable_chg(struct charger_device *chg_dev, bool en)
