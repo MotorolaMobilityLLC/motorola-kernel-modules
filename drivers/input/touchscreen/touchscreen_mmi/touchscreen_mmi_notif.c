@@ -402,14 +402,24 @@ static inline int ts_mmi_ps_get_state(struct power_supply *psy, bool *present)
 {
 	union power_supply_propval pval = {0};
 	int ret;
+	if (!strcmp(psy->desc->name, "battery")) {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &pval);
+		if (pval.intval == MTK_USB_DETECT_IN)
+			*present = true;
+		else if (pval.intval == MTK_USB_DETECT_OUT)
+			*present = false;
+		else
+			ret = -EINVAL;
+	} else {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &pval);
+		if (ret) {
+			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &pval);
+			if (ret)
+				return ret;
+		}
 
-	ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &pval);
-	if (ret) {
-		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &pval);
-		if (ret)
-			return ret;
+		*present = !pval.intval ? false : true;
 	}
-	*present = !pval.intval ? false : true;
 	return 0;
 }
 
@@ -421,12 +431,17 @@ static int ts_mmi_charger_cb(struct notifier_block *self,
 	struct power_supply *psy = ptr;
 	int ret;
 	bool present;
-
-	if (!((event == PSY_EVENT_PROP_CHANGED) && psy &&
-			psy->desc->get_property && psy->desc->name &&
-			!strncmp(psy->desc->name, "usb", sizeof("usb"))))
-		return 0;
-
+	if (touch_cdev->pdata.psy_name && !strcmp(touch_cdev->pdata.psy_name, "battery")) {
+		if (!((event == PSY_EVENT_PROP_CHANGED) && psy &&
+				psy->desc->get_property && psy->desc->name &&
+				!strncmp(psy->desc->name, "battery", sizeof("battery"))))
+			return 0;
+	} else {
+		if (!((event == PSY_EVENT_PROP_CHANGED) && psy &&
+				psy->desc->get_property && psy->desc->name &&
+				!strncmp(psy->desc->name, "usb", sizeof("usb"))))
+			return 0;
+	}
 	ret = ts_mmi_ps_get_state(psy, &present);
 	if (ret) {
 		dev_err(DEV_MMI, "%s: failed to get usb status: %d\n",
@@ -434,7 +449,7 @@ static int ts_mmi_charger_cb(struct notifier_block *self,
 		return ret;
 	}
 
-	dev_dbg(DEV_MMI, "%s: event=%lu, usb status: cur=%d, prev=%d\n",
+	dev_info(DEV_MMI, "%s: event=%lu, usb status: cur=%d, prev=%d\n",
 				__func__, event, present, touch_cdev->ps_is_present);
 
 	if (touch_cdev->ps_is_present != present) {
@@ -517,7 +532,12 @@ int ts_mmi_notifiers_register(struct ts_mmi_dev *touch_cdev)
 		if (ret)
 			goto PS_NOTIF_REGISTER_FAILED;
 
-		psy = power_supply_get_by_name("usb");
+		if (touch_cdev->pdata.psy_name && !strcmp(touch_cdev->pdata.psy_name, "battery")) {
+			psy = power_supply_get_by_name("battery");
+		}
+		else
+			psy = power_supply_get_by_name("usb");
+
 		if (psy) {
 			ret = ts_mmi_ps_get_state(psy, &present);
 			if (!ret) {
