@@ -427,6 +427,8 @@ enum ts_mmi_panel_event {
 
 #define TOUCHSCREEN_MMI_BUS_TYPE_I2C	0
 #define TOUCHSCREEN_MMI_BUS_TYPE_SPI	1
+#define MTK_USB_DETECT_IN 1
+#define MTK_USB_DETECT_OUT 2
 
 struct ts_mmi_dev_pdata {
 	bool		power_off_suspend;
@@ -446,6 +448,7 @@ struct ts_mmi_dev_pdata {
 	int		max_y;
 	int 		ctrl_dsi;
 	int		reset;
+	const char	*psy_name;
 	const char	*class_entry_name;
 	const char 	*bound_display;
 };
