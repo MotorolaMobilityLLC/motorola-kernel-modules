@@ -50,6 +50,11 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 	u32 coords[2];
 
 	dev_info(DEV_TS, "%s: Start parse touchscreen mmi device tree.\n", __func__);
+
+	if (!of_property_read_string(of_node, "mmi,charger-psy-name", &ppdata->psy_name))
+		dev_info(DEV_TS, "%s: mmi,charger-psy-name %s\n",
+				__func__, ppdata->psy_name);
+
 	if (!of_property_read_string(of_node, "mmi,class-entry-name", &ppdata->class_entry_name))
 		dev_info(DEV_TS, "%s: class-entry-name property %s\n",
 				__func__, ppdata->class_entry_name);
