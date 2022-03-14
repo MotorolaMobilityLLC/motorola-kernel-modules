@@ -2372,21 +2372,21 @@ static DEVICE_ATTR(get_tx_vrect, 0444, show_tx_vrect, NULL);
 static void cps_wls_tx_mode(bool en)
 {
  	cps_wls_set_boost(en);
-	if (en) {
+	if ((true == en) && (false == CPS_TX_MODE)) {
 		cps_wls_log(CPS_LOG_ERR,"mmi_mux wls tx start\n");
 		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, true);
 		/* bootst voltage need 10ms to stable and cps need 30ms to stable*/
 		msleep(100);
 		cps_wls_enable_tx_mode();
-	} else {
+	} else if((false == en) && (true == CPS_TX_MODE)){
 		cps_wls_log(CPS_LOG_ERR,"mmi_mux wls tx end\n");
 		cps_wls_disable_tx_mode();
-		if(chip->rx_connected)
-			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
+		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
 		chip->rx_connected = false;
 		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "rx_connected");
+	} else {
+		return;
 	}
-
 	cps_wls_dump_FW_info();
 	if (chip->folio_mode) {
 		cps_wls_set_tx_fod_thresh_I(fod_i_th_w_folio);
@@ -2676,13 +2676,17 @@ static int wireless_en(void *input, bool en)
 
 static int wireless_get_chip_id(void *input)
 {
-	int value = 0;
+	int value = chip->chip_id;
+
+	if(0 != value)
+		return value;
 	cps_wls_tx_enable(true);
 	/*unlock i2c*/
 	cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
 	cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
 	cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
 	value = cps_wls_get_chip_id();
+	chip->chip_id = value;
 	cps_wls_tx_enable(false);
 	return value;
 }
@@ -3068,6 +3072,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     chip->wls_input_curr_max = 0;
     chip->MaxV = 12000;
     chip->MaxI = 1250;
+    chip->chip_id = 0;
 
     init_waitqueue_head(&chip->wait_que);
     wls_rx_init_timer(chip);
