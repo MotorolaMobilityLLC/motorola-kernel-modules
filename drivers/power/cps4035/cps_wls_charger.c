@@ -2308,9 +2308,13 @@ static ssize_t wireless_fw_update_store(struct device *dev, struct device_attrib
 	if (kstrtobool(buf, &val) || !val)
 		return -EINVAL;
 
-	rc = wireless_fw_update(false);
-	if (rc < 0)
-		return rc;
+	if(!chip->wls_online) {
+		rc = wireless_fw_update(false);
+		if (rc < 0)
+			return rc;
+	} else {
+		cps_wls_log(CPS_LOG_DEBG, "wireless_fw_update wls online,forbid fw update\n");
+	}
 
 	return count;
 }
