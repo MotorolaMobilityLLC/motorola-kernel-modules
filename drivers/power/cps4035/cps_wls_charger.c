@@ -2800,17 +2800,20 @@ static int  wls_pen_ops_register(struct cps_wls_chrg_chip *cm)
 #define WLS_RX_CAP_10W 10
 #define WLS_RX_CAP_8W 8
 #define WLS_RX_CAP_5W 5
-static void cps_wls_current_select(int  *icl)
+static void cps_wls_current_select(int  *icl, int *vbus)
 {
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
 
     *icl = 1250000;
+    *vbus = 5000;
+
     if (chg->mode_type == Sys_Op_Mode_BPP)
     {
         chg->MaxV = 12000;
         chg->MaxI = 1000;
         *icl = 1000000;
+        *vbus = 12000;
     }
     else if (chg->mode_type == Sys_Op_Mode_EPP)
     {
@@ -2821,30 +2824,35 @@ static void cps_wls_current_select(int  *icl)
             chg->MaxV = 12000;
             chg->MaxI = 1250;
             *icl = 1250000;
+            *vbus = 12000;
         }
         else if (wls_power >= WLS_RX_CAP_10W)
         {
             chg->MaxV = 12000;
             chg->MaxI = 800;
             *icl = 800000;
+            *vbus = 12000;
         }
         else if (wls_power >= WLS_RX_CAP_8W)
         {
             chg->MaxV = 12000;
             chg->MaxI = 650;
             *icl = 650000;
+            *vbus = 12000;
         }
         else if (wls_power >= WLS_RX_CAP_5W)
         {
             chg->MaxV = 12000;
             chg->MaxI = 400;
             *icl = 400000;
+            *vbus = 12000;
         }
         else
         {
             chg->MaxV = 5000;
             chg->MaxI = 1000;
             *icl = 1000000;
+            *vbus = 5000;
         }
     }
     if (chip->wls_input_curr_max != 0)
