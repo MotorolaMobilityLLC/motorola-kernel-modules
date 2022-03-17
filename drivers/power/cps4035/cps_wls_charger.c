@@ -2805,7 +2805,7 @@ static void cps_wls_current_select(int  *icl, int *vbus)
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
 
-    *icl = 1250000;
+    *icl = 1150000;
     *vbus = 5000;
 
     if (chg->mode_type == Sys_Op_Mode_BPP)
@@ -2822,8 +2822,8 @@ static void cps_wls_current_select(int  *icl, int *vbus)
         if (wls_power >= WLS_RX_CAP_15W)
         {
             chg->MaxV = 12000;
-            chg->MaxI = 1250;
-            *icl = 1250000;
+            chg->MaxI = 1150;
+            *icl = 1150000;
             *vbus = 12000;
         }
         else if (wls_power >= WLS_RX_CAP_10W)
