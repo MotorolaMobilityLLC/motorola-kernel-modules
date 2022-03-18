@@ -1733,7 +1733,7 @@ static int cps_wls_tx_irq_handler(int int_flag)
     {
        if (chip->rx_connected) {
             chip->rx_connected = false;
-            sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "rx_connected");
+            sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
        }
        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_PING");
     }
@@ -1747,7 +1747,7 @@ static int cps_wls_tx_irq_handler(int int_flag)
     if(int_flag & TX_INT_CFGP){
        if (!chip->rx_connected) {
             chip->rx_connected = true;
-            sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "rx_connected");
+            sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
        }
        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_CFGP");
     }
@@ -2387,7 +2387,7 @@ static void cps_wls_tx_mode(bool en)
 		cps_wls_disable_tx_mode();
 		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
 		chip->rx_connected = false;
-		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "rx_connected");
+		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
 	} else {
 		return;
 	}
@@ -2432,7 +2432,7 @@ static ssize_t tx_mode_store(struct device *dev,
 	cps_wls_tx_enable(!!tx_mode);
 	chip->tx_mode = tx_mode;
 	if (chip->wl_psy)
-		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "tx_mode");
+		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
 
 	return r ? r : count;
 }
@@ -2941,7 +2941,8 @@ static int cps_rx_check_events_thread(void *arg)
 			continue;
 		}
 		info->wls_rx_check_thread_timeout = false;
-        cps_rx_online_check(info);
+		cps_rx_online_check(info);
+		__pm_relax(info->rx_check_wakelock);
 	}
 	return 0;
 }
