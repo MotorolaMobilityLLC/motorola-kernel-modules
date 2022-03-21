@@ -2810,10 +2810,10 @@ static void cps_wls_current_select(int  *icl, int *vbus)
 
     if (chg->mode_type == Sys_Op_Mode_BPP)
     {
-        chg->MaxV = 12000;
+        chg->MaxV = 5000;
         chg->MaxI = 1000;
         *icl = 1000000;
-        *vbus = 12000;
+        *vbus = 5000;
     }
     else if (chg->mode_type == Sys_Op_Mode_EPP)
     {
