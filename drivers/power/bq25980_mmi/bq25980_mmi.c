@@ -53,6 +53,7 @@ enum bq_work_mode {
 };
 
 #define BQ_MODE_COUNT 3
+#define SC8541_PART_NO 0x41
 
 enum bq_device_id {
 	BQ25980 = 0,
@@ -150,6 +151,8 @@ struct bq25980_device {
 	int watchdog_timer;
 	int mode;
 	int device_id;
+	int part_no;
+	int sc8541_addr;
 	struct power_supply_desc psy_desc;
 	int reg_addr;
 	int reg_data;
@@ -190,6 +193,38 @@ static struct reg_default bq25980_reg_init_val[] = {
 
 	{BQ25980_ADC_CONTROL1,	0x04},//sample 14 bit
 	{BQ25980_ADC_CONTROL2,	0xE6},
+};
+
+static struct reg_default sc8541_reg_init_val[] = {
+	{BQ25980_BATOVP,	0x4a},//0x47:4550mV 0x4a:4580mv
+	{BQ25980_BATOVP_ALM,	0x42},//0x3f:4470mV 0x42:4500mv
+	{BQ25980_BATOCP,	0xEE},//0xEE:disable for dual //0x46:7000mA for standalone
+	{BQ25980_BATOCP_ALM,	0x7F},//0x7F:12700mA
+	{BQ25980_CHRGR_CFG_1,	0x00},
+	{BQ25980_CHRGR_CTRL_1,	0x49},
+	{BQ25980_BUSOVP,	0x64},//0X50:11000mV 0x64:12000mv
+	{BQ25980_BUSOVP_ALM,	0x50},//0X46:10500mV 0X50:11000mV
+	{BQ25980_BUSOCP,	0x0C},//0X0c:4000mA
+	{BQ25980_REG_09,	0x00},
+	{BQ25980_TEMP_CONTROL,	0x2C},
+	{BQ25980_TDIE_ALM,	0x78},//0x78:85C
+	{BQ25980_TSBUS_FLT,	0x15},
+	{BQ25980_TSBAT_FLG,	0x15},
+	{BQ25980_VAC_CONTROL,	0x6c},//0xb4:14v*2 for vacovp
+	{BQ25980_CHRGR_CTRL_2,	0x00},
+	{BQ25980_CHRGR_CTRL_3,	0x94},//0x94:watchdog disable 5s,500kHz
+	{BQ25980_CHRGR_CTRL_4,	0xf1},//5m oum battery sense resister & ss_timeout is 10s
+	{BQ25980_CHRGR_CTRL_5,	0x60},
+
+	{BQ25980_MASK1,		0x00},
+	{BQ25980_MASK2,		0x00},
+	{BQ25980_MASK3,		0x00},
+	{BQ25980_MASK4,		0x00},
+	{BQ25980_MASK5,		0x00},
+
+	{BQ25980_ADC_CONTROL1,	0x80},
+	{BQ25980_ADC_CONTROL2,	0x06}, //0x26: enable vac1 vac2 adc and vout adc
+
 };
 
 static struct reg_default bq25960_reg_init_val[] = {
@@ -389,6 +424,61 @@ static struct reg_default bq25960_reg_defs[] = {
 	{BQ25980_CHRGR_CTRL_6, 0x0},
 };
 
+static struct reg_default sc8541_reg_defs[] = {
+	{BQ25980_BATOVP, 0x4a},
+	{BQ25980_BATOVP_ALM, 0x42},
+	{BQ25980_BATOCP, 0x51},
+	{BQ25980_BATOCP_ALM, 0x50},
+	{BQ25980_CHRGR_CFG_1, 0x0},
+	{BQ25980_CHRGR_CTRL_1, 0x0},
+	{BQ25980_BUSOVP, 0x26},
+	{BQ25980_BUSOVP_ALM, 0x22},
+	{BQ25980_BUSOCP, 0xD},
+	{BQ25980_REG_09, 0x0},
+	{BQ25980_TEMP_CONTROL, 0x00},
+	{BQ25980_TDIE_ALM, 0xC8},
+	{BQ25980_TSBUS_FLT, 0x15},
+	{BQ25980_TSBAT_FLG, 0x15},
+	{BQ25980_VAC_CONTROL, 0x0},
+	{BQ25980_CHRGR_CTRL_2, 0x0},
+	{BQ25980_CHRGR_CTRL_3, 0x20},
+	{BQ25980_CHRGR_CTRL_4, 0x1D},
+	{BQ25980_CHRGR_CTRL_5, 0x18},
+	{BQ25980_STAT1, 0x0},
+	{BQ25980_STAT2, 0x0},
+	{BQ25980_STAT3, 0x0},
+	{BQ25980_STAT4, 0x0},
+	{BQ25980_STAT5, 0x0},
+	{BQ25980_FLAG1, 0x0},
+	{BQ25980_FLAG2, 0x0},
+	{BQ25980_FLAG3, 0x0},
+	{BQ25980_FLAG4, 0x0},
+	{BQ25980_FLAG5, 0x0},
+	{BQ25980_MASK1, 0x0},
+	{BQ25980_MASK2, 0x0},
+	{BQ25980_MASK3, 0x0},
+	{BQ25980_MASK4, 0x0},
+	{BQ25980_MASK5, 0x0},
+	{BQ25980_DEVICE_INFO, 0x41},
+	{BQ25980_ADC_CONTROL1, 0x0},
+	{BQ25980_ADC_CONTROL2, 0x0},
+	{BQ25980_IBUS_ADC_LSB, 0x0},
+	{BQ25980_IBUS_ADC_MSB, 0x0},
+	{BQ25980_VBUS_ADC_LSB, 0x0},
+	{BQ25980_VBUS_ADC_MSB, 0x0},
+	{BQ25980_VAC1_ADC_LSB, 0x0},
+	{BQ25980_VAC2_ADC_LSB, 0x0},
+	{BQ25980_VOUT_ADC_LSB, 0x0},
+	{BQ25980_VBAT_ADC_LSB, 0x0},
+	{BQ25980_IBAT_ADC_MSB, 0x0},
+	{BQ25980_IBAT_ADC_LSB, 0x0},
+	{BQ25980_TSBUS_ADC_LSB, 0x0},
+	{BQ25980_TSBAT_ADC_LSB, 0x0},
+	{BQ25980_TDIE_ADC_LSB, 0x0},
+	{BQ25980_DEGLITCH_TIME, 0x0},
+	{BQ25980_CHRGR_CTRL_6, 0x0},
+};
+
 static void dump_all_reg(struct bq25980_device *bq)
 {
 	int ret;
@@ -418,7 +508,24 @@ static int bq25980_set_adc_enable(struct bq25980_device *bq, bool enable)
 	return ret;
 }
 
+static int bq25890_get_part_no(struct bq25980_device *bq)
+{
+	struct i2c_client client;
+	int ret;
 
+	ret = device_property_read_u32(bq->dev, "sc8541-addr",
+				       &bq->sc8541_addr);
+	if (ret)
+		return -ENXIO;
+
+	client = *(bq->client);
+	pr_info("bq25890_get_part_no: orig addr = %d, sc8541 addr =%d\n ",
+		client.addr, bq->sc8541_addr);
+	client.addr =  bq->sc8541_addr;
+	ret = i2c_smbus_read_byte_data(&client, BQ25980_DEVICE_INFO);
+
+	return ret;
+}
 
 static int bq25980_get_const_charge_curr(struct bq25980_device *bq)
 {
@@ -467,13 +574,20 @@ static int bq25980_set_chg_en(struct bq25980_device *bq, bool en_chg)
 
 static int bq25980_is_chg_en(struct bq25980_device *bq, bool *en_chg)
 {
+	unsigned int stat5;
 	unsigned int chg_ctrl_2;
 	int ret;
 
 	ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &chg_ctrl_2);
 	if (ret)
 		return ret;
-	*en_chg = chg_ctrl_2 & BQ25980_CHG_EN;
+
+	ret = regmap_read(bq->regmap, BQ25980_STAT5, &stat5);
+	if (ret)
+		return ret;
+
+	*en_chg = (!!(chg_ctrl_2 & BQ25980_CHG_EN) &
+            !!(stat5 & BQ25980_SWITCHING_STAT));
 
 	return 0;
 }
@@ -905,6 +1019,61 @@ static const struct regmap_config bq25960_regmap_config = {
 	.volatile_reg = bq25980_is_volatile_reg,
 };
 
+static const struct regmap_config sc8541_regmap_config = {
+	.reg_bits = 8,
+	.val_bits = 8,
+
+	.max_register = SC8541_CTRL6_REG,
+	.reg_defaults	= sc8541_reg_defs,
+	.num_reg_defaults = ARRAY_SIZE(sc8541_reg_defs),
+	.cache_type = REGCACHE_NONE,
+	.volatile_reg = bq25980_is_volatile_reg,
+};
+
+static const struct bq25980_chip_info sc8541_chip_info_tbl[] = {
+	[BQ25960] = {
+		.model_id = BQ25960,
+		.regmap_config = &sc8541_regmap_config,
+		.reg_init_values = sc8541_reg_init_val,
+
+		.busocp_sc_def = BQ25960_BUSOCP_SC_DFLT_uA,
+		.busocp_byp_def = BQ25960_BUSOCP_BYP_DFLT_uA,
+		.busocp_sc_min = BQ25960_BUSOCP_MIN_uA,
+		.busocp_sc_max = BQ25960_BUSOCP_SC_MAX_uA,
+		.busocp_byp_min = BQ25960_BUSOCP_MIN_uA,
+		.busocp_byp_max = BQ25960_BUSOCP_BYP_MAX_uA,
+		.busocp_step = BQ25960_BUSOCP_STEP_uA,
+		.busocp_offset = BQ25960_BUSOCP_OFFSET_uA,
+
+		.busovp_sc_def = BQ25975_BUSOVP_DFLT_uV,
+		.busovp_byp_def = BQ25975_BUSOVP_BYPASS_DFLT_uV,
+		.busovp_sc_step = BQ25960_BUSOVP_SC_STEP_uV,
+		.busovp_sc_offset = BQ25960_BUSOVP_SC_OFFSET_uV,
+		.busovp_byp_step = BQ25960_BUSOVP_BYP_STEP_uV,
+		.busovp_byp_offset = BQ25960_BUSOVP_BYP_OFFSET_uV,
+		.busovp_sc_min = BQ25960_BUSOVP_SC_MIN_uV,
+		.busovp_sc_max = BQ25960_BUSOVP_SC_MAX_uV,
+		.busovp_byp_min = BQ25960_BUSOVP_BYP_MIN_uV,
+		.busovp_byp_max = BQ25960_BUSOVP_BYP_MAX_uV,
+
+		.batovp_def = SC8545_BATOVP_DFLT_uV,
+		.batovp_max = SC8545_BATOVP_MAX_uV,
+		.batovp_min = SC8545_BATOVP_MIN_uV,
+		.batovp_step = SC8545_BATOVP_STEP_uV,
+		.batovp_offset = SC8545_BATOVP_OFFSET_uV,
+
+		.batocp_def = SC8545_BATOCP_DFLT_uA,
+		.batocp_max = SC8545_BATOCP_MAX_uA,
+
+		.adc_curr_step = SC8541_ADC_CURR_STEP_IBUS_uA,
+		.adc_vbat_volt_step = SC8541_ADC_VOLT_STEP_VBAT_deciuV,
+		.adc_vbus_volt_step = SC8541_ADC_VOLT_STEP_VBUS_deciuV,
+		.adc_vbus_volt_offset = 0,
+		.adc_vout_volt_step = SC8541_ADC_VOLT_STEP_VOUT_deciuV,
+		.adc_vout_volt_offset = 0,
+	},
+};
+
 static const struct bq25980_chip_info bq25980_chip_info_tbl[] = {
 	[BQ25980] = {
 		.model_id = BQ25980,
@@ -1080,6 +1249,10 @@ static int bq25980_power_supply_init(struct bq25980_device *bq,
 static int bq25980_reg_init(struct bq25980_device *bq)
 {
 	int i, ret;
+
+	/*reg reset*/
+	ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+		BQ25980_REG_RESET, BQ25980_REG_RESET);
 
 	for (i = 0; i < ARRAY_SIZE(bq25980_reg_init_val); i++) {
 		ret = regmap_update_bits(bq->regmap, bq->chip_info->reg_init_values[i].reg,
@@ -1464,7 +1637,19 @@ static int bq25980_get_adc(struct charger_device *chg_dev, enum adc_channel chan
 
 static int bq25980_is_vbuslowerr(struct charger_device *chg_dev, bool *err)
 {
-	*err = 0;
+	unsigned int val;
+	int tmp;
+	struct bq25980_device *bq  = charger_get_data(chg_dev);
+
+	if (bq->part_no == SC8541_PART_NO) {
+		tmp = regmap_read(bq->regmap, BQ25980_STAT5, &val);
+		if (tmp)
+			return tmp;
+
+		*err = !!(val & SC8541_VBUS_ERRPRLO_STAT);
+	} else {
+		*err = 0;
+	}
 	return 0;
 }
 
@@ -1521,12 +1706,139 @@ static int bq25980_set_vbusovp_alarm(struct charger_device *chg_dev, u32 uV)
 	return 0;
 }
 
+static int sc8541_config_mux(struct bq25980_device *bq,
+			enum mmi_dvchg_mux_channel typec_mos, enum mmi_dvchg_mux_channel wls_mos)
+{
+	int ret;
+	unsigned int val;
+
+	 if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN) {
+            ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+                    BQ25980_EN_OTG, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux close en otg fail ret=%d", __func__, ret);
+                return ret;
+            }
+        }
+	 if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN
+		&& typec_mos != MMI_DVCHG_MUX_DISABLE && wls_mos != MMI_DVCHG_MUX_DISABLE) {
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ACDRV_MANUAL_EN, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux dis mos both fail ret=%d", __func__, ret);
+                return ret;
+            }
+        }
+
+        if (typec_mos == MMI_DVCHG_MUX_CLOSE) {
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_TYPEC_MOS, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s mmi_mux close typec mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+            udelay(100);
+        }
+        if (wls_mos == MMI_DVCHG_MUX_CLOSE) {
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_WLC_MOS, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux close wls mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+            udelay(100);
+        }
+
+        if (typec_mos == MMI_DVCHG_MUX_CHG_OPEN) {
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_TYPEC_MOS, SC8541_ENABLE_TYPEC_MOS);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux open typec mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+        } else if (typec_mos == MMI_DVCHG_MUX_OTG_OPEN) {
+            ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+                BQ25980_EN_OTG, BQ25980_EN_OTG);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux  en otg fail ret=%d", __func__, ret);
+                return ret;
+            }
+
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ACDRV_MANUAL_EN, SC8541_ACDRV_MANUAL_EN);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+                return ret;
+            }
+            udelay(100);
+
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_TYPEC_MOS, SC8541_ENABLE_TYPEC_MOS);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+        }
+
+        if (wls_mos == MMI_DVCHG_MUX_CHG_OPEN) {
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_WLC_MOS, SC8541_ENABLE_WLC_MOS);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux  open wls mux fail ret=%d", __func__, ret);
+                return ret;
+            }
+        }
+
+	if (typec_mos == MMI_DVCHG_MUX_DISABLE) {
+		ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ACDRV_MANUAL_EN, SC8541_ACDRV_MANUAL_EN);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+                return ret;
+            }
+	      ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_TYPEC_MOS, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux close typec mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+	     udelay(1000);
+	}
+	if (wls_mos == MMI_DVCHG_MUX_DISABLE) {
+		ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ACDRV_MANUAL_EN, SC8541_ACDRV_MANUAL_EN);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+                return ret;
+            }
+	     ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_WLC_MOS, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux close wls mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+	     udelay(1000);
+	}
+
+        ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &val);
+        if (!ret)
+                dev_err(bq->dev, "%s:mmi_mux Reg SC8541_CHRGR_CTRL_2] = 0x%02X\n", __func__,val);
+        ret = regmap_read(bq->regmap, SC8541_CTRL6_REG, &val);
+        if (!ret)
+                dev_err(bq->dev, "%s:mmi_mux Reg SC8541_CTRL6_REG] = 0x%02X\n", __func__, val);
+
+	return 0;
+}
+
 static int bq25980_config_mux(struct charger_device *chg_dev,
 			enum mmi_dvchg_mux_channel typec_mos, enum mmi_dvchg_mux_channel wls_mos)
 {
 	int ret;
 	unsigned int val;
 	struct bq25980_device *bq  = charger_get_data(chg_dev);
+
+	if (bq->part_no == SC8541_PART_NO)
+		return sc8541_config_mux(bq, typec_mos, wls_mos);
 
 	if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN) {
 		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
@@ -1693,7 +2005,15 @@ static int bq25980_probe(struct i2c_client *client,
 	if (ret)
 		goto free_mem;
 
-	bq->chip_info = &bq25980_chip_info_tbl[bq->device_id];
+	bq->part_no = bq25890_get_part_no(bq);
+	pr_info("bq25980 part no = %d, %x \n",bq->part_no,bq->client->addr);
+
+	if (bq->part_no == SC8541_PART_NO) {
+		bq->client->addr =  bq->sc8541_addr;
+		bq->chip_info = &sc8541_chip_info_tbl[bq->device_id];
+	} else {
+		bq->chip_info = &bq25980_chip_info_tbl[bq->device_id];
+	}
 
 	bq->regmap = devm_regmap_init_i2c(client,
 					  bq->chip_info->regmap_config);
@@ -1795,6 +2115,9 @@ static void bq25980_charger_shutdown(struct i2c_client *client)
 {
 	struct bq25980_device *bq = i2c_get_clientdata(client);
 
+	/*reg reset*/
+	regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+		BQ25980_REG_RESET, BQ25980_REG_RESET);
 	bq25980_set_adc_enable(bq, false);
 
 	regmap_write(bq->regmap, BQ25980_CHRGR_CTRL_2, 0);
