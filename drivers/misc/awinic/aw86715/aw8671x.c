@@ -1340,7 +1340,7 @@ static int aw8671x_get_f0(struct aw_haptic *aw_haptic)
 			     AW_I2C_BYTE_ONE);
 	/* play go */
 	aw8671x_play_go(aw_haptic, true);
-	usleep_range(20000, 20500);
+	msleep(1000);
 	aw8671x_wait_enter_standby(aw_haptic);
 	ret = aw8671x_read_f0(aw_haptic);
 	/* restore default config */
