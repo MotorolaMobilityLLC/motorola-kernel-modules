@@ -65,8 +65,8 @@ static bool CPS_TX_MODE = false;
 
 static uint32_t fod_i_th_w_folio = 1100;
 static uint32_t fod_ii_th_w_folio = 1100;
-static uint32_t fod_i_th_o_folio = 750;
-static uint32_t fod_ii_th_o_folio = 750;
+static uint32_t fod_i_th_o_folio = 850;
+static uint32_t fod_ii_th_o_folio = 850;
 #ifdef SMART_PEN_SUPPORT
 static bool PEN_MAC0_READY = false;
 static uint32_t cps_pen_mac[6] = {0};
