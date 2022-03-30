@@ -1236,13 +1236,13 @@ static int aw8671x_get_irq_state(struct aw_haptic *aw_haptic)
 		aw_info("chip playback done");
 	}
 
-	if (reg_val & AW8671X_BIT_SYSINT_FF_AEI)
-		ret = AW_IRQ_ALMOST_EMPTY;
-
 	if (reg_val & AW8671X_BIT_SYSINT_FF_AFI) {
 		ret = AW_IRQ_ALMOST_FULL;
 		aw_info("aw_haptic rtp mode fifo almost full!");
 	}
+
+	if (reg_val & AW8671X_BIT_SYSINT_FF_AEI)
+		ret = AW_IRQ_ALMOST_EMPTY;
 	return ret;
 }
 
