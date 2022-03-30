@@ -44,10 +44,57 @@
 
 char *aw_ram_name = "haptic_ram.bin";
 char aw_rtp_name[][AW_RTP_NAME_MAX] = {
-	{"haptic_rtp_osc_24K_5s.bin"},
-	{"haptic_rtp.bin"},
-	{"haptic_rtp_lighthouse.bin"},
-	{"haptic_rtp_silk.bin"},
+	{"aw86715_rtp.bin"},
+	{"aw86715_rtp_Argo_Navis.bin"},
+	{"aw86715_rtp_Attentive.bin"},
+	{"aw86715_rtp_Awake.bin"},
+	{"aw86715_rtp_Bird_Loop.bin"},
+	{"aw86715_rtp_Brilliant_Times.bin"},
+	{"aw86715_rtp_Chimey_Phone.bin"},
+	{"aw86715_rtp_Complex.bin"},
+	{"aw86715_rtp_Crazy_Dream.bin"},
+	{"aw86715_rtp_Curve_Ball_Blend.bin"},
+	{"aw86715_rtp_Digital_Phone.bin"},
+	{"aw86715_rtp_Electrovision.bin"},
+	{"aw86715_rtp_Ether_Shake.bin"},
+	{"aw86715_rtp_Fateful_Words.bin"},
+	{"aw86715_rtp_Flutey_Phone.bin"},
+	{"aw86715_rtp_Future_Funk.bin"},
+	{"aw86715_rtp_Future_Hi_Tech.bin"},
+	{"aw86715_rtp_Girtab.bin"},
+	{"aw86715_rtp_Hello.bin"},
+	{"aw86715_rtp_Hexagon.bin"},
+	{"aw86715_rtp_Hydra.bin"},
+	{"aw86715_rtp_Insert_Coin.bin"},
+	{"aw86715_rtp_Jumping_Dots.bin"},
+	{"aw86715_rtp_Keys.bin"},
+	{"aw86715_rtp_Loopy.bin"},
+	{"aw86715_rtp_Loopy_Lounge.bin"},
+	{"aw86715_rtp_Modular.bin"},
+	{"aw86715_rtp_Momentum.bin"},
+	{"aw86715_rtp_Morning.bin"},
+	{"aw86715_rtp_Moto.bin"},
+	{"aw86715_rtp_Natural.bin"},
+	{"aw86715_rtp_New_Player.bin"},
+	{"aw86715_rtp_Onward.bin"},
+	{"aw86715_rtp_Organ_Dub.bin"},
+	{"aw86715_rtp_Overclocked.bin"},
+	{"aw86715_rtp_Pegasus.bin"},
+	{"aw86715_rtp_Pyxis.bin"},
+	{"aw86715_rtp_Regrade.bin"},
+	{"aw86715_rtp_Scarabaeus.bin"},
+	{"aw86715_rtp_Sceptrum.bin"},
+	{"aw86715_rtp_Simple.bin"},
+	{"aw86715_rtp_Solarium.bin"},
+	{"aw86715_rtp_Sparse.bin"},
+	{"aw86715_rtp_Terrabytes.bin"},
+	{"aw86715_rtp_Zero_Hour.bin"},
+	{"aw86715_rtp_Play.bin"},
+	{"aw86715_rtp_TJINGLE.bin"},
+	{"aw86715_rtp_Verizon_Airwaves.bin"},
+	{"aw86715_rtp_City_Lights.bin"},
+	{"aw86715_rtp_Firefly.bin"},
+	{"aw86715_rtp_Now_or_Never.bin"},
 };
 struct transient_trig_data {
 	int activate;
@@ -1134,17 +1181,30 @@ static int rtp_play(struct aw_haptic *aw_haptic)
 		if ((aw_haptic->rtp_cnt == aw_rtp->len)
 		    || ((glb_state_val & AW_GLBRD_STATE_MASK) ==
 							AW_STATE_STANDBY)) {
-			if (transient_data) {
-				transient_data->activate = 0;
-				del_timer(&transient_data->timer);
-			}
-			if (aw_haptic->rtp_cnt != aw_rtp->len)
+			if (aw_haptic->rtp_cnt != aw_rtp->len) {
+				aw_haptic->rtp_cnt = 0;
+				aw_haptic->rtp_init = false;
+				if (transient_data) {
+					transient_data->activate = 0;
+					del_timer(&transient_data->timer);
+				}
 				aw_err("rtp play suspend!");
-			else
+				break;
+			} else if (aw_haptic->rtp_file_num >= 1 && aw_haptic->rtp_file_num <= 50) {
+				aw_haptic->rtp_cnt = 0;
+				aw_haptic->rtp_init = true;
+				pm_qos_enable(aw_haptic, true);
+				aw_info("rtp update loop!");
+			} else {
+				aw_haptic->rtp_cnt = 0;
+				aw_haptic->rtp_init = false;
+				if (transient_data) {
+					transient_data->activate = 0;
+					del_timer(&transient_data->timer);
+				}
 				aw_info("rtp update complete!");
-			aw_haptic->rtp_cnt = 0;
-			aw_haptic->rtp_init = false;
-			break;
+				break;
+			}
 		}
 	}
 	return ret;
@@ -1690,6 +1750,7 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 	del_timer(&transient_data->timer);
 	if (level == 0) {
 		aw_haptic->state = 0;
+		pm_qos_enable(aw_haptic, false);
 		schedule_work(&aw_haptic->vibrator_work);
 		return;
 	}
@@ -1731,7 +1792,7 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 		mutex_unlock(&aw_haptic->lock);
 		schedule_work(&aw_haptic->vibrator_work);
 	} else if (duration > 5000000 && duration <= 5000050) {
-		if ((duration - 5000000) > (sizeof(aw_rtp_name) / AW_RTP_NAME_MAX)) {
+		if ((duration - 5000000) >= (sizeof(aw_rtp_name) / AW_RTP_NAME_MAX)) {
 			aw_err("rtp file out of range!");
 			return;
 		}
@@ -1993,23 +2054,30 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count)
 {
 	cdev_t *cdev = dev_get_drvdata(dev);
+
+	struct transient_trig_data *transient_data = led_get_trigger_data(cdev);
 	struct aw_haptic *aw_haptic = container_of(cdev, struct aw_haptic,
 						   vib_dev);
-	uint32_t databuf[2] = { 0, 0 };
+	unsigned int val = 0;
+	int rc = 0;
 
-	if (sscanf(buf, "%x %x", &databuf[0], &databuf[1]) == 2) {
-		if (databuf[0] >= AW_SEQUENCER_SIZE ||
-		    databuf[1] > aw_haptic->ram.ram_num) {
-			aw_err("input value out of range!");
-			return count;
-		}
-		aw_info("seq%d=0x%02X", databuf[0], databuf[1]);
-		mutex_lock(&aw_haptic->lock);
-		aw_haptic->seq[databuf[0]] = (uint8_t)databuf[1];
-		aw_haptic->func->set_wav_seq(aw_haptic, (uint8_t)databuf[0],
-					     aw_haptic->seq[databuf[0]]);
-		mutex_unlock(&aw_haptic->lock);
+	if (!transient_data)
+		return count;
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	mutex_lock(&aw_haptic->lock);
+	aw_haptic->seq[0] = (((val >> 24) - 2) & 0xFF) - 100;
+	aw_info("seq is 0x%02x", aw_haptic->seq[0]);
+	if (aw_haptic->seq[0] < 1 || aw_haptic->seq[0] > 50) {
+		transient_data->duration = 0;
+		aw_dbg("no rtp loop waveform id, don't care");
+	} else {
+		transient_data->duration = aw_haptic->seq[0] + 5000000;
 	}
+	mutex_unlock(&aw_haptic->lock);
+
 	return count;
 }
 
