@@ -593,6 +593,7 @@ struct aw_haptic {
 	uint32_t gun_type;
 	uint32_t bullet_nr;
 	uint32_t theory_time;
+	uint32_t moto_waveid;
 	uint32_t f0_cali_data;
 	uint32_t rtp_file_num;
 	uint32_t timeval_flags;
