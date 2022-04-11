@@ -269,6 +269,7 @@ struct aw_device {
 	unsigned char cur_prof;  /*current profile index*/
 	unsigned char set_prof;  /*set profile index*/
 	unsigned int channel;    /*pa channel select*/
+	unsigned int vcalb_half;
 	unsigned int vol_step;
 	unsigned int re_max;
 	unsigned int re_min;
