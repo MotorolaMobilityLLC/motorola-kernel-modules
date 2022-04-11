@@ -192,8 +192,10 @@ static int aw_dev_set_vcalb(struct aw_device *aw_dev)
 		aw_dev_err(aw_dev->dev, "vcalk is 0");
 		return -EINVAL;
 	}
-
-	vcalb = desc->vcal_factor * icalk / vcalk;
+	if(aw_dev->vcalb_half)
+		vcalb = desc->vcal_factor * icalk / vcalk /2;
+	else
+		vcalb = desc->vcal_factor * icalk / vcalk;
 
 	reg_val = (unsigned int)vcalb;
 	aw_dev_info(aw_dev->dev, "icalk=%d, vcalk=%d, vcalb=%d, reg_val=0x%04x",
@@ -1051,10 +1053,26 @@ static void aw_device_parse_sound_channel_dt(struct aw_device *aw_dev)
 	}
 	aw_dev->channel = channel_value;
 }
+static void aw_device_vcalb_half_dt(struct aw_device *aw_dev)
+{
+	int ret;
+	uint32_t vcalb_half_enable;
+
+	ret = of_property_read_u32(aw_dev->dev->of_node, "vcalb_half", &vcalb_half_enable);
+	if (ret < 0) {
+		aw_dev->vcalb_half =false;
+		aw_dev_info(aw_dev->dev, "read vcalb_half failed,use default");
+		return;
+	}
+
+	aw_dev_info(aw_dev->dev, "read vcalb_half value is : %d", vcalb_half_enable);
+	aw_dev->vcalb_half = vcalb_half_enable;
+}
 
 static void aw_device_parse_dt(struct aw_device *aw_dev)
 {
 	aw_device_parse_sound_channel_dt(aw_dev);
+	aw_device_vcalb_half_dt(aw_dev);
 	aw882xx_device_parse_topo_id_dt(aw_dev);
 	aw882xx_device_parse_port_id_dt(aw_dev);
 }
