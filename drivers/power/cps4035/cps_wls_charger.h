@@ -263,6 +263,7 @@ struct cps_wls_chrg_chip {
     uint32_t MaxV;
     uint32_t MaxI;
     uint32_t chip_id;
+    bool factory_wls_en;
     //struct work_struct wls_rx_work;
 	wait_queue_head_t  wait_que;
 	bool wls_rx_check_thread_timeout;
