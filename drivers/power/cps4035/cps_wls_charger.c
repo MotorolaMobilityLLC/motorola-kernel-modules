@@ -46,7 +46,7 @@
 //#include "mtk_charger.h"
 #include <cps_wls_charger.h>
 #include <linux/alarmtimer.h>
-
+#include "mtk_charger_algorithm_class.h"
 
 #define BOOTLOADER_FILE_NAME "/data/misc/cps/bootloader.hex"
 #define FIRMWARE_FILE_NAME   "/data/misc/cps/firmware.hex"
@@ -1865,6 +1865,8 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 
 	if (tx_detected) {
 		chip->wls_disconnect = false;
+		if (chip->factory_wls_en == true)
+			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
 		cps_wls_log(CPS_LOG_DEBG, "Detected an 0 attach event.\n");
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
@@ -1872,6 +1874,10 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			//chip->wls_online = false;
 			chip->wls_disconnect = true;
 			chip->rx_ldo_on = false;
+			if (chip->factory_wls_en == true) {
+				chip->factory_wls_en = false;
+				mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
+			}
 			//mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
 			//power_supply_changed(chip->wl_psy);
 			//mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
@@ -2671,10 +2677,16 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
 static int wireless_en(void *input, bool en)
 {
 	int ret = 0;
+	struct chg_alg_device *alg;
 
+	alg = get_chg_alg_by_name("wlc");
+	if (NULL != alg) {
+		chg_alg_set_prop(alg, ALG_WLC_STATE, false);
+		msleep(1000);
+		chg_alg_set_prop(alg, ALG_WLC_STATE, true);
+	}
+	chip->factory_wls_en = en;
 	cps_wls_log(CPS_LOG_ERR,"wls: wls_en %d\n",en);
-	ret = mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, en);
-
 	return ret;
 }
 
@@ -3086,6 +3098,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     chip->MaxV = 12000;
     chip->MaxI = 1250;
     chip->chip_id = 0;
+    chip->factory_wls_en = false;
 
     init_waitqueue_head(&chip->wait_que);
     wls_rx_init_timer(chip);
