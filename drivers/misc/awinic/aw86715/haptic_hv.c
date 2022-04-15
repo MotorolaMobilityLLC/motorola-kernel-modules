@@ -1748,7 +1748,7 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 	if (!transient_data)
 		return;
 	del_timer(&transient_data->timer);
-
+	aw_dbg("moto_waveid=%d", aw_haptic->moto_waveid);
 	if (level == 0) {
 		if (aw_haptic->moto_waveid > 0 && aw_haptic->moto_waveid <= 6)
 			return;
@@ -1810,6 +1810,7 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 	} else {
 		mutex_lock(&aw_haptic->lock);
 		aw_haptic->state = level;
+		aw_haptic->moto_waveid = 0;
 		aw_haptic->activate_mode = AW_RAM_LOOP_MODE;
 		aw_haptic->func->set_wav_seq(aw_haptic, 0, 2);
 		aw_haptic->func->set_wav_seq(aw_haptic, 1, 0);
@@ -2082,8 +2083,7 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr,
 	} else if (aw_haptic->moto_waveid == 1){
 		transient_data->duration = 90;
 	} else {
-		aw_haptic->moto_waveid = aw_haptic->moto_waveid - 100;
-		transient_data->duration = aw_haptic->moto_waveid + 5000000;
+		transient_data->duration = aw_haptic->moto_waveid + 5000000 - 100;
 	}
 	mutex_unlock(&aw_haptic->lock);
 
