@@ -183,7 +183,7 @@
  * choose your ic chip type of focaltech
  */
 #define FTS_CHIP_TYPE   _FT8006S_AN
-#define FTS_CHIP_NAME   "ft8006s"
+#define FTS_CHIP_NAME   "ft8006s_aa"
 
 /******************* Enables *********************/
 /*********** 1 to enable, 0 to disable ***********/
