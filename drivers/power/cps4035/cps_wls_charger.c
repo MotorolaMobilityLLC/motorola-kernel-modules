@@ -62,6 +62,7 @@ struct cps_wls_chrg_chip *chip_h = NULL;
 //static bool PEN_POWER_ON = false;
 static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
+static bool CPS_RX_CHRG_FULL = false;
 
 static uint32_t fod_i_th_w_folio = 1100;
 static uint32_t fod_ii_th_w_folio = 1100;
@@ -98,6 +99,15 @@ typedef enum
     CPS_RX_REG_ADC_IOUT,
     CPS_RX_REG_ADC_VOUT,
     CPS_RX_REG_ADC_DIE_TMP,
+    CPS_RX_REG_PPP_HEADER,
+    CPS_RX_REG_PPP_COMMAND,
+    CPS_RX_REG_PPP_DATA0,
+    CPS_RX_REG_PPP_DATA1,
+    CPS_RX_REG_PPP_DATA2,
+    CPS_RX_REG_PPP_DATA3,
+    CPS_RX_REG_PPP_DATA4,
+    CPS_RX_REG_PPP_DATA5,
+    CPS_RX_REG_PPP_DATA6,
     CPS_RX_REG_MAX
 }cps_rx_reg_e;
 
@@ -226,6 +236,15 @@ cps_reg_s cps_rx_reg[CPS_RX_REG_MAX] = {
     {CPS_RX_REG_ADC_IOUT,        2,              0x1F96},
     {CPS_RX_REG_ADC_VOUT,        2,              0x1F98},
     {CPS_RX_REG_ADC_DIE_TMP,     2,              0x1F9A},
+    {CPS_RX_REG_PPP_HEADER,      1,              0x1D82},
+    {CPS_RX_REG_PPP_COMMAND,     1,              0x1D83},
+    {CPS_RX_REG_PPP_DATA0,       1,              0x1D84},
+    {CPS_RX_REG_PPP_DATA1,       1,              0x1D85},
+    {CPS_RX_REG_PPP_DATA2,       1,              0x1D86},
+    {CPS_RX_REG_PPP_DATA3,       1,              0x1D87},
+    {CPS_RX_REG_PPP_DATA4,       1,              0x1D88},
+    {CPS_RX_REG_PPP_DATA5,       1,              0x1D89},
+    {CPS_RX_REG_PPP_DATA6,       1,              0x1D8A},
 };
 
 cps_reg_s cps_tx_reg[CPS_TX_REG_MAX] = {
@@ -1209,6 +1228,39 @@ static int cps_wls_disable_tx_mode(void)
     return cps_wls_set_cmd(cmd);
 }
 
+static int cps_wls_send_ask_packet(uint8_t *data, uint8_t data_len)
+{
+    int status = CPS_WLS_SUCCESS;
+    uint32_t cmd = 0, i = 0;
+    cps_reg_s *cps_reg;
+    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_PPP_HEADER]);
+
+
+    for(i = 0; i < data_len; i++)
+    {
+        status = cps_wls_write_reg((int)(cps_reg->reg_addr + i), *(data + i), 1);
+        if (CPS_WLS_SUCCESS != status)
+        {
+            cps_wls_log(CPS_LOG_ERR, " cps wls write failed, addr 0x%02x, data 0x%02x", cps_reg->reg_addr + i, *(data + i));
+            return status;
+        }
+    }
+
+	cmd = cps_wls_get_cmd();
+
+	cps_wls_log(CPS_LOG_ERR, " cps_wls_get_cmd %x\n",cmd);
+
+
+	cmd |= RX_CMD_SEND_ASK;
+	status = cps_wls_set_cmd(cmd);
+	if(CPS_WLS_SUCCESS != status)
+	{
+		cps_wls_log(CPS_LOG_ERR, " cps TX_CMD_SEND_FSK failed");
+	}
+
+	return status;
+}
+
 static int cps_wls_send_fsk_packet(uint8_t *data, uint8_t data_len)
 {
     int status = CPS_WLS_SUCCESS;
@@ -1687,6 +1739,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
     if (int_flag & RX_INT_POWER_ON)
     {
         CPS_RX_MODE_ERR = false;
+        CPS_RX_CHRG_FULL = false;
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
     }
     if(int_flag & RX_INT_LDO_OFF)
@@ -2871,11 +2924,41 @@ static void cps_wls_current_select(int  *icl, int *vbus)
         *icl = chip->wls_input_curr_max * 1000;
 }
 
+static void  cps_wls_notify_tx_chrgfull(void)
+{
+	int status = CPS_WLS_SUCCESS;
+	uint8_t data[2] = {0x5, 0x64};
+    int retry = 5;
+
+    do {
+        status = cps_wls_send_ask_packet(data, 2);
+        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI notify TX battery full , head 0x%x, cmd 0x%x, status %d\n", 0x5, 0x64,status);
+        msleep(200);
+        retry--;
+
+    } while(retry);
+
+    return;
+}
+
+static void cps_wls_set_battery_soc(int uisoc)
+{
+    struct cps_wls_chrg_chip *chg = chip;
+	int soc = uisoc;
+
+	if (!CPS_RX_CHRG_FULL && chg->wls_online && soc == 100) {
+		cps_wls_log(CPS_LOG_DEBG, "cps Notify TX, battery has been charged full !");
+		cps_wls_notify_tx_chrgfull();
+		CPS_RX_CHRG_FULL = true;
+	}
+}
+
 static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 {
 	int ret;
 
 	cm->wls_chg_ops.wls_current_select = cps_wls_current_select;
+	cm->wls_chg_ops.wls_set_battery_soc = cps_wls_set_battery_soc;
 
 	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
 
