@@ -331,7 +331,11 @@ static int32_t aw9610x_filedata_deal(struct aw9610x *aw9610x)
 		return -EINVAL;
 	}
 
+#ifdef AW9610_KERNEL_VER_OVER_5_4_0
+        ret = kernel_read(fp, buf, CALI_FILE_MAX_SIZE, &(fp->f_pos));
+#else
 	ret = vfs_read(fp, buf, CALI_FILE_MAX_SIZE, &(fp->f_pos));
+#endif
 	if (ret < 0) {
 		LOG_ERR("read failed");
 		set_fs(fs);
@@ -397,7 +401,11 @@ aw9610x_store_spedata_to_file(struct aw9610x *aw9610x, char *buf)
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 
+#ifdef AW9610_KERNEL_VER_OVER_5_4_0
+	kernel_write(fp, buf, strlen(buf), &pos);
+#else
 	vfs_write(fp, buf, strlen(buf), &pos);
+#endif
 
 	set_fs(fs);
 
@@ -1319,6 +1327,7 @@ static ssize_t reset_store(struct class *class,
 		const char *buf, size_t count)
 {
 	uint32_t data_en = 0;
+	int i;
 	if (!strncmp(buf, "reset", 5) || !strncmp(buf, "1", 1)) {
 		aw9610x_i2c_read(g_aw9610x, REG_SCANCTRL0, &data_en);
 		aw9610x_i2c_write_bits(g_aw9610x, REG_SCANCTRL0, ~(0x3f << 8),
@@ -1327,7 +1336,7 @@ static ssize_t reset_store(struct class *class,
 		//g_aw9610x->mode = AW9610X_ACTIVE_MODE;
 	}
 
-	for (int i = 0; i < g_aw9610x->aw_channel_number; i++)
+	for (i = 0; i < g_aw9610x->aw_channel_number; i++)
 	{
                 input_report_abs(g_aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);
 		input_sync(g_aw9610x->aw_pad[i].input);
@@ -1349,6 +1358,7 @@ static ssize_t enable_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
 {
+	int i;
 	ssize_t ret;
 	struct aw9610x *aw9610x = g_aw9610x;
 
@@ -1358,7 +1368,7 @@ static ssize_t enable_store(struct class *class,
 		return count;
 	}
 
-        for (int i = 0; i < aw9610x->aw_channel_number; i++)
+        for (i = 0; i < aw9610x->aw_channel_number; i++)
         {
                 if (!strncmp(buf, "1", 1)){
                         input_report_abs(aw9610x->aw_pad[i].input, ABS_DISTANCE, 0);
@@ -1442,7 +1452,6 @@ static ssize_t reg_show(struct class *class,
 		char *buf)
 {
 	u32 *p = (u32*)buf;
-	u16 reg_value = 0;
 	struct aw9610x *aw9610x = g_aw9610x;
 	if(aw9610x->read_flag){
 		aw9610x->read_flag = 0;
@@ -1463,7 +1472,7 @@ static ssize_t reg_store(struct class *class,
 	int i = 0;
 
 	if( count != 7){
-		LOG_ERR("%s :params error[ count == %d !=2]\n",__func__,count);
+		LOG_ERR("%s :params error[ count == %lu !=2]\n",__func__,count);
 		return -1;
 	}
 	for(i = 0 ; i < count ; i++)
