@@ -1926,6 +1926,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		if (chip->rx_ldo_on) {
 			//chip->wls_online = false;
 			chip->wls_disconnect = true;
+			cps_rx_online_check(chip);
 			chip->rx_ldo_on = false;
 			if (chip->factory_wls_en == true) {
 				chip->factory_wls_en = false;
@@ -2077,6 +2078,40 @@ static void cps_wls_fw_set_boost(bool val)
 	}
 }
 
+static int cps_get_bat_soc()
+{
+	struct mtk_charger *info = NULL;
+	struct power_supply *chg_psy = NULL;
+
+	chg_psy = power_supply_get_by_name("mtk-master-charger");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s mmi_mux Couldn't get chg_psy\n",__func__);
+		return CPS_WLS_FAIL;
+	} else {
+		info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
+	}
+	return get_uisoc(info);
+}
+
+static bool usb_online()
+{
+	union power_supply_propval prop;
+	struct power_supply *chg_psy = NULL;
+	int ret = 0;
+
+	chg_psy = devm_power_supply_get_by_phandle(chip->dev, "charger");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n", __func__);
+		prop.intval = 0;
+	} else {
+		power_supply_get_property(chg_psy,
+			POWER_SUPPLY_PROP_ONLINE, &prop);
+		cps_wls_log(CPS_LOG_ERR,"%s online:%d\n", __func__, prop.intval);
+		return prop.intval;
+	}
+	return ret;
+}
+
 static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info);
 #define CPS_FW_MAJOR_VER_OFFSET		0xc4
 #define CPS_FW_MINOR_VER_OFFSET		0xc5
@@ -2093,6 +2128,12 @@ static int wireless_fw_update(bool force)
 	u32 fw_revision;
 	const struct firmware *fw;
 
+	if (true != usb_online()) {
+		if(50 > cps_get_bat_soc()) {
+			cps_wls_log(CPS_LOG_ERR,"%s Battery SOC should be at least 50%% or connect charger,soc:usb_online %d:%d\n",__func__,usb_online(),cps_get_bat_soc());
+			return CPS_WLS_FAIL;
+		}
+	}
 	CPS_TX_MODE = true;
 	//cps_wls_fw_set_boost(false);
 	//msleep(20);//20mss
@@ -2287,12 +2328,17 @@ free_bug:
 	kfree(firmware_buf);
 	release_firmware(fw);
 	CPS_TX_MODE = false;
-	wake_up_rx_check_thread(chip);
+	cps_rx_online_check(chip);
 	return ret;
 
 update_fail:
     cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
     return ret;
+}
+
+static void cps_firmware_update_work(struct work_struct *work)
+{
+	 wireless_fw_update(false);
 }
 
 //-----------------------------reg addr----------------------------------
@@ -2362,15 +2408,13 @@ static DEVICE_ATTR(wireless_fw_force_update, 0664, NULL, wireless_fw_force_updat
 static ssize_t wireless_fw_update_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	bool val;
-	int rc;
 
 	if (kstrtobool(buf, &val) || !val)
 		return -EINVAL;
 
 	if(!chip->wls_online) {
-		rc = wireless_fw_update(false);
-		if (rc < 0)
-			return rc;
+		queue_delayed_work(chip->wls_wq,
+			   &chip->fw_update_work, msecs_to_jiffies(2000));
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "wireless_fw_update wls online,forbid fw update\n");
 	}
@@ -3013,6 +3057,11 @@ static int cps_wls_rx_power_on()
 			rx_power_cnt = 0;
 			return false;
 		} else {
+			if(chip->rx_ldo_on) {
+				cps_wls_log(CPS_LOG_DEBG, "Rx power off");
+				rx_power_cnt = 0;
+				return false;
+			}
 			info->rx_polling_ns = 500 * 1000 * 1000;
 			wls_rx_start_timer(info);
 			cps_wls_log(CPS_LOG_DEBG, "Re-check after 500ms");
@@ -3022,6 +3071,23 @@ static int cps_wls_rx_power_on()
 	}
 }
 
+static int cps_get_vbus()
+{
+	struct mtk_charger *info = NULL;
+	struct power_supply *chg_psy = NULL;
+	int vbus = 0;
+
+	chg_psy = power_supply_get_by_name("mtk-master-charger");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s mmi_mux Couldn't get chg_psy\n",__func__);
+		return CPS_WLS_FAIL;
+	} else {
+		info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
+	}
+	vbus = get_vbus(info);
+	cps_wls_log(CPS_LOG_ERR, "%s: vbus:%d\n", __func__,vbus);
+	return vbus;
+}
 
 static int cps_rx_check_events_thread(void *arg)
 {
@@ -3036,7 +3102,8 @@ static int cps_rx_check_events_thread(void *arg)
 			continue;
 		}
 		info->wls_rx_check_thread_timeout = false;
-		cps_rx_online_check(info);
+		if(cps_get_vbus() < 5000)
+			cps_rx_online_check(info);
 		__pm_relax(info->rx_check_wakelock);
 	}
 	return 0;
@@ -3185,6 +3252,9 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 
     init_waitqueue_head(&chip->wait_que);
     wls_rx_init_timer(chip);
+	chip->wls_wq = create_singlethread_workqueue("wls_workqueue");
+	INIT_DELAYED_WORK(&chip->fw_update_work,
+			  cps_firmware_update_work);
     kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
 
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger addr low probe successful!\n", __func__);
@@ -3282,6 +3352,7 @@ static int cps_wls_l_chrg_remove(struct i2c_client *client)
 {
     not_called_l_api();
     //cps_wls_lock_destroy(chip);
+    cancel_delayed_work_sync(&chip->fw_update_work);
     kfree(chip);
     return 0;
 }
