@@ -85,7 +85,7 @@
 #define RX_INT_INHIBIT_HIGH     (0x01<<13)
 
 /*rx命令定义*/
-#define RX_CMD_RESERVE1         (0x01<<0)
+#define RX_CMD_SEND_ASK         (0x01<<0)
 #define RX_CMD_RESERVE2         (0x01<<1)
 #define RX_CMD_SEND_EPT         (0x01<<2)
 #define RX_CMD_RESET_SYS        (0x01<<3)
