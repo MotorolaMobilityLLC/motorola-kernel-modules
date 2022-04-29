@@ -1721,7 +1721,8 @@ static int sc8541_config_mux(struct bq25980_device *bq,
             }
         }
 	 if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN
-		&& typec_mos != MMI_DVCHG_MUX_DISABLE && wls_mos != MMI_DVCHG_MUX_DISABLE) {
+		&& typec_mos != MMI_DVCHG_MUX_DISABLE && wls_mos != MMI_DVCHG_MUX_DISABLE
+		 && wls_mos != MMI_DVCHG_MUX_MANUAL_OPEN) {
             ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
                     SC8541_ACDRV_MANUAL_EN, 0);
             if (ret) {
@@ -1787,7 +1788,29 @@ static int sc8541_config_mux(struct bq25980_device *bq,
                 dev_err(bq->dev, "%s:mmi_mux  open wls mux fail ret=%d", __func__, ret);
                 return ret;
             }
+        } else if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ACDRV_MANUAL_EN, SC8541_ACDRV_MANUAL_EN);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+                return ret;
+            }
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_TYPEC_MOS, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux menu close wls mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+            mdelay(50);
+
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_WLC_MOS, SC8541_ENABLE_WLC_MOS);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
+                return ret;
+            }
         }
+
 
 	if (typec_mos == MMI_DVCHG_MUX_DISABLE) {
 		ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
@@ -1918,7 +1941,8 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 		}
 	}
 
-	if (wls_mos == MMI_DVCHG_MUX_CHG_OPEN) {
+	if (wls_mos == MMI_DVCHG_MUX_CHG_OPEN
+		||wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
 		ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
 				BQ25980_DIS_MOS_BOTH, 0);
 		if (ret) {
