@@ -75,6 +75,13 @@ static uint32_t cps_pen_error = PEN_OK;
 static struct wls_pen_charger_notify_data *wls_pen_notify = NULL;
 #endif
 
+struct tags_bootmode {
+	uint32_t size;
+	uint32_t tag;
+	uint32_t bootmode;
+	uint32_t boottype;
+};
+
 /*define cps rx reg enum*/
 typedef enum
 {
@@ -1870,7 +1877,6 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
     Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
 
     cps_wls_log(CPS_LOG_DEBG, "[%s] IRQ triggered\n", __func__);
-    cps_rx_online_check(chip);
 
     mutex_lock(&chip->irq_lock);
     if(cps_wls_get_chip_id() != 0x4035)
@@ -1880,10 +1886,14 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
         cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
         cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
         cps_wls_set_int_enable();
-        
+        cps_rx_online_check(chip);
         cps_wls_log(CPS_LOG_DEBG, "[%s] CPS_I2C_UNLOCK", __func__);
+    } else {
+        /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
+        /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
+        if(chip->bootmode == 8 || chip->bootmode == 9)
+            cps_rx_online_check(chip);
     }
-    
     int_flag = cps_wls_get_int_flag();
     cps_wls_log(CPS_LOG_DEBG, ">>>>>int_flag = %x\n", int_flag);
     if(int_flag == CPS_WLS_FAIL)
@@ -2112,6 +2122,19 @@ static bool usb_online()
 	return ret;
 }
 
+static void wireless_chip_reset()
+{
+	struct chg_alg_device *alg;
+
+	alg = get_chg_alg_by_name("wlc");
+	if (NULL != alg) {
+		chg_alg_set_prop(alg, ALG_WLC_STATE, false);
+		msleep(100);
+		chg_alg_set_prop(alg, ALG_WLC_STATE, true);
+	}
+	return;
+}
+
 static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info);
 #define CPS_FW_MAJOR_VER_OFFSET		0xc4
 #define CPS_FW_MINOR_VER_OFFSET		0xc5
@@ -2131,6 +2154,7 @@ static int wireless_fw_update(bool force)
 	if (true != usb_online()) {
 		if(50 > cps_get_bat_soc()) {
 			cps_wls_log(CPS_LOG_ERR,"%s Battery SOC should be at least 50%% or connect charger,soc:usb_online %d:%d\n",__func__,usb_online(),cps_get_bat_soc());
+			wireless_chip_reset();
 			return CPS_WLS_FAIL;
 		}
 	}
@@ -2328,7 +2352,7 @@ free_bug:
 	kfree(firmware_buf);
 	release_firmware(fw);
 	CPS_TX_MODE = false;
-	cps_rx_online_check(chip);
+	wireless_chip_reset();
 	return ret;
 
 update_fail:
@@ -2672,6 +2696,23 @@ static void cps_wls_create_device_node(struct device *dev)
 static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 {
     struct device_node *node = chip->dev->of_node;
+	struct device_node *boot_node = NULL;
+	struct tags_bootmode *tag = NULL;
+
+	boot_node = of_parse_phandle(node, "bootmode", 0);
+	if (!boot_node)
+		cps_wls_log(CPS_LOG_ERR, "%s: failed to get boot mode phandle\n", __func__);
+	else {
+		tag = (struct tags_bootmode *)of_get_property(boot_node,
+							"atag,boot", NULL);
+		if (!tag)
+			cps_wls_log(CPS_LOG_ERR, "%s: failed to get atag,boot\n", __func__);
+		else {
+			cps_wls_log(CPS_LOG_ERR, "%s: size:0x%x tag:0x%x bootmode:0x%x\n",
+				__func__, tag->size, tag->tag, tag->bootmode);
+			chip->bootmode = tag->bootmode;
+		}
+	}
 
     if(!node){
         cps_wls_log(CPS_LOG_ERR, "devices tree node missing \n");
@@ -3300,6 +3341,10 @@ static int cps_wls_h_chrg_probe(struct i2c_client *client,
     dev_set_drvdata(&(client->dev), chip_h);
 
     cps_wls_h_lock_work_init(chip_h);
+    /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
+    /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
+    if(chip->bootmode == 8 || chip->bootmode == 9)
+        wireless_chip_reset();
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger addr high probe successful!\n", __func__);
     return ret;
 }
