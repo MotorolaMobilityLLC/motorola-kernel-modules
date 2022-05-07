@@ -270,6 +270,8 @@ struct cps_wls_chrg_chip {
 	struct wakeup_source *rx_check_wakelock;
     struct workqueue_struct *wls_wq;
     struct delayed_work fw_update_work;
+    uint32_t bootmode;
+
     /*wls pen*/
 #ifdef SMART_PEN_SUPPORT
     struct moto_wls_pen_ops  wls_pen_ops;
