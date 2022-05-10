@@ -243,6 +243,9 @@ err:
 
 void mmi_ram_info_exit(void)
 {
+	kfree(ddr_info);
+	ddr_info = NULL;
+
 	sysfs_remove_group(ram_info_properties_kobj,
 			&ram_info_properties_attr_group);
 	kobject_del(ram_info_properties_kobj);
