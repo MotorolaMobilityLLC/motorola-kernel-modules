@@ -1289,6 +1289,8 @@ static void rtp_work_routine(struct work_struct *work)
 	ram_vbat_comp(aw_haptic, false);
 	/* rtp mode config */
 	aw_haptic->func->play_mode(aw_haptic, AW_RTP_MODE);
+	/* delay 40ms to sync with ringtone */
+	msleep(40);
 	/* haptic go */
 	aw_haptic->func->play_go(aw_haptic, true);
 	usleep_range(2000, 2500);
