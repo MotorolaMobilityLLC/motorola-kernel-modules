@@ -1,0 +1,7 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
+		-I$(TOP)/motorola/kernel/modules/drivers/power/bq2597x_mmi_discrete
+
+obj-m += bq2597x_mmi_discrete.o
+bq2597x_mmi_discrete-objs += bq2597x_chg_mmi.o
