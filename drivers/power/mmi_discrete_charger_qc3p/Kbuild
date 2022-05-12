@@ -1,0 +1,13 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
+		-I$(TOP)/motorola/kernel/modules/drivers/power/mmi_discrete_charger_qc3p
+
+obj-m += mmi_discrete_charger_qc3p.o
+mmi_discrete_charger_qc3p-objs += mmi_charger_class.o
+mmi_discrete_charger_qc3p-objs += mmi_charger_core.o
+mmi_discrete_charger_qc3p-objs += mmi_charger_pump_policy.o
+mmi_discrete_charger_qc3p-objs += bq2597x_charger.o
+mmi_discrete_charger_qc3p-objs += mtk_pmic_charger.o
+mmi_discrete_charger_qc3p-objs += pps.o
+
