@@ -2048,7 +2048,7 @@ static int bq2597x_psy_register(struct bq2597x *bq)
 	else
 		bq->psy_desc.name = "bq2597x-standalone";
 
-	bq->psy_desc.type = POWER_SUPPLY_TYPE_MAINS;
+	bq->psy_desc.type = POWER_SUPPLY_TYPE_UNKNOWN;
 	bq->psy_desc.properties = bq2597x_charger_props;
 	bq->psy_desc.num_properties = ARRAY_SIZE(bq2597x_charger_props);
 	bq->psy_desc.get_property = bq2597x_charger_get_property;
