@@ -1145,7 +1145,6 @@ static int rtp_play(struct aw_haptic *aw_haptic)
 	uint32_t buf_len = 0;
 	int ret = 0;
 	struct aw_haptic_container *aw_rtp = aw_haptic->aw_rtp;
-	struct transient_trig_data *transient_data = led_get_trigger_data(&aw_haptic->vib_dev);
 
 	while ((!aw_haptic->func->rtp_get_fifo_afs(aw_haptic))
 	       && (aw_haptic->play_mode == AW_RTP_MODE)) {
@@ -1184,10 +1183,6 @@ static int rtp_play(struct aw_haptic *aw_haptic)
 			if (aw_haptic->rtp_cnt != aw_rtp->len) {
 				aw_haptic->rtp_cnt = 0;
 				aw_haptic->rtp_init = false;
-				if (transient_data) {
-					transient_data->activate = 0;
-					del_timer(&transient_data->timer);
-				}
 				aw_err("rtp play suspend!");
 				break;
 			} else if (aw_haptic->rtp_file_num >= 1 && aw_haptic->rtp_file_num <= 50) {
@@ -1198,10 +1193,6 @@ static int rtp_play(struct aw_haptic *aw_haptic)
 			} else {
 				aw_haptic->rtp_cnt = 0;
 				aw_haptic->rtp_init = false;
-				if (transient_data) {
-					transient_data->activate = 0;
-					del_timer(&transient_data->timer);
-				}
 				aw_info("rtp update complete!");
 				break;
 			}
@@ -1315,7 +1306,6 @@ static irqreturn_t irq_handle(int irq, void *data)
 {
 	int irq_state = 0;
 	struct aw_haptic *aw_haptic = data;
-	struct transient_trig_data *transient_data = led_get_trigger_data(&aw_haptic->vib_dev);
 
 	do {
 		irq_state = aw_haptic->func->get_irq_state(aw_haptic);
@@ -1326,10 +1316,6 @@ static irqreturn_t irq_handle(int irq, void *data)
 				mutex_unlock(&aw_haptic->rtp_lock);
 			} else {
 				aw_info("rtp_init: %d", aw_haptic->rtp_init);
-				if (transient_data) {
-					transient_data->activate = 0;
-					del_timer(&transient_data->timer);
-				}
 			}
 		}
 		if (aw_haptic->play_mode != AW_RTP_MODE)
@@ -1752,14 +1738,11 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 	del_timer(&transient_data->timer);
 	aw_dbg("moto_waveid=%d", aw_haptic->moto_waveid);
 	if (level == 0) {
-		if (aw_haptic->moto_waveid > 0 && aw_haptic->moto_waveid <= 6)
-			return;
-		else {
-			aw_haptic->state = 0;
-			pm_qos_enable(aw_haptic, false);
-			schedule_work(&aw_haptic->vibrator_work);
-			return;
-		}
+		aw_haptic->state = 0;
+		pm_qos_enable(aw_haptic, false);
+		schedule_work(&aw_haptic->vibrator_work);
+		return;
+
 	}
 	if (!aw_haptic->ram_init) {
 		aw_err("ram init failed, not allow to play!");
@@ -2084,8 +2067,10 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr,
 		transient_data->duration = 70;
 	} else if (aw_haptic->moto_waveid == 1){
 		transient_data->duration = 90;
-	} else {
+	} else if (aw_haptic->moto_waveid <= 155) {
 		transient_data->duration = aw_haptic->moto_waveid + 5000000 - 100;
+	} else if ((aw_haptic->moto_waveid >= 200) && (aw_haptic->moto_waveid <= 255)) {
+		transient_data->duration = aw_haptic->moto_waveid + 5000000 - 200;
 	}
 	mutex_unlock(&aw_haptic->lock);
 
