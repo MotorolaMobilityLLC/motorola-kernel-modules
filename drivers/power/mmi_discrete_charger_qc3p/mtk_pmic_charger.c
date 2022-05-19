@@ -43,12 +43,12 @@ static int mtk_pmic_is_charging_enabled(struct mmi_charger_device *chrg, bool *e
 	union power_supply_propval prop = {0,};
 	struct power_supply	*usb_psy;
 
-	usb_psy = power_supply_get_by_name("charger");
+	usb_psy = power_supply_get_by_name("sgm4154x-charger");
 	if (!usb_psy)
 		return -ENODEV;
 
 	rc = power_supply_get_property(usb_psy,
-				POWER_SUPPLY_PROP_STATUS, &prop);
+				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
 	if (!rc) {
 		chrg->charger_enabled = !!prop.intval;
 	} else
@@ -81,7 +81,7 @@ static int mtk_pmic_set_charging_current(struct mmi_charger_device *chrg, u32 uA
 	union power_supply_propval prop = {0,};
 	struct power_supply	*usb_psy;
 
-	usb_psy = power_supply_get_by_name("charger");
+	usb_psy = power_supply_get_by_name("sgm4154x-charger");
 	if (!usb_psy)
 		return -ENODEV;
 
@@ -150,7 +150,7 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 		chrg->charger_data.vbus_pres = !!prop.intval;
 
 	rc = power_supply_get_property(usb_psy,
-				POWER_SUPPLY_PROP_STATUS, &prop);
+				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
 	if (!rc)
 		chrg->charger_enabled=!!prop.intval;
 
