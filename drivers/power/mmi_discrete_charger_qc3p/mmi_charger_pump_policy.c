@@ -587,7 +587,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 
 	if (chip->pres_temp_zone == ZONE_COLD
 		|| chip->pres_temp_zone == ZONE_HOT
-		/*|| !chrg_list->chrg_dev[PMIC_SW]->charger_enabled david test*/
+		|| !chrg_list->chrg_dev[PMIC_SW]->charger_enabled
 		|| vbatt_volt > chip->batt_ovp_lmt) {
 
 		mmi_chrg_info(chip, "Force stop charging, "
@@ -1494,7 +1494,7 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 
 		if (chip->pres_temp_zone != ZONE_COLD
 		&& chip->pres_temp_zone != ZONE_HOT
-		/*&& chrg_list->chrg_dev[PMIC_SW]->charger_enabled  david test*/
+		&& chrg_list->chrg_dev[PMIC_SW]->charger_enabled
 		&& chrg_step->chrg_step_cc_curr > 0) {
 			mmi_chrg_sm_move_state(chip, PM_STATE_ENTRY);
 			heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
