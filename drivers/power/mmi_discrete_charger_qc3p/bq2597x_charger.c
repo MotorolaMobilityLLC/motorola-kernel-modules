@@ -37,6 +37,8 @@
 #include <linux/power_supply.h>
 #include "mmi_charger_core.h"
 
+extern int sgm4154x_extern_enable_termination(bool enable);
+
 #define	BAT_OVP_FAULT_SHIFT			8
 #define	BAT_OCP_FAULT_SHIFT			9
 #define	BUS_OVP_FAULT_SHIFT			10
@@ -87,6 +89,12 @@ static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 	if (!chrg->chrg_psy){
 	        chrg_dev_info(chrg, "BQ2597x chrg: chrg_psy is null! \n");
 		return -ENODEV;
+	}
+
+	if (en) {
+		sgm4154x_extern_enable_termination(false);
+	} else {
+		sgm4154x_extern_enable_termination(true);
 	}
 
 	prop.intval = en;
