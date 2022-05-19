@@ -1447,6 +1447,9 @@ static int bq2597x_detect_device(struct bq2597x *bq)
 	u8 data;
 
 	ret = bq2597x_read_byte(bq, BQ2597X_REG_13, &data);
+	if (ret < 0) {
+		ret = bq2597x_read_byte(bq, BQ2597X_REG_13, &data); //Try again for NU2105 in poweroff charging
+	}
 	if (ret == 0) {
 		bq->part_no = (data & BQ2597X_DEV_ID_MASK);
 		bq->part_no >>= BQ2597X_DEV_ID_SHIFT;
@@ -1816,6 +1819,7 @@ static int bq2597x_set_present(struct bq2597x *bq, bool present)
 
 #define SC8551_MAX_SHOW_REG_ADDR 0x36
 #define BQ25970_MAX_SHOW_REG_ADDR 0x2A
+#define NU2105_MAX_SHOW_REG_ADDR 0x2F
 static ssize_t bq2597x_show_registers(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
@@ -1830,7 +1834,10 @@ static ssize_t bq2597x_show_registers(struct device *dev,
 	if (bq->chip_vendor == SC8551) {
 		max_addr = SC8551_MAX_SHOW_REG_ADDR;
 		idx = snprintf(buf, PAGE_SIZE, "%s:\n", "sc8551");
-	} else {
+	}else if(bq->chip_vendor == NU2105){
+		max_addr = NU2105_MAX_SHOW_REG_ADDR;
+		idx = snprintf(buf, PAGE_SIZE, "%s:\n", "nu2105");
+	}else{
 		max_addr = BQ25970_MAX_SHOW_REG_ADDR;
 		idx = snprintf(buf, PAGE_SIZE, "%s:\n", "bq25970");
 	}
