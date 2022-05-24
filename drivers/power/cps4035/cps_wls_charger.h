@@ -10,6 +10,7 @@
 #ifndef __CPS_WLS_CHARGER_H__
 #define __CPS_WLS_CHARGER_H__
 #include <linux/workqueue.h>
+#include <linux/thermal.h>
 #include "mtk_charger.h"
 #include "moto_wlc.h"
 #ifdef SMART_PEN_SUPPORT
@@ -271,6 +272,9 @@ struct cps_wls_chrg_chip {
     struct workqueue_struct *wls_wq;
     struct delayed_work fw_update_work;
     uint32_t bootmode;
+    struct thermal_cooling_device *tcd;
+    bool ntc_thermal;
+    bool fw_uploading;
 
     /*wls pen*/
 #ifdef SMART_PEN_SUPPORT
