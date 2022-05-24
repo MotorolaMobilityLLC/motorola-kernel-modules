@@ -75,6 +75,12 @@ static uint32_t cps_pen_error = PEN_OK;
 static struct wls_pen_charger_notify_data *wls_pen_notify = NULL;
 #endif
 
+enum {
+	TX_MODE_OVERHEAT = -1,
+	TX_MODE_NOT_CONNECTED = 0,
+	TX_MODE_POWER_SHARE = 2,
+};
+
 struct tags_bootmode {
 	uint32_t size;
 	uint32_t tag;
@@ -2159,6 +2165,7 @@ static int wireless_fw_update(bool force)
 		}
 	}
 	CPS_TX_MODE = true;
+	chip->fw_uploading = true;
 	//cps_wls_fw_set_boost(false);
 	//msleep(20);//20mss
 	cps_wls_fw_set_boost(true);
@@ -2352,10 +2359,13 @@ free_bug:
 	kfree(firmware_buf);
 	release_firmware(fw);
 	CPS_TX_MODE = false;
+	chip->fw_uploading = false;
 	wireless_chip_reset();
 	return ret;
 
 update_fail:
+	CPS_TX_MODE = false;
+	chip->fw_uploading = false;
     cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
     return ret;
 }
@@ -2504,38 +2514,46 @@ static void cps_wls_tx_mode(bool en)
 {
  	cps_wls_set_boost(en);
 	if ((true == en) && (false == CPS_TX_MODE)) {
-		cps_wls_log(CPS_LOG_ERR,"mmi_mux wls tx start\n");
+		cps_wls_log(CPS_LOG_ERR,"cps mmi_mux wls tx start\n");
+		if(chip->ntc_thermal) {
+			cps_wls_log(CPS_LOG_ERR, "mmi_mux device too hot to enable tx mode\n");
+			return;
+		}
 		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, true);
 		/* bootst voltage need 10ms to stable and cps need 30ms to stable*/
 		msleep(100);
 		cps_wls_enable_tx_mode();
+		if (chip->folio_mode) {
+			cps_wls_set_tx_fod_thresh_I(fod_i_th_w_folio);
+			cps_wls_set_tx_fod_thresh_II(fod_ii_th_w_folio);
+		} else {
+			cps_wls_set_tx_fod_thresh_I(fod_i_th_o_folio);
+			cps_wls_set_tx_fod_thresh_II(fod_ii_th_o_folio);
+		}
+		cps_wls_dump_FW_info();
+		CPS_TX_MODE = true;
+		chip->tx_mode = true;
+		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
 	} else if((false == en) && (true == CPS_TX_MODE)){
-		cps_wls_log(CPS_LOG_ERR,"mmi_mux wls tx end\n");
+		cps_wls_log(CPS_LOG_ERR,"cps mmi_mux wls tx end\n");
 		cps_wls_disable_tx_mode();
+		cps_wls_dump_FW_info();
 		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
+		 CPS_TX_MODE = false;
 		chip->rx_connected = false;
 		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
+		chip->tx_mode = false;
+		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
 	} else {
 		return;
 	}
-	cps_wls_dump_FW_info();
-	if (chip->folio_mode) {
-		cps_wls_set_tx_fod_thresh_I(fod_i_th_w_folio);
-		cps_wls_set_tx_fod_thresh_II(fod_ii_th_w_folio);
-	} else {
-		cps_wls_set_tx_fod_thresh_I(fod_i_th_o_folio);
-		cps_wls_set_tx_fod_thresh_II(fod_ii_th_o_folio);
-	}
-	cps_wls_log(CPS_LOG_DEBG,"mmi_mux wls tx mode %d\n",chip->tx_mode);
+
+	cps_wls_log(CPS_LOG_DEBG,"cps mmi_mux wls tx mode %d\n",chip->tx_mode);
 }
 
 static void cps_wls_tx_enable(bool en)
 {
     cps_wls_tx_mode(en);
-    if (en)
-        CPS_TX_MODE = true;
-    else
-        CPS_TX_MODE = false;
 }
 
 static ssize_t tx_mode_store(struct device *dev,
@@ -2557,9 +2575,6 @@ static ssize_t tx_mode_store(struct device *dev,
 	}
 
 	cps_wls_tx_enable(!!tx_mode);
-	chip->tx_mode = tx_mode;
-	if (chip->wl_psy)
-		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
 
 	return r ? r : count;
 }
@@ -2581,13 +2596,24 @@ static ssize_t rx_connected_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
-
+	int rx_connected;
 	if (!chip) {
 		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
 		return -ENODEV;
 	}
 
-	return sprintf(buf, "%d\n", chip->rx_connected);
+	if (chip->ntc_thermal) {
+		rx_connected = TX_MODE_OVERHEAT;
+		return sprintf(buf, "%d\n", rx_connected);
+	}
+
+	if (chip->rx_connected)
+		rx_connected = TX_MODE_POWER_SHARE;
+	else
+		rx_connected = TX_MODE_NOT_CONNECTED;
+
+	return sprintf(buf, "%d\n", rx_connected);
+
 }
 
 static DEVICE_ATTR(rx_connected, S_IRUGO,
@@ -3203,6 +3229,53 @@ static void wls_rx_init_timer(struct cps_wls_chrg_chip *info)
 
 }
 
+static int cps_tcd_get_max_state(struct thermal_cooling_device *tcd,
+	unsigned long *state)
+{
+	*state = 1;
+
+	return 0;
+}
+
+static int cps_tcd_get_cur_state(struct thermal_cooling_device *tcd,
+	unsigned long *state)
+{
+	struct cps_wls_chrg_chip *chip = tcd->devdata;
+
+	*state = chip->ntc_thermal;
+
+	return 0;
+}
+
+static int cps_tcd_set_cur_state(struct thermal_cooling_device *tcd,
+	unsigned long state)
+{
+	struct cps_wls_chrg_chip *chip = tcd->devdata;
+
+	if (chip->fw_uploading) {
+		cps_wls_log(CPS_LOG_DEBG, "cps fw uploading,ignore thermal event\n");
+		return 0;
+	}
+	if (state && !chip->ntc_thermal) {
+		cps_wls_log(CPS_LOG_DEBG, "cps Wireless charger overtemp\n");
+		chip->ntc_thermal = true;
+		cps_wls_tx_enable(false);
+		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
+	} else if (!state && chip->ntc_thermal) {
+		cps_wls_log(CPS_LOG_DEBG, "cps Wireless charger temp OK\n");
+		chip->ntc_thermal = false;
+		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
+	}
+
+	return 0;
+}
+
+static const struct thermal_cooling_device_ops cps_tcd_ops = {
+	.get_max_state = cps_tcd_get_max_state,
+	.get_cur_state = cps_tcd_get_cur_state,
+	.set_cur_state = cps_tcd_set_cur_state,
+};
+
 static int cps_wls_chrg_probe(struct i2c_client *client,
                 const struct i2c_device_id *id)
 {
@@ -3296,6 +3369,11 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 	chip->wls_wq = create_singlethread_workqueue("wls_workqueue");
 	INIT_DELAYED_WORK(&chip->fw_update_work,
 			  cps_firmware_update_work);
+
+    /* Register thermal zone cooling device */
+    chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
+		"cps_wls_charger_l", chip, &cps_tcd_ops);
+
     kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
 
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger addr low probe successful!\n", __func__);
@@ -3398,6 +3476,8 @@ static int cps_wls_l_chrg_remove(struct i2c_client *client)
     not_called_l_api();
     //cps_wls_lock_destroy(chip);
     cancel_delayed_work_sync(&chip->fw_update_work);
+    if(chip->tcd)
+		thermal_cooling_device_unregister(chip->tcd);
     kfree(chip);
     return 0;
 }
