@@ -1863,7 +1863,7 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
     struct cps_wls_chrg_chip *chip = chg;
 
     wls_online = cps_wls_rx_power_on();
-    if(!chip->wls_online && wls_online && chip->wls_disconnect) {
+    if(!chip->wls_online && wls_online) {
         chip->wls_online = true;
         mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, true);
         power_supply_changed(chip->wl_psy);
@@ -1933,15 +1933,13 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	int tx_detected = gpio_get_value(chip->wls_det_int);
 
 	if (tx_detected) {
-		chip->wls_disconnect = false;
 		if (chip->factory_wls_en == true)
 			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
-		cps_wls_log(CPS_LOG_DEBG, "Detected an 0 attach event.\n");
+		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
 		if (chip->rx_ldo_on) {
 			//chip->wls_online = false;
-			chip->wls_disconnect = true;
 			cps_rx_online_check(chip);
 			chip->rx_ldo_on = false;
 			if (chip->factory_wls_en == true) {
@@ -3124,11 +3122,6 @@ static int cps_wls_rx_power_on()
 			rx_power_cnt = 0;
 			return false;
 		} else {
-			if(chip->rx_ldo_on) {
-				cps_wls_log(CPS_LOG_DEBG, "Rx power off");
-				rx_power_cnt = 0;
-				return false;
-			}
 			info->rx_polling_ns = 500 * 1000 * 1000;
 			wls_rx_start_timer(info);
 			cps_wls_log(CPS_LOG_DEBG, "Re-check after 500ms");
@@ -3356,7 +3349,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 #endif
     chip->rx_connected = false;
     chip->wls_online = false;
-    chip->wls_disconnect = true;
     wls_chg_ops_register(chip);
     chip->wls_input_curr_max = 0;
     chip->MaxV = 12000;

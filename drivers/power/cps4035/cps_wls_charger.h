@@ -245,7 +245,6 @@ struct cps_wls_chrg_chip {
     unsigned long flags;
     int rx_ldo_on;
     int wls_online;
-    bool wls_disconnect;
     int wls_det_int;
     int wls_det_irq;
     const char *wls_fw_name;
