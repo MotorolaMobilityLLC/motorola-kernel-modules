@@ -37,24 +37,63 @@
 #include <linux/power_supply.h>
 #include "mmi_charger_core.h"
 
+#include "bq2597x_charger.h"
+enum sgm_property {
+	SGM_PROP_CHARGING_ENABLED,
+	SGM_PROP_INPUT_CURRENT_NOW,
+};
+extern int sgm_get_int_property(enum sgm_property bp);
+extern int sgm_get_property(enum sgm_property bp,int *val);
+
+int __weak sgm_get_property_dumy(enum sgm_property bp,int *val)
+{
+       return 0;
+}
+
 static int mtk_pmic_is_charging_enabled(struct mmi_charger_device *chrg, bool *en)
+{
+	int rc,enable;
+
+	rc = sgm_get_property(SGM_PROP_CHARGING_ENABLED,&enable);
+	if (!rc) {
+		chrg->charger_enabled = !!enable;
+	} else {
+		chrg->charger_enabled = false;
+	}
+	*en = chrg->charger_enabled;
+	chrg_dev_info(chrg, "mtk_pmic_is_charging_enabled enable = %d\n",*en);
+
+	return 0;
+}
+
+static int mtk_pmic_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *uA)
 {
 	int rc;
 	union power_supply_propval prop = {0,};
-	struct power_supply	*usb_psy;
 
-	usb_psy = power_supply_get_by_name("sgm4154x-charger");
-	if (!usb_psy)
+	if (!chrg->chrg_psy)
 		return -ENODEV;
 
-	rc = power_supply_get_property(usb_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
-	if (!rc) {
-		chrg->charger_enabled = !!prop.intval;
-	} else
-		chrg->charger_enabled  = false;
+	rc = power_supply_get_property(chrg->chrg_psy,
+				POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
+	if (!rc)
+		*uA = !!prop.intval;
 
-	*en = chrg->charger_enabled;
+	return rc;
+}
+
+static int mtk_pmic_get_input_current(struct mmi_charger_device *chrg, u32 *uA)
+{
+	int rc;
+	union power_supply_propval prop = {0,};
+
+	if (!chrg->chrg_psy)
+		return -ENODEV;
+
+	rc = power_supply_get_property(chrg->chrg_psy,
+				POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT, &prop);
+	if (!rc)
+		*uA = !!prop.intval;
 
 	return rc;
 }
@@ -95,7 +134,7 @@ static int mtk_pmic_set_charging_current(struct mmi_charger_device *chrg, u32 uA
 
 static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 {
-	int rc;
+	int rc,vbus,ibus,enable;
 	struct power_supply	*usb_psy;
 	union power_supply_propval prop = {0,};
 	struct power_supply	*cp_psy;
@@ -128,31 +167,26 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 	if (!rc)
 		chrg->charger_data.batt_temp = prop.intval / 10;
 
-#if 0
-	rc = power_supply_get_property(usb_psy,
-				POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
-	if (!rc)
-		chrg->charger_data.vbus_volt = prop.intval;
-#else	
-	rc = power_supply_get_property(cp_psy,
-				POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED, &prop);
-	if (!rc)
-		chrg->charger_data.vbus_volt = prop.intval * 1000;
-#endif
-	rc = power_supply_get_property(usb_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-	if (!rc)
+	rc = bq2597x_get_property(BQ2597X_PROP_INPUT_VOLTAGE_SETTLED,&vbus);
+	if (!rc) {
+		chrg->charger_data.vbus_volt = vbus*1000;
+	}
+
+	rc = sgm_get_property_dumy(SGM_PROP_INPUT_CURRENT_NOW,&ibus);
+	if (!rc) {
 		chrg->charger_data.ibus_curr = 100;//prop.intval; david test
+	}
 
 	rc = power_supply_get_property(usb_psy,
 				POWER_SUPPLY_PROP_ONLINE, &prop);
 	if (!rc)
 		chrg->charger_data.vbus_pres = !!prop.intval;
 
-	rc = power_supply_get_property(usb_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
-	if (!rc)
-		chrg->charger_enabled=!!prop.intval;
+	rc = sgm_get_property(SGM_PROP_CHARGING_ENABLED,&enable);
+	if (!rc) {
+		chrg->charger_enabled  = !!enable;
+		chrg_dev_info(chrg, "sgm_get_property(SGM_PROP_CHARGING_ENABLED,&enable) %d\n",enable);
+	}
 
 	chrg_dev_info(chrg, "mtk SW chrg: status update: --- info---1");
 	chrg_dev_info(chrg, "vbatt %d\n", chrg->charger_data.vbatt_volt);
@@ -168,6 +202,8 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 
 struct mmi_charger_ops mtk_pmic_charger_ops = {
 	.is_enabled = mtk_pmic_is_charging_enabled,
+	.get_input_voltage_settled = mtk_pmic_get_input_voltage_settled,
+	.get_input_current = mtk_pmic_get_input_current,
 	.get_charging_current = mtk_pmic_get_charging_current,
 	.set_charging_current = mtk_pmic_set_charging_current,
 	.update_charger_status = mtk_pmic_update_charger_status,
