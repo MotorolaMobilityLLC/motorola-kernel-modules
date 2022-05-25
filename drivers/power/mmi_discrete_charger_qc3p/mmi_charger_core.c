@@ -431,8 +431,7 @@ static enum power_supply_property batt_props[] = {
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
-	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
-	POWER_SUPPLY_PROP_CHARGE_RATE,
+	//POWER_SUPPLY_PROP_CHARGE_RATE,
 	POWER_SUPPLY_PROP_CURRENT_MAX,
 };
 
@@ -494,10 +493,10 @@ static int batt_get_property(struct power_supply *psy,
 			}
 		}
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_RATE:
+	/*case POWER_SUPPLY_PROP_CHARGE_RATE:
 		mmi_chrg_rate_check(chip);
 		val->intval = chip->charger_rate;
-		break;
+		break;*/
 	default:
 		rc = power_supply_get_property(chip->mtk_psy,
 							psp, &prop);
@@ -542,7 +541,7 @@ static int batt_is_writeable(struct power_supply *psy,
 {
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
 	case POWER_SUPPLY_PROP_CAPACITY:
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
@@ -582,15 +581,10 @@ static int batt_psy_register(struct mmi_charger_manager *chip)
 }
 
 static enum power_supply_property mmi_chrg_mgr_props[] = {
-	POWER_SUPPLY_PROP_PD_CURRENT_MAX,
-	POWER_SUPPLY_PROP_PD_VOLTAGE_MAX,
-	POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED,
-	POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
-	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
-	POWER_SUPPLY_PROP_CP_ENABLE,
+	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX,
 };
 
 static int mmi_chrg_mgr_get_property(struct power_supply *psy,
@@ -608,18 +602,6 @@ static int mmi_chrg_mgr_get_property(struct power_supply *psy,
 	}
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_PD_CURRENT_MAX:
-		val->intval = chip->pd_request_curr_prev;
-		break;
-	case POWER_SUPPLY_PROP_PD_VOLTAGE_MAX:
-		val->intval = chip->pd_request_volt_prev;
-		break;
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED:
-		val->intval = chip->pd_target_curr;
-		break;
-	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED:
-		val->intval = chip->pd_target_volt;
-		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		rc = power_supply_get_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_CURRENT_NOW, &prop);
@@ -642,11 +624,8 @@ static int mmi_chrg_mgr_get_property(struct power_supply *psy,
 		} else
 			val->intval = 0;
 		break;
-	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
 		val->intval = chip->system_thermal_level;
-		break;
-	case POWER_SUPPLY_PROP_CP_ENABLE:
-		val->intval = !chip->cp_disable;
 		break;
 	default:
 		return -EINVAL;
@@ -662,7 +641,7 @@ static int mmi_chrg_mgr_set_property(struct power_supply *psy,
 	struct mmi_charger_manager *chip  = power_supply_get_drvdata(psy);
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
 		if (val->intval < 0) {
 			chip->system_thermal_level = THERMAL_NOT_LIMIT;
 			return 0;
@@ -678,21 +657,6 @@ static int mmi_chrg_mgr_set_property(struct power_supply *psy,
 			chip->system_thermal_level = val->intval;
 
 		break;
-	case POWER_SUPPLY_PROP_PD_CURRENT_MAX:
-		if (val->intval > chip->pd_curr_max)
-			return -EINVAL;
-		chip->pd_curr_max = val->intval;
-		break;
-	case POWER_SUPPLY_PROP_PD_VOLTAGE_MAX:
-		if (val->intval > chip->pd_volt_max)
-			return -EINVAL;
-		chip->pd_volt_max= val->intval;
-		break;
-	case POWER_SUPPLY_PROP_CP_ENABLE:
-		if (chip->pd_pps_support
-			&& !chip->factory_mode)
-			mmi_chrg_enable_all_cp(chip, val->intval);
-		break;
 	default:
 		return -EINVAL;
 	}
@@ -706,10 +670,7 @@ static int mmi_chrg_mgr_is_writeable(struct power_supply *psy,
 	int ret;
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
-	case POWER_SUPPLY_PROP_PD_CURRENT_MAX:
-	case POWER_SUPPLY_PROP_PD_VOLTAGE_MAX:
-	case POWER_SUPPLY_PROP_CP_ENABLE:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT_MAX:
 		ret = 1;
 		break;
 	default:
@@ -835,22 +796,20 @@ void mmi_chrg_rate_check(struct mmi_charger_manager *chg)
 
 	if (val.intval) {
 		val.intval = 0;
-		rc = power_supply_get_property(chg->usb_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &val);
+
+		rc = mmi_get_input_current(chg->chrg_list[1],&chrg_cm_ma);
 		if (rc < 0) {
 			mmi_chrg_info(chg, "Error getting HW Current Max rc = %d\n", rc);
 			return;
 		}
-		chrg_cm_ma = val.intval / 1000;
+		//chrg_cm_ma = chrg_cm_ma / 1000;
 
-		val.intval = 0;
-		rc = power_supply_get_property(chg->usb_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &val);
+		rc = mmi_get_input_current(chg->chrg_list[1],&chrg_cs_ma);
 		if (rc < 0) {
 			mmi_chrg_err(chg, "Error getting ICL Settled rc = %d\n", rc);
 			return;
 		}
-		chrg_cs_ma = val.intval / 1000;
+		//chrg_cs_ma = chrg_cs_ma / 1000;
 	} else {
 		chg->charger_rate = POWER_SUPPLY_CHARGE_RATE_NONE;
 		goto end_rate_check;
@@ -1215,13 +1174,13 @@ static void mmi_heartbeat_work(struct work_struct *work)
 		mmi_cycle_counts(chip);
 
 	mmi_chrg_rate_check(chip);
-       if (!chip->extrn_fg) {
+       /*if (!chip->extrn_fg) {
 		val.intval = chip->charger_rate;
 		ret = power_supply_set_property(chip->batt_psy,
 				POWER_SUPPLY_PROP_CHARGE_RATE, &val);
 		if (ret)
 			mmi_chrg_err(chip, "Unable to set charge rate: %d\n", ret);
-       }
+       }*/
 
 	chrg_rate_string = kmalloc(CHG_SHOW_MAX_SIZE, GFP_KERNEL);
 	if (!chrg_rate_string) {

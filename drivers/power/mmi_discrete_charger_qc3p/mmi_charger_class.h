@@ -96,6 +96,7 @@ struct mmi_charger_ops {
 	int (*get_charging_current)(struct mmi_charger_device *chrg, u32 *uA);
 	int (*set_charging_current)(struct mmi_charger_device *chrg, u32 uA);
 	int (*get_input_current_settled)(struct mmi_charger_device *chrg, u32 *uA);
+	int (*get_input_voltage_settled)(struct mmi_charger_device *chrg, u32 *vbus);
 	int (*get_input_current)(struct mmi_charger_device *chrg, u32 *uA);
 	int (*set_input_current)(struct mmi_charger_device *chrg, u32 uA);
 	int (*update_charger_status)(struct mmi_charger_device *chrg);
@@ -116,6 +117,7 @@ extern int mmi_is_charging_enabled(struct mmi_charger_device *chrg, bool *en);
 extern int mmi_get_charing_current(struct mmi_charger_device *chrg, u32 *uA);
 extern int mmi_set_charing_current(struct mmi_charger_device *chrg, u32 uA);
 extern int mmi_get_input_current_settled(struct mmi_charger_device *chrg, u32 *uA);
+extern int mmi_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vbus);
 extern int mmi_get_input_current(struct mmi_charger_device *chrg, u32 *uA);
 extern int mmi_set_input_current(struct mmi_charger_device *chrg, u32 uA);
 extern int mmi_update_charger_status(struct mmi_charger_device *chrg);

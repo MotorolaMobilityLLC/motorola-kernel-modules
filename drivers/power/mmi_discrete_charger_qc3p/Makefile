@@ -9,3 +9,5 @@ modules_install:
 clean:
 	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) clean
 
+KBUILD_EXTRA_SYMBOLS += $(M)/../bq2597x_mmi_discrete/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+$(warning M:$(M) GKI_OBJ_MODULE_DIR1:$(GKI_OBJ_MODULE_DIR))
