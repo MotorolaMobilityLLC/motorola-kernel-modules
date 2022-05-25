@@ -1894,36 +1894,30 @@ skip_pd_select:
 int get_caculated_real_ibus_vbus(struct mmi_charger_manager *chip, int *ibus_curr,int *calculated_vbus) {
         int rc;
         struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
-        union power_supply_propval prop = {0,};
+
         int  vbus_volt = 0,ibus_curr_temp = 0,ibus_usb = 0,ibus_pump = 0,ibus_pump_slave = 0;
         int calculated_vbus_temp = 0;
 
-        rc = power_supply_get_property(chrg_list->chrg_dev[CP_MASTER]->chrg_psy,
-                                POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED, &prop);
-        if (!rc)
-                vbus_volt = prop.intval;
+	if (chrg_list->cp_master) {
+		mmi_get_input_voltage_settled(chrg_list->chrg_dev[CP_MASTER],&vbus_volt);
+	}
 
-        rc = power_supply_get_property(chrg_list->chrg_dev[CP_MASTER]->chrg_psy,
-                                POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-        if (!rc)
-                ibus_pump = prop.intval;
+	if (chrg_list->cp_master) {
+		mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_pump);
+	}
 
         if(ibus_pump < 0)
                 ibus_pump = 0;
 
-        rc = power_supply_get_property(chip->usb_psy,
-                                        POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
+	if (chrg_list->pmic_sw) {
+		rc = mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_usb); //use bq2597x ibus
+	}
 
-        if (!rc)
-                ibus_usb = prop.intval;
         if(ibus_usb < 0)
                 ibus_usb = 0;
 
         if (chrg_list->cp_slave && chrg_list->chrg_dev[CP_SLAVE]->charger_enabled) {
-                rc = power_supply_get_property(chrg_list->chrg_dev[CP_SLAVE]->chrg_psy,
-                                POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-                if (!rc)
-                        ibus_pump_slave = prop.intval;
+		mmi_get_input_current(chrg_list->chrg_dev[CP_SLAVE],&ibus_pump_slave);
                 if(ibus_pump_slave < 0)
                         ibus_pump_slave = 0;
         }
@@ -1941,7 +1935,7 @@ int get_caculated_real_ibus_vbus(struct mmi_charger_manager *chip, int *ibus_cur
 
 #define QC3P_PULSE_COUNT_MAX    ((11000 - 5000) / 20 )
 int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_ua, bool sw_reduce_volt){
-        int rc;
+        int rc,vbus_val;
         struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
         union power_supply_propval prop = {0,};
         int ibatt_curr = 0, vbatt_volt = 0, vbus_volt = 0,ibus_curr = 0,ibus_usb = 0,ibus_pump = 0,ibus_pump_slave = 0;
@@ -1974,31 +1968,26 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 
         if (!rc)
                 ibatt_curr = prop.intval;
+	
+	if (chrg_list->cp_master) {
+		mmi_get_input_voltage_settled(chrg_list->chrg_dev[CP_MASTER],&vbus_volt);
+	}
 
-        rc = power_supply_get_property(chrg_list->chrg_dev[CP_MASTER]->chrg_psy,
-                                POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED, &prop);
-        if (!rc)
-                vbus_volt = prop.intval;
-
-        rc = power_supply_get_property(chrg_list->chrg_dev[CP_MASTER]->chrg_psy,
-                                POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-        if (!rc)
-                ibus_pump = prop.intval;
+	if (chrg_list->cp_master) {
+		mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_pump);
+	}	
 
         if(ibus_pump < 0)
                 ibus_pump = 0;
 
         if (chrg_list->cp_slave && chrg_list->chrg_dev[CP_SLAVE]->charger_enabled) {
-                rc = power_supply_get_property(chrg_list->chrg_dev[CP_SLAVE]->chrg_psy,
-                                POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-                if (!rc)
-                        ibus_pump_slave= prop.intval;
+		mmi_get_input_current(chrg_list->chrg_dev[CP_SLAVE],&ibus_pump_slave);
         }
 
-        rc = power_supply_get_property(chip->usb_psy,
-                                        POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-        if (!rc)
-                ibus_usb = prop.intval;
+	if (chrg_list->pmic_sw) {
+		rc = mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_usb);
+	}
+
         if(ibus_usb < 0)
                 ibus_usb = 0;
 
@@ -2169,10 +2158,12 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 			// Need to check if vbus voltage change as expected.
 			udelay(10000*abs(count));
 
-			rc = power_supply_get_property(chrg_list->chrg_dev[CP_MASTER]->chrg_psy,
-						POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED, &prop);
+			if (chrg_list->cp_master) {
+		                rc = mmi_get_input_voltage_settled(chrg_list->chrg_dev[CP_MASTER],&vbus_val);
+		        }
+
 			if (!rc){
-				vbus_volt_new = prop.intval;
+				vbus_volt_new = vbus_val;
 
 				mmi_chrg_err(chip,"vbus_volt_new: %d, vbus_volt: %d", vbus_volt_new, vbus_volt);
 				if(vbus_volt_new > 0 &&
@@ -2212,10 +2203,9 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
                       chip->pd_batt_therm_volt = chip->pd_target_volt;
                }
 
-               rc = power_supply_get_property(chrg_list->chrg_dev[CP_MASTER]->chrg_psy,
-                                POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-               if (!rc)
-                      ibus_pump = prop.intval;
+	       if (chrg_list->cp_master) {
+			mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_pump);
+	       }
 	       if(ibus_pump >= chip->typec_middle_current){
 		       chip->pd_target_curr = ibus_pump * 1000;
 	       }

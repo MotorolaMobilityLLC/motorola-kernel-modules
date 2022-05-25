@@ -11,3 +11,6 @@ mmi_discrete_charger_qc3p-objs += bq2597x_charger.o
 mmi_discrete_charger_qc3p-objs += mtk_pmic_charger.o
 mmi_discrete_charger_qc3p-objs += pps.o
 
+#KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../bq2597x_mmi_discrete/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+#$(warning CURDIR:$(CURDIR) KBUILD_EXTMOD:$(KBUILD_EXTMOD) GKI_OBJ_MODULE_DIR:$(GKI_OBJ_MODULE_DIR))
+KBUILD_EXTRA_SYMBOLS += $(KBUILD_EXTMOD)/../../bq2597x_mmi_discrete.ko_intermediates/LINKED/Module.symvers

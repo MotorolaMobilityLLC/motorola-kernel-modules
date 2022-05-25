@@ -36,6 +36,7 @@
 #include "mmi_charger_class.h"
 #include <linux/power_supply.h>
 #include "mmi_charger_core.h"
+#include "bq2597x_charger.h"
 
 extern int sgm4154x_extern_enable_termination(bool enable);
 
@@ -83,8 +84,7 @@ extern int sgm4154x_extern_enable_termination(bool enable);
 
 static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 {
-	int rc;
-	union power_supply_propval prop = {0,};
+	int rc,val;
 
 	if (!chrg->chrg_psy){
 	        chrg_dev_info(chrg, "BQ2597x chrg: chrg_psy is null! \n");
@@ -97,15 +97,13 @@ static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 		sgm4154x_extern_enable_termination(true);
 	}
 
-	prop.intval = en;
-	rc = power_supply_set_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
-
+	val = en;
+	rc = bq2597x_set_property(BQ2597X_PROP_CHARGING_ENABLED,val);
 	if (!rc) {
-		chrg->charger_enabled = !!prop.intval;
-	chrg_dev_info(chrg, "BQ2597x chrg: set charger_enabled = %d\n",chrg->charger_enabled);
+		chrg->charger_enabled = !!val;
+		chrg_dev_info(chrg, "BQ2597x chrg: set charger_enabled = %d\n",chrg->charger_enabled);
 	} else{
-	chrg_dev_info(chrg, "BQ2597x chrg: charger_enabled failed, set to false\n");
+		chrg_dev_info(chrg, "BQ2597x chrg: charger_enabled failed, set to false\n");
 		chrg->charger_enabled  = false;
 	}
 
@@ -114,16 +112,14 @@ static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 
 static int bq2597x_is_charging_enabled(struct mmi_charger_device *chrg, bool *en)
 {
-	int rc;
-	union power_supply_propval prop = {0,};
+	int rc,val;
 
 	if (!chrg->chrg_psy)
 		return -ENODEV;
 
-	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
+	rc = bq2597x_get_property(BQ2597X_PROP_CHARGING_ENABLED, &val);
 	if (!rc) {
-		chrg->charger_enabled = !!prop.intval;
+		chrg->charger_enabled = !!val;
 	} else
 		chrg->charger_enabled  = false;
 
@@ -148,25 +144,29 @@ static int bq2597x_get_charging_current(struct mmi_charger_device *chrg, u32 *uA
 	return rc;
 }
 
+static int bq2597x_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vbus)
+{
+	int rc, vbus_voltage;
+
+	rc = bq2597x_get_property(BQ2597X_PROP_INPUT_VOLTAGE_SETTLED,&vbus_voltage);
+	if (!rc)
+		*vbus = vbus_voltage;
+	return rc;
+}
+
 static int bq2597x_get_input_current(struct mmi_charger_device *chrg, u32 *uA)
 {
-	int rc;
-	union power_supply_propval prop = {0,};
+	int rc, ibus;
 
-	if (!chrg->chrg_psy)
-		return -ENODEV;
-
-	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
+	rc = bq2597x_get_property(BQ2597X_PROP_INPUT_CURRENT_NOW,&ibus);
 	if (!rc)
-		*uA = prop.intval;
-
+		*uA = ibus;
 	return rc;
 }
 
 static int bq2597x_update_charger_status(struct mmi_charger_device *chrg)
 {
-	int rc;
+	int rc,val,ibus,vbus;
 	union power_supply_propval prop = {0,};
 	struct power_supply	*battery_psy;
 
@@ -189,43 +189,29 @@ static int bq2597x_update_charger_status(struct mmi_charger_device *chrg)
 	if (!rc)
 		chrg->charger_data.ibatt_curr = prop.intval;
 
-#if 0
-	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_TEMP, &prop);
-	if (!rc)
-		chrg->charger_data.batt_temp = prop.intval;
-#else
 	rc = power_supply_get_property(battery_psy,
 				POWER_SUPPLY_PROP_TEMP, &prop);
 	if (!rc)
 		chrg->charger_data.batt_temp = prop.intval / 10;
-#endif
 
-	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED, &prop);
-	if (!rc)
-		chrg->charger_data.vbus_volt = prop.intval;
+	rc = bq2597x_get_property(BQ2597X_PROP_INPUT_VOLTAGE_SETTLED,&vbus);
+	if (!rc) {
+		chrg->charger_data.vbus_volt = vbus;
+	}
 
-	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_NOW, &prop);
-	if (!rc)
-		chrg->charger_data.ibus_curr = prop.intval;
+	rc = bq2597x_get_property(BQ2597X_PROP_INPUT_CURRENT_NOW,&ibus);
+	if (!rc) {
+		chrg->charger_data.ibus_curr = ibus;
+	}
 
-#if 0
-	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_PRESENT, &prop);
-	if (!rc)
-		chrg->charger_data.vbus_pres = !!prop.intval;
-#else
 	rc = power_supply_get_property(chrg->chrg_psy,
 				POWER_SUPPLY_PROP_ONLINE, &prop);
 	if (!rc)
 		chrg->charger_data.vbus_pres = !!prop.intval;
-#endif
-	rc = power_supply_get_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_CHARGING_ENABLED, &prop);
+
+	rc = bq2597x_get_property(BQ2597X_PROP_CHARGING_ENABLED, &val);
 	if (!rc)
-		chrg->charger_enabled = !!prop.intval;
+		chrg->charger_enabled = !!val;
 
 	chrg_dev_info(chrg, "BQ2597x chrg: %s status update: --- info--- 1\n",chrg->name);
 	chrg_dev_info(chrg, "vbatt %d\n", chrg->charger_data.vbatt_volt);
@@ -241,13 +227,13 @@ static int bq2597x_update_charger_status(struct mmi_charger_device *chrg)
 
 static int bq2597x_update_charger_error_status(struct mmi_charger_device *chrg)
 {
-	int rc;
-	union power_supply_propval prop = {0,};
+	int rc= 0;
+	//union power_supply_propval prop = {0,};
 
 	if (!chrg->chrg_psy)
 		return -ENODEV;
 
-	rc = power_supply_get_property(chrg->chrg_psy,
+	/*rc = power_supply_get_property(chrg->chrg_psy,
 				POWER_SUPPLY_PROP_CP_STATUS1, &prop);
 	if (!rc) {
 		chrg->charger_error.chrg_err_type =
@@ -287,20 +273,17 @@ static int bq2597x_update_charger_error_status(struct mmi_charger_device *chrg)
 			((!!(prop.intval & CP_SWITCH_MASK)) ?
 			1 << MMI_CP_SWITCH_BIT :
 			0 << MMI_CP_SWITCH_BIT);
-	}
+	}*/
 	return rc;
 }
 
 static int bq2597x_clear_charger_error(struct mmi_charger_device *chrg)
 {
 	int rc;
-	union power_supply_propval prop = {0,};
 
 	if (!chrg->chrg_psy)
 		return -ENODEV;
-
-	rc = power_supply_set_property(chrg->chrg_psy,
-				POWER_SUPPLY_PROP_UPDATE_NOW, &prop);
+	rc = bq2597x_set_property(BQ2597X_PROP_UPDATE_NOW,true);
 
 	return rc;
 }
@@ -310,6 +293,7 @@ struct mmi_charger_ops bq2597x_charger_ops = {
 	.is_enabled = bq2597x_is_charging_enabled,
 	.get_charging_current = bq2597x_get_charging_current,
 	.get_input_current = bq2597x_get_input_current,
+	.get_input_voltage_settled = bq2597x_get_input_voltage_settled,
 	.update_charger_status = bq2597x_update_charger_status,
 	.update_charger_error = bq2597x_update_charger_error_status,
 	.clear_charger_error = bq2597x_clear_charger_error,

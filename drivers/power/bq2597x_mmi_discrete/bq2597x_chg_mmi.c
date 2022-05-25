@@ -38,6 +38,7 @@
 
 //#include "bq25970_reg.h"
 #include "bq25970_chg_reg.h"
+#include "bq2597x_chg_mmi.h"
 /*#include "bq2597x.h"*/
 
 enum {
@@ -380,6 +381,232 @@ struct bq2597x {
 	int bypass_mode_enable;
 #endif
 };
+
+struct bq2597x_sysfs_field_info {
+	struct device_attribute attr;
+	enum bq2597x_property prop;
+	int (*set)(struct bq2597x *bq,
+		struct bq2597x_sysfs_field_info *attr, int val);
+	int (*get)(struct bq2597x *bq,
+		struct bq2597x_sysfs_field_info *attr, int *val);
+};
+
+static int bq2597x_enable_charge(struct bq2597x *bq, bool enable);
+static int bq2597x_check_charge_enabled(struct bq2597x *bq, bool *enabled);
+static int bq2597x_get_adc_data(struct bq2597x *bq, int channel,  int *result);
+/* ============================================================ */
+/* sysfs */
+/* ============================================================ */
+static int charging_enabled_get(struct bq2597x *bq,
+	struct bq2597x_sysfs_field_info *attr,
+	int *val)
+{
+	bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
+	*val = bq->charge_enabled;
+	bq_debug("%s charging_enabled_get: charge_enabled is %d\n", __func__, *val);
+	return 0;
+}
+
+static int charging_enabled_set(struct bq2597x *bq,
+	struct bq2597x_sysfs_field_info *attr,
+	int val)
+{
+	bq2597x_enable_charge(bq, val);
+	bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
+        bq_info("charging_enabled_set: %s, %d\n", val ? "enable" : "disable", bq->charge_enabled);
+	return 0;
+}
+
+static int update_now_set(struct bq2597x *bq,
+	struct bq2597x_sysfs_field_info *attr,
+	int val)
+{
+	bq->bat_ovp_alarm = false;
+	bq->bat_ocp_alarm = false;
+	bq->bat_ucp_alarm = false;
+	bq->bus_ovp_alarm = false;
+	bq->bus_ocp_alarm = false;
+	bq->bat_therm_alarm = false;
+	bq->bus_therm_alarm = false;
+	bq->die_therm_alarm = false;
+	bq->bat_ovp_fault = false;
+	bq->bat_ocp_fault = false;
+	bq->bus_ovp_fault = false;
+	bq->bus_ocp_fault = false;
+	bq->bat_therm_fault = false;
+	bq->bus_therm_fault = false;
+	bq->die_therm_fault = false;
+	bq->conv_ocp_fault = false;
+	bq->ss_timeout_fault = false;
+	bq->ts_shut_fault = false;
+	bq->bus_ucp_alarm = false;
+        bq_info("update_now_set");
+	return 0;
+}
+
+static int input_current_now_get(struct bq2597x *bq,
+	struct bq2597x_sysfs_field_info *attr,
+	int *val)
+{
+	int ret, result;
+	ret = bq2597x_get_adc_data(bq, ADC_IBUS, &result);
+	if (!ret)
+		bq->ibus_curr = result;
+
+	*val = bq->ibus_curr;
+	
+        bq_info("input_current_now_get ibus %d\n",*val);
+	return 0;
+}
+
+static int input_voltage_settled_get(struct bq2597x *bq,
+	struct bq2597x_sysfs_field_info *attr,
+	int *val)
+{
+	int ret, result;
+	ret = bq2597x_get_adc_data(bq, ADC_VBUS, &result);
+	if (!ret)
+		bq->vbus_volt = result;
+
+	*val = bq->vbus_volt;
+	
+        bq_info("input_voltage_settled_get vbus %d\n",*val);
+	return 0;
+}
+
+static ssize_t bq2597x_sysfs_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct power_supply *psy;
+	struct bq2597x *bq;
+	struct bq2597x_sysfs_field_info *bq2597x_attr;
+	int val;
+	ssize_t ret;
+
+	ret = kstrtos32(buf, 0, &val);
+	if (ret < 0)
+		return ret;
+
+	psy = dev_get_drvdata(dev);
+	bq = (struct bq2597x *)power_supply_get_drvdata(psy);
+
+	bq2597x_attr = container_of(attr,
+		struct bq2597x_sysfs_field_info, attr);
+	if (bq2597x_attr->set != NULL)
+		bq2597x_attr->set(bq, bq2597x_attr, val);
+
+	return count;
+}
+
+static ssize_t bq2597x_sysfs_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct power_supply *psy;
+	struct bq2597x *bq;
+	struct bq2597x_sysfs_field_info *bq2597x_attr;
+	int val = 0;
+	ssize_t count;
+
+	psy = dev_get_drvdata(dev);
+	bq = (struct bq2597x *)power_supply_get_drvdata(psy);
+
+	bq2597x_attr = container_of(attr,
+		struct bq2597x_sysfs_field_info, attr);
+	if (bq2597x_attr->get != NULL)
+		bq2597x_attr->get(bq, bq2597x_attr, &val);
+
+	count = scnprintf(buf, PAGE_SIZE, "%d\n", val);
+	return count;
+}
+
+/* Must be in the same order as BAT_PROP_* */
+static struct bq2597x_sysfs_field_info bq2597x_sysfs_field_tbl[] = {
+	BQ2597X_SYSFS_FIELD_RW(charging_enabled, BQ2597X_PROP_CHARGING_ENABLED),
+	BQ2597X_SYSFS_FIELD_WO(update_now,BQ2597X_PROP_UPDATE_NOW),
+	BQ2597X_SYSFS_FIELD_RO(input_current_now,BQ2597X_PROP_INPUT_CURRENT_NOW),
+	BQ2597X_SYSFS_FIELD_RO(input_voltage_settled,BQ2597X_PROP_INPUT_VOLTAGE_SETTLED),
+};
+
+int bq2597x_get_property(enum bq2597x_property bp,
+			    int *val)
+{
+	struct bq2597x *bq;
+	struct power_supply *psy;
+
+	psy = power_supply_get_by_name("bq2597x-standalone");
+	if (psy == NULL)
+		return -ENODEV;
+
+	bq = (struct bq2597x *)power_supply_get_drvdata(psy);
+	if (bq2597x_sysfs_field_tbl[bp].prop == bp)
+		bq2597x_sysfs_field_tbl[bp].get(bq,
+			&bq2597x_sysfs_field_tbl[bp], val);
+	else {
+		bq_err("%s bp:%d idx error\n", __func__, bp);
+		return -ENOTSUPP;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(bq2597x_get_property);
+
+int bq2597x_get_int_property(enum bq2597x_property bp)
+{
+	int val;
+
+	bq2597x_get_property(bp, &val);
+	return val;
+}
+EXPORT_SYMBOL_GPL(bq2597x_get_int_property);
+
+int bq2597x_set_property(enum bq2597x_property bp,
+			    int val)
+{
+	struct bq2597x *bq;
+	struct power_supply *psy;
+
+	psy = power_supply_get_by_name("bq2597x-standalone");
+	if (psy == NULL)
+		return -ENODEV;
+
+	bq = (struct bq2597x *)power_supply_get_drvdata(psy);
+
+	if (bq2597x_sysfs_field_tbl[bp].prop == bp)
+		bq2597x_sysfs_field_tbl[bp].set(bq,
+			&bq2597x_sysfs_field_tbl[bp], val);
+	else {
+		bq_err("%s bp:%d idx error\n", __func__, bp);
+		return -ENOTSUPP;
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(bq2597x_set_property);
+
+static struct attribute *
+	bq2597x_sysfs_attrs[ARRAY_SIZE(bq2597x_sysfs_field_tbl) + 1];
+
+static const struct attribute_group bq2597x_sysfs_attr_group = {
+	.attrs = bq2597x_sysfs_attrs,
+};
+
+static void bq2597x_sysfs_init_attrs(void)
+{
+	int i, limit = ARRAY_SIZE(bq2597x_sysfs_field_tbl);
+
+	for (i = 0; i < limit; i++)
+		bq2597x_sysfs_attrs[i] = &bq2597x_sysfs_field_tbl[i].attr.attr;
+
+	bq2597x_sysfs_attrs[limit] = NULL; /* Has additional entry for this */
+}
+
+static int bq2597x_sysfs_create_group(struct power_supply *psy)
+{
+	bq2597x_sysfs_init_attrs();
+
+	return sysfs_create_group(&psy->dev.kobj,
+			&bq2597x_sysfs_attr_group);
+}
+
 
 //extern void set_bq2597x_load_flag(bool bqflag);
 
@@ -1884,17 +2111,12 @@ static const struct attribute_group bq2597x_attr_group = {
 
 static enum power_supply_property bq2597x_charger_props[] = {
 	POWER_SUPPLY_PROP_PRESENT,
-	POWER_SUPPLY_PROP_CHARGING_ENABLED,
-	POWER_SUPPLY_PROP_UPDATE_NOW,
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	/* Legacy items. */
         POWER_SUPPLY_PROP_VOLTAGE_NOW,
         POWER_SUPPLY_PROP_CURRENT_NOW,
-        POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
-        POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
 	POWER_SUPPLY_PROP_ONLINE,
-	POWER_SUPPLY_PROP_CP_STATUS1,
 };
 
 static void bq2597x_check_alarm_status(struct bq2597x *bq);
@@ -1910,10 +2132,6 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 	u8 reg_val;
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
-		val->intval = bq->charge_enabled;
-		break;
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = 0;
 		break;
@@ -1939,20 +2157,6 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 			bq->ibat_curr = result;
 
 		val->intval = bq->ibat_curr;
-		break;
-	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED:
-		ret = bq2597x_get_adc_data(bq, ADC_VBUS, &result);
-		if (!ret)
-			bq->vbus_volt = result;
-
-		val->intval = bq->vbus_volt;
-		break;
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_NOW:
-		ret = bq2597x_get_adc_data(bq, ADC_IBUS, &result);
-		if (!ret)
-			bq->ibus_curr = result;
-
-		val->intval = bq->ibus_curr;
 		break;
 	case POWER_SUPPLY_PROP_MODEL_NAME:
 		ret = bq2597x_get_work_mode(bq, &bq->mode);
@@ -1982,37 +2186,10 @@ static int bq2597x_charger_set_property(struct power_supply *psy,
 	struct bq2597x *bq = power_supply_get_drvdata(psy);
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		bq2597x_enable_charge(bq, val->intval);
-		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
-                        bq_info("POWER_SUPPLY_PROP_CHARGING_ENABLED: %s, %d\n",
-                                        val->intval ? "enable" : "disable", bq->charge_enabled);
-		break;
 	case POWER_SUPPLY_PROP_PRESENT:
 		bq2597x_set_present(bq, !!val->intval);
 		bq_info("set present :%d\n", val->intval);
 		break;
-        case POWER_SUPPLY_PROP_UPDATE_NOW:
-                bq->bat_ovp_alarm = false;
-                bq->bat_ocp_alarm = false;
-                bq->bat_ucp_alarm = false;
-                bq->bus_ovp_alarm = false;
-                bq->bus_ocp_alarm = false;
-                bq->bat_therm_alarm = false;
-                bq->bus_therm_alarm = false;
-                bq->die_therm_alarm = false;
-                bq->bat_ovp_fault = false;
-                bq->bat_ocp_fault = false;
-                bq->bus_ovp_fault = false;
-                bq->bus_ocp_fault = false;
-                bq->bat_therm_fault = false;
-                bq->bus_therm_fault = false;
-                bq->die_therm_fault = false;
-                bq->conv_ocp_fault = false;
-                bq->ss_timeout_fault = false;
-                bq->ts_shut_fault = false;
-                bq->bus_ucp_alarm = false;
-                break;
 	default:
 		return -EINVAL;
 	}
@@ -2026,9 +2203,6 @@ static int bq2597x_charger_is_writeable(struct power_supply *psy,
 	int ret;
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		ret = 1;
-		break;
 	default:
 		ret = 0;
 		break;
@@ -2413,6 +2587,7 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 	ret = bq2597x_psy_register(bq);
 	if (ret)
 		return ret;
+	bq2597x_sysfs_create_group(bq->fc2_psy);
 
 	if (client->irq) {
 		ret = devm_request_threaded_irq(&client->dev, client->irq,
@@ -2436,7 +2611,7 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 		bq_err("failed to register sysfs. err: %d\n", ret);
 		goto err_1;
 	}
-
+	
 	/* determine_initial_status(bq); */
 	bq->usb_psy = power_supply_get_by_name("usb");
 	if(!bq->usb_psy){
