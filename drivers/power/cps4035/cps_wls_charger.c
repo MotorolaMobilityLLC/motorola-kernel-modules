@@ -1891,9 +1891,9 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
         cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
         cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
         cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
+        cps_wls_log(CPS_LOG_DEBG, "[%s] CPS_I2C_UNLOCK", __func__);
         cps_wls_set_int_enable();
         cps_rx_online_check(chip);
-        cps_wls_log(CPS_LOG_DEBG, "[%s] CPS_I2C_UNLOCK", __func__);
     } else {
         /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
         /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
@@ -2979,7 +2979,7 @@ static void cps_wls_current_select(int  *icl, int *vbus)
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
 
-    *icl = 1150000;
+    *icl = 400000;
     *vbus = 5000;
 
     if (chg->mode_type == Sys_Op_Mode_BPP)
