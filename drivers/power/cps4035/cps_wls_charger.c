@@ -1875,10 +1875,13 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
     }
 }
 
+static void cps_wls_current_select(int  *icl, int *vbus);
+static void cps_init_charge_hardware(void);
 static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 {
     int int_flag;
     int int_clr;
+    int icl,vbus;
     struct cps_wls_chrg_chip *chip = dev_id;
     Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
 
@@ -1920,11 +1923,23 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
     {
         cps_wls_tx_irq_handler(int_flag);
     }
-    if (chip->rx_ldo_on) {
-        cps_get_sys_op_mode(&mode_type);
-        chip->mode_type = mode_type;
-    }
-    return IRQ_HANDLED;
+	if (chip->rx_ldo_on)
+	{
+		cps_get_sys_op_mode(&mode_type);
+		chip->mode_type = mode_type;
+		if (!chip->factory_wls_en)
+		{
+			cps_wls_current_select(&icl, &vbus);
+			if (chip->chg1_dev)
+				charger_dev_set_input_current(chip->chg1_dev, icl);
+			else
+			{
+				cps_init_charge_hardware();
+				charger_dev_set_input_current(chip->chg1_dev, icl);
+			}
+		}
+	}
+	return IRQ_HANDLED;
 }
 
 static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
@@ -3269,6 +3284,18 @@ static const struct thermal_cooling_device_ops cps_tcd_ops = {
 	.set_cur_state = cps_tcd_set_cur_state,
 };
 
+static void cps_init_charge_hardware()
+{
+	struct cps_wls_chrg_chip *chg = chip;
+	chg->chg1_dev = get_charger_by_name("primary_chg");
+	if (chg->chg1_dev)
+		cps_wls_log(CPS_LOG_DEBG, "%s: Found primary charger\n", __func__);
+	else {
+		cps_wls_log(CPS_LOG_ERR, "%s: Error : can't find primary charger\n",
+			__func__);
+	}
+}
+
 static int cps_wls_chrg_probe(struct i2c_client *client,
                 const struct i2c_device_id *id)
 {
@@ -3365,6 +3392,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     /* Register thermal zone cooling device */
     chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
 		"cps_wls_charger_l", chip, &cps_tcd_ops);
+    cps_init_charge_hardware();
 
     kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
 
