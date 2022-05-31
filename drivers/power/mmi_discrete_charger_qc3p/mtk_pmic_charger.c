@@ -38,6 +38,7 @@
 #include "mmi_charger_core.h"
 
 #include "bq2597x_charger.h"
+
 enum sgm_property {
 	SGM_PROP_CHARGING_ENABLED,
 	SGM_PROP_INPUT_CURRENT_NOW,
@@ -119,6 +120,7 @@ static int mtk_pmic_set_charging_current(struct mmi_charger_device *chrg, u32 uA
 	int rc;
 	union power_supply_propval prop = {0,};
 	struct power_supply	*usb_psy;
+	struct power_supply	*chg_psy;
 
 	usb_psy = power_supply_get_by_name("sgm4154x-charger");
 	if (!usb_psy)
@@ -128,6 +130,14 @@ static int mtk_pmic_set_charging_current(struct mmi_charger_device *chrg, u32 uA
 	prop.intval = uA;
 	rc = power_supply_set_property(usb_psy,
 				POWER_SUPPLY_PROP_CURRENT_MAX, &prop);
+
+	chg_psy = power_supply_get_by_name("mtk-master-charger");
+	if (!chg_psy)
+		return -ENODEV;
+
+	prop.intval = uA;
+	rc = power_supply_set_property(chg_psy,
+				POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT, &prop);
 
 	return rc;
 }
