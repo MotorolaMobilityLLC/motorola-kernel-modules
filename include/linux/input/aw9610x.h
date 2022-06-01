@@ -29,6 +29,9 @@
 #define AW_CHANNEL_NUMBER_FOUR    0x04
 #define AW_CHANNEL_NUMBER_FIVE    0x05
 
+#define REG_FWVER2                             (0x0410)
+#define AW_CHIP_AW9610XA                       (0x03000b00)
+
 #if 0
 #define AWLOGD(dev, format, arg...) \
 	do {\

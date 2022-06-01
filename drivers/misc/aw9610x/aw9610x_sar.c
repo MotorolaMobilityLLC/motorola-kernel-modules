@@ -40,7 +40,7 @@
 #include "base.h"
 
 #define AW9610X_I2C_NAME "aw9610x_sar"
-#define AW9610X_DRIVER_VERSION "v0.1.9.3"
+#define AW9610X_DRIVER_VERSION "v0.1.9.4"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
 #define USB_POWER_SUPPLY_NAME   "charger"
@@ -1941,30 +1941,19 @@ static void aw9610x_i2c_set(struct i2c_client *i2c,
 static int32_t aw9610x_version_init(struct aw9610x *aw9610x)
 {
 	uint32_t firmvers = 0;
+	int32_t ret = 0;
 
-	aw9610x_i2c_read(aw9610x, REG_FIRMVERSION, &firmvers);
-	aw9610x->pad = firmvers >> 28;
-	switch (aw9610x->pad) {
-	case 4:
-		aw9610x->pad -= 1;
-		break;
-	case 5:
-		break;
-	default:
+	ret = aw9610x_i2c_read(aw9610x, REG_FWVER2, &firmvers);
+	if (ret < 0) {
+		LOG_ERR("read REG_FWVER2 err!");
 		return -AW_VERS_ERR;
 	}
-	snprintf(aw9610x->chip_name, sizeof(aw9610x->chip_name),
-						"AW9610%d", aw9610x->pad);
-	aw9610x->chip_name[7] = '\0';
-
-	aw9610x->vers = (firmvers >> 24) & 0xf;
-	if (aw9610x->vers == AW9610XA)
-		memcpy(aw9610x->chip_name + strlen(aw9610x->chip_name), "A", 1);
-
-	aw9610x->chip_name[8] = '\0';
-
-        LOG_INFO("REG_FIRMVERSION = 0x%x", firmvers);
-
+	LOG_INFO("REG_FWVER2 : 0x%08x", firmvers);
+	if (firmvers == AW_CHIP_AW9610XA) {
+		aw9610x->vers = AW9610XA;
+	} else {
+		aw9610x->vers = AW9610X;
+	}
 	return AW_SAR_SUCCESS;
 }
 
