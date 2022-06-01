@@ -2130,10 +2130,17 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 	int result;
 	int ret;
 	u8 reg_val;
+	#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+	bool enabled;
+	#endif
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 		val->intval = 0;
+	#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
+		bq2597x_check_charge_enabled(bq, &enabled);
+		val->intval = (u8)enabled;
+	#endif
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = bq->usb_present;
