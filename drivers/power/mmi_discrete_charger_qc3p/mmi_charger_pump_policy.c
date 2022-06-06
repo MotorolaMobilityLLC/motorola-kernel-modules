@@ -1910,7 +1910,10 @@ int get_caculated_real_ibus_vbus(struct mmi_charger_manager *chip, int *ibus_cur
                 ibus_pump = 0;
 
 	if (chrg_list->pmic_sw) {
-		rc = mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_usb); //use bq2597x ibus
+		rc = mmi_get_input_current(chrg_list->chrg_dev[PMIC_SW],&ibus_usb);
+		if (rc) {
+			ibus_usb = 200; //Force return 200mA input charging current of main charger.
+		}
 	}
 
         if(ibus_usb < 0)
@@ -1985,7 +1988,10 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
         }
 
 	if (chrg_list->pmic_sw) {
-		rc = mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_usb);
+		rc = mmi_get_input_current(chrg_list->chrg_dev[PMIC_SW],&ibus_usb);
+		if (rc) {
+			ibus_usb = 200; //Force return 200mA input charging current of main charger.
+		}
 	}
 
         if(ibus_usb < 0)
@@ -2131,7 +2137,7 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 			      chip->pd_batt_therm_volt = chip->pd_target_volt;
 		      }
 		}
-		if(ibus_pump >= chip->typec_middle_current){
+		if(ibus_pump >= chip->typec_middle_current/1000){
 		      chip->pd_target_curr = ibus_pump * 1000;
 		}
 		chip->pd_request_curr = chip->pd_target_curr;
@@ -2206,7 +2212,7 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 	       if (chrg_list->cp_master) {
 			mmi_get_input_current(chrg_list->chrg_dev[CP_MASTER],&ibus_pump);
 	       }
-	       if(ibus_pump >= chip->typec_middle_current){
+	       if(ibus_pump >= chip->typec_middle_current/1000){
 		       chip->pd_target_curr = ibus_pump * 1000;
 	       }
 	       chip->pd_request_curr = chip->pd_target_curr;

@@ -184,7 +184,7 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 
 	rc = sgm_get_property_dumy(SGM_PROP_INPUT_CURRENT_NOW,&ibus);
 	if (!rc) {
-		chrg->charger_data.ibus_curr = 100;//prop.intval; david test
+		chrg->charger_data.ibus_curr = 200; //Force return 200mA input charging current of main charger.
 	}
 
 	rc = power_supply_get_property(usb_psy,
