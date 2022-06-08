@@ -904,9 +904,6 @@ static void do_set_config(struct usb_function *f, u16 new_config)
 		context->subnet_mask = 0;
 		context->router_ip = 0;
 		context->iff_flag = 0;
-		sysfs_notify(&context->dev->dev.kobj, NULL, "ip_addr");
-		sysfs_notify(&context->dev->dev.kobj, NULL, "subnet_mask");
-		sysfs_notify(&context->dev->dev.kobj, NULL, "iff_flag");
 		schedule_work(&context->usbnet_config_wq);
 	}
 }
@@ -939,12 +936,10 @@ static int usbnet_ctrlrequest(
 		case USBNET_SET_IP_ADDRESS:
 			context->ip_addr = (wValue << 16) | wIndex;
 			rc = 0;
-			sysfs_notify(&context->dev->dev.kobj, NULL, "ip_addr");
 			break;
 		case USBNET_SET_SUBNET_MASK:
 			context->subnet_mask = (wValue << 16) | wIndex;
 			rc = 0;
-			sysfs_notify(&context->dev->dev.kobj, NULL, "subnet_mask");
 			break;
 		case USBNET_SET_HOST_IP:
 			context->router_ip = (wValue << 16) | wIndex;
@@ -957,7 +952,6 @@ static int usbnet_ctrlrequest(
 		if (context->ip_addr && context->subnet_mask
 		    && context->router_ip) {
 			context->iff_flag = IFF_UP;
-			sysfs_notify(&context->dev->dev.kobj, NULL, "iff_flag");
 			/* schedule a work queue to do this because we
 				 need to be able to sleep */
 			schedule_work(&context->usbnet_config_wq);
