@@ -1764,6 +1764,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
     }
     if(int_flag & RX_INT_READY){
+        chip->rx_int_ready = true;
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_READY");
     }
     if(int_flag & RX_INT_OVP){
@@ -1896,6 +1897,7 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
         cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
         cps_wls_log(CPS_LOG_DEBG, "[%s] CPS_I2C_UNLOCK", __func__);
         cps_wls_set_int_enable();
+        chip->chip_state = true;
         cps_rx_online_check(chip);
     } else {
         /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
@@ -1953,6 +1955,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
+		chip->rx_int_ready = false;
 		if (chip->rx_ldo_on) {
 			//chip->wls_online = false;
 			cps_rx_online_check(chip);
@@ -1999,7 +2002,11 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
     switch(psp){
         case POWER_SUPPLY_PROP_PRESENT:
         case POWER_SUPPLY_PROP_ONLINE:
-            val->intval = chip->wls_online;//cps_wls_is_ldo_on();
+            val->intval = chip->wls_online;
+            if (!chip->chip_state)
+            {
+                val->intval = chip->chip_state;
+            }
             break;
 
         case POWER_SUPPLY_PROP_TYPE:
@@ -2034,6 +2041,16 @@ static int cps_wls_chrg_set_property(struct power_supply *psy,
             enum power_supply_property psp,
             const union power_supply_propval *val)
 {
+    switch(psp){
+        case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
+            chip->chip_state = val->intval;
+            power_supply_changed(chip->wl_psy);
+
+            break;
+        default:
+            return -EINVAL;
+    }
+    cps_wls_log(CPS_LOG_ERR, "[%s] psp = %d val = %d.\n", __func__, psp,val->intval);
     return 0;
 }
 
@@ -3177,7 +3194,7 @@ static int cps_rx_check_events_thread(void *arg)
 			continue;
 		}
 		info->wls_rx_check_thread_timeout = false;
-		if(cps_get_vbus() < 5000)
+		if(cps_get_vbus() < 5000  || !chip->rx_int_ready)
 			cps_rx_online_check(info);
 		__pm_relax(info->rx_check_wakelock);
 	}
