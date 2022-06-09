@@ -275,6 +275,8 @@ struct cps_wls_chrg_chip {
     bool ntc_thermal;
     bool fw_uploading;
     struct charger_device *chg1_dev;
+    bool chip_state;
+    bool rx_int_ready;
 
     /*wls pen*/
 #ifdef SMART_PEN_SUPPORT
