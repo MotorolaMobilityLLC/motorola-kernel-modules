@@ -38,7 +38,9 @@
 #include "mmi_charger_core.h"
 #include "bq2597x_charger.h"
 
+#ifdef CONFIG_MOTO_CHARGER_SGM415XX
 extern int sgm4154x_extern_enable_termination(bool enable);
+#endif
 
 #define	BAT_OVP_FAULT_SHIFT			8
 #define	BAT_OCP_FAULT_SHIFT			9
@@ -90,13 +92,13 @@ static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 	        chrg_dev_info(chrg, "BQ2597x chrg: chrg_psy is null! \n");
 		return -ENODEV;
 	}
-
+#ifdef CONFIG_MOTO_CHARGER_SGM415XX
 	if (en) {
 		sgm4154x_extern_enable_termination(false);
 	} else {
 		sgm4154x_extern_enable_termination(true);
 	}
-
+#endif
 	val = en;
 	rc = bq2597x_set_property(BQ2597X_PROP_CHARGING_ENABLED,val);
 	if (!rc) {

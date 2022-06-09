@@ -43,8 +43,11 @@ enum sgm_property {
 	SGM_PROP_CHARGING_ENABLED,
 	SGM_PROP_INPUT_CURRENT_NOW,
 };
+
+#ifdef CONFIG_MOTO_CHARGER_SGM415XX
 extern int sgm_get_int_property(enum sgm_property bp);
 extern int sgm_get_property(enum sgm_property bp,int *val);
+#endif
 
 int __weak sgm_get_property_dumy(enum sgm_property bp,int *val)
 {
@@ -54,8 +57,11 @@ int __weak sgm_get_property_dumy(enum sgm_property bp,int *val)
 static int mtk_pmic_is_charging_enabled(struct mmi_charger_device *chrg, bool *en)
 {
 	int rc,enable;
-
+#ifdef CONFIG_MOTO_CHARGER_SGM415XX
 	rc = sgm_get_property(SGM_PROP_CHARGING_ENABLED,&enable);
+#else
+	rc = sgm_get_property_dumy(SGM_PROP_CHARGING_ENABLED,&enable);
+#endif
 	if (!rc) {
 		chrg->charger_enabled = !!enable;
 	} else {
@@ -182,22 +188,29 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 		chrg->charger_data.vbus_volt = vbus*1000;
 	}
 
+#ifdef CONFIG_MOTO_CHARGER_SGM415XX
 	rc = sgm_get_property_dumy(SGM_PROP_INPUT_CURRENT_NOW,&ibus);
 	if (!rc) {
 		chrg->charger_data.ibus_curr = 200; //Force return 200mA input charging current of main charger.
 	}
+#else
+	rc = sgm_get_property_dumy(SGM_PROP_INPUT_CURRENT_NOW,&ibus); //Read real ibus
+#endif
 
 	rc = power_supply_get_property(usb_psy,
 				POWER_SUPPLY_PROP_ONLINE, &prop);
 	if (!rc)
 		chrg->charger_data.vbus_pres = !!prop.intval;
 
+#ifdef CONFIG_MOTO_CHARGER_SGM415XX
 	rc = sgm_get_property(SGM_PROP_CHARGING_ENABLED,&enable);
 	if (!rc) {
 		chrg->charger_enabled  = !!enable;
 		chrg_dev_info(chrg, "sgm_get_property(SGM_PROP_CHARGING_ENABLED,&enable) %d\n",enable);
 	}
-
+#else
+	rc = sgm_get_property_dumy(SGM_PROP_CHARGING_ENABLED,&enable);
+#endif
 	chrg_dev_info(chrg, "mtk SW chrg: status update: --- info---1");
 	chrg_dev_info(chrg, "vbatt %d\n", chrg->charger_data.vbatt_volt);
 	chrg_dev_info(chrg, "ibatt %d\n", chrg->charger_data.ibatt_curr);
