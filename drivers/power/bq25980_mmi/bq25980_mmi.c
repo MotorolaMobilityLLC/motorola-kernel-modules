@@ -222,7 +222,7 @@ static struct reg_default sc8541_reg_init_val[] = {
 	{BQ25980_MASK4,		0x00},
 	{BQ25980_MASK5,		0x00},
 
-	{BQ25980_ADC_CONTROL1,	0x80},
+	{BQ25980_ADC_CONTROL1,	0x00},
 	{BQ25980_ADC_CONTROL2,	0x06}, //0x26: enable vac1 vac2 adc and vout adc
 
 };
@@ -254,7 +254,7 @@ static struct reg_default bq25960_reg_init_val[] = {
 	{BQ25980_MASK4,		0x00},
 	{BQ25980_MASK5,		0x80},
 
-	{BQ25980_ADC_CONTROL1,	0x84},//sample 14 bit
+	{BQ25980_ADC_CONTROL1,	0x04},//sample 14 bit
 	{BQ25980_ADC_CONTROL2,	0x06}, //0x26: enable vac1 vac2 adc and vout adc
 
 };
@@ -1567,6 +1567,25 @@ static int bq25980_enable_chg(struct charger_device *chg_dev, bool en)
 	return 0;
 }
 
+static int bq25980_enable_adc(struct charger_device *chg_dev, bool en)
+{
+	int ret;
+	struct bq25980_device *bq = charger_get_data(chg_dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	dev_info(bq->dev, "%s %d\n", __func__, en);
+	ret = bq25980_set_adc_enable(bq, en);
+	if (ret) {
+		dev_err(bq->dev, "%s enbale fail%d\n", __func__, en);
+		return ret;
+	}
+
+	return 0;
+}
+
 static int bq25980_is_chg_enabled(struct charger_device *chg_dev, bool *en)
 {
 	int ret;
@@ -1989,6 +2008,7 @@ static const struct charger_ops bq25980_chg_ops = {
 	.is_vbuslowerr = bq25980_is_vbuslowerr,
 	.get_adc_accuracy = bq25980_get_adc_accuracy,
 	.config_mux = bq25980_config_mux,
+	.enable_adc = bq25980_enable_adc,
 };
 
 static int bq25980_register_chgdev(struct bq25980_device *bq)
