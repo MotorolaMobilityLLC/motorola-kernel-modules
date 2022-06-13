@@ -174,12 +174,12 @@ int fsg_lun_open(struct fsg_lun *curlun, const char *filename)
 	/* R/W if we can, R/O if we must */
 	ro = curlun->initially_ro;
 	if (!ro) {
-		filp = filp_open_block(filename, O_RDWR | O_LARGEFILE, 0);
+		filp = filp_open(filename, O_RDWR | O_LARGEFILE, 0);
 		if (PTR_ERR(filp) == -EROFS || PTR_ERR(filp) == -EACCES)
 			ro = 1;
 	}
 	if (ro)
-		filp = filp_open_block(filename, O_RDONLY | O_LARGEFILE, 0);
+		filp = filp_open(filename, O_RDONLY | O_LARGEFILE, 0);
 	if (IS_ERR(filp)) {
 		LINFO(curlun, "unable to open backing file: %s\n", filename);
 		return PTR_ERR(filp);
