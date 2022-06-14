@@ -415,6 +415,62 @@ static int cts_get_panel(void)
 }
 #endif
 
+#ifdef CTS_FHD_MMI_GET_PANEL
+
+struct tag_vifeolfb{
+	u64 fb_base;
+	u32 islcmfound;
+	u32 fps;
+	u32 vram;
+	char lcmname[1];
+};
+static char mtkfb_lcm_name[256] = {0};
+
+static void __parse_tag_videolfb(struct device_node *node)
+{
+	struct tag_vifeolfb *videolfb_tag = NULL;
+	unsigned long size =0;
+	videolfb_tag = (struct tag_vifeolfb *)of_get_property(node,
+	"atag,videolfb", (int *)&size);
+
+	if(videolfb_tag)
+	{
+		memset((void *)mtkfb_lcm_name, 0, sizeof(mtkfb_lcm_name));
+		strcpy((char *)mtkfb_lcm_name, videolfb_tag->lcmname);
+		mtkfb_lcm_name[strlen(videolfb_tag->lcmname)] = '\0';
+	}
+
+}
+
+
+static void _parse_tag_videolfb(void)
+{
+	struct device_node *chosen_node;
+	chosen_node = of_find_node_by_path("/chosen");
+
+	if(!chosen_node)
+		chosen_node = of_find_node_by_path("/chosen@0");
+
+	if(chosen_node)
+		__parse_tag_videolfb(chosen_node);
+
+}
+
+static int cts_get_panel(void)
+{
+
+	cts_info("enter");
+	_parse_tag_videolfb();
+
+	if(strstr(mtkfb_lcm_name,"icnl9922"))
+	{
+		cts_info("[%d  %s]mtkfb_lcm_name is:%s ", __LINE__, __FUNCTION__, mtkfb_lcm_name);
+		return 0;
+	}
+	return -1;
+}
+#endif
+
 #ifdef CHIPONE_SENSOR_EN
 static struct sensors_classdev __maybe_unused sensors_touch_cdev = {
 
@@ -535,6 +591,14 @@ static int cts_driver_probe(struct spi_device *client)
 	int ret = 0;
 #ifdef CHIPONE_SENSOR_EN
 	static bool initialized_sensor;
+#endif
+
+#ifdef CTS_FHD_MMI_GET_PANEL
+	ret = cts_get_panel();
+	if (ret) {
+		cts_info("MTK get chipone panel error");
+		return ret;
+	}
 #endif
 
 #ifdef CTS_MTK_GET_PANEL
