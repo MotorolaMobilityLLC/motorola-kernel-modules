@@ -32,6 +32,10 @@ ifneq ($(filter m y,$(CONFIG_INPUT_CHIPONE_PANEL_NOTIFICATIONS)),)
 EXTRA_CFLAGS += -DCHIPONE_CONFIG_PANEL_NOTIFICATIONS
 endif
 
+ifneq ($(filter m y,$(CONFIG_CTS_FHD_MMI_GET_PANEL)),)
+	EXTRA_CFLAGS += -DCTS_FHD_MMI_GET_PANEL
+endif
+
 
 obj-m := chipone_tddi_fhd_mmi.o
 
