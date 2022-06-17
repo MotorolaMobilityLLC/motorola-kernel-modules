@@ -24,12 +24,25 @@
 #include "aw882xx_bin_parse.h"
 #include "aw882xx_spin.h"
 
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+/*for moto ramping*/
+#include "aw882xx.h"
+#endif
+
 #define AW_DEV_SYSST_CHECK_MAX   (10)
 
 
 char ext_dsp_prof_write = AW_EXT_DSP_WRITE_NONE;
 static DEFINE_MUTEX(g_ext_dsp_prof_wr_lock); /*lock ext wr flag*/
 static unsigned int g_fade_in_time = AW_1000_US / 10;
+
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+/*for moto ramping begin*/
+static unsigned int g_fade_in_time_temp = AW_1000_US / 10;
+static unsigned int g_fade_in_time_top = AW_1000_US / 10;
+static unsigned int g_fade_in_time_bottom = AW_1000_US / 10;
+#endif
+
 static unsigned int g_fade_out_time = AW_1000_US >> 1;
 static LIST_HEAD(g_dev_list);
 static DEFINE_MUTEX(g_dev_lock);
@@ -355,16 +368,37 @@ static void aw_dev_fade_in(struct aw_device *aw_dev)
 	int i = 0;
 	int fade_step = aw_dev->vol_step;
 	struct aw_volume_desc *desc = &aw_dev->volume_desc;
-
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+	/*for moto ramping*/
+	struct aw882xx *aw882xx = (struct aw882xx *)aw_dev->private_data;
+#endif
 	if (fade_step == 0 || g_fade_in_time == 0) {
 		aw_dev->ops.aw_set_volume(aw_dev, desc->init_volume);
 		return;
 	}
+
 	/*volume up*/
 	for (i = desc->mute_volume; i >= desc->init_volume; i -= fade_step) {
 		aw_dev->ops.aw_set_volume(aw_dev, i);
+
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+		/*for moto ramping*/
+		if(aw882xx->i2c->addr==0x35) {
+		    if(g_fade_in_time_top == 1) {
+		        //far ,use defalut time.
+		        g_fade_in_time_temp = g_fade_in_time;
+		    } else {
+		        g_fade_in_time_temp = g_fade_in_time_top;
+		    }
+		} else {
+		    g_fade_in_time_temp = g_fade_in_time;
+		}
+		usleep_range(g_fade_in_time_temp, g_fade_in_time_temp + 10);
+#else
 		usleep_range(g_fade_in_time, g_fade_in_time + 10);
+#endif
 	}
+
 	if (i != desc->init_volume)
 		aw_dev->ops.aw_set_volume(aw_dev, desc->init_volume);
 }
@@ -638,6 +672,25 @@ void aw882xx_dev_set_fade_time(unsigned int time, bool fade_in)
 	else
 		g_fade_out_time = time;
 }
+
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+void aw882xx_dev_set_fade_time_top(unsigned int time, bool fade_in)
+{
+	if (fade_in)
+		g_fade_in_time_top = time;
+	else
+		g_fade_out_time = time;
+}
+
+
+void aw882xx_dev_set_fade_time_bottom(unsigned int time, bool fade_in)
+{
+	if (fade_in)
+		g_fade_in_time_bottom = time;
+	else
+		g_fade_out_time = time;
+}
+#endif
 
 /*init aw_device*/
 void aw882xx_dev_deinit(struct aw_device *aw_dev)

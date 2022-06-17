@@ -338,6 +338,12 @@ int aw882xx_dev_get_fade_vol_step(struct aw_device *aw_dev);
 void aw882xx_dev_get_fade_time(unsigned int *time, bool fade_in);
 void aw882xx_dev_set_fade_time(unsigned int time, bool fade_in);
 
+/*for moto ramping*/
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+void aw882xx_dev_set_fade_time_top(unsigned int time, bool fade_in);
+void aw882xx_dev_set_fade_time_bottom(unsigned int time, bool fade_in);
+#endif
+
 /*dsp kcontrol*/
 int aw882xx_dev_set_afe_module_en(int type, int enable);
 int aw882xx_dev_get_afe_module_en(int type, int *status);
