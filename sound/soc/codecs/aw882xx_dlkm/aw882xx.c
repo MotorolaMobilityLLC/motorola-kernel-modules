@@ -1178,6 +1178,43 @@ static int aw882xx_set_fade_in_time(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+static int aw882xx_set_fade_in_time_top(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
+
+	if (ucontrol->value.integer.value[0] > mc->max) {
+		aw_pr_dbg("set val %ld overflow %d",
+			ucontrol->value.integer.value[0], mc->max);
+		return 0;
+	}
+	aw882xx_dev_set_fade_time_top(ucontrol->value.integer.value[0], true);
+
+	aw_pr_dbg("step time %ld", ucontrol->value.integer.value[0]);
+	return 0;
+}
+
+
+static int aw882xx_set_fade_in_time_bottom(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	struct soc_mixer_control *mc =
+		(struct soc_mixer_control *)kcontrol->private_value;
+
+	if (ucontrol->value.integer.value[0] > mc->max) {
+		aw_pr_dbg("set val %ld overflow %d",
+			ucontrol->value.integer.value[0], mc->max);
+		return 0;
+	}
+	aw882xx_dev_set_fade_time_bottom(ucontrol->value.integer.value[0], true);
+
+	aw_pr_dbg("step time %ld", ucontrol->value.integer.value[0]);
+	return 0;
+}
+#endif
+
 static int aw882xx_get_fade_out_time(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -1224,6 +1261,12 @@ static struct snd_kcontrol_new aw882xx_controls[] = {
 		aw882xx_get_copp_en, aw882xx_set_copp_en),
 	SOC_SINGLE_EXT("aw882xx_fadein_us", 0, 0, 1000000, 0,
 		aw882xx_get_fade_in_time, aw882xx_set_fade_in_time),
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+	SOC_SINGLE_EXT("aw882xx_fadein_us_top", 0, 0, 1000000, 0,
+		aw882xx_get_fade_in_time, aw882xx_set_fade_in_time_top),
+	SOC_SINGLE_EXT("aw882xx_fadein_us_bottom", 0, 0, 1000000, 0,
+		aw882xx_get_fade_in_time, aw882xx_set_fade_in_time_bottom),
+#endif
 	SOC_SINGLE_EXT("aw882xx_fadeout_us", 0, 0, 1000000, 0,
 		aw882xx_get_fade_out_time, aw882xx_set_fade_out_time),
 };
