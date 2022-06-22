@@ -1378,6 +1378,12 @@ int goodix_fw_update_init(struct goodix_ts_core *core_data)
 
 	core_data->set_fw_name = goodix_set_fwname;
 
+#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI) && defined(CONFIG_GTP_LIMIT_USE_SUPPLIER)
+	if(core_data->supplier){
+		snprintf(core_data->board_data.fw_name,GOODIX_MAX_STR_LABLE_LEN,"%s_%s",core_data->supplier,TS_DEFAULT_FIRMWARE);
+	}
+#endif
+
 	strlcpy(goodix_fw_update_ctrl.fw_name, core_data->board_data.fw_name,
 		sizeof(goodix_fw_update_ctrl.fw_name));
 
