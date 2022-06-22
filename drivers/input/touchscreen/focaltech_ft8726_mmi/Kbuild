@@ -1,0 +1,41 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/gpu/drm/mediatek/mediatek_v2/
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_ft8726_mmi \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_ft8726_mmi/include
+
+obj-m := focaltech_ft8726_mmi.o
+focaltech_ft8726_mmi-objs += focaltech_core.o
+focaltech_ft8726_mmi-objs += focaltech_esdcheck.o
+focaltech_ft8726_mmi-objs += focaltech_ex_fun.o
+focaltech_ft8726_mmi-objs += focaltech_ex_mode.o
+focaltech_ft8726_mmi-objs += focaltech_flash.o
+focaltech_ft8726_mmi-objs += focaltech_gesture.o
+focaltech_ft8726_mmi-objs += focaltech_point_report_check.o
+focaltech_ft8726_mmi-objs += focaltech_spi.o
+
+ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_0FLASH_MMI_ENABLE_DOUBLE_TAP)),)
+	EXTRA_CFLAGS += -DFOCALTECH_SENSOR_EN
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_ESD_EN)),)
+EXTRA_CFLAGS += -DFOCALTECH_ESD_EN
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_PANEL_NOTIFICATIONS)),)
+EXTRA_CFLAGS += -DFOCALTECH_CONFIG_PANEL_NOTIFICATIONS
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_DEBUG_EN)),)
+EXTRA_CFLAGS += -DFOCALTECH_DEBUG_EN
+endif
+
+ifneq ($(filter m y,$(CONFIG_FT_FHD_MMI_GET_PANEL)),)
+	EXTRA_CFLAGS += -DFT_FHD_MMI_GET_PANEL
+endif
+
+ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCONFIG_MTK_PANEL_NOTIFICATIONS
+endif
