@@ -1657,8 +1657,8 @@ schedule:
 			}
 		} else if (ibatt_curr < chip->system_thermal_level - CC_CURR_DEBOUNCE) {
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-			if (ibatt_curr + THERMAL_TUNNING_CURR <=
-				chrg_step->chrg_step_cc_curr) {
+			if ( (ibatt_curr + THERMAL_TUNNING_CURR <= chrg_step->chrg_step_cc_curr)
+				&&(vbatt_volt <= chrg_step->chrg_step_cv_volt - 10000) ) {
 				chip->pd_sys_therm_curr += THERMAL_TUNNING_CURR;
 				chip->pd_target_curr = chip->pd_sys_therm_curr;
 #else
