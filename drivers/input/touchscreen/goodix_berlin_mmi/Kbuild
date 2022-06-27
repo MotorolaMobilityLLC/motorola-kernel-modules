@@ -41,7 +41,6 @@ else
 endif
 ifneq ($(filter m y,$(CONFIG_GTP_LIMIT_USE_SUPPLIER)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_LIMIT_USE_SUPPLIER
-    EXTRA_CFLAGS += -DGTP_SAVE_IN_CSV
 endif
 
 ifneq ($(filter m y,$(CONFIG_GTP_ENABLE_PM_QOS)),)
