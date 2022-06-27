@@ -1085,8 +1085,8 @@ static void mmi_power_supply_changed(struct power_supply *psy,
 
 	class_for_each_device(power_supply_class, NULL, psy,
 			      __mmi_ps_changed);
-	atomic_notifier_call_chain(&power_supply_notifier,
-			PSY_EVENT_PROP_CHANGED, psy);
+	//atomic_notifier_call_chain(&power_supply_notifier,
+	//		PSY_EVENT_PROP_CHANGED, psy);
 	kobject_uevent_env(&psy->dev.kobj, KOBJ_CHANGE, envp_ext);
 }
 
