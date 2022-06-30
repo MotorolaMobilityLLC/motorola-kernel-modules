@@ -2267,6 +2267,7 @@ static void sgm4154x_charger_set_constraint(void *data,
 /* Battery presence detection threshold on battery temperature */
 #define BPD_TEMP_THRE (-30)
 #define PANIC_DEB_CNT_MAX (3)
+#define OTG_VBUS_MIN_MV (4600)
 static void sgm4154x_paired_battery_notify(void *data,
 			struct mmi_battery_info *batt_info)
 {
@@ -2287,6 +2288,7 @@ static void sgm4154x_paired_battery_notify(void *data,
 	static int panic_deb_cnt = 0;
 	static bool prev_high_load_en = false;
 	static bool prev_low_load_en = false;
+	bool otg_enabled = false;
 
 	if (!batt_info || batt_info->batt_mv <= 0) {
 		pr_warn("Invalid paired battery info\n");
@@ -2296,16 +2298,37 @@ static void sgm4154x_paired_battery_notify(void *data,
 	memcpy(&chg->paired_batt_info, batt_info, sizeof(struct mmi_battery_info));
 	batt_present = (chg->batt_info.batt_temp >= BPD_TEMP_THRE)? true : false;
 
+	if (!chg->chg_info.chrg_present &&
+	    chg->chg_info.chrg_ma == 0 &&
+	    chg->chg_info.chrg_mv > OTG_VBUS_MIN_MV) {
+		otg_enabled = true;
+	}
+
 	if (batt_present) {
 		rc = power_supply_get_property(chg->fg_psy,
 				POWER_SUPPLY_PROP_PRESENT, &val);
 		if (!rc && !val.intval)
 			batt_present = false;
 	}
-	if (!batt_present) {
+	if (!batt_present || otg_enabled) {
 		sgm4154x_set_hiz_en(chg->sgm, true);
-		pr_warn("%s is absent\n", chg->fg_psy->desc->name);
-		return;
+		if (chg->sgm->client->irq && chg->sgm->irq_enabled) {
+			disable_irq_wake(chg->sgm->client->irq);
+			disable_irq(chg->sgm->client->irq);
+			chg->sgm->irq_enabled = false;
+			pr_warn("irq is disabled, bpd=%d, otg=%d\n",
+				batt_present, otg_enabled);
+		}
+		if (!batt_present)
+			return;
+	} else {
+		if (!chg->sgm->irq_enabled && chg->sgm->client->irq) {
+			enable_irq_wake(chg->sgm->client->irq);
+			enable_irq(chg->sgm->client->irq);
+			chg->sgm->irq_enabled = true;
+			pr_warn("irq is enabled, bpd=%d, otg=%d\n",
+				batt_present, otg_enabled);
+		}
 	}
 
 	batt_ocv = chg->batt_info.batt_mv;
@@ -2923,6 +2946,7 @@ static int sgm4154x_probe(struct i2c_client *client,
 		if (ret)
 			goto error_out;
 		enable_irq_wake(client->irq);
+		sgm->irq_enabled = true;
 	}
 
 	INIT_DELAYED_WORK(&sgm->charge_detect_delayed_work, charger_detect_work_func);
