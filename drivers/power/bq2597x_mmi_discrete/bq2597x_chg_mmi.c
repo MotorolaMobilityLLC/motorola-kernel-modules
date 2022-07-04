@@ -2652,7 +2652,7 @@ static int bq2597x_suspend(struct device *dev)
 	mutex_lock(&bq->irq_complete);
 	bq->resume_completed = false;
 	mutex_unlock(&bq->irq_complete);
-	bq2597x_enable_adc(bq, false);
+	//bq2597x_enable_adc(bq, false);
 	bq_err("Suspend successfully!");
 
 	return 0;
@@ -2686,7 +2686,7 @@ static int bq2597x_resume(struct device *dev)
 		mutex_unlock(&bq->irq_complete);
 	}
 
-	bq2597x_enable_adc(bq, true);
+	//bq2597x_enable_adc(bq, true);
 
 	power_supply_changed(bq->fc2_psy);
 	bq_err("Resume successfully!");
