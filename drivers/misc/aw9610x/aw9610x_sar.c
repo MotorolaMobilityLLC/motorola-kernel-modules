@@ -301,6 +301,7 @@ aw9610x_addrblock_load(struct device *dev, const char *buf)
 	}
 }
 
+#ifdef AW9610x_PROX_DETECTION_SUPPORTED
 /******************************************************
  *
  *the document of storage_spedata
@@ -542,6 +543,7 @@ static void aw9610x_spereg_deal(struct aw9610x *aw9610x)
 	aw9610x_class1_reg(aw9610x);
 	aw9610x_class2_reg(aw9610x);
 }
+#endif
 
 static void aw9610x_datablock_load(struct device *dev, const char *buf)
 {
@@ -575,6 +577,7 @@ static void aw9610x_datablock_load(struct device *dev, const char *buf)
 	i2c_write_seq(aw9610x);
 }
 
+#ifdef AW9610x_PROX_DETECTION_SUPPORTED
 static void aw9610x_power_on_prox_detection(struct aw9610x *aw9610x)
 {
 	int32_t ret = 0;
@@ -604,16 +607,20 @@ static void aw9610x_power_on_prox_detection(struct aw9610x *aw9610x)
 	if (reg_data & 0x10000)
 		aw9610x->power_prox = 1;
 }
+#endif
 
 static void aw9610x_channel_scan_start(struct aw9610x *aw9610x)
 {
 	LOG_DBG("enter");
+#ifdef AW9610x_PROX_DETECTION_SUPPORTED
 	if (aw9610x->pwprox_dete == true) {
 		 aw9610x_power_on_prox_detection(aw9610x);
 	} else {
 		aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
 	}
-
+#else
+	aw9610x_i2c_write(aw9610x, REG_CMD, AW9610X_ACTIVE_MODE);
+#endif
 	aw9610x_i2c_write(aw9610x, REG_HOSTIRQEN, aw9610x->hostirqen);
 	aw9610x->mode = AW9610X_ACTIVE_MODE;
 }
@@ -1083,9 +1090,13 @@ static ssize_t aw9610x_factory_cali_set(struct device *dev,
 	uint32_t databuf[1] = { 0 };
 
 	if (sscanf(buf, "%d", &databuf[0]) == 1) {
+#ifdef AW9610x_PROX_DETECTION_SUPPORTED
 		if ((databuf[0] == 1) && (aw9610x->pwprox_dete == true)) {
 			aw9610x_get_calidata(aw9610x);
 		} else {
+#else
+		if ((databuf[0] == 1) && (aw9610x->pwprox_dete == false)) {
+#endif
 			LOG_ERR("aw_unsupport the pw_prox_dete=%d",aw9610x->pwprox_dete);
 			return count;
 		}
@@ -1664,6 +1675,7 @@ static void aw9610x_irq_handle(struct aw9610x *aw9610x)
 	}
 }
 
+#ifdef AW9610x_PROX_DETECTION_SUPPORTED
 static void aw9610x_farirq_handle(struct aw9610x *aw9610x)
 {
 	uint8_t th0_far = 0;
@@ -1672,6 +1684,7 @@ static void aw9610x_farirq_handle(struct aw9610x *aw9610x)
 	if (th0_far == 1)
 		aw9610x->power_prox = AW9610X_FUNC_OFF;
 }
+#endif
 
 static void aw9610x_interrupt_clear(struct aw9610x *aw9610x)
 {
@@ -1687,8 +1700,10 @@ static void aw9610x_interrupt_clear(struct aw9610x *aw9610x)
 		if ((aw9610x->satu_release == AW9610X_FUNC_ON) && (aw9610x->vers == AW9610X))
 			aw9610x_saturat_release_handle(aw9610x);
 
+#ifdef AW9610x_PROX_DETECTION_SUPPORTED
 		if (aw9610x->pwprox_dete == true)
 			aw9610x_farirq_handle(aw9610x);
+#endif
 	}
 
 	LOG_INFO("IRQSRC = 0x%x", aw9610x->irq_status);
