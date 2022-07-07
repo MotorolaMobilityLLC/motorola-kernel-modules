@@ -1633,15 +1633,14 @@ static int disp_notifier_callback(struct notifier_block *nb,
 	if (v) {
 		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
 			/* before fb blank */
+			if (*data == MTK_DISP_BLANK_POWERDOWN) {
+				fts_ts_suspend(ts_data->dev);
+			}
 		} else if (value == MTK_DISP_EVENT_BLANK) {
 			if (*data == MTK_DISP_BLANK_UNBLANK) {
 				/* cts_resume(ts_data); */
 				queue_work(ts_data->ts_workqueue,
 						&ts_data->resume_work);
-			}
-			else if (*data == MTK_DISP_BLANK_POWERDOWN) {
-
-				fts_ts_suspend(ts_data->dev);
 			}
 		}
 	}

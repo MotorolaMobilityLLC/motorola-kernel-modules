@@ -32,6 +32,9 @@ ifeq ($(MTK_PANEL_NOTIFICATIONS),true)
 endif
 
 include $(CLEAR_VARS)
+ifneq ($(BOARD_USES_DOUBLE_TAP),)
+LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/sensors_class.ko
+endif
 LOCAL_MODULE := focaltech_ft8726_mmi.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/lib/modules/

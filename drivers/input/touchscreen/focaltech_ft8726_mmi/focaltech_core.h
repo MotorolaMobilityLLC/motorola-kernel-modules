@@ -337,12 +337,23 @@ int fts_spi_transfer_direct(u8 *writebuf, u32 writelen, u8 *readbuf, u32 readlen
 
 /* Gesture functions */
 #if FTS_GESTURE_EN
+#define MAX_PANEL_IDX 2
+enum touch_panel_id {
+	TOUCH_PANEL_IDX_PRIMARY = 0,
+	TOUCH_PANEL_MAX_IDX,
+};
+enum touch_state {
+	TOUCH_DEEP_SLEEP_STATE = 0,
+	TOUCH_LOW_POWER_STATE,
+};
+
 int fts_gesture_init(struct fts_ts_data *ts_data);
 int fts_gesture_exit(struct fts_ts_data *ts_data);
 void fts_gesture_recovery(struct fts_ts_data *ts_data);
 int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data);
 int fts_gesture_suspend(struct fts_ts_data *ts_data);
 int fts_gesture_resume(struct fts_ts_data *ts_data);
+extern int touch_set_state(int state, int panel_idx);
 #endif
 
 /* Apk and functions */
