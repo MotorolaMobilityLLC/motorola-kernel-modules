@@ -953,6 +953,6 @@ extern void cts_deinit_rtdata(struct cts_device *cts_dev);
 
 extern int cts_reset_device(struct cts_device *cts_dev);
 extern int cts_spi_xtrans(const struct cts_device *cts_dev, u8 *tx, size_t txlen, u8 *rx, size_t rxlen);
-int touch_set_state(int state, int panel_idx);
+extern int touch_set_state(int state, int panel_idx);
 int check_touch_state(int *state, int panel_idx);
 #endif /* CTS_CORE_H */
