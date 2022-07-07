@@ -92,6 +92,8 @@ struct fts_gesture_st {
     u16 coordinate_y[FTS_GESTURE_POINTS_MAX];
     u8 active;
 };
+extern int __attribute__ ((weak)) sensors_classdev_register(struct device *parent, struct sensors_classdev *sensors_cdev);
+extern void __attribute__ ((weak)) sensors_classdev_unregister(struct sensors_classdev *sensors_cdev);
 
 /*****************************************************************************
 * Static variables
