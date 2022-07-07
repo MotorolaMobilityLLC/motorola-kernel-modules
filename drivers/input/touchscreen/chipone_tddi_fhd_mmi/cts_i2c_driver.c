@@ -10,6 +10,8 @@
 #include "mtk_panel_ext.h"
 #endif
 struct chipone_ts_data *chipone_ts;
+extern int __attribute__ ((weak)) sensors_classdev_register(struct device *parent, struct sensors_classdev *sensors_cdev);
+extern void __attribute__ ((weak)) sensors_classdev_unregister(struct sensors_classdev *sensors_cdev);
 
 enum touch_state {
 	TOUCH_DEEP_SLEEP_STATE = 0,
@@ -131,20 +133,21 @@ static int disp_notifier_callback(struct notifier_block *nb,
 	if (pdata && v) {
 		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
 			/* before fb blank */
+			if (*data == MTK_DISP_BLANK_POWERDOWN) {
+#ifdef CHIPONE_SENSOR_EN
+				if (chipone_ts->should_enable_gesture)
+						touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
+				else
+						touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
+#endif
+						cts_suspend(cts_data);
+			}
+
 		} else if (value == MTK_DISP_EVENT_BLANK) {
 			if (*data == MTK_DISP_BLANK_UNBLANK) {
 				/* cts_resume(cts_data); */
 				queue_work(cts_data->workqueue,
 						&cts_data->ts_resume_work);
-			}
-			else if (*data == MTK_DISP_BLANK_POWERDOWN) {
-#ifdef CHIPONE_SENSOR_EN
-					if (chipone_ts->should_enable_gesture)
-						touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
-					else
-						touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
-#endif
-					cts_suspend(cts_data);
 			}
 		}
 	}
