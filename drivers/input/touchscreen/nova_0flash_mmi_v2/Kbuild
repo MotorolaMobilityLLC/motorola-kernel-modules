@@ -1,5 +1,7 @@
 # add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/gpu/drm/mediatek/mediatek_v2/
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/nova_0flash_mmi_v2
 
@@ -13,11 +15,9 @@ endif
 ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_0FLASH_MMI_NOTIFY_TOUCH_STATE)),)
 	EXTRA_CFLAGS += -DNVT_SET_TOUCH_STATE
 endif
-ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_PANEL_NOTIFICATIONS)),)
-EXTRA_CFLAGS += -DNVT_CONFIG_PANEL_NOTIFICATIONS
-endif
-ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_DRM_PANEL)),)
-	EXTRA_CFLAGS += -DNVT_CONFIG_DRM_PANEL
+
+ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCFG_MTK_PANEL_NOTIFIER
 endif
 
 ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_MULTI_SUPPLIER)),)
@@ -48,10 +48,6 @@ ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_0FLASH_MMI_PEN_NOTIFIER)),)
 endif
 ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_0FLASH_MMI_MTK_GET_PANEL)),)
 	EXTRA_CFLAGS += -DNVT_MTK_GET_PANEL
-endif
-
-ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_0FLASH_MMI_MT6768_SPI_CONF)),)
-	EXTRA_CFLAGS += -DMT6768_NOVA_SPI_CONF
 endif
 
 nova_0flash_mmi_v2-objs += nt36xxx.o
