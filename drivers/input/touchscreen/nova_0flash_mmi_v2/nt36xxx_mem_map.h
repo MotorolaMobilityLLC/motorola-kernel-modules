@@ -15,8 +15,8 @@
  * more details.
  *
  */
-#define CHIP_VER_TRIM_ADDR_V1 0x3F004
-#define CHIP_VER_TRIM_ADDR_V0 0x1F64E
+#define CHIP_VER_TRIM_ADDR 0x3F004
+#define CHIP_VER_TRIM_OLD_ADDR 0x1F64E
 
 struct nvt_ts_mem_map {
 	uint32_t EVENT_BUF_ADDR;

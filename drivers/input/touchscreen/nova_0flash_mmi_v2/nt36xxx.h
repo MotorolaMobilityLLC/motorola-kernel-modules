@@ -26,13 +26,17 @@
 #include <linux/version.h>
 #include <linux/mmi_kernel_common.h>
 
+#include "nt36xxx_mem_map.h"
+
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#include "mtk_panel_ext.h"
+#include "mtk_disp_notify.h"
+#endif
+
 #ifdef NVT_SENSOR_EN
 #include <linux/sensors.h>
 #endif
 
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-#include <linux/panel_notifier.h>
-#endif
 #ifdef NOVATECH_PEN_NOTIFIER
 #include <linux/pen_detection_notify.h>
 #endif
@@ -40,8 +44,6 @@
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
-
-#include "nt36xxx_mem_map.h"
 
 #ifdef CONFIG_MTK_SPI
 /* Please copy mt_spi.h file under mtk spi driver folder */
@@ -84,8 +86,8 @@
 
 //---Touch info.---
 #define TOUCH_COORDS_ARR_SIZE	2
-#define TOUCH_DEFAULT_MAX_WIDTH 720
-#define TOUCH_DEFAULT_MAX_HEIGHT 1600
+#define TOUCH_DEFAULT_MAX_WIDTH 1080
+#define TOUCH_DEFAULT_MAX_HEIGHT 2400
 #define TOUCH_MAX_FINGER_NUM 10
 #define TOUCH_KEY_NUM 0
 #if TOUCH_KEY_NUM > 0
@@ -173,6 +175,9 @@ struct nvt_ts_data {
 	struct delayed_work nvt_fwu_work;
 	uint16_t addr;
 	int8_t phys[32];
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	struct notifier_block disp_notifier;
+#endif
 
 	uint8_t fw_ver;
 	uint8_t x_num;
@@ -226,24 +231,7 @@ struct nvt_ts_data {
 	uint8_t fw_type;
 	uint32_t build_id;
 	uint32_t config_id;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
-#if defined(CONFIG_DRM)
-	struct notifier_block drm_notif;
-#endif
-#else //vension code < 5.4.0
-#if defined(CONFIG_FB)
-#ifdef _MSM_DRM_NOTIFY_H_
-	struct notifier_block drm_notif;
-#else
-	struct notifier_block fb_notif;
-#endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-	struct early_suspend early_suspend;
-#endif
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-	struct notifier_block panel_notif;
-#endif
-#endif //version code >= 5.4.0
+
 };
 
 #if NVT_TOUCH_PROC

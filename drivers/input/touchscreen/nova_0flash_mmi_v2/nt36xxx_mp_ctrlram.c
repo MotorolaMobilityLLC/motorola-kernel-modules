@@ -1363,12 +1363,11 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 	return seq_open(file, &nvt_selftest_seq_ops);
 }
 
-static const struct file_operations nvt_selftest_fops = {
-	.owner = THIS_MODULE,
-	.open = nvt_selftest_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = seq_release,
+static const struct proc_ops nvt_selftest_fops = {
+	.proc_open = nvt_selftest_open,
+	.proc_read = seq_read,
+	.proc_lseek = seq_lseek,
+	.proc_release = seq_release,
 };
 
 #ifdef CONFIG_OF
@@ -1403,9 +1402,9 @@ int32_t nvt_mp_parse_ain(struct device_node *np, const char *name, uint8_t *arra
 			array[i] = tmp[i];
 
 #if NVT_DEBUG
-		printk("[NVT-ts] %s = ", name);
+		pr_info("[NVT-ts] %s = ", name);
 		nvt_print_result_log_in_one_line(array, len);
-		printk("\n");
+		pr_info("\n");
 #endif
 	}
 
@@ -1443,8 +1442,7 @@ Description:
 return:
 	n.a.
 *******************************************************/
-int32_t nvt_mp_parse_array(struct device_node *np, const char *name, int32_t *array,
-		int32_t size)
+int32_t nvt_mp_parse_array(struct device_node *np, const char *name, int32_t *array, int32_t size)
 {
 	struct property *data;
 	int32_t len, ret;
@@ -1469,11 +1467,11 @@ int32_t nvt_mp_parse_array(struct device_node *np, const char *name, int32_t *ar
 		NVT_LOG("%s =\n", name);
 		for (j = 0; j < Y_Channel; j++) {
 			nvt_print_data_log_in_one_line(array + j * X_Channel, X_Channel);
-			printk("\n");
+			pr_info("\n");
 		}
 #if TOUCH_KEY_NUM > 0
 		nvt_print_data_log_in_one_line(array + Y_Channel * X_Channel, Key_Channel);
-		printk("\n");
+		pr_info("\n");
 #endif
 #endif
 	}
@@ -1509,7 +1507,7 @@ int32_t nvt_mp_parse_dt(struct device_node *root, const char *node_compatible)
 		return -1;
 	}
 
-	/* MP Config*/
+	/* MP Config */
 	if (nvt_mp_parse_u32(np, "IC_X_CFG_SIZE", &IC_X_CFG_SIZE))
 		return -1;
 
@@ -1606,8 +1604,7 @@ int32_t nvt_mp_proc_init(void)
 		if(nvt_mp_buffer_init()) {
 			NVT_ERR("Allocate mp memory failed\n");
 			return -1;
-		}
-		else {
+		} else {
 			NVT_LOG("create /proc/nvt_selftest Succeeded!\n");
 		}
 		return 0;

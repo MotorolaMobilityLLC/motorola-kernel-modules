@@ -27,40 +27,10 @@
 #include <linux/power_supply.h>
 #include <linux/version.h>
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-#include <linux/msm_drm_notify.h>
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#include <drm/drm_panel.h>
-#endif
-#else //vension code < 5.4.0
-#if defined(CONFIG_FB)
-#ifdef CONFIG_DRM_MSM
-#include <linux/msm_drm_notify.h>
-#endif
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-#include <linux/earlysuspend.h>
-#endif
-#endif //end version code >= 5.4.0
 #include "nt36xxx.h"
 #if NVT_TOUCH_ESD_PROTECT
 #include <linux/jiffies.h>
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
-
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-#define register_panel_notifier panel_register_notifier
-#define unregister_panel_notifier panel_unregister_notifier
-enum touch_state {
-	TOUCH_DEEP_SLEEP_STATE = 0,
-	TOUCH_LOW_POWER_STATE,
-};
-#else
-#define register_panel_notifier(...) rc
-#define unregister_panel_notifier(...) rc
-#endif
 
 #ifdef NVT_SENSOR_EN
 #ifdef CONFIG_HAS_WAKELOCK
@@ -111,13 +81,6 @@ extern void nvt_mp_proc_deinit(void);
 
 struct nvt_ts_data *ts;
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-static struct drm_panel *active_panel;
-static const char *active_panel_name = NULL;
-#endif
-#endif
-
 #if defined(NVT_CONFIG_MULTI_SUPPLIER)
 #define NVT_MAX_SUPPLIER_LEN		16
 char lcm_panel_supplier[NVT_MAX_SUPPLIER_LEN] = {0};
@@ -132,30 +95,13 @@ extern void Boot_Update_Firmware(struct work_struct *work);
 int nvt_mcu_pen_detect_set(uint8_t pen_detect);
 #endif
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-static int nvt_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
-#ifdef LCM_FAST_LIGHTUP
-static struct work_struct ts_resume_work;
-static void nova_resume_work_func(struct work_struct *work);
-#endif //end LCM_FAST_LIGHTUP
-#endif
-#else //vension code < 5.4.0
-#if defined(CONFIG_FB)
-#ifdef _MSM_DRM_NOTIFY_H_
-static int nvt_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
-#else
-static int nvt_fb_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
-#endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-static void nvt_ts_early_suspend(struct early_suspend *h);
-static void nvt_ts_late_resume(struct early_suspend *h);
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+static int nvt_disp_notifier_callback(struct notifier_block *nb,
+	unsigned long value, void *v);
 #endif
 
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-static int nvt_panel_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
-#endif
-#endif //end version code >= 5.4.0
+static int32_t nvt_ts_resume(struct device *dev);
+static int32_t nvt_ts_suspend(struct device *dev);
 
 uint32_t ENG_RST_ADDR  = 0x7FFF80;
 uint32_t SWRST_N8_ADDR = 0; //read from dtsi
@@ -921,11 +867,10 @@ static int32_t nvt_flash_close(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations nvt_flash_fops = {
-	.owner = THIS_MODULE,
-	.open = nvt_flash_open,
-	.release = nvt_flash_close,
-	.read = nvt_flash_read,
+static const struct proc_ops nvt_flash_fops = {
+	.proc_open = nvt_flash_open,
+	.proc_release = nvt_flash_close,
+	.proc_read = nvt_flash_read,
 };
 
 /*******************************************************
@@ -1147,37 +1092,6 @@ static int nvt_get_dt_def_coords(struct device *dev, char *name)
 	return rc;
 }
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-static int nova_check_dt(struct device_node *np)
-{
-	int i;
-	int count;
-	struct device_node *node;
-	struct drm_panel *panel;
-
-	count = of_count_phandle_with_args(np, "panel", NULL);
-	if (count <= 0)
-		return 0;
-
-	NVT_LOG("nova_check_dt, count=%d\n", count);
-	for (i = 0; i < count; i++) {
-		node = of_parse_phandle(np, "panel", i);
-		panel = of_drm_find_panel(node);
-		of_node_put(node);
-		if (!IS_ERR(panel)) {
-			active_panel = panel;
-			active_panel_name = node->name;
-			NVT_LOG("nova_check_dt, active_panel: %s !\n", active_panel_name);
-			return 0;
-		}
-	}
-
-	return -ENODEV;
-}
-#endif
-#endif
-
 #ifdef NVT_CONFIG_MULTI_SUPPLIER
 static nvt_get_panel_supplier() {
 	//parse panel supplier from cmdline
@@ -1221,11 +1135,6 @@ static int32_t nvt_parse_dt(struct device *dev)
 {
 	struct device_node *np = dev->of_node;
 	int32_t ret = 0;
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-	int num_of_panel_supplier;
-	int j;
-	const char *panel_supplier;
-#endif
 
 #if NVT_TOUCH_SUPPORT_HW_RST
 	ts->reset_gpio = of_get_named_gpio_flags(np, "novatek,reset-gpio", 0, &ts->reset_flags);
@@ -1242,27 +1151,7 @@ static int32_t nvt_parse_dt(struct device *dev)
 		NVT_LOG("SWRST_N8_ADDR=0x%06X\n", SWRST_N8_ADDR);
 	}
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-	num_of_panel_supplier = of_property_count_strings(np, "novatek,panel-supplier");
-	NVT_LOG("%s: get novatek,panel-supplier count=%d", __func__, num_of_panel_supplier);
-	if (active_panel_name && num_of_panel_supplier > 1) {
-		for (j = 0; j < num_of_panel_supplier; j++) {
-			ret = of_property_read_string_index(np, "novatek,panel-supplier", j, &panel_supplier);
-			if (ret < 0) {
-				NVT_LOG("%s: cannot parse panel-supplier: %d\n", __func__, ret);
-				break;
-			} else if (panel_supplier && strstr(active_panel_name, panel_supplier)) {
-				ts->panel_supplier = panel_supplier;
-				NVT_LOG("%s: matched panel_supplier: %s", __func__, panel_supplier);
-				break;
-			}
-		}
-	} else {
-		//in case the panel-supplier info does not completely contained in panel name.
-		ret = of_property_read_string(np, "novatek,panel-supplier",
-			&ts->panel_supplier);
-	}
-#elif defined(NVT_CONFIG_MULTI_SUPPLIER)
+#if defined(NVT_CONFIG_MULTI_SUPPLIER)
 	ret = nvt_get_panel_supplier();
 #else
 	ret = of_property_read_string(np, "novatek,panel-supplier",
@@ -1286,32 +1175,6 @@ static int32_t nvt_parse_dt(struct device *dev)
 			ts->panel_supplier);
 		snprintf(nvt_mp_firmware_name, NVT_FILE_NAME_LENGTH, "%s_novatek_ts_mp.bin",
 			ts->panel_supplier);
-
-		//Support FW name with panel & IC info
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-		if (active_panel_name) {
-			const char *ic_name;
-			int num_of_ic = of_property_count_strings(np, "novatek,fw_ic_info");
-			if (num_of_ic > 0) {
-				int i;
-				NVT_LOG("%s: get novatek,fw_ic_info count=%d", __func__, num_of_ic);
-				for (i = 0; i < num_of_ic; i++) {
-					ret = of_property_read_string_index(np, "novatek,fw_ic_info", i, &ic_name);
-					if (ret < 0) {
-						NVT_LOG("%s: cannot parse fw_ic_info: %d\n", __func__, ret);
-						break;
-					} else if (ic_name && strstr(active_panel_name, ic_name)) {
-						NVT_LOG("%s: matched FW IC: %s", __func__, ic_name);
-						snprintf(nvt_boot_firmware_name, NVT_FILE_NAME_LENGTH, "%s_%s_novatek_ts_fw.bin",
-							ts->panel_supplier, ic_name);
-						snprintf(nvt_mp_firmware_name, NVT_FILE_NAME_LENGTH, "%s_%s_novatek_ts_mp.bin",
-							ts->panel_supplier, ic_name);
-						break;
-					}
-				}
-			}
-		}
-#endif
 	}
 	NVT_LOG("boot firmware %s, mp firmware %s", nvt_boot_firmware_name, nvt_mp_firmware_name);
 
@@ -1881,6 +1744,28 @@ out:
 	return ret;
 }
 
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+static int nvt_tp_power_on_reinit(void)
+{
+	int32_t ret;
+
+	pr_info("%s is called\n", __func__);
+
+	/* do esd recovery, bootloader reset */
+	ret = nvt_ts_suspend(&ts->client->dev);
+	if (ret) {
+		pr_info("%s  is called suspend %d\n", __func__, ret);
+		return ret;
+	}
+
+	ret = nvt_ts_resume(&ts->client->dev);
+	if (ret)
+		pr_info("%s  is called resume %d\n", __func__, ret);
+
+	return ret;
+}
+#endif
+
 #ifdef NVT_SENSOR_EN
 static int nvt_sensor_set_enable(struct sensors_classdev *sensors_cdev,
 		unsigned int enable)
@@ -2262,18 +2147,15 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 #if ((TOUCH_KEY_NUM > 0) || WAKEUP_GESTURE)
 	int32_t retry = 0;
 #endif
+
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	void **retval = NULL;
+#endif
+
 #ifdef NVT_SENSOR_EN
 	static bool initialized_sensor;
 #endif
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-	struct device_node *dp = client->dev.of_node;
 
-	ret = nova_check_dt(dp);
-	if (ret) {
-		NVT_LOG("panel error\n");
-		return ret;
-	}
-#endif
 #ifdef NVT_MTK_GET_PANEL
 	ret = nvt_get_panel();
 	if (ret) {
@@ -2370,20 +2252,19 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	msleep(10);
 
 	//---check chip version trim---
-#ifdef NVT_CONFIG_CHIP_VER_1
-	ret = nvt_ts_check_chip_ver_trim(CHIP_VER_TRIM_ADDR_V1);
+	ret = nvt_ts_check_chip_ver_trim(CHIP_VER_TRIM_ADDR);
 	if (ret) {
 		NVT_LOG("try to check from old chip ver trim address\n");
-		ret = nvt_ts_check_chip_ver_trim(CHIP_VER_TRIM_ADDR_V0);
+		ret = nvt_ts_check_chip_ver_trim(CHIP_VER_TRIM_OLD_ADDR);
+		if (ret) {
+			NVT_ERR("chip is not identified\n");
+			ret = -EINVAL;
+			goto err_chipvertrim_failed;
+		}
 	}
-#else
-	ret = nvt_ts_check_chip_ver_trim(CHIP_VER_TRIM_ADDR_V0);
-#endif
-	if (ret) {
-		NVT_ERR("chip is not identified\n");
-		ret = -EINVAL;
-		goto err_chipvertrim_failed;
-	}
+
+	ts->abs_x_max = TOUCH_DEFAULT_MAX_WIDTH;
+	ts->abs_y_max = TOUCH_DEFAULT_MAX_HEIGHT;
 
 	//---allocate input device---
 	ts->input_dev = input_allocate_device();
@@ -2615,6 +2496,15 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	}
 #endif
 
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	ts->disp_notifier.notifier_call = nvt_disp_notifier_callback;
+	ret = mtk_disp_notifier_register("NVT Touch", &ts->disp_notifier);
+	if (ret) {
+		NVT_ERR("Failed to register disp notifier client:%d", ret);
+		goto err_register_disp_notif_failed;
+	}
+#endif
+
 #ifdef NOVATECH_PEN_NOTIFIER
 	ts->fw_ready_flag = false;
 	ts->nvt_pen_detect_flag = PEN_DETECTION_INSERT;
@@ -2626,55 +2516,6 @@ static int32_t nvt_ts_probe(struct spi_device *client)
     }
 #endif
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-	ts->drm_notif.notifier_call = nvt_drm_notifier_callback;
-	if (active_panel &&
-		drm_panel_notifier_register(active_panel,
-			&ts->drm_notif) < 0) {
-		NVT_LOG("register notifier failed!\n");
-		goto err_register_drm_notif_failed;
-	}
-#endif
-#else //vension code < 5.4.0
-#if defined(CONFIG_FB)
-#ifdef _MSM_DRM_NOTIFY_H_
-	ts->drm_notif.notifier_call = nvt_drm_notifier_callback;
-	ret = msm_drm_register_client(&ts->drm_notif);
-	if(ret) {
-		NVT_ERR("register drm_notifier failed. ret=%d\n", ret);
-		goto err_register_drm_notif_failed;
-	}
-#else
-	ts->fb_notif.notifier_call = nvt_fb_notifier_callback;
-	ret = fb_register_client(&ts->fb_notif);
-	if(ret) {
-		NVT_ERR("register fb_notifier failed. ret=%d\n", ret);
-		goto err_register_fb_notif_failed;
-	}
-#endif
-
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-	ts->panel_notif.notifier_call = nvt_panel_notifier_callback;
-	ret = register_panel_notifier(&ts->panel_notif);
-	if(ret) {
-		NVT_ERR("register panel_notifier failed. ret=%d\n", ret);
-		goto err_register_fb_notif_failed;
-	}
-#endif
-
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-	ts->early_suspend.suspend = nvt_ts_early_suspend;
-	ts->early_suspend.resume = nvt_ts_late_resume;
-	ret = register_early_suspend(&ts->early_suspend);
-	if(ret) {
-		NVT_ERR("register early suspend failed. ret=%d\n", ret);
-		goto err_register_early_suspend_failed;
-	}
-#endif
-#endif //end version code >= 5.4.0
-
 	ret = nvt_fw_class_init(true);
 	if (ret) {
 		NVT_ERR("Create touchscreen class failed. ret=%d\n", ret);
@@ -2684,49 +2525,39 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	bTouchIsAwake = 1;
 	NVT_LOG("end\n");
 
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	pr_info("%s, disp notifier register func!\n", __func__);
+	if (mtk_panel_tch_handle_init()) {
+		retval = mtk_panel_tch_handle_init();
+		*retval = (void *)nvt_tp_power_on_reinit;
+	}
+#endif
+
 	nvt_irq_enable(true);
 
 	return 0;
+
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+err_register_disp_notif_failed:
+	if (mtk_disp_notifier_unregister(&ts->disp_notifier))
+		NVT_ERR("Error occurred while unregistering disp_notifier.\n");
+#endif
 err_create_touchscreen_class_failed:
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-	if (active_panel) {
-		if (drm_panel_notifier_unregister(active_panel, &ts->drm_notif))
-			NVT_ERR("Error occurred while unregistering drm_notifier.\n");
-	}
-err_register_drm_notif_failed:
-#endif
-#else //vension code < 5.4.0
-#if defined(CONFIG_FB)
-#ifdef _MSM_DRM_NOTIFY_H_
-	if (msm_drm_unregister_client(&ts->drm_notif))
-		NVT_ERR("Error occurred while unregistering drm_notifier.\n");
-err_register_drm_notif_failed:
-#else
-	if (fb_unregister_client(&ts->fb_notif))
-		NVT_ERR("Error occurred while unregistering fb_notifier.\n");
-err_register_fb_notif_failed:
-#endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-	unregister_early_suspend(&ts->early_suspend);
-err_register_early_suspend_failed:
-#endif
-#endif //end version code >= 5.4.0
 #ifdef NOVATECH_PEN_NOTIFIER
     if (pen_detection_unregister_client(&ts->pen_notif))
         NVT_ERR("Error occurred while unregistering pen_notifier.\n");
 err_register_pen_notif_failed:
 #endif
 #if NVT_TOUCH_MP
-nvt_mp_proc_deinit();
+	nvt_mp_proc_deinit();
 err_mp_proc_init_failed:
 #endif
 #if NVT_TOUCH_EXT_PROC
-nvt_extra_proc_deinit();
+	nvt_extra_proc_deinit();
 err_extra_proc_init_failed:
 #endif
 #if NVT_TOUCH_PROC
-nvt_flash_proc_deinit();
+	nvt_flash_proc_deinit();
 err_flash_proc_init_failed:
 #endif
 #if NVT_TOUCH_ESD_PROTECT
@@ -2741,6 +2572,7 @@ err_create_nvt_esd_check_wq_failed:
 	if (nvt_fwu_wq) {
 		cancel_delayed_work_sync(&ts->nvt_fwu_work);
 		destroy_workqueue(nvt_fwu_wq);
+		NVT_LOG("kthread_destroy_worker err_create\n");
 		nvt_fwu_wq = NULL;
 	}
 err_create_nvt_fwu_wq_failed:
@@ -2811,31 +2643,11 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 
 	nvt_fw_class_init(false);
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-	if (active_panel) {
-		drm_panel_notifier_unregister(active_panel, &ts->drm_notif);
-		NVT_ERR("Error occurred while unregistering drm_notifier.\n");
-	}
-#endif
-#else //vension code < 5.4.0
-#if defined(CONFIG_FB)
-#ifdef _MSM_DRM_NOTIFY_H_
-	if (msm_drm_unregister_client(&ts->drm_notif))
-		NVT_ERR("Error occurred while unregistering drm_notifier.\n");
-#else
-	if (fb_unregister_client(&ts->fb_notif))
-		NVT_ERR("Error occurred while unregistering fb_notifier.\n");
-#endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-	unregister_early_suspend(&ts->early_suspend);
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	if (mtk_disp_notifier_unregister(&ts->disp_notifier))
+		NVT_ERR("Error occurred while unregistering disp_notifier.\n");
 #endif
 
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-	if (unregister_panel_notifier(&ts->panel_notif))
-		NVT_ERR("Error occurred while unregistering panel_notifier.\n");
-#endif
-#endif //end version code >= 5.4.0
 #ifdef NOVATECH_PEN_NOTIFIER
     if (pen_detection_unregister_client(&ts->pen_notif))
         NVT_ERR("Error occurred while unregistering pen_notifier.\n");
@@ -2910,31 +2722,11 @@ static void nvt_ts_shutdown(struct spi_device *client)
 
 	nvt_irq_enable(false);
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-	if (active_panel) {
-		drm_panel_notifier_unregister(active_panel, &ts->drm_notif);
-		NVT_ERR("Error occurred while unregistering drm_notifier.\n");
-	}
-#endif
-#else //vension code < 5.4.0
-#if defined(CONFIG_FB)
-#ifdef _MSM_DRM_NOTIFY_H_
-	if (msm_drm_unregister_client(&ts->drm_notif))
-		NVT_ERR("Error occurred while unregistering drm_notifier.\n");
-#else
-	if (fb_unregister_client(&ts->fb_notif))
-		NVT_ERR("Error occurred while unregistering fb_notifier.\n");
-#endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-	unregister_early_suspend(&ts->early_suspend);
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	if (mtk_disp_notifier_unregister(&ts->disp_notifier))
+		NVT_ERR("Error occurred while unregistering disp_notifier.\n");
 #endif
 
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-	if (unregister_panel_notifier(&ts->panel_notif))
-		NVT_ERR("Error occurred while unregistering panel_notifier.\n");
-#endif
-#endif //end version code >= 5.4.0
 #if NVT_TOUCH_MP
 	nvt_mp_proc_deinit();
 #endif
@@ -3150,201 +2942,38 @@ static int32_t nvt_ts_resume(struct device *dev)
 	return 0;
 }
 
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
-#if defined(CONFIG_DRM)
-#ifdef LCM_FAST_LIGHTUP
-static void nova_resume_work_func(struct work_struct *work)
+#if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
+/**
+ * nvt_ts_disp_notifier_callback - mtk display notifier callback
+ * Called by kernel during framebuffer blanck/unblank phrase
+ */
+static int nvt_disp_notifier_callback(struct notifier_block *nb,
+	unsigned long value, void *v)
 {
-	NVT_LOG("%s\n", __func__);
-	nvt_ts_resume(&ts->client->dev);
-}
-#endif //end LCM_FAST_LIGHTUP
+	struct nvt_ts_data *ts = container_of(nb, struct nvt_ts_data, disp_notifier);
+	int *data = (int *)v;
 
-static int nvt_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
-{
-	struct msm_drm_notifier *evdata = data;
-	int *blank;
-	struct nvt_ts_data *ts =
-		container_of(self, struct nvt_ts_data, drm_notif);
-
-	NVT_LOG("nvt_drm_notifier_callback start\n");
-	if (!evdata)
-		return 0;
-
-	if (!(event == MSM_DRM_EARLY_EVENT_BLANK ||
-		event == MSM_DRM_EVENT_BLANK)) {
-		NVT_LOG("event(%lu) do not need process\n", event);
-		return 0;
-	}
-
-	blank = evdata->data;
-	NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
-	if (event == MSM_DRM_EARLY_EVENT_BLANK) {
-		if (*blank == MSM_DRM_BLANK_POWERDOWN) {
-			NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
-			nvt_ts_suspend(&ts->client->dev);
-#if defined(NVT_SENSOR_EN) && defined(NVT_SET_TOUCH_STATE)
-			if (ts->should_enable_gesture) {
-				NVT_LOG("double tap gesture suspend\n");
-				touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
-			} else {
-				touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
-			}
-#endif
-		}
-	} else if (event == MSM_DRM_EVENT_BLANK) {
-		if (*blank == MSM_DRM_BLANK_UNBLANK) {
-			NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
-#ifdef LCM_FAST_LIGHTUP
-			if (nvt_fwu_wq) {
-				queue_work(nvt_fwu_wq, &ts_resume_work);
-				NVT_LOG("LCM_FAST_LIGHTUP, queue_work\n");
-			} else {
-				NVT_LOG("nvt_fwu_wq null");
-				nvt_ts_resume(&ts->client->dev);
-			}
-#else
-			nvt_ts_resume(&ts->client->dev);
-#endif //LCM_FAST_LIGHTUP
-		}
-	}
-
-	return 0;
-}
-#endif
-#else //vension code < 5.4.0
-#ifdef NVT_CONFIG_PANEL_NOTIFICATIONS
-static int nvt_panel_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
-{
-	struct nvt_ts_data *ts =
-		container_of(self, struct nvt_ts_data, panel_notif);
-
-	switch (event) {
-	case PANEL_EVENT_PRE_DISPLAY_OFF:
-			NVT_LOG("event=%lu\n", event);
-			nvt_ts_suspend(&ts->client->dev);
-#ifdef NVT_SENSOR_EN
-			if (ts->should_enable_gesture) {
-				NVT_LOG("double tap gesture suspend\n");
-				touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
-			} else {
-				touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
-			}
-#endif
-				break;
-
-	case PANEL_EVENT_DISPLAY_ON:
-			NVT_LOG("event=%lu\n", event);
-			nvt_ts_resume(&ts->client->dev);
-				break;
-	default:	/* use DEV_TS here to avoid unused variable */
-			NVT_LOG("%s: function not implemented event %lu\n", __func__, event);
-				break;
-	}
-
-	return 0;
-}
-#endif
-
-#if defined(CONFIG_FB)
-#ifdef _MSM_DRM_NOTIFY_H_
-static int nvt_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
-{
-	struct msm_drm_notifier *evdata = data;
-	int *blank;
-	struct nvt_ts_data *ts =
-		container_of(self, struct nvt_ts_data, drm_notif);
-
-	if (!evdata || (evdata->id != 0))
-		return 0;
-
-	if (evdata->data && ts) {
-		blank = evdata->data;
-		if (event == MSM_DRM_EARLY_EVENT_BLANK) {
-			if (*blank == MSM_DRM_BLANK_POWERDOWN) {
-				NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
+	if (ts && v) {
+		NVT_LOG("%s IN", __func__);
+		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
+			if (*data == MTK_DISP_BLANK_POWERDOWN) {
 				nvt_ts_suspend(&ts->client->dev);
-#ifdef NVT_SENSOR_EN
-				if (ts->should_enable_gesture) {
-					NVT_LOG("double tap gesture suspend\n");
-					return 1;
-				}
-#endif
 			}
-		} else if (event == MSM_DRM_EVENT_BLANK) {
-			if (*blank == MSM_DRM_BLANK_UNBLANK) {
-				NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
+		} else if (value == MTK_DISP_EVENT_BLANK) {
+			if (*data == MTK_DISP_BLANK_UNBLANK) {
 				nvt_ts_resume(&ts->client->dev);
 			}
 		}
+		NVT_LOG("%s OUT", __func__);
+	} else {
+		NVT_LOG("NT36672 touch IC can not suspend or resume");
+		return -1;
 	}
 
 	return 0;
 }
-#else
-static int nvt_fb_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
-{
-	struct fb_event *evdata = data;
-	int *blank;
-	struct nvt_ts_data *ts =
-		container_of(self, struct nvt_ts_data, fb_notif);
 
-#ifdef CONFIG_LCM_NOTIFIY_SUPPORT
-	//some TP need LCM notify, e.g. NVT
-	//transfer LCM notify to TP notify event
-	if(event == FB_EVENT_NOTIFY_TP_BLANK){
-		NVT_LOG("%s transfer FB_EVENT_NOTIFY_TP_BLANK\n", __func__);
-		event = FB_EVENT_BLANK;
-	}
-	else if(event == FB_EARLY_EVENT_NOTIFY_TP_BLANK){
-		NVT_LOG("%s transfer FB_EARLY_EVENT_NOTIFY_TP_BLANK\n", __func__);
-		event = FB_EARLY_EVENT_BLANK;
-	}
 #endif
-
-	if (evdata && evdata->data && event == FB_EARLY_EVENT_BLANK) {
-		blank = evdata->data;
-		if (*blank == FB_BLANK_POWERDOWN) {
-			NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
-			nvt_ts_suspend(&ts->client->dev);
-		}
-	} else if (evdata && evdata->data && event == FB_EVENT_BLANK) {
-		blank = evdata->data;
-		if (*blank == FB_BLANK_UNBLANK) {
-			NVT_LOG("event=%lu, *blank=%d\n", event, *blank);
-			nvt_ts_resume(&ts->client->dev);
-		}
-	}
-
-	return 0;
-}
-#endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-/*******************************************************
-Description:
-	Novatek touchscreen driver early suspend function.
-
-return:
-	n.a.
-*******************************************************/
-static void nvt_ts_early_suspend(struct early_suspend *h)
-{
-	nvt_ts_suspend(ts->client, PMSG_SUSPEND);
-}
-
-/*******************************************************
-Description:
-	Novatek touchscreen driver late resume function.
-
-return:
-	n.a.
-*******************************************************/
-static void nvt_ts_late_resume(struct early_suspend *h)
-{
-	nvt_ts_resume(ts->client);
-}
-#endif
-#endif //version code >= 5.4.0
 
 static const struct spi_device_id nvt_ts_id[] = {
 	{ NVT_SPI_NAME, 0 },
