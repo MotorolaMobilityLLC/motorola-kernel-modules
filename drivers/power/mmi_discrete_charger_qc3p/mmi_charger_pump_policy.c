@@ -1937,6 +1937,7 @@ int get_caculated_real_ibus_vbus(struct mmi_charger_manager *chip, int *ibus_cur
 }
 
 #define QC3P_PULSE_COUNT_MAX    ((11000 - 5000) / 20 )
+#define USB_VBUS_IRQ_THRESHOLD		3800
 int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_ua, bool sw_reduce_volt){
         int rc,vbus_val;
         struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
@@ -2172,12 +2173,12 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 				vbus_volt_new = vbus_val;
 
 				mmi_chrg_err(chip,"vbus_volt_new: %d, vbus_volt: %d", vbus_volt_new, vbus_volt);
-				if(vbus_volt_new > 0 &&
+				if(vbus_volt_new > USB_VBUS_IRQ_THRESHOLD &&
 				   ((count > 0 && (vbus_volt_new > vbus_volt)) ||
 				    (count < 0 && (vbus_volt_new < vbus_volt)))){
 					mmi_chrg_err(chip,"vbus modify successfully!");
 					break;
-				} else if(vbus_volt_new > 0){
+				} else if(vbus_volt_new > USB_VBUS_IRQ_THRESHOLD){
 					mmi_chrg_err(chip,"vbus modify failed, retry!");
 					count = (count > 0) ?
 					       	(count + (vbus_volt - vbus_volt_new)/20) :
@@ -2198,7 +2199,7 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 		return 0;
 	}
 
-	if(vbus_volt_new > 0){
+	if(vbus_volt_new > USB_VBUS_IRQ_THRESHOLD){
 //               chip->pd_target_volt = target_vbus_volt * 1000;
                chip->pd_target_volt = vbus_volt_new * 1000;
 	       chip->pd_request_volt = chip->pd_target_volt;
