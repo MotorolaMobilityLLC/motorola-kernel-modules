@@ -1878,6 +1878,31 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 
 static void cps_wls_current_select(int  *icl, int *vbus);
 static void cps_init_charge_hardware(void);
+#define WLS_ICL_INCREASE_STEP 100000
+static void cps_bpp_mode_icl_work(struct work_struct *work)
+{
+	struct cps_wls_chrg_chip *chg = chip;
+	int wls_icl = 0;
+
+	wls_icl = 100000;
+	chg->bpp_icl_done = false;
+	while((wls_icl + WLS_ICL_INCREASE_STEP) <= 1000000) {
+		if(!chg->wls_online)
+			break;
+		wls_icl += WLS_ICL_INCREASE_STEP;
+		msleep(200);
+		if (chip->chg1_dev)
+			charger_dev_set_input_current(chip->chg1_dev, wls_icl);
+		else
+		{
+			cps_init_charge_hardware();
+			charger_dev_set_input_current(chip->chg1_dev, wls_icl);
+		}
+		cps_wls_log(CPS_LOG_DEBG, "cps wireless charging icl %d ua\n", wls_icl);
+	}
+	chg->bpp_icl_done = true;
+}
+
 static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 {
     int int_flag;
@@ -1931,7 +1956,12 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 		chip->mode_type = mode_type;
 		if (!chip->factory_wls_en)
 		{
-			cps_wls_current_select(&icl, &vbus);
+			if ((chip->mode_type == Sys_Op_Mode_BPP) && (chip->rx_int_ready)){
+				icl = 100000;
+				queue_delayed_work(chip->wls_wq,
+			         &chip->bpp_icl_work, msecs_to_jiffies(0));
+			} else
+				cps_wls_current_select(&icl, &vbus);
 			if (chip->chg1_dev)
 				charger_dev_set_input_current(chip->chg1_dev, icl);
 			else
@@ -1956,6 +1986,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
 		chip->rx_int_ready = false;
+		chip->bpp_icl_done = false;
 		if (chip->rx_ldo_on) {
 			//chip->wls_online = false;
 			cps_rx_online_check(chip);
@@ -3016,6 +3047,13 @@ static void cps_wls_current_select(int  *icl, int *vbus)
 
     if (chg->mode_type == Sys_Op_Mode_BPP)
     {
+        if (!chg->bpp_icl_done){
+           chg->MaxV = 5000;
+           chg->MaxI = 1000;
+           *icl = 100000;
+           *vbus = 5000;
+           return;
+        }
         chg->MaxV = 5000;
         chg->MaxI = 1000;
         *icl = 1000000;
@@ -3405,6 +3443,8 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 	chip->wls_wq = create_singlethread_workqueue("wls_workqueue");
 	INIT_DELAYED_WORK(&chip->fw_update_work,
 			  cps_firmware_update_work);
+	INIT_DELAYED_WORK(&chip->bpp_icl_work,
+			  cps_bpp_mode_icl_work);
 
     /* Register thermal zone cooling device */
     chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
