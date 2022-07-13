@@ -270,6 +270,7 @@ struct cps_wls_chrg_chip {
 	struct wakeup_source *rx_check_wakelock;
     struct workqueue_struct *wls_wq;
     struct delayed_work fw_update_work;
+    struct delayed_work	bpp_icl_work;
     uint32_t bootmode;
     struct thermal_cooling_device *tcd;
     bool ntc_thermal;
@@ -277,6 +278,7 @@ struct cps_wls_chrg_chip {
     struct charger_device *chg1_dev;
     bool chip_state;
     bool rx_int_ready;
+    bool bpp_icl_done;
 
     /*wls pen*/
 #ifdef SMART_PEN_SUPPORT
