@@ -1181,6 +1181,10 @@ static int brl_event_handler(struct goodix_ts_core *cd,
 	u8 pre_buf[32];
 	u8 event_status;
 	int ret;
+	static u64 int_num = 0;
+
+	int_num++;
+	pr_info("-%llu", int_num);
 
 	pre_read_len = IRQ_EVENT_HEAD_LEN +
 		BYTES_PER_POINT * 2 + COOR_DATA_CHECKSUM_SIZE;
@@ -1190,6 +1194,9 @@ static int brl_event_handler(struct goodix_ts_core *cd,
 		ts_debug("failed get event head data");
 		return ret;
 	}
+
+	if (atomic_read(&cd->suspended))
+		pr_info("-%*ph", 8, pre_buf);
 
 	if (checksum_cmp(pre_buf, IRQ_EVENT_HEAD_LEN, CHECKSUM_MODE_U8_LE)) {
 		ts_debug("touch head checksum err");
@@ -1231,6 +1238,7 @@ static int brl_after_event_handler(struct goodix_ts_core *cd)
 	struct goodix_ic_info_misc *misc = &cd->ic_info.misc;
 	u8 sync_clean = 0;
 
+	pr_info("--");
 	return hw_ops->write(cd, misc->touch_data_addr,
 		&sync_clean, 1);
 }
