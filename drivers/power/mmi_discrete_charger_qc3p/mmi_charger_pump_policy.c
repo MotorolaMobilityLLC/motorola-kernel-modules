@@ -2020,7 +2020,7 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
                 return 0;
         }
 
-	if(sw_reduce_volt && vbatt_volt > 4485){
+	if(sw_reduce_volt && vbatt_volt > 4485000){
 		count = -1;
 	} else{
 
