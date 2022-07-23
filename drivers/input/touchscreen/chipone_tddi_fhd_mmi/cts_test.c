@@ -296,6 +296,10 @@ bool set_short_test_type(struct cts_device *cts_dev, u8 type)
 
 int cts_write_file(struct file *filp, const void *data, size_t size)
 {
+#ifdef CFG_CTS_FOR_GKI
+	cts_info("%s(): kernel_write is forbiddon with GKI Version!", __func__);
+	return -EPERM;
+#else
 	loff_t pos;
 	ssize_t ret;
 
@@ -311,6 +315,7 @@ int cts_write_file(struct file *filp, const void *data, size_t size)
 		filp->f_pos += ret;
 
 	return ret;
+#endif /* CFG_CTS_FOR_GKI */
 }
 
 #ifdef CTS_CONFIG_MKDIR_FOR_CTS_TEST
