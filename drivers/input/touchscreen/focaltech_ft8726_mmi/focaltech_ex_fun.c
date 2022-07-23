@@ -1658,6 +1658,41 @@ static struct attribute_group fts_attribute_group = {
 #include <linux/major.h>
 #include <linux/kdev_t.h>
 
+static char *ts_mmi_kobject_get_path(struct kobject *kobj, gfp_t gfp_mask)
+{
+	char *path;
+	int len = 1;
+	struct kobject *parent = kobj;
+
+	do {
+		if (parent->name == NULL) {
+			len = 0;
+			break;
+		}
+		len += strlen(parent->name) + 1;
+		parent = parent->parent;
+	} while (parent);
+
+	if (len == 0)
+		return NULL;
+
+	path = kzalloc(len, gfp_mask);
+	if (!path)
+		return NULL;
+
+	--len;
+	for (parent = kobj; parent; parent = parent->parent) {
+		int cur = strlen(parent->name);
+		len -= cur;
+		memcpy(path + len, parent->name, cur);
+		*(path + --len) = '/';
+	}
+	pr_debug("kobject: '%s' (%p): %s: path = '%s'\n", kobj->name,
+		kobj, __func__, path);
+
+	return path;
+}
+
 /* Attribute: path (RO) */
 static ssize_t path_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -1670,7 +1705,7 @@ static ssize_t path_show(struct device *dev,
 		pr_err("cannot get fts_ts_data pointer\n");
 		return (ssize_t)0;
 	}
-	path = kobject_get_path(&data->spi->dev.kobj, GFP_KERNEL);
+	path = ts_mmi_kobject_get_path(&data->spi->dev.kobj, GFP_KERNEL);
 	blen = scnprintf(buf, PAGE_SIZE, "%s", path ? path : "na");
 	kfree(path);
 	return blen;
@@ -1703,9 +1738,6 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_NULL
 };
 
-#define TSDEV_MINOR_BASE 128
-#define TSDEV_MINOR_MAX 32
-
 static int fts_sysfs_class(void *_data, bool create)
 {
 	struct fts_ts_data *data = _data;
@@ -1713,15 +1745,14 @@ static int fts_sysfs_class(void *_data, bool create)
 	int i, error = 0;
 	static struct class *touchscreen_class;
 	static struct device *ts_class_dev;
-	static int minor;
+	dev_t devno;
 
 	if (create) {
-		minor = input_get_new_minor(data->spi->chip_select,
-						1, false);
-		if (minor < 0)
-			minor = input_get_new_minor(TSDEV_MINOR_BASE,
-					TSDEV_MINOR_MAX, true);
-		pr_info("assigned minor %d\n", minor);
+		error = alloc_chrdev_region(&devno, 0, 1, FTS_CHIP_NAME);
+		if (error) {
+			FTS_ERROR("cant`t allocate chrdev");
+			return error;
+		}
 
 		touchscreen_class = class_create(THIS_MODULE, "touchscreen");
 		if (IS_ERR(touchscreen_class)) {
@@ -1731,8 +1762,8 @@ static int fts_sysfs_class(void *_data, bool create)
 		}
 
 		ts_class_dev = device_create(touchscreen_class, NULL,
-				MKDEV(INPUT_MAJOR, minor),
-				data, FTS_CHIP_NAME);
+				devno,
+				data, "%s", FTS_CHIP_NAME);
 		if (IS_ERR(ts_class_dev)) {
 			error = PTR_ERR(ts_class_dev);
 			ts_class_dev = NULL;
@@ -1763,7 +1794,6 @@ static int fts_sysfs_class(void *_data, bool create)
 device_destroy:
 	for (--i; i >= 0; --i)
 		device_remove_file(ts_class_dev, &attrs[i]);
-	device_destroy(touchscreen_class, MKDEV(INPUT_MAJOR, minor));
 	ts_class_dev = NULL;
 	class_unregister(touchscreen_class);
 	pr_err("error creating touchscreen class\n");

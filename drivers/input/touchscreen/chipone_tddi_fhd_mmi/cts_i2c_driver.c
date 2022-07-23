@@ -10,8 +10,11 @@
 #include "mtk_panel_ext.h"
 #endif
 struct chipone_ts_data *chipone_ts;
+
+#ifdef CHIPONE_SENSOR_EN
 extern int __attribute__ ((weak)) sensors_classdev_register(struct device *parent, struct sensors_classdev *sensors_cdev);
 extern void __attribute__ ((weak)) sensors_classdev_unregister(struct sensors_classdev *sensors_cdev);
+#endif
 
 enum touch_state {
 	TOUCH_DEEP_SLEEP_STATE = 0,
