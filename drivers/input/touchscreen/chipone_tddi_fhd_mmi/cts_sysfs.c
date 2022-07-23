@@ -1064,7 +1064,9 @@ static ssize_t read_flash_show(struct device *dev,
 	int ret;
 	bool program_mode;
 	bool enabled;
+#ifndef CFG_CTS_FOR_GKI
 	loff_t pos = 0;
+#endif
 
 	if (argc != 2 && argc != 3)
 		return snprintf(buf, PAGE_SIZE, "Invalid num args %d\n", argc);
@@ -1107,6 +1109,9 @@ static ssize_t read_flash_show(struct device *dev,
 	}
 
 	if (argc == 3) {
+#ifdef CFG_CTS_FOR_GKI
+		cts_info("%s(): some functions are forbiddon with GKI Version!", __func__);
+#else
 		struct file *file;
 
 		cts_info("Write flash data to file '%s'", argv[2]);
@@ -1135,6 +1140,7 @@ static ssize_t read_flash_show(struct device *dev,
 			count +=
 			    snprintf(buf, PAGE_SIZE,
 				     "Close file '%s' failed %d", argv[2], ret);
+#endif/* CFG_CTS_FOR_GKI */
 	} else {
 #define PRINT_ROW_SIZE          (16)
 		remaining = size;
@@ -2014,12 +2020,30 @@ static ssize_t manualdiffdata_show(struct device *dev,
 	int max_r, max_c, min_r, min_c;
 	bool data_valid = true;
 	int frame;
-	struct file *file = NULL;
 	int i;
+#ifndef CFG_CTS_FOR_GKI
+	struct file *file = NULL;
 	loff_t pos = 0;
+#endif
 
 	cts_info("Show manualdiff");
 
+#ifdef CFG_CTS_FOR_GKI
+	if (argc != 1) {
+		return scnprintf(buf, PAGE_SIZE, "Invalid num args\n"
+			"USAGE:\n"
+			"  1. echo updatebase > manualdiff\n"
+			"  2. cat manualdiff\n"
+			"  or\n"
+			"  1. echo updatebase > manualdiff\n"
+			"  2. echo frame > manualdiff\n"
+			"  3. cat manualdiff\n");
+	}
+	ret = kstrtou32(argv[0], 0, &frame);
+	if (ret) {
+		return scnprintf(buf, PAGE_SIZE, "Invalid frame num\n");
+	}
+#else
 	if (argc != 1 && argc != 2) {
 		return snprintf(buf, PAGE_SIZE, "Invalid num args\n"
 				"USAGE:\n"
@@ -2041,11 +2065,14 @@ static ssize_t manualdiffdata_show(struct device *dev,
 					argv[1]);
 	} else
 		frame = 1;
+#endif
 
 	rawdata = (s16 *) kmalloc(DIFFDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
 	if (rawdata == NULL) {
 		cts_err("Allocate memory for rawdata failed");
+#ifndef CFG_CTS_FOR_GKI
 		filp_close(file, NULL);
+#endif
 		return -ENOMEM;
 	}
 
@@ -2054,7 +2081,9 @@ static ssize_t manualdiffdata_show(struct device *dev,
 		    (s16 *) kzalloc(DIFFDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
 		if (manualdiff_base == NULL) {
 			cts_err("Malloc manualdiff_base failed");
+#ifndef CFG_CTS_FOR_GKI
 			filp_close(file, NULL);
+#endif
 			kfree(rawdata);
 			goto err_free_diffdata;
 		}
@@ -2145,6 +2174,9 @@ static ssize_t manualdiffdata_show(struct device *dev,
 			}
 			/*cts_info("manualdiffdata_show:%d, %d", i, frame); */
 			if (argc == 2) {
+#ifdef CFG_CTS_FOR_GKI
+				cts_info("%s(): some functions are forbiddon with GKI Version!", __func__);
+#else
 				pos = file->f_pos;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
 				ret = kernel_write(file, buf, count, &pos);
@@ -2158,11 +2190,14 @@ static ssize_t manualdiffdata_show(struct device *dev,
 
 				file->f_pos += count;
 				count = 0;
+#endif
 			}
 		}
 	}
+#ifndef CFG_CTS_FOR_GKI
 	if (argc == 2)
 		filp_close(file, NULL);
+#endif
 
 err_free_diffdata:
 	cts_unlock_device(cts_dev);
@@ -2731,6 +2766,10 @@ static DEVICE_ATTR(int_data_method, S_IWUSR | S_IRUGO,
 /* For dump bin file */
 static int cts_write_intdata(struct file *filp, const void *data, size_t size)
 {
+#ifdef CFG_CTS_FOR_GKI
+	cts_info("%s(): some functions are forbiddon with GKI Version!", __func__);
+	return -EPERM;
+#else
 	loff_t  pos;
 	ssize_t ret;
 
@@ -2747,6 +2786,7 @@ static int cts_write_intdata(struct file *filp, const void *data, size_t size)
 	}
 
 	return ret;
+#endif /* CFG_CTS_FOR_GKI */
 }
 
 u32 old_cnt;
@@ -3164,6 +3204,41 @@ static const struct attribute_group *cts_dev_attr_groups[] = {
 #include <linux/major.h>
 #include <linux/kdev_t.h>
 
+static char *ts_mmi_kobject_get_path(struct kobject *kobj, gfp_t gfp_mask)
+{
+	char *path;
+	int len = 1;
+	struct kobject *parent = kobj;
+
+	do {
+		if (parent->name == NULL) {
+			len = 0;
+			break;
+		}
+		len += strlen(parent->name) + 1;
+		parent = parent->parent;
+	} while (parent);
+
+	if (len == 0)
+		return NULL;
+
+	path = kzalloc(len, gfp_mask);
+	if (!path)
+		return NULL;
+
+	--len;
+	for (parent = kobj; parent; parent = parent->parent) {
+		int cur = strlen(parent->name);
+		len -= cur;
+		memcpy(path + len, parent->name, cur);
+		*(path + --len) = '/';
+	}
+	pr_debug("kobject: '%s' (%p): %s: path = '%s'\n", kobj->name,
+		kobj, __func__, path);
+
+	return path;
+}
+
 /* Attribute: path (RO) */
 static ssize_t path_show(struct device *dev,
 			 struct device_attribute *attr, char *buf)
@@ -3176,10 +3251,11 @@ static ssize_t path_show(struct device *dev,
 		cts_err("Read 'path' with chipone_ts_data NULL");
 		return (ssize_t) 0;
 	}
+
 #ifdef CONFIG_CTS_I2C_HOST
-	path = kobject_get_path(&data->i2c_client->dev.kobj, GFP_KERNEL);
+	path = ts_mmi_kobject_get_path(&data->i2c_client->dev.kobj, GFP_KERNEL);
 #else
-	path = kobject_get_path(&data->spi_client->dev.kobj, GFP_KERNEL);
+	path = ts_mmi_kobject_get_path(&data->spi_client->dev.kobj, GFP_KERNEL);
 #endif
 	blen = scnprintf(buf, PAGE_SIZE, "%s", path ? path : "na");
 	kfree(path);
