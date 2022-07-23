@@ -12,6 +12,9 @@
 /** Whether reset pin is used */
 #define CFG_CTS_HAS_RESET_PIN
 
+/* For Google Security */
+#define CFG_CTS_FOR_GKI
+
 /* #define CONFIG_CTS_I2C_HOST */
 #ifndef CONFIG_CTS_I2C_HOST
 
