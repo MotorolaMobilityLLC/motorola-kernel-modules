@@ -354,6 +354,7 @@ static void nvt_print_criteria(void)
 
 static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch, uint8_t y_ch, const char *file_path, uint32_t offset)
 {
+#ifdef NVT_BUILD_USERDEBUG
 	int32_t x = 0;
 	int32_t y = 0;
 	int32_t iArrayIndex = 0;
@@ -446,6 +447,10 @@ static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch, uint8_t y
 	printk("%s:--\n", __func__);
 
 	return 0;
+#else //undef NVT_BUILD_USERDEBUG
+	NVT_ERR("no write permission for user build!\n");
+	return -1;
+#endif
 }
 
 static int32_t nvt_polling_hand_shake_status(void)
