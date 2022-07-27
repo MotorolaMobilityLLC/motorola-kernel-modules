@@ -119,7 +119,8 @@ static int wait_sfctrl_xfer_comp(const struct cts_device *cts_dev)
 
 static int sfctrlv2_rdsr(const struct cts_device *cts_dev, u8 *status)
 {
-#define RDSR_XCHG_SRAM_ADDR     (cts_dev->hwdata->sram_size - 1)
+#define RDSR_XCHG_SRAM_ADDR \
+    (cts_dev->hwdata->sfctrl->xchg_sram_base + cts_dev->hwdata->sfctrl->xchg_sram_size)
 
     int ret;
 
