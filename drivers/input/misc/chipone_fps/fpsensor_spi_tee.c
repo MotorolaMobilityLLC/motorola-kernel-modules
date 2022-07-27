@@ -34,13 +34,15 @@
 #include <linux/platform_device.h>
 #endif
 
-
+#ifdef CONFIG_CHIPONE_MTK_KERNEL5XX_WAKE_TYPE
+#include <linux/pm_wakeup.h>
+#else
 #if FPSENSOR_WAKEUP_SOURCE
 #include <linux/pm_wakeup.h>
 #else
 #include <linux/wakelock.h>
 #endif
-
+#endif
 
 /*************************** global variables************************** */
 static fpsensor_data_t *g_fpsensor = NULL;
@@ -380,11 +382,16 @@ static irqreturn_t fpsensor_irq(int irq, void *handle)
     /* Make sure 'wakeup_enabled' is updated before using it
     ** since this is interrupt context (other thread...) */
     smp_rmb();
+#ifdef CONFIG_CHIPONE_MTK_KERNEL5XX_WAKE_TYPE
+    __pm_wakeup_event(fpsensor_dev->ttw_wl, 1000);
+#else
 #if FPSENSOR_WAKEUP_SOURCE
     __pm_wakeup_event(&fpsensor_dev->ttw_wl, 1000);
 #else
     wake_lock_timeout(&fpsensor_dev->ttw_wl, msecs_to_jiffies(1000));
 #endif
+#endif
+
     setRcvIRQ(1);
     wake_up_interruptible(&fpsensor_dev->wq_irq_return);
 
@@ -840,10 +847,15 @@ static int fpsensor_probe(struct platform_device *spi)
         goto err2;
     }
     init_waitqueue_head(&fpsensor_dev->wq_irq_return);
+#ifdef CONFIG_CHIPONE_MTK_KERNEL5XX_WAKE_TYPE
+    fpsensor_dev->dev = &spi->dev;
+    g_fpsensor->ttw_wl = wakeup_source_register(g_fpsensor->dev, "fpsensor_ttw_wl");
+#else
 #if FPSENSOR_WAKEUP_SOURCE
     wakeup_source_init(&g_fpsensor->ttw_wl , "fpsensor_ttw_wl");
 #else
     wake_lock_init(&g_fpsensor->ttw_wl, WAKE_LOCK_SUSPEND, "fpsensor_ttw_wl");
+#endif
 #endif
 
 #if FP_NOTIFY
@@ -859,7 +871,7 @@ err2:
      if(fpsensor_dev->pinctrl != NULL)
         devm_pinctrl_put(fpsensor_dev->pinctrl);
 
-err0:
+//err0:
 #if FPSENSOR_PMIC_LDO
     if (fpsensor_dev->fp_regulator != NULL) {
         regulator_put(fpsensor_dev->fp_regulator);
@@ -908,11 +920,17 @@ static int fpsensor_remove(struct platform_device *spi)
         fpsensor_debug(ERR_LOG, "%s with free_flag = %d \n", __func__,fpsensor_dev->free_flag );
     }
     fpsensor_dev_cleanup(fpsensor_dev);
+
+#ifdef CONFIG_CHIPONE_MTK_KERNEL5XX_WAKE_TYPE
+    wakeup_source_unregister(fpsensor_dev->ttw_wl);
+#else
 #if FPSENSOR_WAKEUP_SOURCE
     wakeup_source_trash(&fpsensor_dev->ttw_wl);
 #else
     wake_lock_destroy(&fpsensor_dev->ttw_wl);
 #endif
+#endif
+
     fpsensor_spidev_dts_uninit(fpsensor_dev);
     if(fpsensor_dev!=NULL){
         kfree(fpsensor_dev);
