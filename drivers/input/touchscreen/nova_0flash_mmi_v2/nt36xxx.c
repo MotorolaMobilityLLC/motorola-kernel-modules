@@ -1878,6 +1878,41 @@ int nvt_sensor_remove(struct nvt_ts_data *data)
 #include <linux/major.h>
 #include <linux/kdev_t.h>
 
+static char *mmi_kobject_get_path(struct kobject *kobj, gfp_t gfp_mask)
+{
+	char *path;
+	int len = 1;
+	struct kobject *parent = kobj;
+
+	do {
+		if (parent->name == NULL) {
+			len = 0;
+			break;
+		}
+		len += strlen(parent->name) + 1;
+		parent = parent->parent;
+	} while (parent);
+
+	if (len == 0)
+		return NULL;
+
+	path = kzalloc(len, gfp_mask);
+	if (!path)
+		return NULL;
+
+	--len;
+	for (parent = kobj; parent; parent = parent->parent) {
+		int cur = strlen(parent->name);
+		len -= cur;
+		memcpy(path + len, parent->name, cur);
+		*(path + --len) = '/';
+	}
+	pr_debug("kobject: '%s' (%p): %s: path = '%s'\n", kobj->name,
+		kobj, __func__, path);
+
+	return path;
+}
+
 /* Attribute: path (RO) */
 static ssize_t path_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -1885,7 +1920,7 @@ static ssize_t path_show(struct device *dev,
 	ssize_t blen;
 	const char *path;
 
-	path = kobject_get_path(&ts->client->dev.kobj, GFP_KERNEL);
+	path = mmi_kobject_get_path(&ts->client->dev.kobj, GFP_KERNEL);
 	blen = scnprintf(buf, PAGE_SIZE, "%s", path ? path : "na");
 	kfree(path);
 	return blen;
