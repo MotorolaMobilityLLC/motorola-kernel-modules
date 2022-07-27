@@ -20,7 +20,11 @@
 
 /**************** Custom device : platfotm  or spi **************/
 #define  USE_SPI_BUS                1
+#ifdef CONFIG_CHIPONE_GPIO_CTRL_VDD
+#define  USE_PLATFORM_BUS           0
+#else
 //#define  USE_PLATFORM_BUS           0
+#endif
 
 #define FPSENSOR_PMIC_LDO      0
 
@@ -28,7 +32,11 @@
 #define FPSENSOR_LOG_ENABLE         1         // 0:error log    1: debug log
 
 /*********************** power setting **********************/
+#ifdef CONFIG_CHIPONE_GPIO_CTRL_VDD
+#define FPSENSOR_USE_POWER_GPIO     1        // 0: not use power gpio  1 user power gpio
+#else
 #define FPSENSOR_USE_POWER_GPIO     0        // 0: not use power gpio  1£ºpower gpio
+#endif
 
 /*********************** SPI GPIO setting **********************/
 #define FPSENSOR_SPI_PIN_SET        0        // 0: SPI pin is not configured in the driver    1: confinger spi pin in driver
@@ -37,13 +45,15 @@
 #define FP_NOTIFY                   1        //
 
 /*********************** wakelock setting **********************/
+#ifdef CONFIG_CHIPONE_MTK_KERNEL5XX_WAKE_TYPE
+#else
 #ifdef CONFIG_PM_WAKELOCKS
 #define FPSENSOR_WAKEUP_SOURCE  1
 #else
 #define FPSENSOR_WAKEUP_SOURCE  0
 // others
 #endif
-
+#endif
 /*********************** spi clock setting **********************/
 // Just macro definition, no need to modify
 #define FPSENSOR_SPI_CLOCK_TYPE_MASTER_CLK    1
@@ -150,10 +160,15 @@ typedef struct {
     struct platform_device *spi;
 #endif
 
+#ifdef CONFIG_CHIPONE_MTK_KERNEL5XX_WAKE_TYPE
+    struct device *dev;
+    struct wakeup_source* ttw_wl;
+#else
 #if FPSENSOR_WAKEUP_SOURCE
     struct wakeup_source ttw_wl;
 #else
     struct wake_lock ttw_wl;
+#endif
 #endif
     wait_queue_head_t wq_irq_return;
     struct pinctrl *pinctrl;
