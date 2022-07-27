@@ -1089,29 +1089,29 @@ static int icnl9916_set_access_ddi_reg(struct cts_device *cts_dev, bool enable)
 
 const static struct cts_sfctrl icnl9911_sfctrl = {
     .reg_base = 0x34000,
-    .xchg_sram_base = (80 - 1) * 1024,
-    .xchg_sram_size = 1024,    /* For non firmware programming */
+    .xchg_sram_base = 80 * 1024u,
+    .xchg_sram_size = 16 * 1024u,    /* For non firmware programming */
     .ops = &cts_sfctrlv2_ops
 };
 
 const static struct cts_sfctrl icnl9911s_sfctrl = {
     .reg_base = 0x34000,
-    .xchg_sram_base = (64 - 1) * 1024,
-    .xchg_sram_size = 1024,    /* For non firmware programming */
+    .xchg_sram_base = 64 * 1024u,
+    .xchg_sram_size = 16 * 1024u,    /* For non firmware programming */
     .ops = &cts_sfctrlv2_ops
 };
 
 const static struct cts_sfctrl icnl9911c_sfctrl = {
     .reg_base = 0x34000,
-    .xchg_sram_base = (64 - 1) * 1024,
-    .xchg_sram_size = 1024, /* For non firmware programming */
+    .xchg_sram_base = 64 * 1024u,
+    .xchg_sram_size = 16 * 1024u, /* For non firmware programming */
     .ops = &cts_sfctrlv2_ops
 };
 
 const static struct cts_sfctrl icnl9916_sfctrl = {
     .reg_base = 0x34000,
-    .xchg_sram_base = 96 * 1024,
-    .xchg_sram_size = 32 * 1024, /* For non firmware programming */
+    .xchg_sram_base = 96 * 1024u,
+    .xchg_sram_size = 32 * 1024u, /* For non firmware programming */
     .ops = &cts_sfctrlv2_ops
 };
 
