@@ -645,6 +645,13 @@ static int fpsensor_release(struct inode *inode, struct file *filp)
         fpsensor_debug(INFO_LOG, "%s, disble_irq. irq = %d\n", __func__, fpsensor_dev->irq);
         fpsensor_disable_irq(fpsensor_dev);
     }
+
+    if (fpsensor_dev->irq) {
+        free_irq(fpsensor_dev->irq, fpsensor_dev);
+        fpsensor_dev->irq = 0;
+        fpsensor_dev->irq_enabled = 0;
+    }
+
     fpsensor_dev->device_available = 0;
     FUNC_EXIT();
     return status;
