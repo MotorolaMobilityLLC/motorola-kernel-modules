@@ -62,7 +62,7 @@ static struct gesture_module *gsx_gesture; /*allocated in gesture init module*/
 #ifdef CONFIG_HAS_WAKELOCK
 static struct wake_lock gesture_wakelock;
 #else
-static struct wakeup_source gesture_wakelock;
+static struct wakeup_source * gesture_wakelock;
 #endif
 static struct goodix_ts_core *goodix_core_data;
 
@@ -397,7 +397,12 @@ static int gsx_gesture_init(struct goodix_ts_core *core_data,
 #ifdef CONFIG_HAS_WAKELOCK
         wake_lock_init(&gesture_wakelock, WAKE_LOCK_SUSPEND, "poll-wake-lock");
 #else
-        wakeup_source_init(&gesture_wakelock, "ets_wake_lock");
+	PM_WAKEUP_REGISTER(NULL, gesture_wakelock, "ets_wake_lock");
+	if (!gesture_wakelock) {
+		ts_err("wakeup source request failed");
+		ret = ENOMEM;
+		goto exit_gesture_init;
+	}
 #endif
         if (!gsx_sensor_init(core_data))
             initialized_sensor = true;
@@ -502,7 +507,7 @@ static int gsx_gesture_ist(struct goodix_ts_core *core_data,
 #ifdef CONFIG_HAS_WAKELOCK
 			wake_lock_timeout(&gesture_wakelock, msecs_to_jiffies(5000));
 #else
-			__pm_wakeup_event(&gesture_wakelock, 5000);
+			PM_WAKEUP_EVENT(gesture_wakelock, 5000);
 #endif
 		} else {
 			ts_info("input_report_abs");
@@ -599,7 +604,7 @@ static void __exit goodix_gsx_gesture_exit(void)
 	ts_info("gesture module exit");
 #ifdef GOODIX_SENSOR_EN
 #ifndef CONFIG_HAS_WAKELOCK
-	wakeup_source_trash(&gesture_wakelock);
+	PM_WAKEUP_UNREGISTER(gesture_wakelock);
 #endif
 #endif
 	if (atomic_read(&gsx_gesture->registered)) {
