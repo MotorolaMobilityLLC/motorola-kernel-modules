@@ -57,6 +57,8 @@
 #include <linux/power_supply.h>
 #endif
 
+#include <linux/mmi_wake_lock.h>
+
 #define GOODIX_FLASH_CONFIG_WITH_ISP	1
 /* macros definition */
 #define GOODIX_CORE_DRIVER_NAME		"goodix_ts"
