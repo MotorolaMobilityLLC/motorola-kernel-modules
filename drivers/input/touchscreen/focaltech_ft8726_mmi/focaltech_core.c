@@ -1599,6 +1599,7 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
 
+#if 0
 	ret = of_property_read_string(np, "focaltech,panel-supplier",
 		&fts_data->panel_supplier);
 	if (ret < 0) {
@@ -1607,6 +1608,7 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 	} else {
 		FTS_INFO("panel supplier is %s", (char *)fts_data->panel_supplier);
 	}
+#endif
     FTS_FUNC_EXIT();
     return 0;
 }
@@ -1923,6 +1925,109 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 }
 #endif
 
+#ifdef FT_FHD_MMI_GET_PANEL
+
+struct tag_vifeolfb{
+	u64 fb_base;
+	u32 islcmfound;
+	u32 fps;
+	u32 vram;
+	char lcmname[1];
+};
+static char mtkfb_lcm_name[256] = {0};
+
+static void __parse_tag_videolfb(struct device_node *node)
+{
+	struct tag_vifeolfb *videolfb_tag = NULL;
+	unsigned long size =0;
+	videolfb_tag = (struct tag_vifeolfb *)of_get_property(node,
+	"atag,videolfb", (int *)&size);
+
+	if(videolfb_tag)
+	{
+		memset((void *)mtkfb_lcm_name, 0, sizeof(mtkfb_lcm_name));
+		strcpy((char *)mtkfb_lcm_name, videolfb_tag->lcmname);
+		mtkfb_lcm_name[strlen(videolfb_tag->lcmname)] = '\0';
+	}
+
+}
+
+
+static void _parse_tag_videolfb(void)
+{
+	struct device_node *chosen_node;
+	chosen_node = of_find_node_by_path("/chosen");
+
+	if(!chosen_node)
+		chosen_node = of_find_node_by_path("/chosen@0");
+
+	if(chosen_node)
+		__parse_tag_videolfb(chosen_node);
+
+}
+
+static int ft_get_panel(void)
+{
+
+	FTS_INFO("enter");
+	_parse_tag_videolfb();
+
+	if(strstr(mtkfb_lcm_name,"ft8726"))
+	{
+		FTS_INFO("[%d  %s]mtkfb_lcm_name is:%s ", __LINE__, __FUNCTION__, mtkfb_lcm_name);
+		return 0;
+	}
+	return -1;
+}
+#endif
+
+static int fts_fb_check_dt(struct device_node *np)
+{
+	int ret = 0;
+	int num_of_panel_supplier;
+
+	if (!np)
+		return ret;
+
+	FTS_FUNC_ENTER();
+	if (!strlen(mtkfb_lcm_name)) {
+		FTS_ERROR("not get active_panel, ret=%d\n", ret);
+		return ret;
+	}
+
+	num_of_panel_supplier = of_property_count_strings(np, "focaltech,panel-supplier");
+	FTS_INFO("get focaltech,panel-supplier count=%d", num_of_panel_supplier);
+	if (num_of_panel_supplier > 1) {
+		int j;
+		for (j = 0; j < num_of_panel_supplier; j++) {
+			ret = of_property_read_string_index(np, "focaltech,panel-supplier", j, &fts_data->panel_supplier);
+			if (ret < 0) {
+				FTS_INFO("cannot parse panel-supplier: %d\n", ret);
+				break;
+			} else if (fts_data->panel_supplier && strstr(mtkfb_lcm_name, fts_data->panel_supplier)) {
+				FTS_INFO("matched panel_supplier: %s", fts_data->panel_supplier);
+				return 0;
+			}
+		}
+	} else {
+		ret = of_property_read_string(np, "focaltech,panel-supplier",
+			&fts_data->panel_supplier);
+		if (ret < 0) {
+			fts_data->panel_supplier = NULL;
+			FTS_ERROR("Unable to read panel supplier\n");
+		} else if (fts_data->panel_supplier && strstr(mtkfb_lcm_name, fts_data->panel_supplier)) {
+			FTS_INFO("panel_supplier:%s matched!\n", fts_data->panel_supplier);
+			return 0;
+		} else {
+			if (fts_data->panel_supplier)
+				FTS_INFO(":%s not actived\n", fts_data->panel_supplier);
+			else
+				FTS_INFO("panel_supplier NULL!\n");
+		}
+	}
+
+	return -1;
+}
 static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 {
     int ret = 0;
@@ -1937,6 +2042,11 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     }
 
     if (ts_data->dev->of_node) {
+        ret = fts_fb_check_dt(ts_data->dev->of_node);
+        if(ret) {
+            FTS_ERROR("check fb_check_dt fail");
+            return -ENODEV;
+        }
         ret = fts_parse_dt(ts_data->dev, ts_data->pdata);
         if (ret)
             FTS_ERROR("device-tree parse fail");
@@ -2405,63 +2515,6 @@ static const struct dev_pm_ops fts_dev_pm_ops = {
     .suspend = fts_pm_suspend,
     .resume = fts_pm_resume,
 };
-#endif
-
-
-#ifdef FT_FHD_MMI_GET_PANEL
-
-struct tag_vifeolfb{
-	u64 fb_base;
-	u32 islcmfound;
-	u32 fps;
-	u32 vram;
-	char lcmname[1];
-};
-static char mtkfb_lcm_name[256] = {0};
-
-static void __parse_tag_videolfb(struct device_node *node)
-{
-	struct tag_vifeolfb *videolfb_tag = NULL;
-	unsigned long size =0;
-	videolfb_tag = (struct tag_vifeolfb *)of_get_property(node,
-	"atag,videolfb", (int *)&size);
-
-	if(videolfb_tag)
-	{
-		memset((void *)mtkfb_lcm_name, 0, sizeof(mtkfb_lcm_name));
-		strcpy((char *)mtkfb_lcm_name, videolfb_tag->lcmname);
-		mtkfb_lcm_name[strlen(videolfb_tag->lcmname)] = '\0';
-	}
-
-}
-
-
-static void _parse_tag_videolfb(void)
-{
-	struct device_node *chosen_node;
-	chosen_node = of_find_node_by_path("/chosen");
-
-	if(!chosen_node)
-		chosen_node = of_find_node_by_path("/chosen@0");
-
-	if(chosen_node)
-		__parse_tag_videolfb(chosen_node);
-
-}
-
-static int ft_get_panel(void)
-{
-
-	FTS_INFO("enter");
-	_parse_tag_videolfb();
-
-	if(strstr(mtkfb_lcm_name,"ft8726"))
-	{
-		FTS_INFO("[%d  %s]mtkfb_lcm_name is:%s ", __LINE__, __FUNCTION__, mtkfb_lcm_name);
-		return 0;
-	}
-	return -1;
-}
 #endif
 
 /*****************************************************************************
