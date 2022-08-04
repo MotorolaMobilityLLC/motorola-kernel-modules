@@ -46,6 +46,7 @@
 #include <linux/mutex.h>
 #include <linux/alarmtimer.h>
 #include <linux/notifier.h>
+#include <linux/mmi_wake_lock.h>
 #include "mmi_charger_class.h"
 #include <../../../misc/mediatek/typec/tcpc/inc/tcpm.h>
 
@@ -148,7 +149,7 @@ struct mmi_charger_manager {
 	struct power_supply	*mmi_chrg_mgr_psy;
 	struct notifier_block	psy_nb;
 
-	struct wakeup_source	mmi_hb_wake_source;
+	struct wakeup_source *	mmi_hb_wake_source;
 	struct alarm		heartbeat_alarm;
 	bool			factory_mode;
 	bool			suspended;
