@@ -52,6 +52,11 @@ enum {
     SC8551_MASTER,
 };
 
+enum {
+    SC8551A,
+    NU2105,
+};
+
 static int sc8551_mode_data[] = {
     [SC8551_STDALONE] = SC8551_STDALONE,
     [SC8551_MASTER] = SC8551_ROLE_MASTER,
@@ -119,6 +124,8 @@ struct sc8551 {
 
     int part_no;
     int revision;
+
+    int chip_vendor;//for nu2105
 
     int mode;
 
@@ -552,8 +559,16 @@ static int sc8551_get_adc_data(struct sc8551 *sc, int channel,  int *result)
         return ret;
     val = (val_h << 8) | val_l;
 	
-	sc_err("sc8551_get_adc_data before: channel=%d, val=%d\n", channel, val);
-
+	sc_err("sc8551_get_adc_data before: channel=%d, val=%d, vendor=%d\n", channel, val, sc->chip_vendor);
+if(sc->chip_vendor == NU2105){
+    if(channel == ADC_IBUS) 			val = val * /*1000 * 15625/10000*/1000;
+    else if(channel == ADC_VBUS)		val = val * /*1000 * 375/100*/1000;
+    else if(channel == ADC_VAC)			val = val * 5;
+    else if(channel == ADC_VOUT)		val = val * /*1000 * 125 / 100*/1000;
+    else if(channel == ADC_VBAT)		val = val * /*1000 * 125/100*/1000;
+    else if(channel == ADC_IBAT)		val = val * 3125/1000 ;
+    else if(channel == ADC_TDIE)		val = val * 5/10;
+}else{//SC8551A
     if(channel == ADC_IBUS) 			val = val * /*1000 * 15625/10000*/15625/10;
     else if(channel == ADC_VBUS)		val = val * /*1000 * 375/100*/3750;
     else if(channel == ADC_VAC)			val = val * 5;
@@ -561,7 +576,7 @@ static int sc8551_get_adc_data(struct sc8551 *sc, int channel,  int *result)
     else if(channel == ADC_VBAT)		val = val * /*1000 * 125/100*/1250;
     else if(channel == ADC_IBAT)		val = val * 3125/1000 ;
     else if(channel == ADC_TDIE)		val = val * 5/10;
-
+}
     *result = val;
 	
 	sc_err("sc8551_get_adc_data after: channel=%d, val=%d\n", channel, val);
@@ -775,8 +790,15 @@ static int sc8551_detect_device(struct sc8551 *sc)
     if (ret == 0) {
         sc->part_no = (data & SC8551_DEV_ID_MASK);
         sc->part_no >>= SC8551_DEV_ID_SHIFT;
-    }
 
+	if(data == SC8551A_DEVICE_ID)
+	sc->chip_vendor = SC8551A;
+	else if(data == NU2105_DEVICE_ID)
+	sc->chip_vendor = NU2105;
+	else
+	sc->chip_vendor = SC8551A;
+    }
+	sc_err("chip_vendor %d\n",sc->chip_vendor);
     return ret;
 }
 
@@ -911,6 +933,9 @@ static int sc8551_init_regulation(struct sc8551 *sc)
 
     sc8551_set_vdrop_deglitch(sc, 5000);
     sc8551_set_vdrop_th(sc, 400);
+
+    if(sc->chip_vendor == NU2105)
+    sc8551_update_bits(sc,SC8551_REG_0C,SC8551_TSBUS_TSBAT_SHIFT_MASK,(0x03<<SC8551_TSBUS_TSBAT_SHIFT_SHIFT));
 
     sc8551_enable_regulation(sc, false);
 
