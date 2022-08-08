@@ -1089,7 +1089,7 @@ static enum alarmtimer_restart mmi_heartbeat_alarm_cb(struct alarm *alarm,
 
 	mmi_chrg_info(chip, "MMI: HB alarm fired\n");
 
-	__pm_stay_awake(&chip->mmi_hb_wake_source);
+	PM_STAY_AWAKE(chip->mmi_hb_wake_source);
 	cancel_delayed_work(&chip->heartbeat_work);
 	/* Delay by 500 ms to allow devices to resume. */
 	schedule_delayed_work(&chip->heartbeat_work,
@@ -1190,7 +1190,7 @@ static void mmi_heartbeat_work(struct work_struct *work)
 
 	kfree(chrg_rate_string);
 
-	__pm_relax(&chip->mmi_hb_wake_source);
+	PM_RELAX(chip->mmi_hb_wake_source);
 
 	schedule_delayed_work(&chip->heartbeat_work,
 			      msecs_to_jiffies(hb_resch_time));
@@ -1609,8 +1609,13 @@ static int mmi_chrg_manager_probe(struct platform_device *pdev)
 
 	INIT_WORK(&chip->psy_changed_work, psy_changed_work_func);
 	INIT_DELAYED_WORK(&chip->heartbeat_work, mmi_heartbeat_work);
-	wakeup_source_init(&chip->mmi_hb_wake_source,
-			   "mmi_hb_wake");
+
+	PM_WAKEUP_REGISTER(chip->dev, chip->mmi_hb_wake_source, "mmi_hb_wake");
+	if (!chip->mmi_hb_wake_source) {
+		mmi_chrg_err(chip, "wakeup source request failed\n");
+		goto cleantcpc;
+	}
+
 	alarm_init(&chip->heartbeat_alarm, ALARM_BOOTTIME,
 		   mmi_heartbeat_alarm_cb);
 
