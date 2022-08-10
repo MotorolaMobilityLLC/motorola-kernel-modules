@@ -158,7 +158,7 @@ struct nvt_sensor_platform_data {
 
 /* charger detect */
 #define USB_DETECT_IN 1
-#define USB_DETECT_OUT 0
+#define USB_DETECT_OUT 2	//MTK
 #define CMD_CHARGER_ON (0x53)
 #define CMD_CHARGER_OFF (0x51)
 
@@ -167,6 +167,7 @@ struct usb_charger_detection {
 	uint8_t usb_connected;
 	struct workqueue_struct *nvt_charger_notify_wq;
 	struct work_struct charger_notify_work;
+	const char *psy_name;
 };
 
 struct nvt_ts_data {
@@ -208,6 +209,7 @@ struct nvt_ts_data {
 	uint32_t report_gesture_key;
 	struct usb_charger_detection *charger_detection;
 	bool usb_psp_online;
+	const char *psy_name;
 #ifdef CONFIG_SPI_MT65XX
     struct mtk_chip_config spi_ctrl;
 #endif
