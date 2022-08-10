@@ -108,6 +108,7 @@ uint32_t SWRST_N8_ADDR = 0; //read from dtsi
 uint32_t SPI_RD_FAST_ADDR = 0;	//read from dtsi
 uint32_t panel_wakeup = 0;	//read from dtsi
 static int charger_notifier_callback(struct notifier_block *nb, unsigned long val, void *v);
+static int charger_set_state(struct power_supply *psy, struct usb_charger_detection *chg_detect);
 static int nvt_set_charger(uint8_t charger_on_off);
 static void nvt_charger_notify_work(struct work_struct *work);
 static int usb_detect_flag = 0;
@@ -1212,6 +1213,7 @@ static int32_t nvt_parse_dt(struct device *dev)
 	if (of_property_read_bool(np, "novatek,usb_charger")) {
 		NVT_LOG("novatek,usb_charger set");
 		ts->charger_detection_enable = 1;
+		of_property_read_string(np, "novatek,psy-name", &ts->psy_name);
 		if(of_property_read_bool(np, "novatek,usb-psp-online")) {
 			NVT_LOG("novatek,usb-psp-online set\n");
 			ts->usb_psp_online = 1;
@@ -2419,7 +2421,6 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 
 	if (ts->charger_detection) {
 		struct power_supply *psy = NULL;
-		union power_supply_propval prop = {0};
 
 		NVT_LOG("charger_detection on");
 		ts->charger_detection->usb_connected = 0;
@@ -2442,18 +2443,19 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		 * event, and will cause miss to set TP into charger state.
 		 * So check PS state in probe.
 		 */
-		psy = power_supply_get_by_name("usb");
+		if (ts->psy_name) {
+			psy = power_supply_get_by_name(ts->psy_name);
+			ts->charger_detection->psy_name = ts->psy_name;
+			NVT_LOG("ts->charger_detection->psy_name=%s", ts->charger_detection->psy_name);
+		}
+		else
+			psy = power_supply_get_by_name("usb");
+
 		if (psy) {
-			if (ts->usb_psp_online) {
-				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
-				if (ret < 0)
-					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
-			} else {
-				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
-				if (ret < 0)
-					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
-			}
-			if (ret < 0) {
+			ret = charger_set_state(psy, ts->charger_detection);
+			if (!ret)
+				nvt_set_charger(ts->charger_detection->usb_connected);
+			else {
 				//release charger_detection instead of goto err_register_charger_notify_failed
 				//to NOT interrupt NVT probe process
 				//goto err_register_charger_notify_failed;
@@ -2464,16 +2466,6 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 					destroy_workqueue(ts->charger_detection->nvt_charger_notify_wq);
 					ts->charger_detection->nvt_charger_notify_wq = NULL;
 					kfree(ts->charger_detection);
-				}
-			} else {
-				usb_detect_flag = prop.intval;
-				if (usb_detect_flag != ts->charger_detection->usb_connected) {
-					 if (USB_DETECT_IN == usb_detect_flag) {
-						  ts->charger_detection->usb_connected = USB_DETECT_IN;
-					 } else {
-						  ts->charger_detection->usb_connected = USB_DETECT_OUT;
-					 }
-					 nvt_set_charger(ts->charger_detection->usb_connected);
 				}
 			}
 		}
@@ -3060,6 +3052,56 @@ static int nvt_set_charger(uint8_t charger_on_off)
 	return ret;
 }
 
+static int charger_set_state(struct power_supply *psy, struct usb_charger_detection *chg_detect) {
+	int ret;
+	union power_supply_propval prop = {0};
+
+	if (!psy) {
+		NVT_ERR("psy null\n");
+		return -EINVAL;
+	}
+
+	if (!chg_detect) {
+		NVT_ERR("chg_detect null\n");
+		return -EINVAL;
+	}
+
+	if (ts->usb_psp_online) {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
+		if (ret < 0)
+			NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
+	} else if (!strcmp(psy->desc->name, "battery")) {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &prop);
+		if (ret < 0) {
+			NVT_ERR("Couldn't get POWER_SUPPLY_PROP_STATUS rc=%d\n", ret);
+		}
+	} else {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &prop);
+		if (ret < 0)
+			NVT_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
+	}
+
+	if (!ret) {
+		//NVT_LOG("saved usb_detect_flag=%d, prop.intval=%d", usb_detect_flag, prop.intval);
+		if ((USB_DETECT_IN == prop.intval) || (USB_DETECT_OUT == prop.intval)) {
+			usb_detect_flag = prop.intval;
+			if (usb_detect_flag != chg_detect->usb_connected) {
+				chg_detect->usb_connected = usb_detect_flag;
+				//NVT_LOG("charger state updated: %d", usb_detect_flag);
+			}
+			else {
+				//NVT_LOG("charger state not changed");
+				ret = -1;
+			}
+		} else {
+			//NVT_LOG("unsupported prop.intval");
+			ret = -EINVAL;
+		}
+	}
+
+	return ret;
+}
+
 static void nvt_charger_notify_work(struct work_struct *work)
 {
 	if (NULL == work) {
@@ -3087,48 +3129,41 @@ static void nvt_charger_notify_work(struct work_struct *work)
 }
 
 static int charger_notifier_callback(struct notifier_block *nb,
-		unsigned long val, void *v)
+		unsigned long val, void *cb_v)
 {
 	int ret = 0;
-	struct power_supply *psy = NULL;
+	struct power_supply *psy = cb_v;
 	struct usb_charger_detection *charger_detection =
 			container_of(nb, struct usb_charger_detection, charger_notif);
-	union power_supply_propval prop;
 
-	psy= power_supply_get_by_name("usb");
-	if (!psy){
+	if (!charger_detection) {
+		NVT_LOG("charger_detection null\n");
 		return -EINVAL;
-		NVT_ERR("Couldn't get usbpsy\n");
 	}
 
-	if (!strcmp(psy->desc->name, "usb")){
-		if (psy && charger_detection && val == POWER_SUPPLY_PROP_STATUS) {
-			if (ts->usb_psp_online) {
-				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
-				if (ret < 0)
-					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
-			} else {
-				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
-				if (ret < 0)
-					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
-			}
+	if (!psy || !psy->desc || !psy->desc->name) {
+		NVT_ERR("psy null\n");
+		return -EINVAL;
+	}
 
-			if (ret < 0) {
-				return ret;
-			}else{
-				usb_detect_flag = prop.intval;
-				if(usb_detect_flag != charger_detection->usb_connected) {
-					 if (USB_DETECT_IN == usb_detect_flag) {
-						  charger_detection->usb_connected = USB_DETECT_IN;
-					 }else{
-						  charger_detection->usb_connected = USB_DETECT_OUT;
-					 }
-					 if (bTouchIsAwake){
-						 queue_work(charger_detection->nvt_charger_notify_wq,
-								&charger_detection->charger_notify_work);
-					}
-				}
-			}
+	//check psy name
+	if (charger_detection->psy_name) {
+		if (strncmp(psy->desc->name, charger_detection->psy_name, sizeof(&charger_detection->psy_name))) {
+			//NVT_LOG("unmatched charger psy_name:%s\n", psy->desc->name);
+			return 0;
+		}
+	}
+	else if (strncmp(psy->desc->name, "battery", sizeof("battery"))
+		&& strncmp(psy->desc->name, "usb", sizeof("usb"))) {
+		NVT_LOG("not charger psy_name:%s\n", psy->desc->name);
+		return 0;
+	}
+
+	if (val == POWER_SUPPLY_PROP_STATUS) {
+		ret = charger_set_state(psy, charger_detection);
+		if (!ret && bTouchIsAwake){
+			 queue_work(charger_detection->nvt_charger_notify_wq,
+					&charger_detection->charger_notify_work);
 		}
 	}
 	return 0;
