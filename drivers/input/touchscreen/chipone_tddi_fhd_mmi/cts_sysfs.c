@@ -948,7 +948,7 @@ static ssize_t update_firmware_from_file_store(struct device *dev,
 		goto err_release_firmware;
 	}
 
-	return count;
+	ret = count;
 
 err_release_firmware:
 	cts_release_firmware(firmware);
