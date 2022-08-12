@@ -38,6 +38,9 @@ ifneq ($(filter m y,$(CONFIG_CTS_FHD_MMI_GET_PANEL)),)
 	EXTRA_CFLAGS += -DCTS_FHD_MMI_GET_PANEL
 endif
 
+ifneq ($(filter m y,$(CONFIG_TARGET_BUILD_FACTORY)),)
+	EXTRA_CFLAGS += -DTARGET_BUILD_FACTORY
+endif
 
 obj-m := chipone_tddi_fhd_mmi.o
 
