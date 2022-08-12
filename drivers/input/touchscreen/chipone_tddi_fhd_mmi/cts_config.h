@@ -13,7 +13,10 @@
 #define CFG_CTS_HAS_RESET_PIN
 
 /* For Google Security */
+#ifdef TARGET_BUILD_FACTORY
+#else
 #define CFG_CTS_FOR_GKI
+#endif
 
 /* #define CONFIG_CTS_I2C_HOST */
 #ifndef CONFIG_CTS_I2C_HOST
