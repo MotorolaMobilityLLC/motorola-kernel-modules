@@ -2718,6 +2718,7 @@ static void bq2597x_charger_shutdown(struct i2c_client *client)
 {
 	struct bq2597x *bq = i2c_get_clientdata(client);
 
+	bq2597x_enable_charge(bq,false);
 	bq2597x_enable_adc(bq, false);
 	bq_err("Shutdown successfully!");
 }
