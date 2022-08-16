@@ -963,55 +963,55 @@ void nvt_ts_wakeup_gesture_report(uint8_t gesture_id, uint8_t *data)
 
 	switch (gesture_id) {
 		case GESTURE_WORD_C:
-			NVT_LOG("Gesture : Word-C.\n");
+			NVT_DBG("Gesture : Word-C.\n");
 			keycode = gesture_key_array[0];
 			break;
 		case GESTURE_WORD_W:
-			NVT_LOG("Gesture : Word-W.\n");
+			NVT_DBG("Gesture : Word-W.\n");
 			keycode = gesture_key_array[1];
 			break;
 		case GESTURE_WORD_V:
-			NVT_LOG("Gesture : Word-V.\n");
+			NVT_DBG("Gesture : Word-V.\n");
 			keycode = gesture_key_array[2];
 			break;
 		case GESTURE_DOUBLE_CLICK:
-			NVT_LOG("Gesture : Double Click.\n");
+			NVT_DBG("Gesture : Double Click.\n");
 			keycode = gesture_key_array[3];
 			break;
 		case GESTURE_WORD_Z:
-			NVT_LOG("Gesture : Word-Z.\n");
+			NVT_DBG("Gesture : Word-Z.\n");
 			keycode = gesture_key_array[4];
 			break;
 		case GESTURE_WORD_M:
-			NVT_LOG("Gesture : Word-M.\n");
+			NVT_DBG("Gesture : Word-M.\n");
 			keycode = gesture_key_array[5];
 			break;
 		case GESTURE_WORD_O:
-			NVT_LOG("Gesture : Word-O.\n");
+			NVT_DBG("Gesture : Word-O.\n");
 			keycode = gesture_key_array[6];
 			break;
 		case GESTURE_WORD_e:
-			NVT_LOG("Gesture : Word-e.\n");
+			NVT_DBG("Gesture : Word-e.\n");
 			keycode = gesture_key_array[7];
 			break;
 		case GESTURE_WORD_S:
-			NVT_LOG("Gesture : Word-S.\n");
+			NVT_DBG("Gesture : Word-S.\n");
 			keycode = gesture_key_array[8];
 			break;
 		case GESTURE_SLIDE_UP:
-			NVT_LOG("Gesture : Slide UP.\n");
+			NVT_DBG("Gesture : Slide UP.\n");
 			keycode = gesture_key_array[9];
 			break;
 		case GESTURE_SLIDE_DOWN:
-			NVT_LOG("Gesture : Slide DOWN.\n");
+			NVT_DBG("Gesture : Slide DOWN.\n");
 			keycode = gesture_key_array[10];
 			break;
 		case GESTURE_SLIDE_LEFT:
-			NVT_LOG("Gesture : Slide LEFT.\n");
+			NVT_DBG("Gesture : Slide LEFT.\n");
 			keycode = gesture_key_array[11];
 			break;
 		case GESTURE_SLIDE_RIGHT:
-			NVT_LOG("Gesture : Slide RIGHT.\n");
+			NVT_DBG("Gesture : Slide RIGHT.\n");
 			keycode = gesture_key_array[12];
 			break;
 		default:
@@ -1775,16 +1775,8 @@ static int nvt_sensor_set_enable(struct sensors_classdev *sensors_cdev,
 	NVT_LOG("Gesture set enable %d!", enable);
 	mutex_lock(&ts->state_mutex);
 	if (enable == 1) {
-		if(panel_wakeup){
-			NVT_LOG("panel_wakeup");
-			is_touchscreen_gesture_open(1);
-		}
 		ts->should_enable_gesture = true;
 	} else if (enable == 0) {
-		if(panel_wakeup){
-			NVT_LOG("panel_wakeup off");
-			is_touchscreen_gesture_open(0);
-		}
 		ts->should_enable_gesture = false;
 	} else {
 		NVT_LOG("unknown enable symbol\n");
@@ -2715,9 +2707,11 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 
 #if WAKEUP_GESTURE
 	device_init_wakeup(&ts->input_dev->dev, 0);
-#if defined(NVT_CONFIG_PANEL_NOTIFICATIONS) || defined(NVT_SET_TOUCH_STATE)
-	touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
 #endif
+
+#ifdef NVT_SENSOR_EN
+	touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
+	nvt_sensor_remove(ts);
 #endif
 
 	nvt_irq_enable(false);
@@ -2836,6 +2830,8 @@ static int32_t nvt_ts_suspend(struct device *dev)
 #if WAKEUP_GESTURE
 #ifdef NVT_SENSOR_EN
 	if (ts->should_enable_gesture) {
+		NVT_LOG("set tap touch state:%d\n", TOUCH_LOW_POWER_STATE);
+		touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
 #endif
 		//---write command to enter "wakeup gesture mode"---
 		buf[0] = EVENT_MAP_HOST_CMD;
@@ -2855,6 +2851,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		CTP_SPI_WRITE(ts->client, buf, 2);
 		ts->gesture_enabled = false;
 		ts->wakeable = false;
+		touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
 	}
 #endif
 #else // WAKEUP_GESTURE

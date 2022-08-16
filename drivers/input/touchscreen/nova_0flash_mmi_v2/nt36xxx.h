@@ -79,6 +79,7 @@
 #define NVT_LOG(fmt, args...)    pr_info("[%s] %s %d: " fmt, NVT_SPI_NAME, __func__, __LINE__, ##args)
 #endif
 #define NVT_ERR(fmt, args...)    pr_err("[%s] %s %d: " fmt, NVT_SPI_NAME, __func__, __LINE__, ##args)
+#define NVT_DBG(fmt, args...)    pr_debug("[%s] %s %d: " fmt, NVT_SPI_NAME, __func__, __LINE__, ##args)
 
 //---Input device info.---
 #define NVT_TS_NAME "NVTCapacitiveTouchScreen"
@@ -258,8 +259,7 @@ typedef enum {
     EVENT_MAP_PROJECTID                     = 0x9A,
 } SPI_EVENT_MAP;
 
-#ifdef NVT_SET_TOUCH_STATE
-#define MAX_PANEL_IDX 2
+#ifdef NVT_SENSOR_EN
 enum touch_panel_id {
 	TOUCH_PANEL_IDX_PRIMARY = 0,
 	TOUCH_PANEL_MAX_IDX,
@@ -307,9 +307,8 @@ int32_t nvt_clear_fw_status(void);
 int32_t nvt_check_fw_status(void);
 int32_t nvt_set_page(uint32_t addr);
 int32_t nvt_write_addr(uint32_t addr, uint8_t data);
-#ifdef NVT_SET_TOUCH_STATE
-int touch_set_state(int state, int panel_idx);
-int check_touch_state(int *state, int panel_idx);
+#ifdef NVT_SENSOR_EN
+extern int touch_set_state(int state, int panel_idx);
 #endif
 #if NVT_TOUCH_ESD_PROTECT
 extern void nvt_esd_check_enable(uint8_t enable);
@@ -321,7 +320,4 @@ extern int nvt_mcu_pen_detect_set(uint8_t pen_detect);
 extern int nvt_palm_set(bool enabled);
 #endif
 
-#ifdef NVT_SENSOR_EN
-extern void is_touchscreen_gesture_open(int value);
-#endif
 #endif /* _LINUX_NVT_TOUCH_H */
