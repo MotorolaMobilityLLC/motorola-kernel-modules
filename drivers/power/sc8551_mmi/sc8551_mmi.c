@@ -1205,11 +1205,11 @@ static int sc8551_charger_get_property(struct power_supply *psy,
         val->intval = sc->usb_present;
         break;
     case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-        ret = sc8551_get_adc_data(sc, ADC_VBUS, &result);
+        ret = sc8551_get_adc_data(sc, ADC_VBAT, &result);
         if (!ret)
-            sc->vbus_volt = result;
+            sc->vbat_volt = result;
 
-        val->intval = sc->vbus_volt;
+        val->intval = sc->vbat_volt;
         break;
     case POWER_SUPPLY_PROP_CURRENT_NOW:
         ret = sc8551_get_adc_data(sc, ADC_IBUS, &result);
