@@ -8,6 +8,7 @@
 #include <linux/notifier.h>
 #include "linux/version.h"
 #include <linux/regulator/consumer.h>
+#include <linux/mmi_wake_lock.h>
 
 #define FPSENSOR_DEV_NAME           "fpsensor"
 #define FPSENSOR_CLASS_NAME         "fpsensor"
@@ -28,7 +29,7 @@
 #define FPSENSOR_LOG_ENABLE         1         // 0:error log    1: debug log
 
 /*********************** power setting **********************/
-#define FPSENSOR_USE_POWER_GPIO     0        // 0: not use power gpio  1£ºpower gpio
+#define FPSENSOR_USE_POWER_GPIO     0        // 0: not use power gpio  1: power gpio
 
 /*********************** SPI GPIO setting **********************/
 #define FPSENSOR_SPI_PIN_SET        0        // 0: SPI pin is not configured in the driver    1: confinger spi pin in driver
@@ -151,7 +152,7 @@ typedef struct {
 #endif
 
 #if FPSENSOR_WAKEUP_SOURCE
-    struct wakeup_source ttw_wl;
+    struct wakeup_source *ttw_wl;
 #else
     struct wake_lock ttw_wl;
 #endif
