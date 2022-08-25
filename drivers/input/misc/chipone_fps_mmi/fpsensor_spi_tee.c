@@ -436,7 +436,7 @@ static irqreturn_t fpsensor_irq(int irq, void *handle)
     ** since this is interrupt context (other thread...) */
     smp_rmb();
 #if FPSENSOR_WAKEUP_SOURCE
-    __pm_wakeup_event(&fpsensor_dev->ttw_wl, 1000);
+    PM_WAKEUP_EVENT(fpsensor_dev->ttw_wl, 1000);
 #else
     wake_lock_timeout(&fpsensor_dev->ttw_wl, msecs_to_jiffies(1000));
 #endif
@@ -1027,7 +1027,12 @@ static int fpsensor_probe(struct platform_device *spi)
     }
     init_waitqueue_head(&fpsensor_dev->wq_irq_return);
 #if FPSENSOR_WAKEUP_SOURCE
-    wakeup_source_init(&g_fpsensor->ttw_wl , "fpsensor_ttw_wl");
+	PM_WAKEUP_REGISTER(NULL, g_fpsensor->ttw_wl, "fpsensor_ttw_wl");
+	if (!g_fpsensor->ttw_wl) {
+		fpsensor_debug(ERR_LOG, "wakeup source request failed");
+		status = -ENOMEM;
+		goto err2;
+	}
 #else
     wake_lock_init(&g_fpsensor->ttw_wl, WAKE_LOCK_SUSPEND, "fpsensor_ttw_wl");
 #endif
@@ -1078,7 +1083,7 @@ static int fpsensor_remove(struct platform_device *spi)
 #endif
     fpsensor_dev_cleanup(fpsensor_dev);
 #if FPSENSOR_WAKEUP_SOURCE
-    wakeup_source_trash(&fpsensor_dev->ttw_wl);
+    PM_WAKEUP_UNREGISTER(fpsensor_dev->ttw_wl);
 #else
     wake_lock_destroy(&fpsensor_dev->ttw_wl);
 #endif
