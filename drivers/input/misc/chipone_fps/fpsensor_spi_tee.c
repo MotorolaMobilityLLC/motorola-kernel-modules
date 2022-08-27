@@ -386,7 +386,7 @@ static irqreturn_t fpsensor_irq(int irq, void *handle)
     __pm_wakeup_event(fpsensor_dev->ttw_wl, 1000);
 #else
 #if FPSENSOR_WAKEUP_SOURCE
-    __pm_wakeup_event(&fpsensor_dev->ttw_wl, 1000);
+    PM_WAKEUP_EVENT(fpsensor_dev->ttw_wl, 1000);
 #else
     wake_lock_timeout(&fpsensor_dev->ttw_wl, msecs_to_jiffies(1000));
 #endif
@@ -859,7 +859,12 @@ static int fpsensor_probe(struct platform_device *spi)
     g_fpsensor->ttw_wl = wakeup_source_register(g_fpsensor->dev, "fpsensor_ttw_wl");
 #else
 #if FPSENSOR_WAKEUP_SOURCE
-    wakeup_source_init(&g_fpsensor->ttw_wl , "fpsensor_ttw_wl");
+    PM_WAKEUP_REGISTER(&spi->dev, g_fpsensor->ttw_wl, "fpsensor_ttw_wl");
+    if (!g_fpsensor->ttw_wl) {
+        fpsensor_debug(ERR_LOG, "wakeup source request failed\n");
+        status = -ENOMEM;
+        goto release_class;
+    }
 #else
     wake_lock_init(&g_fpsensor->ttw_wl, WAKE_LOCK_SUSPEND, "fpsensor_ttw_wl");
 #endif
@@ -873,6 +878,11 @@ static int fpsensor_probe(struct platform_device *spi)
     fpsensor_dev->device_available = 1;
     fpsensor_debug(INFO_LOG, "%s finished, driver version: %s\n", __func__, FPSENSOR_SPI_VERSION);
     goto out;
+
+#if FPSENSOR_WAKEUP_SOURCE
+release_class:
+    fpsensor_dev_cleanup(fpsensor_dev);
+#endif
 
 err2:
      if(fpsensor_dev->pinctrl != NULL)
@@ -932,7 +942,7 @@ static int fpsensor_remove(struct platform_device *spi)
     wakeup_source_unregister(fpsensor_dev->ttw_wl);
 #else
 #if FPSENSOR_WAKEUP_SOURCE
-    wakeup_source_trash(&fpsensor_dev->ttw_wl);
+    PM_WAKEUP_UNREGISTER(fpsensor_dev->ttw_wl);
 #else
     wake_lock_destroy(&fpsensor_dev->ttw_wl);
 #endif
