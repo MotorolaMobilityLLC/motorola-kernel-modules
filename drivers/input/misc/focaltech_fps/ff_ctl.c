@@ -36,6 +36,7 @@
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
 #include <linux/spi/spi.h>
+#include <linux/mmi_wake_lock.h>
 
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
@@ -65,7 +66,7 @@ typedef struct {
     struct fasync_struct *async_queue;
     struct input_dev *input;
     struct notifier_block fb_notifier;
-    struct wakeup_source wake_lock;
+    struct wakeup_source *wake_lock;
     bool b_driver_inited;
     bool b_config_dirtied;
 } ff_ctl_context_t;
@@ -205,7 +206,7 @@ static void ff_ctl_device_event(struct work_struct *ws)
     FF_LOGV("'%s' enter.", __func__);
 
     FF_LOGD("%s(irq = %d, ..) toggled.", __func__, ctx->irq_num);
-	__pm_wakeup_event(&g_context->wake_lock, 5000);
+    PM_WAKEUP_EVENT(g_context->wake_lock, 5000);
     kobject_uevent_env(&ctx->miscdev.this_device->kobj, KOBJ_CHANGE, uevent_env);
 
     FF_LOGV("'%s' leave.", __func__);
@@ -628,7 +629,11 @@ static int ff_probe(struct spi_device *dev)
     INIT_WORK(&ff_ctl_context.work_queue, ff_ctl_device_event);
 
     /* Init the wake lock. */
-    wakeup_source_init(&ff_ctl_context.wake_lock, "ff_wake_lock");
+    PM_WAKEUP_REGISTER(&dev->dev, ff_ctl_context.wake_lock, "ff_wake_lock");
+    if (!ff_ctl_context.wake_lock) {
+        FF_LOGE("wakeup source request failed\n");
+        return -ENOMEM;
+    }
 
     /* Assign the context instance. */
     g_context = &ff_ctl_context;
@@ -651,7 +656,7 @@ static int ff_remove(struct spi_device *dev)
     }
 
     /* De-init the wake lock. */
-    wakeup_source_trash(&g_context->wake_lock);
+    PM_WAKEUP_UNREGISTER(g_context->wake_lock);
 
     /* Unregister the miscellaneous device. */
     misc_deregister(&g_context->miscdev);
