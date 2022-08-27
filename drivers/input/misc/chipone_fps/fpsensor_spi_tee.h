@@ -8,6 +8,7 @@
 #include <linux/notifier.h>
 #include "linux/version.h"
 #include <linux/regulator/consumer.h>
+#include <linux/mmi_wake_lock.h>
 
 #define FPSENSOR_DEV_NAME           "fpsensor"
 #define FPSENSOR_CLASS_NAME         "fpsensor"
@@ -165,7 +166,7 @@ typedef struct {
     struct wakeup_source* ttw_wl;
 #else
 #if FPSENSOR_WAKEUP_SOURCE
-    struct wakeup_source ttw_wl;
+    struct wakeup_source* ttw_wl;
 #else
     struct wake_lock ttw_wl;
 #endif
