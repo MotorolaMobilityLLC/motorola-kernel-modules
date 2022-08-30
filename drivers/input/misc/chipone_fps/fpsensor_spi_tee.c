@@ -879,9 +879,12 @@ static int fpsensor_probe(struct platform_device *spi)
     fpsensor_debug(INFO_LOG, "%s finished, driver version: %s\n", __func__, FPSENSOR_SPI_VERSION);
     goto out;
 
+#ifdef CONFIG_CHIPONE_MTK_KERNEL5XX_WAKE_TYPE
+#else
 #if FPSENSOR_WAKEUP_SOURCE
 release_class:
     fpsensor_dev_cleanup(fpsensor_dev);
+#endif
 #endif
 
 err2:
