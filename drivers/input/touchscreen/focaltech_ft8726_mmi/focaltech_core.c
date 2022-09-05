@@ -79,6 +79,8 @@ enum touch_state {
 #define FTS_I2C_VTG_MAX_UV                  1800000
 #endif
 
+#define MTK_USB_DETECT_IN 1
+#define MTK_USB_DETECT_OUT 2
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
@@ -1526,6 +1528,9 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     int ret = 0;
     struct device_node *np = dev->of_node;
     u32 temp_val = 0;
+    const char *psy_name;
+    const char *psp_str;
+    struct fts_ts_data *ts_data = fts_data;
 
     FTS_FUNC_ENTER();
 
@@ -1595,6 +1600,29 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
         else
             pdata->max_touch_number = temp_val;
     }
+
+    ret = of_property_read_string(np,
+				      "focaltech,touch-charger-detect-psy-name",
+				      &psy_name);
+    if (ret) {
+        printk("Parse detect psy name failed %d", ret);
+        psy_name = "usb";
+    } else {
+	if (power_supply_get_by_name(psy_name) == NULL) {
+		printk("Power supply '%s' not found", psy_name);
+		psy_name = "usb";
+	}
+    }
+    ts_data->psy_name = psy_name;
+
+    ts_data->psp = "POWER_SUPPLY_PROP_ONLINE";
+    ret = of_property_read_string(np,
+				      "focaltech,touch-charger-detect-psp",
+				      &psp_str);
+    if (ret) {
+	printk("Parse detect psp failed %d", ret);
+    }
+    ts_data->psp = psp_str;
 
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
@@ -1903,20 +1931,43 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 	struct power_supply *psy = NULL;
 	struct fts_ts_data *ts = container_of(nb, struct fts_ts_data, charger_notif);
 	union power_supply_propval prop;
+	int psp_name;
 
-	psy= power_supply_get_by_name("usb");
+	if(!strcmp(ts->psp, "POWER_SUPPLY_PROP_STATUS")) {
+		psp_name = POWER_SUPPLY_PROP_STATUS;
+	}
+	else if(!strcmp(ts->psp, "POWER_SUPPLY_PROP_PRESENT")) {
+		psp_name = POWER_SUPPLY_PROP_PRESENT;
+	}
+	else if(!strcmp(ts->psp, "POWER_SUPPLY_PROP_ONLINE")) {
+		psp_name = POWER_SUPPLY_PROP_ONLINE;
+	}
+	else {
+		psp_name = -ENOENT;
+	}
+
+	psy= power_supply_get_by_name(ts->psy_name);
 	if (!psy) {
 		FTS_ERROR("Couldn't get usbpsy\n");
 		return -EINVAL;
 	}
-	if (!strcmp(psy->desc->name, "usb")) {
-		if (psy && ts && val == POWER_SUPPLY_PROP_STATUS) {
-			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
+	if (!strcmp(psy->desc->name, ts->psy_name)) {
+		if (psy && ts && val == psp_name) {
+			ret = power_supply_get_property(psy, psp_name,&prop);
 			if (ret < 0) {
 				FTS_ERROR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
 				return ret;
 			} else {
-				ts->usb_detect_flag = prop.intval;
+				FTS_INFO("USB Charge detect:%s %d prop.intval = %d ret = %d\n",__func__,__LINE__,prop.intval,ret);
+				if(prop.intval == MTK_USB_DETECT_IN) {
+					ts->usb_detect_flag = prop.intval;
+				}
+				else if(prop.intval == MTK_USB_DETECT_OUT) {
+					ts->usb_detect_flag = 0;
+				}
+				else {
+					ts->usb_detect_flag = -EINVAL;
+				}
 				//FTS_ERROR("usb prop.intval =%d\n", prop.intval);
 			}
 		}
@@ -2186,9 +2237,10 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 #ifdef CFG_MTK_PANEL_NOTIFIER
 	ts_data->disp_notifier.notifier_call = disp_notifier_callback;
 	ret = mtk_disp_notifier_register("Touch", &ts_data->disp_notifier);
-	if (ret)
+	if (ret) {
 		FTS_ERROR("Failed to register disp notifier client:%d", ret);
 	return ret;
+	}
 #endif /* CFG_MTK_PANEL_NOTIFIER */
 
 #if 0//defined(CONFIG_DRM)
