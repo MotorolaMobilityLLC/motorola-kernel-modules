@@ -290,6 +290,8 @@ struct fts_ts_data {
 	uint8_t usb_connected;
 	struct notifier_block charger_notif;
 #endif
+	const char *psy_name;
+	const char *psp;
 };
 
 enum _FTS_BUS_TYPE {
