@@ -276,7 +276,7 @@
 /*
  * Usb detect support
  */
-#define FTS_USB_DETECT_EN                       0
+#define FTS_USB_DETECT_EN                       1
 
 /*
  * module_id: mean vendor_id generally, also maybe gpio or lcm_id...
