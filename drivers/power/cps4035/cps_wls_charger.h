@@ -82,8 +82,10 @@
 #define RX_INT_OCP              (0x01<<9)
 #define RX_INT_HOCP             (0x01<<10)
 #define RX_INT_SCP              (0x01<<11)
-#define RX_INT_RESERVE4         (0x01<<12)
+#define RX_INT_NEGO_READY       (0x01<<12)
 #define RX_INT_INHIBIT_HIGH     (0x01<<13)
+#define RX_INT_HS_OK            (0x01<<14)
+#define RX_INT_HS_FAIL          (0x01<<15)
 
 /*rx命令定义*/
 #define RX_CMD_SEND_ASK         (0x01<<0)
@@ -165,6 +167,7 @@ typedef enum {
 	Sys_Op_Mode_AC_Missing = 0,
 	Sys_Op_Mode_BPP = 0x1,
 	Sys_Op_Mode_EPP = 0x2,
+	Sys_Op_Mode_MOTO_WLC = 0x3,
 	Sys_Op_Mode_PDDE= 0x4,
 	Sys_Op_Mode_TX = 0x8,
 	Sys_Op_Mode_TX_FOD = 0x9,
@@ -280,6 +283,10 @@ struct cps_wls_chrg_chip {
     bool rx_int_ready;
     bool bpp_icl_done;
 
+    int fan_speed;
+    int light_level;
+    int wlc_status;
+    uint32_t wlc_tx_power;
     /*wls pen*/
 #ifdef SMART_PEN_SUPPORT
     struct moto_wls_pen_ops  wls_pen_ops;
@@ -306,4 +313,8 @@ typedef enum ept_reason
 }ept_reason_e;
 
 static void wls_rx_start_timer(struct cps_wls_chrg_chip *info);
+static void cps_rx_online_check(struct cps_wls_chrg_chip *chg);
+static int cps_wls_set_status(int status);
+static void cps_wls_current_select(int  *icl, int *vbus);
+static void cps_init_charge_hardware(void);
 #endif
