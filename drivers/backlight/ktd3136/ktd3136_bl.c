@@ -124,8 +124,10 @@ static int ktd3136_gpio_init(struct ktd3136_data *drvdata)
 		ret = gpio_request(drvdata->hwen_gpio, "ktd_hwen_gpio");
 		if (ret<0) {
 			pr_err("failed to request gpio\n");
+			gpio_free(drvdata->hwen_gpio);
 			return -1;
 		}
+		/*
 		ret = gpio_direction_output(drvdata->hwen_gpio, 0);
 		pr_debug(" request gpio init\n");
 		if (ret<0) {
@@ -133,6 +135,7 @@ static int ktd3136_gpio_init(struct ktd3136_data *drvdata)
 			gpio_free(drvdata->hwen_gpio);
 			return ret;
 		}
+		*/
 		pr_debug("gpio is valid!\n");
 		ktd3136_hwen_pin_ctrl(drvdata, 1);
 	}
