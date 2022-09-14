@@ -1,0 +1,11 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+	ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/bq25980_mmi_sc \
+		-I$(ANDROID_BUILD_TOP)/kernel-4.19/drivers/power/supply
+
+obj-m += bq25980_mmi_sc.o
