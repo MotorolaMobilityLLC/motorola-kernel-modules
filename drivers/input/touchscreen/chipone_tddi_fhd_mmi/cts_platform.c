@@ -961,12 +961,19 @@ int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
 	struct input_dev *input_dev = pdata->ts_input_dev;
 	int i;
 	int contact = 0;
+#ifdef CONFIG_GTP_LAST_TIME
+	struct chipone_ts_data *cts_data;
+#endif
 #ifdef CONFIG_CTS_SLOTPROTOCOL
 	static unsigned char finger_last[CFG_CTS_MAX_TOUCH_NUM] = { 0 };
 	unsigned char finger_current[CFG_CTS_MAX_TOUCH_NUM] = { 0 };
 #endif
 
 	cts_dbg("Process touch %d msgs", num);
+#ifdef CONFIG_GTP_LAST_TIME
+	cts_data =
+	    container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
+#endif
 	if (num == 0 || num > CFG_CTS_MAX_TOUCH_NUM)
 		return 0;
 
@@ -1000,6 +1007,9 @@ int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
 		case CTS_DEVICE_TOUCH_EVENT_MOVE:
 		case CTS_DEVICE_TOUCH_EVENT_STAY:
 			contact++;
+#ifdef CONFIG_GTP_LAST_TIME
+			cts_data->last_event_time = ktime_get_boottime();
+#endif
 			input_mt_slot(input_dev, msgs[i].id);
 			input_mt_report_slot_state(input_dev, MT_TOOL_FINGER,
 						   true);

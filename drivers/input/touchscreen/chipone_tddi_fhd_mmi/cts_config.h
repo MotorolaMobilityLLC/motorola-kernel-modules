@@ -69,7 +69,11 @@
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
 /* IC type support */
+#ifdef CONFIG_GTP_LAST_TIME
+#define CFG_CTS_CHIP_NAME                   "primary"
+#else
 #define CFG_CTS_CHIP_NAME                   "ICNL9911S"
+#endif
 
 #ifdef CONFIG_PROC_FS
     /* Proc FS for backward compatibility for APK tool com.ICN85xx */

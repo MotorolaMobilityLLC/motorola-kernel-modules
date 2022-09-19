@@ -10,6 +10,10 @@
 #include <linux/sensors.h>
 #endif
 
+#ifdef CONFIG_GTP_LAST_TIME
+#include <linux/ktime.h>
+#endif
+
 enum cts_dev_hw_reg {
 	CTS_DEV_HW_REG_HARDWARE_ID = 0x30000u,
 	CTS_DEV_HW_REG_CLOCK_GATING = 0x30004u,
@@ -480,7 +484,9 @@ struct chipone_ts_data {
 #endif				/* CONFIG_CTS_LEGACY_TOOL */
 
 	bool force_reflash;
-
+#ifdef CONFIG_GTP_LAST_TIME
+	ktime_t last_event_time;
+#endif
 #ifdef CHIPONE_SENSOR_EN
 	bool wakeable;
 	bool should_enable_gesture;
