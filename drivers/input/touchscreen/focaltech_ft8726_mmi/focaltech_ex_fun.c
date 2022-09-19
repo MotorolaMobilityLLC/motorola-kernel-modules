@@ -1730,11 +1730,36 @@ static ssize_t ic_ver_show(struct device *dev,
 	return fts_ic_ver_show(dev, attr, buf);
 }
 
+
+#ifdef CONFIG_GTP_LAST_TIME
+static ssize_t timestamp_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+    struct fts_ts_data *ts_data = dev_get_drvdata(dev);
+    struct input_dev *input_dev = ts_data->input_dev;
+
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
+
+	mutex_lock(&input_dev->mutex);
+	last_ktime = ts_data->last_event_time;
+	ts_data->last_event_time = 0;
+	mutex_unlock(&input_dev->mutex);
+
+	last_ts = ktime_to_timespec64(last_ktime);
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
+	//return scnprintf(buf, PAGE_SIZE, "hxl: %d.%d\n", 123, 456);
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
 	__ATTR_RO(panel_supplier),
+#ifdef CONFIG_GTP_LAST_TIME
+	__ATTR_RO(timestamp),
+#endif
 	__ATTR_NULL
 };
 
