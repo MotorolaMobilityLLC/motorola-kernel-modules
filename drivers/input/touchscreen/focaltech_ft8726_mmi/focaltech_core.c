@@ -521,6 +521,9 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
 #if FTS_REPORT_PRESSURE_EN
             input_report_abs(input_dev, ABS_MT_PRESSURE, events[i].p);
 #endif
+#ifdef CONFIG_GTP_LAST_TIME
+            ts_data->last_event_time = ktime_get_boottime();
+#endif
             input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR, events[i].area);
             input_report_abs(input_dev, ABS_MT_POSITION_X, events[i].x);
             input_report_abs(input_dev, ABS_MT_POSITION_Y, events[i].y);
@@ -1620,9 +1623,10 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 				      "focaltech,touch-charger-detect-psp",
 				      &psp_str);
     if (ret) {
-	printk("Parse detect psp failed %d", ret);
+	    printk("Parse detect psp failed %d", ret);
+    } else {
+	    ts_data->psp = psp_str;
     }
-    ts_data->psp = psp_str;
 
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
