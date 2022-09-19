@@ -1608,25 +1608,26 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 				      "focaltech,touch-charger-detect-psy-name",
 				      &psy_name);
     if (ret) {
-        printk("Parse detect psy name failed %d", ret);
-        psy_name = "usb";
+		FTS_INFO("Parse detect psy name failed %d", ret);
+		ts_data->psy_name = NULL;
     } else {
+	    ts_data->psy_name = psy_name;
 	if (power_supply_get_by_name(psy_name) == NULL) {
-		printk("Power supply '%s' not found", psy_name);
-		psy_name = "usb";
+		FTS_INFO("Power supply '%s' not found", psy_name);
+		psy_name = NULL;
+
 	}
     }
-    ts_data->psy_name = psy_name;
 
-    ts_data->psp = "POWER_SUPPLY_PROP_ONLINE";
     ret = of_property_read_string(np,
 				      "focaltech,touch-charger-detect-psp",
 				      &psp_str);
     if (ret) {
-	    printk("Parse detect psp failed %d", ret);
-    } else {
-	    ts_data->psp = psp_str;
-    }
+		ts_data->psp = NULL;
+		FTS_INFO("Parse detect psp failed %d", ret);
+	} else {
+		ts_data->psp = psp_str;
+	}
 
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
@@ -2282,6 +2283,7 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 #endif
 
 #if FTS_USB_DETECT_EN
+    if(ts_data->psy_name != NULL && ts_data->psp != NULL) {
 	ts_data->usb_connected = 0x00;
 	ts_data->charger_notif.notifier_call = fts_charger_notifier_callback;
 	ret = power_supply_reg_notifier(&ts_data->charger_notif);
@@ -2289,6 +2291,7 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 		FTS_ERROR("Unable to register charger_notifier: %d\n",ret);
 		goto err_register_charger_notify_failed;
 	}
+    }
 #endif
 
     FTS_FUNC_EXIT();
