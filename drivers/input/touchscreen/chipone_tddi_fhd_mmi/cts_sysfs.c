@@ -278,6 +278,24 @@ static DEVICE_ATTR(poweron, S_IRUGO, cts_poweron_show, NULL);
 static DEVICE_ATTR(productinfo, S_IRUGO, cts_productinfo_show, NULL);
 #endif
 
+#ifdef CONFIG_GTP_LAST_TIME
+static ssize_t timestamp_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
+
+	cts_lock_device(&cts_data->cts_dev);
+	last_ktime = cts_data->last_event_time;
+	cts_data->last_event_time = 0;
+	cts_unlock_device(&cts_data->cts_dev);
+
+	last_ts = ktime_to_timespec64(last_ktime);
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
+}
+#endif
+
 static DEVICE_ATTR(write_reg, S_IWUSR, NULL, write_firmware_register_store);
 
 static ssize_t read_firmware_register_show(struct device *dev,
@@ -3289,6 +3307,9 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
+#ifdef CONFIG_GTP_LAST_TIME
+	__ATTR_RO(timestamp),
+#endif
 	__ATTR_NULL
 };
 
@@ -3315,6 +3336,11 @@ static int cts_fw_class_init(void *_data, bool create)
 	cts_info("%s touchscreen class files", create ? "Add" : "Remove");
 
 	if (create) {
+#ifdef CONFIG_GTP_LAST_TIME
+		error =
+		    alloc_chrdev_region(&devno, 0, 1,
+					CFG_CTS_CHIP_NAME);
+#else
 		if (data->cts_dev.hwdata->name != NULL)
 			error =
 			    alloc_chrdev_region(&devno, 0, 1,
@@ -3323,7 +3349,7 @@ static int cts_fw_class_init(void *_data, bool create)
 			error =
 			    alloc_chrdev_region(&devno, 0, 1,
 						CFG_CTS_CHIP_NAME);
-
+#endif
 		if (error) {
 			cts_info("Alloc input devno failed %d", error);
 			return error;
@@ -3339,6 +3365,12 @@ static int cts_fw_class_init(void *_data, bool create)
 			return error;
 		}
 
+#ifdef CONFIG_GTP_LAST_TIME
+			ts_class_dev = device_create(touchscreen_class, NULL,
+						     devno, data, "%s",
+						     CFG_CTS_CHIP_NAME);
+			cts_info("Create device '" CFG_CTS_CHIP_NAME "'");
+#else
 		if (data->cts_dev.hwdata->name != NULL) {
 			ts_class_dev = device_create(touchscreen_class, NULL,
 						     devno, data, "%s",
@@ -3351,6 +3383,7 @@ static int cts_fw_class_init(void *_data, bool create)
 						     CFG_CTS_CHIP_NAME);
 			cts_info("Create device '" CFG_CTS_CHIP_NAME "'");
 		}
+#endif
 		if (IS_ERR(ts_class_dev)) {
 			cts_err("Create device '" CFG_CTS_CHIP_NAME
 				"'failed %ld", PTR_ERR(ts_class_dev));
