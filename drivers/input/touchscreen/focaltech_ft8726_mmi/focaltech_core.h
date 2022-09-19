@@ -73,6 +73,9 @@
 #ifdef FOCALTECH_CONFIG_PANEL_NOTIFICATIONS
 #include <linux/panel_notifier.h>
 #endif
+#ifdef CONFIG_GTP_LAST_TIME
+#include <linux/ktime.h>
+#endif
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -289,6 +292,9 @@ struct fts_ts_data {
 	bool usb_detect_flag;
 	uint8_t usb_connected;
 	struct notifier_block charger_notif;
+#endif
+#ifdef CONFIG_GTP_LAST_TIME
+	ktime_t last_event_time;
 #endif
 	const char *psy_name;
 	const char *psp;

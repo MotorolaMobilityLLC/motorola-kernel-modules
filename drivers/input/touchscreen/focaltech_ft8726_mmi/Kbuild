@@ -42,3 +42,7 @@ endif
 ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
 	EXTRA_CFLAGS += -DCONFIG_MTK_PANEL_NOTIFICATIONS
 endif
+
+ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
+endif
