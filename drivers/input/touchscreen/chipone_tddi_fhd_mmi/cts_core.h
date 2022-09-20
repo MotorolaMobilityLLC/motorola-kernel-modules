@@ -400,7 +400,7 @@ struct cts_dev_ops {
 	int (*top_get_cnegdata)(struct cts_device *cts_dev, u8 *buf,
 				size_t size);
 
-	int (*reset_device)(const struct cts_device *cts_dev);
+	int (*reset_device)(struct cts_device *cts_dev);
 
 	int (*set_int_test)(const struct cts_device *cts_dev, u8 enable);
 	int (*set_int_pin)(const struct cts_device *cts_dev, u8 high);
