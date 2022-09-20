@@ -67,10 +67,16 @@ struct fpc_data {
 	int irq_num;
 	int rst_gpio;
 	int vdd_gpio;
+	int power_enabled;
+	unsigned int rgltr_ctrl_support;
+	uint32_t regulator_current;
+	uint32_t pwr_voltage_range[2];
+
 	bool wakeup_enabled;
 	bool request_irq;
 	bool init;
 	bool init_wakeup;
+	struct regulator *pwr_supply;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
 	struct wakeup_source* ttw_wl;
 #else
@@ -126,6 +132,48 @@ static int set_clks(struct fpc_data *fpc, bool enable)
 	return rc;
 }
 
+static int fpc_power_on(struct  fpc_data *fpc)
+{
+	int rc = 0;
+
+	if (!fpc) return 0;
+
+	if (!fpc->power_enabled) {
+		if (fpc->rgltr_ctrl_support && !IS_ERR_OR_NULL(fpc->pwr_supply)) {
+			rc = regulator_enable(fpc->pwr_supply);
+			dev_info(fpc->dev, " %s : enable  pwr_supply return %d \n", __func__, rc);
+		} else if (gpio_is_valid(fpc->vdd_gpio)) {
+			gpio_direction_output(fpc->vdd_gpio, 1);
+		}
+		fpc->power_enabled = 1;
+		if (fpc->rgltr_ctrl_support ||gpio_is_valid(fpc->vdd_gpio)){
+			usleep_range(11000,12000);
+		}
+	}
+	return rc;
+}
+
+static int fpc_power_off(struct  fpc_data *fpc)
+{
+	int rc = 0;
+
+	if (!fpc) return 0;
+
+	if (fpc->power_enabled) {
+		if (fpc->rgltr_ctrl_support && !IS_ERR_OR_NULL(fpc->pwr_supply)) {
+			rc = regulator_disable(fpc->pwr_supply);
+			dev_info(fpc->dev, " %s : disable  pwr_supply return %d \n", __func__, rc);
+		} else if (gpio_is_valid(fpc->vdd_gpio)) {
+			gpio_direction_output(fpc->vdd_gpio, 0);
+		}
+		fpc->power_enabled = 0;
+		if (fpc->rgltr_ctrl_support ||gpio_is_valid(fpc->vdd_gpio)){
+			usleep_range(11000,12000);
+		}
+	}
+	return rc;
+}
+
 static int hw_reset(struct  fpc_data *fpc)
 {
 	int irq_gpio;
@@ -154,14 +202,21 @@ static ssize_t hw_reset_set(struct device *dev,
 {
 	int rc;
 	struct  fpc_data *fpc = dev_get_drvdata(dev);
-
+	dev_info(dev," %s : hw_reset_set %s\n", __func__, (buf == NULL) ? "":buf);
 	if (!strncmp(buf, "reset", strlen("reset"))) {
 		rc = hw_reset(fpc);
+		return rc ? rc : count;
+	} else if (!strncmp(buf, "poweroff", strlen("poweroff"))) {
+		rc = fpc_power_off(fpc);
+		return rc ? rc : count;
+	} else if (!strncmp(buf, "poweron", strlen("poweron"))) {
+		rc = fpc_power_on(fpc);
 		return rc ? rc : count;
 	} else {
 		return -EINVAL;
 	}
 }
+
 static DEVICE_ATTR(hw_reset, S_IWUSR, NULL, hw_reset_set);
 
 /**
@@ -253,8 +308,46 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 	int irqf = 0;
 	int irq_num = 0;
 	int rc = 0;
+	fpc->pwr_supply = NULL;
 
-	if (!fpc->vdd_gpio) {
+	if (of_property_read_bool(dev->of_node,"rgltr-ctrl-support")) {
+		fpc->rgltr_ctrl_support = 1;
+	} else {
+		fpc->rgltr_ctrl_support = 0;
+		dev_err(fpc->dev, "No regulator control parameter defined\n");
+	}
+
+	if (fpc->rgltr_ctrl_support) {
+		fpc->pwr_supply = devm_regulator_get(dev, "fp,vdd");
+		if (IS_ERR_OR_NULL(fpc->pwr_supply)) {
+			fpc->pwr_supply = NULL;
+			fpc->rgltr_ctrl_support = 0;
+			dev_warn(dev, "Unable to get fp,vdd-regulator");
+		} else {
+			rc = of_property_read_u32_array(dev->of_node, "fp,voltage-range", fpc->pwr_voltage_range, 2);
+			if (rc) {
+				fpc->pwr_voltage_range[0] = -1;
+				fpc->pwr_voltage_range[1] = -1;
+			}
+
+			rc = of_property_read_u32_array(dev->of_node, "fp,vdd-current", &fpc->regulator_current, 1);
+			if (rc) {
+				fpc->regulator_current = 100000;
+			}
+
+			if (regulator_count_voltages(fpc->pwr_supply) > 0) {
+				if((fpc->pwr_voltage_range[0] >0) && (fpc->pwr_voltage_range[1] > 0))
+					rc = regulator_set_voltage(fpc->pwr_supply, fpc->pwr_voltage_range[0], fpc->pwr_voltage_range[1]);
+				if (rc)
+					dev_warn(dev, " %s : set vdd regulator voltage failed %d \n", __func__, rc);
+				rc = regulator_set_load(fpc->pwr_supply, fpc->regulator_current);
+				if (rc) {
+					dev_err(dev, " %s : set vcc regulator current failed %d \n", __func__, rc);
+					goto fpc_power_setup_fail;
+				}
+			}
+		}
+	} else if (!fpc->vdd_gpio) {
 		fpc->vdd_gpio = of_get_named_gpio(dev->of_node, "fpc,vdd", 0);
 		dev_info(dev, "Using GPIO#%d as  vdd. enable\n", fpc->vdd_gpio);
 		if (!gpio_is_valid(fpc->vdd_gpio)){
@@ -325,6 +418,10 @@ err_vdd:
 		device_init_wakeup(dev, false);
 		fpc->init_wakeup = false;
 	}
+
+fpc_power_setup_fail:
+	if(fpc->rgltr_ctrl_support && !IS_ERR_OR_NULL(fpc->pwr_supply))
+		devm_regulator_put(fpc->pwr_supply);
 	return rc;
 }
 
@@ -346,6 +443,8 @@ static int fpc_hw_res_release(struct fpc_data *fpc)
 		device_init_wakeup(dev, false);
 		fpc->init_wakeup = false;
 	}
+	if(fpc->rgltr_ctrl_support && !IS_ERR_OR_NULL(fpc->pwr_supply))
+		devm_regulator_put(fpc->pwr_supply);
 	return 0;
 }
 
@@ -583,8 +682,10 @@ static int fpc_tee_probe(struct spi_device *spidev)
 	}
 #ifndef USER_SPACE_SPI_INIT
 	dev_info(dev, "%s: enable\n", __func__);
+	fpc->power_enabled = 0;
 	fpc_dts_request(fpc);
 	fpc_hw_res_request(fpc);
+	fpc_power_on(fpc);
 	hw_reset(fpc);
 #endif
 	fpc->init = true;
@@ -601,6 +702,7 @@ static int fpc_tee_remove(struct spi_device *spidev)
 
 	dev_info(&spidev->dev, "%s: start\n", __func__);
 #ifndef USER_SPACE_SPI_INIT
+	fpc_power_off(fpc);
 	fpc_hw_res_release(fpc);
 	fpc_dts_release(fpc);
 #endif
