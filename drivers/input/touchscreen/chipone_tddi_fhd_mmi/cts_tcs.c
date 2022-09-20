@@ -25,6 +25,7 @@
 /* tcs reply tail: (errcode + cmd + crc) */
 #define TCS_REPLY_TAIL_SIZ                  (sizeof(u8) + sizeof(u16) + sizeof(u16))
 
+#define INT_DATA_VALID_SIZ					(62)
 #define INT_DATA_INFO_SIZ                   (64)
 #define INT_DATA_TYPE_LEN_SIZ               (4)
 
@@ -958,10 +959,11 @@ static int cts_tcs_polling_data(const struct cts_device *cts_dev, u8 *buf,
 		data_size = TOUCH_INFO_SIZ + TCS_REPLY_TAIL_SIZ;
 
 	do {
+		mdelay(3);
 		ret = cts_tcs_get_data_ready_flag(cts_dev, &ready);
 		if (!ret && ready)
 			break;
-		mdelay(10);
+		mdelay(2);
 	} while (!ready && --retries);
 	cts_info("get data rdy, retries left %d", retries);
 
@@ -1029,6 +1031,24 @@ static int polling_data(struct cts_device *cts_dev, u8 *buf, size_t size,
 	return ret;
 }
 
+int cts_test_polling_rawdata(struct cts_device *cts_dev, u8 *buf, size_t size)
+{
+    int ret = -EIO, retries = 5;
+    int offset = TOUCH_INFO_SIZ + INT_DATA_INFO_SIZ + INT_DATA_TYPE_LEN_SIZ;
+
+    while (retries--) {
+        ret = cts_polling_data(cts_dev, buf, size);
+        if (!ret) {
+			if (cts_dev->rtdata.int_data[TOUCH_INFO_SIZ + INT_DATA_VALID_SIZ]) {
+	            memcpy(buf, cts_dev->rtdata.int_data + offset, size);
+	            break;
+			}
+        }
+    }
+
+    return ret;
+}
+
 int cts_tcs_top_get_rawdata(struct cts_device *cts_dev, u8 *buf, size_t size)
 {
 	return polling_data(cts_dev, buf, size, INT_DATA_TYPE_RAWDATA);
@@ -1074,7 +1094,7 @@ static int cts_tcs_tp_reset(const struct cts_device *cts_dev)
 	return ret;
 }
 
-int cts_tcs_reset_device(const struct cts_device *cts_dev)
+int cts_tcs_reset_device(struct cts_device *cts_dev)
 {
 	bool use_soft_tp_reset;
 	int ret;
@@ -1100,6 +1120,9 @@ int cts_tcs_reset_device(const struct cts_device *cts_dev)
 		}
 		/* program */
 		cts_info("tp reset in program mode");
+
+		cts_enter_program_mode(cts_dev);
+		
 		ret =
 		    cts_hw_reg_writeb(cts_dev, CTS_DEV_HW_REG_RESET_CONFIG,
 				      0xfd);

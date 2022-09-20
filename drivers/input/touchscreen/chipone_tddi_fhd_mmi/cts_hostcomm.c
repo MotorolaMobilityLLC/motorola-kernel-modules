@@ -449,7 +449,7 @@ int cts_hostcomm_top_get_cnegdata(struct cts_device *cts_dev, u8 *buf,
 	return cts_get_compensate_cap(cts_dev, buf);
 }
 
-int cts_hostcomm_reset_device(const struct cts_device *cts_dev)
+int cts_hostcomm_reset_device(struct cts_device *cts_dev)
 {
 	return cts_plat_reset_device(cts_dev->pdata);
 }
