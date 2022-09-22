@@ -3262,10 +3262,8 @@ static ssize_t path_show(struct device *dev,
 			 struct device_attribute *attr, char *buf)
 {
 	struct chipone_ts_data *data = dev_get_drvdata(dev);
-#ifndef CFG_CTS_FOR_GKI
 	ssize_t blen;
 	const char *path;
-#endif
 
 	if (!data) {
 		cts_err("Read 'path' with chipone_ts_data NULL");
