@@ -120,6 +120,7 @@
 #define EPT_POVP              (0x01<<1)
 #define EPT_WRONG_PACKET        (0x01<<0)
 
+#define CPS_PROGRAM_BUFFER_SIZE   512         /*64 128 256 512*/
 
 //#define AP_SYS_CONTROL_BASE_ADDR   0x20001D40
 //#define AP_TX_CONFIG_BASE_ADDR     0x20001E00    
@@ -165,7 +166,7 @@ struct cps_wls_chrg_chip {
     struct pinctrl_state *cps_gpio_active;
     struct pinctrl_state *cps_gpio_suspend;
 
-//    struct wake_lock cps_wls_wake_lock;
+    struct wakeup_source *cps_wls_wake_lock;
     struct mutex   irq_lock;
     struct mutex   i2c_lock;
     int state;
@@ -187,6 +188,18 @@ struct cps_wls_chrg_chip {
     int rx_neg_power;
     int rx_neg_protocol;
     int command_flag;
+
+    unsigned long flags;
+    int rx_ldo_on;
+    int wls_det_int;
+    int wls_det_irq;
+    int wls_switch_en;
+    int wls_boost_en;
+    const char *wls_fw_name;
+    uint32_t wls_fw_version;
+    u32 tx_mode;
+    u32 wls_curr_max;
+    u32 folio_mode;
 };
         
 typedef enum ept_reason
