@@ -287,6 +287,7 @@ struct cps_wls_chrg_chip {
     int light_level;
     int wlc_status;
     uint32_t wlc_tx_power;
+    int cable_ready_wait_count;
     /*wls pen*/
 #ifdef SMART_PEN_SUPPORT
     struct moto_wls_pen_ops  wls_pen_ops;
@@ -315,6 +316,7 @@ typedef enum ept_reason
 static void wls_rx_start_timer(struct cps_wls_chrg_chip *info);
 static void cps_rx_online_check(struct cps_wls_chrg_chip *chg);
 static int cps_wls_set_status(int status);
-static void cps_wls_current_select(int  *icl, int *vbus);
+static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready);
 static void cps_init_charge_hardware(void);
+static void cps_epp_current_select(int  *icl, int *vbus);
 #endif
