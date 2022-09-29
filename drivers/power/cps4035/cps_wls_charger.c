@@ -1795,6 +1795,7 @@ static void cps_bpp_icl_on()
 static void cps_epp_icl_on()
 {
 	int icl, vbus;
+
 	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
 
 	if (chip->factory_wls_en)
@@ -1804,7 +1805,7 @@ static void cps_epp_icl_on()
 	{
 		chip->mode_type = mode_type;
 		chip->wlc_tx_power = cps_wls_get_rx_neg_power() / 2;
-		cps_wls_current_select(&icl, &vbus);
+		cps_epp_current_select(&icl, &vbus);
 		if (chip->chg1_dev)
 		{
 			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
@@ -1827,6 +1828,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	{
 		CPS_RX_MODE_ERR = false;
 		CPS_RX_CHRG_FULL = false;
+		chip->cable_ready_wait_count = 0;
 		cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
 	}
@@ -3185,11 +3187,18 @@ static int  wls_pen_ops_register(struct cps_wls_chrg_chip *cm)
 #define WLS_RX_CAP_10W 10
 #define WLS_RX_CAP_8W 8
 #define WLS_RX_CAP_5W 5
-static void cps_wls_current_select(int  *icl, int *vbus)
+static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
 {
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
 
+    if (chip->cable_ready_wait_count < 3 && chip->mode_type != Sys_Op_Mode_MOTO_WLC)
+    {
+        *cable_ready = false;
+        chip->cable_ready_wait_count++;
+        return;
+    }
+    *cable_ready = true;
     *icl = 400000;
     *vbus = 5000;
 
@@ -3249,6 +3258,55 @@ static void cps_wls_current_select(int  *icl, int *vbus)
     }
     if (chip->wls_input_curr_max != 0)
         *icl = chip->wls_input_curr_max * 1000;
+}
+
+static void cps_epp_current_select(int  *icl, int *vbus)
+{
+    struct cps_wls_chrg_chip *chg = chip;
+    uint32_t wls_power = 0;
+
+    *icl = 400000;
+    *vbus = 5000;
+    if (chg->mode_type == Sys_Op_Mode_EPP)
+    {
+        wls_power = cps_wls_get_rx_neg_power() / 2;
+        cps_wls_log(CPS_LOG_DEBG, "%s cps4035 power %dW", __func__, wls_power);
+        if (wls_power >= WLS_RX_CAP_15W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 1150;
+            *icl = 1150000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_10W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 800;
+            *icl = 800000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_8W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 650;
+            *icl = 650000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_5W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 400;
+            *icl = 400000;
+            *vbus = 12000;
+        }
+        else
+        {
+            chg->MaxV = 5000;
+            chg->MaxI = 1000;
+            *icl = 1000000;
+            *vbus = 5000;
+        }
+    }
 }
 
 static int cps_wls_wlc_update_light_fan(void)
