@@ -171,6 +171,49 @@ struct drm_panel_notifier *evdata = evd; \
 	 (*blank == DRM_PANEL_BLANK_UNBLANK))
 
 #else /* CONFIG_DRM_PANEL_NOTIFICATIONS */
+#if defined(CONFIG_FB)
+#include <linux/notifier.h>
+#include <linux/fb.h>
+#define REGISTER_PANEL_NOTIFIER {\
+	touch_cdev->panel_nb.notifier_call = ts_mmi_panel_cb; \
+	ret = fb_register_client(&touch_cdev->panel_nb); \
+}
+
+#define UNREGISTER_PANEL_NOTIFIER {\
+	fb_unregister_client(&touch_cdev->panel_nb);\
+}
+
+#define GET_CONTROL_DSI_INDEX \
+int *blank; \
+struct fb_event *evdata = evd; \
+{ \
+	if (!(evdata && evdata->data)) { \
+		dev_dbg(DEV_MMI, "%s: invalid evdata\n", __func__); \
+		return 0; \
+	} \
+	idx = 0;\
+	blank = (int *)evdata->data; \
+	dev_dbg(DEV_MMI, "%s: fb notification: event = %lu, blank = %d\n", \
+			__func__, event, *blank); \
+}
+
+#define EVENT_PRE_DISPLAY_OFF \
+	((event == FB_EARLY_EVENT_BLANK) && \
+	 (*blank == FB_BLANK_POWERDOWN))
+
+#define EVENT_DISPLAY_OFF \
+	((event == FB_EVENT_BLANK) && \
+	 (*blank == FB_BLANK_POWERDOWN))
+
+#define EVENT_PRE_DISPLAY_ON \
+	((event == FB_EARLY_EVENT_BLANK) && \
+	 (*blank == FB_BLANK_UNBLANK))
+
+#define EVENT_DISPLAY_ON \
+	((event == FB_EVENT_BLANK) && \
+	 (*blank == FB_BLANK_UNBLANK))
+
+#else /* CONFIG_FB */
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4,14,0)
 #if defined(CONFIG_DRM_MSM)
 
@@ -232,6 +275,7 @@ struct msm_drm_notifier *evdata = evd; \
 #define unregister_panel_notifier(...)
 
 #endif /* LINUX_VERSION_CODE */
+#endif /* CONFIG_FB */
 #endif /* CONFIG_DRM_PANEL_NOTIFICATIONS */
 #endif /* CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS */
 #endif /* CONFIG_MTK_PANEL_NOTIFICATIONS */
