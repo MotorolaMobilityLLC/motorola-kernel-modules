@@ -165,6 +165,15 @@ struct mmi_charger_device *mmi_charger_device_register(const char *name,
 		return ERR_PTR(-ENOMEM);
 
 	mutex_init(&charger_dev->ops_lock);
+#ifdef CONFIG_MOTO_PD_HYPER
+	charger_dev->chrg_psy = power_supply_get_by_name(psy_name);
+	charger_dev->ops = ops;
+	if (!charger_dev->chrg_psy) {
+		pr_info("mmi charger device register: failed to get psy %s \n", psy_name);
+		return ERR_PTR(-ENODEV);
+	}
+	pr_info("mmi charger device get name=%s\n",name);
+#endif
 	charger_dev->dev.class = mmi_charger_class;
 	charger_dev->dev.parent = parent;
 	charger_dev->dev.release = mmi_charger_device_release;
@@ -177,11 +186,13 @@ struct mmi_charger_device *mmi_charger_device_register(const char *name,
 		kfree(charger_dev);
 		return ERR_PTR(rc);
 	}
+#ifndef CONFIG_MOTO_PD_HYPER
 	charger_dev->chrg_psy = power_supply_get_by_name(psy_name);
 	charger_dev->ops = ops;
 	if (!charger_dev->chrg_psy)
 		return ERR_PTR(-ENODEV);
 	pr_info("mmi charger device register: name=%s, successfully\n",name);
+#endif
 	return charger_dev;
 }
 

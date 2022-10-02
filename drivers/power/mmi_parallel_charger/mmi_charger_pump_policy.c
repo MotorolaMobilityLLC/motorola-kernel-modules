@@ -499,9 +499,12 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		if (ibatt_curr < 0)
 			ibatt_curr *= -1;
 	}
+#ifndef CONFIG_MOTO_PD_HYPER
 	vbatt_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbatt_volt;
 	vbatt_volt *= 1000;
-
+#else
+	vbatt_volt = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbatt_volt;
+#endif
 	vbus_pres = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbus_pres;
 	if (!vbus_pres) {
 		for (i = 0; i < 3; i++) {
@@ -810,10 +813,23 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 		break;
 	case PM_STATE_PPS_TUNNING_CURR:
+#ifdef CONFIG_MOTO_PD_HYPER
+		mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR: capability detect begin,sourcecap_dec_enable = %d\n",
+			chip->sourcecap_dec_enable);
+		if (chip->sourcecap_dec_enable) {
+			if (false == mmi_chrg_check_capability(chip)) {
+				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_CURR:pd_volt_max or pd_curr_max changed\n");
+			//	goto schedule;
+			}
+		}
+#endif
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		if (chrg_list->cp_master
 			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
-			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT)))) {
+#ifndef CONFIG_MOTO_PD_HYPER
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT))
+#endif
+			)) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, Enter into "
 								"SW directly\n");
 			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
@@ -861,6 +877,16 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		}
 		break;
 	case PM_STATE_PPS_TUNNING_VOLT:
+#ifdef CONFIG_MOTO_PD_HYPER
+		mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT: capability detect begin,sourcecap_dec_enable = %d\n",
+			chip->sourcecap_dec_enable);
+		if (chip->sourcecap_dec_enable) {
+			if (false == mmi_chrg_check_capability(chip)) {
+				mmi_chrg_info(chip,"PM_STATE_PPS_TUNNING_VOLT:pd_volt_max or pd_curr_max changed\n");
+				//goto schedule;
+			}
+		}
+#endif
 		heartbeat_dely_ms = HEARTBEAT_NEXT_STATE_MS;
 		if (chrg_list->cp_slave
 			&& chrg_list->cp_clave_later
@@ -871,7 +897,10 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 
 		if (chrg_list->cp_master
 			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
-			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT)))) {
+#ifndef CONFIG_MOTO_PD_HYPER
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT))
+#endif
+			)) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, "
 							"Enter into SW directly\n");
 			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
@@ -948,7 +977,10 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 								chrg_step->chrg_step_cv_volt);
 		if (chrg_list->cp_master
 			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
-			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT)))) {
+#ifndef CONFIG_MOTO_PD_HYPER
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT))
+#endif
+			)) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, Enter into SW directly\n");
 			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
@@ -1092,7 +1124,10 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 								chrg_step->chrg_step_cv_tapper_curr);
 		if (chrg_list->cp_master
 			&& (!chrg_list->chrg_dev[CP_MASTER]->charger_enabled
-			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type &  (1<< MMI_CP_SWITCH_BIT)))) {
+#ifndef CONFIG_MOTO_PD_HYPER
+			|| !(chrg_list->chrg_dev[CP_MASTER]->charger_error.chrg_err_type & (1<< MMI_CP_SWITCH_BIT))
+#endif
+			)) {
 			mmi_chrg_info(chip,"CP MASTER was disabled, Enter into SW directly\n");
 			chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 			mmi_chrg_sm_move_state(chip, PM_STATE_SW_ENTRY);
