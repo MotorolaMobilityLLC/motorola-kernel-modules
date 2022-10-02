@@ -784,6 +784,7 @@ static int bq25980_set_charger_property(struct power_supply *psy,
 	struct bq25980_device *bq = power_supply_get_drvdata(psy);
 	switch (prop) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+		bq25980_set_adc_enable(bq,val->intval);
 		bq25980_set_chg_en(bq, val->intval);
 		bq25980_is_chg_en(bq, &bq->charge_enabled);
 		dev_info(bq->dev, "POWER_SUPPLY_PROP_CHARGING_ENABLED: %s, %d\n",
