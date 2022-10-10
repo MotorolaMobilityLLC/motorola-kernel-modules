@@ -44,6 +44,8 @@
 #define ENABLE_PALM_GESTURE_MODE_CMD 0x75
 #define DISABLE_PALM_GESTURE_MODE_CMD 0x76
 
+#define DOUBLE_TAP_GESTURE_MODE_CMD 0x7B
+
 #define ENABLE_DOZE_MODE_CMD 0xB7
 #define DISABLE_DOZE_MODE_CMD 0xB8
 
@@ -646,6 +648,43 @@ int32_t nvt_cmd_store(uint8_t u8Cmd)
 	return ret;
 }
 
+static int32_t nvt_cmd_ext_store(uint8_t cmd, uint8_t subcmd)
+{
+    int32_t i, retry = 5;
+    uint8_t buf[4] = {0};
+
+    //---set xdata index to EVENT BUF ADDR---
+    nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
+
+    for (i = 0; i < retry; i++) {
+		if (buf[1] != cmd) {
+			//---set cmd status---
+			buf[0] = EVENT_MAP_HOST_CMD;
+			buf[1] = cmd;
+			buf[2] = subcmd;
+			CTP_SPI_WRITE(ts->client, buf, 3);
+		}
+
+		msleep(20);
+
+		//---read cmd status---
+		buf[0] = EVENT_MAP_HOST_CMD;
+		buf[1] = 0xFF;
+		CTP_SPI_READ(ts->client, buf, 2);
+		if (buf[1] == 0x00)
+			break;
+	}
+
+	if (i == retry) {
+		NVT_ERR("send Cmd 0x%02X 0x%02X failed, buf[1]=0x%02X\n", cmd, subcmd, buf[1]);
+		return -1;
+	} else {
+		NVT_LOG("send Cmd 0x%02X 0x%02X success, tried %d times\n", cmd, subcmd, i);
+	}
+
+	return 0;
+}
+
 #ifdef NOVATECH_PEN_NOTIFIER
 int nvt_mcu_pen_detect_set(uint8_t pen_detect) {
 	int ret = 0;
@@ -672,6 +711,44 @@ int nvt_palm_set(bool enabled) {
 	}
 
 	return ret;
+}
+#endif
+
+#ifdef NVT_DOUBLE_TAP_CTRL
+int nvt_gesture_type_store(uint8_t g_type)
+{
+	uint8_t fw_gst_type;
+
+	g_type &= SYS_GESTURE_TYPE_MASK;
+	switch (g_type) {
+		case SYS_GESTURE_TYPE_SINGLE_DOUBLE:
+			NVT_LOG("single & double tap enabled\n");
+			fw_gst_type = FW_GESTURE_MODE_SINGLE_DOUBLE;
+			break;
+		case SYS_GESTURE_TYPE_DOUBLE_ONLY:
+			NVT_LOG("double tap only\n");
+			fw_gst_type = FW_GESTURE_MODE_DOUBLE_ONLY;
+			break;
+		case SYS_GESTURE_TYPE_SINGLE_ONLY:
+			NVT_LOG("single tap only\n");
+			fw_gst_type = FW_GESTURE_MODE_SINGLE_ONLY;
+			break;
+		case SYS_GESTURE_TYPE_DISABLE:
+			NVT_LOG("tap idle\n");
+			fw_gst_type = FW_GESTURE_MODE_IDLE;
+			break;
+		default:
+			NVT_LOG("invalid gesture_type:%d, disable tap\n", g_type);
+			fw_gst_type = FW_GESTURE_MODE_IDLE;
+			break;
+	}
+
+	NVT_LOG("set fw gesture_type:%d", fw_gst_type);
+	mutex_lock(&ts->state_mutex);
+	nvt_cmd_ext_store(DOUBLE_TAP_GESTURE_MODE_CMD, fw_gst_type);
+	mutex_unlock(&ts->state_mutex);
+
+	return 0;
 }
 #endif
 
