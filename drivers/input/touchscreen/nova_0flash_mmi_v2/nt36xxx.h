@@ -157,6 +157,24 @@ struct nvt_sensor_platform_data {
 };
 #endif
 
+//#define NVT_ZERO_TAP_SUPPORT				0 //not support yet
+#ifdef NVT_DOUBLE_TAP_CTRL
+//gesture mode for FW
+#define FW_GESTURE_MODE_IDLE				1
+#define FW_GESTURE_MODE_SINGLE_ONLY 			2
+#define FW_GESTURE_MODE_SINGLE_DOUBLE 			3
+#define FW_GESTURE_MODE_DOUBLE_ONLY 			4
+
+//gesture control configs for gesture nodes
+//bit2:0 => double:single:zero.
+#define SYS_GESTURE_TYPE_DISABLE			0
+#define SYS_GESTURE_TYPE_SINGLE_ONLY 			2
+#define SYS_GESTURE_TYPE_DOUBLE_ONLY 			4
+#define SYS_GESTURE_TYPE_SINGLE_DOUBLE 			6
+#define SYS_GESTURE_TYPE_MASK 				0x06
+//#define SYS_GESTURE_TYPE_ZERO_MASK			0x01	//zero tap for FOD
+#endif
+
 /* charger detect */
 #define USB_DETECT_IN 1
 #define USB_DETECT_OUT 2	//MTK
@@ -218,6 +236,10 @@ struct nvt_ts_data {
 	bool wakeable;
 	bool should_enable_gesture;
 	bool gesture_enabled;
+#ifdef NVT_DOUBLE_TAP_CTRL
+	uint8_t supported_gesture_type;
+	uint8_t sys_gesture_type;
+#endif
 #ifdef NOVATECH_PEN_NOTIFIER
 	bool fw_ready_flag;
 	int nvt_pen_detect_flag;
@@ -309,6 +331,9 @@ int32_t nvt_set_page(uint32_t addr);
 int32_t nvt_write_addr(uint32_t addr, uint8_t data);
 #ifdef NVT_SENSOR_EN
 extern int touch_set_state(int state, int panel_idx);
+#endif
+#ifdef NVT_DOUBLE_TAP_CTRL
+extern int nvt_gesture_type_store(uint8_t g_type);
 #endif
 #if NVT_TOUCH_ESD_PROTECT
 extern void nvt_esd_check_enable(uint8_t enable);
