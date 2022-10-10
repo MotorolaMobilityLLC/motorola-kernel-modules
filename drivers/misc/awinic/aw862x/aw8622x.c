@@ -960,7 +960,11 @@ static int aw8622x_haptic_rtp_init(struct aw8622x *aw8622x)
 
 	aw_dev_dbg("%s enter\n", __func__);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	cpu_latency_qos_add_request(&aw8622x_pm_qos_req_vb, CPU_LATENCY_QOC_VALUE);
+#else
+	pm_qos_add_request(&aw8622x_pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY, AW8622X_PM_QOS_VALUE_VB);
+#endif
 	aw8622x->rtp_cnt = 0;
 	mutex_lock(&aw8622x->rtp_lock);
 	while ((!aw8622x_haptic_rtp_get_fifo_afs(aw8622x))
@@ -1008,7 +1012,11 @@ static int aw8622x_haptic_rtp_init(struct aw8622x *aw8622x)
 					   __func__, glb_state_val,
 					   aw8622x->rtp_cnt);
 			aw8622x->rtp_cnt = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 			cpu_latency_qos_remove_request(&aw8622x_pm_qos_req_vb);
+#else
+			pm_qos_remove_request(&aw8622x_pm_qos_req_vb);
+#endif
 			mutex_unlock(&aw8622x->rtp_lock);
 			return 0;
 		}
@@ -1019,7 +1027,11 @@ static int aw8622x_haptic_rtp_init(struct aw8622x *aw8622x)
 
 	aw_dev_dbg("%s exit\n", __func__);
 	mutex_unlock(&aw8622x->rtp_lock);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	cpu_latency_qos_remove_request(&aw8622x_pm_qos_req_vb);
+#else
+	pm_qos_remove_request(&aw8622x_pm_qos_req_vb);
+#endif
 	return 0;
 }
 
@@ -1285,13 +1297,21 @@ static int aw8622x_rtp_osc_calibration(struct aw8622x *aw8622x)
 	/* haptic go */
 	aw8622x_haptic_play_go(aw8622x, true);
 	/* require latency of CPU & DMA not more then PM_QOS_VALUE_VB us */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	cpu_latency_qos_add_request(&aw8622x_pm_qos_req_vb, CPU_LATENCY_QOC_VALUE);
+#else
+	pm_qos_add_request(&aw8622x_pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY, AW8622X_PM_QOS_VALUE_VB);
+#endif
 	while (1) {
 		ret = aw8622x_osc_calculation_time(aw8622x);
 		if (ret < 0)
 			break;
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	cpu_latency_qos_remove_request(&aw8622x_pm_qos_req_vb);
+#else
+	pm_qos_remove_request(&aw8622x_pm_qos_req_vb);
+#endif
 	enable_irq(gpio_to_irq(aw8622x->irq_gpio));
 	aw8622x->microsecond = ktime_to_us(ktime_sub(aw8622x->kend,
 						aw8622x->kstart));

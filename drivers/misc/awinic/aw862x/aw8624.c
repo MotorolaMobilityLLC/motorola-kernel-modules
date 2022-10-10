@@ -3246,13 +3246,21 @@ static int aw8624_rtp_osc_calibration(struct aw8624 *aw8624)
 	disable_irq(gpio_to_irq(aw8624->irq_gpio));
 	/* haptic start */
 	aw8624_haptic_start(aw8624);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	cpu_latency_qos_add_request(&aw8624_pm_qos_req_vb, CPU_LATENCY_QOC_VALUE);
+#else
+	pm_qos_add_request(&aw8624_pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY, AW8624_PM_QOS_VALUE_VB);
+#endif
 	while (1) {
 		ret = aw8624_osc_calculation_time(aw8624);
 		if (ret < 0)
 			break;
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	cpu_latency_qos_remove_request(&aw8624_pm_qos_req_vb);
+#else
+	pm_qos_remove_request(&aw8624_pm_qos_req_vb);
+#endif
 	enable_irq(gpio_to_irq(aw8624->irq_gpio));
 
 	aw8624->osc_cali_flag = 0;
