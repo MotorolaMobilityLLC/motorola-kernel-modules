@@ -41,6 +41,7 @@ static const struct of_device_id panel_i2c_of_match[] = {
 	 {
 	  .compatible = "ocp,bias_ocp2138",
 	  },
+	 {}
  };
 
 static int ocp2138_read_chip_info(struct i2c_client *client)
