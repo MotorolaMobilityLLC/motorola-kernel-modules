@@ -686,7 +686,8 @@ static const struct i2c_device_id ktd3136_id[] = {
 	{}
 };
 static struct of_device_id match_table[] = {
-		{.compatible = "ktd,ktd3136",}
+		{.compatible = "ktd,ktd3136",},
+		{}
 };
 
 MODULE_DEVICE_TABLE(i2c, ktd3136_id);
