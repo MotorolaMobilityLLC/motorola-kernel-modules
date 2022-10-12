@@ -138,6 +138,18 @@ static int disp_notifier_callback(struct notifier_block *nb,
 			/* before fb blank */
 			if (*data == MTK_DISP_BLANK_POWERDOWN) {
 #ifdef CHIPONE_SENSOR_EN
+
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+				if (cts_data->s_tap_flag || cts_data->d_tap_flag) {
+					cts_enable_gesture_wakeup(&cts_data->cts_dev);
+					chipone_ts->should_enable_gesture = true;
+				}
+				else {
+					cts_disable_gesture_wakeup(&cts_data->cts_dev);
+					chipone_ts->should_enable_gesture = false;
+				}
+#endif
+
 				if (chipone_ts->should_enable_gesture)
 						touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
 				else
@@ -540,6 +552,9 @@ static int chipone_sensor_init(struct chipone_ts_data *data)
 
 	__set_bit(EV_KEY, sensor_input_dev->evbit);
 	__set_bit(KEY_F1, sensor_input_dev->keybit);
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	__set_bit(KEY_F4, sensor_input_dev->keybit);
+#endif
 	__set_bit(EV_SYN, sensor_input_dev->evbit);
 
 	sensor_input_dev->name = "double-tap";

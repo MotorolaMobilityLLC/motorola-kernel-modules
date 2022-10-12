@@ -45,6 +45,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
 endif
 
+ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
+	EXTRA_CFLAGS += -DCONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+endif
+
 obj-m := chipone_tddi_fhd_mmi.o
 
 chipone_tddi_fhd_mmi-objs += cts_i2c_driver.o

@@ -1972,8 +1972,6 @@ int cts_irq_handler(struct cts_device *cts_dev)
 				if (ret)
 					cts_err("Process gesture info failed %d", ret);
 				/* return ret; */
-				if (cts_tcs_clr_gstr_ready_flag(cts_dev))
-					cts_err("Clear gesture ready flag failed");
 
 /** - Issure another suspend with gesture wakeup command to device
  * after get gesture info.
@@ -1981,6 +1979,9 @@ int cts_irq_handler(struct cts_device *cts_dev)
 				ret = cts_dev->ops->set_pwr_mode(cts_dev, pwrmode);
 				if (ret)
 					cts_warn("Reenter suspend with gesture wakeup failed %d", ret);
+
+				if (cts_tcs_clr_gstr_ready_flag(cts_dev))
+					cts_err("Clear gesture ready flag failed");
 			} else {
 				if (cts_tcs_clr_data_ready_flag(cts_dev))
 					cts_err("Clear data ready flag failed");
@@ -2038,7 +2039,10 @@ int cts_suspend_device(struct cts_device *cts_dev)
 {
 	int ret;
 	u8 buf;
-
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	struct chipone_ts_data *cts_data = container_of(cts_dev,
+		struct chipone_ts_data, cts_dev);
+#endif
 	cts_info("Suspend device");
 
 	if (cts_dev->rtdata.program_mode) {
@@ -2050,6 +2054,9 @@ int cts_suspend_device(struct cts_device *cts_dev)
 			return ret;
 		}
 	}
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	cts_tcs_set_gesture_en_mask(cts_dev, cts_data->d_tap_flag, cts_data->s_tap_flag);
+#endif
 
 	cts_info("Set suspend mode:%s",
 		cts_dev->rtdata.gesture_wakeup_enabled ? "gesture" : "sleep");

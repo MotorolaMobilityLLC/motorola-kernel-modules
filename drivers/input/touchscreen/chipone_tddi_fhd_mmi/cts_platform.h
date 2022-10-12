@@ -153,6 +153,9 @@ struct cts_platform_data {
 	u8 spi_tx_buf[ALIGN(CFG_CTS_MAX_SPI_XFER_SIZE + 10, 4)];
 	u32 spi_speed;
 #endif				/* CONFIG_CTS_I2C_HOST */
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	int supported_gesture_type;
+#endif
 };
 
 #ifdef CONFIG_CTS_I2C_HOST

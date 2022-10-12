@@ -8,6 +8,7 @@
 #include "cts_sysfs.h"
 
 extern struct chipone_ts_data *chipone_ts;
+static struct wakeup_source *gesture_wakelock;
 
 #ifdef CFG_CTS_FW_LOG_REDIRECT
 size_t cts_plat_get_max_fw_log_size(struct cts_platform_data *pdata)
@@ -566,7 +567,10 @@ static int cts_plat_parse_dt(struct cts_platform_data *pdata,
 	} else
 		cts_info("panel supplier=%s", (char *)pdata->panel_supplier);
 #endif
-
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	if (!of_property_read_u32(dev_node, "chipone,supported_gesture_type", &pdata->supported_gesture_type))
+		cts_info("chipone,supported_gesture_type=%02x\n", pdata->supported_gesture_type);
+#endif
 	return 0;
 }
 #endif /* CONFIG_CTS_OF */
@@ -1238,6 +1242,9 @@ int cts_plat_disable_irq_wake(struct cts_platform_data *pdata)
 int cts_plat_init_gesture(struct cts_platform_data *pdata)
 {
 	int i;
+	struct chipone_ts_data *cts_data;
+	cts_data =
+	    container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
 
 	cts_info("Init gesture");
 
@@ -1248,6 +1255,11 @@ int cts_plat_init_gesture(struct cts_platform_data *pdata)
 		input_set_capability(pdata->ts_input_dev, EV_KEY,
 				     pdata->gesture_keymap[i][1]);
 	}
+        PM_WAKEUP_REGISTER(cts_data->device, gesture_wakelock, "poll-wake-lock");
+        if (!gesture_wakelock) {
+            cts_warn("failed to allocate wakeup source\n");
+            return -ENOMEM;
+        }
 
 	return 0;
 }
@@ -1269,9 +1281,10 @@ int cts_plat_process_gesture_info(struct cts_platform_data *pdata,
 		if (gesture_info->gesture_id == pdata->gesture_keymap[i][0]) {
 			cts_info("Report key[%u]", pdata->gesture_keymap[i][1]);
 #ifdef CHIPONE_SENSOR_EN
-			input_report_key(chipone_ts->sensor_pdata->input_sensor_dev, KEY_F1, 1);
+			PM_WAKEUP_EVENT(gesture_wakelock, 5000);
+			input_report_key(chipone_ts->sensor_pdata->input_sensor_dev, pdata->gesture_keymap[i][1], 1);
 			input_sync(chipone_ts->sensor_pdata->input_sensor_dev);
-			input_report_key(chipone_ts->sensor_pdata->input_sensor_dev, KEY_F1, 0);
+			input_report_key(chipone_ts->sensor_pdata->input_sensor_dev, pdata->gesture_keymap[i][1], 0);
 			input_sync(chipone_ts->sensor_pdata->input_sensor_dev);
 #else
 			input_report_key(pdata->ts_input_dev,
