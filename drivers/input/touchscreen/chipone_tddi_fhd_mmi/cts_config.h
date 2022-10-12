@@ -120,7 +120,7 @@
 	{ GESTURE_C, KEY_C,},               \
 	{ GESTURE_W, KEY_W,},               \
 	{ GESTURE_V, KEY_V,},               \
-	{ GESTURE_D_TAP, KEY_F1,},          \
+	{ GESTURE_D_TAP, KEY_F4,},          \
 	{ GESTURE_Z, KEY_Z,},               \
 	{ GESTURE_M, KEY_M,},               \
 	{ GESTURE_O, KEY_O,},               \

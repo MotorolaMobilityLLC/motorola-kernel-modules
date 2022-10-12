@@ -487,6 +487,7 @@ struct chipone_ts_data {
 #ifdef CONFIG_GTP_LAST_TIME
 	ktime_t last_event_time;
 #endif
+
 #ifdef CHIPONE_SENSOR_EN
 	bool wakeable;
 	bool should_enable_gesture;
@@ -501,7 +502,11 @@ struct chipone_ts_data {
 	struct wakeup_source *gesture_wakelock;
 #endif
 #endif
-
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	unsigned char gesture_mode_type;
+	bool d_tap_flag;
+	bool s_tap_flag;
+#endif
 };
 
 static inline u32 get_unaligned_le24(const void *p)

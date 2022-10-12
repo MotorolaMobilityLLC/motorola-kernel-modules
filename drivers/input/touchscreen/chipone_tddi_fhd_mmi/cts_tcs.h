@@ -113,6 +113,9 @@ int cts_tcs_set_pwr_mode(const struct cts_device *cts_dev, u8 pwr_mode);
 int cts_tcs_read_sram_normal_mode(const struct cts_device *cts_dev,
 				  u32 addr, void *dst, size_t len, int retry,
 				  int delay);
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+extern int cts_tcs_set_gesture_en_mask(const struct cts_device *cts_dev, bool d_tap, bool s_tap);
+#endif
 
 enum TcsCmdIndex {
 	TP_STD_CMD_INFO_CHIP_FW_ID_RO,
