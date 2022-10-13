@@ -133,6 +133,10 @@
 
 #define FTS_REG_RETRY_TIMES                 5
 
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+#define FACTORY_REG_OPEN_ADDR		    0xCF
+#endif
+
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
 *****************************************************************************/
@@ -289,15 +293,20 @@ struct fts_ts_data {
 #endif
 
 #if FTS_USB_DETECT_EN
-	bool usb_detect_flag;
-	uint8_t usb_connected;
-	struct notifier_block charger_notif;
+    bool usb_detect_flag;
+    uint8_t usb_connected;
+    struct notifier_block charger_notif;
 #endif
 #ifdef CONFIG_GTP_LAST_TIME
-	ktime_t last_event_time;
+    ktime_t last_event_time;
 #endif
-	const char *psy_name;
-	const char *psp;
+    const char *psy_name;
+    const char *psp;
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+    bool d_tap_flag;
+    bool s_tap_flag;
+    int supported_gesture_type;
+#endif
 };
 
 enum _FTS_BUS_TYPE {
