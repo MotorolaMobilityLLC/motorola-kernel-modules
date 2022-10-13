@@ -1721,7 +1721,7 @@ static ssize_t vendor_show(struct device *dev,
 static ssize_t panel_supplier_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
-    return fts_panel_supplier_show(dev, attr, buf);
+	return fts_panel_supplier_show(dev, attr, buf);
 }
 
 static ssize_t ic_ver_show(struct device *dev,
@@ -1735,8 +1735,8 @@ static ssize_t ic_ver_show(struct device *dev,
 static ssize_t timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-    struct fts_ts_data *ts_data = dev_get_drvdata(dev);
-    struct input_dev *input_dev = ts_data->input_dev;
+	struct fts_ts_data *ts_data = dev_get_drvdata(dev);
+	struct input_dev *input_dev = ts_data->input_dev;
 
 	ktime_t last_ktime;
 	struct timespec64 last_ts;
@@ -1748,7 +1748,57 @@ static ssize_t timestamp_show(struct device *dev,
 
 	last_ts = ktime_to_timespec64(last_ktime);
 	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
-	//return scnprintf(buf, PAGE_SIZE, "hxl: %d.%d\n", 123, 456);
+}
+#endif
+
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+static ssize_t gesture_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data = dev_get_drvdata(dev);
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", ts_data->supported_gesture_type);
+}
+
+static ssize_t gesture_store(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
+{
+	unsigned int value = 0;
+	int err = 0;
+	struct fts_ts_data *ts_data = dev_get_drvdata(dev);
+	struct input_dev *input_dev = ts_data->input_dev;
+
+	mutex_lock(&input_dev->mutex);
+	err = sscanf(buf, "%d", &value);
+	if (err < 0) {
+		printk("error: Failed to convert value\n");
+		return -EINVAL;
+	}
+
+	switch (value) {
+	case 0x20:
+		FTS_DEBUG("[%s %d]:  single tap disable\n", __func__, __LINE__);
+			ts_data->s_tap_flag = 0;
+		break;
+	case 0x21:
+		FTS_DEBUG("[%s %d]:  single tap enable\n", __func__, __LINE__);
+			ts_data->s_tap_flag = 1;
+		break;
+	case 0x30:
+		FTS_DEBUG("[%s %d]:  double tap disable\n", __func__, __LINE__);
+			ts_data->d_tap_flag = 0;
+		break;
+	case 0x31:
+		FTS_DEBUG("[%s %d]:  double tap enable\n", __func__, __LINE__);
+			ts_data->d_tap_flag = 1;
+		break;
+	default:
+		FTS_ERROR("[%s %d]: unsupport gesture mode type\n", __func__, __LINE__);
+		;
+	}
+	mutex_unlock(&input_dev->mutex);
+
+	return count;
 }
 #endif
 
@@ -1759,6 +1809,9 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(panel_supplier),
 #ifdef CONFIG_GTP_LAST_TIME
 	__ATTR_RO(timestamp),
+#endif
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	__ATTR_RW(gesture),
 #endif
 	__ATTR_NULL
 };

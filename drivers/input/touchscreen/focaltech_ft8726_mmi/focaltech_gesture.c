@@ -57,7 +57,10 @@
 #define GESTURE_RIGHT                           0x21
 #define GESTURE_UP                              0x22
 #define GESTURE_DOWN                            0x23
-#define GESTURE_DOUBLECLICK                     0x24
+
+#define GESTURE_SINGLECLICK                     0x24
+#define GESTURE_DOUBLECLICK                     0x26
+
 #define GESTURE_O                               0x30
 #define GESTURE_W                               0x31
 #define GESTURE_M                               0x32
@@ -301,6 +304,9 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
         gesture = KEY_GESTURE_DOWN;
         break;
     case GESTURE_DOUBLECLICK:
+        gesture = KEY_GESTURE_E;
+        break;
+    case GESTURE_SINGLECLICK:
         gesture = KEY_GESTURE_U;
         break;
     case GESTURE_O:
@@ -350,6 +356,22 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
                 input_report_key(fts_data->sensor_pdata->input_sensor_dev, KEY_F1, 1);
                 input_sync(fts_data->sensor_pdata->input_sensor_dev);
                 input_report_key(fts_data->sensor_pdata->input_sensor_dev, KEY_F1, 0);
+                input_sync(fts_data->sensor_pdata->input_sensor_dev);
+                ++report_cnt;
+            } else {
+                FTS_DEBUG("report_gesture_key not set, input_report_abs");
+                input_report_abs(fts_data->sensor_pdata->input_sensor_dev,
+                                ABS_DISTANCE, ++report_cnt);
+                input_sync(fts_data->sensor_pdata->input_sensor_dev);
+            }
+        }
+        /* report double tap */
+        else if (gesture == KEY_GESTURE_E) {
+            if (fts_data->pdata && fts_data->pdata->report_gesture_key) {
+                FTS_DEBUG("report_gesture_key");
+                input_report_key(fts_data->sensor_pdata->input_sensor_dev, KEY_F4, 1);
+                input_sync(fts_data->sensor_pdata->input_sensor_dev);
+                input_report_key(fts_data->sensor_pdata->input_sensor_dev, KEY_F4, 0);
                 input_sync(fts_data->sensor_pdata->input_sensor_dev);
                 ++report_cnt;
             } else {
@@ -421,6 +443,7 @@ static int fts_sensor_init(struct fts_ts_data *data)
     if (data->pdata->report_gesture_key) {
         __set_bit(EV_KEY, sensor_input_dev->evbit);
         __set_bit(KEY_F1, sensor_input_dev->keybit);
+        __set_bit(KEY_F4, sensor_input_dev->keybit);
     }
     else {
         __set_bit(EV_ABS, sensor_input_dev->evbit);
