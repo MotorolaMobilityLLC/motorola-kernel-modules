@@ -8,6 +8,10 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_ft8726_mmi \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_ft8726_mmi/include
 
+ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
+	EXTRA_CFLAGS += -DCONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+endif
+
 obj-m := focaltech_ft8726_mmi.o
 focaltech_ft8726_mmi-objs += focaltech_core.o
 focaltech_ft8726_mmi-objs += focaltech_esdcheck.o
@@ -28,11 +32,11 @@ EXTRA_CFLAGS += -DFOCALTECH_ESD_EN
 endif
 
 ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_PANEL_NOTIFICATIONS)),)
-EXTRA_CFLAGS += -DFOCALTECH_CONFIG_PANEL_NOTIFICATIONS
+	EXTRA_CFLAGS += -DFOCALTECH_CONFIG_PANEL_NOTIFICATIONS
 endif
 
 ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_DEBUG_EN)),)
-EXTRA_CFLAGS += -DFOCALTECH_DEBUG_EN
+	EXTRA_CFLAGS += -DFOCALTECH_DEBUG_EN
 endif
 
 ifneq ($(filter m y,$(CONFIG_FT_FHD_MMI_GET_PANEL)),)
@@ -44,5 +48,5 @@ ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
 endif
 
 ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
-    EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
+	EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
 endif
