@@ -191,6 +191,10 @@ typedef enum
 #define RX_REG_FOD_C7_GAIN      0x0101
 #define RX_REG_FOD_C7_OFFSET    0x0102
 
+static bool CPS_RX_MODE_ERR = false;
+static bool CPS_TX_MODE = false;
+static bool CPS_RX_CHRG_FULL = false;
+static void cps_rx_online_check(struct cps_wls_chrg_chip *chg);
 typedef struct
 {
     uint16_t     reg_name;
@@ -1144,7 +1148,12 @@ static int cps_wls_set_int_clr(int value)
     cps_reg = (cps_reg_s*)(&cps_comm_reg[CPS_COMM_REG_INT_CLR]);
     return cps_wls_write_reg(cps_reg->reg_addr, value, (int)cps_reg->reg_bytes_len);
 }
-
+static int cps_wls_get_chip_id(void)
+{
+    cps_reg_s *cps_reg;
+    cps_reg = (cps_reg_s*)(&cps_comm_reg[CPS_COMM_REG_CHIP_ID]);
+    return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
+}
 #if 0
 static int cps_wls_get_chip_id(void)
 {
@@ -1872,7 +1881,9 @@ static int cps_wls_rx_irq_handler(int int_flag)
      uint8_t data[8] = {0};
     if (int_flag & RX_INT_POWER_ON)
     {
-        //CPS_RX_MODE_ERR = FALSE;
+        CPS_RX_MODE_ERR = false;
+        CPS_RX_CHRG_FULL = false;
+
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
     }
     if(int_flag & RX_INT_LDO_OFF)
@@ -1912,6 +1923,8 @@ static int cps_wls_rx_irq_handler(int int_flag)
     }
     if(int_flag & RX_INT_OCP){}
     if(int_flag & RX_INT_HOCP){
+          CPS_RX_MODE_ERR = true;
+
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HOCP");
     }
     if(int_flag & RX_INT_SCP){
@@ -1975,11 +1988,230 @@ static int cps_wls_tx_irq_handler(int int_flag)
 
     return rc;
 }
+static void cps_init_charge_hardware()
+{
+	struct cps_wls_chrg_chip *chg = chip;
+	chg->chg1_dev = get_charger_by_name("primary_chg");
+	if (chg->chg1_dev)
+		cps_wls_log(CPS_LOG_DEBG, "%s: Found primary charger\n", __func__);
+	else {
+		cps_wls_log(CPS_LOG_ERR, "%s: Error : can't find primary charger\n",
+			__func__);
+	}
+}
+
+static int cps_get_vbus(void)
+{
+	struct charger_manager *info = NULL;
+	struct power_supply *chg_psy = NULL;
+	int vbus = 0;
+
+	chg_psy = power_supply_get_by_name("primary_chg");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s mmi_mux Couldn't get chg_psy\n",__func__);
+		return CPS_WLS_FAIL;
+	} else {
+		info = (struct charger_manager *)power_supply_get_drvdata(chg_psy);
+	}
+	charger_dev_get_vbus(chip->chg1_dev,&vbus);//pmic_get_vbus();
+	cps_wls_log(CPS_LOG_ERR, "%s: vbus:%d\n", __func__,vbus);
+	return vbus;
+}
+
+static int cps_rx_check_events_thread(void *arg)
+{
+	int status = CPS_WLS_SUCCESS;
+	struct cps_wls_chrg_chip *info = arg;
+
+	while (1) {
+		status = wait_event_interruptible(info->wait_que,
+			(info->wls_rx_check_thread_timeout == true));
+		if (status < 0) {
+			cps_wls_log(CPS_LOG_ERR, "%s: wait event been interrupted\n", __func__);
+			continue;
+		}
+		info->wls_rx_check_thread_timeout = false;
+		if(cps_get_vbus() < 5000  || !chip->rx_int_ready)
+			cps_rx_online_check(info);
+		__pm_relax(info->rx_check_wakelock);
+	}
+	return 0;
+}
+static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info)
+{
+	if (info == NULL)
+		return;
+
+	if (!info->rx_check_wakelock->active)
+		__pm_stay_awake(info->rx_check_wakelock);
+	info->wls_rx_check_thread_timeout = true;
+	wake_up_interruptible(&info->wait_que);
+}
+
+static enum alarmtimer_restart
+	wls_rx_alarm_timer_func(struct alarm *alarm, ktime_t now)
+{
+	struct cps_wls_chrg_chip *info = chip;
+
+	wake_up_rx_check_thread(info);
+
+	return ALARMTIMER_NORESTART;
+}
+static void wls_rx_init_timer(struct cps_wls_chrg_chip *info)
+{
+	alarm_init(&info->wls_rx_timer, ALARM_BOOTTIME,
+			wls_rx_alarm_timer_func);
+
+}
+static void wls_rx_start_timer(struct cps_wls_chrg_chip *info)
+{
+	struct timespec64 endtime, time_now;
+	ktime_t ktime, ktime_now;
+	int ret = 0;
+
+	/* If the timer was already set, cancel it */
+	ret = alarm_try_to_cancel(&info->wls_rx_timer);
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR,"%s: callback was running, skip timer\n", __func__);
+		return;
+	}
+
+	ktime_now = ktime_get_boottime();
+	time_now = ktime_to_timespec64(ktime_now);
+	endtime.tv_sec = time_now.tv_sec + 0;
+	endtime.tv_nsec = time_now.tv_nsec + info->rx_polling_ns;
+	info->end_time = endtime;
+	ktime = ktime_set(info->end_time.tv_sec, info->end_time.tv_nsec);
+
+	cps_wls_log(CPS_LOG_DEBG,"%s: alarm timer start:%d, %lld %ld\n", __func__, ret,
+		info->end_time.tv_sec, info->end_time.tv_nsec);
+	alarm_start(&info->wls_rx_timer, ktime);
+}
+static int mmi_mux_wls_chg_chan(enum mmi_mux_channel channel, bool on)
+{
+	struct charger_manager *info = NULL;
+	struct charger_device *chg_psy = NULL;
+
+	chg_psy = get_charger_by_name("primary_chg");
+	if(chg_psy) {
+		info = (struct charger_manager *)charger_dev_get_drvdata(chg_psy);
+		if(info)
+			cps_wls_log(CPS_LOG_ERR,"%s could  get charger_manager\n",__func__);
+		else {
+			cps_wls_log(CPS_LOG_ERR,"%s Couldn't get charger_manager\n",__func__);
+			return CPS_WLS_SUCCESS;
+		}
+	} else {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n",__func__);
+		return CPS_WLS_SUCCESS;
+	}
+
+	cps_wls_log(CPS_LOG_ERR, "%s open typec OTG chan =%d, on = %d\n", __func__, channel, on);
+	if (info->do_mux)
+		info->do_mux(info, channel, on);
+	else
+		cps_wls_log(CPS_LOG_ERR, "%s get info->algo.do_mux fail", __func__);
+
+	return CPS_WLS_SUCCESS;
+}
+
+static int cps_wls_rx_power_on()
+{
+#if 1
+	uint32_t chip_id = 0,sys_mode = 0;
+	uint32_t online = 0;
+
+	sys_mode = cps_wls_get_sys_mode();
+	cps_wls_log(CPS_LOG_DEBG, "CPS_TX_MODE %d, sys_mode RX/TX, mode %d", CPS_TX_MODE, sys_mode);
+
+	chip_id = cps_wls_get_chip_id();
+	cps_wls_log(CPS_LOG_ERR, "cps get chip id: %x\n",chip_id);
+	if( sys_mode == SYS_MODE_RX) {
+		online = true;
+	} else {
+		online = false;
+	}
+	return online;
+#else
+	struct cps_wls_chrg_chip *info = chip;
+	uint32_t chip_id = 0, sys_mode = 0;
+	bool rx_power = false;
+	static int rx_power_cnt = 0;
+#ifdef SMART_PEN_SUPPORT
+	if (CPS_RX_MODE_ERR || CPS_TX_MODE || chip->pen_power_on) {
+		cps_wls_log(CPS_LOG_ERR, "CPS_RX_MODE_ERR %d, CPS_TX_MODE %d, PEN_POWER_ON%d",
+			CPS_RX_MODE_ERR, CPS_TX_MODE, chip->pen_power_on);
+		cps_wls_log(CPS_LOG_ERR, "Stop wls timer, and report wls rx offline");
+		alarm_try_to_cancel(&info->wls_rx_timer);
+		return false;
+	}
+#else
+	if (CPS_RX_MODE_ERR || CPS_TX_MODE) {
+		cps_wls_log(CPS_LOG_ERR, "CPS_RX_MODE_ERR %d, CPS_TX_MODE %d",
+			CPS_RX_MODE_ERR, CPS_TX_MODE);
+		cps_wls_log(CPS_LOG_ERR, "Stop wls timer, and report wls rx offline");
+		alarm_try_to_cancel(&info->wls_rx_timer);
+		return false;
+	}
+#endif
+
+	sys_mode = cps_wls_get_sys_mode();
+	cps_wls_log(CPS_LOG_DEBG, "CPS_TX_MODE %d, sys_mode RX/TX, mode %d", CPS_TX_MODE, sys_mode);
+
+	chip_id = cps_wls_get_chip_id();
+	cps_wls_log(CPS_LOG_ERR, "cps get chip id: %x\n",chip_id);
+	if(chip_id == 0x4035 && sys_mode == SYS_MODE_RX) {
+		rx_power = true;
+		rx_power_cnt = 0;
+	} else {
+		rx_power = false;
+		rx_power_cnt++;
+	}
+
+	if (rx_power) {
+		cps_wls_log(CPS_LOG_DEBG, "Rx power on, Re-check after 500ms");
+        info->rx_polling_ns = 500 * 1000 * 1000;
+        wls_rx_start_timer(info);
+		return true;
+	} else {
+
+		if (rx_power_cnt > 1) {
+			cps_wls_log(CPS_LOG_DEBG, "Rx power off");
+			rx_power_cnt = 0;
+			return false;
+		} else {
+			info->rx_polling_ns = 500 * 1000 * 1000;
+			wls_rx_start_timer(info);
+			cps_wls_log(CPS_LOG_DEBG, "Re-check after 500ms");
+			//dc_get_power_supply_properties(DC_POWER_SUPPLY_ONLINE, &value);
+			return (info->wls_online ? true : false);
+		}
+	}
+#endif
+}
+static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
+{
+    bool wls_online = false;
+    struct cps_wls_chrg_chip *chip = chg;
+
+    wls_online = cps_wls_rx_power_on();
+    if(!chip->wls_online && wls_online) {
+        chip->wls_online = true;
+        mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, true);
+        power_supply_changed(chip->wl_psy);
+    }
+    if(chip->wls_online && !wls_online){
+        chip->wls_online = false;
+        mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
+        power_supply_changed(chip->wl_psy);
+    }
+}
 
 static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 {
     int int_flag;
     int int_clr;
+    struct cps_wls_chrg_chip *chip = dev_id;
     cps_wls_log(CPS_LOG_DEBG, "[%s] IRQ triggered\n", __func__);
     mutex_lock(&chip->irq_lock);
     //if(cps_wls_get_chip_id() != 0x4035)
@@ -1989,10 +2221,10 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
        // cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
        // cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
         cps_wls_set_int_enable();
-        
+        cps_rx_online_check(chip);
      //   cps_wls_log(CPS_LOG_DEBG, "[%s] CPS_I2C_UNLOCK", __func__);
    // }
-    
+
     int_flag = cps_wls_get_int_flag();
     cps_wls_log(CPS_LOG_DEBG, ">>>>>int_flag = %x\n", int_flag);
     if(int_flag == CPS_WLS_FAIL)
@@ -2013,7 +2245,9 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
     {
         cps_wls_tx_irq_handler(int_flag);
     }
-    
+
+    cps_wls_log(CPS_LOG_DEBG, "cps_wls_get_sys_mode:%d\n",cps_wls_get_sys_mode() );
+
     return IRQ_HANDLED;
 }
 
@@ -2026,6 +2260,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "Detected a detach event.\n");
+		cps_rx_online_check(chip);
 		chip->rx_ldo_on = false;
 		power_supply_changed(chip->wl_psy);
 	}
@@ -2115,11 +2350,7 @@ static int cps_get_fw_revision(uint32_t* fw_revision)
 	cps_reg_s *cps_reg;
 	uint32_t fw_major_revision = 0;
 	uint32_t fw_minor_revision = 0;
-	uint32_t fw_version;
-
-//	cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
-//	cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
-//	cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
+	uint32_t fw_version = 0;
 
 	cps_reg = (cps_reg_s*)(&cps_comm_reg[CPS_COMM_REG_FW_VER]);
 	fw_version =  cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
@@ -2129,7 +2360,6 @@ static int cps_get_fw_revision(uint32_t* fw_revision)
 	}
 
 	if(CPS_WLS_SUCCESS == status) {
-		fw_version = fw_version >> 16;
 		fw_minor_revision = (fw_version) & 0xFF;
 		fw_major_revision = ((fw_version) >> 8) & 0xFF;
 		fw_version =  (fw_major_revision << 16) | (fw_minor_revision);
@@ -2151,15 +2381,29 @@ static void cps_wls_pm_set_awake(int awake)
 		__pm_relax(chip->cps_wls_wake_lock);
 	}
 }
+void wlc_control_pin_set(bool on);
+static void wireless_chip_reset()
+{
+#if 1
+	wlc_control_pin_set(false);
+	msleep(100);
+	wlc_control_pin_set(true);
+    cps_wls_log(CPS_LOG_DEBG,"%s\n", __func__);
+#else
+	struct chg_alg_device *alg;
 
+	alg = get_chg_alg_by_name("wlc");
+	if (NULL != alg) {
+		chg_alg_set_prop(alg, ALG_WLC_STATE, false);
+		msleep(100);
+		chg_alg_set_prop(alg, ALG_WLC_STATE, true);
+	}
+#endif
+	return;
+}
 static void cps_wls_set_boost(int val)
 {
 	/* Assume if we turned the boost on we want to stay awake */
-    if(gpio_is_valid(chip->wls_boost_en))
-	gpio_set_value(chip->wls_boost_en, val);
-    if(gpio_is_valid(chip->wls_switch_en))
-	gpio_set_value(chip->wls_switch_en, val);
-
 	if(val) {
 		cps_wls_pm_set_awake(1);
 	} else {
@@ -2355,6 +2599,7 @@ free_bug:
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	release_firmware(fw);
+	wireless_chip_reset();
 	return CPS_WLS_SUCCESS;
 
 update_fail:
@@ -2653,18 +2898,15 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
     if(!gpio_is_valid(chip->wls_det_int))
         return -EINVAL;
 
+    chip->wls_mode_select = of_get_named_gpio(node, "mmi,wls_mode_select", 0);
+    if(!gpio_is_valid(chip->wls_mode_select))
+		cps_wls_log(CPS_LOG_ERR,"mmi wls_mode_select is %d invalid\n", chip->wls_mode_select );
+
     of_property_read_string(node, "wireless-fw-name", &chip->wls_fw_name);
 
-   chip->wls_switch_en = of_get_named_gpio(node, "cps_wls_switch_en", 0);
-    if(!gpio_is_valid(chip->wls_switch_en))
-        return -EINVAL;
 
-   chip->wls_boost_en = of_get_named_gpio(node, "cps_wls_boost_en", 0);
-    if(!gpio_is_valid(chip->wls_boost_en))
-        return -EINVAL;
-
-    cps_wls_log(CPS_LOG_ERR, "[%s]  wls_charge_int %d wls_det_int %d wls_switch_en %d wls_boost_en %d wls_fw_name: %s\n",
-             __func__, chip->wls_charge_int, chip->wls_det_int, chip->wls_switch_en, chip->wls_boost_en,chip->wls_fw_name);
+    cps_wls_log(CPS_LOG_ERR, "[%s]  wls_charge_int %d wls_det_int %d wls_fw_name: %s\n",
+             __func__, chip->wls_charge_int, chip->wls_det_int,chip->wls_fw_name);
 
     return 0;
 }
@@ -2697,19 +2939,13 @@ static int cps_wls_gpio_request(struct cps_wls_chrg_chip *chip)
 		return -EINVAL;
 	}
 
-	ret = devm_gpio_request_one(chip->dev, chip->wls_switch_en,
-				  GPIOF_OUT_INIT_LOW, "cps4038_wls_switch_en");
-	if (ret < 0) {
-		cps_wls_log(CPS_LOG_ERR,"Failed to request wls_switch_en gpio, ret:%d", ret);
-		return ret;
+	if(gpio_is_valid(chip->wls_mode_select)) {
+		ret  = devm_gpio_request_one(chip->dev, chip->wls_mode_select,
+				  GPIOF_OUT_INIT_LOW, "wls_mode_select");
+		if (ret  < 0)
+			cps_wls_log(CPS_LOG_ERR," [%s] Failed to request wls_mode_select gpio, ret:%d", __func__, ret);
 	}
 
-	ret = devm_gpio_request_one(chip->dev, chip->wls_boost_en,
-				  GPIOF_OUT_INIT_LOW, "cps4038_wls_boost_en");
-	if (ret < 0) {
-		cps_wls_log(CPS_LOG_ERR,"Failed to request wls_boost_en gpio, ret:%d", ret);
-		return ret;
-	}
 
     return ret;
 }
@@ -2827,6 +3063,12 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
         }
         enable_irq_wake(chip->wls_det_irq);
     }
+
+    //Enable IC EPP mode as default
+    if(gpio_is_valid(chip->wls_mode_select)) {
+        gpio_set_value(chip->wls_mode_select, true);
+    }
+
     cps_wls_lock_work_init(chip);
 
     cps_wls_create_device_node(&(client->dev));
@@ -2836,10 +3078,12 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
         cps_wls_log(CPS_LOG_ERR, "[%s] power_supply_register wireless failed , ret = %d\n", __func__, ret);
         goto free_source;
     }
-
+    chip->wls_online = false;
+    wls_rx_init_timer(chip);
+    cps_init_charge_hardware();
 //    wake_lock(&chip->cps_wls_wake_lock);
-
-    cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger addr low probe successful!\n", __func__);
+//    kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
+    cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger  probe successful!\n", __func__);
     return ret;
 
 free_source:

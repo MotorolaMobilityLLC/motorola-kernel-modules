@@ -5,6 +5,8 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-4.19/include/uapi/
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/kernel-4.19/drivers/power/supply \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/cps4038 \
+		-I$(ANDROID_BUILD_TOP)/kernel-4.19/drivers/power/supply/mediatek/charger \
+		-I$(ANDROID_BUILD_TOP)/kernel-4.19/drivers/power/supply/mediatek/misc
 #		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/smart_pen_charger
 
 obj-m += cps_wls_charger_4038.o
