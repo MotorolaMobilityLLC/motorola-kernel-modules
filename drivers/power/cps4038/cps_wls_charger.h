@@ -9,7 +9,9 @@
 
 #ifndef __CPS_WLS_CHARGER_H__
 #define __CPS_WLS_CHARGER_H__
-
+#include <linux/workqueue.h>
+#include <linux/thermal.h>
+#include "mtk_charger_intf.h"
 
 #define CPS_WLS_FAIL    -1
 #define CPS_WLS_SUCCESS 0
@@ -129,6 +131,15 @@
 //#define AP_RX_CONFIG_BASE_ADDR     0x20001F00
 //#define AP_RX_CONTROL_BASE_ADDR    0x20001F40
 //#define AP_RX_REPORT_BASE_ADDR     0x20001F80
+typedef enum {
+	Sys_Op_Mode_AC_Missing = 0,
+	Sys_Op_Mode_BPP = 0x1,
+	Sys_Op_Mode_EPP = 0x2,
+	Sys_Op_Mode_PDDE= 0x4,
+	Sys_Op_Mode_TX = 0x8,
+	Sys_Op_Mode_TX_FOD = 0x9,
+	Sys_Op_Mode_INVALID,
+}Sys_Op_Mode;
 
 /*****************************************************************************
  *  Log
@@ -147,6 +158,12 @@
     } while (0)
     
 /*-------------------------------------------------------------------*/
+struct moto_wls_chg_ops {
+	void *data;
+	void (*wls_current_select)(int  *icl, int *vbus);
+	void (*wls_set_battery_soc)(int uisoc);
+};
+
 struct cps_wls_chrg_chip {
     struct i2c_client *client;
     struct device *dev;
@@ -189,17 +206,54 @@ struct cps_wls_chrg_chip {
     int rx_neg_protocol;
     int command_flag;
 
+    u32 wls_curr_max;
+
     unsigned long flags;
     int rx_ldo_on;
+    int wls_online;
     int wls_det_int;
     int wls_det_irq;
-    int wls_switch_en;
-    int wls_boost_en;
     const char *wls_fw_name;
     uint32_t wls_fw_version;
-    u32 tx_mode;
-    u32 wls_curr_max;
-    u32 folio_mode;
+	/* alarm timer */
+	struct alarm wls_rx_timer;
+	struct timespec64 end_time;
+    unsigned int rx_polling_ns;
+    uint32_t tx_mode;
+    uint32_t wls_input_curr_max;
+    uint32_t folio_mode;
+    bool rx_connected;
+    struct moto_chg_tcmd_client wls_tcmd_client;
+    struct moto_wls_chg_ops  wls_chg_ops;
+    Sys_Op_Mode mode_type;
+    uint32_t MaxV;
+    uint32_t MaxI;
+    uint32_t chip_id;
+    bool factory_wls_en;
+
+	wait_queue_head_t  wait_que;
+	bool wls_rx_check_thread_timeout;
+	struct wakeup_source *rx_check_wakelock;
+    struct workqueue_struct *wls_wq;
+    struct delayed_work fw_update_work;
+    struct delayed_work	bpp_icl_work;
+    uint32_t bootmode;
+    struct thermal_cooling_device *tcd;
+    bool ntc_thermal;
+    bool fw_uploading;
+    struct charger_device *chg1_dev;
+    bool chip_state;
+    bool rx_int_ready;
+    bool bpp_icl_done;
+
+    /*wls pen*/
+#ifdef SMART_PEN_SUPPORT
+    struct moto_wls_pen_ops  wls_pen_ops;
+    uint32_t cps_pen_status;
+    uint32_t cps_pen_soc;
+    bool pen_power_on;
+#endif
+    int wls_mode_select;
 };
         
 typedef enum ept_reason
