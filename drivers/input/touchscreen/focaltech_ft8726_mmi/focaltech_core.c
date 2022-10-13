@@ -1608,26 +1608,31 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 				      "focaltech,touch-charger-detect-psy-name",
 				      &psy_name);
     if (ret) {
-		FTS_INFO("Parse detect psy name failed %d", ret);
-		ts_data->psy_name = NULL;
+        FTS_INFO("Parse detect psy name failed %d", ret);
+        ts_data->psy_name = NULL;
     } else {
-	    ts_data->psy_name = psy_name;
-	if (power_supply_get_by_name(psy_name) == NULL) {
-		FTS_INFO("Power supply '%s' not found", psy_name);
-		psy_name = NULL;
-
-	}
+        ts_data->psy_name = psy_name;
+        if (power_supply_get_by_name(psy_name) == NULL) {
+            FTS_INFO("Power supply '%s' not found", psy_name);
+            psy_name = NULL;
+        }
     }
 
     ret = of_property_read_string(np,
 				      "focaltech,touch-charger-detect-psp",
 				      &psp_str);
     if (ret) {
-		ts_data->psp = NULL;
-		FTS_INFO("Parse detect psp failed %d", ret);
-	} else {
-		ts_data->psp = psp_str;
-	}
+        ts_data->psp = NULL;
+        FTS_INFO("Parse detect psp failed %d", ret);
+    } else {
+        ts_data->psp = psp_str;
+    }
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+    ret = of_property_read_u32(np, "focaltech,supported_gesture_type", &ts_data->supported_gesture_type);
+    if (ret < 0) {
+        FTS_ERROR("Unable to get supported_gesture_type, please check dts");
+    }
+#endif
 
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
@@ -1669,6 +1674,15 @@ static int disp_notifier_callback(struct notifier_block *nb,
 		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
 			/* before fb blank */
 			if (*data == MTK_DISP_BLANK_POWERDOWN) {
+
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+				if (ts_data->s_tap_flag || ts_data->d_tap_flag) {
+					ts_data->gesture_support = true;
+				}
+				else {
+					ts_data->gesture_support = false;
+				}
+#endif
 				fts_ts_suspend(ts_data->dev);
 			}
 		} else if (value == MTK_DISP_EVENT_BLANK) {
@@ -2438,6 +2452,33 @@ static int fts_ts_suspend(struct device *dev)
 
 #if FTS_ESDCHECK_EN
     fts_esdcheck_suspend(ts_data);
+#endif
+
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+
+    if (ts_data->s_tap_flag == 1 && ts_data->d_tap_flag == 1) {
+        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x03);
+    if (ret < 0)
+            FTS_ERROR("set s_tap d_tap fail, ret=%d", ret);
+    }
+    else if (ts_data->s_tap_flag == 0 && ts_data->d_tap_flag == 0) {
+        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x00);
+    if (ret < 0)
+            FTS_ERROR("close s_tap d_tap fail, ret=%d", ret);
+    }
+    else if (ts_data->s_tap_flag == 1) {
+        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x01);
+    if (ret < 0)
+            FTS_ERROR("set s_tap fail, ret=%d", ret);
+    }
+    else if (ts_data->d_tap_flag == 1) {
+        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x02);
+    if (ret < 0)
+            FTS_ERROR("set d_tap fail, ret=%d", ret);
+    }
+    else {
+            FTS_ERROR("unsupport gesture mode type ret=%d", ret);
+    }
 #endif
 
 #if FTS_GESTURE_EN
