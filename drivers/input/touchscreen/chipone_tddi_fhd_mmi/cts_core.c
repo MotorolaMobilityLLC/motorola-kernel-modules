@@ -2865,7 +2865,6 @@ static void cts_esd_protection_work(struct work_struct *work)
 	struct chipone_ts_data *cts_data;
 	int ret;
 
-	cts_info("ESD protection work");
 	cts_data = container_of(work, struct chipone_ts_data, esd_work.work);
 	cts_lock_device(&cts_data->cts_dev);
 #ifdef CONFIG_CTS_I2C_HOST
