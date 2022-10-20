@@ -288,6 +288,7 @@ struct cps_wls_chrg_chip {
     int wlc_status;
     uint32_t wlc_tx_power;
     int cable_ready_wait_count;
+    bool moto_stand;
     /*wls pen*/
 #ifdef SMART_PEN_SUPPORT
     struct moto_wls_pen_ops  wls_pen_ops;
