@@ -177,6 +177,9 @@ const struct mtk_chip_config spi_ctrdata = {
 #endif
 
 static uint8_t bTouchIsAwake = 0;
+#ifdef NVT_TOUCH_LAST_TIME
+static bool time_flag = 1;
+#endif
 
 /*******************************************************
 Description:
@@ -1672,6 +1675,22 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 		}
 	}
 
+#ifdef NVT_TOUCH_LAST_TIME
+	if (finger_cnt > 0) {
+		//touch down/moving
+		if(time_flag) {
+			ts->last_event_time = ktime_get_boottime();
+			//skip all other touch moving events before UP
+			time_flag = 0;
+			NVT_DBG("set last_event_time\n");
+		}
+	} else {
+		//touch UP, enable time flag for next touch
+		time_flag = 1;
+		NVT_DBG("finger_cnt 0, reset time_flag\n");
+	}
+#endif
+
 	input_report_key(ts->input_dev, BTN_TOUCH, (finger_cnt > 0));
 #else /* MT_PROTOCOL_B */
 	if (finger_cnt == 0) {
@@ -2041,6 +2060,23 @@ static ssize_t nvt_palm_settings_store(struct device *dev,
 }
 #endif
 
+#ifdef NVT_TOUCH_LAST_TIME
+static ssize_t timestamp_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
+
+	mutex_lock(&ts->state_mutex);
+	last_ktime = ts->last_event_time;
+	ts->last_event_time = 0;
+	mutex_unlock(&ts->state_mutex);
+
+	last_ts = ktime_to_timespec64(last_ktime);
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
+}
+#endif
+
 #ifdef NVT_DOUBLE_TAP_CTRL
 /*
  * gesture value used to indicate which gesture mode type is supported
@@ -2158,6 +2194,9 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
+#ifdef NVT_TOUCH_LAST_TIME
+	__ATTR_RO(timestamp),
+#endif
 #ifdef PALM_GESTURE
 	__ATTR(palm_settings, S_IRUGO | S_IWUSR | S_IWGRP, nvt_palm_settings_show, nvt_palm_settings_store),
 #endif
@@ -2190,7 +2229,7 @@ int32_t nvt_fw_class_init(bool create)
 	static int minor;
 
 	if (create) {
-#if defined(PALM_GESTURE) || defined(NVT_DOUBLE_TAP_CTRL)
+#if defined(PALM_GESTURE) || defined(NVT_DOUBLE_TAP_CTRL) || defined(NVT_TOUCH_LAST_TIME)
 		ret = alloc_chrdev_region(&devno, 0, 1, NVT_PRIMARY_NAME);
 #else
 		ret = alloc_chrdev_region(&devno, 0, 1, NVT_SPI_NAME);
