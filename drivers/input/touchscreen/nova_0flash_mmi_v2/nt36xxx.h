@@ -243,9 +243,6 @@ struct nvt_ts_data {
 	uint8_t supported_gesture_type;
 	uint8_t sys_gesture_type;
 #endif
-#ifdef NVT_TOUCH_LAST_TIME
-    ktime_t last_event_time;
-#endif
 #ifdef NOVATECH_PEN_NOTIFIER
 	bool fw_ready_flag;
 	int nvt_pen_detect_flag;
@@ -257,6 +254,9 @@ struct nvt_ts_data {
 #endif
 #ifdef PALM_GESTURE
 	bool palm_enabled;
+#endif
+#ifdef NVT_TOUCH_LAST_TIME
+	ktime_t last_event_time;
 #endif
 	char product_id[10];
 	uint8_t fw_type;
