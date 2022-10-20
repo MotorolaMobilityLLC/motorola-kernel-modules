@@ -2067,10 +2067,8 @@ static ssize_t timestamp_show(struct device *dev,
 	ktime_t last_ktime;
 	struct timespec64 last_ts;
 
-	mutex_lock(&ts->state_mutex);
 	last_ktime = ts->last_event_time;
 	ts->last_event_time = 0;
-	mutex_unlock(&ts->state_mutex);
 
 	last_ts = ktime_to_timespec64(last_ktime);
 	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
@@ -2249,7 +2247,7 @@ int32_t nvt_fw_class_init(bool create)
 
 		ts_class_dev = device_create(touchscreen_class, NULL,
 				devno,
-#if defined(PALM_GESTURE) || defined(NVT_DOUBLE_TAP_CTRL)
+#if defined(PALM_GESTURE) || defined(NVT_DOUBLE_TAP_CTRL) || defined(NVT_TOUCH_LAST_TIME)
 				ts, NVT_PRIMARY_NAME);
 #else
 				ts, NVT_SPI_NAME);
@@ -2269,7 +2267,7 @@ int32_t nvt_fw_class_init(bool create)
 		if (error)
 			goto device_destroy;
 		else
-#if defined(PALM_GESTURE) || defined(NVT_DOUBLE_TAP_CTRL)
+#if defined(PALM_GESTURE) || defined(NVT_DOUBLE_TAP_CTRL) || defined(NVT_TOUCH_LAST_TIME)
 			NVT_LOG("create /sys/class/touchscreen/%s Succeeded!\n", NVT_PRIMARY_NAME);
 #else
 			NVT_LOG("create /sys/class/touchscreen/%s Succeeded!\n", NVT_SPI_NAME);
