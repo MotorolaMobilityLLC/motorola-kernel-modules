@@ -1823,6 +1823,7 @@ static void cps_epp_icl_on()
 static int cps_wls_rx_irq_handler(int int_flag)
 {
 	int rc = 0;
+	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
 
 	if (int_flag & RX_INT_POWER_ON)
 	{
@@ -1884,10 +1885,11 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	}
 	if ((int_flag & RX_INT_HS_OK) || (int_flag & RX_INT_HS_FAIL))
 	{
-		cps_get_sys_op_mode(&chip->mode_type);
-		cps_wls_log(CPS_LOG_DEBG, "[%s] op_mode %d\n", __func__, chip->mode_type);
-		if (chip->mode_type == Sys_Op_Mode_MOTO_WLC)
+		cps_get_sys_op_mode(&mode_type);
+		cps_wls_log(CPS_LOG_DEBG, "[%s] op_mode %d\n", __func__, mode_type);
+		if (mode_type == Sys_Op_Mode_MOTO_WLC)
 		{
+			chip->moto_stand = true;
 			cps_wls_set_status(WLC_TX_TYPE_CHANGED);
 		}
 	}
@@ -2844,7 +2846,7 @@ static ssize_t store_wlc_fan_speed(struct device *dev,
 			const char *buf,
 			size_t count)
 {
-	if (chip->mode_type != Sys_Op_Mode_MOTO_WLC) {
+	if (!chip->moto_stand) {
 		cps_wls_log(CPS_LOG_ERR, "[%s] not moto 50w dock %d, skip\n", __func__ , chip->mode_type);
 		return count;
 	}
@@ -2866,7 +2868,7 @@ static ssize_t store_wlc_light_ctl(struct device *dev,
 			const char *buf,
 			size_t count)
 {
-	if (chip->mode_type != Sys_Op_Mode_MOTO_WLC) {
+	if (!chip->moto_stand) {
 		cps_wls_log(CPS_LOG_ERR, "[%s] not moto 50w dock %d, skip\n", __func__ , chip->mode_type);
 		return count;
 	}
@@ -2886,7 +2888,10 @@ static DEVICE_ATTR(wlc_tx_power, 0444, show_wlc_tx_power, NULL);
 
 static ssize_t show_wlc_tx_type(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%d\n", chip->mode_type);
+	if (chip->moto_stand)
+		return sprintf(buf, "%d\n", Sys_Op_Mode_MOTO_WLC);
+	else
+		return sprintf(buf, "%d\n", chip->mode_type);
 }
 
 static DEVICE_ATTR(wlc_tx_type, 0444, show_wlc_tx_type, NULL);
@@ -3192,7 +3197,7 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
 
-    if (chip->cable_ready_wait_count < 3 && chip->mode_type != Sys_Op_Mode_MOTO_WLC)
+    if (chip->cable_ready_wait_count < 3 && !chip->moto_stand)
     {
         *cable_ready = false;
         chip->cable_ready_wait_count++;
@@ -3216,7 +3221,7 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
         *icl = 1000000;
         *vbus = 5000;
     }
-    else if (chg->mode_type == Sys_Op_Mode_EPP || chg->mode_type == Sys_Op_Mode_MOTO_WLC)
+    else if (chg->mode_type == Sys_Op_Mode_EPP)
     {
         wls_power = cps_wls_get_rx_neg_power() / 2;
         cps_wls_log(CPS_LOG_DEBG, "%s cps4035 power %dW", __func__, wls_power);
@@ -3378,7 +3383,7 @@ static int cps_wls_set_status(int status)
 {
 	chip->wlc_status = status;
 	if (status == WLC_DISCONNECTED)
-		chip->mode_type = Sys_Op_Mode_INVALID;
+		chip->moto_stand = false;
 	cps_wls_notify_st_changed();
 
 	return 0;
@@ -3391,7 +3396,7 @@ static void cps_wls_set_battery_soc(int uisoc)
 
 	if (!CPS_RX_CHRG_FULL && chg->wls_online && soc == 100) {
 		cps_wls_log(CPS_LOG_DEBG, "cps Notify TX, battery has been charged full !");
-		if (chip->mode_type == Sys_Op_Mode_MOTO_WLC) {
+		if (chip->moto_stand) {
 			cps_wls_wlc_update_light_fan();
 		} else
 			cps_wls_notify_tx_chrgfull();
@@ -3707,6 +3712,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     chip->mode_type = Sys_Op_Mode_INVALID;
     chip->fan_speed = 1;
     chip->light_level = 1;
+    chip->moto_stand = false;
 
     init_waitqueue_head(&chip->wait_que);
     wls_rx_init_timer(chip);
