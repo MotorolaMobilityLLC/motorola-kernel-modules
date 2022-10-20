@@ -25,6 +25,9 @@
 #include <linux/uaccess.h>
 #include <linux/version.h>
 #include <linux/mmi_kernel_common.h>
+#ifdef NVT_TOUCH_LAST_TIME
+#include <linux/ktime.h>
+#endif
 
 #include "nt36xxx_mem_map.h"
 
@@ -239,6 +242,9 @@ struct nvt_ts_data {
 #ifdef NVT_DOUBLE_TAP_CTRL
 	uint8_t supported_gesture_type;
 	uint8_t sys_gesture_type;
+#endif
+#ifdef NVT_TOUCH_LAST_TIME
+    ktime_t last_event_time;
 #endif
 #ifdef NOVATECH_PEN_NOTIFIER
 	bool fw_ready_flag;
