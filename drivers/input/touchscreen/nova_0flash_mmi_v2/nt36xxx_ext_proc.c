@@ -648,6 +648,7 @@ int32_t nvt_cmd_store(uint8_t u8Cmd)
 	return ret;
 }
 
+#ifdef NVT_DOUBLE_TAP_CTRL
 static int32_t nvt_cmd_ext_store(uint8_t cmd, uint8_t subcmd)
 {
     int32_t i, retry = 5;
@@ -684,6 +685,7 @@ static int32_t nvt_cmd_ext_store(uint8_t cmd, uint8_t subcmd)
 
 	return 0;
 }
+#endif
 
 #ifdef NOVATECH_PEN_NOTIFIER
 int nvt_mcu_pen_detect_set(uint8_t pen_detect) {
