@@ -181,20 +181,22 @@ static int ktd3136_bl_enable_channel(struct ktd3136_data *drvdata)
 
 	return ret;
 }
-static void ktd3136_pwm_mode_enable(struct ktd3136_data *drvdata, bool en)
+static void ktd3136_pwm_mode_enable(struct ktd3136_data *drvdata, bool mode)
 {
 	u8 value;
 
-	if (en) {
+	if (mode) {
+		//1:disable
 		if (drvdata->pwm_mode) {
-			pr_debug("already activated!\n");
+			pr_debug("already set!\n");
 		} else {
-			drvdata->pwm_mode = en;
+			drvdata->pwm_mode = mode;
 		}
 		ktd3136_masked_write(drvdata->client, REG_PWM, 0x80, 0x80);
 	} else {
+		//0:enable as default
 		if (drvdata->pwm_mode) {
-			drvdata->pwm_mode = en;
+			drvdata->pwm_mode = mode;
 		}
 		ktd3136_masked_write(drvdata->client, REG_PWM, 0x80, 0x00);
 	}
