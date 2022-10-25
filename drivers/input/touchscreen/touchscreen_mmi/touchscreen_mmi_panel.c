@@ -95,6 +95,11 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 		ppdata->gestures_enabled = true;
 	}
 
+	if (of_property_read_bool(of_node, "mmi,cli-enable-gestures")) {
+		dev_info(DEV_TS, "%s: using enable cli gestures\n", __func__);
+		ppdata->cli_gestures_enabled = true;
+	}
+
 	if (of_property_read_bool(of_node, "mmi,enable-palm")) {
 		dev_info(DEV_TS, "%s: using enable palm\n", __func__);
 		ppdata->palm_enabled = true;
@@ -113,6 +118,11 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 	if (of_property_read_bool(of_node, "mmi,pill-region-control")) {
 		dev_info(DEV_TS, "%s: using pill region\n", __func__);
 		ppdata->pill_region_ctrl = true;
+	}
+
+	if (of_property_read_bool(of_node, "mmi,active-region-control")) {
+		dev_info(DEV_TS, "%s: using active region\n", __func__);
+		ppdata->active_region_ctrl = true;
 	}
 
 	if (of_property_read_bool(of_node, "mmi,hold-distance-control")) {
@@ -145,6 +155,28 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 		ppdata->max_x = coords[0] - 1;
 		ppdata->max_y = coords[1] - 1;
 	}
+	if (of_property_read_bool(of_node, "mmi,fod_detection")) {
+		dev_info(DEV_TS, "%s: using fod detection\n", __func__);
+		ppdata->fod_detection = true;
+	}
+
+	if (!of_property_read_u32_array(of_node, "mmi,fod_coords", coords, 2)) {
+		ppdata->fod_x = coords[0];
+		ppdata->fod_y = coords[1];
+		dev_info(DEV_TS, "%s: get fod_coords property x:%d y:%d\n", __func__,ppdata->fod_x,ppdata->fod_y);
+	}
+
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	if (!of_property_read_u32(of_node, "mmi,supported_gesture_type", &ppdata->supported_gesture_type))
+		dev_info(DEV_TS, "%s: supported_gesture_type property %02x\n",
+				__func__, ppdata->supported_gesture_type);
+#endif
+
+#ifdef CONFIG_BOARD_USES_CLI_DOUBLE_TAP_CTRL
+	if (!of_property_read_u32(of_node, "mmi,cli_supported_gesture_type", &ppdata->cli_supported_gesture_type))
+		dev_info(DEV_TS, "%s: cli_supported_gesture_type property %02x\n",
+				__func__, ppdata->cli_supported_gesture_type);
+#endif
 
 	chosen = of_find_node_by_name(NULL, "chosen");
 	if (chosen) {

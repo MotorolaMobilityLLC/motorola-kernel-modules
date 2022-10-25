@@ -327,6 +327,132 @@ static ssize_t pwr_store(struct device *dev,
 }
 static DEVICE_ATTR(pwr, (S_IWUSR | S_IWGRP), NULL, pwr_store);
 
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+/*
+ * gesture value used to indicate which gesture mode type is enabled
+ */
+static ssize_t gesture_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", touch_cdev->pdata.supported_gesture_type);
+}
+static ssize_t gesture_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
+	unsigned int value = 0;
+	int err = 0;
+
+	mutex_lock(&touch_cdev->extif_mutex);
+	err = sscanf(buf, "%d", &value);
+	if (err < 0) {
+		dev_err(dev, "forcereflash: Failed to convert value\n");
+		return -EINVAL;
+	}
+	switch (value) {
+		case 0x10:
+			dev_info(dev, "%s: zero tap disable\n", __func__);
+			touch_cdev->gesture_mode_type &= 0xFE;
+			break;
+		case 0x11:
+			dev_info(dev, "%s: zero tap enable\n", __func__);
+			touch_cdev->gesture_mode_type |= 0x01;
+			break;
+		case 0x20:
+			dev_info(dev, "%s: single tap disable\n", __func__);
+			touch_cdev->gesture_mode_type &= 0xFD;
+			break;
+		case 0x21:
+			dev_info(dev, "%s: single tap enable\n", __func__);
+			touch_cdev->gesture_mode_type |= 0x02;
+			break;
+		case 0x30:
+			dev_info(dev, "%s: double tap disable\n", __func__);
+			touch_cdev->gesture_mode_type &= 0xFB;
+			break;
+		case 0x31:
+			dev_info(dev, "%s: double tap enable\n", __func__);
+			touch_cdev->gesture_mode_type |= 0x04;
+			break;
+		default:
+			dev_info(dev, "%s: unsupport gesture mode type\n", __func__);
+			;
+	}
+	mutex_unlock(&touch_cdev->extif_mutex);
+	dev_info(dev, "%s: gesture_mode_type = 0x%02x \n", __func__, touch_cdev->gesture_mode_type);
+
+	return size;
+}
+static DEVICE_ATTR(gesture, (S_IWUSR | S_IWGRP | S_IRUGO), gesture_show, gesture_store);
+#endif
+
+#ifdef CONFIG_BOARD_USES_CLI_DOUBLE_TAP_CTRL
+/*
+ * cli_gesture value used to indicate which gesture mode type is enabled
+ */
+static ssize_t cli_gesture_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", touch_cdev->pdata.cli_supported_gesture_type);
+}
+
+static ssize_t cli_gesture_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
+	unsigned int value = 0;
+	int err = 0;
+
+	mutex_lock(&touch_cdev->extif_mutex);
+	err = sscanf(buf, "%d", &value);
+	if (err < 0) {
+		dev_err(dev, "CLI Failed to convert value\n");
+		return -EINVAL;
+	}
+	switch (value) {
+		case 0x10:
+			dev_info(dev, "%s: CLI zero tap disable\n", __func__);
+			touch_cdev->cli_gesture_mode_type &= 0xFE;
+			break;
+		case 0x11:
+			dev_info(dev, "%s: CLI zero tap enable\n", __func__);
+			touch_cdev->cli_gesture_mode_type |= 0x01;
+			break;
+		case 0x20:
+			dev_info(dev, "%s: CLI single tap disable\n", __func__);
+			touch_cdev->cli_gesture_mode_type &= 0xFD;
+			break;
+		case 0x21:
+			dev_info(dev, "%s: CLI single tap enable\n", __func__);
+			touch_cdev->cli_gesture_mode_type |= 0x02;
+			break;
+		case 0x30:
+			dev_info(dev, "%s: CLI double tap disable\n", __func__);
+			touch_cdev->cli_gesture_mode_type &= 0xFB;
+			break;
+		case 0x31:
+			dev_info(dev, "%s: CLI double tap enable\n", __func__);
+			touch_cdev->cli_gesture_mode_type |= 0x04;
+			break;
+		default:
+			dev_info(dev, "%s: CLI unsupport gesture mode type\n", __func__);
+			;
+	}
+	mutex_unlock(&touch_cdev->extif_mutex);
+	dev_info(dev, "%s: cli_gesture_mode_type = 0x%02x \n", __func__,
+		touch_cdev->cli_gesture_mode_type);
+
+	return size;
+}
+
+static DEVICE_ATTR(cli_gesture, (S_IRUGO | S_IWUSR | S_IWGRP),
+	cli_gesture_show, cli_gesture_store);
+#endif
+
 static struct attribute *sysfs_class_attrs[] = {
 	&dev_attr_path.attr,
 	&dev_attr_vendor.attr,
@@ -355,6 +481,12 @@ static struct attribute *sysfs_class_attrs[] = {
 	&dev_attr_poison_timeout.attr,
 	&dev_attr_poison_distance.attr,
 	&dev_attr_poison_trigger_distance.attr,
+#endif
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	&dev_attr_gesture.attr,
+#endif
+#ifdef CONFIG_BOARD_USES_CLI_DOUBLE_TAP_CTRL
+	&dev_attr_cli_gesture.attr,
 #endif
 	NULL,
 };
@@ -428,11 +560,89 @@ static ssize_t pill_region_store(struct device *dev,
 }
 static DEVICE_ATTR(pill_region, (S_IWUSR | S_IWGRP | S_IRUGO), pill_region_show, pill_region_store);
 
+/*
+ * active_region input requires 4 parameters
+ */
+static ssize_t active_region_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
+	int ret = 0;
+
+	if (!touch_cdev) {
+		dev_err(dev, "get_active_region: invalid pointer\n");
+		return (ssize_t)0;
+	}
+	mutex_lock(&touch_cdev->extif_mutex);
+	if (is_touch_active) {
+		TRY_TO_GET(active_region, &touch_cdev->active_region);
+		if (ret < 0) {
+			dev_err(dev, "get_active_region: return error %d\n", ret);
+			ret = 0;
+			goto ACTIVE_REGION_SHOW_OUT;
+		}
+	} else
+		dev_dbg(dev, "get_active_region: read from cache data.\n");
+
+	ret = scnprintf(buf, PAGE_SIZE, "%u %u %u %u",
+		touch_cdev->active_region[0], touch_cdev->active_region[1],
+		touch_cdev->active_region[2], touch_cdev->active_region[3]);
+ACTIVE_REGION_SHOW_OUT:
+	mutex_unlock(&touch_cdev->extif_mutex);
+
+	return (ssize_t)ret;
+
+}
+static ssize_t active_region_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
+	unsigned int args[TS_MMI_ACTIVE_REGION_REQ_ARGS_NUM] = {0};
+	int ret = 0;
+	int i = TS_MMI_ACTIVE_REGION_REQ_ARGS_NUM;
+
+	ret = sscanf(buf, "%u %u %u %u", &args[0], &args[1], &args[2], &args[3]);
+	if (ret < TS_MMI_ACTIVE_REGION_REQ_ARGS_NUM) {
+		dev_err(dev, "active_region: Failed to convert value\n");
+		return -EINVAL;
+	}
+
+	if (!touch_cdev) {
+		dev_err(dev, "active_region: invalid pointer\n");
+		return -EINVAL;
+	}
+	mutex_lock(&touch_cdev->extif_mutex);
+	mutex_lock(&touch_cdev->method_mutex);
+	while (i--)
+		touch_cdev->active_region[i] = args[i];
+	if (is_touch_active)
+		_TRY_TO_CALL(active_region, touch_cdev->active_region);
+	else
+		dev_dbg(dev, "active_region: write to cache data.\n");
+	mutex_unlock(&touch_cdev->method_mutex);
+	mutex_unlock(&touch_cdev->extif_mutex);
+
+	return size;
+}
+static DEVICE_ATTR(active_region, (S_IWUSR | S_IWGRP | S_IRUGO), active_region_show, active_region_store);
+
 static int ts_mmi_sysfs_create_edge_entries(struct ts_mmi_dev *touch_cdev, bool create) {
 	int ret = 0;
 
 	if (create) {
 		/*initialize value*/
+		if (touch_cdev->pdata.active_region_ctrl) {
+			TRY_TO_GET(active_region, &touch_cdev->active_region);
+			if (ret < 0)
+				dev_err(DEV_TS, "%s: failed to read active_region info (%d)\n",
+						__func__, ret);
+			ret = sysfs_create_file(&DEV_MMI->kobj, &dev_attr_active_region.attr);
+			if (ret < 0) {
+				dev_err(DEV_TS, "%s: failed to create active_region entry (%d)\n",
+						__func__, ret);
+				goto CREATE_SUPPRESSION_FAILED;
+			}
+		}
 		if (touch_cdev->pdata.suppression_ctrl) {
 			TRY_TO_GET(suppression, &touch_cdev->suppression);
 			if (ret < 0)
@@ -715,6 +925,15 @@ int ts_mmi_dev_register(struct device *parent,
 		}
 	}
 
+	if (touch_cdev->pdata.cli_gestures_enabled) {
+		ret = ts_mmi_cli_gesture_init(touch_cdev);
+		if (ret < 0) {
+			dev_err(DEV_TS, "%s: Register CLI gesture failed. %d\n",
+				__func__, ret);
+			goto GESTURE_INIT_FAILED;
+		}
+	}
+
 	if (touch_cdev->pdata.palm_enabled) {
 		ret = ts_mmi_palm_init(touch_cdev);
 		if (ret < 0) {
@@ -782,6 +1001,8 @@ void ts_mmi_dev_unregister(struct device *parent)
 	}
 	if (touch_cdev->pdata.gestures_enabled)
 		ts_mmi_gesture_remove(touch_cdev);
+	if (touch_cdev->pdata.cli_gestures_enabled)
+		ts_mmi_cli_gesture_remove(touch_cdev);
 	if (touch_cdev->pdata.palm_enabled)
 		ts_mmi_palm_remove(touch_cdev);
 	ts_mmi_notifiers_unregister(touch_cdev);
