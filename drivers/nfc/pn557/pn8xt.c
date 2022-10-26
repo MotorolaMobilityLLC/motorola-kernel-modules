@@ -29,6 +29,7 @@
  * GNU General Public License for more details.
  *
  ******************************************************************************/
+#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
@@ -105,14 +106,22 @@ static int signal_handler(pn8xt_access_st_t state, long nfc_pid)
 {
     int sigret = 0;
     pid_t pid;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
+    struct siginfo sinfo;
+#else
     struct kernel_siginfo sinfo;
+#endif
     struct task_struct *task;
 
     if(nfc_pid <= 0) {
         pr_err("%s: invalid nfc service pid %ld\n", __func__, nfc_pid);
         return 0;
     }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
+    memset(&sinfo, 0, sizeof(struct siginfo));
+#else
     memset(&sinfo, 0, sizeof(struct kernel_siginfo));
+#endif
     sinfo.si_signo = SIG_NFC;
     sinfo.si_code = SI_QUEUE;
     sinfo.si_int = state;
