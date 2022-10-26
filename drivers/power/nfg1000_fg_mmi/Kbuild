@@ -1,0 +1,5 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/nfg1000_fg_mmi
+
+obj-m += nfg1000_fg_mmi.o
