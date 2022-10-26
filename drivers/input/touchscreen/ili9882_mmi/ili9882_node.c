@@ -109,6 +109,8 @@ struct record_state {
 static unsigned char g_user_buf[USER_STR_BUFF] = {0};
 #define ILI_SPI_NAME "ilitek"
 #define ILI_SPI_NAME_TM "ilitek_tm"
+#define ILI_SPI_NAME_PRIMARY "primary"
+
 static struct class *touchscreen_class;
 static struct device *touchscreen_class_dev;
 
@@ -2628,10 +2630,46 @@ static ssize_t ic_ver_show(struct device *dev,
 			"Config ID: ", ilits->chip->core_ver);
 }
 
+#ifdef ILI_PASSIVE_PEN
+static ssize_t ili_palm_settings_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d", ilits->canvas_value);
+}
+
+static ssize_t ili_palm_settings_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int value;
+	int err = 0;
+
+	mutex_lock(&ilits->touch_mutex);
+	if (count > 2)
+		return -EINVAL;
+
+	if (sscanf(buf, "%d", &value) != 1)
+		return -EINVAL;
+
+	err = count;
+
+	if (ili_ic_func_ctrl("canvas", value) < 0)
+		ILI_ERR("Write canvas enable fail\n");
+	else
+		ilits->canvas_value = value;
+	ILI_INFO("%s: %d\n", __func__, ilits->canvas_value);
+	mutex_unlock(&ilits->touch_mutex);
+
+	return err;
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
+#ifdef ILI_PASSIVE_PEN
+	__ATTR(palm_settings, S_IRUGO | S_IWUSR | S_IWGRP, ili_palm_settings_show, ili_palm_settings_store),
+#endif
 	__ATTR_NULL
 };
 
@@ -2642,7 +2680,11 @@ int ilitek_sys_init(void)
 	dev_t devno;
 	struct device_attribute *attrs = touchscreen_attributes;
 
+#ifdef ILI_PASSIVE_PEN
+	ret = alloc_chrdev_region(&devno, 0, 1, ILI_SPI_NAME_PRIMARY);
+#else
 	ret = alloc_chrdev_region(&devno, 0, 1, ILI_SPI_NAME);
+#endif
 	if (ret) {
 		ILI_ERR ("can't allocate chrdev\n");
 		return ret;
@@ -2656,10 +2698,14 @@ int ilitek_sys_init(void)
 			ILI_ERR("Failed to create touchscreen class!\n");
 			return ret;
 		}
+#ifdef ILI_PASSIVE_PEN
+		touchscreen_class_dev = device_create(touchscreen_class, NULL, devno, NULL, ILI_SPI_NAME_PRIMARY);
+#else
 		if((ilits->tp_module >= MODEL_TM) && (ilits->tp_module < MODEL_TM_END))
 			touchscreen_class_dev = device_create(touchscreen_class, NULL, devno, NULL, ILI_SPI_NAME_TM);
 		else
 			touchscreen_class_dev = device_create(touchscreen_class, NULL, devno, NULL, ILI_SPI_NAME);
+#endif
 
 		pr_info(" touchscreen_class_dev = %p \n", touchscreen_class_dev);
 		if (IS_ERR(touchscreen_class_dev)) {
