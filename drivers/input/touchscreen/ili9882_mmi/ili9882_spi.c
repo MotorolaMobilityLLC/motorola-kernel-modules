@@ -637,6 +637,20 @@ static int ili_get_panel(void)
 }
 #endif
 
+#ifdef ILITEK_PEN_NOTIFIER
+static int pen_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	ILI_INFO("Received event(%lu) for pen detection\n", event);
+
+	mutex_lock(&ilits->touch_mutex);
+	ili_ic_func_ctrl("passive_pen", event);
+	mutex_unlock(&ilits->touch_mutex);
+
+    	return 0;
+}
+#endif
+
 static int ilitek_spi_probe(struct spi_device *spi)
 {
 	struct touch_bus_info *info =
@@ -809,6 +823,11 @@ static int ilitek_spi_probe(struct spi_device *spi)
 
 	if (ili_core_spi_setup(SPI_CLK) < 0)
 		return -EINVAL;
+
+#ifdef ILITEK_PEN_NOTIFIER
+	ilits->pen_notif.notifier_call = pen_notifier_callback;
+	pen_detection_register_client(&ilits->pen_notif);
+#endif
 
 	return info->hwif->plat_probe();
 }

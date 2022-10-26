@@ -111,6 +111,10 @@
 #include <linux/mmi_wake_lock.h>
 #include <linux/panel_notifier.h>
 
+#ifdef ILITEK_PEN_NOTIFIER
+#include <linux/pen_detection_notify.h>
+#endif
+
 #define DRIVER_VERSION			"3.0.3.0.200610"
 
 /* Options */
@@ -900,6 +904,9 @@ struct ilitek_ts_data {
 	int gesture_demo_ctrl;
 	struct gesture_symbol ges_sym;
 	struct report_info_block rib;
+#ifdef ILITEK_PEN_NOTIFIER
+	struct notifier_block pen_notif;
+#endif
 
 	u16 flash_mid;
 	u16 flash_devid;
