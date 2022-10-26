@@ -907,6 +907,9 @@ struct ilitek_ts_data {
 #ifdef ILITEK_PEN_NOTIFIER
 	struct notifier_block pen_notif;
 #endif
+#ifdef ILI_PASSIVE_PEN
+	int canvas_value;
+#endif
 
 	u16 flash_mid;
 	u16 flash_devid;
