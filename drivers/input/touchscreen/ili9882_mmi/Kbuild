@@ -35,6 +35,10 @@ ifneq ($(filter m y,$(CONFIG_INPUT_ILI_MTK_GET_PANEL)),)
 	EXTRA_CFLAGS += -DILI_MTK_GET_PANEL
 endif
 
+ifneq ($(filter m y,$(CONFIG_ILITEK_PASSIVE_PEN)),)
+EXTRA_CFLAGS += -DILI_PASSIVE_PEN
+endif
+
 ili9882_mmi-objs += ili9882.o
 ili9882_mmi-objs += ili9882_spi.o
 ili9882_mmi-objs += ili9882_qcom.o
