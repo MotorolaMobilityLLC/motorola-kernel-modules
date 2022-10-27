@@ -210,14 +210,14 @@ struct nvt_ts_data {
 	bool wakeable;
 	bool should_enable_gesture;
 	bool gesture_enabled;
+	enum display_state screen_state;
+	struct mutex state_mutex;
+	struct nvt_sensor_platform_data *sensor_pdata;
+#endif
 #ifdef NOVATECH_PEN_NOTIFIER
 	bool fw_ready_flag;
 	int nvt_pen_detect_flag;
 	struct notifier_block pen_notif;
-#endif
-	enum display_state screen_state;
-	struct mutex state_mutex;
-	struct nvt_sensor_platform_data *sensor_pdata;
 #endif
 #ifdef PALM_GESTURE
 	bool palm_enabled;
