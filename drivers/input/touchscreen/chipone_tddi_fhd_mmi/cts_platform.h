@@ -156,6 +156,9 @@ struct cts_platform_data {
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 	int supported_gesture_type;
 #endif
+#ifdef CFG_CTS_MANUAL_CS
+	int ldo_en_flag;
+#endif
 };
 
 #ifdef CONFIG_CTS_I2C_HOST
