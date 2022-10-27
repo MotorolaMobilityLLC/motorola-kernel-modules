@@ -149,18 +149,38 @@ static int disp_notifier_callback(struct notifier_block *nb,
 					chipone_ts->should_enable_gesture = false;
 				}
 #endif
-
 				if (chipone_ts->should_enable_gesture)
 						touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
 				else
 						touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
 #endif
 						cts_suspend(cts_data);
+#ifdef CFG_CTS_MANUAL_CS
+				if(cts_data->pdata->ldo_en_flag == true) {
+					if(chipone_ts->should_enable_gesture == false) {
+						gpio_set_value(cts_data->pdata->rst_gpio, 0);
+						mdelay(1);
+						gpio_direction_output(cts_data->pdata->cs_gpio, 0);
+						mdelay(1);
+						gpio_direction_input(cts_data->pdata->cs_gpio);
+						mdelay(1);
+					}
+				}
+#endif
 			}
 
 		} else if (value == MTK_DISP_EVENT_BLANK) {
 			if (*data == MTK_DISP_BLANK_UNBLANK) {
 				/* cts_resume(cts_data); */
+#ifdef CFG_CTS_MANUAL_CS
+				if(cts_data->pdata->ldo_en_flag == true) {
+					gpio_set_value(cts_data->pdata->rst_gpio, 1);
+					mdelay(1);
+					gpio_direction_output(cts_data->pdata->cs_gpio, 1);
+					mdelay(1);
+					cts_plat_set_cs(cts_data->pdata, 1);
+				}
+#endif
 				queue_work(cts_data->workqueue,
 						&cts_data->ts_resume_work);
 			}

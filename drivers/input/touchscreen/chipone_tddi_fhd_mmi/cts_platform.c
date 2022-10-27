@@ -571,6 +571,12 @@ static int cts_plat_parse_dt(struct cts_platform_data *pdata,
 	if (!of_property_read_u32(dev_node, "chipone,supported_gesture_type", &pdata->supported_gesture_type))
 		cts_info("chipone,supported_gesture_type=%02x\n", pdata->supported_gesture_type);
 #endif
+#ifdef CFG_CTS_MANUAL_CS
+	if (!of_property_read_u32(dev_node, "chipone,ldo_en_flag", &pdata->ldo_en_flag))
+		cts_info("chipone,ldo_en_flag=%02x\n", pdata->ldo_en_flag);
+	else
+		pdata->ldo_en_flag = 0;
+#endif
 	return 0;
 }
 #endif /* CONFIG_CTS_OF */
