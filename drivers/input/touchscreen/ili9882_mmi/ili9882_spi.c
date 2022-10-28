@@ -554,10 +554,17 @@ static int check_dt(struct device_node *np)
 		pr_err("%s: %s not actived\n", __func__, node->name);
 	return ret;
 }
+#endif
 
 static int parse_dt(struct device_node *np)
 {
 	int32_t ret = 0;
+
+#if CHARGER_NOTIFIER_CALLBACK
+	ret = of_property_read_string(np, "touch,psy-name", &ilits->psy_name);
+	if (ilits->psy_name)
+		ILI_INFO("%s: get psy_name:%s", __func__, ilits->psy_name);
+#endif
 
 #ifdef ILI_CONFIG_PANEL_GESTURE
 	//parse gesture by panel config
@@ -584,7 +591,6 @@ static int parse_dt(struct device_node *np)
 
   return ret;
 }
-#endif
 
 #ifdef ILI_MTK_GET_PANEL
 char panel_name[50] = {0};
@@ -790,9 +796,7 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	ilits->wait_int_timeout = AP_INT_TIMEOUT;
 
 	//---parse dts---
-#ifdef CONFIG_DRM
 	parse_dt(spi->dev.of_node);
-#endif
 
 #if ENABLE_GESTURE
 #ifdef ILI_CONFIG_PANEL_GESTURE

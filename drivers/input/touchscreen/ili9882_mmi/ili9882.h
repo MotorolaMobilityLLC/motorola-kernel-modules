@@ -162,7 +162,13 @@
 #define BOOT_FW_UPDATE			ENABLE
 #define MP_INT_LEVEL			DISABLE
 #define PLL_CLK_WAKEUP_TP_RESUME	DISABLE
+#ifdef ILI_CONFIG_CHARGER
+#define CHARGER_NOTIFIER_CALLBACK	ENABLE
+#define USB_DETECT_IN 			1
+#define USB_DETECT_OUT 			2
+#else
 #define CHARGER_NOTIFIER_CALLBACK	DISABLE
+#endif
 
 /*if current interface is spi, must to hostdownload */
 #if (TDDI_INTERFACE == BUS_SPI)
@@ -909,6 +915,10 @@ struct ilitek_ts_data {
 #endif
 #ifdef ILI_PASSIVE_PEN
 	int canvas_value;
+#endif
+
+#if CHARGER_NOTIFIER_CALLBACK
+	const char *psy_name;
 #endif
 
 	u16 flash_mid;
