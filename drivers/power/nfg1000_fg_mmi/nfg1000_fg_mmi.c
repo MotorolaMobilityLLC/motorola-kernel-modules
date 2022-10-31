@@ -159,13 +159,22 @@ struct mmi_fg_chip {
 	int skip_reads;
 	int skip_writes;
 
+	bool fake_battery;
 	int fake_soc;
 	int fake_temp;
 
 	struct power_supply *fg_psy;
 	struct power_supply_desc fg_psy_d;
-};
 
+	int (*mmi_get_property)(struct power_supply *psy,
+			    enum power_supply_property psp,
+			    union power_supply_propval *val);
+	int (*mmi_set_property)(struct power_supply *psy,
+			    enum power_supply_property psp,
+			    const union power_supply_propval *val);
+	void (*mmi_fg_update_thread)(struct work_struct *work);
+
+};
 
 #if 0
 static int __fg_read_byte(struct i2c_client *client, u8 reg, u8 *val)
@@ -183,7 +192,6 @@ static int __fg_read_byte(struct i2c_client *client, u8 reg, u8 *val)
 	return 0;
 }
 
-
 static int __fg_write_byte(struct i2c_client *client, u8 reg, u8 val)
 {
 	s32 ret;
@@ -191,6 +199,20 @@ static int __fg_write_byte(struct i2c_client *client, u8 reg, u8 val)
 	ret = i2c_smbus_write_byte_data(client, reg, val);
 	if (ret < 0) {
 		mmi_err("i2c write byte fail: can't write 0x%02X to reg 0x%02X\n",
+				val, reg);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
+{
+	s32 ret;
+
+	ret = i2c_smbus_write_word_data(client, reg, val);
+	if (ret < 0) {
+		mmi_err("i2c write word fail: can't write 0x%02X to reg 0x%02X\n",
 				val, reg);
 		return ret;
 	}
@@ -213,40 +235,62 @@ static int __fg_read_word(struct i2c_client *client, u8 reg, u16 *val)
 
 	return 0;
 }
-
-#if 0
-static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
-{
-	s32 ret;
-
-	ret = i2c_smbus_write_word_data(client, reg, val);
-	if (ret < 0) {
-		mmi_err("i2c write word fail: can't write 0x%02X to reg 0x%02X\n",
-				val, reg);
-		return ret;
-	}
-
-	return 0;
-}
-#endif
-
 static int __fg_read_block(struct i2c_client *client, u8 reg, u8 *buf, u8 len)
 {
-
 	int ret;
+	struct i2c_msg msg[2];
+	int i;
 
+	msg[0].addr = client->addr;
+	msg[0].flags = 0;
+	msg[0].buf = &reg;
+	msg[0].len = 1;
 
-	ret = i2c_smbus_read_i2c_block_data(client, reg, len, buf);
+	msg[1].addr = client->addr;
+	msg[1].flags = I2C_M_RD;
+	msg[1].buf = buf;
+	msg[1].len = len;
 
+	for (i = 0; i < 3; i++) {
+		ret = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
+		if (ret >= 0)
+			return ret;
+		else
+			msleep(5);
+	}
 	return ret;
 }
 
 static int __fg_write_block(struct i2c_client *client, u8 reg, u8 *buf, u8 len)
 {
 	int ret;
+	struct i2c_msg msg;
+	u8 data[64];
+	char* addr;
+	int i = 0;
 
-	ret = i2c_smbus_write_i2c_block_data(client, reg, len, buf);
+	addr = kmalloc(sizeof(data), GFP_KERNEL);
 
+	data[0] = reg;
+	memcpy(&data[1], buf, len);
+	memcpy(addr, data, sizeof(data));
+
+	msg.addr = client->addr;
+	msg.flags = 0;
+	msg.buf = addr;
+	msg.len = len + 1;
+
+	for (i = 0; i < 3; i++) {
+		ret = i2c_transfer(client->adapter, &msg, 1);
+		if (ret >= 0) {
+			kfree(addr);
+			return ret;
+		}
+		else
+			msleep(5);
+	}
+
+	kfree(addr);
 	return ret;
 }
 
@@ -298,7 +342,7 @@ static int fg_read_word(struct mmi_fg_chip *mmi, u8 reg, u16 *val)
 
 	return ret;
 }
-#if 0
+/*
 static int fg_write_word(struct mmi_fg_chip *mmi, u8 reg, u16 val)
 {
 	int ret;
@@ -312,7 +356,7 @@ static int fg_write_word(struct mmi_fg_chip *mmi, u8 reg, u16 val)
 
 	return ret;
 }
-#endif
+*/
 
 static int fg_read_block(struct mmi_fg_chip *mmi, u8 reg, u8 *buf, u8 len)
 {
@@ -349,13 +393,12 @@ static u8 checksum(u8 *data, u8 len)
 
 	for (i = 0; i < len; i++)
 		sum += data[i];
-
 	sum &= 0xFF;
 
 	return 0xFF - sum;
 }
 
-#if 0
+#if 1
 static void fg_print_buf(const char *msg, u8 *buf, u8 len)
 {
 	int i;
@@ -383,8 +426,8 @@ static int fg_mac_read_block(struct mmi_fg_chip *mmi, u16 cmd, u8 *buf, u8 len)
 	u8 t_len;
 	int i;
 
-	t_buf[0] = (u8)(cmd >> 8);
-	t_buf[1] = (u8)cmd;
+	t_buf[0] = (u8)(cmd >> 0) & 0xFF;
+	t_buf[1] = (u8)(cmd >> 8) & 0xFF;
 	ret = fg_write_block(mmi, mmi->regs[BQ_FG_REG_ALT_MAC], t_buf, 2);
 	if (ret < 0)
 		return ret;
@@ -402,7 +445,7 @@ static int fg_mac_read_block(struct mmi_fg_chip *mmi, u16 cmd, u8 *buf, u8 len)
 
 	cksum_calc = checksum(t_buf, t_len - 2);
 	if (cksum_calc != cksum)
-		return 1;
+		return -1;
 
 	for (i = 0; i < len; i++)
 		buf[i] = t_buf[i+2];
@@ -410,35 +453,23 @@ static int fg_mac_read_block(struct mmi_fg_chip *mmi, u16 cmd, u8 *buf, u8 len)
 	return 0;
 }
 
-
-#if 0
-static void fg_read_fw_version(struct mmi_fg_chip *mmi)
+static int fg_read_HW_version(struct mmi_fg_chip *mmi)
 {
-
 	int ret;
-	u8 buf[36];
-
-	ret = fg_write_word(mmi, mmi->regs[BQ_FG_REG_ALT_MAC], FG_MAC_CMD_FW_VER);
-
+	u8 buf[36]= {0};
+	u16 version =0;
+	ret = fg_mac_read_block(mmi, FG_MAC_CMD_HW_VER, buf, 2);
 	if (ret < 0) {
-		mmi_err("Failed to send firmware version subcommand:%d\n", ret);
-		return;
+		mmi_err("Failed to read hw version:%d\n", ret);
+		return -1;
 	}
+	version =  buf[0] << 8 | buf[1];
+	mmi_log("hw Ver:0x%04X\n", version);
 
-	mdelay(2);
-
-	ret = fg_mac_read_block(mmi, mmi->regs[BQ_FG_REG_ALT_MAC], buf, 11);
-	if (ret < 0) {
-		mmi_err("Failed to read firmware version:%d\n", ret);
-		return;
-	}
-
-	mmi_log("FW Ver:%04X, Build:%04X\n",
-		buf[2] << 8 | buf[3], buf[4] << 8 | buf[5]);
-	mmi_log("Ztrack Ver:%04X\n", buf[7] << 8 | buf[8]);
-
+	return version;
 }
-#endif
+
+
 
 static int fg_read_status(struct mmi_fg_chip *mmi)
 {
@@ -469,7 +500,7 @@ static int fg_read_rsoc(struct mmi_fg_chip *mmi)
 		mmi_err("could not read RSOC, ret = %d\n", ret);
 		return ret;
 	}
-	mmi_info("%s, RSOC = %d", __func__, soc);
+	mmi_info("RSOC = %d", soc);
 
 	return soc;
 
@@ -486,7 +517,7 @@ static int fg_read_temperature(struct mmi_fg_chip *mmi)
 		return ret;
 	}
 	temp -= 2730;
-	mmi_info("%s, temperature = %d", __func__, temp);
+	mmi_info("temperature = %d",  temp);
 
 	return temp;
 
@@ -502,7 +533,7 @@ static int fg_read_volt(struct mmi_fg_chip *mmi)
 		mmi_err("could not read voltage, ret = %d\n", ret);
 		return ret;
 	}
-	mmi_info("%s, volt = %d", __func__, volt);
+	mmi_info(" volt = %d", volt);
 
 	return volt;
 
@@ -519,7 +550,7 @@ static int fg_read_current(struct mmi_fg_chip *mmi, int *curr)
 		return ret;
 	}
 	*curr = (int)((s16)avg_curr);
-	mmi_info("%s, curr = %d", __func__, *curr);
+	mmi_info(" curr = %d", *curr);
 
 	return ret;
 }
@@ -538,7 +569,7 @@ static int fg_read_fcc(struct mmi_fg_chip *mmi)
 
 	if (ret < 0)
 		mmi_err("could not read FCC, ret=%d\n", ret);
-	mmi_info("%s, fcc = %d", __func__, fcc);
+	mmi_info(" fcc = %d", fcc);
 
 	return fcc;
 }
@@ -561,7 +592,7 @@ static int fg_read_dc(struct mmi_fg_chip *mmi)
 		return ret;
 	}
 
-	mmi_info("%s, DesignCapacity = %d", __func__, dc);
+	mmi_info(" DesignCapacity = %d", dc);
 	return dc;
 }
 
@@ -582,7 +613,7 @@ static int fg_read_rm(struct mmi_fg_chip *mmi)
 		mmi_err("could not read DC, ret=%d\n", ret);
 		return ret;
 	}
-	mmi_info("%s, RemainingCapacity = %d", __func__, rm);
+	mmi_info(" RemainingCapacity = %d", rm);
 
 	return rm;
 
@@ -605,7 +636,7 @@ static int fg_read_cyclecount(struct mmi_fg_chip *mmi)
 		return ret;
 	}
 
-	mmi_info("%s, Cycle Count = %d", __func__, cc);
+	mmi_info(" Cycle Count = %d", cc);
 
 	return cc;
 }
@@ -630,7 +661,7 @@ static int fg_read_tte(struct mmi_fg_chip *mmi)
 	if (ret == 0xFFFF)
 		return -ENODATA;
 
-	mmi_info("%s, Time To Empty = %d", __func__, tte);
+	mmi_info(" Time To Empty = %d", tte);
 	return tte;
 }
 
@@ -678,6 +709,63 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 };
+
+
+static int fake_fg_get_property(struct power_supply *psy,
+			enum power_supply_property psp,
+			union power_supply_propval *val)
+{
+	struct mmi_fg_chip *mmi = power_supply_get_drvdata(psy);
+
+	mutex_lock(&mmi->update_lock);
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_STATUS:
+		val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		val->intval = 4200* 1000;
+		break;
+	case POWER_SUPPLY_PROP_PRESENT:
+		val->intval = 1;
+		break;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		val->intval = 0;;
+		break;
+	case POWER_SUPPLY_PROP_CAPACITY:
+		val->intval = 50;
+		break;
+	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
+		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+		break;
+	case POWER_SUPPLY_PROP_TEMP:
+		val->intval = 250;
+		break;
+	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW:
+		val->intval = 10000;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
+		val->intval = 5000 * 1000;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+		val->intval = 5000 * 1000;
+		break;
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		val->intval = 1;
+		break;
+	case POWER_SUPPLY_PROP_TECHNOLOGY:
+		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
+		break;
+	default:
+		mutex_unlock(&mmi->update_lock);
+		return -EINVAL;
+	}
+
+	mutex_unlock(&mmi->update_lock);
+
+	return 0;
+}
+
 
 static int fg_get_property(struct power_supply *psy,
 			enum power_supply_property psp,
@@ -844,12 +932,12 @@ static int fg_psy_register(struct mmi_fg_chip *mmi)
 {
 	struct power_supply_config fg_psy_cfg = {};
 
-	mmi->fg_psy_d.name = "bms";
+	mmi->fg_psy_d.name = "battery";
 	mmi->fg_psy_d.type = POWER_SUPPLY_TYPE_MAINS;
 	mmi->fg_psy_d.properties = fg_props;
 	mmi->fg_psy_d.num_properties = ARRAY_SIZE(fg_props);
-	mmi->fg_psy_d.get_property = fg_get_property;
-	mmi->fg_psy_d.set_property = fg_set_property;
+	mmi->fg_psy_d.get_property = mmi->mmi_get_property;
+	mmi->fg_psy_d.set_property = mmi->mmi_set_property;
 	mmi->fg_psy_d.property_is_writeable = fg_prop_is_writeable;
 
 	fg_psy_cfg.drv_data = mmi;
@@ -971,6 +1059,11 @@ static void fg_dump_registers(struct mmi_fg_chip *mmi)
 	}
 }
 
+static void fake_fg_update_thread(struct work_struct *work)
+{
+	return;
+}
+
 static void fg_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
@@ -983,7 +1076,7 @@ static void fg_update_thread(struct work_struct *work)
 	if (!mmi->batt_psy) {
 		mmi->batt_psy = power_supply_get_by_name("battery");
 		if (!mmi->batt_psy)
-			mmi_log("%s: get batt_psy fail\n", __func__);
+			mmi_log(" get batt_psy fail\n");
 	}
 
 
@@ -1042,6 +1135,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 
 	mmi->fake_soc	= -EINVAL;
 	mmi->fake_temp	= -EINVAL;
+	mmi->fake_battery = false;
 
 	if (mmi->chip == NFG1000) {
 		regs = nfg1000_regs;
@@ -1062,14 +1156,32 @@ static int mmi_fg_probe(struct i2c_client *client,
 
 	device_init_wakeup(mmi->dev, 1);
 
-	fg_psy_register(mmi);
+	ret=fg_read_HW_version(mmi);
+	if (ret < 0) {
+		mmi->fake_battery = true;
+		mmi_info("don't have real battery,use fake battery\n");
+	}
+
+	if(mmi->fake_battery){
+		mmi->mmi_get_property = fake_fg_get_property;
+		mmi->mmi_set_property = NULL;
+		mmi->mmi_fg_update_thread = fake_fg_update_thread;
+	} else {
+		mmi->mmi_get_property = fg_get_property;
+		mmi->mmi_set_property = fg_set_property;
+		mmi->mmi_fg_update_thread = fg_update_thread;
+	}
+
+	ret = fg_psy_register(mmi);
+	if (ret)
+		mmi_err("Failed to register power_supply, err:%d\n", ret);
 
 	ret = sysfs_create_group(&mmi->dev->kobj, &fg_attr_group);
 	if (ret)
 		mmi_err("Failed to register sysfs, err:%d\n", ret);
 
 	mmi->fg_workqueue = create_singlethread_workqueue("nfg1000_gauge");
-	INIT_DELAYED_WORK(&mmi->battery_delay_work, fg_update_thread);
+	INIT_DELAYED_WORK(&mmi->battery_delay_work, mmi->mmi_fg_update_thread);
 	queue_delayed_work(mmi->fg_workqueue, &mmi->battery_delay_work , msecs_to_jiffies(queue_start_work_time));
 
 	mmi_log("mmi fuel gauge probe successfully, %s\n", device2str[mmi->chip]);
