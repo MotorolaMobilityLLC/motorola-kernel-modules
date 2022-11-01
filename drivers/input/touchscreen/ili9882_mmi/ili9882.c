@@ -602,6 +602,9 @@ int ili_fw_upgrade_handler(void *data)
 	}
 
 	atomic_set(&ilits->fw_stat, END);
+#ifdef ILITEK_PEN_NOTIFIER
+	ilitek_pen_detect_set(ilits->pen_detect_flag);
+#endif
 	return ret;
 }
 

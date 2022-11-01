@@ -711,7 +711,7 @@ out:
 static ssize_t ilitek_proc_passive_pen_write(struct file *filp, const char *buff, size_t size, loff_t *pos)
 {
 	char cmd[256] = { 0 };
-	int  glove_value =0;
+	int  pen_value =0;
 
 	if ((size - 1) > sizeof(cmd)) {
 		ILI_ERR("ERROR! input length is larger than local buffer\n");
@@ -727,15 +727,15 @@ static ssize_t ilitek_proc_passive_pen_write(struct file *filp, const char *buff
 			goto out;
 		}
 	}
-	sscanf(cmd, "%x", &glove_value);
-	ILI_INFO("glove status:%x\n",glove_value);
-	if (!glove_value) {
+	sscanf(cmd, "%x", &pen_value);
+	ILI_INFO("passive_pen status:%x\n",pen_value);
+	if (!pen_value) {
 		if (ili_ic_func_ctrl("passive_pen", DISABLE) < 0)
-			ILI_ERR("Write glove disable fail\n");
+			ILI_ERR("Write passive_pen disable fail\n");
 	}
 	else {
 		if (ili_ic_func_ctrl("passive_pen", ENABLE) < 0)
-			ILI_ERR("Write glove enable fail\n");
+			ILI_ERR("Write passive_pen enable fail\n");
 	}
 	
 out:
