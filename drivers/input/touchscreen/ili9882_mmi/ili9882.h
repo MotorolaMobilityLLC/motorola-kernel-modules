@@ -912,6 +912,7 @@ struct ilitek_ts_data {
 	struct report_info_block rib;
 #ifdef ILITEK_PEN_NOTIFIER
 	struct notifier_block pen_notif;
+	u8 pen_detect_flag;
 #endif
 #ifdef ILI_PASSIVE_PEN
 	int canvas_value;
@@ -1138,6 +1139,9 @@ extern int ili_ice_mode_read(u32 addr, u32 *data, int len);
 extern int ili_ice_mode_ctrl(bool enable, bool mcu);
 extern void ili_ic_init(void);
 extern void ili_fw_uart_ctrl(u8 ctrl);
+#ifdef ILITEK_PEN_NOTIFIER
+extern int ilitek_pen_detect_set(u8 pen_detect);
+#endif
 
 /* Prototypes for tddi events */
 #if RESUME_BY_DDI
