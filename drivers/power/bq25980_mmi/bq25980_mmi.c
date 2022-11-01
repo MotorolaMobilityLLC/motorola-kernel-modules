@@ -488,7 +488,7 @@ static void dump_all_reg(struct bq25980_device *bq)
 	for (addr = 0x00; addr <= 0x37; addr++) {
 		ret = regmap_read(bq->regmap, addr, &val);
 		if (!ret)
-			dev_err(bq->dev, "Reg[%02X] = 0x%02X\n", addr, val);
+			dev_err(bq->dev, "%s_dump_registe:Reg[%02X] = 0x%02X\n", bq->model_name, addr, val);
 	}
 }
 
@@ -496,7 +496,7 @@ static int bq25980_set_adc_enable(struct bq25980_device *bq, bool enable)
 {
 	int ret;
 
-	dev_notice(bq->dev, "%s %d", __FUNCTION__, enable);
+	dev_notice(bq->dev, "%s-%s-%d", __FUNCTION__, bq->model_name, enable);
 
 	if (enable)
 		ret = regmap_update_bits(bq->regmap, BQ25980_ADC_CONTROL1,
@@ -910,7 +910,7 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 	struct bq25980_state state;
 	int ret;
 
-	dev_err(bq->dev,"%s enter\n",__func__);
+	dev_err(bq->dev,"[%s]%s enter\n",bq->model_name, __func__);
 	mutex_lock(&bq->irq_complete);
 	bq->irq_waiting = true;
 	if (!bq->resume_completed) {
@@ -2014,7 +2014,13 @@ static const struct charger_ops bq25980_chg_ops = {
 static int bq25980_register_chgdev(struct bq25980_device *bq)
 {
 	bq->chg_prop.alias_name = bq->psy_desc.name;
-	bq->chg_dev = charger_device_register("primary_dvchg", bq->dev,
+
+	if(bq->mode == BQ_SLAVE)
+		bq->chg_dev = charger_device_register("secondary_dvchg", bq->dev,
+						bq, &bq25980_chg_ops,
+						&bq->chg_prop);
+	else
+		bq->chg_dev = charger_device_register("primary_dvchg", bq->dev,
 						bq, &bq25980_chg_ops,
 						&bq->chg_prop);
 	return bq->chg_dev ? 0 : -EINVAL;
@@ -2025,6 +2031,8 @@ static int bq25980_probe(struct i2c_client *client,
 {
 	struct device *dev = &client->dev;
 	struct bq25980_device *bq;
+	const char *sc8541_name;
+	int len;
 	int ret;//, irq_gpio, irqn;
 
 	printk("-------bq25980 driver probe--------\n");
@@ -2055,6 +2063,15 @@ static int bq25980_probe(struct i2c_client *client,
 	if (bq->part_no == SC8541_PART_NO) {
 		bq->client->addr =  bq->sc8541_addr;
 		bq->chip_info = &sc8541_chip_info_tbl[bq->device_id];
+
+		memset((void*)bq->model_name, 0x00, sizeof(bq->model_name));
+		if(!device_property_read_string(bq->dev, "sc8541-name", &sc8541_name)) {
+			len = strlen(sc8541_name);
+			strncpy(bq->model_name, sc8541_name, min(I2C_NAME_SIZE,len) );
+		} else
+			strncpy(bq->model_name, "sc8541-standalone", I2C_NAME_SIZE);
+
+		pr_err("[%s] model_name=%s\n", __func__ , bq->model_name);
 	} else {
 		bq->chip_info = &bq25980_chip_info_tbl[bq->device_id];
 	}
@@ -2131,7 +2148,7 @@ static int bq25980_probe(struct i2c_client *client,
 
 	bq25980_create_device_node(bq->dev);
 	dump_all_reg(bq);
-	printk("-------bq25980 driver probe success--------\n");
+	printk("-------bq25980 driver probe success--------%s\n",dev_name(&client->dev));
 	return 0;
 free_psy:
 	power_supply_unregister(bq->charger);
