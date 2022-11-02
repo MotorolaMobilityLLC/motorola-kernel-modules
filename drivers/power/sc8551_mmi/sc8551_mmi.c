@@ -921,7 +921,7 @@ static int sc8551_init_adc(struct sc8551 *sc)
     sc8551_set_adc_scan(sc, ADC_TDIE, true);
     sc8551_set_adc_scan(sc, ADC_VAC, true);
 
-    sc8551_enable_adc(sc, true);
+    sc8551_enable_adc(sc, false);
 
     return 0;
 }
@@ -1534,7 +1534,7 @@ static int sc8551_enable_chg(struct charger_device *chg_dev, bool en)
 
 	return 0;
 }
-/*
+
 static int sc8551_enable_adc_external(struct charger_device *chg_dev, bool en)
 {
 	int ret;
@@ -1553,7 +1553,7 @@ static int sc8551_enable_adc_external(struct charger_device *chg_dev, bool en)
 
 	return 0;
 }
-*/
+
 static int sc8551_is_chg_enabled(struct charger_device *chg_dev, bool *en)
 {
 	int ret;
@@ -1707,7 +1707,7 @@ static const struct charger_ops sc8551_chg_ops = {
 	.is_vbuslowerr = sc8551_is_vbuslowerr,
 	.get_adc_accuracy = sc8551_get_adc_accuracy,
 	//.config_mux = sc8551_config_mux,
-	//.enable_adc = sc8551_enable_adc_external,
+	.enable_adc = sc8551_enable_adc_external,
 };
 
 
