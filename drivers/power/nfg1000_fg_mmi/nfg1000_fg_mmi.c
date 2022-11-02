@@ -933,7 +933,7 @@ static int fg_psy_register(struct mmi_fg_chip *mmi)
 	struct power_supply_config fg_psy_cfg = {};
 
 	mmi->fg_psy_d.name = "battery";
-	mmi->fg_psy_d.type = POWER_SUPPLY_TYPE_MAINS;
+	mmi->fg_psy_d.type = POWER_SUPPLY_TYPE_BATTERY;
 	mmi->fg_psy_d.properties = fg_props;
 	mmi->fg_psy_d.num_properties = ARRAY_SIZE(fg_props);
 	mmi->fg_psy_d.get_property = mmi->mmi_get_property;
