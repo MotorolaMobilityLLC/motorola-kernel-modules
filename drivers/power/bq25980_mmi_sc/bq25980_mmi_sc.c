@@ -151,6 +151,7 @@ struct bq25980_device {
 	struct bq25980_state state;
 	bool charge_enabled;	/* Register bit status */
 	bool vbus_present;
+	bool factory_mode;
 	int watchdog_timer;
 	int mode;
 	int device_id;
@@ -784,7 +785,8 @@ static int bq25980_set_charger_property(struct power_supply *psy,
 	struct bq25980_device *bq = power_supply_get_drvdata(psy);
 	switch (prop) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		bq25980_set_adc_enable(bq,val->intval);
+		if (!bq->factory_mode)
+			bq25980_set_adc_enable(bq,val->intval);
 		bq25980_set_chg_en(bq, val->intval);
 		bq25980_is_chg_en(bq, &bq->charge_enabled);
 		dev_info(bq->dev, "POWER_SUPPLY_PROP_CHARGING_ENABLED: %s, %d\n",
@@ -2113,6 +2115,43 @@ static int bq25980_register_chgdev(struct bq25980_device *bq)
 	return bq->chg_dev ? 0 : -EINVAL;
 }
 
+enum {
+	MMI_FACTORY_MODE,
+	MMI_FACTORY_BUILD,
+};
+
+static bool mmi_factory_check(int type)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool factory = false;
+	const char *bootargs = NULL;
+	char *bl_version = NULL;
+
+	if (!np)
+		return factory;
+
+	switch (type) {
+	case MMI_FACTORY_MODE:
+		factory = of_property_read_bool(np,
+					"mmi,factory-cable");
+		break;
+	case MMI_FACTORY_BUILD:
+		if (!of_property_read_string(np,
+					"bootargs", &bootargs)) {
+			bl_version = strstr(bootargs,
+					"androidboot.bootloader=");
+			if (bl_version && strstr(bl_version, "factory"))
+				factory = true;
+		}
+		break;
+	default:
+		factory = false;
+	}
+	of_node_put(np);
+
+	return factory;
+}
+
 static int bq25980_probe(struct i2c_client *client,
 			 const struct i2c_device_id *id)
 {
@@ -2223,6 +2262,11 @@ static int bq25980_probe(struct i2c_client *client,
 	}
 
 	bq25980_create_device_node(bq->dev);
+	bq->factory_mode = mmi_factory_check(MMI_FACTORY_MODE);
+	if (bq->factory_mode){
+		pr_info("bq25980 Enter into factory mode, enable adc\n");
+		bq25980_set_adc_enable(bq, true);
+	}
 	dump_all_reg(bq);
 	printk("-------bq25980 driver probe success--------\n");
 	return 0;
