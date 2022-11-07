@@ -25,7 +25,6 @@
 /* Debug level */
 bool debug_en = DEBUG_OUTPUT;
 EXPORT_SYMBOL(debug_en);
-
 static struct workqueue_struct *esd_wq;
 static struct workqueue_struct *bat_wq;
 static struct delayed_work esd_work;
@@ -938,7 +937,6 @@ static int ilitek_get_tp_module(void)
 	 * TODO: users should implement this function
 	 * if there are various tp modules been used in projects.
 	 */
-
 	return ilits->tp_module;
 }
 
@@ -1092,6 +1090,15 @@ static void ili_update_tp_module_info(void)
 		ilits->md_ini_rq_path = HLT_INI_REQUEST_PATH;
 		ilits->md_fw_ili = CTPM_FW_HLT;
 		ilits->md_fw_ili_size = sizeof(CTPM_FW_HLT);
+		break;
+	case MODEL_DJN:
+		ilits->md_name = "DJN";
+		ilits->md_fw_filp_path = DJN_FW_FILP_PATH;
+		ilits->md_fw_rq_path = DJN_FW_REQUEST_PATH;
+		ilits->md_ini_path = DJN_INI_NAME_PATH;
+		ilits->md_ini_rq_path = DJN_INI_REQUEST_PATH;
+		ilits->md_fw_ili = CTPM_FW_DJN;
+		ilits->md_fw_ili_size = sizeof(CTPM_FW_DJN);
 		break;
 	default:
 		break;
