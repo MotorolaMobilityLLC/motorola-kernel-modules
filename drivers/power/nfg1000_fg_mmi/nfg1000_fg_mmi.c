@@ -795,7 +795,7 @@ static int fg_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		mutex_lock(&mmi->data_lock);
 		fg_read_current(mmi, &mmi->batt_curr);
-		val->intval = mmi->batt_curr * 1000*(-1);
+		val->intval = mmi->batt_curr * 1000;
 		mutex_unlock(&mmi->data_lock);
 		break;
 
