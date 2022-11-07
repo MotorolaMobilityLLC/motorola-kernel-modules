@@ -372,7 +372,8 @@ enum TP_MODEL {
 	MODEL_TM_7807S,
 	MODEL_TIANMA_9882N,
 	MODEL_TM_END, //For tianma panel check
-	MODEL_HLT
+	MODEL_HLT,
+	MODEL_DJN
 };
 
 enum TP_ERR_CODE {
