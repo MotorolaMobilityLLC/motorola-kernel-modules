@@ -12,10 +12,17 @@
 #include <linux/workqueue.h>
 #include <linux/thermal.h>
 #include "mtk_charger_intf.h"
+#include <linux/power/moto_chg_tcmd.h>
+#include "moto_wlc_intf.h"
 
 #define CPS_WLS_FAIL    -1
 #define CPS_WLS_SUCCESS 0
-
+struct tags_bootmode {
+	uint32_t size;
+	uint32_t tag;
+	uint32_t bootmode;
+	uint32_t boottype;
+};
 /*****************************************************************************
  *  CMD REG
  ****************************************************************************/
@@ -69,7 +76,12 @@
 #define RX_INT_SCP              (0x01<<15)
 #define RX_INT_SR_SW_R         (0x01<<16)
 #define RX_INT_SR_SW_F     (0x01<<17)
-#define RX_INT_INHIBIT_HIGH     (0x01<<18)
+#define RX_INT_FC_OK     (0x01<<18)
+#define RX_INT_HS_OK     (0x01<<19)
+#define RX_INT_HTP     (0x01<<20)
+#define RX_INT_HS_FAIL     (0x01<<21)
+#define RX_INT_FC_FAIL     (0x01<<22)
+#define RX_INT_NEGO_POWER_READY     (0x01<<23)
 /*rx命令定义*/
 #define RX_CMD_SEND_DATA         (0x01<<0)
 #define RX_CMD_FAST_CHARGING         (0x01<<1)
@@ -124,6 +136,11 @@
 
 #define CPS_PROGRAM_BUFFER_SIZE   512         /*64 128 256 512*/
 
+#define RX_CMD_SEND_ASK         (0x01<<0)
+#define RX_CMD_RESERVE2         (0x01<<1)
+#define RX_CMD_SEND_EPT         (0x01<<2)
+#define RX_CMD_RESET_SYS        (0x01<<3)
+
 //#define AP_SYS_CONTROL_BASE_ADDR   0x20001D40
 //#define AP_TX_CONFIG_BASE_ADDR     0x20001E00    
 //#define AP_TX_CONTROL_BASE_ADDR    0x20001E40
@@ -140,6 +157,18 @@ typedef enum {
 	Sys_Op_Mode_TX_FOD = 0x9,
 	Sys_Op_Mode_INVALID,
 }Sys_Op_Mode;
+
+typedef enum
+{
+    CPS_COMM_REG_CHIP_ID,
+    CPS_COMM_REG_FW_VER,
+    CPS_COMM_REG_SYS_MODE,
+    CPS_COMM_REG_INT_EN,
+    CPS_COMM_REG_INT_FLAG,
+    CPS_COMM_REG_INT_CLR,
+    CPS_COMM_REG_CMD,
+    CPS_COMM_REG_MAX
+}cps_comm_reg_e;
 
 /*****************************************************************************
  *  Log
@@ -158,11 +187,11 @@ typedef enum {
     } while (0)
     
 /*-------------------------------------------------------------------*/
-struct moto_wls_chg_ops {
-	void *data;
-	void (*wls_current_select)(int  *icl, int *vbus);
-	void (*wls_set_battery_soc)(int uisoc);
-};
+//struct moto_wls_chg_ops {
+//	void *data;
+//	void (*wls_current_select)(int  *icl, int *vbus);
+//	void (*wls_set_battery_soc)(int uisoc);
+//};
 
 struct cps_wls_chrg_chip {
     struct i2c_client *client;
