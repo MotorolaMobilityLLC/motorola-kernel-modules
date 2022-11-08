@@ -3749,11 +3749,11 @@ static void aw8622x_vibrator_work_routine(struct work_struct *work)
 				if (moto_mode == 3) {
 					aw8622x->index = 1;
 				} else if (moto_mode == 4) {
-					aw8622x->index = 3;
-				} else if (moto_mode == 5) {
 					aw8622x->index = 1;
-				} else if (moto_mode == 6) {
+				} else if (moto_mode == 5) {
 					aw8622x->index = 2;
+				} else if (moto_mode == 6) {
+					aw8622x->index = 3;
 				} else {
 					aw8622x->index = 1;
 				}
