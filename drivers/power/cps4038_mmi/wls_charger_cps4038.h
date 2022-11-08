@@ -7,10 +7,12 @@
  *
  */
 
-#ifndef __CPS_WLS_CHARGER_H__
-#define __CPS_WLS_CHARGER_H__
-
-
+#ifndef __WLS_CHARGER_CPS4038__
+#define __WLS_CHARGER_CPS4038__
+#include <linux/workqueue.h>
+#include <linux/thermal.h>
+#include "mtk_charger.h"
+#include "moto_wlc.h"
 #define CPS_WLS_FAIL    -1
 #define CPS_WLS_SUCCESS 0
 
@@ -68,6 +70,10 @@
 #define RX_INT_SR_SW_R         (0x01<<16)
 #define RX_INT_SR_SW_F     (0x01<<17)
 #define RX_INT_INHIBIT_HIGH     (0x01<<18)
+#define RX_INT_HS_OK            (0x01<<19)
+#define RX_INT_HS_FAIL          (0x01<<21)
+#define RX_INT_NEGO_READY       (0x01<<23)
+
 /*rx命令定义*/
 #define RX_CMD_SEND_DATA         (0x01<<0)
 #define RX_CMD_FAST_CHARGING         (0x01<<1)
@@ -128,7 +134,32 @@
 //#define AP_RX_CONFIG_BASE_ADDR     0x20001F00
 //#define AP_RX_CONTROL_BASE_ADDR    0x20001F40
 //#define AP_RX_REPORT_BASE_ADDR     0x20001F80
+#define RX_FOD_GAIN_LEN 16
+#define RX_FOD_CURR_LEN 7
 
+typedef enum {
+	Sys_Op_Mode_AC_Missing = 0,
+	Sys_Op_Mode_BPP = 0x1,
+	Sys_Op_Mode_EPP = 0x2,
+	Sys_Op_Mode_MOTO_WLC = 0x3,
+	Sys_Op_Mode_PDDE= 0x4,
+	Sys_Op_Mode_TX = 0x8,
+	Sys_Op_Mode_TX_FOD = 0x9,
+	Sys_Op_Mode_INVALID,
+}Sys_Op_Mode;
+
+#define _CPS_MASK(BITS, POS) \
+	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
+
+#define CPS_MASK(LEFT_BIT_POS, RIGHT_BIT_POS) \
+		_CPS_MASK((LEFT_BIT_POS) - (RIGHT_BIT_POS) + 1, \
+				(RIGHT_BIT_POS))
+
+static uint32_t bpp_fod_array_w_folio[RX_FOD_GAIN_LEN] =
+{80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11};
+
+static uint32_t epp_fod_array_w_folio[RX_FOD_GAIN_LEN] =
+{120, 32, 120, 24, 120, 21, 120, 21, 120, 19, 120, 18, 120, 17, 120, 17};
 /*****************************************************************************
  *  Log
  ****************************************************************************/
@@ -165,7 +196,7 @@ struct cps_wls_chrg_chip {
     struct pinctrl_state *cps_gpio_active;
     struct pinctrl_state *cps_gpio_suspend;
 
-    struct wake_lock cps_wls_wake_lock;
+    struct wakeup_source *cps_wls_wake_lock;
     struct mutex   irq_lock;
     struct mutex   i2c_lock;
     int state;
@@ -187,6 +218,51 @@ struct cps_wls_chrg_chip {
     int rx_neg_power;
     int rx_neg_protocol;
     int command_flag;
+
+    unsigned long flags;
+    int rx_ldo_on;
+    int wls_online;
+    int wls_det_int;
+    int wls_det_irq;
+    const char *wls_fw_name;
+    uint32_t wls_fw_version;
+    /* alarm timer */
+    struct alarm wls_rx_timer;
+    struct timespec64 end_time;
+    unsigned int rx_polling_ns;
+    uint32_t tx_mode;
+    uint32_t wls_input_curr_max;
+    uint32_t folio_mode;
+    bool rx_connected;
+    struct moto_chg_tcmd_client wls_tcmd_client;
+    struct moto_wls_chg_ops  wls_chg_ops;
+    Sys_Op_Mode mode_type;
+    uint32_t MaxV;
+    uint32_t MaxI;
+    uint32_t chip_id;
+    bool factory_wls_en;
+
+    wait_queue_head_t  wait_que;
+    bool wls_rx_check_thread_timeout;
+    struct wakeup_source *rx_check_wakelock;
+    struct workqueue_struct *wls_wq;
+    struct delayed_work fw_update_work;
+    struct delayed_work	bpp_icl_work;
+    uint32_t bootmode;
+    struct thermal_cooling_device *tcd;
+    bool ntc_thermal;
+    bool fw_uploading;
+    struct charger_device *chg1_dev;
+    bool chip_state;
+    bool rx_int_ready;
+    bool bpp_icl_done;
+    int wls_mode_select;
+    int fan_speed;
+    int light_level;
+    int wlc_status;
+    uint32_t wlc_tx_power;
+    int cable_ready_wait_count;
+    bool moto_stand;
 };
         
 typedef enum ept_reason
@@ -205,4 +281,10 @@ typedef enum ept_reason
     EPT_RS,     
 }ept_reason_e;
 
+static void wls_rx_start_timer(struct cps_wls_chrg_chip *info);
+static void cps_rx_online_check(struct cps_wls_chrg_chip *chg);
+static int cps_wls_set_status(int status);
+static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready);
+static void cps_init_charge_hardware(void);
+static void cps_epp_current_select(int  *icl, int *vbus);
 #endif
