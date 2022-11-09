@@ -3195,15 +3195,29 @@ static int nvt_disp_notifier_callback(struct notifier_block *nb,
 
 	if (ts && v) {
 		NVT_LOG("%s IN", __func__);
-		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
-			if (*data == MTK_DISP_BLANK_POWERDOWN) {
+#ifdef NVT_LCM_ESD_NOTIFIER
+		if ((value == MTK_DISP_EARLY_EVENT_BLANK)||(value == MTK_ERALY_NOTIFY_TP_EVENT_BLANK)) {
+			if ((*data == MTK_DISP_BLANK_POWERDOWN)||(*data == MTK_DISP_EARLY_BLANK_POWERDOWN)) {
 				nvt_ts_suspend(&ts->client->dev);
 			}
-		} else if (value == MTK_DISP_EVENT_BLANK) {
-			if (*data == MTK_DISP_BLANK_UNBLANK) {
+		} else if ((value == MTK_DISP_EVENT_BLANK)||(value == MTK_NOTIFY_TP_EVENT_BLANK)) {
+			if ((*data == MTK_DISP_BLANK_UNBLANK)||(*data == MTK_DISP_EARLY_BLANK_UNBLANK)) {
 				nvt_ts_resume(&ts->client->dev);
 			}
 		}
+#else
+		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
+                        if (*data == MTK_DISP_BLANK_POWERDOWN) {
+                                nvt_ts_suspend(&ts->client->dev);
+                        }
+                } else if (value == MTK_DISP_EVENT_BLANK) {
+                        NVT_LOG("%d",*data);
+                        if (*data == MTK_DISP_BLANK_UNBLANK) {
+                                nvt_ts_resume(&ts->client->dev);
+                        }
+                }
+
+#endif
 		NVT_LOG("%s OUT", __func__);
 	} else {
 		NVT_LOG("NT36672 touch IC can not suspend or resume");
