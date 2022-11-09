@@ -55,6 +55,7 @@ enum mmi_fg_reg_idx {
 	BQ_FG_REG_CTRL = 0,
 	BQ_FG_REG_TEMP,		/* Battery Temperature */
 	BQ_FG_REG_VOLT,		/* Battery Voltage */
+	BQ_FG_REG_CURRENT,	/* Real Current */
 	BQ_FG_REG_AI,		/* Average Current */
 	BQ_FG_REG_BATT_STATUS,	/* BatteryStatus */
 	BQ_FG_REG_TTE,		/* Time to Empty */
@@ -74,6 +75,7 @@ static u8 nfg1000_regs[NUM_REGS] = {
 	0x00,	/* CONTROL */
 	0x06,	/* TEMP */
 	0x08,	/* VOLT */
+	0x0C,	/* REAL CURRENT*/
 	0x14,	/* AVG CURRENT */
 	0x0A,	/* FLAGS */
 	0x16,	/* Time to empty */
@@ -544,7 +546,7 @@ static int fg_read_current(struct mmi_fg_chip *mmi, int *curr)
 	int ret;
 	u16 avg_curr = 0;
 
-	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_AI], &avg_curr);
+	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_CURRENT], &avg_curr);
 	if (ret < 0) {
 		mmi_err("could not read current, ret = %d\n", ret);
 		return ret;
