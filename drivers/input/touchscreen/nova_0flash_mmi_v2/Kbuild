@@ -57,6 +57,9 @@ endif
 ifneq ($(filter m y,$(CONFIG_INPUT_NOVA_0FLASH_MMI_MTK_GET_PANEL)),)
 	EXTRA_CFLAGS += -DNVT_MTK_GET_PANEL
 endif
+ifneq ($(filter m y,$(CONFIG_NVT_LCM_ESD_NOTIFIER)),)
+        EXTRA_CFLAGS += -DNVT_LCM_ESD_NOTIFIER
+endif
 
 ifeq ($(TARGET_BUILD_VARIANT),userdebug)
 	EXTRA_CFLAGS += -DNVT_BUILD_USERDEBUG
