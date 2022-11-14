@@ -21,6 +21,7 @@
 #define _COMMON_H_
 
 #include <linux/cdev.h>
+#include <linux/nfcinfo.h>
 
 #include "i2c_drv.h"
 
@@ -40,6 +41,18 @@
 #define NCI_HDR_OID_IDX			(1)
 #define NCI_PAYLOAD_IDX			(3)
 #define NCI_PAYLOAD_LEN_IDX		(2)
+
+#define NCI_RESET_CMD_LEN			(4)
+#define NCI_RESET_RSP_LEN			(4)
+#define NCI_RESET_NTF_LEN			(13)
+#define NCI_GET_VERSION_CMD_LEN		(8)
+#define NCI_GET_VERSION_RSP_LEN		(12)
+
+// Below offsets should be subtracted from core reset ntf len
+
+#define NFC_CHIP_TYPE_OFF		(3)
+#define NFC_ROM_VERSION_OFF		(2)
+#define NFC_FW_MAJOR_OFF		(1)
 
 /* FW DNLD packet details */
 #define DL_HDR_LEN			(2)
@@ -102,10 +115,12 @@ enum nfc_read_pending {
 	NFC_SET_READ_PENDING,
 };
 
-/* nfc platform interface type */
+/*nfc platform interface type*/
 enum interface_flags {
-	/* I2C physical IF for NFCC */
+	/*I2C physical IF for NFCC */
 	PLATFORM_IF_I2C = 0,
+	/*I3C physical IF for NFCC */
+	PLATFORM_IF_I3C,
 };
 
 /* nfc state flags */
@@ -137,6 +152,13 @@ enum gpio_values {
 	GPIO_OUTPUT_HIGH = 0x3,
 	GPIO_IRQ = 0x4,
 };
+
+enum nfcc_chip_variant {
+	NFCC_SN100_A = 0xa3,	    /**< NFCC SN100_A */
+	NFCC_SN100_B = 0xa4,	    /**< NFCC SN100_B */
+	NFCC_NOT_SUPPORTED = 0xFF		/**< NFCC is not supported */
+};
+
 
 /* NFC GPIO variables */
 struct platform_gpio {
@@ -175,6 +197,8 @@ struct nfc_dev {
 	struct device *nfc_device;
 	struct cdev c_dev;
 	dev_t devno;
+	union nqx_uinfo nqx_info;
+
 	/* Interface flag */
 	uint8_t interface;
 	/* nfc state flags */
@@ -185,6 +209,7 @@ struct nfc_dev {
 	union {
 		struct i2c_dev i2c_dev;
 	};
+	struct platform_gpio gpio;
 	struct platform_configs configs;
 	struct cold_reset cold_reset;
 
@@ -211,6 +236,7 @@ int nfc_misc_register(struct nfc_dev *nfc_dev,
 void nfc_misc_unregister(struct nfc_dev *nfc_dev, int count);
 int configure_gpio(unsigned int gpio, int flag);
 void gpio_set_ven(struct nfc_dev *nfc_dev, int value);
+int nfcc_hw_check(struct nfc_dev *nfc_dev);
 void gpio_free_all(struct nfc_dev *nfc_dev);
 int validate_nfc_state_nci(struct nfc_dev *nfc_dev);
 #endif /* _COMMON_H_ */
