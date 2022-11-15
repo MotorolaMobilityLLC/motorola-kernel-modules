@@ -27,6 +27,10 @@ struct drm_panel *ili_active_panel;
 static char *active_panel_name = NULL;
 #endif
 static int check_dt(struct device_node *np);
+#else
+#if defined(ILI_MTK_GET_PANEL) || defined(ILI_MTK_CHECK_PANEL)
+static char *active_panel_name = NULL;
+#endif
 #endif
 
 #ifdef ILITEK_PEN_NOTIFIER
@@ -604,7 +608,7 @@ static int parse_dt(struct device_node *np)
   return ret;
 }
 
-#ifdef ILI_MTK_GET_PANEL
+#if defined(ILI_MTK_GET_PANEL) || defined(ILI_MTK_CHECK_PANEL)
 char panel_name[50] = {0};
 
 static int ili_get_panel(void)
@@ -695,7 +699,7 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	container_of(to_spi_driver(spi->dev.driver),
 		struct touch_bus_info, bus_driver);
 	int tp_module = 0;
-#if defined(ILI_FW_PANEL) || defined(ILI_MTK_GET_PANEL)
+#if defined(ILI_FW_PANEL) || defined(ILI_MTK_GET_PANEL) || defined(ILI_MTK_CHECK_PANEL)
 	int ret;
 #endif
 	ILI_INFO("ilitek spi probe\n");
@@ -724,7 +728,7 @@ static int ilitek_spi_probe(struct spi_device *spi)
 }
 #endif
 
-#ifdef ILI_MTK_GET_PANEL
+#if defined(ILI_MTK_GET_PANEL) || defined(ILI_MTK_CHECK_PANEL)
 	ret = ili_get_panel();
 	if (ret) {
 		ILI_INFO("MTK get ilitek panel error\n");
