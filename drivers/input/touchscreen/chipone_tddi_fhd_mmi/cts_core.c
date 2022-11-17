@@ -2939,7 +2939,7 @@ void cts_disable_esd_protection(struct chipone_ts_data *cts_data)
 		cts_info("ESD protection disable");
 
 		cts_data->esd_enabled = false;
-		cancel_delayed_work(&cts_data->esd_work);
+		cancel_delayed_work_sync(&cts_data->esd_work);
 		flush_workqueue(cts_data->esd_workqueue);
 	}
 }
