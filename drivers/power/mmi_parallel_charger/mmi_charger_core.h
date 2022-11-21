@@ -202,6 +202,7 @@ struct mmi_charger_manager {
 	bool extrn_sense;
 	bool recovery_pmic_chrg;
 	bool dont_rerun_aicl;
+	bool support_mm8013c;
 
 	bool sys_therm_cooling;
 	bool sys_therm_force_pmic_chrg;
