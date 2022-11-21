@@ -33,10 +33,6 @@ static char *active_panel_name = NULL;
 #endif
 #endif
 
-#ifdef ILITEK_PEN_NOTIFIER
-int ilitek_pen_detect_set(u8 pen_detect);
-#endif
-
 /*
 #ifdef ILI_MTK_GET_PANEL
 char active_panel_name[50] = {0};
@@ -659,40 +655,6 @@ static int ili_get_panel(void)
 }
 #endif
 
-#ifdef ILITEK_PEN_NOTIFIER
-#define ENABLE_PASSIVE_PEN_MODE_CMD 0x01
-#define DISABLE_PASSIVE_PEN_MODE_CMD 0x00
-int ilitek_pen_detect_set(u8 pen_detect) {
-	int ret = 0;
-
-	ILI_DBG("enter\n");
-	if (PEN_DETECTION_PULL == pen_detect)
-		ret = ili_ic_func_ctrl("passive_pen", ENABLE_PASSIVE_PEN_MODE_CMD);
-	else
-		ret = ili_ic_func_ctrl("passive_pen", DISABLE_PASSIVE_PEN_MODE_CMD);
-
-	return ret;
-}
-
-static int pen_notifier_callback(struct notifier_block *self,
-				unsigned long event, void *data)
-{
-	ILI_INFO("Received event(%lu) for pen detection\n", event);
-
-	mutex_lock(&ilits->touch_mutex);
-	if (event == PEN_DETECTION_PULL)
-		ilits->pen_detect_flag = PEN_DETECTION_PULL;
-	else
-		ilits->pen_detect_flag = PEN_DETECTION_INSERT;
-
-	ILI_DBG("invoke ilitek_pen_detect_set start");
-	ilitek_pen_detect_set(ilits->pen_detect_flag);
-	mutex_unlock(&ilits->touch_mutex);
-
-    	return 0;
-}
-#endif
-
 static int ilitek_spi_probe(struct spi_device *spi)
 {
 	struct touch_bus_info *info =
@@ -863,12 +825,6 @@ static int ilitek_spi_probe(struct spi_device *spi)
 
 	if (ili_core_spi_setup(SPI_CLK) < 0)
 		return -EINVAL;
-
-#ifdef ILITEK_PEN_NOTIFIER
-	ilits->pen_detect_flag = PEN_DETECTION_INSERT;
-	ilits->pen_notif.notifier_call = pen_notifier_callback;
-	pen_detection_register_client(&ilits->pen_notif);
-#endif
 
 	return info->hwif->plat_probe();
 }
