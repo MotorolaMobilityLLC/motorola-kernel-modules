@@ -768,6 +768,81 @@ static int get_prop_charger_present(struct mmi_charger_manager *chg,
 	return rc;
 }
 
+enum {
+	MMI_CHARGER_MODE_FFC = 0,
+	MMI_CHARGER_MODE_NORMAL,
+	MMI_CHARGER_MODE_USB,
+};
+
+enum charger_type {
+	CHARGER_UNKNOWN = 0,
+	STANDARD_HOST,		/* USB : 450mA */
+	CHARGING_HOST,
+	NONSTANDARD_CHARGER,	/* AC : 450mA~1A */
+	STANDARD_CHARGER,	/* AC : ~1A */
+	APPLE_2_1A_CHARGER, /* 2.1A apple charger */
+	APPLE_1_0A_CHARGER, /* 1A apple charger */
+	APPLE_0_5A_CHARGER, /* 0.5A apple charger */
+	WIRELESS_CHARGER,
+};
+
+int mmi_set_prop_to_bms(enum power_supply_property psp, union power_supply_propval val)
+{
+	int rc;
+	struct power_supply *bms;
+
+	bms = power_supply_get_by_name("bms");
+
+	if (bms == NULL || IS_ERR(bms)) {
+		return -EINVAL;
+	}
+
+	rc = power_supply_set_property(bms, psp, &val);
+
+	return rc;
+}
+
+static void mmi_chrg_config_chgmod_to_fg(struct mmi_charger_manager *chg)
+{
+	union power_supply_propval val,val_charger;
+	int rc = 0;
+	enum charger_type chg_type;
+
+	if (chg->charger_rate == POWER_SUPPLY_CHARGE_RATE_NONE)
+		return;
+
+	if (!chg->usb_psy) {
+		chg->usb_psy = power_supply_get_by_name("charger");
+		if (!chg->usb_psy) {
+			mmi_chrg_err(chg,
+				"Could not get USB power_supply, deferring probe\n");
+			return;
+		}
+	}
+
+	rc = power_supply_get_property(chg->usb_psy,
+			POWER_SUPPLY_PROP_CHARGE_TYPE, &val_charger);
+	if (rc) {
+		mmi_chrg_err(chg, "Unable to read charger TYPE: %d\n", rc);
+		return;
+	}
+
+	chg_type = val_charger.intval;
+	if (chg->charger_rate == POWER_SUPPLY_CHARGE_RATE_TURBO |
+		chg->charger_rate == POWER_SUPPLY_CHARGE_RATE_HYPER |
+		chg->charger_rate == POWER_SUPPLY_CHARGE_RATE_TURBO_30W) {
+		val.intval = MMI_CHARGER_MODE_FFC;
+	} else if (chg_type == STANDARD_HOST) {
+		val.intval = MMI_CHARGER_MODE_USB;
+	} else {
+		val.intval = MMI_CHARGER_MODE_NORMAL;
+	}
+
+	rc = mmi_set_prop_to_bms(POWER_SUPPLY_PROP_TYPE, val);
+	mmi_chrg_info(chg, "%s config charger mode %d to fg, chg_type =%d\n", rc? "Can't" : "success", val.intval,chg_type);
+
+}
+
 #define WEAK_CHRG_THRSH 450
 #define TURBO_CHRG_THRSH 2500
 #define TURBO_30W_CHRG_THRSH_UW 25000000
@@ -1164,6 +1239,9 @@ static void mmi_heartbeat_work(struct work_struct *work)
 		mmi_cycle_counts(chip);
 
 	mmi_chrg_rate_check(chip);
+	if (chip->support_mm8013c) {
+		mmi_chrg_config_chgmod_to_fg(chip);
+	}
        if (!chip->extrn_fg) {
 		val.intval = chip->charger_rate;
 		ret = power_supply_set_property(chip->batt_psy,
@@ -1302,6 +1380,9 @@ static int mmi_chrg_manager_parse_dt(struct mmi_charger_manager *chip)
 
 	chip->dont_rerun_aicl= of_property_read_bool(node,
 			"mmi,dont-rerun-aicl");
+
+	chip->support_mm8013c= of_property_read_bool(node,
+			"mmi,support-mm8013c");
 
 	rc = of_property_read_u32(node,
 				"mmi,typec-middle-current",
