@@ -24,7 +24,7 @@ void goodix_ts_mmi_dev_unregister(struct platform_device *ts_device);
 static int inline goodix_ts_mmi_dev_register(struct platform_device *ts_device) {
 	return -ENOSYS;
 }
-static void inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device) {
+static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device) {
 	return -ENOSYS;
 }
 #endif
@@ -45,12 +45,13 @@ static void inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_devic
 #define SMALL_EDGE                 0x40
 #define BIG_EDGE                   0x80
 
+#define NORMAL_DEFAULT_EDGE               0x08
+#define NORMAL_SMALL_EDGE                 0x48
+#define NORMAL_BIG_EDGE                   0x88
+
 #define STYLUS_MODE_SWITCH_CMD     0xA4
 
-#define INTERPOLATION_SWITCH_CMD   0xC1
-#define REPORT_RATE_DEFAULT        0x00
-#define REPORT_RATE_720HZ          0x01
-#define REPORT_RATE_480HZ          0x02
-#define REPORT_RATE_576HZ          0x03
-
+#define EXIT_HIGH_REPORT_RATE_CMD 0xC100
+#define SAMPLE_SWITCH_CMD   0xC2
+#define ENTER_GESTURE_MODE_CMD   0xA6
 #endif

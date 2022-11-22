@@ -30,12 +30,6 @@
 #include "goodix_ts_core.h"
 #include "goodix_ts_mmi.h"
 
-
-
-#define GOODIX_GESTURE_DOUBLE_TAP		0xCC
-#define GOODIX_GESTURE_SINGLE_TAP		0x4C
-#define GOODIX_GESTURE_FOD_DOWN			0x46
-#define GOODIX_GESTURE_FOD_UP			0x55
 /*
  * struct gesture_module - gesture module data
  * @registered: module register state
@@ -334,8 +328,10 @@ static int gsx_gesture_init(struct goodix_ts_core *cd,
 
 	gsx->ts_core = cd;
 	/*enable all gesture wakeup by default */
-	gsx->ts_core->gesture_type = GESTURE_SINGLE_TAP |GESTURE_FOD_PRESS;
-	cd->ts_event.gesture_data[0] = 0;
+	gsx->ts_core->gesture_type = GESTURE_SINGLE_TAP |GESTURE_FOD_PRESS | GESTURE_DOUBLE_TAP;
+	cd->zerotap_data[0] = 0;
+	//default on the fod event
+	cd->fod_enable = true;
 	atomic_set(&gsx_gesture->registered, 1);
 	return 0;
 }
@@ -369,13 +365,13 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 {
 	struct goodix_ts_hw_ops *hw_ops = cd->hw_ops;
 	struct goodix_ts_event gs_event = {0};
-	int fodx, fody, overlay_area;
+	__maybe_unused int fodx, fody, overlay_area;
 	int ret;
 #if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 	struct gesture_event_data mmi_event;
 	static  unsigned  long  start = 0;
-	int fod_down_interval;
-	int fod_down = cd->ts_event.gesture_data[0];
+	int fod_down_interval = 0;
+	int fod_down = cd->zerotap_data[0];
 #endif
 	if (atomic_read(&cd->suspended) == 0 || cd->gesture_type == 0)
 		return EVT_CONTINUE;
@@ -401,7 +397,7 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 			gs_event.event_type);
 		goto re_send_ges_cmd;
 	}
-	ts_debug("got  gesture type 0x%x", gs_event.gesture_type);
+	ts_info("got  gesture type 0x%x", gs_event.gesture_type);
 #if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 	mmi_event.evcode =0;
 	if ( cd->imports && cd->imports->report_gesture) {
@@ -415,41 +411,53 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 			if (!ret)
 				PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
 			goto gesture_ist_exit;
+		} else if(cd->gesture_type & GESTURE_DOUBLE_TAP && gs_event.gesture_type == GOODIX_GESTURE_DOUBLE_TAP) {
+			ts_info("get DOUBLE-TAP gesture");
+			mmi_event.evcode =4;
+			fod_down = 0;
+
+			/* call class method */
+			ret = cd->imports->report_gesture(&mmi_event);
+			if (!ret)
+				PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+			goto gesture_ist_exit;
 		} else if(cd->gesture_type & GESTURE_FOD_PRESS && gs_event.gesture_type == GOODIX_GESTURE_FOD_DOWN ){
 			fod_down_interval = (int)jiffies_to_msecs(jiffies-start);
 			fodx = le16_to_cpup((__le16 *)gs_event.gesture_data);
 			fody = le16_to_cpup((__le16 *)(gs_event.gesture_data + 2));
 			overlay_area = gs_event.gesture_data[4];
-			//goodix firmware do not send coordinate, we need hardcode a vaild coordinate
+			//goodix firmware do not send coordinate, need mmi touch to define a vaild coordinate thru dts
 			mmi_event.evcode = 2;
-			mmi_event.evdata.x= 540;
-			mmi_event.evdata.y= 2164;
-			ts_info("get FOD-DOWN gesture %d   fod_down_interval=%d",fod_down,fod_down_interval);
-			if(fod_down_interval < 250)
-			{
-				if( fod_down) {
-					goto fod_exit;
-				}
-			} else {
+			mmi_event.evdata.x= 0;
+			mmi_event.evdata.y= 0;
+
+			ts_info("Get FOD-DOWN gesture:%d interval:%d",fod_down,fod_down_interval);
+			if(fod_down_interval > 2000)
 				fod_down = 0;
+			if(fod_down_interval > 0 && fod_down_interval < 250 && fod_down) {
+					goto gesture_ist_exit;
 			}
 			start = jiffies;
-			if(fod_down <4) {
+			//maximum allow send down event 7 times
+			if(fod_down < 6) {
 				ret = cd->imports->report_gesture(&mmi_event);
 				if (!ret)
 					PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
-				}
 			}
-fod_exit:
 			fod_down++;
-			goto gesture_ist_exit;
-	}else if(cd->gesture_type & GESTURE_FOD_PRESS && gs_event.gesture_type == GOODIX_GESTURE_FOD_UP) {
-			ts_info("get FOD-UP gesture");
+		}else if(cd->gesture_type & GESTURE_FOD_PRESS && gs_event.gesture_type == GOODIX_GESTURE_FOD_UP) {
+			ts_info("Get FOD-UP gesture");
 			mmi_event.evcode = 3;
+			mmi_event.evdata.x= 0;
+			mmi_event.evdata.y= 0;
+			ret = cd->imports->report_gesture(&mmi_event);
+			if (!ret)
+				PM_WAKEUP_EVENT(cd->gesture_wakelock, 500);
 			fod_down = 0;
-	} else {
-		ts_debug("not support gesture type[%02X] to wakeup, suspended =%d", gs_event.gesture_type, atomic_read(&cd->suspended));
-		fod_down = 0;
+		} else {
+			ts_debug("not support gesture type[%02X] to wakeup, suspended =%d", gs_event.gesture_type, atomic_read(&cd->suspended));
+			fod_down = 0;
+		}
 	}
 #else
 	switch (gs_event.gesture_type) {
@@ -515,12 +523,16 @@ fod_exit:
 #endif
 
 re_send_ges_cmd:
+#if defined(PRODUCT_MIAMI)
+	if (hw_ops->gesture(cd, 0x80))
+#else
 	if (hw_ops->gesture(cd, 0))
+#endif
 		ts_info("warning: failed re_send gesture cmd");
 gesture_ist_exit:
 	if (!cd->tools_ctrl_sync)
 		hw_ops->after_event_handler(cd);
-	cd->ts_event.gesture_data[0] = fod_down;
+	cd->zerotap_data[0] = fod_down;
 	return EVT_CANCEL_IRQEVT;
 }
 

@@ -1940,6 +1940,7 @@ int goodix_ts_esd_init(struct goodix_ts_core *cd)
 void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 {
 	struct input_dev *input_dev = core_data->input_dev;
+	struct goodix_ts_event *ts_event;
 	int i;
 
 	if (!input_dev) {
@@ -1957,6 +1958,10 @@ void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 	input_report_key(input_dev, BTN_TOUCH, 0);
 	input_mt_sync_frame(input_dev);
 	input_sync(input_dev);
+
+	/* clean event buffer */
+	ts_event = &core_data->ts_event;
+	memset(ts_event, 0, sizeof(*ts_event));
 
 	mutex_unlock(&input_dev->mutex);
 }
@@ -2646,9 +2651,23 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	/* debug node init */
 	goodix_tools_init();
 
+#ifdef CONFIG_GTP_DDA_STYLUS
+	goodix_stylus_dda_init();
+	ret = goodix_stylus_dda_register_cdevice();
+	if (ret)
+		ts_err("Failed register stylus dda device, %d", ret);
+#endif
+
 	core_data->init_stage = CORE_INIT_STAGE1;
 	goodix_modules.core_data = core_data;
 	core_module_prob_sate = CORE_MODULE_PROB_SUCCESS;
+
+	/* Try start a thread to get config-bin info */
+	ret = goodix_start_later_init(core_data);
+	if (ret) {
+		ts_err("Failed start cfg_bin_proc, %d", ret);
+		goto err_register_gesture_wakelock;
+	}
 
 	ts_info("goodix_ts_core probe success");
 	return 0;
@@ -2672,11 +2691,14 @@ static int goodix_ts_remove(struct platform_device *pdev)
 	cpu_latency_qos_remove_request(&core_data->goodix_pm_qos);
 #endif
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
-	ts_info("%s:goodix_ts_mmi_dev_register",__func__);
+	ts_info("%s:goodix_ts_mmi_dev_unregister",__func__);
 	goodix_ts_mmi_dev_unregister(pdev);
 #endif
 
 	goodix_ts_unregister_notifier(&core_data->ts_notifier);
+#ifdef CONFIG_GTP_DDA_STYLUS
+	goodix_stylus_dda_exit();
+#endif
 	goodix_tools_exit();
 
 	if (core_data->init_stage >= CORE_INIT_STAGE2) {
