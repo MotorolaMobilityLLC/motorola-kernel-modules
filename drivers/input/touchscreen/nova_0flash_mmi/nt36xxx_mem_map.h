@@ -268,6 +268,8 @@ static const struct nvt_ts_trim_id_table trim_id_table[] = {
 		.mmap = &NT36675_memory_map,  .hwinfo = &NT36675_hw_info},
 	{.trim_id = "NT36672C",.id = {0x0C, 0xFF, 0xFF, 0x72, 0x66, 0x03}, .mask = {1, 0, 0, 1, 1, 1},
 		.mmap = &NT36675_memory_map,  .hwinfo = &NT36675_hw_info},
+	{.trim_id = "NT36672N",.id = {0xFF, 0xFF, 0xFF, 0x77, 0x66, 0x03}, .mask = {0, 0, 0, 1, 1, 1},
+		.mmap = &NT36675_memory_map,  .hwinfo = &NT36675_hw_info},
 	{.trim_id = "NT36526",.id = {0xFF, 0xFF, 0xFF, 0x26, 0x65, 0x03}, .mask = {0, 0, 0, 1, 1, 1},
 		.mmap = &NT36526_memory_map,  .hwinfo = &NT36526_hw_info},
 	{.trim_id = "NT36675",.id = {0xFF, 0xFF, 0xFF, 0x75, 0x66, 0x03}, .mask = {0, 0, 0, 1, 1, 1},
