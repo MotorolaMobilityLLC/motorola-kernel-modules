@@ -165,6 +165,9 @@ static int charger_notifier_callback(struct notifier_block *nb, unsigned long va
 static int nvt_set_charger(uint8_t charger_on_off);
 static void nvt_charger_notify_work(struct work_struct *work);
 static int usb_detect_flag = 0;
+#ifdef NVT_MTK_GET_PANEL
+char active_panel_name[50] = {0};
+#endif
 
 char *nvt_boot_firmware_name = NULL;
 char *nvt_mp_firmware_name = NULL;
@@ -1288,8 +1291,12 @@ static int32_t nvt_parse_dt(struct device *dev)
 			ts->panel_supplier);
 
 		//Support FW name with panel & IC info
-#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL))
+#if ((LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) || defined(NVT_CONFIG_DRM_PANEL) || defined(NVT_FW_WITH_IC))
+#ifdef NVT_MTK_GET_PANEL
+		if (strlen(active_panel_name)) {
+#else
 		if (active_panel_name) {
+#endif
 			const char *ic_name;
 			int num_of_ic = of_property_count_strings(np, "novatek,fw_ic_info");
 			if (num_of_ic > 0) {
@@ -2194,7 +2201,6 @@ static int pen_notifier_callback(struct notifier_block *self,
 #endif
 
 #ifdef NVT_MTK_GET_PANEL
-char active_panel_name[50] = {0};
 
 static int nvt_get_panel(void)
 {
@@ -2274,6 +2280,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		return ret;
 	}
 #endif
+
 #ifdef NVT_MTK_GET_PANEL
 	ret = nvt_get_panel();
 	if (ret) {
