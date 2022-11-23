@@ -2413,6 +2413,73 @@ static  int cps_wls_is_ldo_on()
 	return (chip->rx_ldo_on && gpio_get_value(chip->wls_det_int));
 }
 void wlc_control_pin_set(bool on);
+static int cps_get_bat_soc()
+{
+	union power_supply_propval prop;
+	struct power_supply *battery_psy = NULL;
+
+	battery_psy = power_supply_get_by_name("battery");
+	if (battery_psy == NULL || IS_ERR(battery_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s mmi_mux Couldn't get battery_psy\n",__func__);
+		return CPS_WLS_FAIL;
+	} else {
+		power_supply_get_property(battery_psy,
+			POWER_SUPPLY_PROP_CAPACITY, &prop);
+		cps_wls_log(CPS_LOG_ERR,"%s battery soc:%d\n", __func__, prop.intval);
+	}
+	return prop.intval;
+}
+static bool usb_online()
+{
+	union power_supply_propval prop;
+	struct power_supply *chg_psy = NULL;
+
+	chg_psy = power_supply_get_by_name("charger");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n", __func__);
+		prop.intval = 0;
+	} else {
+		power_supply_get_property(chg_psy,
+			POWER_SUPPLY_PROP_ONLINE, &prop);
+		cps_wls_log(CPS_LOG_ERR,"%s online:%d\n", __func__, prop.intval);
+	}
+
+	return prop.intval;
+}
+
+void cps_wls_vbus_enable(bool en)
+{
+	int ret = 0;
+	struct charger_manager *info = NULL;
+	struct charger_device *chg_psy = NULL;
+
+	chg_psy = get_charger_by_name("primary_chg");
+	if(chg_psy) {
+		info = (struct charger_manager *)charger_dev_get_drvdata(chg_psy);
+		if(info)
+			cps_wls_log(CPS_LOG_ERR,"%s could  get charger_manager\n",__func__);
+		else {
+			cps_wls_log(CPS_LOG_ERR,"%s Couldn't get charger_manager\n",__func__);
+			return ;
+		}
+	} else {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n",__func__);
+		return ;
+	}
+
+	if(usb_online() == true) {
+		cps_wls_log(CPS_LOG_ERR,"%s usb online\n",__func__);
+		return;
+	}
+
+	ret = charger_dev_enable_otg(chg_psy, en);
+	if(ret < 0){
+		cps_wls_log(CPS_LOG_ERR,"%s enable otg fail\n",__func__);
+	}
+       mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, en);
+
+	return ;
+}
 static int wireless_en(void *input, bool en)
 {
 	int ret = 0;
@@ -2449,8 +2516,11 @@ static int wireless_get_chip_id(void *input)
 	if(0 != value)
 		return value;
 
+	cps_wls_vbus_enable(true);
+	msleep(500);
 	value = cps_wls_get_chip_id();
 	chip->chip_id = value;
+	cps_wls_vbus_enable(false);
 	return value;
 }
 
@@ -2629,6 +2699,12 @@ static int wireless_fw_update(bool force)
 		cps_wls_log(CPS_LOG_ERR,"Couldn't get firmware  rc=%d\n", rc);
 		goto update_fail;
 	}
+	if(cps_get_bat_soc() < 10) {
+		cps_wls_log(CPS_LOG_ERR,"Couldn't updata firmware because of low battery soc\n");
+		goto update_fail;
+	}
+
+	cps_wls_vbus_enable(true);
 
 	maj_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MAJOR_VER_OFFSET));
 	maj_ver = maj_ver >> 8;
@@ -2789,6 +2865,7 @@ static int wireless_fw_update(bool force)
 
 free_bug:
 	cps_wls_set_boost(0);//disable power, after FW updating, need a power reset
+	cps_wls_vbus_enable(false);
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	release_firmware(fw);
