@@ -60,6 +60,9 @@ endif
 ifneq ($(filter m y,$(CONFIG_NVT_LCM_ESD_NOTIFIER)),)
         EXTRA_CFLAGS += -DNVT_LCM_ESD_NOTIFIER
 endif
+ifneq ($(filter m y,$(CONFIG_NVT_ESD_RST_SUPPORT)),)
+        EXTRA_CFLAGS += -DNVT_ESD_RST_SUPPORT
+endif
 
 ifeq ($(TARGET_BUILD_VARIANT),userdebug)
 	EXTRA_CFLAGS += -DNVT_BUILD_USERDEBUG
