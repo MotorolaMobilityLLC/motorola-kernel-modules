@@ -785,12 +785,14 @@ static int bq25980_set_charger_property(struct power_supply *psy,
 	struct bq25980_device *bq = power_supply_get_drvdata(psy);
 	switch (prop) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-		if (!bq->factory_mode)
-			bq25980_set_adc_enable(bq,val->intval);
 		bq25980_set_chg_en(bq, val->intval);
 		bq25980_is_chg_en(bq, &bq->charge_enabled);
 		dev_info(bq->dev, "POWER_SUPPLY_PROP_CHARGING_ENABLED: %s, %d\n",
 			val->intval ? "enable" : "disable", bq->charge_enabled);
+		break;
+	case POWER_SUPPLY_PROP_CHARGING_ENABLE_ADC:
+		bq25980_set_adc_enable(bq, val->intval);
+		dev_info(bq->dev, "POWER_SUPPLY_PROP_CHARGING_ENABLE_ADC value: %d\n", val->intval);
 		break;
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		break;
@@ -999,6 +1001,7 @@ static enum power_supply_property bq25980_power_supply_props[] = {
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CHARGING_ENABLED,
+	POWER_SUPPLY_PROP_CHARGING_ENABLE_ADC,
 	POWER_SUPPLY_PROP_SELECT_MUX,
 	POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
@@ -1013,6 +1016,7 @@ static int bq25980_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+	case POWER_SUPPLY_PROP_CHARGING_ENABLE_ADC:
 	case POWER_SUPPLY_PROP_SELECT_MUX:
 		return true;
 	default:
@@ -2263,10 +2267,6 @@ static int bq25980_probe(struct i2c_client *client,
 
 	bq25980_create_device_node(bq->dev);
 	bq->factory_mode = mmi_factory_check(MMI_FACTORY_MODE);
-	if (bq->factory_mode){
-		pr_info("bq25980 Enter into factory mode, enable adc\n");
-		bq25980_set_adc_enable(bq, true);
-	}
 	dump_all_reg(bq);
 	printk("-------bq25980 driver probe success--------\n");
 	return 0;
