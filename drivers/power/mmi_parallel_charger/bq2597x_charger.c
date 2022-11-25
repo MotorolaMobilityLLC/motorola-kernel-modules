@@ -103,6 +103,21 @@ static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 
 	return rc;
 }
+static int bq2597x_enable_adc(struct mmi_charger_device *chrg, bool en)
+{
+	int rc;
+	union power_supply_propval prop = {0,};
+
+	if (!chrg->chrg_psy){
+	        chrg_dev_info(chrg, "BQ2597x chrg: chrg_psy is null! \n");
+		return -ENODEV;
+	}
+
+	prop.intval = en;
+	rc = power_supply_set_property(chrg->chrg_psy,
+				POWER_SUPPLY_PROP_CHARGING_ENABLE_ADC, &prop);
+	return rc;
+}
 
 static int bq2597x_is_charging_enabled(struct mmi_charger_device *chrg, bool *en)
 {
@@ -285,4 +300,5 @@ struct mmi_charger_ops bq2597x_charger_ops = {
 	.update_charger_status = bq2597x_update_charger_status,
 	.update_charger_error = bq2597x_update_charger_error_status,
 	.clear_charger_error = bq2597x_clear_charger_error,
+	.enable_adc = bq2597x_enable_adc,
 };
