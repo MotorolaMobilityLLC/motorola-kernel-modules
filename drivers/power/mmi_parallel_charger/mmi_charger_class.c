@@ -118,6 +118,14 @@ int mmi_clear_charger_error(struct mmi_charger_device *chrg)
 	return -ENOTSUPP;
 }
 
+int mmi_enable_adc(struct mmi_charger_device *chrg,bool en)
+{
+	if(chrg != NULL && chrg->ops != NULL && chrg->ops->enable_adc)
+		return chrg->ops->enable_adc(chrg,en);
+
+	return -ENOTSUPP;
+}
+
 static void mmi_charger_device_release(struct device *dev)
 {
 	struct mmi_charger_device *charger_dev = to_mmi_charger_device(dev);

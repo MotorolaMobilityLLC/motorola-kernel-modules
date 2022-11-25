@@ -1312,6 +1312,8 @@ static void psy_changed_work_func(struct work_struct *work)
 					chip->pd_volt_max,
 					chip->pd_curr_max);
 
+	mmi_enable_adc(chip->chrg_list[1],chip->vbus_present); //enable master adc
+
 	if (chip->vbus_present
 		&& chip->pd_pps_support
 		&& !chip->factory_mode) {

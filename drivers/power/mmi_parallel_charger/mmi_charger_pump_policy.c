@@ -499,9 +499,9 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		if (ibatt_curr < 0)
 			ibatt_curr *= -1;
 	}
-#ifndef CONFIG_MOTO_PD_HYPER
+#ifdef CONFIG_MOTO_PD_HYPER
 	vbatt_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbatt_volt;
-	vbatt_volt *= 1000;
+	//vbatt_volt *= 1000;
 #else
 	vbatt_volt = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbatt_volt;
 #endif
