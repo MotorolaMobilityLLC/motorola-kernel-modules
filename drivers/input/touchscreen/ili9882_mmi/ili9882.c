@@ -580,8 +580,13 @@ int ili_fw_upgrade_handler(void *data)
 #if CHARGER_NOTIFIER_CALLBACK
 #if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
 		/* add_for_charger_start */
-		if((ilits->usb_plug_status)&&(ilits->actual_tp_mode !=P5_X_FW_TEST_MODE)) {
-			ret = ili_ic_func_ctrl("plug", !ilits->usb_plug_status);// plug in
+		if (ilits->actual_tp_mode != P5_X_FW_TEST_MODE) {
+			ILI_INFO("charge status is %d\n", ilits->usb_plug_status);
+			if (ilits->usb_plug_status == USB_DETECT_IN) {
+				ret = ili_ic_func_ctrl("plug", 0);/* plug in */
+			} else if (ilits->usb_plug_status == USB_DETECT_OUT) {
+				ret = ili_ic_func_ctrl("plug", 1);/* plug out */
+			}
 			if(ret<0) {
 				ILI_ERR("Write plug in failed\n");
 			}
