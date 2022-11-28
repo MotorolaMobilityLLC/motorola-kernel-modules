@@ -1926,42 +1926,45 @@ static int sc8541_config_mux(struct bq25980_device *bq,
 	return 0;
 }
 
+static int bq25980_config_mux(struct charger_device *chg_dev,
+			enum mmi_dvchg_mux_channel typec_mos, enum mmi_dvchg_mux_channel wls_mos);
+
 static int bq25980_select_mux(struct bq25980_device *bq,enum mmi_mux_channel channel)
 {
 	int ret = 0;
 	switch (channel) {
 		case MMI_MUX_CHANNEL_NONE:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_CLOSE, MMI_DVCHG_MUX_CLOSE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_CLOSE, MMI_DVCHG_MUX_CLOSE);
 			break;
 		case MMI_MUX_CHANNEL_TYPEC_CHG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_CHG_OPEN, MMI_DVCHG_MUX_CLOSE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_CHG_OPEN, MMI_DVCHG_MUX_CLOSE);
 			break;
 		case MMI_MUX_CHANNEL_TYPEC_OTG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_OTG_OPEN, MMI_DVCHG_MUX_CLOSE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_OTG_OPEN, MMI_DVCHG_MUX_CLOSE);
 			break;
 		case MMI_MUX_CHANNEL_WLC_CHG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_CLOSE, MMI_DVCHG_MUX_CHG_OPEN);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_CLOSE, MMI_DVCHG_MUX_CHG_OPEN);
 			break;
 		case MMI_MUX_CHANNEL_WLC_OTG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_DISABLE, MMI_DVCHG_MUX_DISABLE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_DISABLE, MMI_DVCHG_MUX_DISABLE);
 			break;
 		case MMI_MUX_CHANNEL_TYPEC_CHG_WLC_OTG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_CHG_OPEN, MMI_DVCHG_MUX_CLOSE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_CHG_OPEN, MMI_DVCHG_MUX_CLOSE);
 			break;
 		case MMI_MUX_CHANNEL_TYPEC_CHG_WLC_CHG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_CHG_OPEN, MMI_DVCHG_MUX_CLOSE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_CHG_OPEN, MMI_DVCHG_MUX_CLOSE);
 			break;
 		case MMI_MUX_CHANNEL_TYPEC_OTG_WLC_CHG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_OTG_OPEN, MMI_DVCHG_MUX_CLOSE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_OTG_OPEN, MMI_DVCHG_MUX_CLOSE);
 			break;
 		case MMI_MUX_CHANNEL_TYPEC_OTG_WLC_OTG:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_OTG_OPEN, MMI_DVCHG_MUX_CLOSE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_OTG_OPEN, MMI_DVCHG_MUX_CLOSE);
 			break;
 		case MMI_MUX_CHANNEL_WLC_FW_UPDATE:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_DISABLE, MMI_DVCHG_MUX_DISABLE);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_DISABLE, MMI_DVCHG_MUX_DISABLE);
 			break;
 		case MMI_MUX_CHANNEL_WLC_FACTORY_TEST:
-			ret = sc8541_config_mux(bq, MMI_DVCHG_MUX_CLOSE, MMI_DVCHG_MUX_MANUAL_OPEN);
+			ret = bq25980_config_mux(bq->chg_dev, MMI_DVCHG_MUX_CLOSE, MMI_DVCHG_MUX_MANUAL_OPEN);
 			break;
 		default:
 			break;
