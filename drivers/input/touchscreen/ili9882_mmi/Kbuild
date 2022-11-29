@@ -51,6 +51,10 @@ ifneq ($(filter m y,$(CONFIG_ILITEK_PASSIVE_PEN)),)
 EXTRA_CFLAGS += -DILI_PASSIVE_PEN
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_DDA_STYLUS)),)
+    EXTRA_CFLAGS += -DCONFIG_MOTO_DDA_PASSIVESTYLUS
+endif
+
 ili9882_mmi-objs += ili9882.o
 ili9882_mmi-objs += ili9882_spi.o
 ili9882_mmi-objs += ili9882_qcom.o
@@ -59,3 +63,8 @@ ili9882_mmi-objs += ili9882_touch.o
 ili9882_mmi-objs += ili9882_mp.o
 ili9882_mmi-objs += ili9882_hostdl.o
 ili9882_mmi-objs += ili9882_node.o
+ifneq ($(filter m y,$(CONFIG_GTP_DDA_STYLUS)),)
+ili9882_mmi-objs += moto_ts_dda.o
+endif
+
+
