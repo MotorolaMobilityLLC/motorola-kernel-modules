@@ -34,6 +34,7 @@
 #include <linux/types.h>
 #include <linux/file.h>
 #include <linux/fs.h>
+#include <linux/power/moto_chg_tcmd.h>
 
 
 #define mmi_info	pr_info
@@ -167,6 +168,7 @@ struct mmi_fg_chip {
 
 	struct power_supply *fg_psy;
 	struct power_supply_desc fg_psy_d;
+	struct moto_chg_tcmd_client batt_tcmd_client;
 
 	int (*mmi_get_property)(struct power_supply *psy,
 			    enum power_supply_property psp,
@@ -1107,7 +1109,40 @@ static void fg_update_thread(struct work_struct *work)
 
 }
 
+static int  tcmd_get_bat_temp(void *input, int* val)
+{
+	int ret = 0;
+	struct mmi_fg_chip *mmi_fg = (struct mmi_fg_chip *)input;
 
+	*val = mmi_fg->batt_temp / 10;
+
+	return ret;
+}
+
+static int  tcmd_get_bat_voltage(void *input, int* val)
+{
+	int ret = 0;
+	struct mmi_fg_chip *mmi_fg = (struct mmi_fg_chip *)input;
+
+	*val = mmi_fg->batt_volt * 1000;
+
+	return ret;
+}
+
+static int battery_tcmd_register(struct mmi_fg_chip *mmi_fg)
+{
+	int ret = 0;
+
+	mmi_fg->batt_tcmd_client.data = mmi_fg;
+	mmi_fg->batt_tcmd_client.client_id = MOTO_CHG_TCMD_CLIENT_BAT;
+
+	mmi_fg->batt_tcmd_client.get_bat_temp = tcmd_get_bat_temp;
+	mmi_fg->batt_tcmd_client.get_bat_voltage = tcmd_get_bat_voltage;
+
+	ret = moto_chg_tcmd_register(&mmi_fg->batt_tcmd_client);
+
+	return ret;
+}
 
 static int mmi_fg_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
@@ -1186,6 +1221,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&mmi->battery_delay_work, mmi->mmi_fg_update_thread);
 	queue_delayed_work(mmi->fg_workqueue, &mmi->battery_delay_work , msecs_to_jiffies(queue_start_work_time));
 
+	battery_tcmd_register(mmi);
 	mmi_log("mmi fuel gauge probe successfully, %s\n", device2str[mmi->chip]);
 
 	return 0;
