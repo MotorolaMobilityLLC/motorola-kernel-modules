@@ -25,6 +25,7 @@
 #include <linux/uaccess.h>
 #include <linux/interrupt.h>
 #include <linux/gpio/consumer.h>
+#include <linux/iio/consumer.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
@@ -128,6 +129,9 @@ struct mmi_fg_chip {
 	struct workqueue_struct *fg_workqueue;
 	struct delayed_work battery_delay_work;
 	struct power_supply *batt_psy;
+	struct iio_channel *Batt_NTC_channel;
+	struct iio_channel *vref_channel;
+	struct fg_temp *ntc_temp_table;
 
 	struct mutex i2c_rw_lock;
 	struct mutex data_lock;
@@ -165,6 +169,7 @@ struct mmi_fg_chip {
 	bool fake_battery;
 	int fake_soc;
 	int fake_temp;
+	int rbat_pull_up_r;
 
 	struct power_supply *fg_psy;
 	struct power_supply_desc fg_psy_d;
@@ -510,11 +515,97 @@ static int fg_read_rsoc(struct mmi_fg_chip *mmi)
 
 }
 
+struct fg_temp {
+	signed int BatteryTemp;
+	signed int TemperatureR;
+};
+
+struct fg_temp fg_temp_table[23] = {
+		{-40, 195652},
+		{-35, 148171},
+		{-30, 113347},
+		{-25, 87559},
+		{-20, 68237},
+		{-15, 53650},
+		{-10, 42506},
+		{-5, 33892},
+		{0, 27219},
+		{5, 22021},
+		{10, 17926},
+		{15, 14674},
+		{20, 12081},
+		{25, 10000},
+		{30, 8315},
+		{35, 6948},
+		{40, 5834},
+		{45, 4917},
+		{50, 4161},
+		{55, 3535},
+		{60, 3014},
+		{65, 2588},
+		{70, 2227}
+};
+/* ============================================================ */
+/* voltage to battery temperature */
+/* ============================================================ */
+int adc_battemp(struct mmi_fg_chip *mmi_fg, int res)
+{
+	int i = 0;
+	int res1 = 0, res2 = 0;
+	int tbatt_value = -200, tmp1 = 0, tmp2 = 0;
+	struct fg_temp *ptable;
+
+	ptable = mmi_fg->ntc_temp_table;
+	if (res >= ptable[0].TemperatureR) {
+		tbatt_value = -40;
+	} else if (res <= ptable[22].TemperatureR) {
+		tbatt_value = 70;
+	} else {
+		res1 = ptable[0].TemperatureR;
+		tmp1 = ptable[0].BatteryTemp;
+
+		for (i = 0; i <= 22; i++) {
+			if (res >= ptable[i].TemperatureR) {
+				res2 = ptable[i].TemperatureR;
+				tmp2 = ptable[i].BatteryTemp;
+				break;
+			}
+			{	/* hidden else */
+				res1 = ptable[i].TemperatureR;
+				tmp1 = ptable[i].BatteryTemp;
+			}
+		}
+
+		tbatt_value = (((res - res2) * tmp1) +
+			((res1 - res) * tmp2)) / (res1 - res2);
+	}
+	mmi_info("[%s] %d %d %d %d %d %d\n",
+		__func__,
+		res1, res2, res, tmp1,
+		tmp2, tbatt_value);
+
+	return tbatt_value;
+}
+
 static int fg_read_temperature(struct mmi_fg_chip *mmi)
 {
+	int batt_ntc_v = 0;
+	int bif_v = 0;
+	int tres_temp,delta_v, batt_temp;
+
+	iio_read_channel_processed(mmi->Batt_NTC_channel, &batt_ntc_v);
+	iio_read_channel_processed(mmi->vref_channel, &bif_v);
+
+	tres_temp = batt_ntc_v * (mmi->rbat_pull_up_r);
+	delta_v = bif_v - batt_ntc_v; //1.8v -batt_ntc_v
+	tres_temp = div_s64(tres_temp, delta_v);
+
+	batt_temp = adc_battemp(mmi, tres_temp);
+	batt_temp *= 10;
+	mmi_info("batt_temp = %d \n",batt_temp);
+/*
 	int ret;
 	u16 temp = 0;
-
 	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_TEMP], &temp);
 	if (ret < 0) {
 		mmi_err("could not read temperature, ret = %d\n", ret);
@@ -522,8 +613,8 @@ static int fg_read_temperature(struct mmi_fg_chip *mmi)
 	}
 	temp -= 2730;
 	mmi_info("temperature = %d",  temp);
-
-	return temp;
+*/
+	return batt_temp;
 
 }
 
@@ -1197,6 +1288,24 @@ static int mmi_fg_probe(struct i2c_client *client,
 	if (ret < 0) {
 		mmi->fake_battery = true;
 		mmi_info("don't have real battery,use fake battery\n");
+	}
+
+	mmi->Batt_NTC_channel = devm_iio_channel_get(mmi->dev, "bat_temp");
+	if (IS_ERR(mmi->Batt_NTC_channel)) {
+		mmi_err( "failed to get batt_therm IIO channel\n");
+		ret = PTR_ERR(mmi->Batt_NTC_channel);
+	}
+	mmi->vref_channel = devm_iio_channel_get(mmi->dev, "vref");
+	if (IS_ERR(mmi->vref_channel)) {
+		mmi_err( "failed to get vref_channel IIO channel\n");
+		ret = PTR_ERR(mmi->vref_channel);
+	}
+	mmi->ntc_temp_table = fg_temp_table;
+
+	ret = of_property_read_u32(mmi->client->dev.of_node , "uirbat_pull_up_r_full", &mmi->rbat_pull_up_r);
+	if (ret < 0) {
+		mmi->rbat_pull_up_r = 24 * 1000;
+		mmi_err("Failed to get uirbat_pull_up_r_full, err:%d, use default 24Kpull_up_r\n", ret);
 	}
 
 	if(mmi->fake_battery){
