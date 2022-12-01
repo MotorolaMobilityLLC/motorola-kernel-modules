@@ -45,6 +45,7 @@
 #include <linux/poll.h>
 #include <linux/ktime.h>
 #include <linux/regulator/consumer.h>
+#include <linux/err.h>
 #include "p73.h"
 #include "common_ese.h"
 
@@ -58,6 +59,8 @@
 /* Macro to configure Hard/Soft reset to P61 */
 //#define P61_HARD_RESET
 #undef P61_HARD_RESET
+
+#undef P61_RESET_GPIO
 
 #ifdef P61_HARD_RESET
 static struct regulator *p61_regulator = NULL;
@@ -132,6 +135,25 @@ static unsigned char debug_level;
 
 #define P61_ERR_MSG(msg...) printk(KERN_ERR "[NFC-P61] : " msg );
 
+void print_packet( const uint8_t* p_data, uint16_t len,int flag) {
+	uint32_t i;
+	char print_buffer[len * 3 + 1];
+	if (debug_level == P61_DEBUG_OFF)
+		return;
+	if (len == 0){
+		P61_DBG_MSG("p61 print length = 0,flag=%d",flag);
+	}
+	memset(print_buffer, 0, sizeof(print_buffer));
+	for (i = 0; i < len; i++) {
+		snprintf(&print_buffer[i * 2], 3, "%02X", p_data[i]);
+	}
+	if (flag) {
+		P61_DBG_MSG("p61 read len = %3d > %s", len, print_buffer);
+	} else  {
+		P61_DBG_MSG("p61 write len = %3d > %s", len, print_buffer);
+	}
+}
+
 /* Device specific macro and structure */
 struct p61_dev {
 	wait_queue_head_t read_wq;	/* wait queue for read interrupt */
@@ -141,6 +163,8 @@ struct p61_dev {
 	struct miscdevice p61_device;	/* char device as misc driver */
 	unsigned int rst_gpio;	/* SW Reset gpio */
 	unsigned int irq_gpio;	/* P61 will interrupt DH for any ntf */
+	struct pinctrl *pctrl;
+	struct pinctrl_state *pctrl_mode_spi, *pctrl_mode_idle;
 	bool irq_enabled;	/* flag to indicate irq is used */
 	unsigned char enable_poll_mode;	/* enable the poll mode */
 	spinlock_t irq_enabled_lock;	/*spin lock for read irq */
@@ -251,6 +275,10 @@ static int ese_dev_release(struct inode *inode, struct file *filp)
 	p61_dev = filp->private_data;
 	nfc_ese_pwr(p61_dev->nfcc_data, ESE_RST_PROT_DIS);
 	P61_DBG_MSG("Exit %s: ESE driver release \n", __func__);
+	if (pinctrl_select_state(p61_dev->pctrl, p61_dev->pctrl_mode_idle) < 0) {
+			P61_DBG_MSG(KERN_ALERT "%s : change CSB management to High Z failed!\n",
+				__func__);
+	}
 	return 0;
 }
 
@@ -293,6 +321,11 @@ static int p61_dev_open(struct inode *inode, struct file *filp)
 	}
 	filp->private_data = p61_dev;
 
+	if (pinctrl_select_state(p61_dev->pctrl, p61_dev->pctrl_mode_spi) < 0) {
+		P61_DBG_MSG(KERN_ALERT "%s : change NSS management to SPI failed!\n",
+			__func__);
+	}
+	msleep(50);
 	P61_DBG_MSG("%s : Major No: %d, Minor No: %d\n", __func__, imajor(inode),
 		    iminor(inode));
 
@@ -338,8 +371,8 @@ static long p61_dev_ioctl(struct file *filp, unsigned int cmd,
 				P61_ERR_MSG(KERN_ALERT " ERROR : p61_regulator is not enabled");
 			}
 #endif
-
 		} else if (arg == 1) {
+#ifdef P61_RESET_GPIO
 			P61_DBG_MSG(KERN_ALERT " Soft Reset");
 			//gpio_set_value(p61_dev->rst_gpio, 1);
 			//msleep(20);
@@ -349,7 +382,7 @@ static long p61_dev_ioctl(struct file *filp, unsigned int cmd,
 			msleep(50);
 			gpio_set_value(p61_dev->rst_gpio, 1);
 			msleep(20);
-
+#endif
 		}
 		break;
 
@@ -498,6 +531,7 @@ static ssize_t p61_dev_write(struct file *filp, const char *buf, size_t count,
 		ret = count;
 		if (p61_through_put_t.enable_through_put_measure)
 			p61_stop_throughput_measurement(WRITE_THROUGH_PUT, ret);
+		print_packet(tx_buffer,count,0);
 	}
 
 	mutex_unlock(&p61_dev->write_mutex);
@@ -640,6 +674,7 @@ static ssize_t p61_dev_read(struct file *filp, char *buf, size_t count,
 	if (p61_through_put_t.enable_through_put_measure)
 		p61_stop_throughput_measurement(READ_THROUGH_PUT, count);
 	P61_DBG_MSG(KERN_INFO "total_count = %zu", count);
+	print_packet(rx_buffer,count,1);
 
 	if (copy_to_user(buf, &rx_buffer[0], count)) {
 		P61_ERR_MSG("%s : failed to copy to user space\n", __func__);
@@ -656,6 +691,7 @@ static ssize_t p61_dev_read(struct file *filp, char *buf, size_t count,
 fail:
 	P61_ERR_MSG("Error p61_dev_read ret %d Exit\n", ret);
 	mutex_unlock(&p61_dev->read_mutex);
+
 	return ret;
 }
 
@@ -720,6 +756,8 @@ static int p61_hw_setup(struct p61_spi_platform_data *platform_data,
 		P61_DBG_MSG("successfully set regulator voltage\n");
 
 	}
+#endif
+#ifdef P61_RESET_GPIO
 	ret = gpio_request(platform_data->rst_gpio, "p61 reset");
 	if (ret < 0) {
 		P61_ERR_MSG("gpio reset request failed = 0x%x\n", platform_data->rst_gpio);
@@ -737,7 +775,7 @@ static int p61_hw_setup(struct p61_spi_platform_data *platform_data,
 	P61_DBG_MSG("Exit : %s\n", __FUNCTION__);
 	return ret;
 
-#ifdef P61_HARD_RESET
+#ifdef P61_RESET_GPIO
 fail_gpio:
 	gpio_free(platform_data->rst_gpio);
 #endif
@@ -809,19 +847,40 @@ static int p61_parse_dt(struct device *dev, struct p61_spi_platform_data *data)
 	if ((!gpio_is_valid(data->irq_gpio))){
             pr_info("%s: failed to get p61-irq gpio\n", __func__);
             return -EINVAL;
-        }
-        
-        pr_info("%s: %d %d\n", __func__, data->irq_gpio, errorno);
+	}
+	pr_info("%s: %d %d\n", __func__, data->irq_gpio, errorno);
 #endif
-
+#ifdef P61_RESET_GPIO
 	data->rst_gpio = of_get_named_gpio(np, "nxp,p61-rst", 0);
 	if ((!gpio_is_valid(data->rst_gpio))){
             pr_info("%s: failed to get p61-rst gpio\n", __func__);
-	//	return -EINVAL;
+		return -EINVAL;
+	}
+	pr_info("%s: %d %d\n", __func__, data->rst_gpio, errorno);
+#endif
+	data->pctrl = devm_pinctrl_get(dev);
+	if (IS_ERR(data->pctrl)) {
+			P61_DBG_MSG(KERN_ALERT "%s: Unable to allocate pinctrl: %d\n",
+				__FILE__, PTR_ERR(data->pctrl));
+			return -EINVAL;
 	}
 
-	//pr_info("%s: %d %d\n", __func__, data->rst_gpio, errorno);
+	data->pctrl_mode_spi = pinctrl_lookup_state(
+		data->pctrl, "pinctrl_state_mode_spi");
+	if (IS_ERR(data->pctrl_mode_spi)) {
+			P61_DBG_MSG(KERN_ALERT "%s: Unable to find pinctrl_state_mode_spi: %d\n",
+				__FILE__, PTR_ERR(data->pctrl_mode_spi));
+			return -EINVAL;
+	}
 
+	data->pctrl_mode_idle = pinctrl_lookup_state(
+			data->pctrl, "pinctrl_state_mode_idle");
+	if (IS_ERR(data->pctrl_mode_idle)) {
+			P61_DBG_MSG(KERN_ALERT "%s: Unable to find pinctrl_state_mode_idle: %d\n",
+				__FILE__, PTR_ERR(data->pctrl_mode_idle));
+			return -EINVAL;
+	}
+	dev_info(dev, "[dsc]%s : pinctrl initialized\n", __func__);
 	return errorno;
 }
 #endif
@@ -904,8 +963,15 @@ static int p61_probe(struct spi_device *spi)
 	p61_dev->p61_device.name = "p73";
 	p61_dev->p61_device.fops = &p61_dev_fops;
 	p61_dev->p61_device.parent = &spi->dev;
+#ifdef P61_IRQ_ENABLE
 	p61_dev->irq_gpio = platform_data->irq_gpio;
+#endif
+#ifdef P61_RESET_GPIO
 	p61_dev->rst_gpio = platform_data->rst_gpio;
+#endif
+	p61_dev->pctrl = platform_data->pctrl;
+	p61_dev->pctrl_mode_spi = platform_data->pctrl_mode_spi;
+	p61_dev->pctrl_mode_idle = platform_data->pctrl_mode_idle;
 
 	dev_set_drvdata(&spi->dev, p61_dev);
 
@@ -956,7 +1022,7 @@ static int p61_probe(struct spi_device *spi)
 
 #endif
 
-	p61_dev->enable_poll_mode = 1;	/* Default IRQ read mode */
+	p61_dev->enable_poll_mode = 0;	/* Default IRQ read mode */
 	P61_DBG_MSG("Exit : %s\n", __FUNCTION__);
 	return ret;
 #ifdef P61_IRQ_ENABLE
@@ -996,21 +1062,20 @@ static int p61_remove(struct spi_device *spi)
 		P61_ERR_MSG("ERROR %s p61_regulator not enabled \n", __func__);
 	}
 #endif
-        if (p61_dev != NULL) {
-          gpio_free(p61_dev->rst_gpio);
-
-#ifdef P61_IRQ_ENABLE
-          free_irq(p61_dev->spi->irq, p61_dev);
-          gpio_free(p61_dev->irq_gpio);
+	if (p61_dev != NULL) {
+#ifdef P61_RESET_GPIO
+		gpio_free(p61_dev->rst_gpio);
 #endif
-
-          mutex_destroy(&p61_dev->read_mutex);
-          misc_deregister(&p61_dev->p61_device);
-          kfree(p61_dev);
-        }
-
-        P61_DBG_MSG("Exit : %s\n", __FUNCTION__);
-        return 0;
+#ifdef P61_IRQ_ENABLE
+		free_irq(p61_dev->spi->irq, p61_dev);
+		gpio_free(p61_dev->irq_gpio);
+#endif
+		mutex_destroy(&p61_dev->read_mutex);
+		misc_deregister(&p61_dev->p61_device);
+		kfree(p61_dev);
+	}
+	P61_DBG_MSG("Exit : %s\n", __FUNCTION__);
+	return 0;
 }
 
 #if DRAGON_P61
