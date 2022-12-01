@@ -55,4 +55,6 @@
 struct p61_spi_platform_data {
 	unsigned int irq_gpio;
 	unsigned int rst_gpio;
+	struct pinctrl *pctrl;
+	struct pinctrl_state *pctrl_mode_spi, *pctrl_mode_idle;
 };
