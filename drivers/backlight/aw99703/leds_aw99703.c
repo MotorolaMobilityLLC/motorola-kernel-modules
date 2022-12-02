@@ -277,7 +277,7 @@ static int aw99703_backlight_init(struct aw99703_data *drvdata)
 	aw99703_i2c_write_bit(drvdata->client,
 				AW99703_REG_BSTCTR1,
 				AW99703_BSTCTR1_OVPSEL_MASK,
-				AW99703_BSTCTR1_OVPSEL_38V);
+				drvdata->ovp_level);
 
 	/*switch frequency 1000kHz*/
 	aw99703_i2c_write_bit(drvdata->client,
@@ -289,7 +289,7 @@ static int aw99703_backlight_init(struct aw99703_data *drvdata)
 	aw99703_i2c_write_bit(drvdata->client,
 				AW99703_REG_BSTCTR1,
 				AW99703_BSTCTR1_OCPSEL_MASK,
-				AW99703_BSTCTR1_OCPSEL_3P3A);
+				drvdata->ocp_level);
 
 	/*BSTCRT2 IDCTSEL*/
 	aw99703_i2c_write_bit(drvdata->client,
@@ -586,6 +586,25 @@ aw99703_get_dt_data(struct device *dev, struct aw99703_data *drvdata)
 		pr_err("%s bl_map not found\n", __func__);
 	else
 		pr_info("%s bl_map=%d\n", __func__, drvdata->bl_map);
+
+	rc = of_property_read_u32(np, "aw99703,ovp-level", &temp);
+	if (rc) {
+		drvdata->ovp_level = AW99703_BSTCTR1_OVPSEL_38V;
+		pr_err("ovp-level not found, set default %x!\n", drvdata->ovp_level);
+	} else {
+		drvdata->ovp_level = temp<<2;
+		pr_info("%s ovp_level %x\n", __func__, drvdata->ovp_level);
+	}
+
+	rc = of_property_read_u32(np, "aw99703,ocp-level", &temp);
+	if (rc) {
+		drvdata->ocp_level = AW99703_BSTCTR1_OCPSEL_2P7A;
+		pr_err("ocp-level not found, set default %x!\n", drvdata->ocp_level);
+	} else {
+		drvdata->ocp_level = temp;
+		pr_info("%s ocp_level %x\n", __func__, drvdata->ocp_level);
+	}
+
 }
 
 /******************************************************
