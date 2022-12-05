@@ -291,7 +291,11 @@ static int ktd3136_backlight_init(struct ktd3136_data *drvdata)
 			ktd3136_pwm_mode_enable(drvdata, false);
 			}
 	ktd3136_ramp_setting(drvdata);
-	ktd3136_transition_ramp(drvdata);
+		if ( drvdata->skip_first_trans){
+			drvdata->reset_trans_delay = true;
+		} else {
+			ktd3136_transition_ramp(drvdata);
+		}
 	ktd3136_read_reg(drvdata->client, REG_CONTROL, &value);
 	pr_debug("read control register -before--<0x%x> -after--<0x%x> \n",
 					update_value, value);
@@ -316,6 +320,10 @@ int ktd3136_set_brightness(struct ktd3136_data *drvdata, int brt_val)
 
 	if (drvdata->enable == false)
 		ktd3136_backlight_init(drvdata);
+	else if ( drvdata->skip_first_trans && drvdata->reset_trans_delay){
+		ktd3136_transition_ramp(drvdata);
+		drvdata->reset_trans_delay = false;
+	}
 
 	if (brt_val>0) {
 		ktd3136_masked_write(drvdata->client, REG_MODE, 0x01, 0x01); //enalbe bl mode
@@ -483,6 +491,13 @@ static void ktd3136_get_dt_data(struct device *dev, struct ktd3136_data *drvdata
 		drvdata->default_brightness = 0xff;
 		drvdata->max_brightness = 255;
 	}
+
+	drvdata->skip_first_trans = of_property_read_bool(np, "ktd,skip-first-trans");
+	pr_info("%s skip_first_trans --<%d>\n", __func__, drvdata->skip_first_trans);
+
+	drvdata->reset_trans_delay = of_property_read_bool(np, "ktd,reset-trans-delay");
+	pr_info("%s reset_trans_delay --<%d>\n", __func__, drvdata->reset_trans_delay);
+
 	rc = of_property_read_u32(np, "ktd,pwm-frequency", &temp);
 	if (rc) {
 		pr_err("Invalid pwm-frequency!\n");
