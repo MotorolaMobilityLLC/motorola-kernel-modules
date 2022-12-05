@@ -142,22 +142,37 @@ struct tags_bootmode {
 #define RX_CMD_RESET_SYS        (0x01<<3)
 
 //#define AP_SYS_CONTROL_BASE_ADDR   0x20001D40
-//#define AP_TX_CONFIG_BASE_ADDR     0x20001E00    
+//#define AP_TX_CONFIG_BASE_ADDR     0x20001E00
 //#define AP_TX_CONTROL_BASE_ADDR    0x20001E40
 //#define AP_TX_REPORT_BASE_ADDR     0x20001E80
 //#define AP_RX_CONFIG_BASE_ADDR     0x20001F00
 //#define AP_RX_CONTROL_BASE_ADDR    0x20001F40
 //#define AP_RX_REPORT_BASE_ADDR     0x20001F80
+#define RX_FOD_GAIN_LEN 16
+#define RX_FOD_CURR_LEN 7
+
 typedef enum {
 	Sys_Op_Mode_AC_Missing = 0,
 	Sys_Op_Mode_BPP = 0x1,
 	Sys_Op_Mode_EPP = 0x2,
+	Sys_Op_Mode_MOTO_WLC = 0x3,
 	Sys_Op_Mode_PDDE= 0x4,
 	Sys_Op_Mode_TX = 0x8,
 	Sys_Op_Mode_TX_FOD = 0x9,
 	Sys_Op_Mode_INVALID,
 }Sys_Op_Mode;
+#define _CPS_MASK(BITS, POS) \
+	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
 
+#define CPS_MASK(LEFT_BIT_POS, RIGHT_BIT_POS) \
+		_CPS_MASK((LEFT_BIT_POS) - (RIGHT_BIT_POS) + 1, \
+				(RIGHT_BIT_POS))
+
+static uint32_t bpp_fod_array_w_folio[RX_FOD_GAIN_LEN] =
+{80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11, 80, 11};
+
+static uint32_t epp_fod_array_w_folio[RX_FOD_GAIN_LEN] =
+{120, 32, 120, 24, 120, 21, 120, 21, 120, 19, 120, 18, 120, 17, 120, 17};
 typedef enum
 {
     CPS_COMM_REG_CHIP_ID,
@@ -283,22 +298,34 @@ struct cps_wls_chrg_chip {
     bool pen_power_on;
 #endif
     int wls_mode_select;
+    int fan_speed;
+    int light_level;
+    int wlc_status;
+    uint32_t wlc_tx_power;
+    int cable_ready_wait_count;
+    bool moto_stand;
 };
-        
+
 typedef enum ept_reason
 {
     EPT_UNKONWN = 0,
     EPT_CC,
-    EPT_IF,       
-    EPT_OT,   
-    EPT_OV,       
-    EPT_OC,       
-    EPT_BF,       
-    EPT_RES1,   
-    EPT_NP,     
-    EPT_RES2,  
-    EPT_NF,     
-    EPT_RS,     
+    EPT_IF,
+    EPT_OT,
+    EPT_OV,
+    EPT_OC,
+    EPT_BF,
+    EPT_RES1,
+    EPT_NP,
+    EPT_RES2,
+    EPT_NF,
+    EPT_RS,
 }ept_reason_e;
 
+static void wls_rx_start_timer(struct cps_wls_chrg_chip *info);
+static void cps_rx_online_check(struct cps_wls_chrg_chip *chg);
+static int cps_wls_set_status(int status);
+static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready);
+static void cps_init_charge_hardware(void);
+static void cps_epp_current_select(int  *icl, int *vbus);
 #endif

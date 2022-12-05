@@ -14,6 +14,7 @@
 #include <linux/notifier.h>
 #include <linux/slab.h>
 #include <linux/of.h>
+#include <linux/fs.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
 #include <linux/param.h>
@@ -43,6 +44,7 @@
 #else
 #include <linux/wakelock.h>
 #endif
+#include <linux/alarmtimer.h>
 
 #define BOOTLOADER_FILE_NAME "/data/misc/cps/bootloader.hex"
 #define FIRMWARE_FILE_NAME   "/data/misc/cps/firmware.hex"
@@ -52,6 +54,11 @@
 #define CPS_WLS_CHRG_PSY_NAME "wireless"
 struct cps_wls_chrg_chip *chip = NULL;
 
+enum {
+	TX_MODE_OVERHEAT = -1,
+	TX_MODE_NOT_CONNECTED = 0,
+	TX_MODE_POWER_SHARE = 2,
+};
 /*define cps rx reg enum*/
 typedef enum
 {
@@ -185,6 +192,38 @@ static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
 static bool CPS_RX_CHRG_FULL = false;
 static void cps_rx_online_check(struct cps_wls_chrg_chip *chg);
+static int cps_wls_rx_power_on(void);
+
+typedef enum
+{
+	WLC_DISCONNECTED,
+	WLC_CONNECTED,
+	WLC_TX_TYPE_CHANGED,
+	WLC_TX_POWER_CHANGED,
+}wlc_status;
+
+typedef enum {
+	WLC_NONE,
+	WLC_BPP,
+	WLC_EPP,
+	WLC_MOTO,
+} mmi_wlc_type;
+
+typedef enum {
+	MMI_DOCK_LIGHT_OFF = 0x10,
+	MMI_DOCK_LIGHT_ON = 0x20,
+	MMI_DOCK_LIGHT_BREATH_2S = 0x30,
+	MMI_DOCK_LIGHT_BREATH_4S = 0x40,
+	MMI_DOCK_LIGHT_DEFAULT = MMI_DOCK_LIGHT_BREATH_4S,
+} mmi_dock_light_ctrl;
+
+/* value = fan speed / 100 */
+typedef enum {
+	MMI_DOCK_FAN_SPEED_OFF= 0,
+	MMI_DOCK_FAN_SPEED_LOW = 0x14,//2000
+	MMI_DOCK_FAN_SPEED_HIGH = 0x28,//4000
+	MMI_DOCK_FAN_DEFAULT = MMI_DOCK_FAN_SPEED_HIGH,
+} mmi_dock_fan_speed;
 typedef struct
 {
     uint16_t     reg_name;
@@ -1253,6 +1292,61 @@ static int cps_wls_get_rx_vout(void)
     return cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
 
+static int cps_wls_set_rx_fod_array_gain(uint32_t *fod_array, uint32_t fod_array_len)
+{
+	int status = CPS_WLS_SUCCESS;
+	uint8_t i;
+	if (fod_array_len != RX_FOD_GAIN_LEN)
+		return -1;
+
+	for(i = 0; i < RX_FOD_GAIN_LEN; i++)
+	{
+		status = cps_wls_write_reg((int)(RX_REG_FOD_C0_GAIN + i), fod_array[i], 1);
+	}
+
+	return status;
+}
+
+static int  cps_get_sys_op_mode(Sys_Op_Mode *sys_mode_type)
+{
+	int status = CPS_WLS_SUCCESS;
+	uint32_t temp = 0;
+	uint8_t retries = 3;
+	cps_reg_s *cps_reg;
+
+	do{
+
+		//msleep(10);//10ms
+		retries--;
+		cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_NEGO_PRO]);
+
+		temp =  cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
+
+		*sys_mode_type = (temp & CPS_MASK(7, 0));
+		cps_wls_log(CPS_LOG_DEBG, "CPS_REG_Sys_Op_Mode = 0x%02x, 0x%02x", temp, *sys_mode_type);
+		if(*sys_mode_type == Sys_Op_Mode_AC_Missing
+				|| *sys_mode_type == Sys_Op_Mode_BPP
+				|| *sys_mode_type == Sys_Op_Mode_EPP
+				|| *sys_mode_type == Sys_Op_Mode_MOTO_WLC) {
+			cps_wls_log(CPS_LOG_DEBG, "CPS_REG_Sys_Op_Mode = 0x%02x, 0x%02x", temp, *sys_mode_type);
+
+			break;
+
+		}
+
+	}while(retries);
+
+	if (chip->folio_mode) {
+		if (*sys_mode_type == Sys_Op_Mode_BPP) {
+			cps_wls_set_rx_fod_array_gain(bpp_fod_array_w_folio, RX_FOD_GAIN_LEN);
+		} else if (*sys_mode_type == Sys_Op_Mode_EPP) {
+			cps_wls_set_rx_fod_array_gain(epp_fod_array_w_folio, RX_FOD_GAIN_LEN);
+		}
+	}
+
+	return status;
+}
+
 static int cps_wls_set_fod_para(void)
 {
     uint8_t i;
@@ -1885,12 +1979,12 @@ static int cps_wls_set_tx_ping_frequency(int value)
 //------------------------------IRQ Handler-----------------------------------
 static int cps_wls_set_int_enable(void)
 {
-    uint16_t int_en;
+    uint32_t int_en;
     cps_reg_s *cps_reg;
-    
-    int_en = 0xFFFF;
+
+    int_en = 0xFFFFFFFF;
     cps_reg = (cps_reg_s*)(&cps_comm_reg[CPS_COMM_REG_INT_EN]);
-    
+
     if(CPS_WLS_FAIL == cps_wls_write_reg((int)cps_reg->reg_addr, int_en, (int)cps_reg->reg_bytes_len))  goto set_int_fail;
     return CPS_WLS_SUCCESS;
 
@@ -1898,26 +1992,80 @@ set_int_fail:
     return CPS_WLS_FAIL;
 }
 
+static void cps_bpp_icl_on()
+{
+	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
+
+	if (chip->factory_wls_en)
+		return;
+	cps_get_sys_op_mode(&mode_type);
+	if (chip->rx_ldo_on && mode_type == Sys_Op_Mode_BPP)
+	{
+		chip->mode_type = mode_type;
+		chip->wlc_tx_power = cps_wls_get_rx_neg_power() / 2;
+		queue_delayed_work(chip->wls_wq, &chip->bpp_icl_work, msecs_to_jiffies(0));
+	}
+}
+
+static void cps_epp_icl_on()
+{
+	int icl, vbus;
+
+	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
+
+	if (chip->factory_wls_en)
+		return;
+	cps_get_sys_op_mode(&mode_type);
+	if (mode_type == Sys_Op_Mode_EPP)
+	{
+		chip->mode_type = mode_type;
+		chip->wlc_tx_power = cps_wls_get_rx_neg_power() / 2;
+		cps_epp_current_select(&icl, &vbus);
+		if (chip->chg1_dev)
+		{
+			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
+			charger_dev_set_input_current(chip->chg1_dev, icl);
+		}
+		else
+		{
+			cps_init_charge_hardware();
+			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
+			charger_dev_set_input_current(chip->chg1_dev, icl);
+		}
+	}
+}
+
 static int cps_wls_rx_irq_handler(int int_flag)
 {
     int rc = 0;
+	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
      uint8_t data[8] = {0};
     if (int_flag & RX_INT_POWER_ON)
     {
-        CPS_RX_MODE_ERR = false;
-        CPS_RX_CHRG_FULL = false;
-
-        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
+		CPS_RX_MODE_ERR = false;
+		CPS_RX_CHRG_FULL = false;
+		chip->cable_ready_wait_count = 0;
+		cps_rx_online_check(chip);
+        /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
+        /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
+        if(chip->bootmode == 8 || chip->bootmode == 9)
+            cps_rx_online_check(chip);
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
     }
     if(int_flag & RX_INT_LDO_OFF)
     {
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_OFF");
     }
-    if(int_flag & RX_INT_LDO_ON){
-         chip->rx_ldo_on = 1;
-         power_supply_changed(chip->wl_psy);
-         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
-    }
+	if (int_flag & RX_INT_LDO_ON)
+	{
+		chip->rx_ldo_on = true;
+		if (chip->wlc_status == WLC_DISCONNECTED)
+		{
+			cps_wls_set_status(WLC_CONNECTED);
+		}
+		cps_bpp_icl_on();
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
+	}
     if(int_flag & RX_INT_READY){
             data[0] = 0x38;
             data[1] = 0x3B;
@@ -1925,12 +2073,18 @@ static int cps_wls_rx_irq_handler(int int_flag)
             data[3] = 0x66;
             //data[0] = 0x38;
            // cps_wls_send_handshake_packet(data,4);
-            cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_READY");
+		chip->rx_int_ready = true;
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_READY");
      }
-     if(int_flag & RX_INT_FSK_ACK){}
-     if(int_flag & RX_INT_FSK_TIMEOUT){}
+     if(int_flag & RX_INT_FSK_ACK){
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ: RX_INT_FSK_ACK");
+     }
+     if(int_flag & RX_INT_FSK_TIMEOUT){
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ: RX_INT_FSK_ACK");
+     }
      if(int_flag & RX_INT_FSK_PKT){
            cps_wls_get_fsk_packet(data);
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ: RX_INT_FSK_PKT");
      }
     if(int_flag & RX_INT_OVP){
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OVP");
@@ -1956,12 +2110,27 @@ static int cps_wls_rx_irq_handler(int int_flag)
     if(int_flag & RX_INT_SR_SW_R){}
     if(int_flag & RX_INT_SR_SW_F){}
     if(int_flag & RX_INT_FC_OK){}
-    if(int_flag & RX_INT_HS_OK){}
+//    if(int_flag & RX_INT_HS_OK){}
     if(int_flag & RX_INT_HTP){}
-    if(int_flag & RX_INT_HS_FAIL){}
+//    if(int_flag & RX_INT_HS_FAIL){}
     if(int_flag & RX_INT_FC_FAIL){}
-    if(int_flag & RX_INT_NEGO_POWER_READY){}
+    if(int_flag & RX_INT_NEGO_POWER_READY)
+	{
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_NEGO_READY");
+		cps_epp_icl_on();
+	}
 
+	if ((int_flag & RX_INT_HS_OK) || (int_flag & RX_INT_HS_FAIL))
+	{
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_OK or RX_INT_HS_FAIL");
+		cps_get_sys_op_mode(&mode_type);
+		cps_wls_log(CPS_LOG_DEBG, "[%s] op_mode %d\n", __func__, mode_type);
+		if (mode_type == Sys_Op_Mode_MOTO_WLC)
+		{
+			chip->moto_stand = true;
+			cps_wls_set_status(WLC_TX_TYPE_CHANGED);
+		}
+	}
 
     return rc;
 }
@@ -2015,107 +2184,7 @@ static int cps_wls_tx_irq_handler(int int_flag)
 
     return rc;
 }
-static void cps_init_charge_hardware()
-{
-	struct cps_wls_chrg_chip *chg = chip;
-	chg->chg1_dev = get_charger_by_name("primary_chg");
-	if (chg->chg1_dev)
-		cps_wls_log(CPS_LOG_DEBG, "%s: Found primary charger\n", __func__);
-	else {
-		cps_wls_log(CPS_LOG_ERR, "%s: Error : can't find primary charger\n",
-			__func__);
-	}
-}
-#if 0
-static int cps_get_vbus(void)
-{
-	struct charger_manager *info = NULL;
-	struct power_supply *chg_psy = NULL;
-	int vbus = 0;
 
-	chg_psy = power_supply_get_by_name("primary_chg");
-	if (chg_psy == NULL || IS_ERR(chg_psy)) {
-		cps_wls_log(CPS_LOG_ERR,"%s mmi_mux Couldn't get chg_psy\n",__func__);
-		return CPS_WLS_FAIL;
-	} else {
-		info = (struct charger_manager *)power_supply_get_drvdata(chg_psy);
-	}
-	charger_dev_get_vbus(chip->chg1_dev,&vbus);//pmic_get_vbus();
-	cps_wls_log(CPS_LOG_ERR, "%s: vbus:%d\n", __func__,vbus);
-	return vbus;
-}
-static int cps_rx_check_events_thread(void *arg)
-{
-	int status = CPS_WLS_SUCCESS;
-	struct cps_wls_chrg_chip *info = arg;
-
-	while (1) {
-		status = wait_event_interruptible(info->wait_que,
-			(info->wls_rx_check_thread_timeout == true));
-		if (status < 0) {
-			cps_wls_log(CPS_LOG_ERR, "%s: wait event been interrupted\n", __func__);
-			continue;
-		}
-		info->wls_rx_check_thread_timeout = false;
-		if(cps_get_vbus() < 5000  || !chip->rx_int_ready)
-			cps_rx_online_check(info);
-		__pm_relax(info->rx_check_wakelock);
-	}
-	return 0;
-}
-#endif
-static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info)
-{
-	if (info == NULL)
-		return;
-
-	if (!info->rx_check_wakelock->active)
-		__pm_stay_awake(info->rx_check_wakelock);
-	info->wls_rx_check_thread_timeout = true;
-	wake_up_interruptible(&info->wait_que);
-}
-
-static enum alarmtimer_restart
-	wls_rx_alarm_timer_func(struct alarm *alarm, ktime_t now)
-{
-	struct cps_wls_chrg_chip *info = chip;
-
-	wake_up_rx_check_thread(info);
-
-	return ALARMTIMER_NORESTART;
-}
-static void wls_rx_init_timer(struct cps_wls_chrg_chip *info)
-{
-	alarm_init(&info->wls_rx_timer, ALARM_BOOTTIME,
-			wls_rx_alarm_timer_func);
-
-}
-#if 0
-static void wls_rx_start_timer(struct cps_wls_chrg_chip *info)
-{
-	struct timespec64 endtime, time_now;
-	ktime_t ktime, ktime_now;
-	int ret = 0;
-
-	/* If the timer was already set, cancel it */
-	ret = alarm_try_to_cancel(&info->wls_rx_timer);
-	if (ret < 0) {
-		cps_wls_log(CPS_LOG_ERR,"%s: callback was running, skip timer\n", __func__);
-		return;
-	}
-
-	ktime_now = ktime_get_boottime();
-	time_now = ktime_to_timespec64(ktime_now);
-	endtime.tv_sec = time_now.tv_sec + 0;
-	endtime.tv_nsec = time_now.tv_nsec + info->rx_polling_ns;
-	info->end_time = endtime;
-	ktime = ktime_set(info->end_time.tv_sec, info->end_time.tv_nsec);
-
-	cps_wls_log(CPS_LOG_DEBG,"%s: alarm timer start:%d, %lld %ld\n", __func__, ret,
-		info->end_time.tv_sec, info->end_time.tv_nsec);
-	alarm_start(&info->wls_rx_timer, ktime);
-}
-#endif
 static int mmi_mux_wls_chg_chan(enum mmi_mux_channel channel, bool on)
 {
 	struct charger_manager *info = NULL;
@@ -2143,113 +2212,7 @@ static int mmi_mux_wls_chg_chan(enum mmi_mux_channel channel, bool on)
 
 	return CPS_WLS_SUCCESS;
 }
-#define WLS_RX_CAP_15W 15
-#define WLS_RX_CAP_10W 10
-#define WLS_RX_CAP_8W 8
-#define WLS_RX_CAP_5W 5
-static void cps_wls_current_select(int  *icl, int *vbus)
-{
-    struct cps_wls_chrg_chip *chg = chip;
-    uint32_t wls_power = 0;
-
-    *icl = 400000;
-    *vbus = 5000;
-
-    if (chg->mode_type == Sys_Op_Mode_BPP)
-    {
-        if (!chg->bpp_icl_done){
-           chg->MaxV = 5000;
-           chg->MaxI = 1000;
-           *icl = 100000;
-           *vbus = 5000;
-           return;
-        }
-        chg->MaxV = 5000;
-        chg->MaxI = 1000;
-        *icl = 1000000;
-        *vbus = 5000;
-    }
-    else if (chg->mode_type == Sys_Op_Mode_EPP)
-    {
-        wls_power = cps_wls_get_rx_neg_power() / 2;
-        cps_wls_log(CPS_LOG_DEBG, "%s cps4035 power %dW", __func__, wls_power);
-        if (wls_power >= WLS_RX_CAP_15W)
-        {
-            chg->MaxV = 12000;
-            chg->MaxI = 1150;
-            *icl = 1150000;
-            *vbus = 12000;
-        }
-        else if (wls_power >= WLS_RX_CAP_10W)
-        {
-            chg->MaxV = 12000;
-            chg->MaxI = 800;
-            *icl = 800000;
-            *vbus = 12000;
-        }
-        else if (wls_power >= WLS_RX_CAP_8W)
-        {
-            chg->MaxV = 12000;
-            chg->MaxI = 650;
-            *icl = 650000;
-            *vbus = 12000;
-        }
-        else if (wls_power >= WLS_RX_CAP_5W)
-        {
-            chg->MaxV = 12000;
-            chg->MaxI = 400;
-            *icl = 400000;
-            *vbus = 12000;
-        }
-        else
-        {
-            chg->MaxV = 5000;
-            chg->MaxI = 1000;
-            *icl = 1000000;
-            *vbus = 5000;
-        }
-    }
-    if (chip->wls_input_curr_max != 0)
-        *icl = chip->wls_input_curr_max * 1000;
-}
-static void  cps_wls_notify_tx_chrgfull(void)
-{
-	int status = CPS_WLS_SUCCESS;
-	uint8_t data[2] = {0x5, 0x64};
-    int retry = 5;
-
-    do {
-        status = cps_wls_send_ask_packet(data, 2);
-        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI notify TX battery full , head 0x%x, cmd 0x%x, status %d\n", 0x5, 0x64,status);
-        msleep(200);
-        retry--;
-
-    } while(retry);
-
-    return;
-}
-static void cps_wls_set_battery_soc(int uisoc)
-{
-    struct cps_wls_chrg_chip *chg = chip;
-	int soc = uisoc;
-
-	if (!CPS_RX_CHRG_FULL && chg->wls_online && soc == 100) {
-		cps_wls_log(CPS_LOG_DEBG, "cps Notify TX, battery has been charged full !");
-		cps_wls_notify_tx_chrgfull();
-		CPS_RX_CHRG_FULL = true;
-	}
-}
-static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
-{
-	int ret;
-
-	cm->wls_chg_ops.wls_current_select = cps_wls_current_select;
-	cm->wls_chg_ops.wls_set_battery_soc = cps_wls_set_battery_soc;
-
-	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
-
-	return ret;
-}
+#if 0
 static int cps_wls_rx_power_on()
 {
 #if 1
@@ -2324,6 +2287,7 @@ static int cps_wls_rx_power_on()
 	}
 #endif
 }
+#endif
 static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 {
     bool wls_online = false;
@@ -2342,6 +2306,31 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
     }
 }
 
+#define WLS_ICL_INCREASE_STEP 100000
+static void cps_bpp_mode_icl_work(struct work_struct *work)
+{
+	struct cps_wls_chrg_chip *chg = chip;
+	int wls_icl = 0;
+
+	wls_icl = 100000;
+	chg->bpp_icl_done = false;
+	while((wls_icl + WLS_ICL_INCREASE_STEP) <= 1000000) {
+		if(!chg->wls_online)
+			break;
+		wls_icl += WLS_ICL_INCREASE_STEP;
+		msleep(200);
+		if (chip->chg1_dev)
+			charger_dev_set_input_current(chip->chg1_dev, wls_icl);
+		else
+		{
+			cps_init_charge_hardware();
+			charger_dev_set_input_current(chip->chg1_dev, wls_icl);
+		}
+		cps_wls_log(CPS_LOG_DEBG, "cps wireless charging icl %d ua\n", wls_icl);
+	}
+	chg->bpp_icl_done = true;
+}
+
 static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 {
     int int_flag;
@@ -2356,7 +2345,8 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
        // cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
        // cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
         cps_wls_set_int_enable();
-        cps_rx_online_check(chip);
+        chip->chip_state = true;
+   //     cps_wls_set_status(WLC_DISCONNECTED);
      //   cps_wls_log(CPS_LOG_DEBG, "[%s] CPS_I2C_UNLOCK", __func__);
    // }
 
@@ -2397,6 +2387,11 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "Detected an detach event.\n");
+		chip->rx_int_ready = false;
+		chip->bpp_icl_done = false;
+		if (chip->rx_ldo_on) {
+			//chip->wls_online = false;
+			cps_wls_set_status(WLC_DISCONNECTED);
 		cps_rx_online_check(chip);
 		chip->rx_ldo_on = false;
 	//	if (chip->factory_wls_en == true) {
@@ -2404,13 +2399,9 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	//		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
 	//	}
 		power_supply_changed(chip->wl_psy);
+		}
 	}
 	return IRQ_HANDLED;
-}
-
-static  int cps_wls_is_ldo_on()
-{
-	return (chip->rx_ldo_on && gpio_get_value(chip->wls_det_int));
 }
 void wlc_control_pin_set(bool on);
 static int cps_get_bat_soc()
@@ -2567,7 +2558,12 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
     switch(psp){
         case POWER_SUPPLY_PROP_PRESENT:
         case POWER_SUPPLY_PROP_ONLINE:
-            val->intval = cps_wls_is_ldo_on();
+            //val->intval = cps_wls_is_ldo_on();
+            val->intval = chip->wls_online;
+            if (!chip->chip_state)
+            {
+                val->intval = chip->chip_state;
+            }
             break;
 
         case POWER_SUPPLY_PROP_TYPE:
@@ -2575,7 +2571,7 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
             break;
 
         case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-            val->intval = 12000000;
+            val->intval = chip->MaxV * 1000;
             break;
 
         case POWER_SUPPLY_PROP_VOLTAGE_NOW:
@@ -2583,7 +2579,7 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
             break;
 
         case POWER_SUPPLY_PROP_CURRENT_MAX:
-            val->intval = 1250000;
+            val->intval = chip->MaxI * 1000;
             break;
 
         case POWER_SUPPLY_PROP_CURRENT_NOW:
@@ -2603,6 +2599,16 @@ static int cps_wls_chrg_set_property(struct power_supply *psy,
             enum power_supply_property psp,
             const union power_supply_propval *val)
 {
+    switch(psp){
+        case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
+            chip->chip_state = val->intval;
+            power_supply_changed(chip->wl_psy);
+
+            break;
+        default:
+            return -EINVAL;
+    }
+    cps_wls_log(CPS_LOG_ERR, "[%s] psp = %d val = %d.\n", __func__, psp,val->intval);
     return 0;
 }
 
@@ -2689,22 +2695,26 @@ static int wireless_fw_update(bool force)
 	u32 fw_revision;
 	const struct firmware *fw;
 	int cfg_buf_size;
-	int addr;
-
+		int addr,ret = CPS_WLS_SUCCESS;
+	CPS_TX_MODE = true;
+	chip->fw_uploading = true;
 	cps_wls_set_boost(1);
 
 	firmware_buf = kzalloc(0x6000, GFP_KERNEL);  // 24K buffer
 	rc = firmware_request_nowarn(&fw, chip->wls_fw_name, chip->dev);
 	if (rc) {
 		cps_wls_log(CPS_LOG_ERR,"Couldn't get firmware  rc=%d\n", rc);
+        ret = CPS_WLS_FAIL;
 		goto update_fail;
 	}
 	if(cps_get_bat_soc() < 10) {
 		cps_wls_log(CPS_LOG_ERR,"Couldn't updata firmware because of low battery soc\n");
+        ret = CPS_WLS_FAIL;
 		goto update_fail;
 	}
 
 	cps_wls_vbus_enable(true);
+	msleep(500);
 
 	maj_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MAJOR_VER_OFFSET));
 	maj_ver = maj_ver >> 8;
@@ -2719,22 +2729,44 @@ static int wireless_fw_update(bool force)
 	result = cps_get_fw_revision(&fw_revision);
 	if(version == fw_revision) {
 	    cps_wls_log(CPS_LOG_DEBG,"%s bin version %x same as fw version %x,no need update fw\n",__func__,version,fw_revision);
+	    ret = CPS_WLS_SUCCESS;
 	    goto free_bug;
 	}
 
 	//CPS4035_BL
 	//bootloader_buf = CPS4035_BOOTLOADER;
-   if(CPS_WLS_FAIL == cps_wls_write_word(0xFFFFFF00, 0x0000000E)) goto free_bug; /*enable 32bit i2c*/
-   if(CPS_WLS_FAIL == cps_wls_write_word(0x4000E75C, 0x00001250)) goto free_bug; /*write password*/
-   if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00000006)) goto free_bug; /*reset and halt mcu*/
+	if(CPS_WLS_FAIL == cps_wls_write_word(0xFFFFFF00, 0x0000000E)) {
+         ret = CPS_WLS_FAIL;
+         goto free_bug;/*enable 32bit i2c*/
+    }
+	if(CPS_WLS_FAIL == cps_wls_write_word(0x4000E75C, 0x00001250)) {
+        ret = CPS_WLS_FAIL;
+        goto free_bug;//*write password*/
+    }
+	if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00000006)) {
+        ret = CPS_WLS_FAIL;
+        goto free_bug;/*reset and halt mcu*/
+    }
     cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM HEX!\n", __func__);
-   if(CPS_WLS_FAIL == cps_wls_program_sram(0x20000000, CPS4038_BOOTLOADER, 0x800)) goto free_bug;
+	if(CPS_WLS_FAIL == cps_wls_program_sram(0x20000000, CPS4038_BOOTLOADER, 0x800)) {
+        ret = CPS_WLS_FAIL;
+        goto free_bug;//program sram
+    }
+	if(CPS_WLS_FAIL == cps_wls_write_word(0x400400A0, 0x000000FF)) {
+        ret = CPS_WLS_FAIL;
+        goto free_bug;//remap enable
+    }
+	if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00008003)) {
+        ret = CPS_WLS_FAIL;
+        goto free_bug;/*triming load function is disabled and run mcu*/
+    }
 
-	if(CPS_WLS_FAIL == cps_wls_write_word(0x400400A0, 0x000000FF))    goto free_bug;//remap enable
-	if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00008003))    goto free_bug; /*triming load function is disabled and run mcu*/
+	msleep(10);
 
-    msleep(10);
-    if(CPS_WLS_FAIL == cps_wls_write_word(0xFFFFFF00, 0x0000000E))  goto free_bug; /*enable 32bit i2c*/
+	if(CPS_WLS_FAIL == cps_wls_write_word(0xFFFFFF00, 0x0000000E)) {
+        ret = CPS_WLS_FAIL;
+        goto free_bug; /*enable 32bit i2c*/
+    }
     msleep(10);
 
 	//=========================================================
@@ -2746,6 +2778,7 @@ static int wireless_fw_update(bool force)
 	if(result != PASS)
 	{
 	    cps_wls_log(CPS_LOG_ERR, "[%s] ---- bootloader crc fail\n", __func__);
+        ret = CPS_WLS_FAIL;
 	    goto free_bug;
 	}
 	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- load bootloader successful\n", __func__);
@@ -2782,6 +2815,7 @@ static int wireless_fw_update(bool force)
                                      if(result != PASS)
                                      {
                                               pr_err("%s: ---> WRITE BUFFER1 DATA TO MTP FAIL\n",__func__);
+						    ret = CPS_WLS_FAIL;
                                               goto free_bug;
                                      }
                                      buf1_flag = 0;
@@ -2802,6 +2836,7 @@ static int wireless_fw_update(bool force)
                                        if(result != PASS)
                                        {
                                                 pr_err("%s: ---> WRITE BUFFER0 DATA TO MTP FAIL\n",__func__);
+						      ret = CPS_WLS_FAIL;
                                                goto free_bug;
                                        }
                                        buf0_flag = 0;
@@ -2854,6 +2889,7 @@ static int wireless_fw_update(bool force)
       if(result != PASS)
       {
                pr_err("%s:---> WRITE MCU START FLAG FAIL\n",__func__);
+	        ret = CPS_WLS_FAIL;
                goto free_bug;
        }
 
@@ -2869,12 +2905,20 @@ free_bug:
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	release_firmware(fw);
+	CPS_TX_MODE = false;
+	chip->fw_uploading = false;
 	wireless_chip_reset();
-	return CPS_WLS_SUCCESS;
+	return ret;
 
 update_fail:
+	CPS_TX_MODE = false;
+	chip->fw_uploading = false;
     cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
-    return CPS_WLS_FAIL;
+    return ret;
+}
+static void cps_firmware_update_work(struct work_struct *work)
+{
+	 wireless_fw_update(false);
 }
 //-----------------------------reg addr----------------------------------
 static ssize_t show_reg_addr(struct device *dev, struct device_attribute *attr, char *buf)
@@ -2916,7 +2960,11 @@ static ssize_t wireless_fw_version_show(struct device *dev, struct device_attrib
 
 	int rc;
 	uint32_t  fw_version;
+
+	cps_wls_vbus_enable(true);
+	msleep(300);
 	rc = cps_get_fw_revision(&fw_version);
+	cps_wls_vbus_enable(false);
 
 	return sprintf(buf, "%08x\n", fw_version);
 }
@@ -2942,14 +2990,16 @@ static DEVICE_ATTR(wireless_fw_force_update, 0664, NULL, wireless_fw_force_updat
 static ssize_t wireless_fw_update_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	bool val;
-	int rc;
 
 	if (kstrtobool(buf, &val) || !val)
 		return -EINVAL;
 
-	rc = wireless_fw_update(false);
-	if (rc < 0)
-		return rc;
+	if(!chip->wls_online) {
+		queue_delayed_work(chip->wls_wq,
+			   &chip->fw_update_work, msecs_to_jiffies(2000));
+	} else {
+		cps_wls_log(CPS_LOG_DEBG, "wireless_fw_update wls online,forbid fw update\n");
+	}
 
 	return count;
 }
@@ -3039,13 +3089,24 @@ static ssize_t rx_connected_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
-
+	int rx_connected;
 	if (!chip) {
 		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
 		return -ENODEV;
 	}
 
-	return sprintf(buf, "%d\n", chip->rx_ldo_on);
+	if (chip->ntc_thermal) {
+		rx_connected = TX_MODE_OVERHEAT;
+		return sprintf(buf, "%d\n", rx_connected);
+	}
+
+	if (chip->rx_connected)
+		rx_connected = TX_MODE_POWER_SHARE;
+	else
+		rx_connected = TX_MODE_NOT_CONNECTED;
+
+	return sprintf(buf, "%d\n", rx_connected);
+
 }
 
 static DEVICE_ATTR(rx_connected, S_IRUGO,
@@ -3057,20 +3118,20 @@ static ssize_t wls_input_current_limit_store(struct device *dev,
 		const char *buf, size_t count)
 {
 	unsigned long r;
-	unsigned long wls_curr_max;
+	unsigned long wls_input_curr_max;
 
 	if (!chip) {
 		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
 		return -ENODEV;
 	}
 
-	r = kstrtoul(buf, 0, &wls_curr_max);
+	r = kstrtoul(buf, 0, &wls_input_curr_max);
 	if (r) {
-		cps_wls_log(CPS_LOG_ERR, "Invalid TCMD = %lu\n", wls_curr_max);
+		cps_wls_log(CPS_LOG_ERR, "Invalid TCMD = %lu\n", wls_input_curr_max);
 		return -EINVAL;
 	}
-
-	chip->wls_curr_max = wls_curr_max;
+	cps_wls_log(CPS_LOG_DEBG,"wls input_current = %lu\n", wls_input_curr_max);
+	chip->wls_input_curr_max = wls_input_curr_max;
 	return r ? r : count;
 }
 
@@ -3084,7 +3145,7 @@ static ssize_t wls_input_current_limit_show(struct device *dev,
 		return -ENODEV;
 	}
 
-	return sprintf(buf, "%d\n", chip->wls_curr_max);
+	return sprintf(buf, "%d\n", chip->wls_input_curr_max);
 }
 static DEVICE_ATTR(wls_input_current_limit, S_IRUGO|S_IWUSR, wls_input_current_limit_show, wls_input_current_limit_store);
 
@@ -3124,6 +3185,74 @@ static ssize_t folio_mode_show(struct device *dev,
 	return sprintf(buf, "%d\n", chip->folio_mode);
 }
 static DEVICE_ATTR(folio_mode, S_IRUGO|S_IWUSR, folio_mode_show, folio_mode_store);
+
+static ssize_t show_wlc_fan_speed(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, " %d\n", chip->fan_speed);
+}
+static int cps_wls_wlc_update_light_fan(void);
+static ssize_t store_wlc_fan_speed(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf,
+			size_t count)
+{
+	if (!chip->moto_stand) {
+		cps_wls_log(CPS_LOG_ERR, "[%s] not moto 50w dock %d, skip\n", __func__ , chip->mode_type);
+		return count;
+	}
+
+	chip->fan_speed = simple_strtoul(buf, NULL, 0);
+	cps_wls_wlc_update_light_fan();
+
+	return count;
+}
+static DEVICE_ATTR(wlc_fan_speed, S_IRUGO|S_IWUSR, show_wlc_fan_speed, store_wlc_fan_speed);
+
+static ssize_t show_wlc_light_ctl(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, " %d\n", chip->light_level);
+}
+
+static ssize_t store_wlc_light_ctl(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf,
+			size_t count)
+{
+	if (!chip->moto_stand) {
+		cps_wls_log(CPS_LOG_ERR, "[%s] not moto 50w dock %d, skip\n", __func__ , chip->mode_type);
+		return count;
+	}
+
+	chip->light_level = simple_strtoul(buf, NULL, 0);
+	cps_wls_wlc_update_light_fan();
+
+	return count;
+}
+static DEVICE_ATTR(wlc_light_ctl, S_IRUGO|S_IWUSR, show_wlc_light_ctl, store_wlc_light_ctl);
+
+static ssize_t show_wlc_tx_power(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", chip->wlc_tx_power);
+}
+static DEVICE_ATTR(wlc_tx_power, 0444, show_wlc_tx_power, NULL);
+
+static ssize_t show_wlc_tx_type(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	if (chip->moto_stand)
+		return sprintf(buf, "%d\n", Sys_Op_Mode_MOTO_WLC);
+	else
+		return sprintf(buf, "%d\n", chip->mode_type);
+}
+
+static DEVICE_ATTR(wlc_tx_type, 0444, show_wlc_tx_type, NULL);
+
+static ssize_t show_wlc_st_changed(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", chip->wlc_status);
+}
+
+static DEVICE_ATTR(wlc_st_changed, S_IRUGO, show_wlc_st_changed, NULL);
+
 static void cps_wls_create_device_node(struct device *dev)
 {
     device_create_file(dev, &dev_attr_reg_addr);
@@ -3149,6 +3278,12 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_rx_connected);
     device_create_file(dev, &dev_attr_wls_input_current_limit);
     device_create_file(dev, &dev_attr_folio_mode);
+
+    device_create_file(dev, &dev_attr_wlc_fan_speed);
+    device_create_file(dev, &dev_attr_wlc_light_ctl);
+    device_create_file(dev, &dev_attr_wlc_tx_power);
+    device_create_file(dev, &dev_attr_wlc_tx_type);
+    device_create_file(dev, &dev_attr_wlc_st_changed);
 }
 
 static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
@@ -3241,8 +3376,6 @@ static void cps_wls_lock_work_init(struct cps_wls_chrg_chip *chip)
     char *name = NULL;
     mutex_init(&chip->irq_lock);
     mutex_init(&chip->i2c_lock);
-//    wake_lock_init(&chip->cps_wls_wake_lock, WAKE_LOCK_SUSPEND, "cps_wls_wake_lock");
-    //INIT_DELAYED_WORK(&chip->cps_wls_monitor_work, cps_wls_monitor_work_func);
     name = devm_kasprintf(chip->dev, GFP_KERNEL, "%s", "cps_wls_wake_lock");
     chip->cps_wls_wake_lock = wakeup_source_register(NULL, name);
 }
@@ -3286,12 +3419,467 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
     }
     return CPS_WLS_SUCCESS;
 }
+#define WLS_RX_CAP_15W 15
+#define WLS_RX_CAP_10W 10
+#define WLS_RX_CAP_8W 8
+#define WLS_RX_CAP_5W 5
+static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
+{
+    struct cps_wls_chrg_chip *chg = chip;
+    uint32_t wls_power = 0;
+
+    cps_wls_log(CPS_LOG_DEBG, "%s", __func__);
+
+    if (chip->cable_ready_wait_count < 3 && !chip->moto_stand)
+    {
+        *cable_ready = false;
+        chip->cable_ready_wait_count++;
+        return;
+    }
+    *cable_ready = true;
+    *icl = 400000;
+    *vbus = 5000;
+
+    if (chg->mode_type == Sys_Op_Mode_BPP)
+    {
+        if (!chg->bpp_icl_done){
+           chg->MaxV = 5000;
+           chg->MaxI = 1000;
+           *icl = 100000;
+           *vbus = 5000;
+           return;
+        }
+        chg->MaxV = 5000;
+        chg->MaxI = 1000;
+        *icl = 1000000;
+        *vbus = 5000;
+    }
+    else if (chg->mode_type == Sys_Op_Mode_EPP)
+    {
+        wls_power = cps_wls_get_rx_neg_power() / 2;
+        cps_wls_log(CPS_LOG_DEBG, "%s cps4038 power %dW", __func__, wls_power);
+        if (wls_power >= WLS_RX_CAP_15W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 1150;
+            *icl = 1150000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_10W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 800;
+            *icl = 800000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_8W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 650;
+            *icl = 650000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_5W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 400;
+            *icl = 400000;
+            *vbus = 12000;
+        }
+        else
+        {
+            chg->MaxV = 5000;
+            chg->MaxI = 1000;
+            *icl = 1000000;
+            *vbus = 5000;
+        }
+    }
+    if (chip->wls_input_curr_max != 0)
+        *icl = chip->wls_input_curr_max * 1000;
+}
+
+static void cps_epp_current_select(int  *icl, int *vbus)
+{
+    struct cps_wls_chrg_chip *chg = chip;
+    uint32_t wls_power = 0;
+
+    *icl = 400000;
+    *vbus = 5000;
+    if (chg->mode_type == Sys_Op_Mode_EPP)
+    {
+        wls_power = cps_wls_get_rx_neg_power() / 2;
+        cps_wls_log(CPS_LOG_DEBG, "%s cps4038 power %dW", __func__, wls_power);
+        if (wls_power >= WLS_RX_CAP_15W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 1150;
+            *icl = 1150000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_10W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 800;
+            *icl = 800000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_8W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 650;
+            *icl = 650000;
+            *vbus = 12000;
+        }
+        else if (wls_power >= WLS_RX_CAP_5W)
+        {
+            chg->MaxV = 12000;
+            chg->MaxI = 400;
+            *icl = 400000;
+            *vbus = 12000;
+        }
+        else
+        {
+            chg->MaxV = 5000;
+            chg->MaxI = 1000;
+            *icl = 1000000;
+            *vbus = 5000;
+        }
+    }
+}
+
+static int cps_wls_wlc_update_light_fan(void)
+{
+	int status = CPS_WLS_SUCCESS;
+	uint8_t data[4] = {0x38, 0x05, 0x40, 0x14};
+	int retry = 2;
+
+	if (CPS_RX_CHRG_FULL)
+	{
+		data[2] = MMI_DOCK_LIGHT_ON;
+		data[3] = MMI_DOCK_FAN_SPEED_OFF;
+	}
+	else
+	{
+		if (chip->fan_speed == 0)
+			data[3] = MMI_DOCK_FAN_SPEED_LOW;
+		else
+			data[3] = MMI_DOCK_FAN_SPEED_HIGH;
+
+		if (chip->light_level == 0)
+			data[2] = MMI_DOCK_LIGHT_OFF;
+		else
+			data[2] = MMI_DOCK_LIGHT_DEFAULT;
+	}
+	do
+	{
+//		status = cps_wls_send_fsk_packet(data, 4);
+		status  = cps_wls_send_ask_packet(data, 4);
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI set fan/light, WLS_WLC_FAN_SPEED %d, CPS_RX_CHRG_FULL %d, WLS_WLC_LIGHT %d",
+					chip->fan_speed, CPS_RX_CHRG_FULL, chip->light_level);
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI set fan/light, ight 0x%x, fan 0x%x", data[2], data[3]);
+		msleep(200);
+		retry--;
+	} while (retry);
+	return 0;
+}
+
+static void  cps_wls_notify_tx_chrgfull(void)
+{
+	int status = CPS_WLS_SUCCESS;
+	uint8_t data[2] = {0x5, 0x64};
+    int retry = 5;
+
+    do {
+//        status = cps_wls_send_fsk_packet(data, 2);
+        status = cps_wls_send_ask_packet(data, 2);
+        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI notify TX battery full , head 0x%x, cmd 0x%x, status %d\n", 0x5, 0x64,status);
+        msleep(200);
+        retry--;
+
+    } while(retry);
+
+    return;
+}
+
+static int cps_wls_notify_st_changed(void)
+{
+	static int pre_status = -1;
+
+	if (pre_status != chip->wlc_status) {
+		cps_wls_log(CPS_LOG_DEBG,"%s st change  %d -> %d\n",__func__, pre_status, chip->wlc_status);
+		pre_status = chip->wlc_status;
+		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "wlc_st_changed");
+	}
+
+	return 0;
+}
+
+static int cps_wls_set_status(int status)
+{
+	chip->wlc_status = status;
+	if (status == WLC_DISCONNECTED)
+		chip->moto_stand = false;
+	cps_wls_notify_st_changed();
+	cps_wls_log(CPS_LOG_DEBG, "cps_wls_set_status:%d",status);
+	return 0;
+}
+
+static void cps_wls_set_battery_soc(int uisoc)
+{
+    struct cps_wls_chrg_chip *chg = chip;
+	int soc = uisoc;
+
+	if (!CPS_RX_CHRG_FULL && chg->wls_online && soc == 100) {
+		cps_wls_log(CPS_LOG_DEBG, "cps Notify TX, battery has been charged full !");
+		if (chip->moto_stand) {
+			cps_wls_wlc_update_light_fan();
+		} else
+			cps_wls_notify_tx_chrgfull();
+		CPS_RX_CHRG_FULL = true;
+	}
+}
+
+static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
+{
+	int ret;
+
+	cm->wls_chg_ops.wls_current_select = cps_wls_current_select;
+	cm->wls_chg_ops.wls_set_battery_soc = cps_wls_set_battery_soc;
+
+	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
+
+	return ret;
+}
+
+static int cps_wls_rx_power_on(void)
+{
+	struct cps_wls_chrg_chip *info = chip;
+	uint32_t chip_id = 0, sys_mode = 0;
+	bool rx_power = false;
+	static int rx_power_cnt = 0;
+#ifdef SMART_PEN_SUPPORT
+	if (CPS_RX_MODE_ERR || CPS_TX_MODE || chip->pen_power_on) {
+		cps_wls_log(CPS_LOG_ERR, "CPS_RX_MODE_ERR %d, CPS_TX_MODE %d, PEN_POWER_ON%d",
+			CPS_RX_MODE_ERR, CPS_TX_MODE, chip->pen_power_on);
+		cps_wls_log(CPS_LOG_ERR, "Stop wls timer, and report wls rx offline");
+		alarm_try_to_cancel(&info->wls_rx_timer);
+		return false;
+	}
+#else
+	if (CPS_RX_MODE_ERR || CPS_TX_MODE) {
+		cps_wls_log(CPS_LOG_ERR, "CPS_RX_MODE_ERR %d, CPS_TX_MODE %d",
+			CPS_RX_MODE_ERR, CPS_TX_MODE);
+		cps_wls_log(CPS_LOG_ERR, "Stop wls timer, and report wls rx offline");
+		alarm_try_to_cancel(&info->wls_rx_timer);
+		return false;
+	}
+#endif
+
+	sys_mode = cps_wls_get_sys_mode();
+	cps_wls_log(CPS_LOG_DEBG, "CPS_TX_MODE %d, sys_mode RX/TX, 0 mode %d", CPS_TX_MODE, sys_mode);
+
+	chip_id = cps_wls_get_chip_id();
+	if(chip_id == 0x4038 && sys_mode == SYS_MODE_RX) {
+		rx_power = true;
+		rx_power_cnt = 0;
+	} else {
+		rx_power = false;
+		rx_power_cnt++;
+	}
+
+	if (rx_power) {
+		cps_wls_log(CPS_LOG_DEBG, "Rx power on, Re-check after 500ms");
+        info->rx_polling_ns = 500 * 1000 * 1000;
+        wls_rx_start_timer(info);
+		return true;
+	} else {
+
+		if (rx_power_cnt > 1) {
+			cps_wls_log(CPS_LOG_DEBG, "Rx power off");
+			rx_power_cnt = 0;
+			return false;
+		} else {
+			info->rx_polling_ns = 500 * 1000 * 1000;
+			wls_rx_start_timer(info);
+			cps_wls_log(CPS_LOG_DEBG, "Re-check after 500ms");
+			//dc_get_power_supply_properties(DC_POWER_SUPPLY_ONLINE, &value);
+			return (info->wls_online ? true : false);
+		}
+	}
+}
+
+static int cps_get_vbus(void)
+{
+	struct charger_manager *info = NULL;
+	int ret = 0;
+	int vchr = 0;
+	struct charger_device *chg_psy = NULL;
+
+	chg_psy = get_charger_by_name("primary_chg");
+	if(chg_psy) {
+		info = (struct charger_manager *)charger_dev_get_drvdata(chg_psy);
+		if(info)
+			cps_wls_log(CPS_LOG_ERR,"%s could  get charger_manager\n",__func__);
+		else {
+			cps_wls_log(CPS_LOG_ERR,"%s Couldn't get charger_manager\n",__func__);
+			return CPS_WLS_SUCCESS;
+		}
+	} else {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n",__func__);
+		return CPS_WLS_SUCCESS;
+	}
+
+	ret = charger_dev_get_vbus(chg_psy, &vchr);
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR,"%s get vbus failed: %d\n", __func__, ret);
+		return ret;
+	}
+
+	vchr = vchr / 1000;
+//	vbus = get_vbus(info);
+	cps_wls_log(CPS_LOG_ERR, "%s: vbus:%d\n", __func__,vchr);
+	return vchr;
+}
+
+static int cps_rx_check_events_thread(void *arg)
+{
+	int status = CPS_WLS_SUCCESS;
+	struct cps_wls_chrg_chip *info = arg;
+
+	while (1) {
+		status = wait_event_interruptible(info->wait_que,
+			(info->wls_rx_check_thread_timeout == true));
+		if (status < 0) {
+			cps_wls_log(CPS_LOG_ERR, "%s: wait event been interrupted\n", __func__);
+			continue;
+		}
+		info->wls_rx_check_thread_timeout = false;
+		if(cps_get_vbus() < 5000  || !chip->rx_int_ready)
+			cps_rx_online_check(info);
+		__pm_relax(info->rx_check_wakelock);
+	}
+	return 0;
+}
+
+static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info)
+{
+	if (info == NULL)
+		return;
+
+	if (!info->rx_check_wakelock->active)
+		__pm_stay_awake(info->rx_check_wakelock);
+	info->wls_rx_check_thread_timeout = true;
+	wake_up_interruptible(&info->wait_que);
+}
+
+static enum alarmtimer_restart
+	wls_rx_alarm_timer_func(struct alarm *alarm, ktime_t now)
+{
+	struct cps_wls_chrg_chip *info = chip;
+
+	wake_up_rx_check_thread(info);
+
+	return ALARMTIMER_NORESTART;
+}
+
+static void wls_rx_start_timer(struct cps_wls_chrg_chip *info)
+{
+	struct timespec64 endtime, time_now;
+	ktime_t ktime, ktime_now;
+	int ret = 0;
+
+	/* If the timer was already set, cancel it */
+	ret = alarm_try_to_cancel(&info->wls_rx_timer);
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR,"%s: callback was running, skip timer\n", __func__);
+		return;
+	}
+
+	ktime_now = ktime_get_boottime();
+	time_now = ktime_to_timespec64(ktime_now);
+	endtime.tv_sec = time_now.tv_sec + 0;
+	endtime.tv_nsec = time_now.tv_nsec + info->rx_polling_ns;
+	info->end_time = endtime;
+	ktime = ktime_set(info->end_time.tv_sec, info->end_time.tv_nsec);
+
+	cps_wls_log(CPS_LOG_DEBG,"%s: alarm timer start:%d, %lld %ld\n", __func__, ret,
+		info->end_time.tv_sec, info->end_time.tv_nsec);
+	alarm_start(&info->wls_rx_timer, ktime);
+}
+
+static void wls_rx_init_timer(struct cps_wls_chrg_chip *info)
+{
+	alarm_init(&info->wls_rx_timer, ALARM_BOOTTIME,
+			wls_rx_alarm_timer_func);
+
+}
+
+static int cps_tcd_get_max_state(struct thermal_cooling_device *tcd,
+	unsigned long *state)
+{
+	*state = 1;
+
+	return 0;
+}
+
+static int cps_tcd_get_cur_state(struct thermal_cooling_device *tcd,
+	unsigned long *state)
+{
+	struct cps_wls_chrg_chip *chip = tcd->devdata;
+
+	*state = chip->ntc_thermal;
+
+	return 0;
+}
+
+static int cps_tcd_set_cur_state(struct thermal_cooling_device *tcd,
+	unsigned long state)
+{
+	struct cps_wls_chrg_chip *chip = tcd->devdata;
+
+	if (chip->fw_uploading) {
+		cps_wls_log(CPS_LOG_DEBG, "cps fw uploading,ignore thermal event\n");
+		return 0;
+	}
+	if (state && !chip->ntc_thermal) {
+		cps_wls_log(CPS_LOG_DEBG, "cps Wireless charger overtemp\n");
+		chip->ntc_thermal = true;
+//		cps_wls_tx_enable(false);
+		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
+	} else if (!state && chip->ntc_thermal) {
+		cps_wls_log(CPS_LOG_DEBG, "cps Wireless charger temp OK\n");
+		chip->ntc_thermal = false;
+		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
+	}
+
+	return 0;
+}
+
+static const struct thermal_cooling_device_ops cps_tcd_ops = {
+	.get_max_state = cps_tcd_get_max_state,
+	.get_cur_state = cps_tcd_get_cur_state,
+	.set_cur_state = cps_tcd_set_cur_state,
+};
+
+static void cps_init_charge_hardware()
+{
+	struct cps_wls_chrg_chip *chg = chip;
+	chg->chg1_dev = get_charger_by_name("primary_chg");
+	if (chg->chg1_dev)
+		cps_wls_log(CPS_LOG_DEBG, "%s: Found primary charger\n", __func__);
+	else {
+		cps_wls_log(CPS_LOG_ERR, "%s: Error : can't find primary charger\n",
+			__func__);
+	}
+}
 
 
 static int cps_wls_chrg_probe(struct i2c_client *client,
                 const struct i2c_device_id *id)
 {
      int ret=0;
+    char *name = NULL;
+
     cps_wls_log(CPS_LOG_ERR, "[%s] ---->start\n", __func__);
     chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
     if (!chip) {
@@ -3316,6 +3904,9 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 
     i2c_set_clientdata(client, chip);
     dev_set_drvdata(&(client->dev), chip);
+
+    name = devm_kasprintf(chip->dev, GFP_KERNEL, "%s", "cps suspend wakelock");
+    chip->rx_check_wakelock = wakeup_source_register(NULL, name);
 
     ret = cps_wls_parse_dt(chip);
     if(ret < 0){
@@ -3353,13 +3944,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     if(gpio_is_valid(chip->wls_mode_select)) {
         gpio_set_value(chip->wls_mode_select, true);
     }
-    chip->rx_connected = false;
-    chip->wls_online = false;
-    chip->wls_input_curr_max = 0;
-    chip->MaxV = 12000;
-    chip->MaxI = 1250;
-    chip->chip_id = 0;
-    chip->factory_wls_en = false;
 
     cps_wls_lock_work_init(chip);
 
@@ -3371,16 +3955,36 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
         goto free_source;
     }
     wls_tcmd_register(chip);
-    wls_chg_ops_register(chip);
-
+    chip->rx_connected = false;
     chip->wls_online = false;
+    wls_chg_ops_register(chip);
+    chip->wls_input_curr_max = 0;
+    chip->MaxV = 12000;
+    chip->MaxI = 1150;
+    chip->chip_id = 0;
+    chip->factory_wls_en = false;
+    chip->mode_type = Sys_Op_Mode_INVALID;
+    chip->fan_speed = 0;
+    chip->light_level = 1;
+    chip->moto_stand = false;
+
+    init_waitqueue_head(&chip->wait_que);
     wls_rx_init_timer(chip);
+	chip->wls_wq = create_singlethread_workqueue("wls_workqueue");
+	INIT_DELAYED_WORK(&chip->fw_update_work,
+			  cps_firmware_update_work);
+	INIT_DELAYED_WORK(&chip->bpp_icl_work,
+			  cps_bpp_mode_icl_work);
+
+    /* Register thermal zone cooling device */
+    chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
+		"cps_wls_charger_l", chip, &cps_tcd_ops);
     cps_init_charge_hardware();
 
     if(chip->bootmode == 8 || chip->bootmode == 9)
         wireless_chip_reset();
 //    wake_lock(&chip->cps_wls_wake_lock);
-//    kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
+    kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger  probe successful!\n", __func__);
     return ret;
 
