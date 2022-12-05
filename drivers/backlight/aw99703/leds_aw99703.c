@@ -306,7 +306,10 @@ static int aw99703_backlight_init(struct aw99703_data *drvdata)
 	aw99703_bl_enable_channel(drvdata);
 
 	aw99703_ramp_setting(drvdata);
-	aw99703_transition_ramp(drvdata);
+	if ( drvdata->skip_first_trans)
+		drvdata->reset_trans_delay = true;
+	else
+		aw99703_transition_ramp(drvdata);
 
 	if (drvdata->reinit_brightness) {
 		int bl_level = drvdata->reinit_brightness;
@@ -348,6 +351,10 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 		}
 		aw99703_backlight_init(drvdata);
 		aw99703_backlight_enable(drvdata);
+	}
+	else if ( drvdata->skip_first_trans && drvdata->reset_trans_delay){
+		aw99703_transition_ramp(drvdata);
+		drvdata->reset_trans_delay = false;
 	}
 
 	if (drvdata->bl_low_remap && (brt_val < AW99703_BL_MAP_MAX)) {
@@ -497,6 +504,12 @@ aw99703_get_dt_data(struct device *dev, struct aw99703_data *drvdata)
 	} else {
 		drvdata->max_brightness = 255;
 	}
+
+	drvdata->skip_first_trans = of_property_read_bool(np, "aw99703,skip-first-trans");
+	pr_info("%s skip_first_trans --<%d>\n", __func__, drvdata->skip_first_trans);
+
+	drvdata->reset_trans_delay = of_property_read_bool(np, "aw99703,reset-trans-delay");
+	pr_info("%s reset_trans_delay --<%d>\n", __func__, drvdata->reset_trans_delay);
 
 	drvdata->bl_low_remap = of_property_read_bool(np, "aw99703,bl-low-remap");
 	if (drvdata->bl_low_remap) {

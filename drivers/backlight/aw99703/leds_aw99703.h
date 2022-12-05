@@ -257,6 +257,8 @@ struct aw99703_data {
 	int hwen_gpio;
 	unsigned int  pwm_mode;
 	bool using_lsb;
+	bool skip_first_trans;
+	bool reset_trans_delay;
 	bool bl_low_remap;
 	unsigned int pwm_period;
 	unsigned int full_scale_led;
