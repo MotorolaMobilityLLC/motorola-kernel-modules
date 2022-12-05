@@ -100,6 +100,8 @@ struct ktd3136_data {
 	int hwen_gpio;
 	bool pwm_mode;
 	bool using_lsb;
+	bool skip_first_trans;
+	bool reset_trans_delay;
 	unsigned int pwm_period;
 	unsigned int full_scale_led;
 	unsigned int ramp_on_time;
