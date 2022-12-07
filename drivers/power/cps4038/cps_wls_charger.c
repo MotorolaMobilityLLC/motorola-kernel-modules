@@ -3430,7 +3430,7 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
 
     cps_wls_log(CPS_LOG_DEBG, "%s", __func__);
 
-    if (chip->cable_ready_wait_count < 3 && !chip->moto_stand)
+    if (chip->cable_ready_wait_count < 0 && !chip->moto_stand)
     {
         *cable_ready = false;
         chip->cable_ready_wait_count++;
