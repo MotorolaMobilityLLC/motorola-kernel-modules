@@ -2715,8 +2715,8 @@ static int wireless_fw_update(bool force)
 		goto update_fail;
 	}
 
-	cps_wls_vbus_enable(true);
-	msleep(500);
+	//cps_wls_vbus_enable(true);
+	//msleep(500);
 
 	maj_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MAJOR_VER_OFFSET));
 	maj_ver = maj_ver >> 8;
@@ -2903,7 +2903,7 @@ static int wireless_fw_update(bool force)
 
 free_bug:
 	cps_wls_set_boost(0);//disable power, after FW updating, need a power reset
-	cps_wls_vbus_enable(false);
+	//cps_wls_vbus_enable(false);
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	release_firmware(fw);
@@ -2982,7 +2982,10 @@ static ssize_t wireless_fw_force_update_store(struct device *dev, struct device_
 	if (kstrtobool(buf, &val) || !val)
 		return -EINVAL;
 
+	cps_wls_vbus_enable(true);
+	msleep(300);
 	rc = wireless_fw_update(true);
+	cps_wls_vbus_enable(false);
 	if (rc < 0)
 		return rc;
 
