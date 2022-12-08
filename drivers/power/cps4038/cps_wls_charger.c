@@ -2443,6 +2443,7 @@ void cps_wls_vbus_enable(bool en)
 	int ret = 0;
 	struct charger_manager *info = NULL;
 	struct charger_device *chg_psy = NULL;
+	static bool otg_status = 0;
 
 	chg_psy = get_charger_by_name("primary_chg");
 	if(chg_psy) {
@@ -2458,8 +2459,8 @@ void cps_wls_vbus_enable(bool en)
 		return ;
 	}
 
-	if(usb_online() == true) {
-		cps_wls_log(CPS_LOG_ERR,"%s usb online\n",__func__);
+	if((usb_online() == true || otg_status == en) && otg_status != true) {
+		cps_wls_log(CPS_LOG_ERR,"%s usb online or otg status same, no need switch\n",__func__);
 		return;
 	}
 
@@ -2467,6 +2468,7 @@ void cps_wls_vbus_enable(bool en)
 	if(ret < 0){
 		cps_wls_log(CPS_LOG_ERR,"%s enable otg fail\n",__func__);
 	}
+	otg_status = en;
        mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, en);
 
 	return ;
@@ -2913,6 +2915,7 @@ free_bug:
 update_fail:
 	CPS_TX_MODE = false;
 	chip->fw_uploading = false;
+	cps_wls_set_boost(0);
     cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
     return ret;
 }
