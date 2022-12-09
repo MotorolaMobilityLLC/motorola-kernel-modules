@@ -1279,8 +1279,8 @@ static int mmi_fg_probe(struct i2c_client *client,
 	mmi->batt_fcc	= -ENODATA;
 	mmi->batt_rm	= -ENODATA;
 	mmi->batt_dc	= -ENODATA;
-	mmi->batt_volt	= -ENODATA;
-	mmi->batt_temp	= -ENODATA;
+	mmi->batt_volt	=4200;
+	mmi->batt_temp	= 250;
 	mmi->batt_curr	= -ENODATA;
 	mmi->batt_cyclecnt = -ENODATA;
 
