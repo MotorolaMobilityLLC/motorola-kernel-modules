@@ -2597,16 +2597,26 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		 * event, and will cause miss to set TP into charger state.
 		 * So check PS state in probe.
 		 */
+#ifdef	NOVA_CHARGER_FLAG_BATTERY
+		psy = power_supply_get_by_name("battery");
+#else
 		psy = power_supply_get_by_name("usb");
+#endif
 		if (psy) {
 			if (ts->usb_psp_online) {
 				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
 				if (ret < 0)
 					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
 			} else {
+#ifdef NOVA_CHARGER_FLAG_BATTERY
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &prop);
+				if (ret < 0)
+					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_STATUS rc=%d\n", ret);
+#else
 				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
 				if (ret < 0)
 					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
+#endif
 			}
 			if (ret < 0) {
 				//release charger_detection instead of goto err_register_charger_notify_failed
@@ -3536,29 +3546,48 @@ static int charger_notifier_callback(struct notifier_block *nb,
 	struct usb_charger_detection *charger_detection =
 			container_of(nb, struct usb_charger_detection, charger_notif);
 	union power_supply_propval prop;
-
+#ifdef NOVA_CHARGER_FLAG_BATTERY
+	psy= power_supply_get_by_name("battery");
+	if (!psy){
+		NVT_ERR("Couldn't get batterypsy\n");
+		return -EINVAL;
+	}
+#else
 	psy= power_supply_get_by_name("usb");
 	if (!psy){
-		return -EINVAL;
 		NVT_ERR("Couldn't get usbpsy\n");
+		return -EINVAL;
 	}
+#endif
 
-	if (!strcmp(psy->desc->name, "usb")){
+	if ((!strcmp(psy->desc->name, "usb")) ||
+		(!strcmp(psy->desc->name, "battery"))) {
 		if (psy && charger_detection && val == POWER_SUPPLY_PROP_STATUS) {
 			if (ts->usb_psp_online) {
 				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
 				if (ret < 0)
 					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
 			} else {
+#ifdef NOVA_CHARGER_FLAG_BATTERY
+				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &prop);
+				if (ret < 0)
+					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_STATUS rc=%d\n", ret);
+#else
 				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
 				if (ret < 0)
 					NVT_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
+#endif
 			}
 
 			if (ret < 0) {
 				return ret;
 			}else{
+#ifdef NOVA_CHARGER_FLAG_BATTERY
+				if((prop.intval == USB_DETECT_IN) || (prop.intval == USB_DETECT_OUT))
+					usb_detect_flag = prop.intval;
+#else
 				usb_detect_flag = prop.intval;
+#endif
 				if(usb_detect_flag != charger_detection->usb_connected) {
 					 if (USB_DETECT_IN == usb_detect_flag) {
 						  charger_detection->usb_connected = USB_DETECT_IN;
