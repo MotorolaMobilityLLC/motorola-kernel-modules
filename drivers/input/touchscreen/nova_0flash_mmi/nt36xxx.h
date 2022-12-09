@@ -155,8 +155,14 @@ struct nvt_sensor_platform_data {
 #endif
 
 /* charger detect */
+#ifdef NOVA_CHARGER_FLAG_BATTERY
+#define USB_DETECT_IN 1
+#define USB_DETECT_OUT 2
+#else
 #define USB_DETECT_IN 1
 #define USB_DETECT_OUT 0
+#endif
+
 #define CMD_CHARGER_ON (0x53)
 #define CMD_CHARGER_OFF (0x51)
 
