@@ -214,6 +214,7 @@ static int __fg_write_byte(struct i2c_client *client, u8 reg, u8 val)
 
 	return 0;
 }
+#endif
 
 static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
 {
@@ -228,7 +229,6 @@ static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
 
 	return 0;
 }
-#endif
 
 static int __fg_read_word(struct i2c_client *client, u8 reg, u16 *val)
 {
@@ -351,7 +351,7 @@ static int fg_read_word(struct mmi_fg_chip *mmi, u8 reg, u16 *val)
 
 	return ret;
 }
-/*
+
 static int fg_write_word(struct mmi_fg_chip *mmi, u8 reg, u16 val)
 {
 	int ret;
@@ -365,7 +365,6 @@ static int fg_write_word(struct mmi_fg_chip *mmi, u8 reg, u16 val)
 
 	return ret;
 }
-*/
 
 static int fg_read_block(struct mmi_fg_chip *mmi, u8 reg, u8 *buf, u8 len)
 {
@@ -978,29 +977,51 @@ static int fg_get_property(struct power_supply *psy,
 }
 static void fg_dump_registers(struct mmi_fg_chip *mmi);
 
+static int battery_chargeType_to_FG(struct mmi_fg_chip *mmi, int ffc_enable)
+{
+	int ret;
+	u16 cmd;
+
+	if( ffc_enable == 1) {
+		cmd = 0x003E;
+	} else {
+		cmd = 0x003F;
+	}
+
+	ret = fg_write_word(mmi, mmi->regs[BQ_FG_REG_ALT_MAC], cmd);
+	if (ret < 0) {
+		mmi_err("fail to write chargeType to fg, ret=%d\n", ret);
+		return ret;
+	}
+
+	return ret;
+}
 static int fg_set_property(struct power_supply *psy,
 			       enum power_supply_property prop,
 			       const union power_supply_propval *val)
 {
-	struct mmi_fg_chip *mmi = power_supply_get_drvdata(psy);
+	struct mmi_fg_chip *mmi_fg = power_supply_get_drvdata(psy);
 
-	mutex_lock(&mmi->update_lock);
+	mutex_lock(&mmi_fg->update_lock);
 
-	fg_dump_registers(mmi);
+	fg_dump_registers(mmi_fg);
 	switch (prop) {
 	case POWER_SUPPLY_PROP_TEMP:
-		mmi->fake_temp = val->intval;
+		mmi_fg->fake_temp = val->intval;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		mmi->fake_soc = val->intval;
-		power_supply_changed(mmi->fg_psy);
+		mmi_fg->fake_soc = val->intval;
+		power_supply_changed(mmi_fg->fg_psy);
+		break;
+	case POWER_SUPPLY_PROP_TYPE:
+		battery_chargeType_to_FG(mmi_fg, val->intval);
 		break;
 	default:
-		mutex_unlock(&mmi->update_lock);
+		mutex_unlock(&mmi_fg->update_lock);
 		return -EINVAL;
 	}
 
-	mutex_unlock(&mmi->update_lock);
+	mutex_unlock(&mmi_fg->update_lock);
 
 	return 0;
 }
