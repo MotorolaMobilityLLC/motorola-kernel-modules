@@ -120,6 +120,8 @@ exit:
 
 void fpsensor_gpio_output_dts(int gpio, int level)
 {
+    if (g_fpsensor->pinctrl == NULL)
+	return;
     mutex_lock(&spidev_set_gpio_mutex);
     fpsensor_debug(DEBUG_LOG, "[fpsensor]fpsensor_gpio_output_dts: gpio= %d, level = %d\n", gpio, level);
     if (gpio == FPSENSOR_RST_PIN) {
@@ -273,10 +275,15 @@ int fpsensor_spidev_dts_uninit(fpsensor_data_t *fpsensor)
     fpsensor_debug(ERR_LOG,"fpsensor_spidev_dts_uinit Enter.\n");
 #if FPSENSOR_PMIC_LDO
     if (fpsensor->fp_regulator != NULL) {
-        regulator_disable(fpsensor->fp_regulator);
+        regulator_force_disable(fpsensor->fp_regulator);
         regulator_put(fpsensor->fp_regulator);
         fpsensor->fp_regulator = NULL;
     }
+#endif
+
+#if FPSENSOR_USE_POWER_GPIO
+       fpsensor_gpio_output_dts(FPSENSOR_POWER_PIN, 0);
+       fpsensor_debug(INFO_LOG, "%s: gpio FPSENSOR_POWER_PIN ======\n", __func__);
 #endif
 
     if(NULL != fpsensor->pinctrl) {
@@ -520,10 +527,38 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         fpsensor_spi_clk_enable(0);
         break;
     case FPSENSOR_IOC_ENABLE_POWER:
+        #if FPSENSOR_PMIC_LDO
+        if (fpsensor_dev->fp_regulator != NULL) {
+            if(regulator_is_enabled(fpsensor_dev->fp_regulator) > 0)
+            {
+                fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_ENABLE_POWER skipping====regulator_is_enabled==\n", __func__);
+                break;
+            }
+            regulator_enable(fpsensor_dev->fp_regulator);
+        }
+        #endif
+		
+#if FPSENSOR_USE_POWER_GPIO
+        fpsensor_gpio_output_dts(FPSENSOR_POWER_PIN, 1);
+        fpsensor_debug(INFO_LOG, "%s: gpio FPSENSOR_IOC_ENABLE_POWER ======\n", __func__);
+#else
         fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_ENABLE_POWER ======\n", __func__);
+#endif
         break;
     case FPSENSOR_IOC_DISABLE_POWER:
-        fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
+        #if FPSENSOR_PMIC_LDO
+        if (fpsensor_dev->fp_regulator != NULL && regulator_is_enabled(fpsensor_dev->fp_regulator) > 0) {
+            regulator_force_disable(fpsensor_dev->fp_regulator);
+            fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
+        }
+        #endif
+		
+#if FPSENSOR_USE_POWER_GPIO
+        fpsensor_gpio_output_dts(FPSENSOR_POWER_PIN, 0);
+	fpsensor_debug(INFO_LOG, "%s: gpio FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
+#else
+	fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
+#endif
         break;
     case FPSENSOR_IOC_REMOVE:
         if(fpsensor_dev->device_available) {
@@ -651,6 +686,11 @@ static int fpsensor_release(struct inode *inode, struct file *filp)
         fpsensor_dev->irq = 0;
         fpsensor_dev->irq_enabled = 0;
     }
+
+#if FPSENSOR_USE_POWER_GPIO
+    fpsensor_gpio_output_dts(FPSENSOR_POWER_PIN, 0);
+    fpsensor_debug(INFO_LOG, "%s: gpio FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
+#endif
 
     fpsensor_dev->device_available = 0;
     FUNC_EXIT();
