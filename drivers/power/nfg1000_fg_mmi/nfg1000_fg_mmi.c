@@ -592,6 +592,7 @@ static int fg_read_temperature(struct mmi_fg_chip *mmi)
 	int batt_ntc_v = 0;
 	int bif_v = 0;
 	int tres_temp,delta_v, batt_temp;
+	u16 fgTemp;
 
 	iio_read_channel_processed(mmi->Batt_NTC_channel, &batt_ntc_v);
 	iio_read_channel_processed(mmi->vref_channel, &bif_v);
@@ -602,18 +603,19 @@ static int fg_read_temperature(struct mmi_fg_chip *mmi)
 
 	batt_temp = adc_battemp(mmi, tres_temp);
 	batt_temp *= 10;
-	mmi_info("batt_temp = %d \n",batt_temp);
-/*
-	int ret;
-	u16 temp = 0;
-	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_TEMP], &temp);
-	if (ret < 0) {
-		mmi_err("could not read temperature, ret = %d\n", ret);
-		return ret;
+	mmi_info("read batt temperature from PMIC,temp = %d \n",batt_temp);
+
+	if (batt_temp >= 700) {
+		if (fg_read_word(mmi, mmi->regs[BQ_FG_REG_TEMP], &fgTemp) <0 ) {
+			mmi_err("could not read temperature from FG\n");
+		}
+		else {
+			fgTemp -= 2730;
+			mmi_info("read batt temperature from FG, temp= %d",  fgTemp);
+			batt_temp = fgTemp;
+		}
 	}
-	temp -= 2730;
-	mmi_info("temperature = %d",  temp);
-*/
+
 	return batt_temp;
 
 }
