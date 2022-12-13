@@ -43,6 +43,12 @@ endif
 ifeq ($(GTP_ENABLE_DDA_STYLUS),true)
 	KERNEL_CFLAGS += CONFIG_GTP_DDA_STYLUS=y
 endif
+
+
+ifeq ($(BOARD_USES_DOUBLE_TAP_CTRL),true)
+	KERNEL_CFLAGS += CONFIG_BOARD_USES_DOUBLE_TAP_CTRL=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_brl_mmi.ko
 LOCAL_MODULE_TAGS := optional
