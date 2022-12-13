@@ -1148,6 +1148,11 @@ static int goodix_parse_dt(struct device_node *node,
 	if (board_data->interpolation_ctrl)
 		ts_info("support goodix interpolation mode");
 
+	board_data->sample_ctrl = of_property_read_bool(node,
+					"goodix,sample-ctrl");
+	if (board_data->sample_ctrl)
+		ts_info("support goodix sample mode");
+
 	board_data->report_rate_ctrl = of_property_read_bool(node,
 					"goodix,report_rate-ctrl");
 	if (board_data->report_rate_ctrl)
@@ -1193,6 +1198,11 @@ static void goodix_ts_report_pen(struct input_dev *dev,
 		input_report_key(dev, BTN_TOUCH, 0);
 		input_report_key(dev, pen_data->coords.tool_type, 0);
 	}
+
+#ifdef CONFIG_GTP_DDA_STYLUS
+	goodix_dda_process_pen_report(pen_data);
+#endif
+
 	/* report pen button */
 	for (i = 0; i < GOODIX_MAX_PEN_KEY; i++) {
 		if (pen_data->keys[i].status == TS_TOUCH)
@@ -1204,18 +1214,23 @@ static void goodix_ts_report_pen(struct input_dev *dev,
 	input_sync(dev);
 	mutex_unlock(&dev->mutex);
 }
-
+#ifdef CONFIG_GTP_FOD
+#define GOODIX_GESTURE_FOD_DOWN			0x46
+#define GOODIX_GESTURE_FOD_UP				0x55
+#endif
 static void goodix_ts_report_finger(struct input_dev *dev,
 		struct goodix_touch_data *touch_data)
 {
 	unsigned int touch_num = touch_data->touch_num;
 	int i;
 	static uint8_t touchdown[GOODIX_MAX_TOUCH];
-#if defined (CONFIG_GTP_LAST_TIME)
+#if defined (CONFIG_GTP_FOD) || defined (CONFIG_GTP_LAST_TIME)
 	struct goodix_ts_core *core_data = goodix_modules.core_data;
 #endif
+#ifdef CONFIG_GTP_FOD
+	struct goodix_ts_event *ts_event = &goodix_modules.core_data->ts_event;
+#endif
 	mutex_lock(&dev->mutex);
-
 	for (i = 0; i < GOODIX_MAX_TOUCH; i++) {
 		if (touch_data->coords[i].status == TS_TOUCH) {
 			ts_debug("report: id %d, x %d, y %d, w %d", i,
@@ -1248,6 +1263,25 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 
 	input_report_key(dev, BTN_TOUCH, touch_num > 0 ? 1 : 0);
 	input_sync(dev);
+#ifdef CONFIG_GTP_FOD
+		if(core_data->fod_enable) {
+			if(ts_event->gesture_type == GOODIX_GESTURE_FOD_DOWN && touch_num > 0) {
+				input_report_key(dev, BTN_TRIGGER_HAPPY1, 1);
+				input_sync(dev);
+				input_report_key(dev, BTN_TRIGGER_HAPPY1, 0);
+				input_sync(dev);
+				ts_info("report BTN_TRIGGER_HAPPY1");
+			}else if(ts_event->gesture_type == GOODIX_GESTURE_FOD_UP) {
+				input_report_key(dev, BTN_TRIGGER_HAPPY2, 1);
+				input_sync(dev);
+				input_report_key(dev, BTN_TRIGGER_HAPPY2, 0);
+				input_sync(dev);
+				ts_info("report BTN_TRIGGER_HAPPY2");
+			}
+		}
+		ts_debug("fod_enable= %d, gesture_type =%x, touch_num= %d", core_data->fod_enable,
+			ts_event->gesture_type, touch_num);
+#endif
 
 	mutex_unlock(&dev->mutex);
 }
@@ -1273,10 +1307,6 @@ static int goodix_ts_request_handle(struct goodix_ts_core *cd,
 			  ts_event->request_code);
 	return ret;
 }
-#ifdef CONFIG_GTP_FOD
-#define GOODIX_GESTURE_FOD_DOWN			0x46
-#define GOODIX_GESTURE_FOD_UP			0x55
-#endif
 /**
  * goodix_ts_threadirq_func - Bottom half of interrupt
  * This functions is excuted in thread context,
@@ -1321,19 +1351,6 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 			/* report touch */
 			goodix_ts_report_finger(core_data->input_dev,
 					&ts_event->touch_data);
-#ifdef CONFIG_GTP_FOD
-		if(ts_event->gesture_type == GOODIX_GESTURE_FOD_DOWN) {
-			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY1, 1);
-			input_sync(core_data->input_dev);
-			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY1, 0);
-			input_sync(core_data->input_dev);
-		} else if(ts_event->gesture_type == GOODIX_GESTURE_FOD_UP) {
-			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY2, 1);
-			input_sync(core_data->input_dev);
-			input_report_key(core_data->input_dev, BTN_TRIGGER_HAPPY2, 0);
-			input_sync(core_data->input_dev);
-		}
-#endif
 		}
 		if (core_data->board_data.pen_enable &&
 				ts_event->event_type == EVENT_PEN) {
