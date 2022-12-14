@@ -95,8 +95,8 @@ else ifneq ($(filter li, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_LI
 else ifneq ($(filter eqs, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_EQS
-else ifneq ($(filter tundra%, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_TUNDRA
+else ifneq ($(filter lyriq%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_LYRIQ
 else ifneq ($(filter miami%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_MIAMI
 else ifneq ($(filter rtwo%, $(USE_TARGET_PRODUCT)), )
