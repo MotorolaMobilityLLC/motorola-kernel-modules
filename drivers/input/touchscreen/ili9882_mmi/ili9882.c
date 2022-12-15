@@ -24,9 +24,6 @@
 #ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
 #include "moto_ts_dda.h"
 #endif
-#ifdef ILITEK_PEN_NOTIFIER
-int ilitek_pen_detect_set(u8 pen_detect);
-#endif
 
 /* Debug level */
 bool debug_en = DEBUG_OUTPUT;
@@ -570,40 +567,6 @@ int ili_sleep_handler(int mode)
 	return ret;
 }
 
-#ifdef ILITEK_PEN_NOTIFIER
-#define ENABLE_PASSIVE_PEN_MODE_CMD 0x01
-#define DISABLE_PASSIVE_PEN_MODE_CMD 0x00
-int ilitek_pen_detect_set(u8 pen_detect) {
-        int ret = 0;
-
-        ILI_DBG("enter\n");
-        if (PEN_DETECTION_PULL == pen_detect)
-                ret = ili_ic_func_ctrl("passive_pen", ENABLE_PASSIVE_PEN_MODE_CMD);
-        else
-                ret = ili_ic_func_ctrl("passive_pen", DISABLE_PASSIVE_PEN_MODE_CMD);
-
-        return ret;
-}
-
-static int pen_notifier_callback(struct notifier_block *self,
-                                unsigned long event, void *data)
-{
-        ILI_INFO("Received event(%lu) for pen detection\n", event);
-
-        mutex_lock(&ilits->touch_mutex);
-        if (event == PEN_DETECTION_PULL)
-                ilits->pen_detect_flag = PEN_DETECTION_PULL;
-        else
-                ilits->pen_detect_flag = PEN_DETECTION_INSERT;
-
-        ILI_DBG("invoke ilitek_pen_detect_set start");
-        ilitek_pen_detect_set(ilits->pen_detect_flag);
-        mutex_unlock(&ilits->touch_mutex);
-
-        return 0;
-}
-#endif
-
 int ili_fw_upgrade_handler(void *data)
 {
 	int ret = 0;
@@ -644,9 +607,7 @@ int ili_fw_upgrade_handler(void *data)
 		ili_wq_ctrl(WQ_ESD, ENABLE);
 		ili_wq_ctrl(WQ_BAT, ENABLE);
 #ifdef ILITEK_PEN_NOTIFIER
-		ilits->pen_detect_flag = PEN_DETECTION_INSERT;
-		ilits->pen_notif.notifier_call = pen_notifier_callback;
-		pen_detection_register_client(&ilits->pen_notif);
+		first_fw_ready = 1;
 #endif
 	}
 
