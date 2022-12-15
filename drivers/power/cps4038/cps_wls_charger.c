@@ -2045,11 +2045,6 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		CPS_RX_MODE_ERR = false;
 		CPS_RX_CHRG_FULL = false;
 		chip->cable_ready_wait_count = 0;
-		cps_rx_online_check(chip);
-        /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
-        /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
-        if(chip->bootmode == 8 || chip->bootmode == 9)
-            cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
     }
     if(int_flag & RX_INT_LDO_OFF)
@@ -2058,6 +2053,12 @@ static int cps_wls_rx_irq_handler(int int_flag)
     }
 	if (int_flag & RX_INT_LDO_ON)
 	{
+		cps_rx_online_check(chip);
+        /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
+        /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
+        if(chip->bootmode == 8 || chip->bootmode == 9)
+            cps_rx_online_check(chip);
+
 		chip->rx_ldo_on = true;
 		if (chip->wlc_status == WLC_DISCONNECTED)
 		{
@@ -2074,6 +2075,11 @@ static int cps_wls_rx_irq_handler(int int_flag)
             //data[0] = 0x38;
            // cps_wls_send_handshake_packet(data,4);
 		chip->rx_int_ready = true;
+		cps_rx_online_check(chip);
+        /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
+        /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
+        if(chip->bootmode == 8 || chip->bootmode == 9)
+            cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_READY");
      }
      if(int_flag & RX_INT_FSK_ACK){
@@ -2307,6 +2313,7 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 }
 
 #define WLS_ICL_INCREASE_STEP 100000
+int g_bpp_wlc_icl = 0;
 static void cps_bpp_mode_icl_work(struct work_struct *work)
 {
 	struct cps_wls_chrg_chip *chg = chip;
@@ -2314,7 +2321,8 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 
 	wls_icl = 100000;
 	chg->bpp_icl_done = false;
-	while((wls_icl + WLS_ICL_INCREASE_STEP) <= 1000000) {
+	g_bpp_wlc_icl = 0 ;
+	while((wls_icl + WLS_ICL_INCREASE_STEP) <= 900000) {
 		if(!chg->wls_online)
 			break;
 		wls_icl += WLS_ICL_INCREASE_STEP;
@@ -2326,6 +2334,7 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 			cps_init_charge_hardware();
 			charger_dev_set_input_current(chip->chg1_dev, wls_icl);
 		}
+		g_bpp_wlc_icl = wls_icl;
 		cps_wls_log(CPS_LOG_DEBG, "cps wireless charging icl %d ua\n", wls_icl);
 	}
 	chg->bpp_icl_done = true;
@@ -3451,13 +3460,13 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
         if (!chg->bpp_icl_done){
            chg->MaxV = 5000;
            chg->MaxI = 1000;
-           *icl = 100000;
+           *icl = g_bpp_wlc_icl;//100000;
            *vbus = 5000;
            return;
         }
         chg->MaxV = 5000;
         chg->MaxI = 1000;
-        *icl = 1000000;
+        *icl = 900000;
         *vbus = 5000;
     }
     else if (chg->mode_type == Sys_Op_Mode_EPP)
@@ -3700,7 +3709,8 @@ static int cps_wls_rx_power_on(void)
 		return true;
 	} else {
 
-		if (rx_power_cnt > 1) {
+//		if (rx_power_cnt > 1) {
+		if ( 1) {
 			cps_wls_log(CPS_LOG_DEBG, "Rx power off");
 			rx_power_cnt = 0;
 			return false;
