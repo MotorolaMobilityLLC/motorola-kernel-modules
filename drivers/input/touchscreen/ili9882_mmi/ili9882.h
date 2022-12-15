@@ -1142,6 +1142,7 @@ extern void ili_ic_init(void);
 extern void ili_fw_uart_ctrl(u8 ctrl);
 #ifdef ILITEK_PEN_NOTIFIER
 extern int ilitek_pen_detect_set(u8 pen_detect);
+extern int first_fw_ready;
 #endif
 
 /* Prototypes for tddi events */
