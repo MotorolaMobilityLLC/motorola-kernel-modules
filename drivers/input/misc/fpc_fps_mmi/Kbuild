@@ -2,6 +2,11 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
+ifeq ($(FPC_TEE_BOOST), y)
+	EXTRA_CFLAGS += -I$(TOP)/kernel-4.19/drivers/tee/gud/500/MobiCoreDriver/public
+	EXTRA_CFLAGS += -DFPC_TEE_BOOST
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE)),)
 	EXTRA_CFLAGS += -DCONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 endif
