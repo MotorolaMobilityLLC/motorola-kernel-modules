@@ -45,6 +45,10 @@
 #include <linux/clk.h>
 #include <linux/version.h>
 
+#ifdef FPC_TEE_BOOST
+#include <mc_linux_api.h>
+#endif
+
 #define FPC_RESET_LOW_US 5000
 #define FPC_RESET_HIGH1_US 100
 #define FPC_RESET_HIGH2_US 5000
@@ -88,6 +92,9 @@ static DEFINE_MUTEX(spidev_set_gpio_mutex);
 
 extern void mt_spi_disable_master_clk(struct spi_device *spidev);
 extern void mt_spi_enable_master_clk(struct spi_device *spidev);
+#ifdef FPC_TEE_BOOST
+extern void set_tee_worker_threads_on_big_core(bool big_core);
+#endif
 
 static irqreturn_t fpc_irq_handler(int irq, void *handle);
 
@@ -258,6 +265,31 @@ static ssize_t active_get(struct device *device,
 	return scnprintf(buffer, PAGE_SIZE, "%i\n", result);
 }
 static DEVICE_ATTR(active, S_IRUSR, active_get, NULL);
+
+static ssize_t tee_boost_enable(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t count)
+{
+        struct  fpc_data *fpc = dev_get_drvdata(dev);
+	dev_info(dev," %s: %s\n", __func__, (buf == NULL) ? "":buf);
+        ssize_t ret = count;
+
+        if (!strncmp(buf, "enable", strlen("enable"))) {
+#ifdef FPC_TEE_BOOST
+		set_tee_worker_threads_on_big_core(true);
+#endif
+		dev_info(dev," %s enable\n", __func__);
+        } else if (!strncmp(buf, "disable", strlen("disable"))) {
+#ifdef FPC_TEE_BOOST
+		set_tee_worker_threads_on_big_core(false);
+#endif
+		dev_info(dev," %s disable\n", __func__);
+        } else {
+                ret = -EINVAL;
+        }
+        return ret;
+}
+static DEVICE_ATTR(boost_enable, S_IWUSR, NULL, tee_boost_enable);
+
 
 static int fpc_dts_request(struct fpc_data *fpc)
 {
@@ -535,6 +567,7 @@ static struct attribute *fpc_attributes[] = {
 	&dev_attr_irq.attr,
 	&dev_attr_active.attr,
 	&dev_attr_hw_enable.attr,
+	&dev_attr_boost_enable.attr,
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	&dev_attr_vendor.attr,
 	&dev_attr_modalias.attr,
