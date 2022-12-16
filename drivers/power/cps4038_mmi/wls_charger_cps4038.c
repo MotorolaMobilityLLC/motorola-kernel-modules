@@ -2297,7 +2297,7 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
        // cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
         cps_wls_set_int_enable();
         chip->chip_state = true;
-        cps_wls_set_status(WLC_DISCONNECTED);
+        //cps_wls_set_status(WLC_DISCONNECTED);
      //   cps_wls_log(CPS_LOG_DEBG, "[%s] CPS_I2C_UNLOCK", __func__);
    // }
     
