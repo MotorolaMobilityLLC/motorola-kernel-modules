@@ -1781,6 +1781,38 @@ static int cps_wls_send_fsk_packet(uint8_t *data, uint8_t data_len)
     return cps_wls_set_cmd(cmd);
 }
 
+static int cps_wls_send_ask_packet(uint8_t *data, uint8_t data_len)
+{
+    int status = CPS_WLS_SUCCESS;
+    uint32_t cmd = 0, i = 0;
+    cps_reg_s *cps_reg;
+    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_PPP_HEADER]);
+
+
+    for(i = 0; i < data_len; i++)
+    {
+        status = cps_wls_write_reg((int)(cps_reg->reg_addr + i), *(data + i), 1);
+        if (CPS_WLS_SUCCESS != status)
+        {
+            cps_wls_log(CPS_LOG_ERR, " cps wls write failed, addr 0x%02x, data 0x%02x", cps_reg->reg_addr + i, *(data + i));
+            return status;
+        }
+    }
+
+	cmd = cps_wls_get_cmd();
+
+	cps_wls_log(CPS_LOG_ERR, " cps_wls_get_cmd %x\n",cmd);
+
+	cmd |= RX_CMD_SEND_ASK;
+	status = cps_wls_set_cmd(cmd);
+	if(CPS_WLS_SUCCESS != status)
+	{
+		cps_wls_log(CPS_LOG_ERR, " cps TX_CMD_SEND_FSK failed");
+	}
+
+	return status;
+}
+
 
 
 
@@ -3488,7 +3520,8 @@ static int cps_wls_wlc_update_light_fan(void)
 	}
 	do
 	{
-		status = cps_wls_send_fsk_packet(data, 4);
+		//status = cps_wls_send_fsk_packet(data, 4);
+		status = cps_wls_send_ask_packet(data, 4);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI set fan/light, WLS_WLC_FAN_SPEED %d, CPS_RX_CHRG_FULL %d, WLS_WLC_LIGHT %d",
 					chip->fan_speed, CPS_RX_CHRG_FULL, chip->light_level);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI set fan/light, ight 0x%x, fan 0x%x", data[2], data[3]);
@@ -3505,7 +3538,8 @@ static void  cps_wls_notify_tx_chrgfull(void)
     int retry = 5;
 
     do {
-        status = cps_wls_send_fsk_packet(data, 2);
+        //status = cps_wls_send_fsk_packet(data, 2);
+        status = cps_wls_send_ask_packet(data, 2);
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI notify TX battery full , head 0x%x, cmd 0x%x, status %d\n", 0x5, 0x64,status);
         msleep(200);
         retry--;
