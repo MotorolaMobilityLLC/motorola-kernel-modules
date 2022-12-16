@@ -69,14 +69,15 @@
 #define RX_INT_SCP              (0x01<<15)
 #define RX_INT_SR_SW_R         (0x01<<16)
 #define RX_INT_SR_SW_F     (0x01<<17)
-#define RX_INT_INHIBIT_HIGH     (0x01<<18)
-#define RX_INT_HS_OK            (0x01<<19)
-#define RX_INT_HS_FAIL          (0x01<<21)
-#define RX_INT_NEGO_READY       (0x01<<23)
-
+#define RX_INT_FC_OK     (0x01<<18)
+#define RX_INT_HS_OK     (0x01<<19)
+#define RX_INT_HTP     (0x01<<20)
+#define RX_INT_HS_FAIL     (0x01<<21)
+#define RX_INT_FC_FAIL     (0x01<<22)
+#define RX_INT_NEGO_POWER_READY     (0x01<<23)
 /*rx命令定义*/
-#define RX_CMD_SEND_DATA         (0x01<<0)
-#define RX_CMD_FAST_CHARGING         (0x01<<1)
+#define RX_CMD_SEND_ASK         (0x01<<0)
+#define RX_CMD_RESERVE2         (0x01<<1)
 #define RX_CMD_SEND_EPT         (0x01<<2)
 #define RX_CMD_RESET_SYS        (0x01<<3)
 
@@ -126,9 +127,8 @@
 #define EPT_POVP              (0x01<<1)
 #define EPT_WRONG_PACKET        (0x01<<0)
 
-
 //#define AP_SYS_CONTROL_BASE_ADDR   0x20001D40
-//#define AP_TX_CONFIG_BASE_ADDR     0x20001E00    
+//#define AP_TX_CONFIG_BASE_ADDR     0x20001E00
 //#define AP_TX_CONTROL_BASE_ADDR    0x20001E40
 //#define AP_TX_REPORT_BASE_ADDR     0x20001E80
 //#define AP_RX_CONFIG_BASE_ADDR     0x20001F00
@@ -264,21 +264,21 @@ struct cps_wls_chrg_chip {
     int cable_ready_wait_count;
     bool moto_stand;
 };
-        
+
 typedef enum ept_reason
 {
     EPT_UNKONWN = 0,
     EPT_CC,
-    EPT_IF,       
-    EPT_OT,   
-    EPT_OV,       
-    EPT_OC,       
-    EPT_BF,       
-    EPT_RES1,   
-    EPT_NP,     
-    EPT_RES2,  
-    EPT_NF,     
-    EPT_RS,     
+    EPT_IF,
+    EPT_OT,
+    EPT_OV,
+    EPT_OC,
+    EPT_BF,
+    EPT_RES1,
+    EPT_NP,
+    EPT_RES2,
+    EPT_NF,
+    EPT_RS,
 }ept_reason_e;
 
 static void wls_rx_start_timer(struct cps_wls_chrg_chip *info);
