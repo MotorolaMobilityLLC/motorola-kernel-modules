@@ -94,9 +94,11 @@ typedef enum
     CPS_RX_REG_NEGO_POWER,
     CPS_RX_REG_NEGO_PRO,
     CPS_RX_REG_ADC_VRECT,
-    CPS_RX_REG_ADC_IOUT,
+    CPS_RX_REG_ADC_IRECT,
     CPS_RX_REG_ADC_VOUT,
     CPS_RX_REG_ADC_DIE_TMP,
+    CPS_RX_REG_RP_VRECT_AVG,
+    CPS_RX_REG_RP_IRECT_AVG,
     CPS_RX_REG_PPP_HEADER,     
     CPS_RX_REG_PPP_COMMAND,   
     CPS_RX_REG_PPP_DATA0,       
@@ -265,25 +267,27 @@ cps_reg_s cps_comm_reg[CPS_COMM_REG_MAX] = {
 
 cps_reg_s cps_rx_reg[CPS_RX_REG_MAX] = {
     /* reg name            bytes number      reg address          */
-    {CPS_RX_REG_EPT_VAL,         2,              0x0196},
+    {CPS_RX_REG_EPT_VAL,         2,              0x019A},
     {CPS_RX_REG_POWER_SET,       1,              0x0104},
     {CPS_RX_REG_VOUT_SET,        2,              0x00C0},
-    {CPS_RX_REG_OCP_TH,          2,              0x00DC},
-    {CPS_RX_REG_OVP_TH,          1,              0x00E6},
-    {CPS_RX_REG_DROP_MIN,        2,              0x00C8},
-    {CPS_RX_REG_DROP_MAX,        2,              0x00CA},
-    {CPS_RX_REG_DROP_MIN_CUR,    2,              0x00CC},
-    {CPS_RX_REG_DROP_MAX_CUR,    2,              0x00CE},
-    {CPS_RX_REG_SS_VAL,          2,              0x0190},
-    {CPS_RX_REG_CE_VAL,          2,              0x0192},
-    {CPS_RX_REG_RP_VAL,          2,              0x0194},
-    {CPS_RX_REG_FOP_VAL,         2,              0x018},
+    {CPS_RX_REG_OCP_TH,          2,              0x00E2},
+    {CPS_RX_REG_OVP_TH,          1,              0x00F0},
+    {CPS_RX_REG_DROP_MIN,        2,              0x00CC},
+    {CPS_RX_REG_DROP_MAX,        2,              0x00CE},
+    {CPS_RX_REG_DROP_MIN_CUR,    2,              0x00D0},
+    {CPS_RX_REG_DROP_MAX_CUR,    2,              0x00D2},
+    {CPS_RX_REG_SS_VAL,          2,              0x0194},
+    {CPS_RX_REG_CE_VAL,          2,              0x0196},
+    {CPS_RX_REG_RP_VAL,          2,              0x0198},
+    {CPS_RX_REG_FOP_VAL,         2,              0x018E},
     {CPS_RX_REG_NEGO_POWER,      1,              0x0186},
     {CPS_RX_REG_NEGO_PRO,        1,              0x0187},
     {CPS_RX_REG_ADC_VRECT,       2,              0x0184},
-    {CPS_RX_REG_ADC_IOUT,        2,              0x0188},
+    {CPS_RX_REG_ADC_IRECT,       2,              0x0188},
     {CPS_RX_REG_ADC_VOUT,        2,              0x018A},
     {CPS_RX_REG_ADC_DIE_TMP,     2,              0x018C},
+    {CPS_RX_REG_RP_VRECT_AVG,    2,              0x0190},
+    {CPS_RX_REG_RP_IRECT_AVG,    2,              0x0192},
     {CPS_RX_REG_PPP_HEADER,      1,              0x0080},
     {CPS_RX_REG_PPP_COMMAND,     1,              0x0081},
     {CPS_RX_REG_PPP_DATA0,       1,               0x0082},
@@ -1164,7 +1168,7 @@ update_fail:
 
 static void cps_wls_write_password()
 {
-    cps_wls_log(CPS_LOG_DEBG, "[%s] -------write password\n", __func__);
+//    cps_wls_log(CPS_LOG_DEBG, "[%s] -------write password\n", __func__);
 //no need at cps4038
 //    cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
 //    cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
@@ -1292,7 +1296,7 @@ static int cps_wls_get_rx_vrect(void)
 static int cps_wls_get_rx_irect(void)
 {
     cps_reg_s *cps_reg;
-    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_IOUT]);
+    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_IRECT]);
     return cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
 
@@ -1300,7 +1304,7 @@ static int cps_wls_get_rx_iout(void)
 {
     cps_reg_s *cps_reg;
     cps_wls_write_password();
-    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_IOUT]);
+    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_IRECT]);
     return cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
 
@@ -2120,13 +2124,11 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	}
     if(int_flag & RX_INT_SR_SW_R){}
     if(int_flag & RX_INT_SR_SW_F){}
-	if (int_flag & RX_INT_INHIBIT_HIGH)
+	if(int_flag & RX_INT_HTP){}
+
+	if (int_flag & RX_INT_NEGO_POWER_READY)
 	{
-		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_INHIBIT_HIGH");
-	}
-	if (int_flag & RX_INT_NEGO_READY)
-	{
-		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_NEGO_READY");
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_NEGO_POWER_READY");
 		cps_epp_icl_on();
 	}
 	if ((int_flag & RX_INT_HS_OK) || (int_flag & RX_INT_HS_FAIL))
@@ -3458,6 +3460,7 @@ static void cps_epp_current_select(int  *icl, int *vbus)
             *vbus = 5000;
         }
     }
+    cps_wls_log(CPS_LOG_DEBG, "%s icl=%duA vbus=%dmV wls_power=%d", __func__, *icl, *vbus, wls_power);
 }
 
 static int cps_wls_wlc_update_light_fan(void)
