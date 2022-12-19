@@ -185,6 +185,9 @@ struct mmi_fg_chip {
 
 };
 
+extern int mmi_batt_health_check(void);
+
+
 #if 0
 static int __fg_read_byte(struct i2c_client *client, u8 reg, u8 *val)
 {
@@ -778,18 +781,22 @@ static int fg_get_batt_status(struct mmi_fg_chip *mmi)
 }
 
 
-static int fg_get_batt_capacity_level(struct mmi_fg_chip *mmi)
+static int fg_get_batt_capacity_level(struct mmi_fg_chip *mmi_fg)
 {
+	int uisoc = mmi_fg->batt_soc;
 
-	if (mmi->batt_fc)
+	if (uisoc >= 100)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-	else if (mmi->batt_rca)
+	else if (uisoc >= 80 && uisoc < 100)
+		return POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
+	else if (uisoc >= 20 && uisoc < 80)
+		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	else if (uisoc > 0 && uisoc < 20)
 		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-	else if (mmi->batt_fd)
+	else if (uisoc == 0)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 	else
-		return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-
+		return POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
 }
 
 
@@ -801,8 +808,10 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_TEMP,
-	/*POWER_SUPPLY_PROP_HEALTH,*//*implement it in battery power_supply*/
 	POWER_SUPPLY_PROP_CHARGE_FULL,
+	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CYCLE_COUNT,
+	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 };
 
@@ -960,6 +969,10 @@ static int fg_get_property(struct power_supply *psy,
 			mmi->batt_cyclecnt = ret;
 		val->intval = mmi->batt_cyclecnt;
 		mutex_unlock(&mmi->data_lock);
+		break;
+
+	case POWER_SUPPLY_PROP_HEALTH:
+		val->intval = mmi_batt_health_check();
 		break;
 
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
