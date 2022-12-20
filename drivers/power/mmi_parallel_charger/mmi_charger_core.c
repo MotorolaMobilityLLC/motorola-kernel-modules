@@ -574,6 +574,9 @@ static enum power_supply_property mmi_chrg_mgr_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL,
 	POWER_SUPPLY_PROP_CP_ENABLE,
+#ifdef CONFIG_MOTO_PD_HYPER
+	POWER_SUPPLY_PROP_PD_PPS_SUPPORT,
+#endif
 };
 
 static int mmi_chrg_mgr_get_property(struct power_supply *psy,
@@ -631,6 +634,11 @@ static int mmi_chrg_mgr_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CP_ENABLE:
 		val->intval = !chip->cp_disable;
 		break;
+#ifdef CONFIG_MOTO_PD_HYPER
+	case POWER_SUPPLY_PROP_PD_PPS_SUPPORT:
+		val->intval = chip->pd_pps_support;
+		break;
+#endif
 	default:
 		return -EINVAL;
 
