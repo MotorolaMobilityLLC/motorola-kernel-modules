@@ -266,6 +266,8 @@ static ssize_t active_get(struct device *device,
 }
 static DEVICE_ATTR(active, S_IRUSR, active_get, NULL);
 
+#ifdef FPC_TEE_BOOST
+
 static ssize_t tee_boost_enable(struct device *dev,
         struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -274,14 +276,10 @@ static ssize_t tee_boost_enable(struct device *dev,
         ssize_t ret = count;
 
         if (!strncmp(buf, "enable", strlen("enable"))) {
-#ifdef FPC_TEE_BOOST
 		set_tee_worker_threads_on_big_core(true);
-#endif
 		dev_info(dev," %s enable\n", __func__);
         } else if (!strncmp(buf, "disable", strlen("disable"))) {
-#ifdef FPC_TEE_BOOST
 		set_tee_worker_threads_on_big_core(false);
-#endif
 		dev_info(dev," %s disable\n", __func__);
         } else {
                 ret = -EINVAL;
@@ -290,6 +288,7 @@ static ssize_t tee_boost_enable(struct device *dev,
 }
 static DEVICE_ATTR(boost_enable, S_IWUSR, NULL, tee_boost_enable);
 
+#endif
 
 static int fpc_dts_request(struct fpc_data *fpc)
 {
