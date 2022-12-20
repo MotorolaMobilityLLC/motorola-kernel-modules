@@ -566,7 +566,9 @@ static struct attribute *fpc_attributes[] = {
 	&dev_attr_irq.attr,
 	&dev_attr_active.attr,
 	&dev_attr_hw_enable.attr,
+#ifdef FPC_TEE_BOOST
 	&dev_attr_boost_enable.attr,
+#endif
 #ifdef CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 	&dev_attr_vendor.attr,
 	&dev_attr_modalias.attr,
