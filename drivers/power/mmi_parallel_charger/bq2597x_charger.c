@@ -103,6 +103,8 @@ static int bq2597x_enable_charging(struct mmi_charger_device *chrg, bool en)
 
 	return rc;
 }
+
+#ifdef CONFIG_MOTO_PD_HYPER
 static int bq2597x_enable_adc(struct mmi_charger_device *chrg, bool en)
 {
 	int rc;
@@ -118,6 +120,7 @@ static int bq2597x_enable_adc(struct mmi_charger_device *chrg, bool en)
 				POWER_SUPPLY_PROP_CHARGING_ENABLE_ADC, &prop);
 	return rc;
 }
+#endif
 
 static int bq2597x_is_charging_enabled(struct mmi_charger_device *chrg, bool *en)
 {
@@ -300,5 +303,7 @@ struct mmi_charger_ops bq2597x_charger_ops = {
 	.update_charger_status = bq2597x_update_charger_status,
 	.update_charger_error = bq2597x_update_charger_error_status,
 	.clear_charger_error = bq2597x_clear_charger_error,
+#ifdef CONFIG_MOTO_PD_HYPER
 	.enable_adc = bq2597x_enable_adc,
+#endif
 };
