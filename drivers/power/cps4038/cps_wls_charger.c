@@ -2303,11 +2303,13 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
     if(!chip->wls_online && wls_online) {
         chip->wls_online = true;
         mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, true);
+	cps_wls_log(CPS_LOG_DEBG, " CPS_WLS  cps_rx_online_check: online");
         power_supply_changed(chip->wl_psy);
     }
     if(chip->wls_online && !wls_online){
         chip->wls_online = false;
         mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
+	cps_wls_log(CPS_LOG_DEBG, " CPS_WLS  cps_rx_online_check: off line");
         power_supply_changed(chip->wl_psy);
     }
 }
@@ -2724,8 +2726,8 @@ static int wireless_fw_update(bool force)
 		goto update_fail;
 	}
 
-	//cps_wls_vbus_enable(true);
-	//msleep(500);
+	cps_wls_vbus_enable(true);
+	msleep(500);
 
 	maj_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MAJOR_VER_OFFSET));
 	maj_ver = maj_ver >> 8;
@@ -2912,7 +2914,7 @@ static int wireless_fw_update(bool force)
 
 free_bug:
 	cps_wls_set_boost(0);//disable power, after FW updating, need a power reset
-	//cps_wls_vbus_enable(false);
+	cps_wls_vbus_enable(false);
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	release_firmware(fw);
