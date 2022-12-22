@@ -2,7 +2,7 @@
  * Copyright (C) 2013-2016, Shenzhen Huiding Technology Co., Ltd.
  * All Rights Reserved.
  */
-
+#include <linux/version.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/io.h>
@@ -71,7 +71,9 @@ u32 gf_spi_speed = 1*1000000;
 /**********************function defination**********************/
 extern void mt_spi_enable_master_clk(struct spi_device *spidev);
 extern void mt_spi_disable_master_clk(struct spi_device *spidev);
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+extern void set_tee_worker_threads_on_big_core(bool big_core);
+#endif
 /*************************************************************/
 static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_lock);
@@ -271,7 +273,7 @@ static int gf_get_gpio_dts_info(struct gf_device *gf_dev)
 		return ret;
 	}
 
-	gf_debug(DEBUG_LOG, "%s success\n", __func__);
+	gf_debug(INFO_LOG, "%s success\n", __func__);
 	return 0;
 err_pwr:
 	if (!IS_ERR_OR_NULL(gf_dev->pwr_supply))
@@ -336,11 +338,11 @@ static void gf_spi_clk_enable(struct gf_device *gf_dev, u8 bonoff)
 	static int count = 0;
 	//pr_err("%s line:%d try to control spi clk\n", __func__,__LINE__);
 	if (bonoff && (count == 0)) {
-		pr_err("%s line:%d enable spi clk\n", __func__,__LINE__);
+		gf_debug(DEBUG_LOG,"%s line:%d enable spi clk\n", __func__,__LINE__);
 		mt_spi_enable_master_clk(gf_dev->spi);
 		count = 1;
 	} else if ((count > 0) && (bonoff == 0)) {
-		pr_err("%s line:%d disable spi clk\n", __func__,__LINE__);
+		gf_debug(DEBUG_LOG,"%s line:%d disable spi clk\n", __func__,__LINE__);
 		mt_spi_disable_master_clk(gf_dev->spi);
 		count = 0;
 	}
@@ -871,7 +873,20 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		mutex_destroy(&gf_dev->release_lock);*/
 
 		break;
-
+	case GF_IOC_ENABLE_TEEBOOST:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+		if (copy_from_user(&nav_input, (gf_nav_event_t *)arg, sizeof(nav_input))) {
+			gf_debug(ERR_LOG, "Failed to copy nav event from user to kernel\n");
+			retval = -EFAULT;
+			break;
+		}
+		gf_debug(ERR_LOG, "tee boost enable %s\n", (nav_input > 0 ? "enable":"disable"));
+		if(nav_input > 0)
+			set_tee_worker_threads_on_big_core(true);
+		else
+			set_tee_worker_threads_on_big_core(false);
+#endif
+		break;
 	default:
 		gf_debug(ERR_LOG, "gf doesn't support this command(%x)\n", cmd);
 		break;
