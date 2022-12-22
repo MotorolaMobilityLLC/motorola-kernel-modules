@@ -22,11 +22,11 @@
 #define DEBUG_LOG (2)
 
 /* debug log setting */
-u8 g_debug_level = DEBUG_LOG;
+u8 g_debug_level = INFO_LOG;
 
 #define gf_debug(level, fmt, args...) do { \
 			if (g_debug_level >= level) {\
-				pr_warn("[gf] " fmt, ##args); \
+				pr_warn("[gf_fod] " fmt, ##args); \
 			} \
 		} while (0)
 
@@ -162,8 +162,8 @@ typedef struct {
 #define GF_IOC_TRANSFER_CMD		_IOWR(GF_IOC_MAGIC, 15, struct gf_ioc_transfer)
 #define GF_IOC_TRANSFER_RAW_CMD	_IOWR(GF_IOC_MAGIC, 16, struct gf_ioc_transfer_raw)
 #define GF_IOC_SPI_INIT_CFG_CMD	_IOW(GF_IOC_MAGIC, 17, gf_spi_cfg_t)
-
-#define  GF_IOC_MAXNR    18  /* THIS MACRO IS NOT USED NOW... */
+#define GF_IOC_ENABLE_TEEBOOST		_IOW(GF_IOC_MAGIC, 18, unsigned int)
+#define  GF_IOC_MAXNR    30  /* THIS MACRO IS NOT USED NOW... */
 
 struct gf_device {
 	dev_t devno;
