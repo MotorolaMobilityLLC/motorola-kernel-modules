@@ -1199,6 +1199,7 @@ static void fg_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
 	struct mmi_fg_chip *mmi;
+	int rsoc;
 
 	delay_work = container_of(work, struct delayed_work, work);
 	mmi = container_of(delay_work, struct mmi_fg_chip, battery_delay_work);
@@ -1215,7 +1216,7 @@ static void fg_update_thread(struct work_struct *work)
 	fg_read_status(mmi);
 	mutex_lock(&mmi->data_lock);
 
-	mmi->batt_soc = fg_read_rsoc(mmi);
+	rsoc = fg_read_rsoc(mmi);
 	mmi->batt_volt = fg_read_volt(mmi);
 	fg_read_current(mmi, &mmi->batt_curr);
 	mmi->batt_temp = fg_read_temperature(mmi);
@@ -1226,7 +1227,10 @@ static void fg_update_thread(struct work_struct *work)
 	mutex_unlock(&mmi->update_lock);
 
 	if (mmi->batt_psy) {
-		power_supply_changed(mmi->batt_psy);
+		if (rsoc != mmi->batt_soc) {
+			mmi->batt_soc = rsoc;
+			power_supply_changed(mmi->batt_psy);
+		}
 	}
 
 	mmi_log("RSOC:%d, Volt:%d, Current:%d, Temperature:%d\n",
