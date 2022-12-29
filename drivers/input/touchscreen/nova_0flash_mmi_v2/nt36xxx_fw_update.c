@@ -1163,6 +1163,11 @@ void Boot_Update_Firmware(struct work_struct *work)
 {
 	int32_t ret = 0;
 
+	if (!nvt_touch_is_awake()) {
+		NVT_LOG("Touch is suspend, skip\n");
+		return;
+	}
+
 	mutex_lock(&ts->lock);
 
 	if(nvt_boot_firmware_name)
@@ -1172,7 +1177,12 @@ void Boot_Update_Firmware(struct work_struct *work)
 	if (ret) {
 		NVT_ERR("download firmware failed, ignore check fw state\n");
 	} else {
-		nvt_check_fw_reset_state(RESET_STATE_REK);
+		ret = nvt_check_fw_reset_state(RESET_STATE_REK);
+		if (ret) {
+			NVT_ERR("nvt_check_fw_reset_state failed. (%d)\n", ret);
+			mutex_unlock(&ts->lock);
+			return;
+		}
 	}
 
 	mutex_unlock(&ts->lock);

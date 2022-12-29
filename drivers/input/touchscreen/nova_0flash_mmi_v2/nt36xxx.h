@@ -359,6 +359,7 @@ int32_t nvt_clear_fw_status(void);
 int32_t nvt_check_fw_status(void);
 int32_t nvt_set_page(uint32_t addr);
 int32_t nvt_write_addr(uint32_t addr, uint8_t data);
+uint8_t nvt_touch_is_awake(void);
 #ifdef NVT_SENSOR_EN
 extern int touch_set_state(int state, int panel_idx);
 #endif
