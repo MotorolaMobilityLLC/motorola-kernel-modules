@@ -603,6 +603,8 @@ int32_t nvt_check_fw_reset_state(RST_COMPLETE_STATE check_reset_state)
 
 		if ((buf[1] >= check_reset_state) && (buf[1] <= RESET_STATE_MAX)) {
 			ret = 0;
+			NVT_DBG("pass, retry=%d, buf[1]=0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
+				retry, buf[1], buf[2], buf[3], buf[4], buf[5]);
 			break;
 		}
 
@@ -3138,7 +3140,6 @@ static int32_t nvt_ts_resume(struct device *dev)
 #if NVT_TOUCH_SUPPORT_HW_RST
 	gpio_set_value(ts->reset_gpio, 1);
 #endif
-	queue_delayed_work(nvt_fwu_wq, &ts->nvt_fwu_work, msecs_to_jiffies(0));
 
 #if !WAKEUP_GESTURE
 	nvt_irq_enable(true);
@@ -3170,6 +3171,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 #endif
 
 	bTouchIsAwake = 1;
+	queue_delayed_work(nvt_fwu_wq, &ts->nvt_fwu_work, msecs_to_jiffies(0));
 
 	mutex_unlock(&ts->lock);
 
@@ -3394,6 +3396,11 @@ static int charger_notifier_callback(struct notifier_block *nb,
 		}
 	}
 	return 0;
+}
+
+uint8_t nvt_touch_is_awake(void)
+{
+	return bTouchIsAwake;
 }
 
 #ifdef CONFIG_OF
