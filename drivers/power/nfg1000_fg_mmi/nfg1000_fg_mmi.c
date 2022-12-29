@@ -1260,6 +1260,17 @@ static int  tcmd_get_bat_voltage(void *input, int* val)
 	return ret;
 }
 
+static int  tcmd_get_bat_ocv(void *input, int* val)
+{
+	int ret = 0;
+	struct mmi_fg_chip *mmi_fg = (struct mmi_fg_chip *)input;
+
+	*val = mmi_fg->batt_volt;
+
+	return ret;
+}
+
+
 static int battery_tcmd_register(struct mmi_fg_chip *mmi_fg)
 {
 	int ret = 0;
@@ -1269,6 +1280,7 @@ static int battery_tcmd_register(struct mmi_fg_chip *mmi_fg)
 
 	mmi_fg->batt_tcmd_client.get_bat_temp = tcmd_get_bat_temp;
 	mmi_fg->batt_tcmd_client.get_bat_voltage = tcmd_get_bat_voltage;
+	mmi_fg->batt_tcmd_client.get_bat_ocv= tcmd_get_bat_ocv;
 
 	ret = moto_chg_tcmd_register(&mmi_fg->batt_tcmd_client);
 
