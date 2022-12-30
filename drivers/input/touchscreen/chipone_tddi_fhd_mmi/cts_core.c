@@ -2082,7 +2082,7 @@ int cts_suspend_device(struct cts_device *cts_dev)
 int cts_resume_device(struct cts_device *cts_dev)
 {
 	int ret = 0;
-	int retries = 3;
+	int retries = 5;
 	u8 tdata[4] = { 'R', 'S', 'T', '!' };
 
 	cts_info("Resume device");
@@ -2124,7 +2124,17 @@ int cts_resume_device(struct cts_device *cts_dev)
 						cts_dev->hwdata->fwid, 0);
 #endif
 		if (firmware) {
-			ret = cts_update_firmware(cts_dev, firmware, false);
+			retries = 5;
+			while (retries-- > 0) {
+				ret = cts_update_firmware(cts_dev, firmware, false);
+				if (ret) {
+					cts_err("Update default firmware failed %d, retries %d",
+						ret, retries);
+					mdelay(100);
+				} else {
+					break;
+				}
+			}
 			cts_release_firmware(firmware);
 
 			if (ret) {
