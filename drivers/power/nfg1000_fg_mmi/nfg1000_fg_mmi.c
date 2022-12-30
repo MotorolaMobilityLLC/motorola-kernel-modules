@@ -186,6 +186,7 @@ struct mmi_fg_chip {
 };
 
 extern int mmi_batt_health_check(void);
+extern int mmi_charger_update_batt_status(void);
 
 
 #if 0
@@ -764,23 +765,6 @@ static int fg_read_tte(struct mmi_fg_chip *mmi)
 	return tte;
 }
 
-static int fg_get_batt_status(struct mmi_fg_chip *mmi)
-{
-
-	fg_read_status(mmi);
-
-	if (mmi->batt_fc)
-		return POWER_SUPPLY_STATUS_FULL;
-	else if (mmi->batt_dsg)
-		return POWER_SUPPLY_STATUS_DISCHARGING;
-	else if (mmi->batt_curr > 0)
-		return POWER_SUPPLY_STATUS_CHARGING;
-	else
-		return POWER_SUPPLY_STATUS_NOT_CHARGING;
-
-}
-
-
 static int fg_get_batt_capacity_level(struct mmi_fg_chip *mmi_fg)
 {
 	int uisoc = mmi_fg->batt_soc;
@@ -883,7 +867,7 @@ static int fg_get_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
-		val->intval = fg_get_batt_status(mmi);
+		val->intval = mmi_charger_update_batt_status();
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		ret = fg_read_volt(mmi);
