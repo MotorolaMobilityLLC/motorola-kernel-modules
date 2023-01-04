@@ -100,6 +100,10 @@
 #include <linux/msm_drm_notify.h>
 #endif
 
+#ifdef ILI_SENSOR_EN
+#include <linux/sensors.h>
+#endif
+
 #ifdef CONFIG_DRM
 #include <drm/drm_panel.h>
 #endif
@@ -147,7 +151,7 @@
 #define ENABLE_WQ_ESD			DISABLE
 #endif
 #define ENABLE_WQ_BAT			DISABLE
-#if defined(ILI_CONFIG_GESTURE) || defined(ILI_CONFIG_PANEL_GESTURE)
+#if defined(ILI_CONFIG_GESTURE) || defined(ILI_CONFIG_PANEL_GESTURE) || defined(ILI_SENSOR_EN)
 #define ENABLE_GESTURE			ENABLE
 #else
 #define ENABLE_GESTURE			DISABLE
@@ -660,6 +664,7 @@ struct report_info_block {
 
 /* The example for the gesture virtual keys */
 #define GESTURE_DOUBLECLICK				0x58
+#define GESTURE_SINGLECLICK				0x57
 #define GESTURE_UP					0x60
 #define GESTURE_DOWN					0x61
 #define GESTURE_LEFT					0x62
@@ -816,6 +821,23 @@ struct report_info_block {
 #define TDDI_PC_LATCH_ADDR				0x51010
 #define TDDI_CHIP_RESET_ADDR				0x40050
 #define RAWDATA_NO_BK_SHIFT				8192
+
+#ifdef ILI_SENSOR_EN
+/* display state */
+enum display_state {
+	SCREEN_UNKNOWN,
+	SCREEN_OFF,
+	SCREEN_ON,
+};
+struct ili_sensor_platform_data {
+	struct input_dev *input_sensor_dev;
+	struct sensors_classdev ps_cdev;
+	int sensor_opened;
+	char sensor_data; /* 0 near, 1 far */
+	struct ilitek_ts_data *data;
+};
+#define REPORT_MAX_COUNT 10000
+#endif
 
 struct ilitek_ts_data {
 	struct i2c_client *i2c;
@@ -992,6 +1014,21 @@ struct ilitek_ts_data {
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *pins_active;
 	struct pinctrl_state *pins_suspend;
+
+#ifdef ILI_SENSOR_EN
+	bool wakeable;
+	bool should_enable_gesture;
+	bool gesture_enabled;
+	uint32_t report_gesture_key;
+	enum display_state screen_state;
+	struct mutex state_mutex;
+	struct ili_sensor_platform_data *sensor_pdata;
+#ifdef CONFIG_HAS_WAKELOCK
+	struct wake_lock gesture_wakelock;
+#else
+	struct wakeup_source *gesture_wakelock;
+#endif
+#endif //ILI_SENSOR_EN
 };
 extern struct ilitek_ts_data *ilits;
 
@@ -1202,6 +1239,10 @@ extern int ili_get_tp_recore_ctrl(int data);
 extern int ili_get_tp_recore_data(void);
 extern void ili_demo_debug_info_mode(u8 *buf, size_t rlen);
 extern void ili_demo_debug_info_id0(u8 *buf, size_t len);
+
+#ifdef ILI_SET_TP_GESTURE_STATUS
+extern void is_touchscreen_gesture_open(int value);
+#endif
 
 static inline void ipio_kfree(void **mem)
 {
