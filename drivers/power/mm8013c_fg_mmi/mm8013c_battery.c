@@ -49,6 +49,7 @@ struct mm8xxx_access_methods {
 
 struct mm8xxx_state_cache {
 	int temperature;
+	int curr_now;
 	int avg_time_to_empty;
 	int full_charge_capacity;
 	int cycle_count;
@@ -88,6 +89,7 @@ struct mm8xxx_device_info {
 	u32 second_battery_id;
 	u8 update_interval;
 	bool mm8xxx_suspend_flag;
+	bool mm8xxx_input_present;
 	struct mutex i2c_rw_lock;
 };
 
@@ -99,6 +101,7 @@ static int mm8xxx_battery_write(struct mm8xxx_device_info *di, u8 cmd,int value)
 static int mm8xxx_battery_write_Nbyte(struct mm8xxx_device_info *di, u8 cmd,unsigned int value, int byte_num);
 static int mm8xxx_battery_write_4byteCmd(struct mm8xxx_device_info *di, unsigned int cmd,unsigned int value);
 static u32 mmi_get_battery_info(struct mm8xxx_device_info *di, u32 cmd);
+static int mm8xxx_get_battery_current(struct mm8xxx_device_info *di);
 /****************************FW / Parameter update****************************************/
 #define ENABLE_VERIFICATION
 
@@ -1579,6 +1582,7 @@ static void mm8xxx_battery_update(struct mm8xxx_device_info *di)
 	int req = 0;
 #endif
 
+	di->mm8xxx_input_present = input_present;
 	/* get battery power supply */
 	if (!di->batt_psy) {
 		di->batt_psy = power_supply_get_by_name("battery");
@@ -1592,6 +1596,7 @@ static void mm8xxx_battery_update(struct mm8xxx_device_info *di)
 	if (cache.flags < 0)
 		goto out;
 
+	cache.curr_now = mm8xxx_get_battery_current(di)*(-1);
 	cache.temperature = mm8xxx_battery_read_temperature(di);
 	cache.temperature += -2731;
 	cache.avg_time_to_empty = mm8xxx_battery_read_averagetimetoempty(di);
@@ -1704,6 +1709,19 @@ static int mm8xxx_battery_current(struct mm8xxx_device_info *di,
 	val->intval = curr;
 
 	return 0;
+}
+
+static int mm8xxx_get_battery_current(struct mm8xxx_device_info *di)
+{
+	int curr;
+	curr = mm8xxx_read(di, MM8XXX_CMD_AVERAGECURRENT);
+	if (curr < 0) {
+		dev_err(di->dev, "error reading current\n");
+		return curr;
+	}
+
+	curr = (int)((s16)curr) * 1000;
+	return curr;
 }
 
 static int mm8xxx_battery_status(struct mm8xxx_device_info *di,
@@ -1824,8 +1842,12 @@ static int mm8xxx_battery_get_property(struct power_supply *psy,
 		val->intval = di->cache.flags < 0 ? 0 : 1;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		ret = mm8xxx_battery_current(di, val);
-		val->intval = val->intval * (-1);
+		if(di->mm8xxx_input_present) {
+			ret = mm8xxx_battery_current(di, val);
+			val->intval = val->intval * (-1);
+		} else {
+			ret = mm8xxx_simple_value(di->cache.curr_now, val);
+		}
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		ret = mm8xxx_simple_value(di->cache.soc, val);
@@ -2339,7 +2361,7 @@ static int mmi_fg_suspend(struct device *dev)
 		down(&di->suspend_lock);
 	}
 	di->mm8xxx_suspend_flag = true;
-	cancel_delayed_work_sync(&di->work);
+	//cancel_delayed_work_sync(&di->work);
 
 	return 0;
 }
@@ -2353,7 +2375,7 @@ static int mmi_fg_resume(struct device *dev)
 		up(&di->suspend_lock);
 	}
 	di->mm8xxx_suspend_flag = false;
-	schedule_delayed_work(&di->work, 100);
+	//schedule_delayed_work(&di->work, 100);
 
 	return 0;
 }
