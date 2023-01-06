@@ -875,11 +875,12 @@ static ssize_t fts_ic_ver_show(struct device *dev,
 #if FTS_ESDCHECK_EN
     fts_esdcheck_proc_busy(1);
 #endif
-    fts_read_reg(FTS_REG_VENDOR_ID, &val);
-    count += snprintf(buf + count, PAGE_SIZE, "Product ID: 0x%02x\n", val);
+
+    count += snprintf(buf + count, PAGE_SIZE, "Product ID:%s\n", FTS_CHIP_NAME_IC);
     fts_read_reg(FTS_REG_FW_VER, &val);
     count += snprintf(buf + count, PAGE_SIZE, "Build ID: 0000-%02x\n", val);
-    count += scnprintf(buf + count, PAGE_SIZE, "IC: %s\n", FTS_CHIP_NAME);
+    fts_read_reg(FTS_REG_VENDOR_ID, &val);
+    count += scnprintf(buf + count, PAGE_SIZE, "Config ID: 0x%02x\n", val);
 #if FTS_ESDCHECK_EN
     fts_esdcheck_proc_busy(0);
 #endif
