@@ -2904,6 +2904,12 @@ static ssize_t show_tx_vrect(struct device *dev, struct device_attribute *attr, 
 }
 static DEVICE_ATTR(get_tx_vrect, 0444, show_tx_vrect, NULL);
 
+static ssize_t show_tx_mode_vout(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    return sprintf(buf, "%d\n", cps_wls_get_tx_vrect());
+}
+static DEVICE_ATTR(tx_mode_vout, 0444, show_tx_mode_vout, NULL);
+
 static void cps_wls_tx_mode(bool en)
 {
  	cps_wls_set_boost(en);
@@ -3175,6 +3181,7 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_get_tx_vin);
     device_create_file(dev, &dev_attr_get_tx_iin);
     device_create_file(dev, &dev_attr_get_tx_vrect);
+    device_create_file(dev, &dev_attr_tx_mode_vout);
 
     device_create_file(dev, &dev_attr_tx_mode);
     device_create_file(dev, &dev_attr_rx_connected);
