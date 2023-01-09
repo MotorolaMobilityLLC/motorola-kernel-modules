@@ -980,6 +980,7 @@ static void nvt_flash_proc_deinit(void)
 #define GESTURE_WORD_C          12
 #define GESTURE_WORD_W          13
 #define GESTURE_WORD_V          14
+#define GESTURE_SINGLE_CLICK    25
 #define GESTURE_DOUBLE_CLICK    15
 #define GESTURE_WORD_Z          16
 #define GESTURE_WORD_M          17
@@ -1035,6 +1036,7 @@ void nvt_ts_wakeup_gesture_report(uint8_t gesture_id, uint8_t *data)
 			NVT_LOG("Gesture : Word-V.\n");
 			keycode = gesture_key_array[2];
 			break;
+		case GESTURE_SINGLE_CLICK:
 		case GESTURE_DOUBLE_CLICK:
 			NVT_LOG("Gesture : Double Click.\n");
 			keycode = gesture_key_array[3];
@@ -1953,13 +1955,13 @@ static int nvt_sensor_set_enable(struct sensors_classdev *sensors_cdev,
 	mutex_lock(&ts->state_mutex);
 	if (enable == 1) {
 		if(panel_wakeup){
-			NVT_LOG("panel_wakeup");
+			NVT_LOG("panel_wakeup, tap gesture on");
 			is_touchscreen_gesture_open(1);
 		}
 		ts->should_enable_gesture = true;
 	} else if (enable == 0) {
 		if(panel_wakeup){
-			NVT_LOG("panel_wakeup off");
+			NVT_LOG("panel_wakeup off, tap gesture off");
 			is_touchscreen_gesture_open(0);
 		}
 		ts->should_enable_gesture = false;
@@ -3170,6 +3172,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		CTP_SPI_WRITE(ts->client, buf, 2);
 		ts->gesture_enabled = false;
 		ts->wakeable = false;
+		NVT_LOG("write deep sleep mode\n");
 	}
 #endif
 #else // WAKEUP_GESTURE
