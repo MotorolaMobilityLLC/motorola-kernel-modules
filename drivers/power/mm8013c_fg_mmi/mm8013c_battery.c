@@ -119,6 +119,8 @@ static int mm8xxx_get_battery_current(struct mm8xxx_device_info *di);
 #define SIZE_PARAMETER		(0x3C0)
 #ifdef ENABLE_VERIFICATION
 #define SIZE_READBUFFER		(16)
+#define MM8013_FW_CHECKSUM	(0x085AAC4C7982)
+#define MM8013_FW_VERSION	(0x08150024)
 #endif
 
 #define COMMAND_CONTROL		(0x00)
@@ -475,6 +477,7 @@ static int write_nvm(struct mm8xxx_device_info *di, enum PARTITION_INDEX ptindex
 	int i;
 #ifdef ENABLE_VERIFICATION
 	int j;
+	int errcnt;
 	int addr;
 	unsigned char rbuf[SIZE_READBUFFER];
 #endif
@@ -509,21 +512,108 @@ static int write_nvm(struct mm8xxx_device_info *di, enum PARTITION_INDEX ptindex
 	}
 
 #ifdef ENABLE_VERIFICATION
-	for (i = 0; i < size; i += SIZE_READBUFFER) {
-		addr = offset + i;
+	switch (ptindex)
+	{
+	case PARTITION_PROGRAM:
+		errcnt = 0;
 
-		if ((mm8xxx_battery_write_Nbyte(di, COMMAND_READNVMDATA, addr, 4) < 0) ||
-		    (mm8xxx_battery_read_Nbyte(di, COMMAND_READNVMDATA, rbuf, SIZE_READBUFFER) < 0)) {
-			mm_info("%s, verification fail\n", __func__);
+		/* Unseal Request */
+		mm_info("Requesting set to Unseal mode ... ");
+		if (unseal_request(di, 0x56781234) < 0) {
+			mm_info("%s, unseal_request failed\n", __func__);
 			return  -EINVAL;
 		}
 
-		for (j = 0; j < SIZE_READBUFFER; j++) {
-			if (data[i + j] != rbuf[j]) {
+		/* Lock Release Request */
+		mm_info("Requesting lock releasing ... ");
+		if (Lock_release_request(di) < 0) {
+			mm_info("%s, Lock_release_request failed\n", __func__);
+			return  -EINVAL;
+		}
+
+		/* NVM Read/Write mode Request */
+		mm_info("Requesting set to NVM Write mode ... ");
+		if (NVM_write_mode(di) < 0) {
+			mm_info("%s, Requesting set to NVM Read/Write mode failed\n", __func__);
+			return  -EINVAL;
+		}
+
+		/* FW ver. Read */
+		addr = 0x00008200;
+
+		if (mm8xxx_battery_write_Nbyte(di, COMMAND_READNVMDATA, addr, 4) < 0) {
+			mm_info("%s, __DEBUG_CODE__ failed to send readnvm command\n", __func__);
+			return  -EINVAL;
+		}
+		if (mm8xxx_battery_read_Nbyte(di, COMMAND_READNVMDATA, rbuf, SIZE_READBUFFER) < 0) {
+			mm_info("%s, __DEBUG_CODE__ failed to read nvm\n", __func__);
+			return  -EINVAL;
+		}
+
+		for (i = 0; i < 4; i++) {
+			if (rbuf[4 + i] != (unsigned char)((MM8013_FW_VERSION >> (i * 8)) & 0xFF))
+				errcnt++;
+		}
+
+		if (errcnt != 0) {
+			/* verification errors are detected. */
+			mm_info("%s, FW Ver. does not match\n", __func__);
+			return  -EINVAL;
+		}
+
+		/* Checksum Read */
+		if (mm8xxx_battery_write_Nbyte(di, COMMAND_CONTROL, 0x0005, 2) < 0) {
+			mm_info("%s, failed to send 0x00 command\n", __func__);
+			return  -EINVAL;
+		}
+		if (mm8xxx_battery_write_Nbyte(di, 0x64, 0x0005, 2) < 0) {
+			mm_info("%s, failed to send 0x64 command\n", __func__);
+			return  -EINVAL;
+		}
+
+		mdelay(300);
+
+		if (mm8xxx_battery_read_Nbyte(di, 0x04, rbuf, 6) < 0) {
+			mm_info("%s, failed to read FW Checksum\n", __func__);
+			return -EINVAL;
+		}
+
+		for (i = 0; i < 6; i++) {
+			if (rbuf[i] != (unsigned char)((MM8013_FW_CHECKSUM >> (i * 8)) & 0xFF))
+				errcnt++;
+		}
+
+		if (errcnt != 0) {
+			/* checksum errors are detected. */
+			mm_info("%s, FW checksum does not match\n", __func__);
+			return  -EINVAL;
+		}
+		break;
+
+	default:
+		errcnt = 0;
+		for (i = 0; i < size; i += SIZE_READBUFFER) {
+			addr = offset + i;
+
+			if ((mm8xxx_battery_write_Nbyte(di, COMMAND_READNVMDATA, addr, 4) < 0) ||
+			    (mm8xxx_battery_read_Nbyte(di, COMMAND_READNVMDATA, rbuf, SIZE_READBUFFER) < 0)) {
 				mm_info("%s, verification fail\n", __func__);
 				return  -EINVAL;
 			}
+
+			for (j = 0; j < SIZE_READBUFFER; j++) {
+				if (data[i + j] != rbuf[j]) {
+					errcnt++;
+				}
+			}
 		}
+
+		if (errcnt != 0) {
+			/* verification errors are detected. */
+			mm_info("%s, verification fail\n", __func__);
+			return  -EINVAL;
+		}
+		break;
 	}
 #endif
 
