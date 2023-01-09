@@ -338,6 +338,6 @@ extern int nvt_palm_set(bool enabled);
 #endif
 
 #ifdef NVT_SENSOR_EN
-extern void is_touchscreen_gesture_open(int value);
+extern void __attribute__ ((weak)) is_touchscreen_gesture_open(int value);
 #endif
 #endif /* _LINUX_NVT_TOUCH_H */
