@@ -53,6 +53,7 @@ struct mm8xxx_state_cache {
 	int avg_time_to_empty;
 	int full_charge_capacity;
 	int cycle_count;
+	int age_factor;
 	int soc;
 	int flags;
 	int health;
@@ -1135,6 +1136,7 @@ enum mm8xxx_cmd_index {
 	MM8XXX_CMD_AVERAGETIMETOEMPTY,
 	MM8XXX_CMD_CHARGETYPE,
 	MM8XXX_CMD_CYCLECOUNT,
+	MM8XXX_CMD_AGE,
 	MM8XXX_CMD_STATEOFCHARGE,
 	MM8XXX_CMD_CHARGEVOLTAGE,
 	MM8XXX_CMD_DESIGNCAPACITY,
@@ -1157,6 +1159,7 @@ static u8
 		[MM8XXX_CMD_AVERAGETIMETOEMPTY]	= 0x16,
 		[MM8XXX_CMD_CYCLECOUNT]		= 0x2A,
 		[MM8XXX_CMD_STATEOFCHARGE]	= 0x2C,
+		[MM8XXX_CMD_AGE]		= 0x2E,
 		[MM8XXX_CMD_CHARGEVOLTAGE]	= INVALID_COMMAND,
 		[MM8XXX_CMD_DESIGNCAPACITY]	= 0x3C,
 		[MM8XXX_CMD_ELAPSEDTIMEM]	= INVALID_COMMAND,
@@ -1174,6 +1177,7 @@ static u8
 		[MM8XXX_CMD_AVERAGETIMETOEMPTY]	= 0x16,
 		[MM8XXX_CMD_CYCLECOUNT]		= 0x2A,
 		[MM8XXX_CMD_STATEOFCHARGE]	= 0x2C,
+		[MM8XXX_CMD_AGE]		= 0x2E,
 		[MM8XXX_CMD_CHARGEVOLTAGE]	= INVALID_COMMAND,
 		[MM8XXX_CMD_DESIGNCAPACITY]	= 0x3C,
 		[MM8XXX_CMD_ELAPSEDTIMEM]	= INVALID_COMMAND,
@@ -1192,6 +1196,7 @@ static u8
 		[MM8XXX_CMD_CHARGETYPE]		= 0x20,
 		[MM8XXX_CMD_CYCLECOUNT]		= 0x2A,
 		[MM8XXX_CMD_STATEOFCHARGE]	= 0x2C,
+		[MM8XXX_CMD_AGE]		= 0x2E,
 		[MM8XXX_CMD_CHARGEVOLTAGE]	= 0x30,
 		[MM8XXX_CMD_DESIGNCAPACITY]	= 0x3C,
 		[MM8XXX_CMD_ELAPSEDTIMEM]	= 0x74,
@@ -1213,6 +1218,7 @@ static enum power_supply_property mm8118g01_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
+	POWER_SUPPLY_PROP_AGE,
 	POWER_SUPPLY_PROP_POWER_AVG,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_MANUFACTURER,
@@ -1233,6 +1239,7 @@ static enum power_supply_property mm8013c10_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
+	POWER_SUPPLY_PROP_AGE,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TYPE,
 	POWER_SUPPLY_PROP_MANUFACTURER,
@@ -1489,6 +1496,21 @@ static int mm8xxx_battery_read_cyclecount(struct mm8xxx_device_info *di)
 }
 
 /*
+ * Return the battery age factory
+ * Or < 0 if something fails.
+ */
+static int mm8xxx_battery_read_agefactor(struct mm8xxx_device_info *di)
+{
+	int age;
+
+	age = mm8xxx_read(di, MM8XXX_CMD_AGE);
+	if (age < 0)
+		dev_err(di->dev, "error reading age\n");
+
+	return age;
+}
+
+/*
  * Return the battery usable time
  * Or < 0 if something fails.
  */
@@ -1695,6 +1717,7 @@ static void mm8xxx_battery_update(struct mm8xxx_device_info *di)
 	di->cache.flags = cache.flags;
 	cache.health = mm8xxx_battery_read_health(di);
 	cache.cycle_count = mm8xxx_battery_read_cyclecount(di);
+	cache.age_factor = mm8xxx_battery_read_agefactor(di);
 	//mm8xxx_battery_temp_to_FG(di);
 	mm_info("soc = %d, ui_soc = %d, temperture = %d\n", cache.soc, di->cache.soc, cache.temperature);
 
@@ -1973,6 +1996,9 @@ static int mm8xxx_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		ret = mm8xxx_simple_value(di->cache.cycle_count, val);
 		break;
+	case POWER_SUPPLY_PROP_AGE:
+		ret = mm8xxx_simple_value(di->cache.age_factor, val);
+		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		ret = mm8xxx_simple_value(di->cache.health, val);
 		break;
@@ -2069,6 +2095,7 @@ static void mm8xxx_fake_battery_update(struct mm8xxx_device_info *di)
 	di->cache.flags = 0;
 	di->cache.health = POWER_SUPPLY_HEALTH_GOOD;
 	di->cache.cycle_count = 0;
+	di->cache.age_factor = 100;
 
 	di->charge_design_full = 4020000;
 
@@ -2142,6 +2169,9 @@ static int mm8xxx_fake_battery_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		ret = mm8xxx_simple_value(di->cache.cycle_count, val);
+		break;
+	case POWER_SUPPLY_PROP_AGE:
+		ret = mm8xxx_simple_value(di->cache.age_factor, val);
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		ret = mm8xxx_simple_value(di->cache.health, val);
