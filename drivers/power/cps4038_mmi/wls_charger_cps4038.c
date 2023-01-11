@@ -3350,14 +3350,16 @@ static int wireless_get_chip_id(void *input)
 
 	if(0 != value)
 		return value;
-	cps_wls_tx_enable(true);
-	/*unlock i2c*/
-	//cps_wls_h_write_reg(REG_PASSWORD, PASSWORD);
-	//cps_wls_h_write_reg(REG_HIGH_ADDR, HIGH_ADDR);
-	//cps_wls_h_write_reg(REG_WRITE_MODE, WRITE_MODE);
-	value = cps_wls_get_chip_id();
-	chip->chip_id = value;
-	cps_wls_tx_enable(false);
+	if (chip->rx_ldo_on) {
+		value = cps_wls_get_chip_id();
+		if (value == 0x4038)
+			chip->chip_id = value;
+	} else {
+		cps_wls_tx_enable(true);
+		value = cps_wls_get_chip_id();
+		chip->chip_id = value;
+		cps_wls_tx_enable(false);
+	}
 	return value;
 }
 
@@ -3637,6 +3639,7 @@ static int cps_wls_rx_power_on()
 	if(chip_id == 0x4038 && sys_mode == SYS_MODE_RX) {
 		rx_power = true;
 		rx_power_cnt = 0;
+		info->chip_id = chip_id;
 	} else {
 		rx_power = false;
 		rx_power_cnt++;
