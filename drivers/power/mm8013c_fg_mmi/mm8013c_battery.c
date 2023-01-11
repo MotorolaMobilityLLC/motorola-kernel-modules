@@ -1959,7 +1959,7 @@ static int mm8xxx_battery_get_property(struct power_supply *psy,
 			ret = mm8xxx_battery_current(di, val);
 			val->intval = val->intval * (-1);
 		} else {
-			ret = mm8xxx_simple_value(di->cache.curr_now, val);
+			val->intval = di->cache.curr_now;
 		}
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
