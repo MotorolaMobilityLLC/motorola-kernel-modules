@@ -76,6 +76,7 @@ struct mm8xxx_device_info {
 	struct power_supply *batt_psy;
 	struct power_supply *usb_psy;
 	struct power_supply *dc_psy;
+	struct power_supply *wlc_psy;
 	struct list_head list;
 	struct mutex lock;
 	struct semaphore suspend_lock;
@@ -1672,6 +1673,17 @@ static bool is_input_present(struct mm8xxx_device_info *di)
 				POWER_SUPPLY_PROP_ONLINE, &pval);
 		if (rc < 0)
 			pr_err("Couldn't read DC Present status, rc=%d\n", rc);
+		else
+			input_present |= pval.intval;
+	}
+
+	if (!di->wlc_psy)
+		di->wlc_psy = power_supply_get_by_name("wireless");
+	if (di->wlc_psy) {
+		rc = power_supply_get_property(di->wlc_psy,
+				POWER_SUPPLY_PROP_ONLINE, &pval);
+		if (rc < 0)
+			pr_err("Couldn't read WLC Present status, rc=%d\n", rc);
 		else
 			input_present |= pval.intval;
 	}
