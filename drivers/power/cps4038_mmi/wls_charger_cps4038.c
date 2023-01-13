@@ -2590,12 +2590,11 @@ static int wireless_fw_update(bool force)
 	min_ver = min_ver >> 8;
 	cps_wls_log(CPS_LOG_DEBG,"maj_var %#x, min_ver %#x\n", maj_ver, min_ver);
 	version = maj_ver << 16 | min_ver;
-	if (force)
-		version = UINT_MAX;
-	cps_wls_log(CPS_LOG_DEBG,"FW size: %zu version: %#x\n", fw->size, version);
+
+	cps_wls_log(CPS_LOG_DEBG,"FW size: %zu version: %#x force update: %d\n", fw->size, version, force);
 
 	result = cps_get_fw_revision(&fw_revision);
-	if(version == fw_revision) {
+	if (!force && version == fw_revision) {
 	    cps_wls_log(CPS_LOG_DEBG,"%s bin version %x same as fw version %x,not need update fw\n",__func__,version,fw_revision);
 	    ret = CPS_WLS_SUCCESS;
 	    goto free_bug;
@@ -2763,6 +2762,16 @@ static int wireless_fw_update(bool force)
        cps_wls_write_word(0xFFFFFF00, 0x00000000); /*i2c 32bit mode disable*/
 	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- Program successful\n", __func__);
 
+	result = cps_get_fw_revision(&fw_revision);
+
+	if (version == fw_revision) {
+		cps_wls_log(CPS_LOG_DEBG, "%s update fw 0x%X successful \n", __func__, version);
+		ret = CPS_WLS_SUCCESS;
+	} else {
+		cps_wls_log(CPS_LOG_DEBG, "%s update fw 0x%X failed,fw_revision 0x%X\n", __func__, version, fw_revision);
+		ret = CPS_WLS_FAIL;
+	}
+
 free_bug:
 	cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
 	msleep(20);//20ms
@@ -2823,10 +2832,11 @@ static DEVICE_ATTR(reg_data, 0664, show_reg_data, store_reg_data);
 
 static ssize_t wireless_fw_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+	uint32_t fw_version = 0x00;
 
-	int rc;
-	uint32_t  fw_version;
-	rc = cps_get_fw_revision(&fw_version);
+	if (chip && chip->wls_fw_version) {
+		fw_version = chip->wls_fw_version;
+	}
 
 	return sprintf(buf, "%08x\n", fw_version);
 }
