@@ -2045,6 +2045,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		CPS_RX_MODE_ERR = false;
 		CPS_RX_CHRG_FULL = false;
 		chip->cable_ready_wait_count = 0;
+		cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
     }
     if(int_flag & RX_INT_LDO_OFF)
