@@ -6,5 +6,6 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/power/supply \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/cps4038_mmi
 
-obj-m += wls_charger_cps4038.o
-wls_charger_cps4038-objs += wls_charger_cps4038.o
+obj-m += cps4038_mmi.o
+cps4038_mmi-objs += moto_wls_auth2.0.o
+cps4038_mmi-objs += wls_charger_cps4038.o
