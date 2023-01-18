@@ -2279,10 +2279,17 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 {
 	struct cps_wls_chrg_chip *chg = chip;
 	int wls_icl = 0;
+	int wls_icl_max = 1000000;
 
 	wls_icl = 100000;
 	chg->bpp_icl_done = false;
-	while((wls_icl + WLS_ICL_INCREASE_STEP) <= 1000000) {
+	if (chip && chip->wls_input_curr_max > 0) {
+		wls_icl_max = chip->wls_input_curr_max * 1000;
+		if (wls_icl_max > 1000000) {
+			wls_icl_max = 1000000;
+		}
+	}
+	while((wls_icl + WLS_ICL_INCREASE_STEP) <= wls_icl_max) {
 		if(!chg->wls_online)
 			break;
 		wls_icl += WLS_ICL_INCREASE_STEP;
@@ -3066,7 +3073,19 @@ static ssize_t wls_input_current_limit_store(struct device *dev,
 		cps_wls_log(CPS_LOG_ERR, "Invalid TCMD = %lu\n", wls_input_curr_max);
 		return -EINVAL;
 	}
-	cps_wls_log(CPS_LOG_DEBG,"wls input_current = %lu\n", wls_input_curr_max);
+
+	if (chip->rx_ldo_on && wls_input_curr_max > 0) {
+		if (wls_input_curr_max > chip->MaxI) {
+			wls_input_curr_max = chip->MaxI;
+		}
+		if (!chip->chg1_dev)
+			cps_init_charge_hardware();
+		if (chip->chg1_dev)
+			charger_dev_set_input_current(chip->chg1_dev, wls_input_curr_max * 1000);
+	}
+
+	cps_wls_log(CPS_LOG_DEBG,"wls input_current = %lu chip->MaxI = %dmA\n",
+		wls_input_curr_max, chip->MaxI);
 	chip->wls_input_curr_max = wls_input_curr_max;
 	return r ? r : count;
 }
@@ -3526,7 +3545,7 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
             *vbus = 5000;
         }
     }
-    if (chip->wls_input_curr_max != 0)
+    if (chip->wls_input_curr_max != 0 && chip->wls_input_curr_max < chg->MaxI)
         *icl = chip->wls_input_curr_max * 1000;
 }
 
@@ -3577,6 +3596,8 @@ static void cps_epp_current_select(int  *icl, int *vbus)
             *vbus = 5000;
         }
     }
+    if (chip->wls_input_curr_max != 0 && chip->wls_input_curr_max < chg->MaxI)
+        *icl = chip->wls_input_curr_max * 1000;
     cps_wls_log(CPS_LOG_DEBG, "%s icl=%duA vbus=%dmV wls_power=%d", __func__, *icl, *vbus, wls_power);
 }
 
