@@ -107,6 +107,8 @@ else ifneq ($(filter felix, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DCONFIG_GTP_DISP_MODE
 else ifneq ($(filter zeekr%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_ZEEKR
+else ifneq ($(filter aion%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_AION
 endif
 $(warning "goodix berlin EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
 
