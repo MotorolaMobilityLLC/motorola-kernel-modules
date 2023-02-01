@@ -924,15 +924,19 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 	}
 	bq->irq_waiting = false;
 
+	ret = bq25980_get_state(bq, &state);
+	if (ret < 0) {
+		mutex_unlock(&bq->irq_complete);
+		goto irq_out;
+	}
+
+	if (!bq25980_state_changed(bq, &state)) {
+		mutex_unlock(&bq->irq_complete);
+		goto irq_out;
+	}
+
 	dump_all_reg(bq);
 	mutex_unlock(&bq->irq_complete);
-
-	ret = bq25980_get_state(bq, &state);
-	if (ret < 0)
-		goto irq_out;
-
-	if (!bq25980_state_changed(bq, &state))
-		goto irq_out;
 
 	mutex_lock(&bq->lock);
 	bq->state = state;
