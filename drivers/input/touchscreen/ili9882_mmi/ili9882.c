@@ -1261,7 +1261,13 @@ int ili_tddi_init(void)
 #ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
 	{
 		int err;
-		moto_dda_init("ilitek-ts for Geneva5G");
+		if (ilits->dda_device_info) {
+			ILI_INFO("dda_device_info=%s\n", ilits->dda_device_info);
+			moto_dda_init((char *)ilits->dda_device_info);
+		}
+		else
+			moto_dda_init("ilitek-ts for Geneva5G");
+
 		err = moto_dda_register_cdevice();
         	if (err)
                 	ILI_ERR("Failed register stylus dda device, %d", err);

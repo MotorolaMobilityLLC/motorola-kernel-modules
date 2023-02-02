@@ -610,6 +610,12 @@ static int parse_dt(struct device_node *np)
 	}
 #endif
 
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+	ret = of_property_read_string(np, "ili,dda-device-info", &ilits->dda_device_info);
+	if (ilits->dda_device_info)
+		ILI_INFO("%s: get dda_device_info=%s", __func__, ilits->dda_device_info);
+#endif
+
   return ret;
 }
 
