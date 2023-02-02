@@ -2391,6 +2391,7 @@ static enum power_supply_property cps_wls_chrg_props[] = {
     POWER_SUPPLY_PROP_VOLTAGE_NOW,
     POWER_SUPPLY_PROP_CURRENT_MAX,
     POWER_SUPPLY_PROP_CURRENT_NOW,
+    POWER_SUPPLY_PROP_POWER_NOW,
 };
 
 static int cps_wls_chrg_property_is_writeable(struct power_supply *psy,
@@ -2431,6 +2432,9 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
 
         case POWER_SUPPLY_PROP_CURRENT_NOW:
             val->intval = cps_wls_get_rx_iout() * 1000;
+            break;
+         case POWER_SUPPLY_PROP_POWER_NOW:
+            val->intval = cps_wls_get_rx_neg_power() / 2;
             break;
         default:
             return -EINVAL;
