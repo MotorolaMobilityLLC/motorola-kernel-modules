@@ -1158,6 +1158,57 @@ static nvt_get_panel_supplier() {
 }
 #endif
 
+#ifdef NVT_CHECK_DEVICE_BOOTMODE
+bool nvt_is_charger_bootmode(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool is_chargermode = false;
+	int ret;
+	const char *bootargs = NULL;
+	char *bootmode = NULL;
+
+	NVT_DBG("enter\n");
+	if (!np) {
+		NVT_LOG("chosen node NULL\n");
+		return false;
+	}
+
+#ifdef CONFIG_BOOT_CONFIG
+	ret = of_property_read_string(np, "mmi,bootconfig", &bootargs);
+#else
+	ret = of_property_read_string(np, "bootargs", &bootargs);
+#endif
+
+	NVT_DBG("ret=%d, bootargs=%s", ret, bootargs);
+	if (!ret && bootargs) {
+		bootmode = strstr(bootargs, "androidboot.mode=");
+		if (bootmode) {
+			NVT_LOG("bootmode info: %s\n", bootmode);
+			bootmode = strpbrk(bootmode, "=");
+			if (bootmode && (strlen(bootmode) > 1)) {
+				bootmode++;
+				NVT_INFO("bootmode=%s\n", bootmode);
+				if (bootmode && !strncmp(bootmode, "charger", strlen("charger"))) {
+					is_chargermode = true;
+					NVT_LOG("is_chargermode true\n");
+				}
+			}
+		}
+	}
+
+	of_node_put(np);
+
+	return is_chargermode;
+}
+
+static bool nvt_skip_charger_bootmode(void) {
+	int ret = false;
+
+	ret = nvt_is_charger_bootmode();
+	return ret;
+}
+#endif
+
 static int32_t nvt_parse_dt(struct device *dev)
 {
 	struct device_node *np = dev->of_node;
@@ -2408,6 +2459,15 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		return ret;
 	}
 #endif
+
+#ifdef NVT_CHECK_DEVICE_BOOTMODE
+	ret = nvt_skip_charger_bootmode();
+	if (ret) {
+		NVT_ERR("charger bootmode, skip. ret=%d\n", ret);
+		return ret;
+	}
+#endif
+
 	NVT_LOG("start\n");
 
 	ts = kzalloc(sizeof(struct nvt_ts_data), GFP_KERNEL);
