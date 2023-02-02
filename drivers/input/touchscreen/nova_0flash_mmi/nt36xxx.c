@@ -1328,6 +1328,12 @@ static int32_t nvt_parse_dt(struct device *dev)
 	}
 	NVT_LOG("boot firmware %s, mp firmware %s", nvt_boot_firmware_name, nvt_mp_firmware_name);
 
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+	ret = of_property_read_string(np, "novatek,dda-device-info", &ts->dda_device_info);
+	if (ts->dda_device_info)
+		NVT_LOG("%s: get dda_device_info=%s", __func__, ts->dda_device_info);
+#endif
+
 	ret = nvt_get_dt_def_coords(dev, "novatek,def-max-resolution");
 	if (ret) {
 		ts->abs_x_max = TOUCH_DEFAULT_MAX_WIDTH;
@@ -2512,8 +2518,13 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	ts->palm_enabled = false;
 #endif
 
-	#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
-	moto_dda_init("novatek-ts for Geneva5G");
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+	if (ts->dda_device_info) {
+		NVT_LOG("dda_device_info=%s\n", ts->dda_device_info);
+		moto_dda_init((char *)ts->dda_device_info);
+	}
+	else
+		moto_dda_init("novatek-ts for Geneva5G");
 	ret = moto_dda_register_cdevice();
 	if (ret)
 		NVT_ERR("Failed register stylus dda device, %d", ret);

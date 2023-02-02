@@ -228,6 +228,9 @@ struct nvt_ts_data {
 #ifdef PALM_GESTURE
 	bool palm_enabled;
 #endif
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+	const char *dda_device_info;
+#endif
 	char product_id[10];
 	uint8_t fw_type;
 	uint32_t build_id;
