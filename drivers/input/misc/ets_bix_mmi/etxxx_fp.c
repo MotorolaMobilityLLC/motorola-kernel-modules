@@ -67,8 +67,10 @@
 extern void mt_spi_enable_master_clk(struct spi_device *spidev);
 extern void mt_spi_disable_master_clk(struct spi_device *spidev);
 
+#ifndef CONFIG_EGIS_SCREEN_EVENT_DISABLE
 static int waitq_type = 0;
 static int screenonoff_flag = 0;
+#endif
 
 struct egisfp_dev_t *g_data = NULL;
 DECLARE_BITMAP(minors, N_SPI_MINORS);
@@ -464,12 +466,14 @@ unsigned int egisfp_interrupt_poll(struct file *file, struct poll_table_struct *
 		mask |= 0x400 | POLLRDNORM;
 		egis_dev->fps_ints.drdy_irq_abort = 0;
 	}
+#ifndef CONFIG_EGIS_SCREEN_EVENT_DISABLE
 	else if(screenonoff_flag == 1){
 		mask = waitq_type ;
 		screenonoff_flag = 0;
 		waitq_type = 0;
 		INFO_PRINT(" egisfp_screenonoff_poll_mask = %d \n", mask);
 	}
+#endif
 	return mask;
 }
 
@@ -1201,10 +1205,14 @@ static int egisfp_fb_callback(struct notifier_block *nb, unsigned long val, void
 	default:
 		break;
 	}
+#ifndef CONFIG_EGIS_SCREEN_EVENT_DISABLE
 	screenonoff_flag = 1;
 	waitq_type |= POLLIN | POLLHUP;
 	wake_up_interruptible(&interrupt_waitq);
 	INFO_PRINT(" %s : screen_onoff = %d  waitq_type =%d  \n", __func__, egis_dev->screen_onoff,waitq_type);
+#else
+	INFO_PRINT(" %s : screen_onoff = %d \n", __func__, egis_dev->screen_onoff);
+#endif
 	envp[1] = NULL;
 	ret = kobject_uevent_env(&egis_dev->dd->dev.kobj, KOBJ_CHANGE, envp);
 	return NOTIFY_OK;

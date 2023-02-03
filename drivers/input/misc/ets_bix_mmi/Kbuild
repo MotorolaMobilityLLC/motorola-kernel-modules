@@ -2,6 +2,11 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/input/misc/ets_bix_mmi
+
+ifneq ($(filter m y,$(CONFIG_EGIS_SCREEN_EVENT_DISABLE)),)
+   EXTRA_CFLAGS += -DCONFIG_EGIS_SCREEN_EVENT_DISABLE
+endif
+
 ets_bix_mmi-y += etxxx_fp.o
 
 obj-m += ets_bix_mmi.o
