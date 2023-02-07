@@ -1159,7 +1159,7 @@ static nvt_get_panel_supplier() {
 #endif
 
 #ifdef NVT_CHECK_DEVICE_BOOTMODE
-bool nvt_is_charger_bootmode(void)
+static bool nvt_skip_charger_bootmode(void)
 {
 	struct device_node *np = of_find_node_by_path("/chosen");
 	bool is_chargermode = false;
@@ -1199,13 +1199,6 @@ bool nvt_is_charger_bootmode(void)
 	of_node_put(np);
 
 	return is_chargermode;
-}
-
-static bool nvt_skip_charger_bootmode(void) {
-	int ret = false;
-
-	ret = nvt_is_charger_bootmode();
-	return ret;
 }
 #endif
 
