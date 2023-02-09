@@ -1,0 +1,12 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-5.10/include
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/smart_battery
+
+
+obj-m += smart_battery.o
+smart_battery-objs += smart_battery_core.o
+
+

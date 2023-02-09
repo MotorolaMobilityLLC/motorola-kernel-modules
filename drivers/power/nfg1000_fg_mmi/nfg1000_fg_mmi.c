@@ -35,7 +35,7 @@
 #include <linux/types.h>
 #include <linux/file.h>
 #include <linux/fs.h>
-#include <linux/power/moto_chg_tcmd.h>
+#include <linux/mmi_gauge_class.h>
 
 
 #define mmi_info	pr_info
@@ -167,13 +167,12 @@ struct mmi_fg_chip {
 	int skip_writes;
 
 	bool fake_battery;
-	int fake_soc;
-	int fake_temp;
 	int rbat_pull_up_r;
 
 	struct power_supply *fg_psy;
 	struct power_supply_desc fg_psy_d;
-	struct moto_chg_tcmd_client batt_tcmd_client;
+	struct gauge_device	*gauge_dev;
+	const char *gauge_dev_name;
 
 	int (*mmi_get_property)(struct power_supply *psy,
 			    enum power_supply_property psp,
@@ -664,13 +663,16 @@ static int fg_read_fcc(struct mmi_fg_chip *mmi)
 
 	if (mmi->regs[BQ_FG_REG_FCC] == INVALID_REG_ADDR) {
 		mmi_err("FCC command not supported!\n");
-		return 0;
+		return -1;
 	}
 
 	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_FCC], &fcc);
 
-	if (ret < 0)
+	if (ret < 0) {
 		mmi_err("could not read FCC, ret=%d\n", ret);
+		return ret;
+	}
+
 	mmi_info(" fcc = %d", fcc);
 
 	return fcc;
@@ -684,7 +686,7 @@ static int fg_read_dc(struct mmi_fg_chip *mmi)
 
 	if (mmi->regs[BQ_FG_REG_DC] == INVALID_REG_ADDR) {
 		mmi_err("DesignCapacity command not supported!\n");
-		return 0;
+		return -1;
 	}
 
 	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_DC], &dc);
@@ -805,6 +807,128 @@ static int fg_get_batt_capacity_level(struct mmi_fg_chip *mmi_fg)
 		return POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
 }
 
+int fg_get_voltage_now(struct gauge_device *gauge_dev, int *mV)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*mV = 4200;
+	else {
+		ret = fg_read_volt(mmi);
+		if (ret >= 0)
+			*mV = ret;
+	}
+
+	return 0;
+}
+
+int fg_get_current_now(struct gauge_device *gauge_dev, int *mA)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*mA = 0;
+	else {
+		ret = fg_read_current(mmi, mA);
+	}
+
+	return 0;
+}
+
+int fg_get_capacity(struct gauge_device *gauge_dev, int *soc)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*soc = 50;
+	else {
+		ret = fg_read_rsoc(mmi);
+		if (ret >= 0)
+			*soc = ret;
+	}
+
+	return 0;
+}
+
+int fg_get_temp(struct gauge_device *gauge_dev, int *temp)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+
+	if (mmi->fake_battery)
+		*temp = 250;
+	else {
+		*temp = fg_read_temperature(mmi);
+	}
+
+	return 0;
+}
+
+int fg_get_tte(struct gauge_device *gauge_dev, int *tte)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*tte = 10000;
+	else {
+		ret = fg_read_tte(mmi);
+		if (ret >= 0)
+			*tte = ret;
+	}
+
+	return 0;
+}
+
+int fg_get_charge_full(struct gauge_device *gauge_dev, int *charge_full)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*charge_full = 5000 * 1000;
+	else {
+		ret = fg_read_fcc(mmi);
+		if (ret > 0)
+			*charge_full = ret;
+	}
+
+	return 0;
+}
+
+int fg_get_charge_full_design(struct gauge_device *gauge_dev, int *charge_full_design)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*charge_full_design = 5000 * 1000;
+	else {
+		ret = fg_read_dc(mmi);
+		if (ret > 0)
+			*charge_full_design = ret;
+	}
+
+	return 0;
+}
+
+int fg_get_cycle_count(struct gauge_device *gauge_dev, int *cycle_count)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*cycle_count = 1;
+	else {
+		ret = fg_read_cyclecount(mmi);
+		if (ret >= 0)
+			*cycle_count = ret;
+	}
+
+	return 0;
+}
 
 static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
@@ -821,69 +945,11 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 };
 
-
-static int fake_fg_get_property(struct power_supply *psy,
-			enum power_supply_property psp,
-			union power_supply_propval *val)
-{
-	struct mmi_fg_chip *mmi = power_supply_get_drvdata(psy);
-
-	mutex_lock(&mmi->update_lock);
-
-	switch (psp) {
-	case POWER_SUPPLY_PROP_STATUS:
-		val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
-		break;
-	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = 4200* 1000;
-		break;
-	case POWER_SUPPLY_PROP_PRESENT:
-		val->intval = 1;
-		break;
-	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		val->intval = 0;;
-		break;
-	case POWER_SUPPLY_PROP_CAPACITY:
-		val->intval = 50;
-		break;
-	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
-		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-		break;
-	case POWER_SUPPLY_PROP_TEMP:
-		val->intval = 250;
-		break;
-	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW:
-		val->intval = 10000;
-		break;
-	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		val->intval = 5000 * 1000;
-		break;
-	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		val->intval = 5000 * 1000;
-		break;
-	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		val->intval = 1;
-		break;
-	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
-		break;
-	default:
-		mutex_unlock(&mmi->update_lock);
-		return -EINVAL;
-	}
-
-	mutex_unlock(&mmi->update_lock);
-
-	return 0;
-}
-
-
 static int fg_get_property(struct power_supply *psy,
 			enum power_supply_property psp,
 			union power_supply_propval *val)
 {
 	struct mmi_fg_chip *mmi = power_supply_get_drvdata(psy);
-	int ret;
 
 	mutex_lock(&mmi->update_lock);
 
@@ -892,10 +958,8 @@ static int fg_get_property(struct power_supply *psy,
 		val->intval = fg_get_batt_status(mmi);
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		ret = fg_read_volt(mmi);
 		mutex_lock(&mmi->data_lock);
-		if (ret >= 0)
-			mmi->batt_volt = ret;
+		fg_get_voltage_now(mmi->gauge_dev, &mmi->batt_volt);
 		val->intval = mmi->batt_volt * 1000;
 		mutex_unlock(&mmi->data_lock);
 
@@ -905,20 +969,14 @@ static int fg_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		mutex_lock(&mmi->data_lock);
-		fg_read_current(mmi, &mmi->batt_curr);
+		fg_get_current_now(mmi->gauge_dev, &mmi->batt_curr);
 		val->intval = mmi->batt_curr * 1000;
 		mutex_unlock(&mmi->data_lock);
 		break;
 
 	case POWER_SUPPLY_PROP_CAPACITY:
-		if (mmi->fake_soc >= 0) {
-			val->intval = mmi->fake_soc;
-			break;
-		}
-		ret = fg_read_rsoc(mmi);
 		mutex_lock(&mmi->data_lock);
-		if (ret >= 0)
-			mmi->batt_soc = ret;
+		fg_get_capacity(mmi->gauge_dev, &mmi->batt_soc);
 		val->intval = mmi->batt_soc;
 		mutex_unlock(&mmi->data_lock);
 		break;
@@ -928,51 +986,36 @@ static int fg_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_TEMP:
-		if (mmi->fake_temp != -EINVAL) {
-			val->intval = mmi->fake_temp;
-			break;
-		}
-		ret = fg_read_temperature(mmi);
 		mutex_lock(&mmi->data_lock);
-		if (ret > 0)
-			mmi->batt_temp = ret;
+		fg_get_temp(mmi->gauge_dev, &mmi->batt_temp);
 		val->intval = mmi->batt_temp;
 		mutex_unlock(&mmi->data_lock);
 		break;
 
 	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW:
-		ret = fg_read_tte(mmi);
 		mutex_lock(&mmi->data_lock);
-		if (ret >= 0)
-			mmi->batt_tte = ret;
-
+		fg_get_tte(mmi->gauge_dev, &mmi->batt_tte);
 		val->intval = mmi->batt_tte;
 		mutex_unlock(&mmi->data_lock);
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		ret = fg_read_fcc(mmi);
 		mutex_lock(&mmi->data_lock);
-		if (ret > 0)
-			mmi->batt_fcc = ret;
+		fg_get_charge_full(mmi->gauge_dev, &mmi->batt_fcc);
 		val->intval = mmi->batt_fcc * 1000;
 		mutex_unlock(&mmi->data_lock);
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		ret = fg_read_dc(mmi);
 		mutex_lock(&mmi->data_lock);
-		if (ret > 0)
-			mmi->batt_dc = ret;
+		fg_get_charge_full_design(mmi->gauge_dev, &mmi->batt_dc);
 		val->intval = mmi->batt_dc * 1000;
 		mutex_unlock(&mmi->data_lock);
 		break;
 
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		ret = fg_read_cyclecount(mmi);
 		mutex_lock(&mmi->data_lock);
-		if (ret >= 0)
-			mmi->batt_cyclecnt = ret;
+		fg_get_cycle_count(mmi->gauge_dev, &mmi->batt_cyclecnt);
 		val->intval = mmi->batt_cyclecnt;
 		mutex_unlock(&mmi->data_lock);
 		break;
@@ -1015,23 +1058,30 @@ static int battery_chargeType_to_FG(struct mmi_fg_chip *mmi, int ffc_enable)
 
 	return ret;
 }
+
+int fg_set_charge_type(struct gauge_device *gauge_dev, int charge_type)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+
+	if (!mmi->fake_battery)
+		battery_chargeType_to_FG(mmi, charge_type);
+
+	return 0;
+}
+
 static int fg_set_property(struct power_supply *psy,
 			       enum power_supply_property prop,
 			       const union power_supply_propval *val)
 {
 	struct mmi_fg_chip *mmi_fg = power_supply_get_drvdata(psy);
 
+	if (mmi_fg->fake_battery)
+		return 0;
+
 	mutex_lock(&mmi_fg->update_lock);
 
 	fg_dump_registers(mmi_fg);
 	switch (prop) {
-	case POWER_SUPPLY_PROP_TEMP:
-		mmi_fg->fake_temp = val->intval;
-		break;
-	case POWER_SUPPLY_PROP_CAPACITY:
-		mmi_fg->fake_soc = val->intval;
-		power_supply_changed(mmi_fg->fg_psy);
-		break;
 	case POWER_SUPPLY_PROP_TYPE:
 		battery_chargeType_to_FG(mmi_fg, val->intval);
 		break;
@@ -1052,8 +1102,7 @@ static int fg_prop_is_writeable(struct power_supply *psy,
 	int ret;
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_TEMP:
-	case POWER_SUPPLY_PROP_CAPACITY:
+	case POWER_SUPPLY_PROP_TYPE:
 		ret = 1;
 		break;
 	default:
@@ -1069,8 +1118,8 @@ static int fg_psy_register(struct mmi_fg_chip *mmi)
 {
 	struct power_supply_config fg_psy_cfg = {};
 
-	mmi->fg_psy_d.name = "battery";
-	mmi->fg_psy_d.type = POWER_SUPPLY_TYPE_BATTERY;
+	mmi->fg_psy_d.name = "bms";
+	mmi->fg_psy_d.type = POWER_SUPPLY_TYPE_MAINS;
 	mmi->fg_psy_d.properties = fg_props;
 	mmi->fg_psy_d.num_properties = ARRAY_SIZE(fg_props);
 	mmi->fg_psy_d.get_property = mmi->mmi_get_property;
@@ -1246,52 +1295,21 @@ static void fg_update_thread(struct work_struct *work)
 
 }
 
-static int  tcmd_get_bat_temp(void *input, int* val)
-{
-	int ret = 0;
-	struct mmi_fg_chip *mmi_fg = (struct mmi_fg_chip *)input;
+static const struct gauge_properties nfg1000_gauge_props = {
+	.alias_name = "nfg1000",
+};
 
-	*val = mmi_fg->batt_temp / 10;
-
-	return ret;
-}
-
-static int  tcmd_get_bat_voltage(void *input, int* val)
-{
-	int ret = 0;
-	struct mmi_fg_chip *mmi_fg = (struct mmi_fg_chip *)input;
-
-	*val = mmi_fg->batt_volt * 1000;
-
-	return ret;
-}
-
-static int  tcmd_get_bat_ocv(void *input, int* val)
-{
-	int ret = 0;
-	struct mmi_fg_chip *mmi_fg = (struct mmi_fg_chip *)input;
-
-	*val = mmi_fg->batt_volt;
-
-	return ret;
-}
-
-
-static int battery_tcmd_register(struct mmi_fg_chip *mmi_fg)
-{
-	int ret = 0;
-
-	mmi_fg->batt_tcmd_client.data = mmi_fg;
-	mmi_fg->batt_tcmd_client.client_id = MOTO_CHG_TCMD_CLIENT_BAT;
-
-	mmi_fg->batt_tcmd_client.get_bat_temp = tcmd_get_bat_temp;
-	mmi_fg->batt_tcmd_client.get_bat_voltage = tcmd_get_bat_voltage;
-	mmi_fg->batt_tcmd_client.get_bat_ocv= tcmd_get_bat_ocv;
-
-	ret = moto_chg_tcmd_register(&mmi_fg->batt_tcmd_client);
-
-	return ret;
-}
+static struct gauge_ops nfg1000_gauge_ops = {
+	.get_voltage_now = fg_get_voltage_now,
+	.get_current_now = fg_get_current_now,
+	.get_capacity = fg_get_capacity,
+	.get_temperature = fg_get_temp,
+	.get_tte = fg_get_tte,
+	.get_charge_full = fg_get_charge_full,
+	.get_charge_full_design = fg_get_charge_full_design,
+	.get_cycle_count = fg_get_cycle_count,
+	.set_charge_type = fg_set_charge_type,
+};
 
 static int mmi_fg_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
@@ -1319,8 +1337,6 @@ static int mmi_fg_probe(struct i2c_client *client,
 	mmi->batt_curr	= -ENODATA;
 	mmi->batt_cyclecnt = -ENODATA;
 
-	mmi->fake_soc	= -EINVAL;
-	mmi->fake_temp	= -EINVAL;
 	mmi->fake_battery = false;
 
 	if (mmi->chip == NFG1000) {
@@ -1367,14 +1383,13 @@ static int mmi_fg_probe(struct i2c_client *client,
 	}
 
 	if(mmi->fake_battery){
-		mmi->mmi_get_property = fake_fg_get_property;
-		mmi->mmi_set_property = NULL;
 		mmi->mmi_fg_update_thread = fake_fg_update_thread;
 	} else {
-		mmi->mmi_get_property = fg_get_property;
-		mmi->mmi_set_property = fg_set_property;
 		mmi->mmi_fg_update_thread = fg_update_thread;
 	}
+
+	mmi->mmi_get_property = fg_get_property;
+	mmi->mmi_set_property = fg_set_property;
 
 	ret = fg_psy_register(mmi);
 	if (ret)
@@ -1384,11 +1399,21 @@ static int mmi_fg_probe(struct i2c_client *client,
 	if (ret)
 		mmi_err("Failed to register sysfs, err:%d\n", ret);
 
+	mmi->gauge_dev_name = "bms";
+	mmi->gauge_dev = gauge_device_register(mmi->gauge_dev_name,
+					      &client->dev, mmi,
+					      &nfg1000_gauge_ops,
+					      &nfg1000_gauge_props);
+	if (IS_ERR_OR_NULL(mmi->gauge_dev)) {
+		ret = PTR_ERR(mmi->gauge_dev);
+		mmi_err("Failed to register gauge device, err:%d\n", ret);
+		return ret;
+	}
+
 	mmi->fg_workqueue = create_singlethread_workqueue("nfg1000_gauge");
 	INIT_DELAYED_WORK(&mmi->battery_delay_work, mmi->mmi_fg_update_thread);
 	queue_delayed_work(mmi->fg_workqueue, &mmi->battery_delay_work , msecs_to_jiffies(queue_start_work_time));
 
-	battery_tcmd_register(mmi);
 	mmi_log("mmi fuel gauge probe successfully, %s\n", device2str[mmi->chip]);
 
 	return 0;
