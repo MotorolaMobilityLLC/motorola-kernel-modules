@@ -2663,12 +2663,47 @@ static ssize_t ili_palm_settings_store(struct device *dev,
 }
 #endif
 
+#ifdef ILI_TOUCH_STYLUS_TIME
+static ssize_t ili_stylustime_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int value = 0;
+
+	if (size > 2) {
+		ILI_ERR("Invalid value, need enter 1 or 0!\n");
+		return -EINVAL;
+	}
+
+	if (sscanf(buf, "%d", &value) != 1) {
+		ILI_ERR("Failed to convert value.\n");
+		return -EINVAL;
+	}
+	ILI_INFO("value=%d\n", value);
+
+	if(1 == value)
+		ilits->stylustime_enable = true;
+	else
+		ilits->stylustime_enable = false;
+
+	return size;
+}
+
+static ssize_t ili_stylustime_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "stylus timestamp enable: %d\n", ilits->stylustime_enable);
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
 #ifdef ILI_PASSIVE_PEN
 	__ATTR(palm_settings, S_IRUGO | S_IWUSR | S_IWGRP, ili_palm_settings_show, ili_palm_settings_store),
+#endif
+#ifdef ILI_TOUCH_STYLUS_TIME
+	__ATTR(stylustime, S_IRUGO | S_IWUSR | S_IWGRP, ili_stylustime_show, ili_stylustime_store),
 #endif
 	__ATTR_NULL
 };

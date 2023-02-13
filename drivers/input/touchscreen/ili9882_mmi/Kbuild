@@ -60,6 +60,16 @@ ifneq ($(filter m y,$(CONFIG_GTP_DDA_STYLUS)),)
     EXTRA_CFLAGS += -DCONFIG_MOTO_DDA_PASSIVESTYLUS
 endif
 
+ifeq ($(TARGET_BUILD_VARIANT),userdebug)
+    EXTRA_CFLAGS += -DDDA_BUILD_USERDEBUG
+ifneq ($(filter m y,$(CONFIG_ILI_TOUCH_STYLUS_TIME)),)
+    EXTRA_CFLAGS += -DILI_TOUCH_STYLUS_TIME
+endif
+ifneq ($(filter m y,$(CONFIG_DDA_STYLUS_TIME)),)
+    EXTRA_CFLAGS += -DTP_DDA_STYLUS_TIME
+endif
+endif
+
 ili9882_mmi-objs += ili9882.o
 ili9882_mmi-objs += ili9882_spi.o
 ili9882_mmi-objs += ili9882_qcom.o

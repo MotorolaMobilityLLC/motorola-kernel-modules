@@ -37,6 +37,9 @@ int moto_dda_register_cdevice(void);
 #ifdef MOTO_DDA_PASSIVE_STYLUS
 void moto_dda_process_finger_press(uint8_t touch_id, struct dda_finger_coords *finger_data);
 void moto_dda_process_finger_release(uint8_t touch_id);
+#ifdef TP_DDA_STYLUS_TIME
+void moto_dda_stylus_time_stamp(uint8_t en);
+#endif
 #endif	//MOTO_DDA_PASSIVE_STYLUS
 
 #ifdef MOTO_DDA_ACTIVE_STYLUS

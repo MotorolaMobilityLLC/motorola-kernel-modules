@@ -26,6 +26,10 @@
 #include "moto_ts_dda.h"
 #endif
 
+#ifdef ILI_TOUCH_STYLUS_TIME
+extern ktime_t start;
+extern ktime_t end;
+#endif
 
 /*gesture info mode*/
 struct ili_demo_debug_info_id0 {
@@ -1101,6 +1105,14 @@ void ili_report_ap_mode(u8 *buf, int len)
 			ilits->last_touch = 0;
 		}
 	}
+#ifdef ILI_TOUCH_STYLUS_TIME
+	if(ilits->stylustime_enable)
+	{
+		end=ktime_get();
+		ILI_INFO("spend time(%lld)us\n", ktime_to_us(ktime_sub(end,start)));
+		ILI_INFO("report time(%lld)ms\n", ktime_to_ms(ktime_get()));
+	}
+#endif
 	ilitek_tddi_touch_send_debug_data(buf, len);
 }
 

@@ -15,11 +15,29 @@
 #define DDA_TOUCH_ID_MAX 10
 #define DDA_DEVICE_NAME_MAXLEN	32
 
+#ifdef DDA_BUILD_USERDEBUG
+#define DDA_VER_USERDEBUG	1
+#else
+#define DDA_VER_USERDEBUG	0
+#endif
+
+#ifdef TP_DDA_STYLUS_TIME
+bool dda_time_en = 0;
+ktime_t dda_start = 0;
+ktime_t dda_end = 0;
+unsigned int press_count, release_cycle;
+unsigned int report_count, report_cycle;
+#endif
+
 static bool debug_log_flag = false;
 #define DDA_INFO(fmt, args...)    pr_info("[MOTO_DDA_INFO] %s %d: " fmt, __func__, __LINE__, ##args)
 #define DDA_ERR(fmt, args...)    pr_err("[MOTO_DDA_ERR] %s %d: " fmt, __func__, __LINE__, ##args)
 #define DDA_DBG(fmt, args...)    {if(debug_log_flag)pr_debug("[MOTO_DDA_DBG] %s %d: " fmt, __func__, __LINE__, ##args);}
-
+#ifdef DDA_VER_USERDEBUG
+#define DDA_DEBUG(fmt, args...)    pr_info("[MOTO_DDA_DEBUG] %s %d: " fmt, __func__, __LINE__, ##args)
+#else
+#define DDA_DEBUG(fmt, args...)    pr_debug("[MOTO_DDA_DEBUG] %s %d: " fmt, __func__, __LINE__, ##args)
+#endif
 
 struct dda_io_device_name {
 	char device_name[DDA_DEVICE_NAME_MAXLEN];
@@ -240,6 +258,14 @@ static int get_finger_report(int id, unsigned long arg){
 	unsigned char wp;
 	unsigned char num;
 	int touch_id;
+
+#ifdef TP_DDA_STYLUS_TIME
+	if (dda_time_en) {
+		dda_start = ktime_get();
+		//DDA_DEBUG("dda finger report time start:(%lld)ms\n", ktime_to_ms(dda_start));
+	}
+#endif
+
 	//enter to critical session
 	local_irq_save(flags);
 	touch_id = dda_finger_id_assign_table[id];
@@ -277,10 +303,45 @@ static int get_finger_report(int id, unsigned long arg){
 
 
 	if (copy_to_user((void __user *)arg, &finger_reports, sizeof(finger_reports))) {
+		DDA_DEBUG("fail return -EFAULT:-%d\n", EFAULT);
 		return -EFAULT;
 	}
+
+#ifdef TP_DDA_STYLUS_TIME
+	if (dda_time_en) {
+		dda_end = ktime_get();
+		if (report_cycle)
+			DDA_DEBUG("dda finger report time(%lld)ms, report_count=%d, report_cycle=%d\n", ktime_to_ms(dda_end), report_count, report_cycle);
+		else
+			DDA_DEBUG("dda finger report time(%lld)ms, report_count=%d\n", ktime_to_ms(dda_end), report_count);
+
+		report_count++;
+		if (!report_count)
+			report_cycle++;
+	}
+#endif
+
 	return 0;
 }
+
+#ifdef TP_DDA_STYLUS_TIME
+void moto_dda_stylus_time_stamp(uint8_t en) {
+	if (en) {
+		dda_start = ktime_get();
+		DDA_DEBUG("dda stamp time:(%lld)ms\n", ktime_to_ms(dda_start));
+		if (!dda_time_en)
+			dda_time_en = en;
+	} else if (dda_time_en) {
+		dda_time_en = 0;
+		DDA_DEBUG("dda disable stylus time\n");
+		report_count = 0;
+		report_cycle = 0;
+		press_count = 0;
+		release_cycle = 0;
+	}
+}
+#endif
+
 #endif //MOTO_DDA_PASSIVE_STYLUS
 
 #ifdef MOTO_DDA_ACTIVE_STYLUS
@@ -322,7 +383,9 @@ static int get_pen_report(unsigned long arg){
 #endif //MOTO_DDA_ACTIVE_STYLUS
 
 static int get_device_name(unsigned long arg){
+	DDA_DEBUG("enter, dda_device_name=%s\n", dda_device_name);
 	if (copy_to_user((void __user *)arg, &dda_device_name, sizeof(dda_device_name))) {
+		DDA_INFO("return -EFAULT:-%d\n", EFAULT);
 		return -EFAULT;
 	}
 	return 0;
@@ -343,6 +406,7 @@ void moto_dda_process_finger_press(uint8_t touch_id, struct dda_finger_coords *f
 	unsigned char id_is_found;
 
 	if(touch_id >= DDA_TOUCH_ID_MAX){
+		DDA_DEBUG("touch_id:%d > DDA_TOUCH_ID_MAX %d, return\n", touch_id, DDA_TOUCH_ID_MAX);
 		return;
 	}
 
@@ -357,6 +421,12 @@ void moto_dda_process_finger_press(uint8_t touch_id, struct dda_finger_coords *f
 	pfinger_info->coords.major = finger_data->major;
 	pfinger_info->frame_no = dda_finger_report_buf[touch_id].frame_no;
 	DDA_DBG("P:[%d] %d %d %d (%d)\n",touch_id, finger_data->x, finger_data->y, finger_data->p, dda_finger_report_buf[touch_id].frame_no);
+#ifdef TP_DDA_STYLUS_TIME
+	if (dda_time_en) {
+		press_count++;
+		DDA_DEBUG("P:[%d] %d %d %d (%d), press_count=%d\n",touch_id, finger_data->x, finger_data->y, finger_data->p, dda_finger_report_buf[touch_id].frame_no, press_count);
+	}
+#endif
 	dda_finger_report_buf[touch_id].frame_no++;
 	if(DDA_FINGER_RELEASE == dda_finger_report_buf[touch_id].last_status){
 		pfinger_info->coords.status =  DDA_FINGER_ENTER;
@@ -409,6 +479,13 @@ void moto_dda_process_finger_release(uint8_t touch_id) {
 	pfinger_info->coords.major = 0;
 	pfinger_info->frame_no = dda_finger_report_buf[touch_id].frame_no;
 	DDA_DBG("R:[%d] (%d)\n",touch_id, dda_finger_report_buf[touch_id].frame_no);
+#ifdef TP_DDA_STYLUS_TIME
+	if (dda_time_en) {
+		DDA_DEBUG("R:[%d] (%d), press count=%d, rel cycle=%d\n",touch_id, dda_finger_report_buf[touch_id].frame_no, press_count, release_cycle);
+		release_cycle++;
+		press_count = 0;
+	}
+#endif
 	dda_finger_report_buf[touch_id].frame_no++;
 	pfinger_info->coords.status =  DDA_FINGER_RELEASE;
 	dda_finger_report_buf[touch_id].last_status = pfinger_info->coords.status;
@@ -474,6 +551,7 @@ void moto_dda_init(char *device_name) {
 	strncpy(dda_device_name,device_name,sizeof(dda_device_name)-1);
 
 #ifdef MOTO_DDA_PASSIVE_STYLUS
+	DDA_INFO("enter\n");
 	for(cnt =0;cnt<DDA_TOUCH_ID_MAX;cnt++ ){
 		dda_finger_report_buf[cnt].finger_report_num = 0;
 		dda_finger_report_buf[cnt].frame_no = 0;
