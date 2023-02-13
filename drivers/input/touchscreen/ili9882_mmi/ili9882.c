@@ -25,6 +25,15 @@
 #include "moto_ts_dda.h"
 #endif
 
+#ifdef ILI_TOUCH_STYLUS_TIME
+ktime_t start = 0;
+ktime_t end = 0;
+#endif
+
+#ifdef TP_DDA_STYLUS_TIME
+bool dda_time_stamp;
+#endif
+
 /* Debug level */
 bool debug_en = DEBUG_OUTPUT;
 EXPORT_SYMBOL(debug_en);
@@ -790,6 +799,23 @@ int ili_report_handler(void)
 	u8 *trdata = NULL;
 	int rlen = 0;
 	int tmp = debug_en;
+
+#ifdef ILI_TOUCH_STYLUS_TIME
+	if(ilits->stylustime_enable) {
+		start = ktime_get();
+	}
+#endif
+
+#ifdef TP_DDA_STYLUS_TIME
+	if(ilits->stylustime_enable && ilits->canvas_value) {
+		moto_dda_stylus_time_stamp(1);
+		dda_time_stamp = 1;
+	} else if (dda_time_stamp) {
+		ILI_INFO("disable stylustime\n");
+		moto_dda_stylus_time_stamp(0);
+		dda_time_stamp = 0;
+	}
+#endif
 
 	/* Just in case these stats couldn't be blocked in top half context */
 	if (!ilits->boot || !ilits->report || atomic_read(&ilits->tp_reset) ||

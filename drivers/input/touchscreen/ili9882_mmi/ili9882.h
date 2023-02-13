@@ -1033,6 +1033,10 @@ struct ilitek_ts_data {
 	struct wakeup_source *gesture_wakelock;
 #endif
 #endif //ILI_SENSOR_EN
+
+#ifdef ILI_TOUCH_STYLUS_TIME
+	bool stylustime_enable;
+#endif
 };
 extern struct ilitek_ts_data *ilits;
 
