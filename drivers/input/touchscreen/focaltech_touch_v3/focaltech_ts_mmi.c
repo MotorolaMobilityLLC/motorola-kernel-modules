@@ -16,6 +16,32 @@
 #include <linux/regulator/consumer.h>
 #include "focaltech_core.h"
 
+#define EDGE_SWITCH_CMD            0x17
+#define ROTATE_DEFAULT_0           0x00
+#define ROTATE_LEFT_90             0X40
+#define ROTATE_RIGHT_90            0x80
+#define DEFAULT_EDGE               0x00
+#define SMALL_EDGE                 0x40
+#define BIG_EDGE                   0x80
+
+/* hal settings */
+#define ROTATE_0   0
+#define ROTATE_90   1
+#define ROTATE_180   2
+#define ROTATE_270  3
+#define BIG_MODE   1
+#define SMALL_MODE    2
+#define DEFAULT_MODE   0
+#define MAX_ATTRS_ENTRIES 10
+
+#define NORMAL_DEFAULT_MODE 10
+#define NORMAL_SMALL_MODE 11
+#define NORMAL_BIG_MODE 12
+
+#define NORMAL_DEFAULT_EDGE               0x08
+#define NORMAL_SMALL_EDGE                 0x48
+#define NORMAL_BIG_EDGE                   0x88
+
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
 //extern int ts_mmi_dev_register(struct device *parent, struct ts_mmi_methods *mdata);
 //extern void ts_mmi_dev_unregister(struct device *parent);
@@ -28,6 +54,224 @@
 		return -ENODEV; \
 	} \
 }
+
+static ssize_t fts_edge_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t fts_edge_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+
+static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
+	fts_edge_show, fts_edge_store);
+
+static struct attribute *ext_attributes[MAX_ATTRS_ENTRIES];
+static struct attribute_group ext_attr_group = {
+	.attrs = ext_attributes,
+};
+
+#define ADD_ATTR(name) { \
+	if (idx < MAX_ATTRS_ENTRIES)  { \
+		dev_info(dev, "%s: [%d] adding %p\n", __func__, idx, &dev_attr_##name.attr); \
+		ext_attributes[idx] = &dev_attr_##name.attr; \
+		idx++; \
+	} else { \
+		dev_err(dev, "%s: cannot add attribute '%s'\n", __func__, #name); \
+	} \
+}
+
+static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
+{
+	int idx = 0;
+	struct fts_ts_data *ts_data;
+	struct fts_ts_platform_data *pdata;
+
+	GET_TS_DATA(dev);
+	pdata = ts_data->pdata;
+
+	if (pdata->edge_ctrl)
+		ADD_ATTR(edge);
+/*
+	if (ts_data->board_data.interpolation_ctrl)
+		ADD_ATTR(interpolation);
+
+	if (ts_data->board_data.sample_ctrl)
+		ADD_ATTR(sample);
+
+	if (ts_data->board_data.stylus_mode_ctrl)
+		ADD_ATTR(stylus_mode);
+
+	if (ts_data->board_data.sensitivity_ctrl)
+		ADD_ATTR(sensitivity);
+
+#ifdef CONFIG_GTP_LAST_TIME
+	ADD_ATTR(timestamp);
+#endif
+*/
+	if (idx) {
+		ext_attributes[idx] = NULL;
+		*group = &ext_attr_group;
+	} else
+		*group = NULL;
+
+	return 0;
+}
+
+int fts_set_edge_mode(struct focaltech_mode_info mode)
+{
+	u8 reg_value_8c = 0;
+	u8 reg_value_8d = 0;
+	int ret = 0;
+
+	switch (mode.edge_mode[0]) {
+	case ROTATE_DEFAULT_0:
+		reg_value_8c = 0;
+		break;
+	case ROTATE_LEFT_90:
+		reg_value_8c = 1;
+		break;
+	case ROTATE_RIGHT_90:
+		reg_value_8c = 2;
+		break;
+	default:
+		FTS_ERROR("Invalid edge mode!");
+		return -EINVAL;
+	}
+
+	switch (mode.edge_mode[1]) {
+	case DEFAULT_EDGE:
+		reg_value_8d = 0;
+		break;
+	case SMALL_EDGE:
+		reg_value_8d = 1;
+		break;
+	case BIG_EDGE:
+		reg_value_8d = 2;
+		break;
+	case NORMAL_DEFAULT_EDGE:
+		reg_value_8d = 0;
+		break;
+	case NORMAL_SMALL_EDGE:
+		reg_value_8d = 1;
+		break;
+	case NORMAL_BIG_EDGE:
+		reg_value_8d = 2;
+		break;
+	default:
+		FTS_ERROR("Invalid edge mode!");
+		return -EINVAL;
+	}
+
+	ret = fts_write_reg(0x8C, reg_value_8c);
+	if (ret < 0) {
+		FTS_ERROR("set reg 0x8C fail, ret=%d", ret);
+		return -EINVAL;
+	}
+
+	ret = fts_write_reg(0x8D, reg_value_8d);
+	if (ret < 0) {
+		FTS_ERROR("set reg 0x8D fail, ret=%d", ret);
+		return -EINVAL;
+	}
+
+	FTS_INFO("Write edge value (%02x %02x)",
+				reg_value_8c, reg_value_8d);
+	return 0;
+}
+
+static ssize_t fts_edge_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	int edge_cmd[2] = { 0 };
+	unsigned int args[2] = { 0 };
+	struct fts_ts_data *ts_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	ret = sscanf(buf, "%d %d", &args[0], &args[1]);
+	if (ret < 2)
+		return -EINVAL;
+
+	switch (args[0]) {
+	case DEFAULT_MODE:
+		edge_cmd[1] = DEFAULT_EDGE;
+		break;
+	case SMALL_MODE:
+		edge_cmd[1] = SMALL_EDGE;
+		break;
+	case BIG_MODE:
+		edge_cmd[1] = BIG_EDGE;
+		break;
+	case NORMAL_DEFAULT_MODE:
+		edge_cmd[1] = NORMAL_DEFAULT_EDGE;
+		break;
+	case NORMAL_SMALL_MODE:
+		edge_cmd[1] = NORMAL_SMALL_EDGE;
+		break;
+	case NORMAL_BIG_MODE:
+		edge_cmd[1] = NORMAL_BIG_EDGE;
+		break;
+	default:
+		FTS_ERROR("Invalid edge mode: %d!", args[0]);
+		return -EINVAL;
+	}
+
+	if (ROTATE_0 == args[1]) {
+		edge_cmd[0] = ROTATE_DEFAULT_0;
+	} else if (ROTATE_90 == args[1]) {
+		edge_cmd[0] = ROTATE_RIGHT_90;
+	} else if (ROTATE_270 == args[1]) {
+		edge_cmd[0] = ROTATE_LEFT_90;
+	} else {
+		FTS_ERROR("Invalid rotation mode: %d!", args[1]);
+		return -EINVAL;
+	}
+
+	mutex_lock(&ts_data->mode_lock);
+	memcpy(ts_data->get_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
+	if (!memcmp(ts_data->set_mode.edge_mode, edge_cmd, sizeof(edge_cmd))) {
+		FTS_INFO("The value (%02x %02x) is same,so not write.",
+					edge_cmd[0], edge_cmd[1]);
+		ret = size;
+		goto exit;
+	}
+
+	if (ts_data->power_disabled) {
+		FTS_ERROR("The touch is in sleep state, restore the value when resume");
+		ret = size;
+		goto exit;
+	}
+
+	ret = fts_set_edge_mode(ts_data->get_mode);
+	if (ret < 0) {
+		FTS_ERROR("failed to send edge switch cmd");
+		goto exit;
+	}
+
+	memcpy(ts_data->set_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
+	msleep(20);
+	ret = size;
+	FTS_INFO("Success to set edge = %02x, rotation = %02x", edge_cmd[1], edge_cmd[0]);
+
+exit:
+	mutex_unlock(&ts_data->mode_lock);
+	return ret;
+}
+
+static ssize_t fts_edge_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	FTS_INFO("edge area = %02x, rotation = %02x\n",
+		ts_data->set_mode.edge_mode[1], ts_data->set_mode.edge_mode[0]);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x 0x%02x",
+		ts_data->set_mode.edge_mode[1], ts_data->set_mode.edge_mode[0]);
+}
+
 static int fts_mmi_methods_get_vendor(struct device *dev, void *cdata)
 {
 	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "focaltech");
@@ -310,8 +554,11 @@ static int fts_mmi_pre_resume(struct device *dev)
 static int fts_mmi_post_resume(struct device *dev)
 {
 	struct fts_ts_data *ts_data;
+	struct fts_ts_platform_data *pdata;
+	int ret = 0;
 
 	GET_TS_DATA(dev);
+	pdata = ts_data->pdata;
 
 	if (ts_data->gesture_support == true) {
 		FTS_INFO("Reset IC in resume");
@@ -343,6 +590,21 @@ static int fts_mmi_post_resume(struct device *dev)
 #if FTS_GESTURE_EN
 exit:
 #endif
+	mutex_lock(&ts_data->mode_lock);
+	/* All IC status are cleared after reset */
+	memset(&ts_data->set_mode, 0 , sizeof(ts_data->set_mode));
+	if (pdata->edge_ctrl) {
+		ret = fts_set_edge_mode(ts_data->get_mode);
+		if (!ret) {
+			memcpy(ts_data->set_mode.edge_mode, ts_data->get_mode.edge_mode,
+					sizeof(ts_data->get_mode.edge_mode));
+			msleep(20);
+			FTS_INFO("Success to set edge area = %02x, rotation = %02x",
+				ts_data->get_mode.edge_mode[1], ts_data->get_mode.edge_mode[0]);
+		}
+	}
+	mutex_unlock(&ts_data->mode_lock);
+
 	FTS_FUNC_EXIT();
 	ts_data->suspended = false;
 
@@ -422,6 +684,8 @@ static struct ts_mmi_methods fts_mmi_methods = {
 #endif
 	/* Firmware */
 	.firmware_update = fts_mmi_firmware_update,
+	/* vendor specific attribute group */
+	.extend_attribute_group = fts_mmi_extend_attribute_group,
 	/* PM callback */
 	.panel_state = fts_mmi_panel_state,
 	.pre_resume = fts_mmi_pre_resume,
@@ -434,9 +698,11 @@ static struct ts_mmi_methods fts_mmi_methods = {
 int fts_mmi_dev_register(struct fts_ts_data *ts_data) {
 	int ret;
 
+	mutex_init(&ts_data->mode_lock);
 	ret = ts_mmi_dev_register(ts_data->dev, &fts_mmi_methods);
 	if (ret) {
 		dev_err(ts_data->dev, "Failed to register ts mmi\n");
+		mutex_destroy(&ts_data->mode_lock);
 		return ret;
 	}
 
@@ -447,6 +713,7 @@ int fts_mmi_dev_register(struct fts_ts_data *ts_data) {
 }
 
 void fts_mmi_dev_unregister(struct fts_ts_data *ts_data) {
+	mutex_destroy(&ts_data->mode_lock);
 	ts_mmi_dev_unregister(ts_data->dev);
 }
 
