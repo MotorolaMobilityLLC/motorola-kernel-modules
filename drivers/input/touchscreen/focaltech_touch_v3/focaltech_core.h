@@ -150,6 +150,7 @@ struct fts_ts_platform_data {
     u32 x_min;
     u32 y_min;
     u32 max_touch_number;
+    bool edge_ctrl;
 };
 
 struct ts_event {
@@ -182,6 +183,13 @@ struct pen_event {
     int tilt_y;
     int azimuth;
     int tool_type;
+};
+
+struct focaltech_mode_info {
+	int interpolation;
+	int sample;
+	int report_rate_mode;
+	int edge_mode[2];
 };
 
 struct fts_ts_data {
@@ -286,6 +294,10 @@ struct fts_ts_data {
     struct wakeup_source *palm_gesture_read_wakelock;
 #endif
 #endif
+
+    struct mutex mode_lock;
+    struct focaltech_mode_info set_mode;
+    struct focaltech_mode_info get_mode;
 
 #if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
     struct ts_mmi_class_methods *imports;
