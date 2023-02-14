@@ -1891,6 +1891,11 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
 
+	pdata->edge_ctrl = of_property_read_bool(np,
+					"focaltech,edge-ctrl");
+	if (pdata->edge_ctrl)
+		FTS_INFO("support focaltech edge mode");
+
 	chosen = of_find_node_by_name(NULL, "chosen");
 	if (chosen) {
 		ret = of_property_read_string(chosen, PRIM_PANEL_NAME,
