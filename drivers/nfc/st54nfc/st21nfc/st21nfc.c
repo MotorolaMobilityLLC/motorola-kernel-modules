@@ -95,7 +95,7 @@ static char *I2CDMAReadBuf; /*= NULL;*/ /* unnecessary initialise */
 static unsigned int I2CDMAReadBuf_pa; /* = NULL; */
 #endif /* KRNMTKLEGACY_I2C */
 
-static bool enable_debug_log;
+static bool enable_debug_log = true;
 
 /*The enum is used to index a pw_states array, the values matter here*/
 enum st21nfc_power_state {
@@ -293,7 +293,7 @@ static int st21nfc_loc_set_polaritymode(struct st21nfc_device *st21nfc_dev,
 	 * for reading.  it is cleared when all data has been read.
 	 */
 	if (enable_debug_log)
-		pr_debug("%s : requesting IRQ %d\n", __func__, client->irq);
+		pr_info("%s : requesting IRQ %d\n", __func__, client->irq);
 	st21nfc_dev->irq_enabled = true;
 
 	ret = devm_request_irq(dev, client->irq, st21nfc_dev_irq_handler,
@@ -464,7 +464,7 @@ static ssize_t st21nfc_dev_read(struct file *filp, char __user *buf,
 		count = MAX_BUFFER_SIZE;
 
 	if (enable_debug_log)
-		pr_debug("%s : reading %zu bytes.\n", __func__, count);
+		pr_info("%s : reading %zu bytes.\n", __func__, count);
 
 	if (gpiod_get_value(st21nfc_dev->gpiod_irq) == 0) {
 		pr_info("%s : read called but no IRQ.\n", __func__);
@@ -548,12 +548,12 @@ static ssize_t st21nfc_dev_read(struct file *filp, char __user *buf,
 		    (st21nfc_dev->buffer[2] > 0)) {
 			st21nfc_dev->r_state_current = ST21NFC_PAYLOAD;
 			if (enable_debug_log)
-				pr_debug("%s : new state = ST21NFC_PAYLOAD\n",
+				pr_info("%s : new state = ST21NFC_PAYLOAD\n",
 					 __func__);
 		} else {
 			st21nfc_dev->r_state_current = ST21NFC_HEADER;
 			if (enable_debug_log)
-				pr_debug("%s : new state = ST21NFC_HEADER\n",
+				pr_info("%s : new state = ST21NFC_HEADER\n",
 					 __func__);
 		}
 	}
@@ -577,7 +577,7 @@ static ssize_t st21nfc_dev_write(struct file *filp, const char __user *buf,
 
 	if (enable_debug_log) {
 		//pr_debug("%s: st21nfc_dev ptr %p\n", __func__, st21nfc_dev);
-		pr_debug("%s : writing %zu bytes.\n", __func__, count);
+		pr_info("%s : writing %zu bytes.\n", __func__, count);
 	}
 
 	if (count > MAX_BUFFER_SIZE)
@@ -639,7 +639,7 @@ static int st21nfc_release(struct inode *inode, struct file *file)
 
 	st21nfc_dev->device_open = false;
 	if (enable_debug_log)
-		pr_debug("%s : device_open  = false\n", __func__);
+		pr_info("%s : device_open  = false\n", __func__);
 
 	return 0;
 }
@@ -750,13 +750,13 @@ static long st21nfc_dev_ioctl(struct file *filp, unsigned int cmd,
 			ret = 1;
 
 		if (enable_debug_log)
-			pr_debug("%s get gpio result %d\n", __func__, ret);
+			pr_info("%s get gpio result %d\n", __func__, ret);
 		break;
 	case ST21NFC_GET_POLARITY:
 	case ST21NFC_LEGACY_GET_POLARITY:
 		ret = st21nfc_dev->polarity_mode;
 		if (enable_debug_log)
-			pr_debug("%s get polarity %d\n", __func__, ret);
+			pr_info("%s get polarity %d\n", __func__, ret);
 		break;
 	case ST21NFC_RECOVERY:
 	case ST21NFC_LEGACY_RECOVERY:
@@ -832,7 +832,7 @@ static long st21nfc_dev_ioctl(struct file *filp, unsigned int cmd,
 					st21nfc_st54spi_data);
 		}
 		if (enable_debug_log)
-			pr_debug("%s use ESE %d : %d\n", __func__, ret, tmp);
+			pr_info("%s use ESE %d : %d\n", __func__, ret, tmp);
 		break;
 	default:
 		pr_err("%s bad ioctl %u\n", __func__, cmd);
@@ -856,14 +856,14 @@ static unsigned int st21nfc_poll(struct file *file, poll_table *wait)
 	mutex_lock(&st21nfc_dev->irq_dir_mutex);
 	if (pinlev != 0) {
 		if (enable_debug_log)
-			pr_debug("%s return ready\n", __func__);
+			pr_info("%s return ready\n", __func__);
 
 		mask = POLLIN | POLLRDNORM; /* signal data avail */
 		st21nfc_disable_irq(st21nfc_dev);
 	} else {
 		/* Wake_up_pin is low. Activate ISR  */
 		if (enable_debug_log)
-			pr_debug("%s enable irq\n", __func__);
+			pr_info("%s enable irq\n", __func__);
 
 		st21nfc_enable_irq(st21nfc_dev);
 	}
@@ -1536,7 +1536,7 @@ static int __init st21nfc_dev_init(void)
 #ifndef KRNMTKLEGACY_GPIO
 	platform_driver_register(&st21nfc_platform_driver);
 	if (enable_debug_log)
-		pr_debug("Loading st21nfc i2c driver\n");
+		pr_info("Loading st21nfc i2c driver\n");
 #endif
 	return i2c_add_driver(&st21nfc_driver);
 }
