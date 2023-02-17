@@ -84,6 +84,7 @@ struct mm8xxx_device_info {
 	u8 *cmds;
 	struct iio_channel *Batt_NTC_channel;
 	bool fake_battery;
+	bool disable_battery_update;
 	u32 latest_fw_version;
 	u32 first_battery_param_ver;
 	u32 second_battery_param_ver;
@@ -1007,8 +1008,6 @@ static int mm8xxx_battery_write(struct mm8xxx_device_info *di, u8 cmd,
 #endif
 }
 
-static bool enable_reset_delay = false;
-
 static int mm8xxx_battery_write_Nbyte(struct mm8xxx_device_info *di, u8 cmd,
 				unsigned int value, int byte_num)
 {
@@ -1035,10 +1034,7 @@ static int mm8xxx_battery_write_Nbyte(struct mm8xxx_device_info *di, u8 cmd,
 	msg.flags = 0;
 
 	ret = i2c_transfer(client->adapter, &msg, 1);
-	if (enable_reset_delay) {
-		mdelay(100);
-		mm_info("Dealy 100ms for boot mode reset!\n");
-	}
+
 	if (ret < 0)
 		return ret;
 	else if (ret != 1)
@@ -2303,6 +2299,8 @@ static int mm8xxx_battery_parse_dts(struct mm8xxx_device_info *di)
 	struct device_node *np = di->dev->of_node;
 	int rc;
 
+	di->disable_battery_update = of_property_read_bool(np, "disable-battery-update");
+
 	rc = of_property_read_u32(np, "latest_fw_version", &di->latest_fw_version);
 	if(rc < 0){
 		di->latest_fw_version = MM8013_LATEST_FW_VERSION;
@@ -2427,15 +2425,14 @@ static int mm8xxx_battery_probe(struct i2c_client *client,
 
 		if ((fg_fw_ver == 0x0024) && (fg_param_ver == 0x0006)) {
 			/* System Reset Request */
-			enable_reset_delay = true;
 			mm_info("The FG is in boot mode, Requesting system resetting ... ");
 			if (mm8xxx_battery_write_Nbyte(di, COMMAND_MODECONTROL, 0x80, 1) < 0) {
 				mm_info("Reset fg system failed\n");
 			}
-			enable_reset_delay = false;
+			mdelay(600); //need delay time to wait the reset done
 		}
 
-		if (is_factory_mode())
+		if (is_factory_mode() && (!di->disable_battery_update))
 		{
 			if (fg_fw_ver < 0 || fg_param_ver < 0 || fg_battery_id < 0) {
 				update_index = UPDATE_NONE;
