@@ -51,6 +51,7 @@ static enum power_supply_property batt_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
@@ -124,6 +125,12 @@ static int batt_get_prop(struct power_supply *psy,
 		if (ret >= 0)
 			chip->charge_full_design = temp;
 		val->intval = chip->charge_full_design * 1000;
+		break;
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		ret = gauge_dev_get_charge_counter(chip->gauge_dev, &temp);
+		if (ret >= 0)
+			chip->charge_counter = temp;
+		val->intval = chip->charge_counter * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		ret = gauge_dev_get_cycle_count(chip->gauge_dev, &temp);

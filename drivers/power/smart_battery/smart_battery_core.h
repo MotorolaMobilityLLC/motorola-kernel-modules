@@ -61,6 +61,7 @@ struct mmi_smart_battery {
 	int				batt_tte;
 	int				charge_full;
 	int				charge_full_design;
+	int				charge_counter;
 	int				cycle_count;
 
 	int				fake_soc;
