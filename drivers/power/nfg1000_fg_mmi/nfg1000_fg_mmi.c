@@ -914,6 +914,22 @@ int fg_get_charge_full_design(struct gauge_device *gauge_dev, int *charge_full_d
 	return 0;
 }
 
+int fg_get_charge_counter(struct gauge_device *gauge_dev, int *charge_counter)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*charge_counter = 2500 * 1000;
+	else {
+		ret = fg_read_rm(mmi);
+		if (ret > 0)
+			*charge_counter = ret;
+	}
+
+	return 0;
+}
+
 int fg_get_cycle_count(struct gauge_device *gauge_dev, int *cycle_count)
 {
 	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
@@ -940,6 +956,7 @@ static enum power_supply_property fg_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
@@ -1013,6 +1030,12 @@ static int fg_get_property(struct power_supply *psy,
 		mutex_unlock(&mmi->data_lock);
 		break;
 
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		mutex_lock(&mmi->data_lock);
+		fg_get_charge_counter(mmi->gauge_dev, &mmi->batt_rm);
+		val->intval = mmi->batt_rm * 1000;
+		mutex_unlock(&mmi->data_lock);
+		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		mutex_lock(&mmi->data_lock);
 		fg_get_cycle_count(mmi->gauge_dev, &mmi->batt_cyclecnt);
@@ -1307,6 +1330,7 @@ static struct gauge_ops nfg1000_gauge_ops = {
 	.get_tte = fg_get_tte,
 	.get_charge_full = fg_get_charge_full,
 	.get_charge_full_design = fg_get_charge_full_design,
+	.get_charge_counter = fg_get_charge_counter,
 	.get_cycle_count = fg_get_cycle_count,
 	.set_charge_type = fg_set_charge_type,
 };
