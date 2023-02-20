@@ -27,6 +27,11 @@ ktime_t dda_start = 0;
 ktime_t dda_end = 0;
 unsigned int press_count, release_cycle;
 unsigned int report_count, report_cycle;
+
+#endif
+
+#ifdef DDA_REPORT_LOG_CHECK
+unsigned int reported_cnt;
 #endif
 
 static bool debug_log_flag = false;
@@ -320,6 +325,19 @@ static int get_finger_report(int id, unsigned long arg){
 			report_cycle++;
 	}
 #endif
+
+#ifdef DDA_REPORT_LOG_CHECK
+#if DDA_VER_USERDEBUG
+	if (!(reported_cnt%200))
+		DDA_INFO("touch_id=%d, num=%d, reported count=%d\n", touch_id, num, reported_cnt);
+#else
+	if (!(reported_cnt%500)) {
+		//reported count check to avoid impact performance
+		DDA_INFO("touch_id=%d, num=%d, reported count=%d\n", touch_id, num, reported_cnt);
+	}
+#endif
+	reported_cnt++;
+#endif //DDA_REPORT_LOG_CHECK
 
 	return 0;
 }
