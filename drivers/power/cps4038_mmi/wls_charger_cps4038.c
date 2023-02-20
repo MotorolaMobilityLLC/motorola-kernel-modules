@@ -2423,7 +2423,10 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
             break;
 
         case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-            val->intval = cps_wls_get_rx_vout() * 1000;
+            if (chip->rx_ldo_on || CPS_TX_MODE)
+                val->intval = cps_wls_get_rx_vout() * 1000;
+            else
+                val->intval = -1;
             break;
 
         case POWER_SUPPLY_PROP_CURRENT_MAX:
@@ -2431,10 +2434,16 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
             break;
 
         case POWER_SUPPLY_PROP_CURRENT_NOW:
-            val->intval = cps_wls_get_rx_iout() * 1000;
+            if (chip->rx_ldo_on || CPS_TX_MODE)
+                val->intval = cps_wls_get_rx_iout() * 1000;
+            else
+                val->intval = -1;
             break;
          case POWER_SUPPLY_PROP_POWER_NOW:
-            val->intval = cps_wls_get_rx_neg_power() / 2;
+            if (chip->rx_ldo_on || CPS_TX_MODE)
+                val->intval = cps_wls_get_rx_neg_power() / 2;
+            else
+                val->intval = -1;
             break;
         default:
             return -EINVAL;
