@@ -26,6 +26,10 @@
 #include <linux/version.h>
 #include <linux/mmi_kernel_common.h>
 
+#ifdef NVT_TOUCH_STYLUS_TIME
+#include <linux/ktime.h>
+#endif
+
 #ifdef NVT_SENSOR_EN
 #include <linux/sensors.h>
 #endif
@@ -219,6 +223,9 @@ struct nvt_ts_data {
 	enum display_state screen_state;
 	struct mutex state_mutex;
 	struct nvt_sensor_platform_data *sensor_pdata;
+#endif
+#ifdef NVT_TOUCH_STYLUS_TIME
+	bool stylustime_enable;
 #endif
 #ifdef NOVATECH_PEN_NOTIFIER
 	bool fw_ready_flag;
