@@ -66,6 +66,10 @@ enum touch_state {
 #include "moto_ts_dda.h"
 #endif
 
+#ifdef TP_DDA_STYLUS_TIME
+	bool dda_time_stamp;
+#endif
+
 #ifdef NVT_SENSOR_EN
 #ifdef CONFIG_HAS_WAKELOCK
 static struct wake_lock gesture_wakelock;
@@ -1615,6 +1619,24 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	int32_t i = 0;
 	int32_t finger_cnt = 0;
 
+#ifdef NVT_TOUCH_STYLUS_TIME
+	ktime_t start = 0;
+	ktime_t end = 0;
+	if(ts->stylustime_enable)
+		start = ktime_get();
+#endif
+
+#ifdef TP_DDA_STYLUS_TIME
+	if(ts->stylustime_enable) {
+		moto_dda_stylus_time_stamp(1);
+		dda_time_stamp = 1;
+	} else if (dda_time_stamp) {
+		NVT_LOG("disable stylustime\n");
+		moto_dda_stylus_time_stamp(0);
+		dda_time_stamp = 0;
+	}
+#endif
+
 #if WAKEUP_GESTURE
 	if (bTouchIsAwake == 0) {
 		pm_wakeup_event(&ts->input_dev->dev, 5000);
@@ -1873,6 +1895,14 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 
 	input_sync(ts->input_dev);
 
+#ifdef NVT_TOUCH_STYLUS_TIME
+	if(ts->stylustime_enable)
+	{
+		end=ktime_get();
+		NVT_LOG("spend time(%lld)us\n", ktime_to_us(ktime_sub(end,start)));
+		NVT_LOG("report time(%lld)ms\n", ktime_to_ms(ktime_get()));
+	}
+#endif
 XFER_ERROR:
 
 	mutex_unlock(&ts->lock);
@@ -2139,12 +2169,49 @@ static ssize_t nvt_palm_settings_store(struct device *dev,
 }
 #endif
 
+#ifdef NVT_TOUCH_STYLUS_TIME
+static ssize_t nvt_stylustime_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	uint8_t value = 0;
+
+	if (size > 2) {
+		NVT_ERR("Invalid value, need enter 1 or 0!\n");
+		return -EINVAL;
+	}
+
+	ret = kstrtou8(buf, 0, &value);
+	if (ret < 0) {
+		NVT_ERR("Failed to convert value.\n");
+		return -EINVAL;
+	}
+	NVT_LOG("value=%d\n", value);
+
+	if(1 == value)
+		ts->stylustime_enable = true;
+	else
+		ts->stylustime_enable = false;
+
+	return size;
+}
+
+static ssize_t nvt_stylustime_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "stylus timestamp enable: %d\n", ts->stylustime_enable);
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
 #ifdef PALM_GESTURE
 	__ATTR(palm_settings, S_IRUGO | S_IWUSR | S_IWGRP, nvt_palm_settings_show, nvt_palm_settings_store),
+#endif
+#ifdef NVT_TOUCH_STYLUS_TIME
+	__ATTR(stylustime, S_IRUGO | S_IWUSR | S_IWGRP, nvt_stylustime_show, nvt_stylustime_store),
 #endif
 	__ATTR_NULL
 };
