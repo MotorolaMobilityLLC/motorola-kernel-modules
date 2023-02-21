@@ -38,7 +38,7 @@ static bool debug_log_flag = false;
 #define DDA_INFO(fmt, args...)    pr_info("[MOTO_DDA_INFO] %s %d: " fmt, __func__, __LINE__, ##args)
 #define DDA_ERR(fmt, args...)    pr_err("[MOTO_DDA_ERR] %s %d: " fmt, __func__, __LINE__, ##args)
 #define DDA_DBG(fmt, args...)    {if(debug_log_flag)pr_debug("[MOTO_DDA_DBG] %s %d: " fmt, __func__, __LINE__, ##args);}
-#ifdef DDA_VER_USERDEBUG
+#if DDA_VER_USERDEBUG
 #define DDA_DEBUG(fmt, args...)    pr_info("[MOTO_DDA_DEBUG] %s %d: " fmt, __func__, __LINE__, ##args)
 #else
 #define DDA_DEBUG(fmt, args...)    pr_debug("[MOTO_DDA_DEBUG] %s %d: " fmt, __func__, __LINE__, ##args)
