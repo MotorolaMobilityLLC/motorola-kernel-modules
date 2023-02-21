@@ -2045,7 +2045,8 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		CPS_RX_MODE_ERR = false;
 		CPS_RX_CHRG_FULL = false;
 		chip->cable_ready_wait_count = 0;
-		cps_rx_online_check(chip);
+		if(!chip->factory_mode)
+			cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
     }
     if(int_flag & RX_INT_LDO_OFF)
@@ -2541,6 +2542,12 @@ static int  wls_tcmd_register(struct cps_wls_chrg_chip *cm)
 
 	ret = moto_chg_tcmd_register(&cm->wls_tcmd_client);
 
+	ret = moto_chg_tcmd_get_client(&cm->chg_tcmd_client, MOTO_CHG_TCMD_CLIENT_CHG);
+	if(ret < 0) {
+		cps_wls_log(CPS_LOG_ERR, "%s chg tcmd client is null\n",__func__);
+		cm->chg_tcmd_client = NULL;
+	}
+
 	return ret;
 }
 static enum power_supply_property cps_wls_chrg_props[] = {
@@ -2709,7 +2716,9 @@ static int wireless_fw_update(bool force)
 	u32 fw_revision;
 	const struct firmware *fw;
 	int cfg_buf_size;
-		int addr,ret = CPS_WLS_SUCCESS;
+	int addr,ret = CPS_WLS_SUCCESS;
+	bool prev_factory_kill_status = false;
+
 	CPS_TX_MODE = true;
 	chip->fw_uploading = true;
 	cps_wls_set_boost(1);
@@ -2728,8 +2737,13 @@ static int wireless_fw_update(bool force)
 	}
 
 	cps_wls_vbus_enable(true);
-	msleep(500);
+	if(chip->chg_tcmd_client != NULL && chip->factory_mode) {
+		prev_factory_kill_status = chip->chg_tcmd_client->factory_kill_disable;
+		chip->chg_tcmd_client->factory_kill_disable = true;
+		cps_wls_log(CPS_LOG_ERR,"%s set factory kill disabled\n",__func__);
+	}
 
+	msleep(500);
 	maj_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MAJOR_VER_OFFSET));
 	maj_ver = maj_ver >> 8;
 	min_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MINOR_VER_OFFSET));
@@ -2922,6 +2936,11 @@ free_bug:
 	CPS_TX_MODE = false;
 	chip->fw_uploading = false;
 	wireless_chip_reset();
+	if(chip->chg_tcmd_client != NULL && chip->factory_mode) {
+		msleep(2000);
+		chip->chg_tcmd_client->factory_kill_disable = prev_factory_kill_status;
+		cps_wls_log(CPS_LOG_ERR,"%s set factory kill enabled\n",__func__);
+	}
 	return ret;
 
 update_fail:
@@ -3892,6 +3911,32 @@ static void cps_init_charge_hardware()
 	}
 }
 
+bool is_factory_mode(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool factory_mode = false;
+	const char *bootargs = NULL;
+	char *bootmode = NULL;
+	char *end = NULL;
+
+	if (!np)
+		return factory_mode;
+
+	if (!of_property_read_string(np, "bootargs", &bootargs)) {
+		bootmode = strstr(bootargs, "androidboot.mode=");
+		if (bootmode) {
+			end = strpbrk(bootmode, " ");
+			bootmode = strpbrk(bootmode, "=");
+		}
+		if (bootmode &&
+		    end > bootmode &&
+		    strnstr(bootmode, "mot-factory", end - bootmode)) {
+				factory_mode = true;
+		}
+	}
+	of_node_put(np);
+	return factory_mode;
+}
 
 static int cps_wls_chrg_probe(struct i2c_client *client,
                 const struct i2c_device_id *id)
@@ -3974,6 +4019,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
         goto free_source;
     }
     wls_tcmd_register(chip);
+    chip->factory_mode = is_factory_mode();
     chip->rx_connected = false;
     chip->wls_online = false;
     wls_chg_ops_register(chip);
