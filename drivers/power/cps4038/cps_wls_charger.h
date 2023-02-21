@@ -304,6 +304,8 @@ struct cps_wls_chrg_chip {
     uint32_t wlc_tx_power;
     int cable_ready_wait_count;
     bool moto_stand;
+    bool factory_mode;
+    struct moto_chg_tcmd_client *chg_tcmd_client;
 };
 
 typedef enum ept_reason
