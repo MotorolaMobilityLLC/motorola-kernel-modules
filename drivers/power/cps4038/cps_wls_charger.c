@@ -50,7 +50,7 @@
 #define FIRMWARE_FILE_NAME   "/data/misc/cps/firmware.hex"
 
 #define CPS_WLS_CHRG_DRV_NAME "cps-wls-charger"
-
+MOTO_WLS_AUTH_T motoauth;
 #define CPS_WLS_CHRG_PSY_NAME "wireless"
 struct cps_wls_chrg_chip *chip = NULL;
 
@@ -193,21 +193,6 @@ static bool CPS_TX_MODE = false;
 static bool CPS_RX_CHRG_FULL = false;
 static void cps_rx_online_check(struct cps_wls_chrg_chip *chg);
 static int cps_wls_rx_power_on(void);
-
-typedef enum
-{
-	WLC_DISCONNECTED,
-	WLC_CONNECTED,
-	WLC_TX_TYPE_CHANGED,
-	WLC_TX_POWER_CHANGED,
-}wlc_status;
-
-typedef enum {
-	WLC_NONE,
-	WLC_BPP,
-	WLC_EPP,
-	WLC_MOTO,
-} mmi_wlc_type;
 
 typedef enum {
 	MMI_DOCK_LIGHT_OFF = 0x10,
@@ -648,7 +633,6 @@ static int cps_wls_l_read_reg(int reg)
     }
     return value;
 }
-
 /*
 return -1 means fail, 0 means success
 */
@@ -1787,7 +1771,7 @@ static int cps_wls_get_fsk_packet(uint8_t *data)
     uint8_t i;
     uint8_t data_len;
     cps_reg_s *cps_reg;
-    cps_reg = (cps_reg_s*)(&cps_tx_reg[CPS_RX_REG_BC_HEADER]);
+    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_BC_HEADER]);
 
     /*get header*/
     temp = cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
@@ -1800,7 +1784,7 @@ static int cps_wls_get_fsk_packet(uint8_t *data)
     {
         return CPS_WLS_FAIL;
     }
-
+    cps_wls_log(CPS_LOG_ERR,"%s reg_addr=0x%04X data_len=%d\n", __func__, cps_reg->reg_addr, data_len);
     for(i = 0; i < data_len; i++)
     {
         temp = cps_wls_read_reg((int)(cps_reg->reg_addr + 1 + i), (int)cps_reg->reg_bytes_len);
@@ -1814,6 +1798,10 @@ static int cps_wls_get_fsk_packet(uint8_t *data)
         }
     }
 
+    moto_auth_printf_data("get_fsk_packet", data+1, data_len);
+    if (motoauth.wls_get_fsk_packet && chip && chip->moto_stand) {
+        motoauth.wls_get_fsk_packet(data+1, data_len);
+    }
     return CPS_WLS_SUCCESS;
 }
 static int cps_wls_send_ask_packet(uint8_t *data, uint8_t data_len)
@@ -1823,7 +1811,7 @@ static int cps_wls_send_ask_packet(uint8_t *data, uint8_t data_len)
     cps_reg_s *cps_reg;
     cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_PPP_HEADER]);
 
-
+    moto_auth_printf_data("send_fsk_packet", data, data_len);
     for(i = 0; i < data_len; i++)
     {
         status = cps_wls_write_reg((int)(cps_reg->reg_addr + i), *(data + i), 1);
@@ -2106,7 +2094,10 @@ static int cps_wls_rx_irq_handler(int int_flag)
     if(int_flag & RX_INT_SR_OCP){
         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OCP");
     }
-    if(int_flag & RX_INT_OCP){}
+    if(int_flag & RX_INT_OCP){
+		CPS_RX_MODE_ERR = true;
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OCP");
+	}
     if(int_flag & RX_INT_HOCP){
           CPS_RX_MODE_ERR = true;
 
@@ -2121,14 +2112,14 @@ static int cps_wls_rx_irq_handler(int int_flag)
 //    if(int_flag & RX_INT_HS_OK){}
     if(int_flag & RX_INT_HTP){}
 //    if(int_flag & RX_INT_HS_FAIL){}
-    if(int_flag & RX_INT_FC_FAIL){}
+//    if(int_flag & RX_INT_FC_FAIL){}
     if(int_flag & RX_INT_NEGO_POWER_READY)
 	{
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_NEGO_READY");
 		cps_epp_icl_on();
 	}
 
-	if ((int_flag & RX_INT_HS_OK) || (int_flag & RX_INT_HS_FAIL))
+	if ((int_flag & RX_INT_HS_OK))
 	{
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_OK or RX_INT_HS_FAIL");
 		cps_get_sys_op_mode(&mode_type);
@@ -2138,9 +2129,21 @@ static int cps_wls_rx_irq_handler(int int_flag)
 			chip->moto_stand = true;
 			cps_wls_set_status(WLC_TX_TYPE_CHANGED);
 		}
+		//check_factory_mode(&factory_mode);
+		motoauth_hs_ok_handler(mode_type);
 	}
-
-    return rc;
+	if (int_flag & RX_INT_HS_FAIL) {
+		chip->moto_stand = false;
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_FAIL");
+	}
+	if (int_flag & RX_INT_FC_FAIL) {
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_FC_FAIL");
+//		WLC_FC_IRQ = WLS_IRQ_ACK_FAIL;
+//		cps_wls_wlc_update_light_fan();
+//		WLC_VOUT_BOOSTING = FALSE;
+//		motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
+	}
+	return rc;
 }
 
 static int cps_wls_tx_irq_handler(int int_flag)
@@ -2411,6 +2414,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	//		chip->factory_wls_en = false;
 	//		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
 	//	}
+		motoauth_disconnect(&motoauth);
 		power_supply_changed(chip->wl_psy);
 		}
 	}
@@ -2559,6 +2563,7 @@ static enum power_supply_property cps_wls_chrg_props[] = {
     POWER_SUPPLY_PROP_VOLTAGE_NOW,
     POWER_SUPPLY_PROP_CURRENT_MAX,
     POWER_SUPPLY_PROP_CURRENT_NOW,
+    POWER_SUPPLY_PROP_POWER_NOW,
 //    POWER_SUPPLY_PROP_VOUT_NOW,
 //    POWER_SUPPLY_PROP_VRECT,
 //    POWER_SUPPLY_PROP_IRECT,
@@ -2606,7 +2611,9 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
         case POWER_SUPPLY_PROP_CURRENT_NOW:
             val->intval = cps_wls_get_rx_iout() * 1000;
             break;
-
+         case POWER_SUPPLY_PROP_POWER_NOW:
+            val->intval = cps_wls_get_rx_neg_power() / 2;
+            break;
         default:
             return -EINVAL;
             break;
@@ -3276,7 +3283,7 @@ static DEVICE_ATTR(wlc_tx_power, 0444, show_wlc_tx_power, NULL);
 static ssize_t show_wlc_tx_type(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	if (chip->moto_stand)
-		return sprintf(buf, "%d\n", Sys_Op_Mode_MOTO_WLC);
+		return sprintf(buf, "%d\n", WLC_MOTO);//Sys_Op_Mode_MOTO_WLC);
 	else
 		return sprintf(buf, "%d\n", chip->mode_type);
 }
@@ -3285,10 +3292,50 @@ static DEVICE_ATTR(wlc_tx_type, 0444, show_wlc_tx_type, NULL);
 
 static ssize_t show_wlc_st_changed(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	return sprintf(buf, "%d\n", chip->wlc_status);
+    int moto_wlc_status = 0;
+    if (chip && chip->moto_stand) {
+		moto_wlc_status = motoauth.WLC_STATUS;
+	} else {
+        moto_wlc_status = chip->wlc_status;
+    }
+	return sprintf(buf, "%d\n", moto_wlc_status);
 }
 
 static DEVICE_ATTR(wlc_st_changed, S_IRUGO, show_wlc_st_changed, NULL);
+
+static ssize_t show_wlc_tx_capability(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int wlc_tx_capability = 0;
+	if (chip && chip->moto_stand) {
+		wlc_tx_capability = motoauth.WLS_WLC_CAPABILITY;
+	}
+	return sprintf(buf, "%d\n", wlc_tx_capability);
+}
+
+static DEVICE_ATTR(wlc_tx_capability, 0444, show_wlc_tx_capability, NULL);
+
+static ssize_t show_wlc_tx_id(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int wlc_tx_id = 0;
+	if (chip && chip->moto_stand) {
+		wlc_tx_id = motoauth.WLS_WLC_ID;
+	}
+
+	return sprintf(buf, "%d\n", wlc_tx_id);
+}
+
+static DEVICE_ATTR(wlc_tx_id, 0444, show_wlc_tx_id, NULL);
+
+static ssize_t show_wlc_tx_sn(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int wlc_tx_sn = 0;
+	if(chip && chip->moto_stand) {
+		wlc_tx_sn = motoauth.WLS_WLC_SN;
+	}
+	return sprintf(buf, "%d\n", wlc_tx_sn);
+}
+
+static DEVICE_ATTR(wlc_tx_sn, 0444, show_wlc_tx_sn, NULL);
 
 static void cps_wls_create_device_node(struct device *dev)
 {
@@ -3310,6 +3357,7 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_get_tx_vin);
     device_create_file(dev, &dev_attr_get_tx_iin);
     device_create_file(dev, &dev_attr_get_tx_vrect);
+//    device_create_file(dev, &dev_attr_tx_mode_vout);
 
     device_create_file(dev, &dev_attr_tx_mode);
     device_create_file(dev, &dev_attr_rx_connected);
@@ -3321,6 +3369,11 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_wlc_tx_power);
     device_create_file(dev, &dev_attr_wlc_tx_type);
     device_create_file(dev, &dev_attr_wlc_st_changed);
+
+//-----------------------MOTO WLC2.0-------------------
+    device_create_file(dev, &dev_attr_wlc_tx_capability);
+    device_create_file(dev, &dev_attr_wlc_tx_id);
+    device_create_file(dev, &dev_attr_wlc_tx_sn);
 }
 
 static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
@@ -3456,10 +3509,12 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
     }
     return CPS_WLS_SUCCESS;
 }
-#define WLS_RX_CAP_15W 15
-#define WLS_RX_CAP_10W 10
-#define WLS_RX_CAP_8W 8
-#define WLS_RX_CAP_5W 5
+int cps_wls_get_ldo_on(void)
+{
+	if (!chip)
+		return 0;
+	return chip->rx_ldo_on;
+}
 static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
 {
     struct cps_wls_chrg_chip *chg = chip;
@@ -3648,6 +3703,17 @@ static int cps_wls_notify_st_changed(void)
 		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, "wlc_st_changed");
 	}
 
+	return 0;
+}
+
+int cps_wls_sysfs_notify(const char *attr)
+{
+    cps_wls_log(CPS_LOG_DEBG,"%s %s\n",__func__, attr);
+	if(chip && chip->wl_psy) {
+		sysfs_notify(&chip->wl_psy->dev.parent->kobj, NULL, attr);
+		//pr_info("wireless charger notify, event %lu\n", event);
+		power_supply_changed(chip->wl_psy);
+	}
 	return 0;
 }
 
@@ -4046,10 +4112,20 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 		"cps_wls_charger_l", chip, &cps_tcd_ops);
     cps_init_charge_hardware();
 
+    motoauth.wls_get_ldo_on = cps_wls_get_ldo_on;
+    motoauth.wls_send_ask_packet = cps_wls_send_ask_packet;
+    motoauth.wls_sysfs_notify = cps_wls_sysfs_notify;
+    if (0 == moto_wls_auth_init(&motoauth)){
+        cps_wls_log(CPS_LOG_DEBG, "[%s] moto_wls_auth_init successful!\n", __func__);
+    } else {
+        cps_wls_log(CPS_LOG_ERR, "[%s] moto_wls_auth_init failed!\n", __func__);
+    }
+
     if(chip->bootmode == 8 || chip->bootmode == 9)
         wireless_chip_reset();
 //    wake_lock(&chip->cps_wls_wake_lock);
     kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
+
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger  probe successful!\n", __func__);
     return ret;
 

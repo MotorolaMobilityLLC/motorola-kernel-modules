@@ -14,6 +14,7 @@
 #include "mtk_charger_intf.h"
 #include <linux/power/moto_chg_tcmd.h>
 #include "moto_wlc_intf.h"
+#include "moto_wls_auth2.0.h"
 
 #define CPS_WLS_FAIL    -1
 #define CPS_WLS_SUCCESS 0
@@ -151,16 +152,7 @@ struct tags_bootmode {
 #define RX_FOD_GAIN_LEN 16
 #define RX_FOD_CURR_LEN 7
 
-typedef enum {
-	Sys_Op_Mode_AC_Missing = 0,
-	Sys_Op_Mode_BPP = 0x1,
-	Sys_Op_Mode_EPP = 0x2,
-	Sys_Op_Mode_MOTO_WLC = 0x3,
-	Sys_Op_Mode_PDDE= 0x4,
-	Sys_Op_Mode_TX = 0x8,
-	Sys_Op_Mode_TX_FOD = 0x9,
-	Sys_Op_Mode_INVALID,
-}Sys_Op_Mode;
+
 #define _CPS_MASK(BITS, POS) \
 	((unsigned char)(((1 << (BITS)) - 1) << (POS)))
 
@@ -330,4 +322,6 @@ static int cps_wls_set_status(int status);
 static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready);
 static void cps_init_charge_hardware(void);
 static void cps_epp_current_select(int  *icl, int *vbus);
+int cps_wls_get_ldo_on(void);
+int cps_wls_sysfs_notify(const char *attr);
 #endif
