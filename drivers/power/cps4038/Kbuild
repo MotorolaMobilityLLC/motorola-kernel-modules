@@ -11,5 +11,6 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 #		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/smart_pen_charger
 
 obj-m += cps_wls_charger_4038.o
+cps_wls_charger_4038-objs += moto_wls_auth2.0.o
 cps_wls_charger_4038-objs += cps_wls_charger.o
 #KBUILD_EXTRA_SYMBOLS += $(KBUILD_EXTMOD)/../../smart_pen_charger.ko_intermediates/LINKED/Module.symvers
