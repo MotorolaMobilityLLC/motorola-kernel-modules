@@ -41,6 +41,10 @@ else
     goodix_brl_mmi-objs += goodix_ts_gesture.o
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_DELAY_RELEASE)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_DELAY_RELEASE
+endif
+
 ifneq ($(filter m y,$(CONFIG_GTP_LIMIT_USE_SUPPLIER)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_LIMIT_USE_SUPPLIER
 endif

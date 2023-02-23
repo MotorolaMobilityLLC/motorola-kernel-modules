@@ -1005,7 +1005,9 @@ static int goodix_ts_mmi_pre_resume(struct device *dev) {
 		core_data->hw_ops->irq_enable(core_data, false);
 		disable_irq_wake(core_data->irq);
 	}
-
+#ifdef CONFIG_GTP_DELAY_RELEASE
+	goodix_start_delay_work(true, 350);
+#endif
 	return 0;
 }
 

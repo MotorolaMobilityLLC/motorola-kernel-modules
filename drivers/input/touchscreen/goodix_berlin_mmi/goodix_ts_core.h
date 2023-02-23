@@ -36,6 +36,12 @@
 #include <linux/ktime.h>
 #endif
 
+#ifdef CONFIG_GTP_DELAY_RELEASE
+#include <linux/workqueue.h>
+#include <linux/wait.h>
+#include <linux/jiffies.h>
+#endif
+
 #define GOODIX_CORE_DRIVER_NAME			"goodix_ts"
 #define GOODIX_PEN_DRIVER_NAME			"goodix_ts,pen"
 #define GOODIX_DRIVER_VERSION			"v1.2.3"
@@ -48,6 +54,11 @@
 #define GOODIX_MAX_STR_LABLE_LEN		64
 #define GOODIX_MAX_FRAMEDATA_LEN		1700
 #define GOODIX_GESTURE_DATA_LEN			16
+#ifdef CONFIG_GTP_DELAY_RELEASE
+#define GOODIX_FOD_X				(540 * 16)
+#define GOODIX_FOD_Y				(2168 * 16)
+#define GOODIX_FOD_W				(120 * 16)
+#endif
 
 #define GOODIX_NORMAL_RESET_DELAY_MS	100
 #define GOODIX_HOLD_CPU_RESET_DELAY_MS  5
@@ -738,5 +749,7 @@ void goodix_stylus_dda_exit(void);
 int goodix_stylus_dda_register_cdevice(void);
 void goodix_dda_process_pen_report(struct goodix_pen_data *pen_data);
 #endif
-
+#ifdef CONFIG_GTP_DELAY_RELEASE
+void goodix_start_delay_work(bool start, int delay_ms);
+#endif
 #endif
