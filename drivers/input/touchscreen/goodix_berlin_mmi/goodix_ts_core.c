@@ -44,7 +44,16 @@ static struct goodix_ts_core *ts_core;
 
 struct goodix_module goodix_modules;
 int core_module_prob_sate = CORE_MODULE_UNPROBED;
+static uint32_t touchdown[GOODIX_MAX_TOUCH][3];
 
+#ifdef CONFIG_GTP_DELAY_RELEASE
+static uint32_t backup_touchdown[GOODIX_MAX_TOUCH][3];
+struct workqueue_struct *gf_ts_workqueue = NULL;
+struct delayed_work  gf_ts_work;
+int fod_area_x = 0;
+int fod_area_y = 0;
+int fod_area_w = 0;
+#endif
 static int goodix_send_ic_config(struct goodix_ts_core *cd, int type);
 /**
  * __do_register_ext_module - register external module
@@ -1170,6 +1179,29 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->gesture_wait_pm = false;
 	}
 
+#ifdef CONFIG_GTP_DELAY_RELEASE
+	r = of_property_read_u32(node, "goodix,fod-x",
+				 &fod_area_x);
+	if (r) {
+		ts_info("failed get fod-x, use default");
+		fod_area_x = GOODIX_FOD_X;
+	}
+
+	r = of_property_read_u32(node, "goodix,fod-y",
+				 &fod_area_y);
+	if (r) {
+		ts_info("failed get fod-y, use default");
+		fod_area_y = GOODIX_FOD_Y;
+	}
+
+	r = of_property_read_u32(node, "goodix,fod-w",
+				 &fod_area_w);
+	if (r) {
+		ts_info("failed get fod-w, use default");
+		fod_area_w = GOODIX_FOD_W;
+	}
+#endif
+
 	return 0;
 }
 #endif
@@ -1223,7 +1255,6 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 {
 	unsigned int touch_num = touch_data->touch_num;
 	int i;
-	static uint8_t touchdown[GOODIX_MAX_TOUCH];
 #if defined (CONFIG_GTP_FOD) || defined (CONFIG_GTP_LAST_TIME)
 	struct goodix_ts_core *core_data = goodix_modules.core_data;
 #endif
@@ -1236,12 +1267,12 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 			ts_debug("report: id %d, x %d, y %d, w %d", i,
 				touch_data->coords[i].x, touch_data->coords[i].y,
 				touch_data->coords[i].w);
-			if (touchdown[i] == 0) {
+			if (touchdown[i][0] == 0) {
 #ifdef CONFIG_GTP_LAST_TIME
 				core_data->last_event_time = ktime_get_boottime();
 				ts_debug("TOUCH: [%d] logged timestamp\n", i);
 #endif
-				touchdown[i] = 1;
+				touchdown[i][0] = 1;
 			}
 			input_mt_slot(dev, i);
 			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
@@ -1251,10 +1282,14 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 					touch_data->coords[i].y);
 			input_report_abs(dev, ABS_MT_TOUCH_MAJOR,
 					touch_data->coords[i].w);
+			touchdown[i][1] = touch_data->coords[i].x;
+			touchdown[i][2] = touch_data->coords[i].y;
 		} else {
-			if (touchdown[i] == 1) {
-				ts_debug("TOUCH: [%d] release\n", i);
-				touchdown[i] = 0;
+			if (touchdown[i][0] == 1) {
+				ts_debug("TOUCH: [%d] release  x %d, y %d,\n", i,touchdown[i][1],touchdown[i][2]);
+				touchdown[i][0] = 0;
+				touchdown[i][1] = 0;
+				touchdown[i][2] = 0;
 				input_mt_slot(dev, i);
 				input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
 			}
@@ -1265,7 +1300,7 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 	input_sync(dev);
 #ifdef CONFIG_GTP_FOD
 		if(core_data->fod_enable) {
-			if(ts_event->gesture_type == GOODIX_GESTURE_FOD_DOWN && touch_num > 0) {
+			if(ts_event->gesture_type == GOODIX_GESTURE_FOD_DOWN) {
 				input_report_key(dev, BTN_TRIGGER_HAPPY1, 1);
 				input_sync(dev);
 				input_report_key(dev, BTN_TRIGGER_HAPPY1, 0);
@@ -1307,6 +1342,75 @@ static int goodix_ts_request_handle(struct goodix_ts_core *cd,
 			  ts_event->request_code);
 	return ret;
 }
+#ifdef CONFIG_GTP_DELAY_RELEASE
+void goodix_start_delay_work(bool start, int delay_ms)
+{
+	static bool work_start = false;
+	if(!gf_ts_workqueue) return;
+
+	if(start) {
+		mod_delayed_work(gf_ts_workqueue, &gf_ts_work, msecs_to_jiffies(delay_ms));
+		work_start = true;
+		ts_info("goodix_delay_work %d queued",delay_ms);
+	} else {
+		if(work_start) {
+			bool cancel = false;
+			cancel = cancel_delayed_work(&gf_ts_work);
+			ts_info("goodix_delay_work canceled %d",cancel);
+		}
+		work_start = false;
+	}
+}
+
+static bool goodix_fod_area(int x, int y) {
+	if((y > (fod_area_y - fod_area_w)) && (y < (fod_area_y + fod_area_w))
+		&& (x > (fod_area_x - fod_area_w)) && (x < (fod_area_x + fod_area_w))) {
+		return true;
+	}
+	return false;
+}
+
+static void goodix_delay_work(struct work_struct *work)
+{
+	struct goodix_ts_core *core_data = goodix_modules.core_data;
+	bool need_send_release = false;
+	int i;
+	static int stage = 1;
+
+	struct input_dev *input_dev = core_data->input_dev;
+	if (!input_dev) {
+		ts_err("Invalid input device");
+		return;
+	}
+	mutex_lock(&input_dev->mutex);
+	for (i = 0; i < GOODIX_MAX_TOUCH; i++) {
+		if(backup_touchdown[i][0])
+		{
+			if(stage == 1 && goodix_fod_area(backup_touchdown[i][1], backup_touchdown[i][2])) {
+				ts_info("goodix_delay_work finger is in fod area and zero tap up skip");
+				continue;
+			}
+			input_mt_slot(input_dev, i);
+			input_mt_report_slot_state(input_dev,
+				MT_TOOL_FINGER,
+				false);
+			need_send_release = true;
+			ts_info("goodix_delay_work  slot:%i x:%d y:%d", i, backup_touchdown[i][1], backup_touchdown[i][2]);
+		}
+		backup_touchdown[i][0] = 0;
+		backup_touchdown[i][1] = 0;
+		backup_touchdown[i][2] = 0;
+	}
+	if(need_send_release) {
+		input_report_key(input_dev, BTN_TOUCH, 0);
+		input_mt_sync_frame(input_dev);
+		input_sync(input_dev);
+	}
+	stage++;
+	if(stage >2) stage = 1;
+	mutex_unlock(&input_dev->mutex);
+}
+#endif
 /**
  * goodix_ts_threadirq_func - Bottom half of interrupt
  * This functions is excuted in thread context,
@@ -1965,17 +2069,24 @@ void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 		return;
 	}
 	mutex_lock(&input_dev->mutex);
-
-	for (i = 0; i < GOODIX_MAX_TOUCH; i++) {
-		input_mt_slot(input_dev, i);
-		input_mt_report_slot_state(input_dev,
-				MT_TOOL_FINGER,
-				false);
+#ifdef CONFIG_GTP_DELAY_RELEASE
+	if(gf_ts_workqueue) {
+		memcpy(&backup_touchdown, &touchdown, sizeof(backup_touchdown));
+		memset(&touchdown, 0, sizeof(touchdown));
+		goodix_start_delay_work(true, 1);
+	} else
+#endif
+	{
+		for (i = 0; i < GOODIX_MAX_TOUCH; i++) {
+			input_mt_slot(input_dev, i);
+			input_mt_report_slot_state(input_dev,
+					MT_TOOL_FINGER,
+					false);
+		}
+		input_report_key(input_dev, BTN_TOUCH, 0);
+		input_mt_sync_frame(input_dev);
+		input_sync(input_dev);
 	}
-	input_report_key(input_dev, BTN_TOUCH, 0);
-	input_mt_sync_frame(input_dev);
-	input_sync(input_dev);
-
 	/* clean event buffer */
 	ts_event = &core_data->ts_event;
 	memset(ts_event, 0, sizeof(*ts_event));
@@ -2478,7 +2589,15 @@ stage2_init:
 		goto uninit_fw;
 	}
 	cd->init_stage = CORE_INIT_STAGE2;
+#ifdef CONFIG_GTP_DELAY_RELEASE
+	gf_ts_workqueue = create_singlethread_workqueue("gf_ts_wq");
 
+	if (!gf_ts_workqueue) {
+		ts_err("create gf_ts workqueue fail");
+	} else {
+		INIT_DELAYED_WORK(&gf_ts_work, goodix_delay_work);
+	}
+#endif
 	return 0;
 
 uninit_fw:
