@@ -53,6 +53,43 @@
 #define	FG_FLAGS_DSG				BIT(6)
 #define FG_FLAGS_RCA				BIT(9)
 
+#define I2C_MAX_BUFFER_SIZE			4096    //ONE PAGE
+#define I2C_NO_REG_DATA		0XFF
+#define I2C_BLOCK_MAX_BUFFER_SIZE		36	    //ONE BLOCK
+#define NFG1000_FULL_KEY       0x05060708
+#define NFG1000_UNSEAL_KEY     0x01020304
+#define NFG1000_CHIP_NAME      0x0661019A
+#define NFG1000_RESET_CMD	0x8a
+#define PROGRAM_ERROR_UNSEAL		0x01
+#define PROGRAM_ERROR_ENTER_BOOT	0x02
+#define PROGRAM_ERROR_SHA256		0x04
+#define PROGRAM_ERROR_CHIP_NAME		0x08
+#define PROGRAM_ERROR_APP_ERASE		0x09
+#define PROGRAM_ERROR_APP_WRITE		0x0A
+#define PROGRAM_ERROR_APP_CHECKCRC	0x0C
+#define PROGRAM_ERROR_DATA_ERASE	0x0F
+#define PROGRAM_ERROR_DATA_WRITE	0x10
+#define PROGRAM_ERROR_DATA_CHECKCRC	0x11
+#define PROGRAM_ERROR_EXIT_BOOT		0x12
+#define PROGRAM_ERROR_SEAL		0x14
+#define ERROR_CODE_I2C_WRITE		0xe0
+#define ERROR_CODE_I2C_READ		0xe1
+#define ERROR_CODE_CHECKSUM		0xe2
+#define ERROR_CODE_RERUNCODE		0xe3
+#define ERROR_CODE_MCUCODE		0xe4
+#define ERROR_CODE_UPDATEFILELEN	0xe5
+#define ERROR_CODE_OPENFILE		0xe6
+#define APP_SIZE					49152
+
+#define NFG1000_RESET_WAIT_TIME 100 //(100ms)
+#define NFG1000_write_WAIT_TIME 25
+#define NFG1000_com_WAIT_TIME 5
+#define NFG1000_erase_WAIT_TIME 1000
+#define NFG1000_boot_WAIT_TIME 2000
+#define NFG1000_seal_WAIT_TIME 1200
+#define NFG1000_SUCESS_CODE  0x79
+
+#define NAKE_DWORD_8BITS(HH,HL,LH,LL) ((u32)(HH)<<24)|((u32)(HL)<<16)|((u32)(LH)<<8)|((u32)(LL))
 enum mmi_fg_reg_idx {
 	BQ_FG_REG_CTRL = 0,
 	BQ_FG_REG_TEMP,		/* Battery Temperature */
@@ -127,6 +164,7 @@ struct mmi_fg_chip {
 	struct i2c_client *client;
 
 	struct workqueue_struct *fg_workqueue;
+	struct work_struct  fg_upgrade_work;
 	struct delayed_work battery_delay_work;
 	struct power_supply *batt_psy;
 	struct iio_channel *Batt_NTC_channel;
@@ -169,6 +207,17 @@ struct mmi_fg_chip {
 	bool fake_battery;
 	int rbat_pull_up_r;
 
+	int unseal_key;
+	int mcu_auth_code;
+	const char *battsn_buf;
+	u32 batt_param_version;
+	u8 *fw_version;
+	u8 *fw_data;
+	u8 *params_data;
+	u32 fw_start_addr;
+	u32 param_start_addr;
+	bool do_upgrading;
+
 	struct power_supply *fg_psy;
 	struct power_supply_desc fg_psy_d;
 	struct gauge_device	*gauge_dev;
@@ -188,38 +237,7 @@ extern int mmi_batt_health_check(void);
 #ifdef CONFIG_MOTO_REMOVE_MTK_GAUGE
 extern int mmi_charger_update_batt_status(void);
 #endif
-
-
-#if 0
-static int __fg_read_byte(struct i2c_client *client, u8 reg, u8 *val)
-{
-	s32 ret;
-
-	ret = i2c_smbus_read_byte_data(client, reg);
-	if (ret < 0) {
-		mmi_err("i2c read byte fail: can't read from reg 0x%02X\n", reg);
-		return ret;
-	}
-
-	*val = (u8)ret;
-
-	return 0;
-}
-
-static int __fg_write_byte(struct i2c_client *client, u8 reg, u8 val)
-{
-	s32 ret;
-
-	ret = i2c_smbus_write_byte_data(client, reg, val);
-	if (ret < 0) {
-		mmi_err("i2c write byte fail: can't write 0x%02X to reg 0x%02X\n",
-				val, reg);
-		return ret;
-	}
-
-	return 0;
-}
-#endif
+static int fg_get_capacity(struct gauge_device *gauge_dev, int *soc);
 
 static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
 {
@@ -254,19 +272,31 @@ static int __fg_read_block(struct i2c_client *client, u8 reg, u8 *buf, u8 len)
 	int ret;
 	struct i2c_msg msg[2];
 	int i;
+	u8 msg_len;
 
-	msg[0].addr = client->addr;
-	msg[0].flags = 0;
-	msg[0].buf = &reg;
-	msg[0].len = 1;
+	if(reg == I2C_NO_REG_DATA)
+	{
+		msg[0].addr = client->addr;
+		msg[0].flags = I2C_M_RD;
+		msg[0].buf = buf;
+		msg[0].len = len;
+		msg_len = 1;
+	}
+	else
+	{
+		msg[0].addr = client->addr;
+		msg[0].flags = 0;
+		msg[0].buf = &reg;
+		msg[0].len = 1;
 
-	msg[1].addr = client->addr;
-	msg[1].flags = I2C_M_RD;
-	msg[1].buf = buf;
-	msg[1].len = len;
-
+		msg[1].addr = client->addr;
+		msg[1].flags = I2C_M_RD;
+		msg[1].buf = buf;
+		msg[1].len = len;
+		msg_len = 2;
+	}
 	for (i = 0; i < 3; i++) {
-		ret = i2c_transfer(client->adapter, msg, ARRAY_SIZE(msg));
+		ret = i2c_transfer(client->adapter, msg, msg_len);
 		if (ret >= 0)
 			return ret;
 		else
@@ -275,24 +305,34 @@ static int __fg_read_block(struct i2c_client *client, u8 reg, u8 *buf, u8 len)
 	return ret;
 }
 
-static int __fg_write_block(struct i2c_client *client, u8 reg, u8 *buf, u8 len)
+static int __fg_write_block(struct i2c_client *client, u8 reg, u8 *buf, u16 len)
 {
 	int ret;
 	struct i2c_msg msg;
-	u8 data[64];
+	u8 data[I2C_MAX_BUFFER_SIZE];
 	char* addr;
 	int i = 0;
 
 	addr = kmalloc(sizeof(data), GFP_KERNEL);
+	if(!buf || (len>=I2C_MAX_BUFFER_SIZE))
+	{
+		mmi_err("nfg1000_i2c_write:condition is error!!\n");
+		return -1;
+	}
 
-	data[0] = reg;
-	memcpy(&data[1], buf, len);
+	if (reg == I2C_NO_REG_DATA) {
+		memcpy(data, buf, len);
+		msg.len = len;
+	} else {
+		data[0] = reg;
+		memcpy(&data[1], buf, len);
+		msg.len = len + 1;
+	}
 	memcpy(addr, data, sizeof(data));
 
 	msg.addr = client->addr;
 	msg.flags = 0;
 	msg.buf = addr;
-	msg.len = len + 1;
 
 	for (i = 0; i < 3; i++) {
 		ret = i2c_transfer(client->adapter, &msg, 1);
@@ -307,39 +347,6 @@ static int __fg_write_block(struct i2c_client *client, u8 reg, u8 *buf, u8 len)
 	kfree(addr);
 	return ret;
 }
-
-#if 0
-static int fg_read_byte(struct mmi_fg_chip *mmi, u8 reg, u8 *val)
-{
-	int ret;
-
-	if (mmi->skip_reads) {
-		*val = 0;
-		return 0;
-	}
-
-	mutex_lock(&mmi->i2c_rw_lock);
-	ret = __fg_read_byte(mmi->client, reg, val);
-	mutex_unlock(&mmi->i2c_rw_lock);
-
-	return ret;
-}
-
-
-static int fg_write_byte(struct mmi_fg_chip *mmi, u8 reg, u8 val)
-{
-	int ret;
-
-	if (mmi->skip_writes)
-		return 0;
-
-	mutex_lock(&mmi->i2c_rw_lock);
-	ret = __fg_write_byte(mmi->client, reg, val);
-	mutex_unlock(&mmi->i2c_rw_lock);
-
-	return ret;
-}
-#endif
 
 static int fg_read_word(struct mmi_fg_chip *mmi, u8 reg, u16 *val)
 {
@@ -385,7 +392,7 @@ static int fg_read_block(struct mmi_fg_chip *mmi, u8 reg, u8 *buf, u8 len)
 
 }
 
-static int fg_write_block(struct mmi_fg_chip *mmi, u8 reg, u8 *data, u8 len)
+static int fg_write_block(struct mmi_fg_chip *mmi, u8 reg, u8 *data, u16 len)
 {
 	int ret;
 
@@ -482,6 +489,1362 @@ static int fg_read_HW_version(struct mmi_fg_chip *mmi)
 	return version;
 }
 
+/*--------------------------------------upgrade begin------------------------------------------------------*/
+
+u8 code_static_DF_sig[2] = {0};
+u8 sha_256_ramdom_data[64] = {0x20, 0x31, 0x0C, 0xFF, 0x52, 0xF5, 0x06, 0x2E, 0x1D, 0x74,0x73, 0xDD, 0x75, 0xAD, 0x16, 0x6F, 0x09, 0x61, 0x5B, 0xD2,0xE2, 0xA6, 0xE8, 0x62, 0x31, 0x5F, 0x17, 0xC9, 0xDF, 0x52,0x45, 0xE6, 0xBA};
+u8 sha_256_pass_word[64] = {0xD0, 0x81, 0xCA, 0x11, 0xBF, 0xF1, 0xFA, 0xA9, 0xA6, 0xF8,0x2A, 0xD5, 0x6C, 0x94, 0x47, 0x00, 0x93, 0x75, 0xE8, 0xE6,0xC2, 0x97, 0x8B, 0x7D, 0x17, 0x44, 0xC7, 0x0E, 0x99, 0xB9,0xC0, 0x67, 0xDF};
+u8 app_flash_erase_order[195] = {0x00,0x5F,0x00,0x00,0x00,0x01,0x00,0x02,0x00,0x03,0x00,0x04,0x00,0x05,0x00,0x06,0x00,0x07,0x00,0x08,0x00,0x09,0x00,0x0A,0x00,0x0B,0x00,0x0C,0x00,0x0D,0x00,0x0E,0x00,0x0F,0x00,
+								0x10,0x00,0x11,0x00,0x12,0x00,0x13,0x00,0x14,0x00,0x15,0x00,0x16,0x00,0x17,0x00,0x18,0x00,0x19,0x00,0x1A,0x00,0x1B,0x00,0x1C,0x00,0x1D,0x00,0x1E,0x00,0x1F,0x00,0x20,0x00,0x21,
+								0x00,0x22,0x00,0x23,0x00,0x24,0x00,0x25,0x00,0x26,0x00,0x27,0x00,0x28,0x00,0x29,0x00,0x2A,0x00,0x2B,0x00,0x2C,0x00,0x2D,0x00,0x2E,0x00,0x2F,0x00,0x30,0x00,0x31,0x00,0x32,0x00,
+								0x33,0x00,0x34,0x00,0x35,0x00,0x36,0x00,0x37,0x00,0x38,0x00,0x39,0x00,0x3A,0x00,0x3B,0x00,0x3C,0x00,0x3D,0x00,0x3E,0x00,0x3F,0x00,0x40,0x00,0x41,0x00,0x42,0x00,0x43,0x00,0x44,
+								0x00,0x45,0x00,0x46,0x00,0x47,0x00,0x48,0x00,0x49,0x00,0x4A,0x00,0x4B,0x00,0x4C,0x00,0x4D,0x00,0x4E,0x00,0x4F,0x00,0x50,0x00,0x51,0x00,0x52,0x00,0x53,0x00,0x54,0x00,0x55,0x00,
+								0x56,0x00,0x57,0x00,0x58,0x00,0x59,0x00,0x5A,0x00,0x5B,0x00,0x5C,0x00,0x5D,0x00,0x5E,0x00,0x5F,0x5F};
+u8 data_flash_erase_order[] = {0x00,0x07,0x01,0x86,0x01,0x87,0x01,0x88,0x01,0x89,0x01,0x8A,0x01,0x8B,0x01,0x8C,0x01,0x8D,0x07};
+u8 nfg1000_Dataflash_updata_CMD[] = {0x00,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0D,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1A,0x1C};
+static u32 crc_table[256];
+
+static s32 nfg1000_GetReturnCode(struct mmi_fg_chip *di)
+{
+	int ret = 0;u8 uReCode[2] = {0};
+
+	ret = fg_read_block(di,I2C_NO_REG_DATA,uReCode,1);
+	if(ret < 0)
+	{
+		mmi_err(":read reg: %x error!!\n", I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_READ;
+	}
+
+	if(uReCode[0] != NFG1000_SUCESS_CODE)
+	{
+		mmi_err(":return code error:%x!!\n",uReCode[0]);
+		return -ERROR_CODE_RERUNCODE;
+	}
+
+	return 0;
+}
+
+static void init_crc_table(void)
+{
+	u32 c;
+	u32 i, j;
+
+	for (i = 0; i < 256; i++) {
+		c = i;
+		for (j = 0; j < 8; j++) {
+			if (c & 1)
+				c = 0xedb88320L ^ (c >> 1);
+			else
+				c = c >> 1;
+		}
+		crc_table[i] = c;
+	}
+}
+
+static u32 crc32(u32 crc,u8 *buffer, u32 size)
+{
+	u32 i;
+
+	for (i = 0; i < size; i++)
+	{
+		crc = crc_table[(crc ^ buffer[i]) & 0xff] ^ (crc >> 8);
+	}
+	crc = crc ^ 0xFFFFFFFF;
+	return crc ;
+}
+
+static int nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(struct mmi_fg_chip *dev, u16 reg, u8 *poutbuf, u32 len)
+{
+	u8 reg_data[2];
+	u8 block_data[36];
+	int ret;
+
+	reg_data[0] = (reg >> 0) & 0xFF;
+	reg_data[1] = (reg >> 8) & 0xFF;
+
+	if(!poutbuf) {
+		mmi_err(":poutbuf is NULL!!\n");
+		return -1;
+	}
+
+	ret = fg_write_block(dev, dev->regs[BQ_FG_REG_ALT_MAC], reg_data, 2);
+	if(ret < 0) {
+		mmi_err(":write reg:%d failed!!\n",reg);
+		return -1;
+	}
+	ret = fg_read_block(dev, dev->regs[BQ_FG_REG_ALT_MAC], block_data, 36);
+	if(ret < 0) {
+		mmi_err(":read reg:%d failed!!\n",reg);
+		return -1;
+	}
+	//fg_print_buf("command_read_with_CHECKSUM",block_data, 36);
+	if((reg_data[0] != block_data[0]) || (reg_data[1] != block_data[1]) ||
+		(block_data[34] != checksum(block_data,34)) || (block_data[35] != len+4)) {
+		mmi_err(":command:%d failed!!\n",checksum(block_data,34));
+		return -2;
+	}
+	memcpy(poutbuf,&block_data[2],len);
+	msleep(NFG1000_com_WAIT_TIME);
+
+	return 0;
+}
+
+static int nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(struct mmi_fg_chip *dev,u16 reg,u8 *pinbuf,u32 len)
+{
+	u8 databuf[36] = {0};
+	int ret;
+
+	databuf[0] = (reg >> 0) & 0xFF;
+	databuf[1] = (reg >> 8) & 0xFF;
+
+	if(!pinbuf || (len>=I2C_BLOCK_MAX_BUFFER_SIZE))
+	{
+		printk("nfg1000_i2c_BLOCK_command_write_with_CHECKSUM:condition is error!!\n");
+		return -1;
+	}
+
+	if(len)
+		memcpy(&databuf[2],pinbuf,len);
+	databuf[34] = checksum(&databuf[0],34);
+	databuf[35] = len+4;
+
+	ret = fg_write_block(dev,dev->regs[BQ_FG_REG_ALT_MAC],databuf,36);
+	if(ret < 0)
+	{
+		printk("nfg1000_i2c_BLOCK_command_write_with_CHECKSUM:write reg:%d failed!!\n",reg);
+		return -1;
+	}
+	msleep(NFG1000_com_WAIT_TIME);
+
+	return 0;
+}
+
+static int nfg1000_ota_unseal(struct mmi_fg_chip *di)
+{
+	int ret;int i=0;
+	u8 u8pwd[2] = {0};
+	u8 seal_state_read[32] = {0};
+	u16 seal_state_cmd = 0x0054;
+
+	if (di->unseal_key == 0) {
+		mmi_err("nfg1000_battery_unseal:unseal failed due to missing key\n");
+		return -ERROR_CODE_CHECKSUM;
+	}
+
+	for(i = 0;i < 3;i++)
+	{	mmi_info("unseal_key 0x01020304");
+		//unseal_key:0x01020304
+		u8pwd[0] = ((NFG1000_UNSEAL_KEY>>24))&0xff;
+		u8pwd[1] = (NFG1000_UNSEAL_KEY>>16)&0xff;
+		ret = fg_write_block(di,di->regs[BQ_FG_REG_ALT_MAC],u8pwd,2);
+		if(ret < 0) {
+			mmi_err("nfg1000_ota_program_unseal_state_check: step1 unseal write error!%x\n", ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		msleep(NFG1000_write_WAIT_TIME);
+
+		u8pwd[0] = ((NFG1000_UNSEAL_KEY>>8))&0xff;
+		u8pwd[1] = ((NFG1000_UNSEAL_KEY>>0))&0xff;
+		ret = fg_write_block(di,di->regs[BQ_FG_REG_ALT_MAC],u8pwd,2);
+		if(ret < 0 ) {
+			mmi_err("nfg1000_ota_program_unseal_state_check:step2 unseal write error!%x\n", ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		msleep(NFG1000_RESET_WAIT_TIME);
+
+		mmi_info("unseal_key 0x05060708");
+		u8pwd[0] = ((NFG1000_FULL_KEY>>24))&0xff;
+		u8pwd[1] = ((NFG1000_FULL_KEY>>16))&0xff;
+		ret = fg_write_block(di,di->regs[BQ_FG_REG_ALT_MAC],u8pwd,2);
+		if(ret < 0) {
+			mmi_err("nfg1000_ota_program_unseal_state_check:step3 unseal write error!%x\n", ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		msleep(NFG1000_write_WAIT_TIME);
+
+		u8pwd[0] = ((NFG1000_FULL_KEY>>8))&0xff;
+		u8pwd[1] = ((NFG1000_FULL_KEY>>0))&0xff;
+		ret = fg_write_block(di,di->regs[BQ_FG_REG_ALT_MAC],u8pwd,2);
+		if(ret < 0) {
+			mmi_err("nfg1000_ota_program_unseal_state_check:step4 unseal write error!%x\n", ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		msleep(NFG1000_write_WAIT_TIME);
+
+		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, seal_state_cmd, seal_state_read, 4);
+		if(ret) {
+			mmi_err("nfg1000_ota_program_unseal_state_check:step5 unseal state read error!%x\n", ret);
+			msleep(NFG1000_boot_WAIT_TIME);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		if((seal_state_read[1] & 0x03) == 0x01) {
+			break;
+		}
+	}
+
+	if(i == 3) {
+		mmi_err("nfg1000_ota_program_unseal_state_check:step6 unseal opeartion error!%x\n", ret);
+		return -ERROR_CODE_CHECKSUM;
+	}
+
+	return 0;
+}
+
+//firmware_version_check
+static bool nfg1000_ota_program_check_fw_upgrade(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 i = 0;
+	u8 fw_ver_read[12] = {0};
+	bool upgrade_status = false;
+
+	ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_FW_VER, fw_ver_read, 12);
+	if(ret) {
+		mmi_err(": From fg ic read the  firmware version error!\n");
+		return upgrade_status;
+	}
+
+	mmi_info(":Read From fuelgauge, Firmware version=[%02x %02x %02x %02x %02x]\n",
+		fw_ver_read[0], fw_ver_read[1],fw_ver_read[2],fw_ver_read[3],fw_ver_read[4]);
+	for(i = 0; i < 5; i++) {
+		if(fw_ver_read[i] != di->fw_version[i]) {
+			mmi_info(":firmware version is not same!into upgrade...\n");
+			upgrade_status = true;
+			break;
+		}
+	}
+
+	return upgrade_status;
+}
+
+static const char *get_battery_serialnumber(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	const char *battsn_buf;
+	int retval;
+
+	battsn_buf = NULL;
+
+	if (np)
+		retval = of_property_read_string(np, "mmi,battid",
+						 &battsn_buf);
+	else
+		return NULL;
+
+	if ((retval == -EINVAL) || !battsn_buf) {
+		mmi_info(" Battsn unused\n");
+		of_node_put(np);
+		return NULL;
+
+	} else
+		mmi_info("Battsn = %s\n", battsn_buf);
+
+	of_node_put(np);
+
+	return battsn_buf;
+}
+
+//battery parameter version check
+static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di)
+{
+	bool upgrade_status = false;
+	u8 dataflash_ver_read[32] = {0};
+	u16 fg_param_version = 0xFFFF;
+	const char *dev_sn = NULL;
+	/*
+	int ret = 0;
+	u8 i = 0;
+	ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di,0x440D ,dataflash_ver_read,32);
+	if(ret)
+	{
+		printk("nfg1000_ota_program_dataflash_version_check:dataflash version read error!\n");
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	for(i = 0;i < 10;i++)
+	{
+		if(dataflash_ver_read[i] != di->battsn_buf[i])
+		{
+			break;
+		}
+	}
+	if(i != 10)
+	{
+		mmi_info("nfg1000_ota_program_dataflash_version_check: battery version different!\n");
+		return -PROGRAM_BATTERY_VERSION;
+	}
+	*/
+	if(nfg1000_ota_unseal(di))
+	{
+		return PROGRAM_ERROR_UNSEAL;
+	}
+
+	if (nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di,0x440B ,dataflash_ver_read,32) < 0)
+		return upgrade_status;
+
+	fg_param_version = ((dataflash_ver_read[25] - 0x30) << 8);
+	fg_param_version |= (dataflash_ver_read[26] - 0x30);
+
+	mmi_info(":the fg_param_version=0x%04x\n", fg_param_version);
+	mmi_info(":latest battery parameter version=0x%04x\n", di->batt_param_version);
+
+	if(fg_param_version < di->batt_param_version)
+	{
+		dev_sn = get_battery_serialnumber();
+		if (dev_sn != NULL && di->battsn_buf != NULL) {
+			if (strnstr(dev_sn, di->battsn_buf, 10)) {
+				mmi_info(":battsn compared,the battery parameter data need upgrade!\n");
+				upgrade_status = true;
+			}
+		}
+	}
+
+	return upgrade_status;
+}
+
+//enter bootload
+static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 u8Data[2] = {0};
+	u8 uReCode[2] = {0};
+	u8 retry_cnt = 0;
+
+	u8Data[1] = 0;
+	u8Data[0] = NFG1000_RESET_CMD;
+	//reset nfg1000
+	mmi_info("reset nfg1000");
+	ret = fg_write_block(di, di->regs[BQ_FG_REG_ALT_MAC], u8Data, 2);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",di->regs[BQ_FG_REG_ALT_MAC]);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	msleep(NFG1000_RESET_WAIT_TIME);
+
+	u8Data[0] = 0x3f;
+	for(retry_cnt = 0; retry_cnt < 3; retry_cnt++)
+	{
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data,1);
+		ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode,1);
+		if(uReCode[0] == NFG1000_SUCESS_CODE)
+			break;
+	}
+	if(uReCode[0] != NFG1000_SUCESS_CODE)
+	{
+		msleep(NFG1000_boot_WAIT_TIME);
+		for(retry_cnt = 0; retry_cnt < 3; retry_cnt++)
+		{
+			ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 1);
+			ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode, 1);
+			if(uReCode[0] == NFG1000_SUCESS_CODE)
+				break;
+		}
+	}
+	if(uReCode[0] != NFG1000_SUCESS_CODE) {
+		mmi_err(":return code error:%x!!\n",uReCode[0]);
+		return -ERROR_CODE_RERUNCODE;
+	}
+
+	return 0;
+}
+
+u8 CalcXorsum(u8 *inbuf,int len)
+{
+	int i;
+	u8 xorsum = 0;
+
+	for(i=0;i<len;i++)
+	{
+		xorsum ^=inbuf[i];
+	}
+
+	return xorsum;
+}
+
+#define SHA_DATA_SIZE	32
+
+static int nfg1000_ota_program_step2_ShaAuth(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 u8Data[64] = {0};
+
+	u8Data[0] = 0XE6;
+	u8Data[1] = 0X19;
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	memcpy(&u8Data[0], sha_256_ramdom_data, SHA_DATA_SIZE);
+	u8Data[SHA_DATA_SIZE] = CalcXorsum(sha_256_ramdom_data, SHA_DATA_SIZE);
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, SHA_DATA_SIZE+1);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+	msleep(NFG1000_RESET_WAIT_TIME);
+
+	memcpy(&u8Data[0], sha_256_pass_word, SHA_DATA_SIZE);
+	u8Data[SHA_DATA_SIZE] = CalcXorsum(sha_256_pass_word, SHA_DATA_SIZE);
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, SHA_DATA_SIZE+1);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	msleep(NFG1000_RESET_WAIT_TIME);
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	return 0;
+}
+
+#define MCU_AUTH_CODE_SIZE		4
+static int nfg1000_ota_program_step3_mcuAuth(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u32 tmpMcuCode =0;
+	u8 u8Data[8] = {0};
+	u8 uReCode[8] = {0};
+
+	u8Data[0] = 0x91;
+	u8Data[1] = 0x6e;
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	u8Data[0] = 0;
+	u8Data[1] = 2;
+	u8Data[2] = 0xb;
+	u8Data[3] = 0xf8;
+	//u8Data[4] = u8Data[0]^ u8Data[1]^u8Data[2]^ u8Data[3];
+	u8Data[4] = CalcXorsum(u8Data,4);
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 5);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	memset(u8Data, 0, sizeof(u8Data));
+	u8Data[0] = 0x3;
+	u8Data[1] = (u8)0xff - ((u8)MCU_AUTH_CODE_SIZE - 1);//03 fc
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode, 4);
+	if(ret < 0) {
+		mmi_err(":read reg: %x error!!\n", I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_READ;
+	}
+
+	tmpMcuCode = NAKE_DWORD_8BITS(uReCode[3], uReCode[2], uReCode[1], uReCode[0]);
+	if(di->mcu_auth_code != tmpMcuCode) {
+		mmi_err(":mcu code check error: file_code:%x  tmpMcuCode:%d !\n", di->mcu_auth_code, tmpMcuCode);
+		return -ERROR_CODE_MCUCODE;
+	}
+
+	return 0;
+}
+
+static int nfg1000_ota_program_step4_EraseFlash(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	int datalen = 0;
+	u8 u8Data[200] = {0};
+
+	u8Data[0] = 0xc4;u8Data[1] = 0x3b;
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n", I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	memcpy(u8Data, app_flash_erase_order, sizeof(app_flash_erase_order));
+	datalen = sizeof(app_flash_erase_order);
+	if(datalen <= 0) {
+		return datalen;
+	}
+
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, datalen);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n", I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	msleep(NFG1000_erase_WAIT_TIME);
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	return 0;
+}
+
+static int nfg1000_ota_program_step5_WriteUpdatefile(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 u8checksum = 0;
+	u8 u8Data[260] = {0};
+	s32 i = 0;
+	s32 j = 0;
+	s32 k = 0;
+	u32 tmpaddr = 0;
+
+	for(i=256; i < APP_SIZE; i+=256)
+	{
+		u8Data[0] = 0xb1;
+		u8Data[1] = 0x4e;
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+		if(ret < 0) {
+			mmi_err(":Error write 0xb14e reg loop=%d, error: %d!!\n", i, ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		ret = nfg1000_GetReturnCode(di);
+		if(ret) {
+			mmi_err(":Error write 0xb14e GetReturnCode error, loop=%d, error: %d!!\n", i, ret);
+			return ret;
+		}
+
+		tmpaddr = di->fw_start_addr+i;
+		u8Data[0] = (tmpaddr>>24)&0xff;
+		u8Data[1] = (tmpaddr>>16)&0xff;
+		u8Data[2] = (tmpaddr>>8)&0xff;
+		u8Data[3] = (tmpaddr)&0xff;
+		u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 5);
+		if(ret < 0) {
+			mmi_err(":Error write fw start addr reg loop=%d,error: %d!!\n", i, ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		ret = nfg1000_GetReturnCode(di);
+		if(ret) {
+			mmi_err(":Error write fw start addr GetReturnCode loop=%d,error: %d!!\n", i, ret);
+			return ret;
+		}
+
+		u8checksum = 0;
+		u8Data[0] = 0xff;
+		u8checksum ^= u8Data[0];
+		for(j=0; j<256; j++)
+		{
+			u8checksum ^= di->fw_data[j+i];
+			u8Data[1+j] = di->fw_data[j+i];
+		}
+		u8Data[1+j] = u8checksum;
+		for (k=1; k<=3; k++) {
+			ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 258);
+			if(ret < 0) {
+				mmi_err(":Error write fw data loop=%d,error: %d!!\n", i, ret);
+				return -ERROR_CODE_I2C_WRITE;
+			}
+			msleep(120);
+			ret = nfg1000_GetReturnCode(di);
+			if(ret) {
+				mmi_err(":Error write fw data GetReturnCode loop=%d,error: %d!!\n", i, ret);
+				if (k == 3)
+					return ret;
+			} else {
+				break; //write fw data pass
+			}
+		}
+	}
+
+	for(i=252; i>=0; i=i-4)
+	{
+		u8Data[0] = 0xb1;
+		u8Data[1] = 0x4e;
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+		if(ret < 0) {
+			mmi_err(":Error before 252bye,write 0xb14e reg loop=%d, error: %d!!\n", i, ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+
+		ret = nfg1000_GetReturnCode(di);
+		if(ret) {
+			mmi_err(":Error before 252bye,write 0xb14e GetReturnCode error, loop=%d, error: %d!!\n", i, ret);
+			return ret;
+		}
+
+		tmpaddr = di->fw_start_addr+i;
+		u8Data[0] = (tmpaddr>>24)&0xff;
+		u8Data[1] = (tmpaddr>>16)&0xff;
+		u8Data[2] = (tmpaddr>>8)&0xff;
+		u8Data[3] = (tmpaddr)&0xff;
+		u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 5);
+		if(ret < 0) {
+			mmi_err(":Error before 252bye,write fw start addr,loop=%d error: %d!!\n", i, ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		ret = nfg1000_GetReturnCode(di);
+		if(ret) {
+			mmi_err(":Error before 252bye, write fw start addr GetReturnCode loop=%d,error: %d!!\n", i, ret);
+			return ret;
+		}
+
+		u8checksum = 0;
+		u8Data[0] = 0x3;
+		u8checksum ^= u8Data[0];
+		for(j=0; j<4; j++)
+		{
+			u8checksum ^= di->fw_data[j+i];
+			u8Data[1+j] = di->fw_data[j+i];
+		}
+		u8Data[1+j] = u8checksum;
+		for (k=1; k<=3; k++) {
+			ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data,6);
+			if(ret < 0) {
+				mmi_err(":Error write before 252byte data loop=%d,error: %x !!\n", i, ret);
+				return -ERROR_CODE_I2C_WRITE;
+			}
+			msleep(NFG1000_write_WAIT_TIME);
+
+			ret = nfg1000_GetReturnCode(di);
+			if(ret) {
+				mmi_err(":Error write before 252byte data GetReturnCode loop=%d,error: %d!!\n", i, ret);
+				if (k == 3)
+					return ret;
+			} else {
+				break; //write fw data pass
+			}
+		}
+	}
+	return 0;
+}
+
+static int nfg1000_ota_program_step6_CheckCrc(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 u8Data[8] = {0};
+	u8 uReCode[8] = {0};
+	u32 tmpaddr = 0;
+	u32 Crc32tmp = 0;
+	u32 Crc32_code = 0;
+
+	u8Data[0] = 0xd0;
+	u8Data[1] = 0x2f;
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0) {
+		mmi_err("nfg1000_ota_program_step6_CheckCrc:write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	tmpaddr = di->fw_start_addr;
+	u8Data[0] = (tmpaddr>>24)&0xff;
+	u8Data[1] = (tmpaddr>>16)&0xff;
+	u8Data[2] = (tmpaddr>>8)&0xff;
+	u8Data[3] = (tmpaddr)&0xff;
+	u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 5);
+	if(ret < 0) {
+		mmi_err("nfg1000_ota_program_step6_CheckCrc:write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	tmpaddr = di->fw_start_addr + APP_SIZE - 1;
+	u8Data[0] = (tmpaddr>>24)&0xff;u8Data[1] = (tmpaddr>>16)&0xff;
+	u8Data[2] = (tmpaddr>>8)&0xff;
+	u8Data[3] = (tmpaddr)&0xff;
+	u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 5);
+	if(ret < 0) {
+		mmi_err("nfg1000_ota_program_step6_CheckCrc:write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		return ret;
+	}
+
+	msleep(NFG1000_RESET_WAIT_TIME);
+	ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode, 4);
+	if(ret < 0) {
+		mmi_err("nfg1000_ota_program_step6_CheckCrc:read reg: %x error!!\n", I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_READ;
+	}
+
+	Crc32tmp = NAKE_DWORD_8BITS(uReCode[3],uReCode[2],uReCode[1],uReCode[0]);
+	init_crc_table();
+	Crc32_code  = crc32(0xFFFFFFFF, di->fw_data, APP_SIZE);
+	if(Crc32_code != Crc32tmp) {
+		mmi_err("nfg1000_ota_program_step6_CheckCrc:read reg: %x error!!\n",  Crc32_code);
+		return -ERROR_CODE_I2C_READ;
+	}
+
+	return 0;
+}
+
+static int nfg1000_ota_program_step7_ExitBoot(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+
+	u8 u8Data[8] = {0};
+	u8Data[0] = 0xA1;
+	u8Data[1] = 0x5E;
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		mmi_err("nfg1000 write addr 0xA15E GetReturnCode fail");
+		return ret;
+	}
+	u8Data[0] = 0;
+	u8Data[1] = 0;
+	u8Data[2] = 0;
+	u8Data[3] = 0;
+	u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 5);
+	if(ret < 0) {
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		mmi_err("nfg1000_GetReturnCode fail 1");
+		return ret;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret) {
+		mmi_err("nfg1000_GetReturnCode fail 2");
+		return ret;
+	}
+	msleep(NFG1000_seal_WAIT_TIME);
+
+	return 0;
+}
+
+static int nfg1000_ota_program_step8_EraseDATA(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+
+	u8 u8Data[20] = {0};
+	u8Data[0] = 0xc4;
+	u8Data[1] = 0x3b;
+
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0)
+	{
+		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret)
+	{
+		return ret;
+	}
+
+	memcpy(u8Data,data_flash_erase_order,sizeof(data_flash_erase_order));
+
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, sizeof(data_flash_erase_order));
+	if(ret < 0)
+	{
+		mmi_err("nfg1000_ota_program_step8_EraseDATA:write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	msleep(NFG1000_erase_WAIT_TIME);
+	ret = nfg1000_GetReturnCode(di);
+	if(ret)
+	{
+		mmi_err("nfg1000_GetReturnCode error");
+		return ret;
+	}
+
+	return 0;
+}
+
+#define CHEMID_START_DATAFLASH	3072
+#define CHEMID_STOP_DATAFLASH	4096
+static int nfg1000_ota_program_step9_WriteDatafile(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 u8Data[260] = {0};
+	u8 u8checksum = 0;
+	u32 i=0;
+	u32 j=0;
+	u32 tmpaddr = 0;
+
+	for(i = CHEMID_START_DATAFLASH;i < CHEMID_STOP_DATAFLASH;i += 256)
+	{
+		u8Data[0] = 0xb1;
+		u8Data[1] = 0x4e;
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+		if(ret < 0)
+		{
+			mmi_err("nfg1000_ota_program_step9_WriteDatafile:write reg: %x error!!\n",I2C_NO_REG_DATA);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+
+		ret = nfg1000_GetReturnCode(di);
+		if(ret)
+		{
+			mmi_err("nfg1000_GetReturnCode error");
+			return ret;
+		}
+
+		tmpaddr = di->param_start_addr + i;
+		u8Data[0] = (tmpaddr>>24)&0xff;
+		u8Data[1] = (tmpaddr>>16)&0xff;
+		u8Data[2] = (tmpaddr>>8)&0xff;
+		u8Data[3] = (tmpaddr)&0xff;
+		u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 5);
+		if(ret < 0)
+		{
+			printk("nfg1000_ota_program_step9_WriteDatafile:write reg: %x error!!\n",I2C_NO_REG_DATA);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		ret = nfg1000_GetReturnCode(di);
+		if(ret)
+		{
+			mmi_err("nfg1000_GetReturnCode error");
+			return ret;
+		}
+
+		u8checksum = 0;
+		u8Data[0] = 0xff;
+		u8checksum ^= u8Data[0];
+		for(j=0;j<256;j++)
+		{
+			u8checksum ^= di->params_data[j+i];
+			u8Data[1+j] = di->params_data[j+i];
+		}
+
+		u8Data[1+j] = u8checksum;
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 258);
+		if(ret < 0)
+		{
+			mmi_err("nfg1000_ota_program_step9_WriteDatafile:write reg: %x error!!\n",I2C_NO_REG_DATA);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		msleep(NFG1000_RESET_WAIT_TIME);
+		ret = nfg1000_GetReturnCode(di);
+		if(ret)
+		{
+			mmi_err("nfg1000_GetReturnCode error");
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+static int nfg1000_ota_program_step10_CheckDataCrc(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 u8Data[8] = {0};
+	u8 uReCode[8] = {0};
+	u32 tmpaddr = 0;
+	u32 Crc32tmp = 0;
+	u32 Crc32_code = 0;
+
+	u8Data[0] = 0xd0;
+	u8Data[1] = 0x2f;
+
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
+	if(ret < 0)
+	{
+		mmi_err("nfg1000_ota_program_step10_CheckDataCrc:write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	ret = nfg1000_GetReturnCode(di);
+	if(ret)
+	{
+		mmi_err("nfg1000_GetReturnCode error");
+		return ret;
+	}
+
+	tmpaddr = 0x30C00;
+	u8Data[0] = (tmpaddr>>24)&0xff;
+	u8Data[1] = (tmpaddr>>16)&0xff;
+	u8Data[2] = (tmpaddr>>8)&0xff;
+	u8Data[3] = (tmpaddr)&0xff;
+	u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data,5);
+	if(ret < 0)
+	{
+		mmi_err("nfg1000_ota_program_step10_CheckDataCrc:write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	ret = nfg1000_GetReturnCode(di);
+	if(ret)
+	{
+		mmi_err("nfg1000_GetReturnCode error");
+		return ret;
+	}
+
+
+	tmpaddr = 0x03FF;
+	u8Data[0] = (tmpaddr>>24)&0xff;
+	u8Data[1] = (tmpaddr>>16)&0xff;
+	u8Data[2] = (tmpaddr>>8)&0xff;
+	u8Data[3] = (tmpaddr)&0xff;
+	u8Data[4] = u8Data[0]^u8Data[1]^u8Data[2]^u8Data[3];
+
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data,5);
+	if(ret < 0)
+	{
+		mmi_err("nfg1000_ota_program_step10_CheckDataCrc:write reg: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+	ret = nfg1000_GetReturnCode(di);
+	if(ret)
+	{
+		mmi_err("nfg1000_GetReturnCode error");
+		return ret;
+	}
+	msleep(NFG1000_RESET_WAIT_TIME);
+
+	//read crc and compare
+	ret = fg_read_block(di, I2C_NO_REG_DATA,uReCode,4);
+	if(ret < 0)
+	{
+		mmi_err("nfg1000_ota_program_step10_CheckDataCrc:read output crc: %x error!!\n", I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_READ;
+	}
+	Crc32tmp = NAKE_DWORD_8BITS(uReCode[3],uReCode[2],uReCode[1],uReCode[0]);
+
+	init_crc_table();
+	Crc32_code  = crc32(0xFFFFFFFF, &di->params_data[CHEMID_START_DATAFLASH], 1024);
+	if(Crc32_code != Crc32tmp)
+	{
+		mmi_err("nfg1000_ota_program_step10_CheckDataCrc:calculate crc: %x error!!\n",  Crc32_code);
+		return -ERROR_CODE_I2C_READ;
+	}
+
+	return 0;
+}
+
+
+
+// updata config information
+
+static int nfg1000_ota_updata_config(struct mmi_fg_chip *di)
+{
+	u8 ret;
+	u8 i = 0;
+	u8 j = 0;
+	u8 addr_cmd = 0;
+	u8 retry_cnt = 0;
+	u8 retry_flag = 0;
+	u16 dataflash_base_addr = 0x4400;
+	u8 config_data_read[32] = {0};
+
+	for(i = 0; i < sizeof(nfg1000_Dataflash_updata_CMD);)
+	{
+		addr_cmd = nfg1000_Dataflash_updata_CMD[i];
+
+		ret = nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(di, dataflash_base_addr + addr_cmd, &di->params_data[addr_cmd*32],32);
+
+		msleep(NFG1000_RESET_WAIT_TIME);
+		if(ret)
+		{
+			mmi_err("nfg1000_ota_updata_config:write reg: %x error!!\n",ret);
+			break;
+		}
+		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, dataflash_base_addr + addr_cmd,config_data_read,32);
+		if(ret)
+		{
+			mmi_err("nfg1000_ota_updata_config:read reg: %x error!!\n",ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+
+		for(j = 0;j < 32;j++)
+		{
+			if(config_data_read[j] != di->params_data[addr_cmd*32 + j])
+			{
+				retry_flag = 1;
+				retry_cnt++;
+				break;
+			}
+		}
+		if(retry_flag == 0)
+		{
+			retry_cnt = 0;
+			i++;
+		}
+		else
+		{
+			if(retry_cnt > 2)
+			{
+				mmi_err("nfg1000_ota_updata_config:config updata reg: %x error!!\n",addr_cmd);
+				return -ERROR_CODE_I2C_WRITE;
+			}
+			retry_flag = 0;
+		}
+	}
+	if(i != sizeof(nfg1000_Dataflash_updata_CMD))
+	{
+		mmi_err("nfg1000_ota_updata config: %x error!!\n",I2C_NO_REG_DATA);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	return 0;
+}
+
+
+static int nfg1000_ota_seal(struct mmi_fg_chip *di)
+{
+	int ret;
+	int i=0;
+	u8 u8Data[8] = {0};
+	u8 seal_state_read[32] = {0};
+	u16 seal_state_cmd = 0x0054;
+
+	for(i = 0; i < 3; i++)
+	{
+		u8Data[0] = 0x3E;
+		u8Data[1] = 0x30;
+		u8Data[2] = 0;
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 3);
+		if(ret < 0) {
+			mmi_err("nfg1000_ota_seal:write reg: %x error!!\n",I2C_NO_REG_DATA);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, seal_state_cmd, seal_state_read, 4);
+		if(ret) {
+			mmi_err("nfg1000_ota_program_seal_state_check:seal state read error!%x\n", ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		if((seal_state_read[1] & 0x03) == 0x03)
+			break;
+	}
+	if(i == 3) {
+		mmi_err("nfg1000_ota_program_seal_state_check:seal opeartion error!%x\n", ret);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	return 0;
+}
+
+void nfg1000_ota_init(struct mmi_fg_chip *di)
+{
+	di->unseal_key = NFG1000_UNSEAL_KEY;
+	di->mcu_auth_code = NFG1000_CHIP_NAME;
+	di->fw_start_addr = 0;
+	di->param_start_addr = 0x30000;
+
+	return;
+}
+
+static u8 *nfg1000_upgrade_read_firmware(char *bin_name, struct mmi_fg_chip *mmi_fg)
+{
+	const struct firmware *fw;
+	int ret;
+	u8 *des_buf = NULL;
+
+	ret = request_firmware(&fw, bin_name, mmi_fg->dev);
+	if (ret || fw->size <= 0 ) {
+		mmi_info("Couldn't get nfg1000_firmware  rc=%d\n", ret);
+		return NULL;
+	}
+	des_buf = kzalloc(fw->size, GFP_KERNEL);
+	memset(des_buf, 0, fw->size);
+	memcpy(des_buf, fw->data, fw->size);
+	if (fw) {
+		release_firmware(fw);
+		fw = NULL;
+	}
+
+	return des_buf;
+}
+
+static ssize_t nfg1000_upgrade_Params(struct mmi_fg_chip *di)
+{
+	if (di->params_data == NULL)
+		di->params_data = nfg1000_upgrade_read_firmware("NFG1000A_battery_parameter.bin", di);
+	if (di->params_data == NULL) {
+		mmi_err("battery paramter data is null, exit upgrade.");
+		return PROGRAM_ERROR_EXIT_BOOT;
+	}
+
+	mmi_info("step1 EnterBootLoad");
+	if(nfg1000_ota_program_step1_EnterBootLoad(di))
+	{
+		return PROGRAM_ERROR_ENTER_BOOT;
+	}
+	mmi_info("step2 ShaAuth");
+	if(nfg1000_ota_program_step2_ShaAuth(di))
+	{
+		return PROGRAM_ERROR_SHA256;
+	}
+	mmi_info("step3 mcuAuth");
+	if(nfg1000_ota_program_step3_mcuAuth(di))
+	{
+		return PROGRAM_ERROR_CHIP_NAME;
+	}
+	mmi_info("step8_EraseDATA");
+	if(nfg1000_ota_program_step8_EraseDATA(di))
+	{
+		return PROGRAM_ERROR_DATA_ERASE;
+	}
+	mmi_info("step9_WriteDatafile");
+	if(nfg1000_ota_program_step9_WriteDatafile(di))
+	{
+		return PROGRAM_ERROR_DATA_WRITE;
+	}
+	mmi_info("step10_CheckDataCrc");
+	if(nfg1000_ota_program_step10_CheckDataCrc(di))
+	{
+		return PROGRAM_ERROR_APP_CHECKCRC;
+	}
+	mmi_info("step7_ExitBoot");
+	if(nfg1000_ota_program_step7_ExitBoot(di))
+	{
+		return PROGRAM_ERROR_EXIT_BOOT;
+	}
+	mmi_info("ota_unseal");
+	if(nfg1000_ota_unseal(di))
+	{
+		return PROGRAM_ERROR_UNSEAL;
+	}
+	mmi_info("ota_updata_config");
+	if(nfg1000_ota_updata_config(di))
+	{
+		return PROGRAM_ERROR_UNSEAL;
+	}
+	mmi_info("ota_seal");
+	if(nfg1000_ota_seal(di))
+	{
+		return PROGRAM_ERROR_SEAL;
+	}
+
+	return 0;
+}
+
+static ssize_t nfg1000_upgrade_APP(struct mmi_fg_chip *di)
+{
+	mmi_info("step1 EnterBootLoad");
+	if(nfg1000_ota_program_step1_EnterBootLoad(di))
+	{
+		return PROGRAM_ERROR_ENTER_BOOT;
+	}
+	mmi_info("step2 ShaAuth");
+	if(nfg1000_ota_program_step2_ShaAuth(di))
+	{
+		return PROGRAM_ERROR_SHA256;
+	}
+	mmi_info("step3 mcuAuth");
+	if(nfg1000_ota_program_step3_mcuAuth(di))
+	{
+		return PROGRAM_ERROR_CHIP_NAME;
+	}
+	mmi_info("step4 EraseFlash");
+	if(nfg1000_ota_program_step4_EraseFlash(di))
+	{
+		return PROGRAM_ERROR_APP_ERASE;
+	}
+	mmi_info("step5 WriteUpdatefile");
+	if(nfg1000_ota_program_step5_WriteUpdatefile(di))
+	{
+		mmi_info("step5 WriteUpdatefile failed");
+		return PROGRAM_ERROR_APP_WRITE;
+	}
+	mmi_info("step6 CheckCrc");
+	if(nfg1000_ota_program_step6_CheckCrc(di))
+	{
+		return PROGRAM_ERROR_APP_CHECKCRC;
+	}
+	mmi_info("step7 ExitBoot");
+	if(nfg1000_ota_program_step7_ExitBoot(di))
+	{
+		return PROGRAM_ERROR_EXIT_BOOT;
+	}
+	mmi_info("ota seal");
+	if(nfg1000_ota_seal(di))
+	{
+		return PROGRAM_ERROR_SEAL;
+	}
+
+	return 0;
+}
+
+static bool is_atm_mode()
+{
+	const char *bootargs_ptr = NULL;
+	char *bootargs_str = NULL;
+	char *idx = NULL;
+	char *kvpair = NULL;
+	struct device_node *n = of_find_node_by_path("/chosen");
+	size_t bootargs_ptr_len = 0;
+	char *value = NULL;
+	bool factory_mode = false;
+
+	if (n == NULL)
+		goto err_putnode;
+
+	bootargs_ptr = (char *)of_get_property(n, "mmi,bootconfig", NULL);
+
+	if (!bootargs_ptr) {
+		mmi_err("%s: failed to get mmi,bootconfig\n", __func__);
+		goto err_putnode;
+	}
+
+	bootargs_ptr_len = strlen(bootargs_ptr);
+	if (!bootargs_str) {
+		/* Following operations need a non-const version of bootargs */
+		bootargs_str = kzalloc(bootargs_ptr_len + 1, GFP_KERNEL);
+		if (!bootargs_str)
+			goto err_putnode;
+	}
+	strlcpy(bootargs_str, bootargs_ptr, bootargs_ptr_len + 1);
+
+	idx = strnstr(bootargs_str, "androidboot.atm=", strlen(bootargs_str));
+	if (idx) {
+		kvpair = strsep(&idx, " ");
+		if (kvpair)
+			if (strsep(&kvpair, "=")) {
+				value = strsep(&kvpair, "\n");
+			}
+	}
+	if (value) {
+		if (!strncmp(value, "enable", strlen("enable"))) {
+			factory_mode = true;
+		}
+	}
+	kfree(bootargs_str);
+
+err_putnode:
+	if (n)
+		of_node_put(n);
+
+	return factory_mode;
+}
+
+static void nfg1000_upgrade_func(struct work_struct *work)
+{
+	struct mmi_fg_chip *di = container_of(work, struct mmi_fg_chip, fg_upgrade_work);
+	int count = 1;
+	if (is_atm_mode() == false) {
+		mmi_info("only factory-mode support fuelgauge upgrade,exit");
+		return;
+	}
+
+	if (di->fake_battery == true) {
+		mmi_info("fake battery not support upgrade,exit");
+		return;
+	}
+
+	nfg1000_ota_init(di);
+
+	fg_get_capacity(di->gauge_dev, &di->batt_soc);
+	di->fake_battery = true;
+	di->do_upgrading = true;
+
+	if (nfg1000_ota_program_check_fw_upgrade(di) == false) {
+		mmi_info("fw not need upgrade,exit");
+	} else {
+		if (di->fw_data == NULL)
+			di->fw_data = nfg1000_upgrade_read_firmware("NFG1000A_firmware.bin", di);
+		if (di->fw_data == NULL) {
+			mmi_err("fw data is null, exit upgrade.");
+			goto upgrade_error;
+		}
+		mmi_info("ota unseal");
+		if(nfg1000_ota_unseal(di))
+		{
+			mmi_err("ota unseal,failed, exit upgrade");
+			goto upgrade_error;
+		}
+		for (count=1; count<=3; count++) {
+			if (nfg1000_upgrade_APP(di) != 0) {
+				mmi_err("nfg1000_upgrade_APP failed, retry=%d", count);
+				if (count == 3) {
+					mmi_err("nfg1000_upgrade_APP failed, use fake battery");
+					goto upgrade_error;
+				}
+			} else {
+				mmi_info("nfg1000_upgrade_APP successfully!!");
+				break;
+			}
+		}
+	}
+
+	if (nfg1000_ota_program_check_batt_params_version(di) == false) {
+		mmi_info("battery params not need upgrade,exit");
+	} else {
+		for (count=1; count<=3; count++) {
+			if (nfg1000_upgrade_Params(di) != 0) {
+				mmi_err("nfg1000_upgrade_Params failed, retry=%d", count);
+				if (count == 3) {
+					mmi_err("nfg1000_upgrade_Params failed, use fake battery");
+					goto upgrade_error;
+				}
+			} else {
+				mmi_info("nfg1000_upgrade_Params successfully!!");
+				break;
+			}
+		}
+	}
+	di->do_upgrading = false;
+	di->fake_battery = false;
+
+upgrade_error:
+	if (di->fw_data) {
+		di->fw_data =NULL;
+		kfree(di->fw_data);
+	}
+	if (di->params_data) {
+		di->params_data =NULL;
+		kfree(di->params_data);
+	}
+
+}
+
+/*------------------------------------upgrade end---------------------------------------------------*/
 
 
 static int fg_read_status(struct mmi_fg_chip *mmi)
@@ -842,7 +2205,9 @@ int fg_get_capacity(struct gauge_device *gauge_dev, int *soc)
 	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
 	int ret = 0;
 
-	if (mmi->fake_battery)
+	if (mmi->do_upgrading)
+		*soc = mmi->batt_soc;
+	else if (mmi->fake_battery)
 		*soc = 50;
 	else {
 		ret = fg_read_rsoc(mmi);
@@ -1268,11 +2633,6 @@ static void fg_dump_registers(struct mmi_fg_chip *mmi)
 	}
 }
 
-static void fake_fg_update_thread(struct work_struct *work)
-{
-	return;
-}
-
 static void fg_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
@@ -1281,6 +2641,10 @@ static void fg_update_thread(struct work_struct *work)
 
 	delay_work = container_of(work, struct delayed_work, work);
 	mmi = container_of(delay_work, struct mmi_fg_chip, battery_delay_work);
+
+
+	if (mmi->fake_battery || mmi->do_upgrading)
+		return;
 
 	/* get battery power supply */
 	if (!mmi->batt_psy) {
@@ -1335,16 +2699,56 @@ static struct gauge_ops nfg1000_gauge_ops = {
 	.set_charge_type = fg_set_charge_type,
 };
 
+static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)
+{
+	struct device_node *np = mmi_fg->client->dev.of_node;
+	int byte_len;
+	int rc;
+
+	rc = of_property_read_u32(np , "uirbat_pull_up_r_full", &mmi_fg->rbat_pull_up_r);
+	if (rc < 0) {
+		mmi_fg->rbat_pull_up_r = 24 * 1000;
+		mmi_err("Failed to get uirbat_pull_up_r_full, err:%d, use default 24Kpull_up_r\n", rc);
+	}
+
+	if (of_find_property(np, "latest_fw_version", &byte_len)) {
+		mmi_fg->fw_version= (u8 *)devm_kzalloc(&mmi_fg->client->dev, byte_len, GFP_KERNEL);
+		if (mmi_fg->fw_version == NULL) {
+			mmi_err(" devm_kzalloc fail,exit parse dts");
+			return -ENOMEM;
+		}
+		rc = of_property_read_u8_array(np,
+			"latest_fw_version", mmi_fg->fw_version, byte_len / sizeof(u8));
+		if (rc < 0) {
+			mmi_err("Couldn't read mmi fw version = %d\n", rc);
+			return -ENOMEM;
+		}
+	}
+	// read batt id
+	rc = of_property_read_string(np, "df_serialnum", &mmi_fg->battsn_buf);
+	if (rc)
+		mmi_err("No Default Serial Number defined\n");
+	else if (mmi_fg->battsn_buf)
+		mmi_info("Default Serial Number %s\n", mmi_fg->battsn_buf);
+
+	// read battery param version
+	rc = of_property_read_u32(np , "latest_batt_param_version", &mmi_fg->batt_param_version);
+	if (rc < 0) {
+		mmi_fg->batt_param_version = 0;
+		mmi_info("Failed to get batt_param_version, err:%d, set batt_param_versions=0\n", rc);
+	}
+
+	return 0;
+}
+
 static int mmi_fg_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
 {
-
 	int ret;
 	struct mmi_fg_chip *mmi;
 	u8 *regs;
 
 	mmi = devm_kzalloc(&client->dev, sizeof(*mmi), GFP_KERNEL);
-
 	if (!mmi)
 		return -ENOMEM;
 
@@ -1362,6 +2766,12 @@ static int mmi_fg_probe(struct i2c_client *client,
 	mmi->batt_cyclecnt = -ENODATA;
 
 	mmi->fake_battery = false;
+	mmi->do_upgrading = false;
+	mmi->battsn_buf = NULL;
+	mmi->fw_data = NULL;
+	mmi->params_data = NULL;
+
+	mmi_parse_dt(mmi);
 
 	if (mmi->chip == NFG1000) {
 		regs = nfg1000_regs;
@@ -1378,7 +2788,6 @@ static int mmi_fg_probe(struct i2c_client *client,
 	mutex_init(&mmi->data_lock);
 	mutex_init(&mmi->update_lock);
 	mmi->resume_completed = true;
-
 
 	device_init_wakeup(mmi->dev, 1);
 
@@ -1399,19 +2808,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 		ret = PTR_ERR(mmi->vref_channel);
 	}
 	mmi->ntc_temp_table = fg_temp_table;
-
-	ret = of_property_read_u32(mmi->client->dev.of_node , "uirbat_pull_up_r_full", &mmi->rbat_pull_up_r);
-	if (ret < 0) {
-		mmi->rbat_pull_up_r = 24 * 1000;
-		mmi_err("Failed to get uirbat_pull_up_r_full, err:%d, use default 24Kpull_up_r\n", ret);
-	}
-
-	if(mmi->fake_battery){
-		mmi->mmi_fg_update_thread = fake_fg_update_thread;
-	} else {
-		mmi->mmi_fg_update_thread = fg_update_thread;
-	}
-
+	mmi->mmi_fg_update_thread = fg_update_thread;
 	mmi->mmi_get_property = fg_get_property;
 	mmi->mmi_set_property = fg_set_property;
 
@@ -1438,10 +2835,12 @@ static int mmi_fg_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&mmi->battery_delay_work, mmi->mmi_fg_update_thread);
 	queue_delayed_work(mmi->fg_workqueue, &mmi->battery_delay_work , msecs_to_jiffies(queue_start_work_time));
 
+	INIT_WORK(&mmi->fg_upgrade_work, nfg1000_upgrade_func);
+	schedule_work(&mmi->fg_upgrade_work);
+
 	mmi_log("mmi fuel gauge probe successfully, %s\n", device2str[mmi->chip]);
 
 	return 0;
-
 }
 
 
