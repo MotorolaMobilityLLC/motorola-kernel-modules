@@ -48,6 +48,12 @@ enum brl_request_code {
 	BRL_REQUEST_CODE_RESET = 0x03,
 	BRL_REQUEST_CODE_CLOCK = 0x04,
 };
+#ifdef   CONFIG_GTP_FOD
+#define  GOODIX_FP_EVENTS                   0x8
+#define  GOODIX_GESTURE_FOD_DOWN			0x46
+#define  GOODIX_GESTURE_FOD_UP			    0x55
+static int pre_flags = 0;
+#endif
 
 static int brl_select_spi_mode(struct goodix_ts_core *cd)
 {
@@ -312,7 +318,11 @@ static int brl_dev_confirm(struct goodix_ts_core *cd)
 static int brl_reset(struct goodix_ts_core *cd, int delay)
 {
 	ts_info("chip_reset");
-
+#ifdef CONFIG_GTP_DELAY_RELEASE
+	//reset the FOD keybitmap
+	ts_debug("chip_reset %x",pre_flags);
+	pre_flags = 0;
+#endif
 	gpio_direction_output(cd->board_data.reset_gpio, 0);
 	usleep_range(2000, 2100);
 	gpio_direction_output(cd->board_data.reset_gpio, 1);
@@ -1098,11 +1108,7 @@ static void goodix_parse_pen(struct goodix_pen_data *pen_data,
 		pen_data->keys[i].status = TS_TOUCH;
 	}
 }
-#ifdef   CONFIG_GTP_FOD
-#define  GOODIX_FP_EVENTS                   0x8
-#define  GOODIX_GESTURE_FOD_DOWN			0x46
-#define  GOODIX_GESTURE_FOD_UP			    0x55
-#endif
+
 static int goodix_touch_handler(struct goodix_ts_core *cd,
 				struct goodix_ts_event *ts_event,
 				u8 *pre_buf, u32 pre_buf_len)
@@ -1120,7 +1126,6 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 	static u8 pre_pen_num;
 #ifdef CONFIG_GTP_FOD
 	int  fp_flags = 0;
-	static int pre_flags = 0;
 #endif
 	/* clean event buffer */
 	memset(ts_event, 0, sizeof(*ts_event));
