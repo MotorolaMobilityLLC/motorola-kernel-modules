@@ -1768,9 +1768,13 @@ static void nfg1000_upgrade_func(struct work_struct *work)
 {
 	struct mmi_fg_chip *di = container_of(work, struct mmi_fg_chip, fg_upgrade_work);
 	int count = 1;
-	if (is_atm_mode() == false) {
-		mmi_info("only factory-mode support fuelgauge upgrade,exit");
-		return;
+
+	//MMI_STOPSHIP: <fuelgauge>: remove the limits of fg upgrade function.
+	if (0) {
+		if (is_atm_mode() == false) {
+			mmi_info("only factory-mode support fuelgauge upgrade,exit");
+			return;
+		}
 	}
 
 	if (di->fake_battery == true) {
