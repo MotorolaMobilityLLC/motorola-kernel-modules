@@ -38,6 +38,10 @@ ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
 	EXTRA_CFLAGS += -DCONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 endif
 
+ifneq ($(filter m y, $(CONFIG_TOUCHCLASS_MMI_MTK_CHARGER)),)
+	EXTRA_CFLAGS += -DCONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+endif
+
 obj-m := touchscreen_mmi.o
 touchscreen_mmi-objs := touchscreen_mmi_class.o touchscreen_mmi_panel.o touchscreen_mmi_notif.o touchscreen_mmi_gesture.o
 
