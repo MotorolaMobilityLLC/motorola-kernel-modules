@@ -425,6 +425,16 @@ static inline int ts_mmi_ps_get_state(struct power_supply *psy, bool *present)
 {
 	union power_supply_propval pval = {0};
 	int ret;
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &pval);
+		if (ret) {
+			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &pval);
+			if (ret)
+				return ret;
+		}
+
+		*present = !pval.intval ? false : true;
+#else
 	if (!strcmp(psy->desc->name, "battery")) {
 		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &pval);
 		if (pval.intval == MTK_USB_DETECT_IN)
@@ -443,6 +453,7 @@ static inline int ts_mmi_ps_get_state(struct power_supply *psy, bool *present)
 
 		*present = !pval.intval ? false : true;
 	}
+#endif
 	return 0;
 }
 
@@ -454,6 +465,12 @@ static int ts_mmi_charger_cb(struct notifier_block *self,
 	struct power_supply *psy = ptr;
 	int ret;
 	bool present;
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+	if (!((event == PSY_EVENT_PROP_CHANGED) && psy &&
+			psy->desc->get_property && psy->desc->name &&
+			!strncmp(psy->desc->name, touch_cdev->pdata.psy_name, sizeof(&touch_cdev->pdata.psy_name))))
+			return 0;
+#else
 	if (touch_cdev->pdata.psy_name && !strcmp(touch_cdev->pdata.psy_name, "battery")) {
 		if (!((event == PSY_EVENT_PROP_CHANGED) && psy &&
 				psy->desc->get_property && psy->desc->name &&
@@ -465,6 +482,8 @@ static int ts_mmi_charger_cb(struct notifier_block *self,
 				!strncmp(psy->desc->name, "usb", sizeof("usb"))))
 			return 0;
 	}
+#endif
+
 	ret = ts_mmi_ps_get_state(psy, &present);
 	if (ret) {
 		dev_err(DEV_MMI, "%s: failed to get usb status: %d\n",
@@ -555,12 +574,22 @@ int ts_mmi_notifiers_register(struct ts_mmi_dev *touch_cdev)
 		if (ret)
 			goto PS_NOTIF_REGISTER_FAILED;
 
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+		psy = devm_power_supply_get_by_phandle(touch_cdev->dev,
+				"mtk-charger");
+		if(psy) {
+			touch_cdev->pdata.psy_name = psy->desc->name;
+			dev_info(DEV_MMI, "%s: psy_name %s\n", __func__, touch_cdev->pdata.psy_name);
+		} else {
+			dev_info(DEV_MMI, "%s: psy is NULL\n", __func__);
+		}
+#else
 		if (touch_cdev->pdata.psy_name && !strcmp(touch_cdev->pdata.psy_name, "battery")) {
 			psy = power_supply_get_by_name("battery");
 		}
 		else
 			psy = power_supply_get_by_name("usb");
-
+#endif
 		if (psy) {
 			ret = ts_mmi_ps_get_state(psy, &present);
 			if (!ret) {
