@@ -72,6 +72,13 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 		ppdata->usb_detection = true;
 	}
 
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+	if (!of_find_property(of_node, "mtk-charger", NULL)) {
+		dev_info(DEV_TS, "%s: using mtk usb detection but not defined mtk-charger\n", __func__);
+		ppdata->usb_detection = false;
+	}
+#endif
+
 	if (!of_property_read_u32(of_node, "mmi,reset-on-resume", &ppdata->reset))
 		dev_info(DEV_TS, "%s: using %u reset on resume\n",
 				__func__, ppdata->reset);
