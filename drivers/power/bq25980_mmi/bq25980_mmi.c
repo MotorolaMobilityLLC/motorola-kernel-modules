@@ -776,11 +776,7 @@ static int bq25980_set_charger_property(struct power_supply *psy,
 		const union power_supply_propval *val)
 {
 	switch (prop) {
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
-		break;
 
-	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT:
-		break;
 	default:
 		return -EINVAL;
 	}
@@ -935,7 +931,7 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 		goto irq_out;
 	}
 
-	dump_all_reg(bq);
+	//dump_all_reg(bq);
 	mutex_unlock(&bq->irq_complete);
 
 	mutex_lock(&bq->lock);
@@ -952,10 +948,7 @@ irq_out:
 static enum power_supply_property bq25980_power_supply_props[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_MODEL_NAME,
-	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_HEALTH,
-	POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT,
-	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
@@ -966,11 +959,7 @@ static int bq25980_property_is_writeable(struct power_supply *psy,
 					 enum power_supply_property prop)
 {
 	switch (prop) {
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
-	case POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT:
-		return true;
+
 	default:
 		return false;
 	}
