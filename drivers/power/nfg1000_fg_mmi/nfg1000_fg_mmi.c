@@ -296,26 +296,23 @@ static int __fg_write_block(struct i2c_client *client, u8 reg, u8 *buf, u16 len)
 {
 	int ret;
 	struct i2c_msg msg;
-	u8 data[I2C_MAX_BUFFER_SIZE];
-	char* addr;
+	char* addr = NULL;
 	int i = 0;
 
-	addr = kmalloc(sizeof(data), GFP_KERNEL);
-	if(!buf || (len>=I2C_MAX_BUFFER_SIZE))
+	if(!buf || (len >= I2C_MAX_BUFFER_SIZE))
 	{
 		mmi_err("nfg1000_i2c_write:condition is error!!\n");
 		return -1;
 	}
 
-	if (reg == I2C_NO_REG_DATA) {
-		memcpy(data, buf, len);
-		msg.len = len;
-	} else {
-		data[0] = reg;
-		memcpy(&data[1], buf, len);
-		msg.len = len + 1;
+	msg.len = (reg == I2C_NO_REG_DATA) ? len : len+1;
+	addr = devm_kzalloc(&client->dev, msg.len, GFP_KERNEL);
+	if (!addr) {
+		mmi_err("devm_kzalloc error!!\n");
+		return -ENOMEM;
 	}
-	memcpy(addr, data, sizeof(data));
+	addr[0] = (msg.len > len) ? reg : 0;
+	memcpy(addr + msg.len - len, buf, len);
 
 	msg.addr = client->addr;
 	msg.flags = 0;
@@ -324,14 +321,13 @@ static int __fg_write_block(struct i2c_client *client, u8 reg, u8 *buf, u16 len)
 	for (i = 0; i < 3; i++) {
 		ret = i2c_transfer(client->adapter, &msg, 1);
 		if (ret >= 0) {
-			kfree(addr);
-			return ret;
+			goto end;
 		}
 		else
 			msleep(5);
 	}
-
-	kfree(addr);
+end:
+	devm_kfree(&client->dev, addr);
 	return ret;
 }
 
