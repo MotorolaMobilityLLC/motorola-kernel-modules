@@ -787,7 +787,7 @@ static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di
 	mmi_info(":the fg_param_version=0x%04x\n", fg_param_version);
 	mmi_info(":latest battery parameter version=0x%04x\n", di->batt_param_version);
 
-	if(fg_param_version < di->batt_param_version)
+	if(fg_param_version != di->batt_param_version)
 	{
 		dev_sn = get_battery_serialnumber();
 		if (dev_sn != NULL && di->battsn_buf != NULL) {
