@@ -52,7 +52,12 @@ struct mmi_smart_battery {
 	struct power_supply	*batt_psy;
 	struct moto_chg_tcmd_client batt_tcmd_client;
 
+	struct workqueue_struct	*fg_workqueue;
+	struct delayed_work		battery_delay_work;
+
 	bool				*debug_enabled;
+
+	bool				resume_completed;
 
 	int				voltage_now;
 	int				current_now;
@@ -67,6 +72,9 @@ struct mmi_smart_battery {
 	int				fake_soc;
 	int				fake_temp;
 };
+
+#define QUEUS_DELAYED_WORK_TIME  8000
+#define QUEUE_START_WORK_TIME    1
 
 extern int mmi_batt_health_check(void);
 
