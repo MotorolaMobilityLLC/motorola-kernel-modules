@@ -89,9 +89,6 @@ static int batt_get_prop(struct power_supply *psy,
 			break;
 		}
 
-		ret = gauge_dev_get_capacity(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->uisoc = temp;
 		val->intval = chip->uisoc;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
@@ -109,33 +106,18 @@ static int batt_get_prop(struct power_supply *psy,
 		val->intval = chip->batt_temp;
 		break;
 	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW:
-		ret = gauge_dev_get_tte(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->batt_tte = temp;
 		val->intval = chip->batt_tte;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		ret = gauge_dev_get_charge_full(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->charge_full = temp;
 		val->intval = chip->charge_full * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		ret = gauge_dev_get_charge_full_design(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->charge_full_design = temp;
 		val->intval = chip->charge_full_design * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-		ret = gauge_dev_get_charge_counter(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->charge_counter = temp;
 		val->intval = chip->charge_counter * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		ret = gauge_dev_get_cycle_count(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->cycle_count = temp;
 		val->intval = chip->cycle_count;
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
@@ -203,6 +185,42 @@ static const struct power_supply_desc batt_psy_desc = {
 	.num_properties	= ARRAY_SIZE(batt_props),
 };
 
+static void smart_batt_update_thread(struct work_struct *work)
+{
+	struct delayed_work *delay_work;
+	struct mmi_smart_battery *chip;
+	int rsoc;
+
+	delay_work = container_of(work, struct delayed_work, work);
+	chip = container_of(delay_work, struct mmi_smart_battery, battery_delay_work);
+
+	gauge_dev_get_capacity(chip->gauge_dev, &rsoc);
+
+	gauge_dev_get_voltage_now(chip->gauge_dev, &chip->voltage_now);
+	gauge_dev_get_current_now(chip->gauge_dev, &chip->current_now);
+	gauge_dev_get_temperature(chip->gauge_dev, &chip->batt_temp);
+	gauge_dev_get_charge_counter(chip->gauge_dev, &chip->charge_counter);
+
+	gauge_dev_get_tte(chip->gauge_dev, &chip->batt_tte);
+	gauge_dev_get_charge_full(chip->gauge_dev, &chip->charge_full);
+	gauge_dev_get_charge_full_design(chip->gauge_dev, &chip->charge_full_design);
+	gauge_dev_get_cycle_count(chip->gauge_dev, &chip->cycle_count);
+
+
+	if (chip->batt_psy) {
+		if (rsoc != chip->uisoc) {
+			chip->uisoc = rsoc;
+			power_supply_changed(chip->batt_psy);
+		}
+	}
+
+	mmi_info(chip, "RSOC:%d, Volt:%d, Current:%d, Temperature:%d\n",
+		rsoc, chip->voltage_now, chip->current_now, chip->batt_temp);
+
+	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(QUEUS_DELAYED_WORK_TIME));
+
+}
+
 static int  tcmd_get_bat_temp(void *input, int* val)
 {
 	int ret = 0;
@@ -249,6 +267,27 @@ static int battery_tcmd_register(struct mmi_smart_battery *chip)
 	return ret;
 }
 
+static int smart_battery_suspend(struct device *dev)
+{
+	struct mmi_smart_battery *chip = this_chip;
+
+	cancel_delayed_work(&chip->battery_delay_work);
+	chip->resume_completed = false;
+
+	return 0;
+}
+
+
+static int smart_battery_resume(struct device *dev)
+{
+	struct mmi_smart_battery *chip = this_chip;
+
+	chip->resume_completed = true;
+	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(1));
+
+	return 0;
+}
+
 static int smart_battery_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -268,6 +307,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 
 	chip->fake_soc	= -EINVAL;
 	chip->fake_temp	= -EINVAL;
+	chip->resume_completed = true;
 
 	chip->gauge_dev = get_gauge_by_name("bms");
 	if (chip->gauge_dev) {
@@ -290,6 +330,10 @@ static int smart_battery_probe(struct platform_device *pdev)
 		goto cleanup;
 	}
 
+	chip->fg_workqueue = create_singlethread_workqueue("smart_battery");
+	INIT_DELAYED_WORK(&chip->battery_delay_work, smart_batt_update_thread);
+	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work , msecs_to_jiffies(QUEUE_START_WORK_TIME));
+
 	battery_tcmd_register(chip);
 
 	return rc;
@@ -307,6 +351,11 @@ static int smart_battery_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct dev_pm_ops smart_battery_pm_ops = {
+	.resume	= smart_battery_resume,
+	.suspend	= smart_battery_suspend,
+};
+
 static const struct of_device_id match_table[] = {
 	{ .compatible = "mmi,smart-battery", },
 	{ },
@@ -317,6 +366,7 @@ static struct platform_driver smart_battery_driver = {
 		.name		= "mmi,smart-battery",
 		.owner		= THIS_MODULE,
 		.of_match_table	= match_table,
+		.pm     = &smart_battery_pm_ops,
 	},
 	.probe		= smart_battery_probe,
 	.remove		= smart_battery_remove,
