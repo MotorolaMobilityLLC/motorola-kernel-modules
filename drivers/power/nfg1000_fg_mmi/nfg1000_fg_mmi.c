@@ -163,10 +163,7 @@ struct mmi_fg_chip {
 	struct device *dev;
 	struct i2c_client *client;
 
-	struct workqueue_struct *fg_workqueue;
 	struct work_struct  fg_upgrade_work;
-	struct delayed_work battery_delay_work;
-	struct power_supply *batt_psy;
 	struct iio_channel *Batt_NTC_channel;
 	struct iio_channel *vref_channel;
 	struct fg_temp *ntc_temp_table;
@@ -220,8 +217,6 @@ struct mmi_fg_chip {
 
 	struct gauge_device	*gauge_dev;
 	const char *gauge_dev_name;
-
-	void (*mmi_fg_update_thread)(struct work_struct *work);
 
 };
 
@@ -1843,7 +1838,7 @@ upgrade_error:
 /*------------------------------------upgrade end---------------------------------------------------*/
 
 
-static int fg_read_status(struct mmi_fg_chip *mmi)
+int fg_read_status(struct mmi_fg_chip *mmi)
 {
 	int ret;
 	u16 flags;
@@ -2401,55 +2396,6 @@ void fg_dump_registers(struct mmi_fg_chip *mmi)
 	}
 }
 
-static void fg_update_thread(struct work_struct *work)
-{
-	struct delayed_work *delay_work;
-	struct mmi_fg_chip *mmi;
-	int rsoc;
-
-	delay_work = container_of(work, struct delayed_work, work);
-	mmi = container_of(delay_work, struct mmi_fg_chip, battery_delay_work);
-
-
-	if (mmi->fake_battery || mmi->do_upgrading)
-		return;
-
-	/* get battery power supply */
-	if (!mmi->batt_psy) {
-		mmi->batt_psy = power_supply_get_by_name("battery");
-		if (!mmi->batt_psy)
-			mmi_log(" get batt_psy fail\n");
-	}
-
-
-	mutex_lock(&mmi->update_lock);
-	fg_read_status(mmi);
-	mutex_lock(&mmi->data_lock);
-
-	rsoc = fg_read_rsoc(mmi);
-	mmi->batt_volt = fg_read_volt(mmi);
-	fg_read_current(mmi, &mmi->batt_curr);
-	mmi->batt_temp = fg_read_temperature(mmi);
-	mmi->batt_rm = fg_read_rm(mmi);
-
-	mutex_unlock(&mmi->data_lock);
-
-	mutex_unlock(&mmi->update_lock);
-
-	if (mmi->batt_psy) {
-		if (rsoc != mmi->batt_soc) {
-			mmi->batt_soc = rsoc;
-			power_supply_changed(mmi->batt_psy);
-		}
-	}
-
-	mmi_log("RSOC:%d, Volt:%d, Current:%d, Temperature:%d\n",
-		mmi->batt_soc, mmi->batt_volt, mmi->batt_curr, mmi->batt_temp);
-
-	queue_delayed_work(mmi->fg_workqueue, &mmi->battery_delay_work, msecs_to_jiffies(queue_delayed_work_time));
-
-}
-
 static const struct gauge_properties nfg1000_gauge_props = {
 	.alias_name = "nfg1000",
 };
@@ -2576,7 +2522,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 		ret = PTR_ERR(mmi->vref_channel);
 	}
 	mmi->ntc_temp_table = fg_temp_table;
-	mmi->mmi_fg_update_thread = fg_update_thread;
+
 	ret = sysfs_create_group(&mmi->dev->kobj, &fg_attr_group);
 	if (ret)
 		mmi_err("Failed to register sysfs, err:%d\n", ret);
@@ -2592,10 +2538,6 @@ static int mmi_fg_probe(struct i2c_client *client,
 		return ret;
 	}
 
-	mmi->fg_workqueue = create_singlethread_workqueue("nfg1000_gauge");
-	INIT_DELAYED_WORK(&mmi->battery_delay_work, mmi->mmi_fg_update_thread);
-	queue_delayed_work(mmi->fg_workqueue, &mmi->battery_delay_work , msecs_to_jiffies(queue_start_work_time));
-
 	INIT_WORK(&mmi->fg_upgrade_work, nfg1000_upgrade_func);
 	schedule_work(&mmi->fg_upgrade_work);
 
@@ -2604,24 +2546,15 @@ static int mmi_fg_probe(struct i2c_client *client,
 	return 0;
 }
 
-
-static inline bool is_device_suspended(struct mmi_fg_chip *mmi)
-{
-	return !mmi->resume_completed;
-}
-
-
 static int mmi_fg_suspend(struct device *dev)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct mmi_fg_chip *mmi = i2c_get_clientdata(client);
 
-	cancel_delayed_work(&mmi->battery_delay_work);
 	mmi->resume_completed = false;
 
 	return 0;
 }
-
 
 static int mmi_fg_resume(struct device *dev)
 {
@@ -2629,7 +2562,6 @@ static int mmi_fg_resume(struct device *dev)
 	struct mmi_fg_chip *mmi = i2c_get_clientdata(client);
 
 	mmi->resume_completed = true;
-	queue_delayed_work(mmi->fg_workqueue, &mmi->battery_delay_work, msecs_to_jiffies(1));
 
 	return 0;
 }
