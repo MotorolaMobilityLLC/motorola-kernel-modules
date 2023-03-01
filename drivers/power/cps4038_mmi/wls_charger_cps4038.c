@@ -59,6 +59,7 @@ MOTO_WLS_AUTH_T motoauth;
 struct cps_wls_chrg_chip *chip = NULL;
 static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
+static bool CPS_TX_IRQ = false;
 static bool CPS_RX_CHRG_FULL = false;
 //static uint32_t fod_i_th_w_folio = 1100;
 //static uint32_t fod_ii_th_w_folio = 1100;
@@ -2233,6 +2234,7 @@ static int cps_wls_tx_irq_handler(int int_flag)
     }
     if(int_flag & TX_INT_INIT){
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_INIT");
+         CPS_TX_IRQ = true;
     }
     if(int_flag & TX_INT_ASK_PKT)
     {
@@ -2959,6 +2961,8 @@ static DEVICE_ATTR(tx_mode_vout, 0444, show_tx_mode_vout, NULL);
 
 static void cps_wls_tx_mode(bool en)
 {
+	int retry = 0;
+	CPS_TX_IRQ = false;
  	cps_wls_set_boost(en);
 	if ((true == en) && (false == CPS_TX_MODE)) {
 		cps_wls_log(CPS_LOG_ERR,"cps mmi_mux wls tx start\n");
@@ -2980,6 +2984,12 @@ static void cps_wls_tx_mode(bool en)
 		}
 		cps_wls_dump_FW_info();
 #endif
+		while (retry < 100 && CPS_TX_IRQ == false) {
+			msleep(1);
+			retry ++;
+		}
+		cps_wls_log(CPS_LOG_DEBG,"cps wait tx_mode %dms\n", retry);
+
 		CPS_TX_MODE = true;
 		chip->tx_mode = true;
 		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
