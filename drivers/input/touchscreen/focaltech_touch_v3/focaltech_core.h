@@ -151,6 +151,8 @@ struct fts_ts_platform_data {
     u32 y_min;
     u32 max_touch_number;
     bool edge_ctrl;
+    bool interpolation_ctrl;
+    bool report_rate_ctrl;
 };
 
 struct ts_event {
@@ -217,6 +219,7 @@ struct fts_ts_data {
     int log_level;
     int fw_is_running;      /* confirm fw is running when using spi:default 0 */
     int dummy_byte;
+    int refresh_rate;
 #if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
     struct completion pm_completion;
     bool pm_suspend;
