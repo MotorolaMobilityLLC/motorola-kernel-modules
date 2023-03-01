@@ -15,6 +15,7 @@
 #include <linux/touchscreen_mmi.h>
 #include <linux/regulator/consumer.h>
 #include "focaltech_core.h"
+#include "focaltech_ts_config.h"
 
 #define EDGE_SWITCH_CMD            0x17
 #define ROTATE_DEFAULT_0           0x00
@@ -42,6 +43,8 @@
 #define NORMAL_SMALL_EDGE                 0x48
 #define NORMAL_BIG_EDGE                   0x88
 
+#define FTS_CMD_REPORT_RATE_ADDR          0x8E
+
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
 //extern int ts_mmi_dev_register(struct device *parent, struct ts_mmi_methods *mdata);
 //extern void ts_mmi_dev_unregister(struct device *parent);
@@ -59,9 +62,15 @@ static ssize_t fts_edge_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fts_edge_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t fts_interpolation_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t fts_interpolation_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_edge_show, fts_edge_store);
+static DEVICE_ATTR(interpolation, (S_IRUGO | S_IWUSR | S_IWGRP),
+	fts_interpolation_show, fts_interpolation_store);
 
 static struct attribute *ext_attributes[MAX_ATTRS_ENTRIES];
 static struct attribute_group ext_attr_group = {
@@ -89,10 +98,10 @@ static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_g
 
 	if (pdata->edge_ctrl)
 		ADD_ATTR(edge);
-/*
-	if (ts_data->board_data.interpolation_ctrl)
-		ADD_ATTR(interpolation);
 
+	if (pdata->interpolation_ctrl)
+		ADD_ATTR(interpolation);
+/*
 	if (ts_data->board_data.sample_ctrl)
 		ADD_ATTR(sample);
 
@@ -270,6 +279,84 @@ static ssize_t fts_edge_show(struct device *dev,
 		ts_data->set_mode.edge_mode[1], ts_data->set_mode.edge_mode[0]);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x 0x%02x",
 		ts_data->set_mode.edge_mode[1], ts_data->set_mode.edge_mode[0]);
+}
+
+static int fts_mmi_set_report_rate(struct fts_ts_data *ts_data)
+{
+	int ret = 0;
+	int mode = 0;
+
+	mode = fts_mmi_get_report_rate(ts_data);
+	if (mode == -1) {
+		return -EINVAL;
+	}
+
+	ts_data->get_mode.report_rate_mode = mode;
+	if (ts_data->set_mode.report_rate_mode == mode) {
+		FTS_DEBUG("The value = %d is same, so not to write", mode);
+		return 0;
+	}
+
+	if (ts_data->power_disabled) {
+		FTS_DEBUG("The touch is in sleep state, restore the value when resume\n");
+		return 0;
+	}
+
+	ret = fts_write_reg(FTS_CMD_REPORT_RATE_ADDR, mode);
+	if (ret < 0) {
+		FTS_ERROR("failed to set report rate, mode = %d", mode);
+		return -EINVAL;
+	}
+	msleep(20);
+
+	ts_data->set_mode.report_rate_mode = mode;
+
+	FTS_INFO("Success to set %s\n", mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
+				(mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_360HZ" :
+				"Unsupported"));
+
+	return ret;
+}
+
+static ssize_t fts_interpolation_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct fts_ts_data *ts_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		FTS_ERROR("Failed to convert value.");
+		return -EINVAL;
+	}
+
+	mutex_lock(&ts_data->mode_lock);
+	ts_data->get_mode.interpolation = mode;
+	ret = fts_mmi_set_report_rate(ts_data);
+	if (ret < 0)
+		goto exit;
+
+	ret = size;
+	ts_data->set_mode.interpolation = mode;
+exit:
+	mutex_unlock(&ts_data->mode_lock);
+	return ret;
+}
+
+static ssize_t fts_interpolation_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	FTS_INFO("interpolation = %d.", ts_data->set_mode.interpolation);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts_data->set_mode.interpolation);
 }
 
 static int fts_mmi_methods_get_vendor(struct device *dev, void *cdata)
@@ -583,6 +670,19 @@ exit:
 	mutex_lock(&ts_data->mode_lock);
 	/* All IC status are cleared after reset */
 	memset(&ts_data->set_mode, 0 , sizeof(ts_data->set_mode));
+	if (pdata->interpolation_ctrl && ts_data->get_mode.interpolation) {
+		ret = fts_write_reg(FTS_CMD_REPORT_RATE_ADDR, ts_data->get_mode.report_rate_mode);
+		if (ret >= 0) {
+			ts_data->set_mode.interpolation = ts_data->get_mode.interpolation;
+			ts_data->set_mode.report_rate_mode = ts_data->get_mode.report_rate_mode;
+
+			FTS_INFO("Success to %s interpolation mode\n",
+				ts_data->get_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
+				(ts_data->get_mode.report_rate_mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_360HZ" :
+				"Unsupported"));
+		}
+	}
+
 	if (pdata->edge_ctrl) {
 		ret = fts_set_edge_mode(ts_data->get_mode);
 		if (!ret) {

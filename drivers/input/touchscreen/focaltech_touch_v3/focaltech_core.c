@@ -1896,6 +1896,16 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 	if (pdata->edge_ctrl)
 		FTS_INFO("support focaltech edge mode");
 
+	pdata->interpolation_ctrl = of_property_read_bool(np,
+					"focaltech,interpolation-ctrl");
+	if (pdata->interpolation_ctrl)
+		FTS_INFO("support focaltech interpolation mode");
+
+	pdata->report_rate_ctrl = of_property_read_bool(np,
+					"focaltech,report_rate-ctrl");
+	if (pdata->report_rate_ctrl)
+		FTS_INFO("support focaltech report rate switch mode");
+
 	chosen = of_find_node_by_name(NULL, "chosen");
 	if (chosen) {
 		ret = of_property_read_string(chosen, PRIM_PANEL_NAME,
