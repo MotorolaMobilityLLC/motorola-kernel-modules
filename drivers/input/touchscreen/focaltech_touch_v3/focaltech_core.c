@@ -730,12 +730,14 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
 {
     int ret = 0;
     u8 gesture_en = 0xFF;
-	#ifdef FOCALTECH_PALM_SENSOR_EN
+    #ifdef FOCALTECH_PALM_SENSOR_EN
     int pd_state = 0;
-	#endif
+    #endif
 
     memset(touch_buf, 0xFF, FTS_MAX_TOUCH_BUF);
     ts_data->ta_size = ts_data->touch_size;
+
+    fts_read_report_fod_event(ts_data);
 
     /*read touch data*/
     ret = fts_read_touchdata(ts_data, touch_buf);
@@ -1185,6 +1187,10 @@ static int fts_input_init(struct fts_ts_data *ts_data)
         input_dev->id.bustype = BUS_SPI;
     input_dev->dev.parent = ts_data->dev;
 
+    input_dev->id.product = 0xDEAD;
+    input_dev->id.vendor = 0xBEEF;
+    input_dev->id.version = 10427;
+
     input_set_drvdata(input_dev, ts_data);
 
     __set_bit(EV_SYN, input_dev->evbit);
@@ -1198,6 +1204,9 @@ static int fts_input_init(struct fts_ts_data *ts_data)
         for (key_num = 0; key_num < pdata->key_number; key_num++)
             input_set_capability(input_dev, EV_KEY, pdata->keys[key_num]);
     }
+
+    input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY1);
+    input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY2);
 
 #if FTS_MT_PROTOCOL_B_EN
     input_mt_init_slots(input_dev, pdata->max_touch_number, INPUT_MT_DIRECT);
@@ -2455,6 +2464,18 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     return 0;
 }
 
+bool fts_is_fod_resume(struct fts_ts_data *ts_data)
+{
+    unsigned long fod_timeout = msecs_to_jiffies(3000);
+
+    fod_timeout += ts_data->fod_jiffies;
+    if (time_before(jiffies, fod_timeout)) {
+        return true;
+    }
+
+    return false;
+}
+
 #ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
 static int fts_ts_suspend(struct device *dev)
 {
@@ -2547,7 +2568,9 @@ static int fts_ts_resume(struct device *dev)
 #if FTS_POWER_SOURCE_CUST_EN
         fts_power_source_resume(ts_data);
 #endif
-        fts_reset_proc(200);
+        if(fts_is_fod_resume(ts_data)) {
+            fts_reset_proc(200);
+        }
     }
 
     fts_wait_tp_to_valid();
@@ -2556,7 +2579,9 @@ static int fts_ts_resume(struct device *dev)
 #if FTS_ESDCHECK_EN
     fts_esdcheck_resume(ts_data);
 #endif
-
+    if(fts_data->zero_enable) {
+        fts_write_reg(0xCF, 0x02);
+    }
     if (ts_data->gesture_support) {
         fts_gesture_resume(ts_data);
     }
