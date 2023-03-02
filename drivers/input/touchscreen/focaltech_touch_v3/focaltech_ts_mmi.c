@@ -553,6 +553,7 @@ static int fts_mmi_panel_state(struct device *dev,
 	struct fts_ts_platform_data *pdata;
 	struct fts_ts_data *ts_data;
 	int ret = 0;
+
 #if defined(CONFIG_FTS_DOUBLE_TAP_CONTROL)
 	u8 gesture_command = 0;
 	unsigned char gesture_type = 0;
@@ -560,7 +561,7 @@ static int fts_mmi_panel_state(struct device *dev,
 
 	GET_TS_DATA(dev);
 	pdata = ts_data->pdata;
-
+	ts_data->zero_enable = 0;
 	switch (to) {
 		case TS_MMI_PM_DEEPSLEEP:
 			ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
@@ -582,6 +583,10 @@ static int fts_mmi_panel_state(struct device *dev,
 			if (gesture_type & TS_MMI_GESTURE_DOUBLE) {
 				gesture_command |= (1 << 4);
 				FTS_INFO("Enable GESTURE_CLI_DOUBLE command: %02x", gesture_command);
+			}
+			if (gesture_type & TS_MMI_GESTURE_ZERO) {
+				ts_data->zero_enable = 1;
+				FTS_INFO("Enable GESTURE_CLI_ZERO command: %02x", gesture_command);
 			}
 
 			FTS_INFO("CLI GESTURE SWITCH command: %02x", gesture_command);
@@ -641,9 +646,12 @@ static int fts_mmi_post_resume(struct device *dev)
 	GET_TS_DATA(dev);
 	pdata = ts_data->pdata;
 
+	ts_data->fod_suspended = false;
 	if (ts_data->gesture_support == true) {
-		FTS_INFO("Reset IC in resume");
-		fts_reset_proc(200);
+		if(!fts_is_fod_resume(ts_data)) {
+			FTS_INFO("Reset IC in post resume");
+			fts_reset_proc(200);
+		}
 	}
 
 	fts_tp_state_recovery(ts_data);
@@ -656,6 +664,10 @@ static int fts_mmi_post_resume(struct device *dev)
 #ifdef FOCALTECH_SENSOR_EN
 	if (ts_data->wakeable) {
 #endif
+
+		fts_write_reg(0xCF, 0x02);
+		FTS_INFO("Enable fod report for normal mode in %s", __func__);
+
 		if (fts_gesture_resume(ts_data) == 0) {
 #ifdef FOCALTECH_SENSOR_EN
 			ts_data->wakeable = false;
@@ -740,6 +752,7 @@ static int fts_mmi_post_suspend(struct device *dev)
 #endif
 
 	ts_data->suspended = true;
+	ts_data->fod_suspended = true;
 	FTS_FUNC_EXIT();
 
 	return 0;

@@ -225,6 +225,7 @@ struct fts_ts_data {
     bool pm_suspend;
 #endif
     bool suspended;
+    bool fod_suspended;
     bool fw_loading;
     bool force_reflash;
     bool irq_disabled;
@@ -305,6 +306,11 @@ struct fts_ts_data {
 #if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
     struct ts_mmi_class_methods *imports;
 #endif
+    unsigned char gesture_type;
+    int zerotap_data[1];
+    int zero_enable;
+    unsigned long fod_jiffies;
+
 };
 
 enum _FTS_BUS_TYPE {
@@ -357,6 +363,7 @@ void fts_gesture_recovery(struct fts_ts_data *ts_data);
 int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data);
 int fts_gesture_suspend(struct fts_ts_data *ts_data);
 int fts_gesture_resume(struct fts_ts_data *ts_data);
+void fts_read_report_fod_event(struct fts_ts_data *ts_data);
 
 /* Apk and functions */
 int fts_create_apk_debug_channel(struct fts_ts_data *);
@@ -406,4 +413,5 @@ int fts_ex_mode_recovery(struct fts_ts_data *ts_data);
 void fts_irq_disable(void);
 void fts_irq_enable(void);
 int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable);
+bool fts_is_fod_resume(struct fts_ts_data *ts_data);
 #endif /* __LINUX_FOCALTECH_CORE_H__ */
