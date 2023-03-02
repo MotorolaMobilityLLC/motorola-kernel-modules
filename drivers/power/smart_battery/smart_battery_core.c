@@ -89,7 +89,10 @@ static int batt_get_prop(struct power_supply *psy,
 			break;
 		}
 
-		val->intval = chip->uisoc;
+		if(chip->uisoc == -EINVAL)
+			val->intval = 50;
+		else
+			val->intval = chip->uisoc;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		val->intval = mmi_get_batt_capacity_level(chip);
@@ -185,6 +188,32 @@ static const struct power_supply_desc batt_psy_desc = {
 	.num_properties	= ARRAY_SIZE(batt_props),
 };
 
+#define CAP(min, max, value)			\
+		((min > value) ? min : ((value > max) ? max : value))
+
+static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
+{
+	int uisoc = rsoc;
+
+	mmi_info(chip, "rsoc = %d, chip->uisoc = %d\n", rsoc, chip->uisoc);
+	if (chip->uisoc == -EINVAL)
+		return uisoc;
+
+	if (rsoc > chip->uisoc) {
+		/* SOC increased */
+		if (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING) {
+			uisoc = chip->uisoc + 1;
+		} else
+			uisoc = chip->uisoc;
+	} else if (rsoc < chip->uisoc) {
+		/* SOC dropped */
+		uisoc = chip->uisoc - 1;
+	}
+	uisoc = CAP(0, 100, uisoc);
+
+	return uisoc;
+}
+
 static void smart_batt_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
@@ -206,6 +235,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 	gauge_dev_get_charge_full_design(chip->gauge_dev, &chip->charge_full_design);
 	gauge_dev_get_cycle_count(chip->gauge_dev, &chip->cycle_count);
 
+	rsoc = smart_batt_monotonic_soc(chip, rsoc);
 
 	if (chip->batt_psy) {
 		if (rsoc != chip->uisoc) {
@@ -308,6 +338,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->fake_soc	= -EINVAL;
 	chip->fake_temp	= -EINVAL;
 	chip->resume_completed = true;
+	chip->uisoc = -EINVAL;
 
 	chip->gauge_dev = get_gauge_by_name("bms");
 	if (chip->gauge_dev) {
