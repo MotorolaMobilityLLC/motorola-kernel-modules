@@ -156,18 +156,22 @@ int fts_set_edge_mode(struct focaltech_mode_info mode)
 		reg_value_8d = 2;
 		break;
 	case NORMAL_DEFAULT_EDGE:
-		reg_value_8d = 0;
+		reg_value_8d = 3;
 		break;
 	case NORMAL_SMALL_EDGE:
-		reg_value_8d = 1;
+		reg_value_8d = 4;
 		break;
 	case NORMAL_BIG_EDGE:
-		reg_value_8d = 2;
+		reg_value_8d = 5;
 		break;
 	default:
 		FTS_ERROR("Invalid edge mode!");
 		return -EINVAL;
 	}
+
+	//In landscape mode and not in normal edge suppression
+	if((reg_value_8c > 0) && (reg_value_8d < 3))
+		reg_value_8d++;
 
 	ret = fts_write_reg(0x8C, reg_value_8c);
 	if (ret < 0) {
