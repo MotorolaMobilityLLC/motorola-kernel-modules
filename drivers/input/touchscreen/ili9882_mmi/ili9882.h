@@ -945,7 +945,7 @@ struct ilitek_ts_data {
 	const char *psy_name;
 #endif
 
-#if CONFIG_MOTO_DDA_PASSIVESTYLUS
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
 	const char *dda_device_info;
 #endif
 
