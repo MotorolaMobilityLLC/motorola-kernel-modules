@@ -147,6 +147,7 @@ struct mmi_charger_manager {
 	struct power_supply	*extrn_psy;
 	struct power_supply	*usb_psy;
 	struct power_supply	*mmi_chrg_mgr_psy;
+	struct power_supply	*wlc_psy;
 	struct notifier_block	psy_nb;
 
 	struct wakeup_source	*mmi_hb_wake_source;

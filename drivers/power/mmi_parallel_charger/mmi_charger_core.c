@@ -851,6 +851,12 @@ static void mmi_chrg_config_chgmod_to_fg(struct mmi_charger_manager *chg)
 
 }
 
+/*wireless charging power*/
+#define WLS_RX_CAP_15W 15
+#define WLS_RX_CAP_10W 10
+#define WLS_RX_CAP_8W 8
+#define WLS_RX_CAP_5W 5
+
 #define WEAK_CHRG_THRSH 450
 #define TURBO_CHRG_THRSH 2500
 #define TURBO_30W_CHRG_THRSH_UW 25000000
@@ -864,6 +870,26 @@ void mmi_chrg_rate_check(struct mmi_charger_manager *chg)
 	int charger_power = 0;
 	int prev_chg_rate = chg->charger_rate;
 	int rc = -EINVAL;
+
+	if (!chg->wlc_psy) {
+		chg->wlc_psy = power_supply_get_by_name("wireless");
+	}
+	if (chg->wlc_psy) {
+		rc = power_supply_get_property(chg->wlc_psy,
+				POWER_SUPPLY_PROP_ONLINE, &val);
+		if (val.intval) {
+			rc = power_supply_get_property(chg->wlc_psy,
+				POWER_SUPPLY_PROP_POWER_NOW, &val);
+			if (val.intval >= WLS_RX_CAP_15W) {
+				chg->charger_rate = POWER_SUPPLY_CHARGE_RATE_TURBO;
+			} else if(val.intval >= WLS_RX_CAP_5W) {
+				chg->charger_rate = POWER_SUPPLY_CHARGE_RATE_NORMAL;
+			} else {
+				chg->charger_rate = POWER_SUPPLY_CHARGE_RATE_WEAK;
+			}
+			goto end_rate_check;
+		}
+	}
 
 	if (!chg->usb_psy) {
 		mmi_chrg_err(chg, "No usb PSY\n");
