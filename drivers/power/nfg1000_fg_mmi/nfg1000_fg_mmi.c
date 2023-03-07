@@ -425,9 +425,12 @@ static int fg_mac_read_block(struct mmi_fg_chip *mmi, u16 cmd, u8 *buf, u8 len)
 {
 	int ret;
 	u8 cksum_calc, cksum;
-	u8 t_buf[40];
+	u8 t_buf[40] = {0};
 	u8 t_len;
 	int i;
+
+	if (len > 32)
+		return -1;
 
 	t_buf[0] = (u8)(cmd >> 0) & 0xFF;
 	t_buf[1] = (u8)(cmd >> 8) & 0xFF;
@@ -445,6 +448,9 @@ static int fg_mac_read_block(struct mmi_fg_chip *mmi, u16 cmd, u8 *buf, u8 len)
 
 	cksum = t_buf[34];
 	t_len = t_buf[35];
+
+	if (t_len > 36)
+		return -2; //FW upgrade failed
 
 	cksum_calc = checksum(t_buf, t_len - 2);
 	if (cksum_calc != cksum)
@@ -464,7 +470,7 @@ static int fg_read_HW_version(struct mmi_fg_chip *mmi)
 	ret = fg_mac_read_block(mmi, FG_MAC_CMD_HW_VER, buf, 2);
 	if (ret < 0) {
 		mmi_err("Failed to read hw version:%d\n", ret);
-		return -1;
+		return ret;
 	}
 	version =  buf[0] << 8 | buf[1];
 	mmi_log("hw Ver:0x%04X\n", version);
