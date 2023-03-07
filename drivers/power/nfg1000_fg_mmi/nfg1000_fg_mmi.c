@@ -164,6 +164,7 @@ struct mmi_fg_chip {
 	struct i2c_client *client;
 
 	struct work_struct  fg_upgrade_work;
+	struct work_struct  fg_force_upgrade_work;
 	struct iio_channel *Batt_NTC_channel;
 	struct iio_channel *vref_channel;
 	struct fg_temp *ntc_temp_table;
@@ -214,6 +215,7 @@ struct mmi_fg_chip {
 	u32 fw_start_addr;
 	u32 param_start_addr;
 	bool do_upgrading;
+	bool force_upgrade;
 
 	struct gauge_device	*gauge_dev;
 	const char *gauge_dev_name;
@@ -733,6 +735,23 @@ static const char *get_battery_serialnumber(void)
 	return battsn_buf;
 }
 
+//battery id check
+static bool nfg1000_ota_program_check_batt_id(struct mmi_fg_chip *di)
+{
+	bool upgrade_status = false;
+	const char *dev_sn = NULL;
+
+	dev_sn = get_battery_serialnumber();
+	if (dev_sn != NULL && di->battsn_buf != NULL) {
+		if (strnstr(dev_sn, di->battsn_buf, 10)) {
+			mmi_info(":battsn compared,the battery parameter data need upgrade!\n");
+			upgrade_status = true;
+		}
+	}
+
+	return upgrade_status;
+}
+
 //battery parameter version check
 static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di)
 {
@@ -803,10 +822,7 @@ static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
 	//reset nfg1000
 	mmi_info("reset nfg1000");
 	ret = fg_write_block(di, di->regs[BQ_FG_REG_ALT_MAC], u8Data, 2);
-	if(ret < 0) {
-		mmi_err(":write reg: %x error!!\n",di->regs[BQ_FG_REG_ALT_MAC]);
-		return -ERROR_CODE_I2C_WRITE;
-	}
+
 	msleep(NFG1000_RESET_WAIT_TIME);
 
 	u8Data[0] = 0x3f;
@@ -1701,6 +1717,7 @@ static ssize_t nfg1000_upgrade_APP(struct mmi_fg_chip *di)
 	return 0;
 }
 
+#if 0
 static bool is_atm_mode()
 {
 	const char *bootargs_ptr = NULL;
@@ -1752,22 +1769,94 @@ err_putnode:
 
 	return factory_mode;
 }
+#endif
+
+static void nfg1000_force_upgrade_func(struct work_struct *work)
+{
+	struct mmi_fg_chip *di = container_of(work, struct mmi_fg_chip, fg_force_upgrade_work);
+	int count = 1;
+
+	if (di->force_upgrade == false)
+		return;
+
+	nfg1000_ota_init(di);
+
+	di->fake_battery = true;
+	di->do_upgrading = true;
+
+	if (di->fw_data == NULL)
+		di->fw_data = nfg1000_upgrade_read_firmware("NFG1000A_firmware.bin", di);
+	if (di->fw_data == NULL) {
+		mmi_err("fw data is null, exit upgrade.");
+		goto upgrade_error;
+	}
+
+	for (count=1; count<=3; count++) {
+		if(nfg1000_ota_unseal(di))
+		{
+			mmi_err("ota unseal,failed, exit upgrade");
+			//goto upgrade_error;
+		}
+
+		if (nfg1000_upgrade_APP(di) != 0) {
+			mmi_err("nfg1000_upgrade_APP failed, retry=%d", count);
+			if (count == 3) {
+				mmi_err("nfg1000_upgrade_APP failed, use fake battery");
+				goto upgrade_error;
+			}
+		} else {
+			mmi_info("nfg1000_upgrade_APP successfully!!");
+			break;
+		}
+	}
+
+
+	if (nfg1000_ota_program_check_batt_id(di) == false) {
+		mmi_info("battery id not need upgrade,exit");
+	} else {
+		for (count=1; count<=3; count++) {
+
+			if(nfg1000_ota_unseal(di))
+			{
+				mmi_err("ota unseal,failed, exit upgrade");
+				//goto upgrade_error;
+			}
+
+			if (nfg1000_upgrade_Params(di) != 0) {
+				mmi_err("nfg1000_upgrade_Params failed, retry=%d", count);
+				if (count == 3) {
+					mmi_err("nfg1000_upgrade_Params failed, use fake battery");
+					goto upgrade_error;
+				}
+			} else {
+				mmi_info("nfg1000_upgrade_Params successfully!!");
+				break;
+			}
+		}
+	}
+	di->do_upgrading = false;
+	di->fake_battery = false;
+	di->force_upgrade = false;
+
+upgrade_error:
+	if (di->fw_data) {
+		di->fw_data =NULL;
+		kfree(di->fw_data);
+	}
+	if (di->params_data) {
+		di->params_data =NULL;
+		kfree(di->params_data);
+	}
+
+}
 
 static void nfg1000_upgrade_func(struct work_struct *work)
 {
 	struct mmi_fg_chip *di = container_of(work, struct mmi_fg_chip, fg_upgrade_work);
 	int count = 1;
 
-	//MMI_STOPSHIP: <fuelgauge>: remove the limits of fg upgrade function.
-	if (0) {
-		if (is_atm_mode() == false) {
-			mmi_info("only factory-mode support fuelgauge upgrade,exit");
-			return;
-		}
-	}
-
-	if (di->fake_battery == true) {
-		mmi_info("fake battery not support upgrade,exit");
+	if (di->force_upgrade == true) {
+		mmi_info("force upgrade now,exit");
 		return;
 	}
 
@@ -2483,6 +2572,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 
 	mmi->fake_battery = false;
 	mmi->do_upgrading = false;
+	mmi->force_upgrade = false;
 	mmi->battsn_buf = NULL;
 	mmi->fw_data = NULL;
 	mmi->params_data = NULL;
@@ -2508,9 +2598,11 @@ static int mmi_fg_probe(struct i2c_client *client,
 	device_init_wakeup(mmi->dev, 1);
 
 	ret=fg_read_HW_version(mmi);
-	if (ret < 0) {
+	if (ret < 0 && (ret != (-2))) {
 		mmi->fake_battery = true;
 		mmi_info("don't have real battery,use fake battery\n");
+	} else if (ret == (-2)) {
+		mmi->force_upgrade = true;
 	}
 
 	mmi->Batt_NTC_channel = devm_iio_channel_get(mmi->dev, "bat_temp");
@@ -2540,8 +2632,15 @@ static int mmi_fg_probe(struct i2c_client *client,
 		return ret;
 	}
 
-	INIT_WORK(&mmi->fg_upgrade_work, nfg1000_upgrade_func);
-	schedule_work(&mmi->fg_upgrade_work);
+	//MMI_STOPSHIP: <fuelgauge>: remove the limits of fg upgrade function.
+	//if (mmi->fake_battery == false && is_atm_mode() == true) {
+	if (mmi->fake_battery == false) {
+		INIT_WORK(&mmi->fg_force_upgrade_work, nfg1000_force_upgrade_func);
+		schedule_work(&mmi->fg_force_upgrade_work);
+
+		INIT_WORK(&mmi->fg_upgrade_work, nfg1000_upgrade_func);
+		schedule_work(&mmi->fg_upgrade_work);
+	}
 
 	mmi_log("mmi fuel gauge probe successfully, %s\n", device2str[mmi->chip]);
 
