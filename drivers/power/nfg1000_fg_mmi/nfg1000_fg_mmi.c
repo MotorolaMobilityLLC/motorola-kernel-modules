@@ -681,6 +681,40 @@ static int nfg1000_ota_unseal(struct mmi_fg_chip *di)
 	return 0;
 }
 
+static int nfg1000_ota_seal(struct mmi_fg_chip *di)
+{
+	int ret;
+	int i=0;
+	u8 u8Data[8] = {0};
+	u8 seal_state_read[32] = {0};
+	u16 seal_state_cmd = 0x0054;
+
+	for(i = 0; i < 3; i++)
+	{
+		u8Data[0] = 0x3E;
+		u8Data[1] = 0x30;
+		u8Data[2] = 0;
+		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 3);
+		if(ret < 0) {
+			mmi_err("nfg1000_ota_seal:write reg: %x error!!\n",I2C_NO_REG_DATA);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, seal_state_cmd, seal_state_read, 4);
+		if(ret) {
+			mmi_err("nfg1000_ota_program_seal_state_check:seal state read error!%x\n", ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+		if((seal_state_read[1] & 0x03) == 0x03)
+			break;
+	}
+	if(i == 3) {
+		mmi_err("nfg1000_ota_program_seal_state_check:seal opeartion error!%x\n", ret);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	return 0;
+}
+
 //firmware_version_check
 static bool nfg1000_ota_program_check_fw_upgrade(struct mmi_fg_chip *di)
 {
@@ -804,6 +838,11 @@ static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di
 				upgrade_status = true;
 			}
 		}
+	}
+
+	if (upgrade_status == false)
+	{
+		nfg1000_ota_seal(di);
 	}
 
 	return upgrade_status;
@@ -1534,41 +1573,6 @@ static int nfg1000_ota_updata_config(struct mmi_fg_chip *di)
 	if(i != sizeof(nfg1000_Dataflash_updata_CMD))
 	{
 		mmi_err("nfg1000_ota_updata config: %x error!!\n",I2C_NO_REG_DATA);
-		return -ERROR_CODE_I2C_WRITE;
-	}
-
-	return 0;
-}
-
-
-static int nfg1000_ota_seal(struct mmi_fg_chip *di)
-{
-	int ret;
-	int i=0;
-	u8 u8Data[8] = {0};
-	u8 seal_state_read[32] = {0};
-	u16 seal_state_cmd = 0x0054;
-
-	for(i = 0; i < 3; i++)
-	{
-		u8Data[0] = 0x3E;
-		u8Data[1] = 0x30;
-		u8Data[2] = 0;
-		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 3);
-		if(ret < 0) {
-			mmi_err("nfg1000_ota_seal:write reg: %x error!!\n",I2C_NO_REG_DATA);
-			return -ERROR_CODE_I2C_WRITE;
-		}
-		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, seal_state_cmd, seal_state_read, 4);
-		if(ret) {
-			mmi_err("nfg1000_ota_program_seal_state_check:seal state read error!%x\n", ret);
-			return -ERROR_CODE_I2C_WRITE;
-		}
-		if((seal_state_read[1] & 0x03) == 0x03)
-			break;
-	}
-	if(i == 3) {
-		mmi_err("nfg1000_ota_program_seal_state_check:seal opeartion error!%x\n", ret);
 		return -ERROR_CODE_I2C_WRITE;
 	}
 
