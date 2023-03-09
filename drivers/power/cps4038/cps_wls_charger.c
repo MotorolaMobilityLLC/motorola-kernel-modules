@@ -3010,7 +3010,7 @@ static ssize_t wireless_fw_version_show(struct device *dev, struct device_attrib
 	return sprintf(buf, "%08x\n", fw_version);
 }
 
-static DEVICE_ATTR(wireless_fw_version, 0664, wireless_fw_version_show, NULL);
+static DEVICE_ATTR(wireless_fw_version, 0444, wireless_fw_version_show, NULL);
 
 static ssize_t wireless_fw_force_update_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -3029,7 +3029,7 @@ static ssize_t wireless_fw_force_update_store(struct device *dev, struct device_
 
 	return count;
 }
-static DEVICE_ATTR(wireless_fw_force_update, 0664, NULL, wireless_fw_force_update_store);
+static DEVICE_ATTR(wireless_fw_force_update, 0220, NULL, wireless_fw_force_update_store);
 
 static ssize_t wireless_fw_update_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -3047,7 +3047,7 @@ static ssize_t wireless_fw_update_store(struct device *dev, struct device_attrib
 
 	return count;
 }
-static DEVICE_ATTR(wireless_fw_update, 0664, NULL, wireless_fw_update_store);
+static DEVICE_ATTR(wireless_fw_update, 0220, NULL, wireless_fw_update_store);
 
 static ssize_t show_rx_irect(struct device *dev, struct device_attribute *attr, char *buf)
 {
