@@ -941,6 +941,14 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 				mmi_chrg_dbg(chip, PR_MOTO, "Increase pps volt %d\n",
 								chip->pd_request_volt);
 				heartbeat_dely_ms = HEARTBEAT_PPS_TUNNING_MS;
+#ifdef CONFIG_MOTO_PD_HYPER
+				if((ibatt_curr > 10000000) && (chrg_step->pres_chrg_step == STEP_FIRST))
+					heartbeat_dely_ms = HEARTBEAT_PPS_TUNNING_MS*6;
+				else
+					heartbeat_dely_ms = HEARTBEAT_PPS_TUNNING_MS;
+#else
+				heartbeat_dely_ms = HEARTBEAT_PPS_TUNNING_MS;
+#endif
 		} else {
 			mmi_chrg_info(chip,"Enter into CC loop stage !\n");
 			mmi_chrg_sm_move_state(chip, PM_STATE_CP_CC_LOOP);
