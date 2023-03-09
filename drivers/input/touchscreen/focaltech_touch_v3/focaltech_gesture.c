@@ -257,6 +257,7 @@ static int fts_create_gesture_sysfs(struct device *dev)
     return 0;
 }
 
+#ifdef FOCALTECH_SENSOR_EN
 void fts_read_report_fod_event(struct fts_ts_data *ts_data)
 {
     u8 cmd = 0xE1;
@@ -370,6 +371,7 @@ void fts_read_report_fod_event(struct fts_ts_data *ts_data)
         }
     }
 }
+#endif
 
 static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 {
@@ -588,9 +590,12 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
 #else
         fts_write_reg(0xD1, 0xFF);
 #endif
+
+#ifdef FOCALTECH_SENSOR_EN
         if(fts_data->zero_enable) {
             fts_write_reg(0xCF, 0x02);
         }
+#endif
         fts_write_reg(0xD2, 0xFF);
         fts_write_reg(0xD5, 0xFF);
         fts_write_reg(0xD6, 0xFF);
