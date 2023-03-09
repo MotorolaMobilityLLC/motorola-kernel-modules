@@ -1795,7 +1795,7 @@ static void mm8xxx_battery_update(struct mm8xxx_device_info *di)
 #endif
 
 out:
-	if ((di->cache.soc != cache.soc) || (di->cache.temperature != cache.temperature) ||
+	if ((di->cache.soc != cache.soc) || ((di->cache.temperature/10) != (cache.temperature/10)) ||
 	    (di->cache.flags != cache.flags)) {
 		if (di->batt_psy)
 			power_supply_changed(di->batt_psy);
