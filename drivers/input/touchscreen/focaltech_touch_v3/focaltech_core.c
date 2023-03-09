@@ -737,7 +737,9 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
     memset(touch_buf, 0xFF, FTS_MAX_TOUCH_BUF);
     ts_data->ta_size = ts_data->touch_size;
 
+#ifdef FOCALTECH_SENSOR_EN
     fts_read_report_fod_event(ts_data);
+#endif
 
     /*read touch data*/
     ret = fts_read_touchdata(ts_data, touch_buf);
@@ -1205,8 +1207,10 @@ static int fts_input_init(struct fts_ts_data *ts_data)
             input_set_capability(input_dev, EV_KEY, pdata->keys[key_num]);
     }
 
+#ifdef FOCALTECH_SENSOR_EN
     input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY1);
     input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY2);
+#endif
 
 #if FTS_MT_PROTOCOL_B_EN
     input_mt_init_slots(input_dev, pdata->max_touch_number, INPUT_MT_DIRECT);
@@ -2464,6 +2468,7 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     return 0;
 }
 
+#ifdef FOCALTECH_SENSOR_EN
 bool fts_is_fod_resume(struct fts_ts_data *ts_data)
 {
     unsigned long fod_timeout = msecs_to_jiffies(3000);
@@ -2475,6 +2480,7 @@ bool fts_is_fod_resume(struct fts_ts_data *ts_data)
 
     return false;
 }
+#endif
 
 #ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
 static int fts_ts_suspend(struct device *dev)
@@ -2568,9 +2574,7 @@ static int fts_ts_resume(struct device *dev)
 #if FTS_POWER_SOURCE_CUST_EN
         fts_power_source_resume(ts_data);
 #endif
-        if(fts_is_fod_resume(ts_data)) {
-            fts_reset_proc(200);
-        }
+        fts_reset_proc(200);
     }
 
     fts_wait_tp_to_valid();
@@ -2579,9 +2583,7 @@ static int fts_ts_resume(struct device *dev)
 #if FTS_ESDCHECK_EN
     fts_esdcheck_resume(ts_data);
 #endif
-    if(fts_data->zero_enable) {
-        fts_write_reg(0xCF, 0x02);
-    }
+
     if (ts_data->gesture_support) {
         fts_gesture_resume(ts_data);
     }
