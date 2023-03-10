@@ -143,7 +143,9 @@ static int fpc_power_on(struct  fpc_data *fpc)
 			rc = regulator_enable(fpc->pwr_supply);
 			dev_info(fpc->dev, " %s : enable  pwr_supply return %d \n", __func__, rc);
 		} else if (gpio_is_valid(fpc->vdd_gpio)) {
+#ifndef FPC_SHARE_GPIO
 			gpio_direction_output(fpc->vdd_gpio, 1);
+#endif
 		}
 		fpc->power_enabled = 1;
 		if (fpc->rgltr_ctrl_support ||gpio_is_valid(fpc->vdd_gpio)){
@@ -164,7 +166,9 @@ static int fpc_power_off(struct  fpc_data *fpc)
 			rc = regulator_disable(fpc->pwr_supply);
 			dev_info(fpc->dev, " %s : disable  pwr_supply return %d \n", __func__, rc);
 		} else if (gpio_is_valid(fpc->vdd_gpio)) {
+#ifndef FPC_SHARE_GPIO
 			gpio_direction_output(fpc->vdd_gpio, 0);
+#endif
 		}
 		fpc->power_enabled = 0;
 		if (fpc->rgltr_ctrl_support ||gpio_is_valid(fpc->vdd_gpio)){
