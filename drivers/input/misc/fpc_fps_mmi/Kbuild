@@ -11,6 +11,10 @@ ifneq ($(filter m y,$(CONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE)),)
 	EXTRA_CFLAGS += -DCONFIG_INPUT_MISC_FPC1020_SAVE_TO_CLASS_DEVICE
 endif
 
+ifeq ($(CONFIG_FPC_SHARE_GPIO), y)
+	EXTRA_CFLAGS += -DFPC_SHARE_GPIO
+endif
+
 fpc_mtk_tee-y += fpc_tee_spi.o
 
 obj-m += fpc_mtk_tee.o
