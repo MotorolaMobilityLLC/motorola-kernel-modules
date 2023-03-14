@@ -153,6 +153,7 @@ struct fts_ts_platform_data {
     bool edge_ctrl;
     bool interpolation_ctrl;
     bool report_rate_ctrl;
+    bool sample_ctrl;
 };
 
 struct ts_event {
