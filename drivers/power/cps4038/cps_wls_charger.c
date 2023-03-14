@@ -2942,7 +2942,6 @@ free_bug:
 	release_firmware(fw);
 	CPS_TX_MODE = false;
 	chip->fw_uploading = false;
-	wireless_chip_reset();
 	if(chip->chg_tcmd_client != NULL && chip->factory_mode) {
 		msleep(2000);
 		chip->chg_tcmd_client->factory_kill_disable = prev_factory_kill_status;
@@ -4121,8 +4120,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
         cps_wls_log(CPS_LOG_ERR, "[%s] moto_wls_auth_init failed!\n", __func__);
     }
 
-    if(chip->bootmode == 8 || chip->bootmode == 9)
-        wireless_chip_reset();
 //    wake_lock(&chip->cps_wls_wake_lock);
     kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
 
