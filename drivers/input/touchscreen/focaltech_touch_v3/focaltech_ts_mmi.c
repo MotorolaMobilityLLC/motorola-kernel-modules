@@ -71,6 +71,10 @@ static ssize_t fts_sample_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fts_sample_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+#ifdef CONFIG_FTS_LAST_TIME
+static ssize_t fts_timestamp_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+#endif
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_edge_show, fts_edge_store);
@@ -78,6 +82,9 @@ static DEVICE_ATTR(interpolation, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_interpolation_show, fts_interpolation_store);
 static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_sample_show, fts_sample_store);
+#ifdef CONFIG_FTS_LAST_TIME
+static DEVICE_ATTR(timestamp, S_IRUGO, fts_timestamp_show, NULL);
+#endif
 
 static struct attribute *ext_attributes[MAX_ATTRS_ENTRIES];
 static struct attribute_group ext_attr_group = {
@@ -111,16 +118,16 @@ static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_g
 
 	if (pdata->sample_ctrl)
 		ADD_ATTR(sample);
+
+#ifdef CONFIG_FTS_LAST_TIME
+	ADD_ATTR(timestamp);
+#endif
 /*
 	if (ts_data->board_data.stylus_mode_ctrl)
 		ADD_ATTR(stylus_mode);
 
 	if (ts_data->board_data.sensitivity_ctrl)
 		ADD_ATTR(sensitivity);
-
-#ifdef CONFIG_GTP_LAST_TIME
-	ADD_ATTR(timestamp);
-#endif
 */
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -432,6 +439,28 @@ static ssize_t fts_sample_show(struct device *dev,
 	FTS_INFO("sample = %d.\n", ts_data->set_mode.sample);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts_data->set_mode.sample);
 }
+
+#ifdef CONFIG_FTS_LAST_TIME
+static ssize_t fts_timestamp_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data;
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	mutex_lock(&ts_data->mode_lock);
+	last_ktime = ts_data->last_event_time;
+	ts_data->last_event_time = 0;
+	mutex_unlock(&ts_data->mode_lock);
+
+	last_ts = ktime_to_timespec64(last_ktime);
+
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
+}
+#endif
 
 static int fts_mmi_methods_get_vendor(struct device *dev, void *cdata)
 {
