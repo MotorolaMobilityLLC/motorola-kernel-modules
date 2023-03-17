@@ -195,26 +195,36 @@ static int sx937x_Hardware_Check(psx93XX_t this)
 {
 	int ret;
 	u32 idCode;
+	u8 loop = 0;
 	this->failStatusCode = 0;
+
+	//Check th IRQ Status
+	while(this->get_nirq_low && this->get_nirq_low())
+	{
+		read_regStat(this);
+		msleep(100);
+		if(++loop >10)
+		{
+			this->failStatusCode = SX937x_NIRQ_ERROR;
+			break;
+		}
+	}
 
 	//Check I2C Connection
 	ret = sx937x_i2c_read_16bit(this, SX937X_DEVICE_INFO, &idCode);
 	if(ret < 0)
 	{
 		this->failStatusCode = SX937x_I2C_ERROR;
-		LOG_ERR("Failed to read device info:failcode = 0x%x\n",this->failStatusCode);
-
-		return ret;
 	}
 
-	if(idCode >> 12 != SX937X_WHOAMI_VALUE >> 4)
+	if(idCode!= SX937X_WHOAMI_VALUE)
 	{
 		this->failStatusCode = SX937x_ID_ERROR;
 	}
 
-	LOG_INFO("sx937x idcode = 0x%x, failcode = 0x%x\n", idCode>>8, this->failStatusCode);
-
-	return (int)this->failStatusCode;
+	LOG_INFO("sx937x idcode = 0x%x, failcode = 0x%x\n", idCode, this->failStatusCode);
+	//return (int)this->failStatusCode;
+	return 0;
 }
 
 static int sx937x_global_variable_init(psx93XX_t this)
@@ -717,14 +727,13 @@ static void sx937x_reg_init(psx93XX_t this)
 	psx937x_t pDevice = 0;
 	psx937x_platform_data_t pdata = 0;
 	int i = 0;
-	//uint32_t tmpvalue;
+	uint32_t tmpvalue;
 	/* configure device */
 	if (this && (pDevice = this->pDevice) && (pdata = pDevice->hw))
 	{
 		/*******************************************************************************/
 		// try to initialize from device tree!
 		/*******************************************************************************/
-#if 0
 		while ( i < ARRAY_SIZE(sx937x_i2c_reg_setup))
 		{
 			/* Write all registers/values contained in i2c_reg */
@@ -741,7 +750,6 @@ static void sx937x_reg_init(psx93XX_t this)
 			sx937x_i2c_write_16bit(this, sx937x_i2c_reg_setup[i].reg, tmpvalue);
 			i++;
 		}
-#endif
 #ifdef USE_DTS_REG
 		if (this->reg_in_dts == true)
 		{
@@ -1170,8 +1178,7 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 				input_report_abs(psmtcButtons[i].input_dev, ABS_DISTANCE, 0);
 				input_sync(psmtcButtons[i].input_dev);
 
-                //save enable time, sx937x will calibrate itself when a phase is enabled.
-				//manual_offset_calibration(global_sx937x);
+				manual_offset_calibration(global_sx937x);
 			} else if (enable == 0) {
 				LOG_INFO("disable cap sensor : %s\n", sensors_cdev->name);
 				psmtcButtons[i].enabled = false;
@@ -1391,23 +1398,6 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 
 	this = devm_kzalloc(&client->dev,sizeof(sx93XX_t), GFP_KERNEL); /* create memory for main struct */
 	LOG_DBG("Initialized Main Memory: 0x%p\n",this);
-    if (!this){
-        LOG_ERR("Failed to create this, size=%ld\n", sizeof(sx93XX_t));
-        return -ENOMEM;
-    }
-
-    /* setup i2c communication */
-	this->bus = client;
-	i2c_set_clientdata(client, this);
-
-	/* record device struct */
-	this->pdev = &client->dev;
-
-    //memory allocated with devm_kzalloc will be freed automatically if probe is failed.
-    if (sx937x_Hardware_Check(this) != 0) {
-		LOG_ERR("sx937x_Hardware_Check Fail!\n");
-		return -1;
-	}
 
 	pButtonInformationData = devm_kzalloc(&client->dev , sizeof(struct totalButtonInformation), GFP_KERNEL);
 	if (!pButtonInformationData)
@@ -1467,6 +1457,13 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 			this->statusFunc[6] = touchProcess; /* TOUCH_STAT  */
 			this->statusFunc[7] = 0; /* RESET_STAT */
 		}
+
+		/* setup i2c communication */
+		this->bus = client;
+		i2c_set_clientdata(client, this);
+
+		/* record device struct */
+		this->pdev = &client->dev;
 
 		/* create memory for device specific struct */
 		this->pDevice = pDevice = devm_kzalloc(&client->dev,sizeof(sx937x_t), GFP_KERNEL);
@@ -1634,7 +1631,12 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	}
 
 	pplatData->exit_platform_hw = sx937x_exit_platform_hw;
-	
+
+	if (sx937x_Hardware_Check(this) != 0) {
+		LOG_ERR("sx937x_Hardware_CheckFail!\n");
+		//return -1;
+	}
+
 	global_sx937x = this;
 	LOG_INFO("sx937x_probe() Done\n");
 	return 0;
