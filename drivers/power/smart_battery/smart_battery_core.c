@@ -313,7 +313,7 @@ static int smart_battery_resume(struct device *dev)
 	struct mmi_smart_battery *chip = this_chip;
 
 	chip->resume_completed = true;
-	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(1));
+	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(QUEUS_RESUME_DELAYED_WORK_TIME));
 
 	return 0;
 }
