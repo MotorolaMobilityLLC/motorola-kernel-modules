@@ -2570,7 +2570,7 @@ static bool usb_online()
 	}
 	return ret;
 }
-#endif
+
 static void wireless_chip_reset()
 {
 	struct chg_alg_device *alg;
@@ -2583,6 +2583,7 @@ static void wireless_chip_reset()
 	}
 	return;
 }
+#endif
 
 static void wake_up_rx_check_thread(struct cps_wls_chrg_chip *info);
 #define CPS_FW_MAJOR_VER_OFFSET		0xc4
@@ -2818,7 +2819,7 @@ free_bug:
 	release_firmware(fw);
 	CPS_TX_MODE = false;
 	chip->fw_uploading = false;
-	wireless_chip_reset();
+	//wireless_chip_reset();
 	return ret;
 
 update_fail:
