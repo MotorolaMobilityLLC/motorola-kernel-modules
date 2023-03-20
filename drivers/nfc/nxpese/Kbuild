@@ -5,3 +5,5 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/nfc/nxpI2
 
 obj-m        += nxp_ese.o
 nxp_ese-objs:= p73.o
+
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../nxp_i2c/Module.symvers
