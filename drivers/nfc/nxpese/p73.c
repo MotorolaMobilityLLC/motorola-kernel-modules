@@ -136,6 +136,7 @@ static unsigned char debug_level;
 #define P61_ERR_MSG(msg...) printk(KERN_ERR "[NFC-P61] : " msg );
 
 void print_packet( const uint8_t* p_data, uint16_t len,int flag) {
+#if 0
 	uint32_t i;
 	char print_buffer[len * 3 + 1];
 	if (debug_level == P61_DEBUG_OFF)
@@ -152,6 +153,7 @@ void print_packet( const uint8_t* p_data, uint16_t len,int flag) {
 	} else  {
 		P61_DBG_MSG("p61 write len = %3d > %s", len, print_buffer);
 	}
+#endif
 }
 
 /* Device specific macro and structure */
@@ -351,8 +353,9 @@ static long p61_dev_ioctl(struct file *filp, unsigned int cmd,
 {
 	int ret = 0;
 	struct p61_dev *p61_dev = NULL;
-
+#ifdef P61_RESET_GPIO
 	unsigned char buf[100];
+#endif
 
 	P61_DBG_MSG(KERN_ALERT "p61_dev_ioctl-Enter %u arg = %ld\n", cmd, arg);
 	p61_dev = filp->private_data;
@@ -839,7 +842,10 @@ static const struct file_operations p61_dev_fops = {
 #if DRAGON_P61
 static int p61_parse_dt(struct device *dev, struct p61_spi_platform_data *data)
 {
+
+#ifdef P61_IRQ_ENABLE
 	struct device_node *np = dev->of_node;
+#endif
 	int errorno = 0;
 
 #ifdef P61_IRQ_ENABLE
@@ -860,7 +866,7 @@ static int p61_parse_dt(struct device *dev, struct p61_spi_platform_data *data)
 #endif
 	data->pctrl = devm_pinctrl_get(dev);
 	if (IS_ERR(data->pctrl)) {
-			P61_DBG_MSG(KERN_ALERT "%s: Unable to allocate pinctrl: %d\n",
+			P61_DBG_MSG(KERN_ALERT "%s: Unable to allocate pinctrl: %ld\n",
 				__FILE__, PTR_ERR(data->pctrl));
 			return -EINVAL;
 	}
@@ -868,7 +874,7 @@ static int p61_parse_dt(struct device *dev, struct p61_spi_platform_data *data)
 	data->pctrl_mode_spi = pinctrl_lookup_state(
 		data->pctrl, "pinctrl_state_mode_spi");
 	if (IS_ERR(data->pctrl_mode_spi)) {
-			P61_DBG_MSG(KERN_ALERT "%s: Unable to find pinctrl_state_mode_spi: %d\n",
+			P61_DBG_MSG(KERN_ALERT "%s: Unable to find pinctrl_state_mode_spi: %ld\n",
 				__FILE__, PTR_ERR(data->pctrl_mode_spi));
 			return -EINVAL;
 	}
@@ -876,7 +882,7 @@ static int p61_parse_dt(struct device *dev, struct p61_spi_platform_data *data)
 	data->pctrl_mode_idle = pinctrl_lookup_state(
 			data->pctrl, "pinctrl_state_mode_idle");
 	if (IS_ERR(data->pctrl_mode_idle)) {
-			P61_DBG_MSG(KERN_ALERT "%s: Unable to find pinctrl_state_mode_idle: %d\n",
+			P61_DBG_MSG(KERN_ALERT "%s: Unable to find pinctrl_state_mode_idle: %ld\n",
 				__FILE__, PTR_ERR(data->pctrl_mode_idle));
 			return -EINVAL;
 	}

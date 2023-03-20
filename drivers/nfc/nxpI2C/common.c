@@ -20,6 +20,7 @@
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 
 #include "common_ese.h"
 
@@ -204,8 +205,13 @@ int nfc_misc_register(struct nfc_dev *nfc_dev,
 		unregister_chrdev_region(nfc_dev->devno, count);
 		return ret;
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
+	nfc_dev->nfc_device = device_create(nfc_dev->nfc_class, NULL,
+					    nfc_dev->devno, nfc_dev, "%s", devname);
+#else
 	nfc_dev->nfc_device = device_create(nfc_dev->nfc_class, NULL,
 					    nfc_dev->devno, nfc_dev, devname);
+#endif
 	if (IS_ERR(nfc_dev->nfc_device)) {
 		ret = PTR_ERR(nfc_dev->nfc_device);
 		pr_err("%s: failed to create the device ret %d\n", __func__,
