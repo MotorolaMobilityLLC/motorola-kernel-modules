@@ -7,5 +7,9 @@ ifeq ($(CONFIG_AW_RAMPING_SUPPORT), y)
     EXTRA_CFLAGS += -DCONFIG_AW_RAMPING_SUPPORT
 endif
 
+ifeq ($(CONFIG_DUMMY_SND_CARD_SUPPORT), y)
+    EXTRA_CFLAGS += -DCONFIG_DUMMY_SND_CARD_SUPPORT
+endif
+
 aw882xx_dlkm-objs = aw882xx.o aw882xx_bin_parse.o aw882xx_calib.o aw882xx_device.o aw882xx_dsp.o aw882xx_init.o aw882xx_monitor.o aw882xx_spin.o
 obj-m += aw882xx_dlkm.o

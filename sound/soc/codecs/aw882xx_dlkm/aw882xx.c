@@ -56,6 +56,10 @@ static const char *const aw882xx_switch[] = {"Disable", "Enable"};
 static const char *const aw882xx_spin[] = {"spin_0", "spin_90",
 					"spin_180", "spin_270"};
 
+#ifdef CONFIG_DUMMY_SND_CARD_SUPPORT
+extern void set_dailink_dummy_flag(int flag);
+#endif
+
 /******************************************************
  *
  * aw882xx distinguish between codecs and components by version
@@ -2302,6 +2306,12 @@ static int aw882xx_i2c_probe(struct i2c_client *i2c,
 	ret = aw882xx_read_chipid(aw882xx);
 	if (ret < 0) {
 		aw_dev_err(&i2c->dev, "aw882xx_read_chipid failed ret=%d", ret);
+
+#ifdef CONFIG_DUMMY_SND_CARD_SUPPORT
+		//notify to machine driver
+		set_dailink_dummy_flag(1);
+#endif
+
 		return ret;
 	}
 
@@ -2342,6 +2352,11 @@ static int aw882xx_i2c_probe(struct i2c_client *i2c,
 	g_aw882xx_dev_cnt++;
 	mutex_unlock(&g_aw882xx_lock);
 	aw_dev_info(&i2c->dev, "dev_cnt %d", g_aw882xx_dev_cnt);
+#ifdef CONFIG_DUMMY_SND_CARD_SUPPORT
+	//notify to machine driver
+	set_dailink_dummy_flag(2);
+#endif
+
 	return ret;
 err_sysfs:
 	aw_componet_codec_ops.unregister_codec(&i2c->dev);
