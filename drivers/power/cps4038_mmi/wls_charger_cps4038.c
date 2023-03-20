@@ -632,6 +632,7 @@ static int cps_wls_set_status(int status);
 static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready);
 static void cps_init_charge_hardware(void);
 static void cps_epp_current_select(int  *icl, int *vbus);
+static void cps_wls_tx_enable(bool en);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
@@ -2005,6 +2006,14 @@ static int cps_wls_set_tx_ping_frequency(int value)
     return cps_wls_write_reg((int)cps_reg->reg_addr, value, (int)cps_reg->reg_bytes_len);
 }*/
 #endif
+
+static int cps_wls_get_tx_ept_rsn(void)
+{
+    cps_reg_s *cps_reg;
+    cps_reg = (cps_reg_s*)(&cps_tx_reg[CPS_TX_REG_EPT_RSN]);
+    return cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
+}
+
 static int mmi_mux_wls_chg_chan(enum mmi_mux_channel channel, bool on)
 {
 	struct mtk_charger *info = NULL;
@@ -2221,7 +2230,23 @@ static int cps_wls_tx_irq_handler(int int_flag)
        cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_CFGP");
     }
     if(int_flag & TX_INT_EPT){
-         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_EPT");
+        if (chip->fw_uploading) {
+            cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_EPT fw_uploading");
+        } else {
+            rc = cps_wls_get_tx_ept_rsn();
+            cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_EPT RSN:0x%04X", rc);
+            if (rc & EPT_OTP) {
+                chip->ntc_thermal = true;
+            }
+            if (true == CPS_TX_MODE) {
+                cps_wls_tx_enable(false);
+            } else {
+                chip->rx_connected = false;
+                sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
+                chip->tx_mode = false;
+                sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
+            }
+        }
     }
     if(int_flag & TX_INT_RPP_TO){
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_RPP_TO");
