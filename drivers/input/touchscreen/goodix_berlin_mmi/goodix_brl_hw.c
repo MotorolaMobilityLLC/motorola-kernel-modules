@@ -267,17 +267,33 @@ int brl_resume(struct goodix_ts_core *cd)
 int brl_gesture(struct goodix_ts_core *cd, int gesture_type)
 {
 	struct goodix_ts_cmd cmd;
-
+#ifdef CONFIG_GTP_FOD
+	unsigned short gesture_cmd = 0xFFFF;
+#endif
 	cmd.cmd = GOODIX_GESTURE_CMD;
 #ifdef CONFIG_GTP_FOD
 	cmd.len = 6;
 #else
 	cmd.len = 5;
 #endif
+#ifdef CONFIG_GTP_FOD
+	if (gesture_type & GESTURE_FOD_PRESS) {
+		gesture_cmd &= ~(1 << 5);
+	}
+	if (gesture_type & GESTURE_SINGLE_TAP) {
+		gesture_cmd &= ~(1 << 4);
+	}
+	if (gesture_type & GESTURE_DOUBLE_TAP) {
+		gesture_cmd &= ~(1 << 15);
+	}
+	cmd.data[0] = gesture_cmd >> 8;
+	cmd.data[1] = gesture_cmd & 0xFF;
+	ts_debug("brl_gesture %x %x",gesture_type,gesture_cmd);
+#else
 	cmd.data[0] = gesture_type;
+#endif
 	if (cd->hw_ops->send_cmd(cd, &cmd))
 		ts_err("failed send gesture cmd");
-
 	return 0;
 }
 
