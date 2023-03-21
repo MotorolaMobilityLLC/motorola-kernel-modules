@@ -112,7 +112,7 @@ int fts_check_cid(struct fts_ts_data *ts_data, u8 id_h)
 *  Output:
 *  Return: return 0 if tp valid, otherwise return error code
 *****************************************************************************/
-int fts_wait_tp_to_valid(void)
+int fts_wait_tp_to_valid(int delay)
 {
     int ret = 0;
     int cnt = 0;
@@ -129,8 +129,8 @@ int fts_wait_tp_to_valid(void)
             FTS_DEBUG("TP Not Ready,ReadData:0x%02x,ret:%d", idh, ret);
 
         cnt++;
-        msleep(INTERVAL_READ_REG);
-    } while ((cnt * INTERVAL_READ_REG) < TIMEOUT_READ_REG);
+        msleep(delay);
+    } while ((cnt * delay) < TIMEOUT_READ_REG);
 
     return -EIO;
 }
@@ -146,7 +146,7 @@ void fts_tp_state_recovery(struct fts_ts_data *ts_data)
 {
     FTS_FUNC_ENTER();
     /* wait tp stable */
-    fts_wait_tp_to_valid();
+    fts_wait_tp_to_valid(10);
     /* recover TP charger state 0x8B */
     /* recover TP glove state 0xC0 */
     /* recover TP cover state 0xC1 */
@@ -2585,10 +2585,10 @@ static int fts_ts_resume(struct device *dev)
 #if FTS_POWER_SOURCE_CUST_EN
         fts_power_source_resume(ts_data);
 #endif
-        fts_reset_proc(200);
+        fts_reset_proc(50);
     }
 
-    fts_wait_tp_to_valid();
+    fts_wait_tp_to_valid(10);
     fts_ex_mode_recovery(ts_data);
 
 #if FTS_ESDCHECK_EN

@@ -575,7 +575,7 @@ static bool fts_fwupg_check_fw_valid(void)
 {
     int ret = 0;
 
-    ret = fts_wait_tp_to_valid();
+    ret = fts_wait_tp_to_valid(200);
     if (ret < 0) {
         FTS_INFO("tp fw invaild");
         return false;
