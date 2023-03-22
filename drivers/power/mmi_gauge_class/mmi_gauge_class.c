@@ -120,6 +120,16 @@ int gauge_dev_get_charge_full_design(struct gauge_device *gauge_dev, int *charge
 }
 EXPORT_SYMBOL(gauge_dev_get_charge_full_design);
 
+int gauge_dev_get_soh(struct gauge_device *gauge_dev, int *soh)
+{
+	if (gauge_dev != NULL && gauge_dev->ops != NULL &&
+	    gauge_dev->ops->get_soh)
+		return gauge_dev->ops->get_soh(gauge_dev, soh);
+
+	return -ENOTSUPP;
+}
+EXPORT_SYMBOL(gauge_dev_get_soh);
+
 int gauge_dev_get_charge_counter(struct gauge_device *gauge_dev, int *charge_counter)
 {
 	if (gauge_dev != NULL && gauge_dev->ops != NULL &&

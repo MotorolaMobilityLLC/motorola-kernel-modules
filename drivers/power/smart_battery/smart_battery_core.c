@@ -55,6 +55,7 @@ static enum power_supply_property batt_props[] = {
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
+	POWER_SUPPLY_PROP_SCOPE,
 };
 
 static int batt_get_prop(struct power_supply *psy,
@@ -130,7 +131,9 @@ static int batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
 		val->intval = POWER_SUPPLY_TECHNOLOGY_LIPO;
 		break;
-
+	case POWER_SUPPLY_PROP_SCOPE:
+		val->intval = chip->soh;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -233,6 +236,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 	gauge_dev_get_tte(chip->gauge_dev, &chip->batt_tte);
 	gauge_dev_get_charge_full(chip->gauge_dev, &chip->charge_full);
 	gauge_dev_get_charge_full_design(chip->gauge_dev, &chip->charge_full_design);
+	gauge_dev_get_soh(chip->gauge_dev, &chip->soh);
 	gauge_dev_get_cycle_count(chip->gauge_dev, &chip->cycle_count);
 
 	rsoc = smart_batt_monotonic_soc(chip, rsoc);
@@ -339,6 +343,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->fake_temp	= -EINVAL;
 	chip->resume_completed = true;
 	chip->uisoc = -EINVAL;
+	chip->soh = 100;
 
 	chip->gauge_dev = get_gauge_by_name("bms");
 	if (chip->gauge_dev) {
