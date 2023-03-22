@@ -2038,12 +2038,15 @@ int adc_battemp(struct mmi_fg_chip *mmi_fg, int res)
 	return tbatt_value;
 }
 
+#define OUTOF_RANGE_TEMP 700
+#define K2C_TEMP_BASE 2730
 static int fg_read_temperature(struct mmi_fg_chip *mmi)
 {
 	int batt_ntc_v = 0;
 	int bif_v = 0;
 	int tres_temp,delta_v, batt_temp;
-	u16 fgTemp;
+	u16 temp;
+	int fgTemp;
 
 	iio_read_channel_processed(mmi->Batt_NTC_channel, &batt_ntc_v);
 	iio_read_channel_processed(mmi->vref_channel, &bif_v);
@@ -2056,13 +2059,12 @@ static int fg_read_temperature(struct mmi_fg_chip *mmi)
 	batt_temp *= 10;
 	mmi_info("read batt temperature from PMIC,temp = %d \n",batt_temp);
 
-	if (batt_temp >= 700) {
-		if (fg_read_word(mmi, mmi->regs[BQ_FG_REG_TEMP], &fgTemp) <0 ) {
-			mmi_err("could not read temperature from FG\n");
-		}
-		else {
-			fgTemp -= 2730;
-			mmi_info("read batt temperature from FG, temp= %d",  fgTemp);
+	if (fg_read_word(mmi, mmi->regs[BQ_FG_REG_TEMP], &temp) <0 ) {
+		mmi_err("Error reading batt temperature from FG\n");
+	} else {
+		fgTemp = (int)((s16)temp) - K2C_TEMP_BASE; //Thermodynamic temperature to Celsius temperature
+		mmi_info("read batt temperature from FG, temp= %d", fgTemp);
+		if (batt_temp >= OUTOF_RANGE_TEMP) {
 			batt_temp = fgTemp;
 		}
 	}
