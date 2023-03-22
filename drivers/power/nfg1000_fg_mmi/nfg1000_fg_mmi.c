@@ -2170,6 +2170,28 @@ static int fg_read_rm(struct mmi_fg_chip *mmi)
 
 }
 
+static int fg_read_soh(struct mmi_fg_chip *mmi)
+{
+	int ret;
+	u16 soh;
+
+	if (mmi->regs[BQ_FG_REG_SOH] == INVALID_REG_ADDR) {
+		mmi_err("SOH command not supported!\n");
+		return 0;
+	}
+
+	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_SOH], &soh);
+
+	if (ret < 0) {
+		mmi_err("could not read SOH, ret=%d\n", ret);
+		return ret;
+	}
+	mmi_info(" SOH = %d", soh);
+
+	return soh;
+
+}
+
 static int fg_read_cyclecount(struct mmi_fg_chip *mmi)
 {
 	int ret;
@@ -2341,6 +2363,22 @@ int fg_get_charge_counter(struct gauge_device *gauge_dev, int *charge_counter)
 	return 0;
 }
 
+int fg_get_soh(struct gauge_device *gauge_dev, int *soh)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	int ret = 0;
+
+	if (mmi->fake_battery)
+		*soh = 100;
+	else {
+		ret = fg_read_soh(mmi);
+		if (ret > 0)
+			*soh = ret;
+	}
+
+	return 0;
+}
+
 int fg_get_cycle_count(struct gauge_device *gauge_dev, int *cycle_count)
 {
 	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
@@ -2503,6 +2541,7 @@ static struct gauge_ops nfg1000_gauge_ops = {
 	.get_charge_full_design = fg_get_charge_full_design,
 	.get_charge_counter = fg_get_charge_counter,
 	.get_cycle_count = fg_get_cycle_count,
+	.get_soh = fg_get_soh,
 	.set_charge_type = fg_set_charge_type,
 };
 
