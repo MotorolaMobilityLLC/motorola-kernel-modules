@@ -2561,6 +2561,27 @@ static void cps_wls_fw_set_boost(bool val)
 		cps_wls_pm_set_awake(0);
 	}
 }
+
+static int cps_get_bat_soc(void)
+{
+	union power_supply_propval prop;
+	struct power_supply *battery_psy = NULL;
+	int ret = 0;
+
+	battery_psy = power_supply_get_by_name("battery");
+	if (battery_psy == NULL || IS_ERR(battery_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get battery_psy\n", __func__);
+		return CPS_WLS_FAIL;
+	} else {
+		power_supply_get_property(battery_psy,
+			POWER_SUPPLY_PROP_CAPACITY, &prop);
+		cps_wls_log(CPS_LOG_DEBG,"%s battery soc:%d\n",
+				__func__, prop.intval);
+		ret = prop.intval;
+	}
+	return ret;
+}
+
 #if 0
 static int cps_get_bat_soc()
 {
@@ -2625,15 +2646,13 @@ static int wireless_fw_update(bool force)
 	const struct firmware *fw;
 	int cfg_buf_size;
 	int addr,ret = CPS_WLS_SUCCESS;
-#if 0
-	if (true != usb_online()) {
-		if(50 > cps_get_bat_soc()) {
-			cps_wls_log(CPS_LOG_ERR,"%s Battery SOC should be at least 50%% or connect charger,soc:usb_online %d:%d\n",__func__,usb_online(),cps_get_bat_soc());
-			wireless_chip_reset();
-			return CPS_WLS_FAIL;
-		}
+
+	if (cps_get_bat_soc() < 10 && !force) {
+		cps_wls_log(CPS_LOG_ERR,
+			"Wireless fw update failed. Battery SOC should be at least 10%%\n");
+		return CPS_WLS_FAIL;
 	}
-#endif
+
 	CPS_TX_MODE = true;
 	chip->fw_uploading = true;
 	//cps_wls_fw_set_boost(false);
