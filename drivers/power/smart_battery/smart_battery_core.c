@@ -70,18 +70,22 @@ static int batt_get_prop(struct power_supply *psy,
 		val->intval = mmi_charger_update_batt_status();
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		ret = gauge_dev_get_voltage_now(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->voltage_now = temp;
+		if (chip->voltage_now == -EINVAL || (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING)) {
+			ret = gauge_dev_get_voltage_now(chip->gauge_dev, &temp);
+			if (ret >= 0)
+				chip->voltage_now = temp;
+		}
 		val->intval = chip->voltage_now * 1000;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = 1;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		ret = gauge_dev_get_current_now(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->current_now = temp;
+		if (chip->current_now == -EINVAL || (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING)) {
+			ret = gauge_dev_get_current_now(chip->gauge_dev, &temp);
+			if (ret >= 0)
+				chip->current_now = temp;
+		}
 		val->intval = chip->current_now * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
@@ -103,10 +107,11 @@ static int batt_get_prop(struct power_supply *psy,
 			val->intval = chip->fake_temp;
 			break;
 		}
-
-		ret = gauge_dev_get_temperature(chip->gauge_dev, &temp);
-		if (ret >= 0)
-			chip->batt_temp = temp;
+		if (chip->batt_temp == -EINVAL || (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING)) {
+			ret = gauge_dev_get_temperature(chip->gauge_dev, &temp);
+				if (ret >= 0)
+					chip->batt_temp = temp;
+		}
 		val->intval = chip->batt_temp;
 		break;
 	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW:
@@ -344,6 +349,9 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->resume_completed = true;
 	chip->uisoc = -EINVAL;
 	chip->soh = 100;
+	chip->voltage_now = -EINVAL;
+	chip->current_now = -EINVAL;
+	chip->batt_temp = -EINVAL;
 
 	chip->gauge_dev = get_gauge_by_name("bms");
 	if (chip->gauge_dev) {
