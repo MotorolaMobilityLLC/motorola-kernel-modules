@@ -47,6 +47,7 @@ struct gauge_ops {
 	int (*get_charge_full)(struct gauge_device *gauge_dev, int *charge_full);
 	int (*get_charge_full_design)(struct gauge_device *gauge_dev, int *charge_full_design);
 	int (*get_charge_counter)(struct gauge_device *gauge_dev, int *charge_counter);
+	int (*get_soh)(struct gauge_device *gauge_dev, int *soh);
 	int (*get_cycle_count)(struct gauge_device *gauge_dev, int *cycle_count);
 
 	int (*set_temperature)(struct gauge_device *gauge_dev, int temp);
@@ -87,6 +88,8 @@ extern int gauge_dev_get_tte(struct gauge_device *gauge_dev, int *tte);
 extern int gauge_dev_get_charge_full(struct gauge_device *gauge_dev, int *charge_full);
 
 extern int gauge_dev_get_charge_full_design(struct gauge_device *gauge_dev, int *charge_full_design);
+
+extern int gauge_dev_get_soh(struct gauge_device *gauge_dev, int *soh);
 
 extern int gauge_dev_get_charge_counter(struct gauge_device *gauge_dev, int *charge_counter);
 
