@@ -1163,7 +1163,8 @@ void Boot_Update_Firmware(struct work_struct *work)
 {
 	int32_t ret = 0;
 
-	if (!nvt_touch_is_awake()) {
+	ts->fw_delay_que = 0;
+	if (!ts->bTouchIsAwake) {
 		NVT_LOG("Touch is suspend, skip\n");
 		return;
 	}

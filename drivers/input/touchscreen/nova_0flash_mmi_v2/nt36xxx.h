@@ -212,7 +212,8 @@ struct nvt_ts_data {
 #if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
 	struct notifier_block disp_notifier;
 #endif
-
+	uint8_t fw_delay_que;
+	uint8_t bTouchIsAwake;
 	uint8_t fw_ver;
 	uint8_t x_num;
 	uint8_t y_num;

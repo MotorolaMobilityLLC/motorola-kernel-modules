@@ -176,7 +176,6 @@ const struct mtk_chip_config spi_ctrdata = {
 };
 #endif
 
-static uint8_t bTouchIsAwake = 0;
 #ifdef NVT_TOUCH_LAST_TIME
 static bool time_flag = 1;
 #endif
@@ -1194,7 +1193,11 @@ static bool nvt_skip_charger_bootmode(void)
 				}
 			}
 		}
+		else
+			NVT_LOG("bootmode null\n");
 	}
+	else
+		NVT_LOG("get bootargs fail\n");
 
 	of_node_put(np);
 
@@ -1543,7 +1546,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 	int32_t finger_cnt = 0;
 
 #if WAKEUP_GESTURE
-	if (bTouchIsAwake == 0) {
+	if (ts->bTouchIsAwake == 0) {
 		pm_wakeup_event(&ts->input_dev->dev, 5000);
 	}
 #endif
@@ -1594,7 +1597,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 #endif /* POINT_DATA_CHECKSUM */
 
 #if WAKEUP_GESTURE
-	if (bTouchIsAwake == 0) {
+	if (ts->bTouchIsAwake == 0) {
 		input_id = (uint8_t)(point_data[1] >> 3);
 		nvt_ts_wakeup_gesture_report(input_id, point_data);
 		mutex_unlock(&ts->lock);
@@ -2354,7 +2357,7 @@ static int pen_notifier_callback(struct notifier_block *self,
     else if (event == PEN_DETECTION_PULL)
         ts->nvt_pen_detect_flag = PEN_DETECTION_PULL;
 
-    if (!bTouchIsAwake || !ts->fw_ready_flag) {
+    if (!ts->bTouchIsAwake || !ts->fw_ready_flag) {
         NVT_LOG("touch in suspend or no firmware, so store.");
     } else {
         ret = nvt_mcu_pen_detect_set(ts->nvt_pen_detect_flag);
@@ -2459,6 +2462,8 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		NVT_ERR("charger bootmode, skip. ret=%d\n", ret);
 		return ret;
 	}
+#else
+	NVT_LOG("bootmode check not set\n");
 #endif
 
 	NVT_LOG("start\n");
@@ -2742,6 +2747,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	INIT_DELAYED_WORK(&ts->nvt_fwu_work, Boot_Update_Firmware);
 	// please make sure boot update start after display reset(RESX) sequence
 	queue_delayed_work(nvt_fwu_wq, &ts->nvt_fwu_work, msecs_to_jiffies(14000));
+	ts->fw_delay_que = 1;
 #endif
 #ifdef LCM_FAST_LIGHTUP
 	INIT_WORK(&ts_resume_work, nova_resume_work_func);
@@ -2810,7 +2816,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		goto err_create_touchscreen_class_failed;
 	}
 
-	bTouchIsAwake = 1;
+	ts->bTouchIsAwake = 1;
 	NVT_LOG("end\n");
 
 #if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
@@ -3063,7 +3069,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 	uint32_t i = 0;
 #endif
 
-	if (!bTouchIsAwake) {
+	if (!ts->bTouchIsAwake) {
 		NVT_LOG("Touch is already suspend\n");
 		return 0;
 	}
@@ -3095,7 +3101,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	NVT_LOG("start\n");
 
-	bTouchIsAwake = 0;
+	ts->bTouchIsAwake = 0;
 
 #if WAKEUP_GESTURE
 #ifdef NVT_SENSOR_EN
@@ -3153,9 +3159,16 @@ static int32_t nvt_ts_suspend(struct device *dev)
 #endif
 	input_sync(ts->input_dev);
 
+#if BOOT_UPDATE_FIRMWARE
+	if (nvt_fwu_wq && ts->fw_delay_que) {
+		cancel_delayed_work_sync(&ts->nvt_fwu_work);
+		ts->fw_delay_que = 0;
+		NVT_LOG("cancel_delayed_work_sync nvt_fwu_work\n");
+	}
+#endif
 	msleep(50);
 
-	NVT_LOG("end\n");
+	NVT_LOG("end, bTouchIsAwake=%d\n", ts->bTouchIsAwake);
 #ifdef NVT_SENSOR_EN
 	ts->screen_state = SCREEN_OFF;
 	mutex_unlock(&ts->state_mutex);
@@ -3177,7 +3190,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 #ifdef NVT_SENSOR_EN
 	mutex_lock(&ts->state_mutex);
 #endif
-	if (bTouchIsAwake) {
+	if (ts->bTouchIsAwake) {
 #ifdef NVT_SENSOR_EN
 		mutex_unlock(&ts->state_mutex);
 #endif
@@ -3223,7 +3236,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 #endif
 #endif
 
-	bTouchIsAwake = 1;
+	ts->bTouchIsAwake = 1;
 	queue_delayed_work(nvt_fwu_wq, &ts->nvt_fwu_work, msecs_to_jiffies(0));
 
 	mutex_unlock(&ts->lock);
@@ -3443,17 +3456,12 @@ static int charger_notifier_callback(struct notifier_block *nb,
 
 	if (val == POWER_SUPPLY_PROP_STATUS) {
 		ret = charger_set_state(psy, charger_detection);
-		if (!ret && bTouchIsAwake){
+		if (!ret && ts->bTouchIsAwake){
 			 queue_work(charger_detection->nvt_charger_notify_wq,
 					&charger_detection->charger_notify_work);
 		}
 	}
 	return 0;
-}
-
-uint8_t nvt_touch_is_awake(void)
-{
-	return bTouchIsAwake;
 }
 
 #ifdef CONFIG_OF
