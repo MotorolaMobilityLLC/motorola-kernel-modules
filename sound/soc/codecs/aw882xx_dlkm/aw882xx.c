@@ -676,6 +676,115 @@ static int aw882xx_monitor_set(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+static int aw882xx_ramp_info(struct snd_kcontrol *kcontrol,
+                        struct snd_ctl_elem_info *uinfo)
+{
+        int count;
+
+        uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
+        uinfo->count = 1;
+        count = 2;
+
+        uinfo->value.enumerated.items = count;
+
+        if (uinfo->value.enumerated.item >= count)
+                uinfo->value.enumerated.item = count - 1;
+
+        strlcpy(uinfo->value.enumerated.name,
+                aw882xx_switch[uinfo->value.enumerated.item],
+                strlen(aw882xx_switch[uinfo->value.enumerated.item]) + 1);
+
+        return 0;
+}
+
+static int aw882xx_ramp_get(struct snd_kcontrol *kcontrol,
+                        struct snd_ctl_elem_value *ucontrol)
+{
+        aw_snd_soc_codec_t *codec =
+                aw_componet_codec_ops.kcontrol_codec(kcontrol);
+        struct aw882xx *aw882xx =
+                aw_componet_codec_ops.codec_get_drvdata(codec);
+        uint32_t ramp_en;
+
+
+        aw882xx_dev_get_ramp_status(aw882xx->aw_pa,&ramp_en);
+
+        ucontrol->value.integer.value[0] = ramp_en;
+
+        return 0;
+}
+
+static int aw882xx_ramp_set(struct snd_kcontrol *kcontrol,
+                struct snd_ctl_elem_value *ucontrol)
+{
+        aw_snd_soc_codec_t *codec =
+                aw_componet_codec_ops.kcontrol_codec(kcontrol);
+        struct aw882xx *aw882xx =
+                aw_componet_codec_ops.codec_get_drvdata(codec);
+        uint32_t ramp_en;
+
+        ramp_en = ucontrol->value.integer.value[0];
+
+        aw882xx_dev_set_ramp_status(aw882xx->aw_pa,ramp_en);
+        return 0;
+}
+
+static int aw882xx_attenuate_info(struct snd_kcontrol *kcontrol,
+                        struct snd_ctl_elem_info *uinfo)
+{
+        int count;
+
+        uinfo->type = SNDRV_CTL_ELEM_TYPE_ENUMERATED;
+        uinfo->count = 1;
+        count = 2;
+
+        uinfo->value.enumerated.items = count;
+
+        if (uinfo->value.enumerated.item >= count)
+                uinfo->value.enumerated.item = count - 1;
+
+        strlcpy(uinfo->value.enumerated.name,
+                aw882xx_switch[uinfo->value.enumerated.item],
+                strlen(aw882xx_switch[uinfo->value.enumerated.item]) + 1);
+
+        return 0;
+}
+
+static int aw882xx_attenuate_get(struct snd_kcontrol *kcontrol,
+                        struct snd_ctl_elem_value *ucontrol)
+{
+        aw_snd_soc_codec_t *codec =
+                aw_componet_codec_ops.kcontrol_codec(kcontrol);
+        struct aw882xx *aw882xx =
+                aw_componet_codec_ops.codec_get_drvdata(codec);
+        uint32_t attenuate_en;
+
+
+        aw882xx_dev_get_attenuate_status(aw882xx->aw_pa,&attenuate_en);
+
+        ucontrol->value.integer.value[0] = attenuate_en;
+
+        return 0;
+}
+
+static int aw882xx_attenuate_set(struct snd_kcontrol *kcontrol,
+                struct snd_ctl_elem_value *ucontrol)
+{
+        aw_snd_soc_codec_t *codec =
+                aw_componet_codec_ops.kcontrol_codec(kcontrol);
+        struct aw882xx *aw882xx =
+                aw_componet_codec_ops.codec_get_drvdata(codec);
+        uint32_t attenuate_en;
+
+        attenuate_en = ucontrol->value.integer.value[0];
+
+        aw882xx_dev_set_attenuate_status(aw882xx->aw_pa,attenuate_en);
+        return 0;
+}
+
+#endif
+
 static int aw882xx_dynamic_create_controls(struct aw882xx *aw882xx)
 {
 	struct snd_kcontrol_new *aw882xx_dev_control = NULL;
@@ -723,8 +832,41 @@ static int aw882xx_dynamic_create_controls(struct aw882xx *aw882xx)
 	aw882xx_dev_control[2].get = aw882xx_monitor_get;
 	aw882xx_dev_control[2].put = aw882xx_monitor_set;
 
+
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+
+        kctl_name = devm_kzalloc(aw882xx->codec->dev, AW_NAME_BUF_MAX, GFP_KERNEL);
+        if (!kctl_name)
+                return -ENOMEM;
+
+        snprintf(kctl_name, AW_NAME_BUF_MAX, "aw_dev_%d_ramp", aw882xx->aw_pa->channel);
+
+        aw882xx_dev_control[3].name = kctl_name;
+        aw882xx_dev_control[3].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+        aw882xx_dev_control[3].info = aw882xx_ramp_info;
+        aw882xx_dev_control[3].get = aw882xx_ramp_get;
+        aw882xx_dev_control[3].put = aw882xx_ramp_set;
+
+        kctl_name = devm_kzalloc(aw882xx->codec->dev, AW_NAME_BUF_MAX, GFP_KERNEL);
+        if (!kctl_name)
+                return -ENOMEM;
+
+        snprintf(kctl_name, AW_NAME_BUF_MAX, "aw_dev_%d_attenuate", aw882xx->aw_pa->channel);
+
+        aw882xx_dev_control[4].name = kctl_name;
+        aw882xx_dev_control[4].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
+        aw882xx_dev_control[4].info = aw882xx_attenuate_info;
+        aw882xx_dev_control[4].get = aw882xx_attenuate_get;
+        aw882xx_dev_control[4].put = aw882xx_attenuate_set;
+#endif
+
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+	aw_componet_codec_ops.add_codec_controls(aw882xx->codec,
+						aw882xx_dev_control, 5);
+#else
 	aw_componet_codec_ops.add_codec_controls(aw882xx->codec,
 						aw882xx_dev_control, 3);
+#endif
 
 	return 0;
 }
