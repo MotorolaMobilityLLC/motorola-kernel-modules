@@ -9,7 +9,7 @@
 #define AW_REG_NONE		(0xFF)
 #define AW_NAME_MAX		(50)
 #define ALGO_VERSION_MAX	(80)
-
+#define AW_ATTENUATION_VOL      208
 
 enum {
 	AW_1000_US = 1000,
@@ -304,6 +304,15 @@ struct aw_device {
 	struct aw_efcheck_desc efcheck_desc;
 	struct aw_device_ops ops;
 	struct list_head list_node;
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+	uint32_t ramp_en;
+	uint32_t ramp_in_process;
+	struct workqueue_struct *ramp_queue;
+	struct delayed_work ramp_work;
+	struct delayed_work attenuate_work;
+	uint32_t attenuate_en;
+	uint32_t attenuate_in_process;
+#endif
 };
 
 
@@ -342,6 +351,10 @@ void aw882xx_dev_set_fade_time(unsigned int time, bool fade_in);
 #ifdef CONFIG_AW_RAMPING_SUPPORT
 void aw882xx_dev_set_fade_time_top(unsigned int time, bool fade_in);
 void aw882xx_dev_set_fade_time_bottom(unsigned int time, bool fade_in);
+int aw882xx_dev_set_ramp_status(struct aw_device *aw_dev, uint32_t set_ramp);
+int aw882xx_dev_get_ramp_status(struct aw_device *aw_dev, uint32_t *get_ramp);
+int aw882xx_dev_set_attenuate_status(struct aw_device *aw_dev, uint32_t set_attenuate);
+int aw882xx_dev_get_attenuate_status(struct aw_device *aw_dev, uint32_t *get_attenuate);
 #endif
 
 /*dsp kcontrol*/
