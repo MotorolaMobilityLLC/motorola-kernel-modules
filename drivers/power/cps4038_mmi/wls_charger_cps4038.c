@@ -2960,7 +2960,27 @@ static ssize_t wireless_fw_update_store(struct device *dev, struct device_attrib
 }
 static DEVICE_ATTR(wireless_fw_update, 0220, NULL, wireless_fw_update_store);
 
+static ssize_t mode_select_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	bool val;
 
+	if (kstrtobool(buf, &val))
+		return -EINVAL;
+	cps_wls_log(CPS_LOG_DEBG, "mode_select_store %d, wls_online:%d\n", val , chip->wls_online);
+
+	if (chip->wls_online) {
+		if (gpio_is_valid(chip->wls_mode_select)) {
+			gpio_set_value(chip->wls_mode_select, val);
+		} else {
+			cps_wls_log(CPS_LOG_ERR, "wls_mode_select is not valid\n");
+		}
+	} else {
+		cps_wls_log(CPS_LOG_ERR, "wls not online, can't ctl mode_sel\n");
+	}
+
+	return count;
+}
+static DEVICE_ATTR(mode_select, 0220, NULL, mode_select_store);
 
 static ssize_t show_rx_irect(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -3331,6 +3351,7 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_get_rx_irect);
     device_create_file(dev, &dev_attr_get_rx_vrect);
     device_create_file(dev, &dev_attr_get_rx_vout);
+    device_create_file(dev, &dev_attr_mode_select);
 //-----------------------TX--------------------------
     device_create_file(dev, &dev_attr_get_tx_vin);
     device_create_file(dev, &dev_attr_get_tx_iin);
