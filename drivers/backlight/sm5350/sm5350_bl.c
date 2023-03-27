@@ -275,12 +275,13 @@ static int sm5350_get_dt_data(struct device *dev, struct sm5350_data *drvdata)
 	}
 	rc = of_property_read_u32(of_node, "boost-ctl", &tmp);
 	if (rc) {
-		pr_err("%s:%d, dt not specified\n",
-						__func__, __LINE__);
-		return -EINVAL;
+		drvdata->boost_ctl = 0;
+		pr_info("%s : use default boost_ctl=0x%x\n",__func__, drvdata->boost_ctl);
 	}
-	drvdata->boost_ctl = (!rc ? tmp : 0);
-	pr_debug("%s : boost_ctl=0x%x\n",__func__, drvdata->boost_ctl);
+	else {
+		drvdata->boost_ctl = tmp;
+		pr_debug("%s : boost_ctl=0x%x\n",__func__, drvdata->boost_ctl);
+	}
 
 	rc = of_property_read_u32(of_node, "map-mode", &tmp);
 	drvdata->map_mode= (!rc ? tmp : 1); /* 1: linear, 0: expo, linear as default*/
@@ -296,21 +297,23 @@ static int sm5350_get_dt_data(struct device *dev, struct sm5350_data *drvdata)
 
 	rc = of_property_read_u32(of_node, "pwm-cfg", &tmp);
 	if (rc) {
-		pr_err("%s:%d, dt not specified\n",
-						__func__, __LINE__);
-		return -EINVAL;
+		drvdata->pwm_cfg = 0x0C;
+		pr_info("%s: use default pwm_cfg:%02x\n", __func__, drvdata->pwm_cfg);
 	}
-	drvdata->pwm_cfg = (!rc ? tmp : 0);
-	pr_debug("%s : pwm_cfg=0x%x\n",__func__, drvdata->pwm_cfg);
+	else {
+		drvdata->pwm_cfg = tmp;
+		pr_debug("%s : pwm_cfg=0x%x\n",__func__, drvdata->pwm_cfg);
+	}
 
 	rc = of_property_read_u32(of_node, "ctl-bank-en", &tmp);
 	if (rc) {
-		pr_err("%s:%d, dt not specified\n",
-						__func__, __LINE__);
-		return -EINVAL;
+		drvdata->ctl_bank_en = 0x02;
+		pr_info("%s: use default ctl-bank-en:%02x\n", __func__, drvdata->ctl_bank_en);
 	}
-	drvdata->ctl_bank_en = (!rc ? tmp : 0);
-	pr_debug("%s : ctl_bank_en=0x%x\n",__func__, drvdata->ctl_bank_en);
+	else {
+		drvdata->ctl_bank_en = tmp;
+		pr_debug("%s : ctl_bank_en=0x%x\n",__func__, drvdata->ctl_bank_en);
+	}
 
 	if (drvdata->ctl_bank_en & 0x01)
 		drvdata->bank_A = true;
@@ -321,11 +324,12 @@ static int sm5350_get_dt_data(struct device *dev, struct sm5350_data *drvdata)
 
 	rc = of_property_read_u32(of_node, "full-scale-current", &tmp);
 	if (rc) {
-		pr_err("%s:%d, dt not specified\n",
-						__func__, __LINE__);
-		return -EINVAL;
+		drvdata->full_scale_current = 0x13;
+		pr_info("%s:%d, use default full_scale_current:%02x\n",
+						__func__, __LINE__, drvdata->full_scale_current);
 	}
-	drvdata->full_scale_current = (!rc ? tmp : 0);
+	else
+		drvdata->full_scale_current = (!rc ? tmp : 0);
 
 	pr_info("bank_A = %d, bank_B = %d, pwm_cfg = 0x%x, full_scale_current = 0x%x, map_mode = 0x%x, boost_ctl = 0x%x.\n",
 		drvdata->bank_A, drvdata->bank_B, drvdata->pwm_cfg, drvdata->full_scale_current, drvdata->map_mode, drvdata->boost_ctl);
@@ -334,7 +338,7 @@ static int sm5350_get_dt_data(struct device *dev, struct sm5350_data *drvdata)
 
 	if (drvdata->brt_code_enable == false) {
 		pr_info("%s : brt_code_enable = %d, rc = %d.\n",__func__, drvdata->brt_code_enable, rc);
-		return rc;
+		return 0;
 	}
 
 	data = of_get_property(of_node, "brt-code-table", &len);
