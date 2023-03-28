@@ -75,7 +75,6 @@ struct mmi_smart_battery {
 };
 
 #define QUEUS_DELAYED_WORK_TIME  8000
-#define QUEUS_RESUME_DELAYED_WORK_TIME  1000
 #define QUEUE_START_WORK_TIME    1
 
 extern int mmi_batt_health_check(void);
