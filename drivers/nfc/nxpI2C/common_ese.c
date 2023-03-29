@@ -334,7 +334,7 @@ int perform_ese_cold_reset(unsigned long arg)
 			return -EPERM;
 		}
 	}
-	pr_debug("%s: arg = %d ret = %lu\n", __func__, arg, ret);
+	pr_debug("%s: arg = %lu ret = %d\n", __func__, arg, ret);
 	return ret;
 }
 EXPORT_SYMBOL(perform_ese_cold_reset);
