@@ -88,6 +88,9 @@ struct mmi_charger_device {
 	int charging_curr_min; /*The minimum charging current supported by this device*/
 	bool	charger_enabled; /*is this charger device enabled*/
 	bool	charger_limited; /*is the charging current of this device limited*/
+#if defined(CONFIG_MOTO_PD_HYPER) && defined(CONFIG_SUPPORT_BQ25980)
+	int 	part_no;
+#endif
 };
 
 struct mmi_charger_ops {
