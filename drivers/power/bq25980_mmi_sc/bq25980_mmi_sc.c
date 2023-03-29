@@ -825,6 +825,9 @@ static int bq25980_get_charger_property(struct power_supply *psy,
 		bq25980_is_chg_en(bq, &bq->charge_enabled);
 		val->intval = bq->charge_enabled;
 		break;
+	case POWER_SUPPLY_PROP_CP_PART_NO:
+		val->intval = bq->part_no;
+		break;
 	case POWER_SUPPLY_PROP_MANUFACTURER:
 		val->strval = BQ25980_MANUFACTURER;
 		break;
@@ -1002,6 +1005,7 @@ static enum power_supply_property bq25980_power_supply_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CHARGING_ENABLED,
 	POWER_SUPPLY_PROP_CHARGING_ENABLE_ADC,
+	POWER_SUPPLY_PROP_CP_PART_NO,
 	POWER_SUPPLY_PROP_SELECT_MUX,
 	POWER_SUPPLY_PROP_INPUT_VOLTAGE_SETTLED,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
