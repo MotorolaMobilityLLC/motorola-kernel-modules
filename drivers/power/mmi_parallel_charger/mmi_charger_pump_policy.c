@@ -359,6 +359,7 @@ void mmi_chrg_enable_all_cp(struct mmi_charger_manager *chip, int val)
 #define DISABLE_CHRG_LIMIT -1
 #define CP_CHRG_SOC_LIMIT 90
 #define PD_CONT_PWR_CNT 5
+#define SC8541_PART_NO 0x41
 
 void mmi_chrg_policy_clear(struct mmi_charger_manager *chip) {
 	struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
@@ -499,11 +500,15 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		if (ibatt_curr < 0)
 			ibatt_curr *= -1;
 	}
-#ifdef CONFIG_MOTO_PD_HYPER
-	vbatt_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbatt_volt;
-	//vbatt_volt *= 1000;
+#if defined(CONFIG_MOTO_PD_HYPER) && defined(CONFIG_SUPPORT_BQ25980)
+	if(chrg_list->chrg_dev[CP_MASTER]->part_no == SC8541_PART_NO) {
+		vbatt_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbatt_volt;
+	} else {
+		vbatt_volt = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbatt_volt;
+	}
 #else
-	vbatt_volt = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbatt_volt;
+	vbatt_volt = chrg_list->chrg_dev[CP_MASTER]->charger_data.vbatt_volt;
+	vbatt_volt *= 1000;
 #endif
 	vbus_pres = chrg_list->chrg_dev[PMIC_SW]->charger_data.vbus_pres;
 	if (!vbus_pres) {
