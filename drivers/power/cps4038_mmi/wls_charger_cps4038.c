@@ -633,6 +633,7 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready);
 static void cps_init_charge_hardware(void);
 static void cps_epp_current_select(int  *icl, int *vbus);
 static void cps_wls_tx_enable(bool en);
+static bool cps_stop_epp_timeout(long ms);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
@@ -2374,6 +2375,22 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
     
     return IRQ_HANDLED;
 }
+
+static int cps_wls_mode_select(char *str, bool mode)
+{
+	struct cps_wls_chrg_chip *chg = chip;
+	int rt = CPS_WLS_FAIL;
+
+	if (chg && gpio_is_valid(chg->wls_mode_select)) {
+		gpio_set_value(chg->wls_mode_select, mode);
+		rt = CPS_WLS_SUCCESS;
+	}
+
+	cps_wls_log(CPS_LOG_DEBG, "[%s] cps_wls_mode_select mode:%d rt:%d\n", str, mode, rt);
+
+	return rt;
+}
+
 static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 {
 	struct cps_wls_chrg_chip *chip = dev_id;
@@ -2383,10 +2400,18 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		if (chip->factory_wls_en == true)
 			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
+		if (chip->stop_epp_flag) {
+			chip->stop_epp_flag = false;
+			cps_wls_log(CPS_LOG_DEBG, "wls_det_irq_handler stop_epp_flag false.\n");
+		}
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
 		chip->rx_int_ready = false;
 		chip->bpp_icl_done = false;
+
+		if (!chip->stop_epp_flag)
+			cps_wls_mode_select("wls_det_irq_handler", true);
+
 		if (chip->rx_ldo_on) {
 			//chip->wls_online = false;
 			cps_wls_set_status(WLC_DISCONNECTED);
@@ -2438,6 +2463,9 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
             if (!chip->chip_state)
             {
                 val->intval = chip->chip_state;
+            }
+            if (chip->stop_epp_flag && !cps_stop_epp_timeout(5000)) {
+                val->intval = true;
             }
             break;
 
@@ -2969,11 +2997,7 @@ static ssize_t mode_select_store(struct device *dev, struct device_attribute *at
 	cps_wls_log(CPS_LOG_DEBG, "mode_select_store %d, wls_online:%d\n", val , chip->wls_online);
 
 	if (chip->wls_online) {
-		if (gpio_is_valid(chip->wls_mode_select)) {
-			gpio_set_value(chip->wls_mode_select, val);
-		} else {
-			cps_wls_log(CPS_LOG_ERR, "wls_mode_select is not valid\n");
-		}
+		cps_wls_mode_select("mode_select_store", val);
 	} else {
 		cps_wls_log(CPS_LOG_ERR, "wls not online, can't ctl mode_sel\n");
 	}
@@ -3416,6 +3440,11 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
     of_property_read_string(node, "wireless-fw-name", &chip->wls_fw_name);
     cps_wls_log(CPS_LOG_ERR, "[%s]  wls_charge_int %d wls_det_int %d wls_fw_name: %s\n",
              __func__, chip->wls_charge_int, chip->wls_det_int, chip->wls_fw_name);
+
+	chip->enable_stop_epp = 0x00;
+	of_property_read_u32(node, "enable_stop_epp", &chip->enable_stop_epp);
+	cps_wls_log(CPS_LOG_ERR,"[%s] enable_stop_epp %d\n", __func__, chip->enable_stop_epp);
+
     return 0;
 }
 
@@ -3793,12 +3822,53 @@ static void cps_wls_set_battery_soc(int uisoc)
 	}
 }
 
+static bool cps_stop_epp_timeout(long ms)
+{
+	ktime_t ktime_now;
+
+	if (!chip)
+		return true;
+
+	ktime_now = ktime_get_boottime();
+	if (ktime_now >= chip->stop_epp_ktime + ms *1000000) {
+		cps_wls_log(CPS_LOG_DEBG, "cps_stop_epp_timeout start:%ld\n",
+					(long int)chip->stop_epp_ktime);
+		cps_wls_log(CPS_LOG_DEBG, "cps_stop_epp_timeout now:%ld\n",
+					(long int)ktime_now);
+		chip->stop_epp_ktime = 0;
+		chip->stop_epp_flag = false;
+		cps_wls_mode_select("cps_stop_epp_timeout", true);
+		return true;
+	} else {
+		return false;
+	}
+}
+
+static void cps_wls_stop_epp(void)
+{
+	struct cps_wls_chrg_chip *chg = chip;
+	cps_wls_log(CPS_LOG_DEBG, "cps_wls_stop_epp mode_type:%d stop_epp_flag:%d\n",
+					chg->mode_type, chg->stop_epp_flag);
+	if (chg && chg->wls_online &&
+			chg->mode_type == Sys_Op_Mode_EPP &&
+			chip->enable_stop_epp) {
+		if (CPS_WLS_SUCCESS == cps_wls_mode_select("cps_wls_stop_epp", false)) {
+			chg->stop_epp_flag = true;
+			chg->stop_epp_ktime = ktime_get_boottime();
+			cps_wls_log(CPS_LOG_DEBG, "cps_wls_stop_epp start\n");
+		} else {
+			cps_wls_log(CPS_LOG_ERR, "cps_wls_stop_epp failed\n");
+		}
+	}
+}
+
 static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 {
 	int ret;
 
 	cm->wls_chg_ops.wls_current_select = cps_wls_current_select;
 	cm->wls_chg_ops.wls_set_battery_soc = cps_wls_set_battery_soc;
+	cm->wls_chg_ops.wls_stop_epp = cps_wls_stop_epp;
 
 	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
 
@@ -4079,9 +4149,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     }
 
     //Enable IC EPP mode as default
-    if(gpio_is_valid(chip->wls_mode_select)) {
-        gpio_set_value(chip->wls_mode_select, true);
-    }
+    cps_wls_mode_select("cps_wls_chrg_probe", true);
 
     cps_wls_lock_work_init(chip);
 

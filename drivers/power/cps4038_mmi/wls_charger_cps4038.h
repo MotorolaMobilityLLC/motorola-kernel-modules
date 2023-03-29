@@ -255,6 +255,9 @@ struct cps_wls_chrg_chip {
     uint32_t wlc_tx_power;
     int cable_ready_wait_count;
     bool moto_stand;
+    int enable_stop_epp;
+    bool stop_epp_flag;
+    ktime_t stop_epp_ktime;
 };
 
 typedef enum ept_reason
