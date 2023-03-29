@@ -217,6 +217,14 @@ static int bq2597x_update_charger_status(struct mmi_charger_device *chrg)
 	if (!rc)
 		chrg->charger_enabled = !!prop.intval;
 
+#if defined(CONFIG_MOTO_PD_HYPER) && defined(CONFIG_SUPPORT_BQ25980)
+	rc = power_supply_get_property(chrg->chrg_psy,
+				POWER_SUPPLY_PROP_CP_PART_NO, &prop);
+	if (!rc)
+		chrg->part_no = prop.intval;
+	chrg_dev_info(chrg, "part_no %d\n", chrg->part_no);
+#endif
+
 	chrg_dev_info(chrg, "BQ2597x chrg: %s status update: --- info---\n",chrg->name);
 	chrg_dev_info(chrg, "vbatt %d\n", chrg->charger_data.vbatt_volt);
 	chrg_dev_info(chrg, "ibatt %d\n", chrg->charger_data.ibatt_curr);
