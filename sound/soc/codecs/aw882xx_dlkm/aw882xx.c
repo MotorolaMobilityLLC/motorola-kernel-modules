@@ -790,7 +790,12 @@ static int aw882xx_dynamic_create_controls(struct aw882xx *aw882xx)
 	struct snd_kcontrol_new *aw882xx_dev_control = NULL;
 	char *kctl_name = NULL;
 
+#ifdef CONFIG_AW_RAMPING_SUPPORT
+	aw882xx_dev_control = devm_kzalloc(aw882xx->codec->dev, sizeof(struct snd_kcontrol_new) * 5, GFP_KERNEL);
+#else
 	aw882xx_dev_control = devm_kzalloc(aw882xx->codec->dev, sizeof(struct snd_kcontrol_new) * 3, GFP_KERNEL);
+#endif
+
 	if (aw882xx_dev_control == NULL) {
 		aw_dev_err(aw882xx->codec->dev, "kcontrol malloc failed!");
 		return -ENOMEM;
