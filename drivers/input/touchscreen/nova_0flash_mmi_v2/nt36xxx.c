@@ -2370,7 +2370,60 @@ static int pen_notifier_callback(struct notifier_block *self,
 }
 #endif
 
-#ifdef NVT_MTK_GET_PANEL
+#ifdef NVT_MTK_CHECK_PANEL
+struct tag_vifeolfb{
+	u64 fb_base;
+	u32 islcmfound;
+	u32 fps;
+	u32 vram;
+	char lcmname[1];
+};
+char active_panel_name[50] = {0};
+
+static void nvt_get_active_panel(void)
+{
+	struct device_node *chosen_node = of_find_node_by_path("/chosen");
+
+	if(!chosen_node)
+		chosen_node = of_find_node_by_path("/chosen@0");
+
+	if(chosen_node) {
+		struct tag_vifeolfb *videolfb_tag = NULL;
+		unsigned long size =0;
+		videolfb_tag = (struct tag_vifeolfb *)of_get_property(chosen_node, "atag,videolfb", (int *)&size);
+		if(videolfb_tag)
+		{
+			memset((void *)active_panel_name, 0, sizeof(active_panel_name));
+			strcpy((char *)active_panel_name, videolfb_tag->lcmname);
+			active_panel_name[strlen(videolfb_tag->lcmname)] = '\0';
+			NVT_INFO("active_panel_name=%s\n", active_panel_name);
+		}
+		else
+			NVT_LOG("videolfb_tag null\n");
+
+	}
+	else
+		NVT_LOG("chosen node null\n");
+
+}
+
+static int nvt_check_panel(void)
+{
+	NVT_INFO("enter");
+	nvt_get_active_panel();
+
+	if(strstr(active_panel_name, "nt366") || strstr(active_panel_name, "nt365") || strstr(active_panel_name, "nt377"))
+	{
+		NVT_LOG("matched active_panel:%s ", active_panel_name);
+		return 0;
+	}
+	else
+		NVT_LOG("not macthed active_panel:%s\n", active_panel_name);
+
+	return -1;
+}
+
+#elif NVT_MTK_GET_PANEL
 char active_panel_name[50] = {0};
 
 static int nvt_get_panel(void)
@@ -2448,7 +2501,13 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	static bool initialized_sensor;
 #endif
 
-#ifdef NVT_MTK_GET_PANEL
+#ifdef NVT_MTK_CHECK_PANEL
+	ret = nvt_check_panel();
+	if (ret) {
+		NVT_LOG("MTK check panel error\n");
+		return ret;
+	}
+#elif NVT_MTK_GET_PANEL
 	ret = nvt_get_panel();
 	if (ret) {
 		NVT_LOG("MTK get panel error\n");
