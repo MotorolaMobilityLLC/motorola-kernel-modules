@@ -3727,7 +3727,10 @@ static int cps_wls_wlc_update_light_fan(void)
 
 	if (CPS_RX_CHRG_FULL)
 	{
-		data[2] = MMI_DOCK_LIGHT_ON;
+		if (chip->light_level == 0)
+			data[2] = MMI_DOCK_LIGHT_OFF;
+		else
+			data[2] = MMI_DOCK_LIGHT_ON;
 		data[3] = MMI_DOCK_FAN_SPEED_OFF;
 	}
 	else
@@ -3814,11 +3817,11 @@ static void cps_wls_set_battery_soc(int uisoc)
 	cps_wls_log(CPS_LOG_DEBG, "cps_wls_set_battery_soc");
 	if (!CPS_RX_CHRG_FULL && chg->wls_online && soc == 100) {
 		cps_wls_log(CPS_LOG_DEBG, "cps Notify TX, battery has been charged full !");
+		CPS_RX_CHRG_FULL = true;
 		if (chip->moto_stand) {
 			cps_wls_wlc_update_light_fan();
 		} else
 			cps_wls_notify_tx_chrgfull();
-		CPS_RX_CHRG_FULL = true;
 	}
 }
 
