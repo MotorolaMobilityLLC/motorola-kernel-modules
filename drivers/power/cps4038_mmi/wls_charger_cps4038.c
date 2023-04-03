@@ -2409,7 +2409,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		chip->rx_int_ready = false;
 		chip->bpp_icl_done = false;
 
-		if (!chip->stop_epp_flag)
+		if (!chip->stop_epp_flag && !chip->mode_select_force)
 			cps_wls_mode_select("wls_det_irq_handler", true);
 
 		if (chip->rx_ldo_on) {
@@ -2992,10 +2992,15 @@ static ssize_t mode_select_store(struct device *dev, struct device_attribute *at
 {
 	bool val;
 
-	if (kstrtobool(buf, &val))
+	if (kstrtobool(buf, &val)) {
+		chip->mode_select_force = false;
+		cps_wls_log(CPS_LOG_DEBG, "mode_select_store force exit\n");
 		return -EINVAL;
-	cps_wls_log(CPS_LOG_DEBG, "mode_select_store %d, wls_online:%d\n", val , chip->wls_online);
+	}
 
+	chip->mode_select_force = true;
+	cps_wls_log(CPS_LOG_DEBG, "mode_select_store %d, wls_online:%d force:%d\n",
+			val , chip->wls_online, chip->mode_select_force);
 	if (chip->wls_online) {
 		cps_wls_mode_select("mode_select_store", val);
 	} else {

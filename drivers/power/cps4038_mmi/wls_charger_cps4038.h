@@ -258,6 +258,7 @@ struct cps_wls_chrg_chip {
     int enable_stop_epp;
     bool stop_epp_flag;
     ktime_t stop_epp_ktime;
+    bool mode_select_force;
 };
 
 typedef enum ept_reason
