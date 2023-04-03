@@ -2423,7 +2423,7 @@ static int nvt_check_panel(void)
 	return -1;
 }
 
-#elif NVT_MTK_GET_PANEL
+#elif defined(NVT_MTK_GET_PANEL)
 char active_panel_name[50] = {0};
 
 static int nvt_get_panel(void)
@@ -2507,7 +2507,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 		NVT_LOG("MTK check panel error\n");
 		return ret;
 	}
-#elif NVT_MTK_GET_PANEL
+#elif defined(NVT_MTK_GET_PANEL)
 	ret = nvt_get_panel();
 	if (ret) {
 		NVT_LOG("MTK get panel error\n");
