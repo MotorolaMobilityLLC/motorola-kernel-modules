@@ -87,7 +87,9 @@
 #endif
 #include <linux/notifier.h>
 #include <linux/fb.h>
-#else
+#endif
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
 
@@ -147,7 +149,11 @@
 #define MULTI_REPORT_RATE		DISABLE
 #define ENGINEER_FLOW			ENABLE
 #define DMESG_SEQ_FILE			ENABLE
+#if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
+#define GENERIC_KERNEL_IMAGE	ENABLE/*follow gki */
+#else
 #define GENERIC_KERNEL_IMAGE	DISABLE/*follow gki */
+#endif
 #define SUSPEND_RESUME_SUPPORT		ENABLE
 
 #define BOOT_FW_UPDATE_MODE			BOOT_FW_VER_DIFF
@@ -1090,7 +1096,7 @@ struct ilitek_ts_data {
 
 #ifdef CONFIG_FB
 	struct notifier_block notifier_fb;
-#else
+#elif defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
 #endif
 #if CHARGER_NOTIFIER_CALLBACK
