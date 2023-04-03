@@ -57,7 +57,7 @@
 #define AW_I2C_BYTE_EIGHT			(8)
 
 #define AW_SEQUENCER_LOOP_SIZE			(4)
-#define AW_RAM_GET_F0_SEQ			(8)
+#define AW_RAM_GET_F0_SEQ			(2)
 #define AW_RTP_NAME_MAX				(64)
 #define AW_PM_QOS_VALUE_VB			(400)
 #define AW_DRV2_LVL_MAX				(0x7F)
@@ -624,7 +624,7 @@ struct aw_haptic {
 	struct mutex rtp_lock;
 	struct work_struct rtp_work;
 	struct work_struct dual_work;
-	struct delayed_work ram_work;
+	struct work_struct ram_work;
 	struct work_struct vibrator_work;
 	struct aw_haptic_ram ram;
 	struct aw_haptic_dts_info info;
