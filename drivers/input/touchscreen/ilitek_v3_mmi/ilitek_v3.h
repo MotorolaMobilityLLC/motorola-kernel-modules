@@ -99,6 +99,7 @@
 #include "mt_spi.h"
 #include "sync_write.h"
 #endif
+#include <linux/mmi_wake_lock.h>
 
 #define DRIVER_VERSION			"3.0.9.0.230110"
 
