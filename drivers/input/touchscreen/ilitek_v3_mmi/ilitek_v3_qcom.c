@@ -608,7 +608,7 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 	return NOTIFY_OK;
 }
 #endif/*defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)*/
-#else
+#elif defined(CONFIG_HAS_EARLYSUSPEND)
 static void ilitek_plat_early_suspend(struct early_suspend *h)
 {
 	if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
@@ -648,7 +648,7 @@ static void ilitek_plat_sleep_init(void)
 #endif /* CONFIG_PLAT_SPRD */
 #endif /* CONFIG_DRM_MSM */
 #endif/*defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)*/
-#else
+#elif defined(CONFIG_HAS_EARLYSUSPEND)
 	ILI_INFO("Init eqarly_suspend struct\n");
 	ilits->early_suspend.suspend = ilitek_plat_early_suspend;
 	ilits->early_suspend.resume = ilitek_plat_late_resume;
