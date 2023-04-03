@@ -1382,7 +1382,7 @@ static int aw8671x_ram_get_f0(struct aw_haptic *aw_haptic)
 				 AW8671X_BIT_DETCFG3_D2S_GAIN_MASK,
 				 AW8671X_BIT_DETCFG3_D2S_GAIN_40);
 	/* f0 calibrate work mode */
-	aw8671x_play_mode(aw_haptic, AW_RAM_MODE);
+	aw8671x_play_mode(aw_haptic, AW_RAM_LOOP_MODE);
 	/* enable f0 detect */
 	aw8671x_f0_detect(aw_haptic, true);
 	/* enable auto break */
@@ -1390,13 +1390,14 @@ static int aw8671x_ram_get_f0(struct aw_haptic *aw_haptic)
 			    AW_I2C_BYTE_ONE);
 	brk_en_default = reg_val & AW8671X_BIT_PLAYCFG3_BRK_ENABLE;
 	aw8671x_auto_break_mode(aw_haptic, true);
-	aw8671x_set_bst_vol(aw_haptic, 6558);
+	//aw8671x_set_bst_vol(aw_haptic, 6558);
 	aw8671x_set_wav_seq(aw_haptic, 0x00, AW_RAM_GET_F0_SEQ);
 	aw8671x_set_wav_seq(aw_haptic, 0x01, 0x00);
-	aw8671x_set_wav_loop(aw_haptic, 0x00, 0x02);
+	aw8671x_set_wav_loop(aw_haptic, 0x00, 0x0f);
 	/* play go */
 	aw8671x_play_go(aw_haptic, true);
-	usleep_range(20000, 20500);
+	msleep(1000);//delay 1S
+	aw8671x_stop(aw_haptic);
 	aw8671x_wait_enter_standby(aw_haptic);
 	ret = aw8671x_read_f0(aw_haptic);
 	/* restore default config */

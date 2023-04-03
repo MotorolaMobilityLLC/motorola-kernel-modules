@@ -40,7 +40,7 @@
 #include "haptic_hv.h"
 #include "haptic_hv_reg.h"
 
-#define HAPTIC_HV_DRIVER_VERSION	"v1.0.0"
+#define HAPTIC_HV_DRIVER_VERSION	"v1.0.1"
 
 char *aw_ram_name = "haptic_ram.bin";
 char aw_rtp_name[][AW_RTP_NAME_MAX] = {
@@ -1361,7 +1361,6 @@ static void ram_load(const struct firmware *cont, void *context)
 
 #ifdef AW_READ_BIN_FLEXBALLY
 	static uint8_t load_cont;
-	int ram_timer_val = 1000;
 
 	load_cont++;
 #endif
@@ -1370,8 +1369,7 @@ static void ram_load(const struct firmware *cont, void *context)
 		release_firmware(cont);
 #ifdef AW_READ_BIN_FLEXBALLY
 		if (load_cont <= 20) {
-			schedule_delayed_work(&aw_haptic->ram_work,
-					      msecs_to_jiffies(ram_timer_val));
+			schedule_work(&aw_haptic->ram_work);
 			aw_info("start hrtimer:load_cont%d", load_cont);
 		}
 #endif
@@ -1413,6 +1411,10 @@ static void ram_load(const struct firmware *cont, void *context)
 	}
 	kfree(aw_fw);
 
+	mutex_lock(&aw_haptic->lock);
+	ram_vbat_comp(aw_haptic, true);
+	ram_f0_cali(aw_haptic);
+	mutex_unlock(&aw_haptic->lock);
 #ifdef AW_BOOT_OSC_CALI
 	rtp_trim_lra_cali(aw_haptic);
 #endif
@@ -1430,18 +1432,15 @@ static int ram_update(struct aw_haptic *aw_haptic)
 static void ram_work_routine(struct work_struct *work)
 {
 	struct aw_haptic *aw_haptic = container_of(work, struct aw_haptic,
-						   ram_work.work);
+						   ram_work);
 
 	ram_update(aw_haptic);
 }
 
 static void ram_work_init(struct aw_haptic *aw_haptic)
 {
-	int ram_timer_val = AW_RAM_WORK_DELAY_INTERVAL;
-
-	INIT_DELAYED_WORK(&aw_haptic->ram_work, ram_work_routine);
-	schedule_delayed_work(&aw_haptic->ram_work,
-			      msecs_to_jiffies(ram_timer_val));
+	INIT_WORK(&aw_haptic->ram_work, ram_work_routine);
+	schedule_work(&aw_haptic->ram_work);
 }
 
 /*****************************************************
@@ -3628,7 +3627,7 @@ static void haptic_init(struct aw_haptic *aw_haptic)
 	aw_haptic->func->offset_cali(aw_haptic);
 	aw_haptic->ram_vbat_comp = AW_RAM_VBAT_COMP_ENABLE;
 	/* f0 calibration */
-	f0_cali(aw_haptic);
+//	f0_cali(aw_haptic);
 	mutex_unlock(&aw_haptic->lock);
 }
 
@@ -3786,7 +3785,7 @@ static int aw_remove(struct i2c_client *i2c)
 	struct aw_haptic *aw_haptic = i2c_get_clientdata(i2c);
 
 	aw_info("enter");
-	cancel_delayed_work_sync(&aw_haptic->ram_work);
+	cancel_work_sync(&aw_haptic->ram_work);
 	cancel_work_sync(&aw_haptic->haptic_audio.work);
 	hrtimer_cancel(&aw_haptic->haptic_audio.timer);
 	cancel_work_sync(&aw_haptic->rtp_work);
