@@ -100,6 +100,10 @@ static int nvt_disp_notifier_callback(struct notifier_block *nb,
 	unsigned long value, void *v);
 #endif
 
+#ifdef NVT_MTK_CHECK_PANEL
+const char *active_panel_name;
+#endif
+
 static int32_t nvt_ts_resume(struct device *dev);
 static int32_t nvt_ts_suspend(struct device *dev);
 
@@ -2371,36 +2375,17 @@ static int pen_notifier_callback(struct notifier_block *self,
 #endif
 
 #ifdef NVT_MTK_CHECK_PANEL
-struct tag_vifeolfb{
-	u64 fb_base;
-	u32 islcmfound;
-	u32 fps;
-	u32 vram;
-	char lcmname[1];
-};
-char active_panel_name[50] = {0};
-
 static void nvt_get_active_panel(void)
 {
-	struct device_node *chosen_node = of_find_node_by_path("/chosen");
+	int rc;
+	struct device_node *chosen = of_find_node_by_name(NULL, "chosen");
 
-	if(!chosen_node)
-		chosen_node = of_find_node_by_path("/chosen@0");
-
-	if(chosen_node) {
-		struct tag_vifeolfb *videolfb_tag = NULL;
-		unsigned long size =0;
-		videolfb_tag = (struct tag_vifeolfb *)of_get_property(chosen_node, "atag,videolfb", (int *)&size);
-		if(videolfb_tag)
-		{
-			memset((void *)active_panel_name, 0, sizeof(active_panel_name));
-			strcpy((char *)active_panel_name, videolfb_tag->lcmname);
-			active_panel_name[strlen(videolfb_tag->lcmname)] = '\0';
-			NVT_INFO("active_panel_name=%s\n", active_panel_name);
-		}
+	if(chosen) {
+		rc = of_property_read_string(chosen, "mmi,panel_name", (const char **)&active_panel_name);
+		if (rc)
+			NVT_LOG("mmi,panel_name null\n");
 		else
-			NVT_LOG("videolfb_tag null\n");
-
+			NVT_INFO("active_panel_name=%s\n", active_panel_name);
 	}
 	else
 		NVT_LOG("chosen node null\n");
@@ -2412,7 +2397,9 @@ static int nvt_check_panel(void)
 	NVT_INFO("enter");
 	nvt_get_active_panel();
 
-	if(strstr(active_panel_name, "nt366") || strstr(active_panel_name, "nt365") || strstr(active_panel_name, "nt377"))
+	if (!active_panel_name)
+		NVT_LOG("active_panel NULL\n");
+	else if(strstr(active_panel_name, "nt366") || strstr(active_panel_name, "nt365") || strstr(active_panel_name, "nt377"))
 	{
 		NVT_LOG("matched active_panel:%s ", active_panel_name);
 		return 0;
