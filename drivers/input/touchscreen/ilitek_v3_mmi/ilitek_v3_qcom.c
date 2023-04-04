@@ -26,6 +26,34 @@
 #define DTS_RESET_GPIO	"touch,reset-gpio"
 #define DTS_OF_NAME	"tchip,ilitek"
 
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+static int ili_disp_notifier_callback(struct notifier_block *nb, unsigned long value, void *v);
+
+static int ili_tp_power_on_reinit(void)
+{
+	int ret = 0;
+
+	ILI_DBG("enter, TBD\n");
+
+	// do esd recovery, bootloader reset
+	ret = ili_sleep_handler(TP_DEEP_SLEEP);
+	if (ret < 0)
+		ILI_INFO("reinit deep sleep suspend ret:%d\n", ret);
+	else
+		ILI_INFO("reinit deep sleep suspend!\n");
+
+	usleep_range(5000, 5100);
+
+	ret = ili_sleep_handler(TP_RESUME);
+	if (ret < 0)
+		ILI_INFO("reinit resume ret:%d\n", ret);
+	else
+		ILI_INFO("reinit resume!\n");
+
+	return ret;
+}
+#endif
+
 void ili_tp_reset(void)
 {
 	ILI_INFO("edge delay = %d\n", ilits->rst_edge_delay);
@@ -396,6 +424,35 @@ int ili_irq_register(int type)
 	return ret;
 }
 
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+static int ili_disp_notifier_callback(struct notifier_block *nb,
+	unsigned long value, void *v)
+{
+	int *data = (int *)v;
+
+	ILI_DBG("entery\n");
+	if (v) {
+		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
+			/* before fb blank */
+			ILI_INFO("event %lu not care", value);
+		} else if (value == MTK_DISP_EVENT_BLANK) {
+			if (*data == MTK_DISP_BLANK_UNBLANK) {
+				ILI_INFO("TP resume: event = %lu, TP_RESUME\n", value);
+				if (ili_sleep_handler(TP_RESUME) < 0)
+					ILI_ERR("TP resume failed\n");
+			}
+			else if (*data == MTK_DISP_BLANK_POWERDOWN) {
+				ILI_INFO("TP suspend: event = %lu, TP_DEEP_SLEEP\n", value);
+				if (ili_sleep_handler(TP_DEEP_SLEEP) < 0)
+					ILI_ERR("TP suspend deep sleep failed\n");
+			}
+		}
+	}
+
+	return 0;
+}
+#endif
+
 #if SPRD_SYSFS_SUSPEND_RESUME
 static ssize_t ts_suspend_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -624,7 +681,28 @@ static void ilitek_plat_late_resume(struct early_suspend *h)
 
 static void ilitek_plat_sleep_init(void)
 {
-#if defined(CONFIG_FB) || defined(CONFIG_DRM_MSM)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	int ret;
+	void **mtk_ret = NULL;
+
+	ILI_INFO("init disp_notifier cb\n");
+	ilits->disp_notifier.notifier_call = ili_disp_notifier_callback;
+	ret = mtk_disp_notifier_register("ILI Touch", &ilits->disp_notifier);
+	if (ret) {
+		ILI_ERR("Failed to register disp notifier client:%d", ret);
+		goto err_register_disp_notif_failed;
+	}
+
+	ILI_DBG("disp notifier TP power_on reset config\n");
+	if (mtk_panel_tch_handle_init()) {
+		mtk_ret = mtk_panel_tch_handle_init();
+		*mtk_ret = (void *)ili_tp_power_on_reinit;
+	}
+	else
+		ILI_INFO("mtk_panel_tch_handle_init NULL\n");
+
+	return;
+#elif defined(CONFIG_FB) || defined(CONFIG_DRM_MSM)
 	ILI_INFO("Init notifier_fb struct\n");
 #if defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)
 	ilits->notifier_fb.notifier_call = drm_notifier_callback;
@@ -654,6 +732,13 @@ static void ilitek_plat_sleep_init(void)
 	ilits->early_suspend.resume = ilitek_plat_late_resume;
 	ilits->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
 	register_early_suspend(&ilits->early_suspend);
+#endif
+
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+err_register_disp_notif_failed:
+	ret = mtk_disp_notifier_unregister(&ilits->disp_notifier);
+	if (ret)
+		ILI_ERR("Error unregistering disp_notifier\n");
 #endif
 }
 #endif/*SPRD_SYSFS_SUSPEND_RESUME*/
@@ -734,6 +819,10 @@ static int ilitek_tp_pm_resume(struct device *dev)
 static int ilitek_plat_remove(void)
 {
 	ILI_INFO("remove plat dev\n");
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	if (ilits && mtk_disp_notifier_unregister(&ilits->disp_notifier))
+		ILI_ERR("Error unregistering disp_notifier\n");
+#endif
 #if SPRD_SYSFS_SUSPEND_RESUME
 	ili_sysfs_remove_device(ilits->dev);
 #endif
