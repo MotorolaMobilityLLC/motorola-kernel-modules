@@ -89,6 +89,11 @@
 #include <linux/fb.h>
 #endif
 
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#include "mtk_panel_ext.h"
+#include "mtk_disp_notify.h"
+#endif
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
@@ -1094,6 +1099,9 @@ struct ilitek_ts_data {
 	struct regulator *vcc;
 	struct sram_test_para sram_para;
 
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+	struct notifier_block disp_notifier;
+#endif
 #ifdef CONFIG_FB
 	struct notifier_block notifier_fb;
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
