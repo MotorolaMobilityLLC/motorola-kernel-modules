@@ -170,13 +170,13 @@ int fts_set_edge_mode(struct focaltech_mode_info mode)
 		reg_value_8d = 2;
 		break;
 	case NORMAL_DEFAULT_EDGE:
-		reg_value_8d = 3;
-		break;
-	case NORMAL_SMALL_EDGE:
 		reg_value_8d = 4;
 		break;
-	case NORMAL_BIG_EDGE:
+	case NORMAL_SMALL_EDGE:
 		reg_value_8d = 5;
+		break;
+	case NORMAL_BIG_EDGE:
+		reg_value_8d = 6;
 		break;
 	default:
 		FTS_ERROR("Invalid edge mode!");
