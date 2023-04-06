@@ -66,6 +66,7 @@ static bool CPS_RX_CHRG_FULL = false;
 //static uint32_t fod_i_th_o_folio = 800;
 //static uint32_t fod_ii_th_o_folio = 800;
 enum {
+	TX_MODE_EPT_ERR = -2,
 	TX_MODE_OVERHEAT = -1,
 	TX_MODE_NOT_CONNECTED = 0,
 	TX_MODE_POWER_SHARE = 2,
@@ -2236,9 +2237,7 @@ static int cps_wls_tx_irq_handler(int int_flag)
         } else {
             rc = cps_wls_get_tx_ept_rsn();
             cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_EPT RSN:0x%04X", rc);
-            if (rc & EPT_OTP) {
-                chip->ntc_thermal = true;
-            }
+            chip->tx_ept_flag = true;
             if (true == CPS_TX_MODE) {
                 cps_wls_tx_enable(false);
             } else {
@@ -3157,6 +3156,10 @@ static ssize_t rx_connected_show(struct device *dev,
 
 	if (chip->ntc_thermal) {
 		rx_connected = TX_MODE_OVERHEAT;
+		return sprintf(buf, "%d\n", rx_connected);
+	} else if (chip->tx_ept_flag) {
+		rx_connected = TX_MODE_EPT_ERR;
+		chip->tx_ept_flag = false;
 		return sprintf(buf, "%d\n", rx_connected);
 	}
 

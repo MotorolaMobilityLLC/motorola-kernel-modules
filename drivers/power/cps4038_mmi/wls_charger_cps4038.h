@@ -243,6 +243,7 @@ struct cps_wls_chrg_chip {
     uint32_t bootmode;
     struct thermal_cooling_device *tcd;
     bool ntc_thermal;
+    bool tx_ept_flag;
     bool fw_uploading;
     struct charger_device *chg1_dev;
     bool chip_state;
