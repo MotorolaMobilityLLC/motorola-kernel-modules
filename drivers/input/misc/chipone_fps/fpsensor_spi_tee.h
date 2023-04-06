@@ -27,8 +27,12 @@
 //#define  USE_PLATFORM_BUS           0
 #endif
 
+#ifdef CONFIG_CHIPONE_PMIC_CTRL_VDD
+#define FPSENSOR_PMIC_LDO           1
+#define  USE_PLATFORM_BUS           0
+#else
 #define FPSENSOR_PMIC_LDO      0
-
+#endif
 /*********************** debug log setting **********************/
 #define FPSENSOR_LOG_ENABLE         1         // 0:error log    1: debug log
 

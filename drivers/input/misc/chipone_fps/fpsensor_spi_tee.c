@@ -175,7 +175,8 @@ int fpsensor_spidev_dts_init(fpsensor_data_t *fpsensor)
         pdev = of_find_device_by_node(node);
         if(pdev) {
             #if FPSENSOR_PMIC_LDO
-            fpsensor->fp_regulator = regulator_get(&pdev->dev, "vdd");
+            fpsensor->fp_regulator = regulator_get(&pdev->dev, FPSENSOR_VDD_NAME);
+
             if (IS_ERR(fpsensor->fp_regulator)) {
                 ret = PTR_ERR(fpsensor->fp_regulator);
                 fpsensor_debug(ERR_LOG, "fpsensor Regulator get failed vdd err\n");
