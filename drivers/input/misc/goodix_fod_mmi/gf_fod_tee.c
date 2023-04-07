@@ -1336,6 +1336,10 @@ static int gf_remove(struct spi_device *spi)
 
 	fb_unregister_client(&gf_dev->notifier);
 
+	if(gf_dev->pinctrl_gpios != NULL) {
+		devm_pinctrl_put(gf_dev->pinctrl_gpios);
+		gf_dev->pinctrl_gpios = NULL;
+	}
 
 	mutex_lock(&gf_dev->release_lock);
 	if (gf_dev->input == NULL) {
