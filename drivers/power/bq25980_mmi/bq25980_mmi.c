@@ -210,7 +210,11 @@ static struct reg_default sc8541_reg_init_val[] = {
 	{BQ25980_TDIE_ALM,	0x78},//0x78:85C
 	{BQ25980_TSBUS_FLT,	0x15},
 	{BQ25980_TSBAT_FLG,	0x15},
-	{BQ25980_VAC_CONTROL,	0x6c},//0xb4:14v*2 for vacovp
+#ifdef CONFIG_MOTO_CHARGE_PUMP_OVP_CONTROL_SUPPORT
+	{BQ25980_VAC_CONTROL, VAC_CONTROL_VALUE},
+#else
+	{BQ25980_VAC_CONTROL, 0x6C},
+#endif
 	{BQ25980_CHRGR_CTRL_2,	0x00},
 	{BQ25980_CHRGR_CTRL_3,	0x94},//0x94:watchdog disable 5s,500kHz
 	{BQ25980_CHRGR_CTRL_4,	0xf1},//5m oum battery sense resister & ss_timeout is 10s

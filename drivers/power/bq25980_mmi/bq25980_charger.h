@@ -237,5 +237,8 @@
 #define SC8541_ADC_VOLT_STEP_VOUT_deciuV	12500
 #define SC8541_ADC_VOLT_STEP_VBUS_deciuV	37500
 
+#ifdef CONFIG_MOTO_CHARGE_PUMP_OVP_CONTROL_SUPPORT
+#define VAC_CONTROL_VALUE 0x45 // vac1 disable 12V; vac2 enable 12V;
+#endif
 
 #endif /* BQ25980_CHARGER_H */
