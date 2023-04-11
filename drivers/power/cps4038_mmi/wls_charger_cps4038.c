@@ -635,6 +635,7 @@ static void cps_init_charge_hardware(void);
 static void cps_epp_current_select(int  *icl, int *vbus);
 static void cps_wls_tx_enable(bool en);
 static bool cps_stop_epp_timeout(long ms);
+static void cps_wls_notify_tx_chrgfull(void);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
@@ -2188,11 +2189,16 @@ static int cps_wls_rx_irq_handler(int int_flag)
 			cps_wls_set_status(WLC_TX_TYPE_CHANGED);
 		}
 		//check_factory_mode(&factory_mode);
-		motoauth_hs_ok_handler(mode_type);
+		if (chip->bootmode == 8 || chip->bootmode == 9)
+			queue_delayed_work(chip->wls_wq, &chip->light_fan_work, msecs_to_jiffies(0));
+		else
+			motoauth_hs_ok_handler(mode_type);
 	}
 	if (int_flag & RX_INT_HS_FAIL) {
 		chip->moto_stand = false;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_FAIL");
+		if (chip->bootmode == 8 || chip->bootmode == 9)
+			queue_delayed_work(chip->wls_wq, &chip->light_fan_work, msecs_to_jiffies(0));
 	}
 	if (int_flag & RX_INT_FC_FAIL) {
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_FC_FAIL");
@@ -3727,6 +3733,33 @@ static void cps_epp_current_select(int  *icl, int *vbus)
     cps_wls_log(CPS_LOG_DEBG, "%s icl=%duA vbus=%dmV wls_power=%d", __func__, *icl, *vbus, wls_power);
 }
 
+static void cps_wls_light_fan_work(struct work_struct *work)
+{
+	int uisoc = 0;
+
+	if (!chip)
+		return;
+
+	if (!chip->rx_ldo_on)
+		return;
+
+	uisoc = cps_get_bat_soc();
+	cps_wls_log(CPS_LOG_DEBG, "%s moto:%d boot:%d uisoc:%d\n",
+			__func__, chip->moto_stand, chip->bootmode, uisoc);
+
+	if (uisoc != 100)
+		return;
+
+	if (chip->bootmode == 8 || chip->bootmode == 9) {
+		CPS_RX_CHRG_FULL = true;
+		if (chip->moto_stand) {
+			cps_wls_wlc_update_light_fan();
+		} else {
+			cps_wls_notify_tx_chrgfull();
+		}
+	}
+}
+
 static int cps_wls_wlc_update_light_fan(void)
 {
 	int status = CPS_WLS_SUCCESS;
@@ -3866,6 +3899,10 @@ static void cps_wls_stop_epp(void)
 		if (CPS_WLS_SUCCESS == cps_wls_mode_select("cps_wls_stop_epp", false)) {
 			chg->stop_epp_flag = true;
 			chg->stop_epp_ktime = ktime_get_boottime();
+			if (chip->moto_stand && (chip->bootmode == 8 || chip->bootmode == 9)) {
+				chip->light_level = 0;
+				cps_wls_log(CPS_LOG_DEBG, "cps_wls_stop_epp moto stand set light level 0\n");
+			}
 			cps_wls_log(CPS_LOG_DEBG, "cps_wls_stop_epp start\n");
 		} else {
 			cps_wls_log(CPS_LOG_ERR, "cps_wls_stop_epp failed\n");
@@ -4194,6 +4231,8 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 			  cps_firmware_update_work);
 	INIT_DELAYED_WORK(&chip->bpp_icl_work,
 			  cps_bpp_mode_icl_work);
+	INIT_DELAYED_WORK(&chip->light_fan_work,
+			  cps_wls_light_fan_work);
 
     /* Register thermal zone cooling device */
     chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
