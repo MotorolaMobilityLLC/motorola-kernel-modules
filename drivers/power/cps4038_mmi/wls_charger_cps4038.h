@@ -240,6 +240,7 @@ struct cps_wls_chrg_chip {
     struct workqueue_struct *wls_wq;
     struct delayed_work fw_update_work;
     struct delayed_work	bpp_icl_work;
+    struct delayed_work	light_fan_work;
     uint32_t bootmode;
     struct thermal_cooling_device *tcd;
     bool ntc_thermal;
