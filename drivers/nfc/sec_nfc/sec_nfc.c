@@ -1093,6 +1093,14 @@ static int sec_nfc_remove(struct i2c_client *client)
     sec_nfc_i2c_remove(&client->dev);
     return __sec_nfc_remove(&client->dev);
 }
+
+static void sec_nfc_shutdown(struct i2c_client *client)
+{
+	struct sec_nfc_info *info = dev_get_drvdata(&client->dev);
+	dev_err(info->dev , "%s\n", __func__);
+	sec_nfc_set_mode(info, SEC_NFC_MODE_FIRMWARE);
+}
+
 #else /* CONFIG_SEC_NFC_IF_I2C */
 MODULE_DEVICE_TABLE(platform, sec_nfc_id_table);
 typedef struct platform_driver sec_nfc_driver_type;
@@ -1128,6 +1136,7 @@ static struct i2c_driver sec_nfc_driver = {
     .probe = sec_nfc_probe,
     .id_table = sec_nfc_id_table,
     .remove = sec_nfc_remove,
+    .shutdown = sec_nfc_shutdown,
     .driver = {
         .name = SEC_NFC_DRIVER_NAME,
 #ifdef CONFIG_PM
