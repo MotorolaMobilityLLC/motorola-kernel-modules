@@ -253,6 +253,7 @@ struct cps_wls_chrg_chip {
     int wls_mode_select;
     int fan_speed;
     int light_level;
+    bool light_fan_reset_flag;
     int wlc_status;
     uint32_t wlc_tx_power;
     int cable_ready_wait_count;
