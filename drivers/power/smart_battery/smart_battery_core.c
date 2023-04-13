@@ -107,7 +107,7 @@ static int batt_get_prop(struct power_supply *psy,
 			val->intval = chip->fake_temp;
 			break;
 		}
-		if (chip->batt_temp == -EINVAL || (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING)) {
+		if (chip->batt_temp == -EINVAL) {
 			ret = gauge_dev_get_temperature(chip->gauge_dev, &temp);
 				if (ret >= 0)
 					chip->batt_temp = temp;
