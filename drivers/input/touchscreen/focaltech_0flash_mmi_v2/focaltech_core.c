@@ -1637,16 +1637,6 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     FTS_INFO("max touch number:%d, irq gpio:%d, reset gpio:%d",
              pdata->max_touch_number, pdata->irq_gpio, pdata->reset_gpio);
 
-#if 0
-	ret = of_property_read_string(np, "focaltech,panel-supplier",
-		&fts_data->panel_supplier);
-	if (ret < 0) {
-		fts_data->panel_supplier = NULL;
-		FTS_ERROR("Unable to read panel supplier\n");
-	} else {
-		FTS_INFO("panel supplier is %s", (char *)fts_data->panel_supplier);
-	}
-#endif
     FTS_FUNC_EXIT();
     return 0;
 }
@@ -1995,8 +1985,43 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 }
 #endif
 
-#ifdef FT_FHD_MMI_GET_PANEL
+#ifdef FTS_MTK_CHECK_PANEL
+const char *active_panel_name;
+static void fts_get_active_panel(void)
+{
+	int rc;
+	struct device_node *chosen = of_find_node_by_name(NULL, "chosen");
 
+	if(chosen) {
+		rc = of_property_read_string(chosen, "mmi,panel_name", (const char **)&active_panel_name);
+		if (rc)
+			FTS_INFO("mmi,panel_name null\n");
+		else
+			FTS_DEBUG("active_panel=%s\n", active_panel_name);
+	}
+	else
+		FTS_INFO("chosen node null\n");
+
+}
+
+static int fts_get_panel(void)
+{
+	FTS_DEBUG("enter");
+	fts_get_active_panel();
+
+	if (!active_panel_name)
+		FTS_INFO("active_panel NULL\n");
+	else if(strstr(active_panel_name, "ft87") || strstr(active_panel_name, "ft80"))
+	{
+		FTS_INFO("matched active_panel:%s ", active_panel_name);
+		return 0;
+	}
+	else
+		FTS_INFO("not macthed active_panel:%s\n", active_panel_name);
+
+	return -1;
+}
+#elif defined(FT_FHD_MMI_GET_PANEL)
 struct tag_vifeolfb{
 	u64 fb_base;
 	u32 islcmfound;
@@ -2036,7 +2061,7 @@ static void _parse_tag_videolfb(void)
 
 }
 
-static int ft_get_panel(void)
+static int fts_get_panel(void)
 {
 
 	FTS_INFO("enter");
@@ -2049,8 +2074,74 @@ static int ft_get_panel(void)
 	}
 	return -1;
 }
+#endif //FTS_MTK_CHECK_PANEL
+
+#ifdef FTS_MTK_CHECK_PANEL
+static int fts_fb_check_dt(struct device_node *np)
+{
+	int ret = 0;
+#ifdef CONFIG_FTS_MULTI_IC_EN
+	int num_of_panel_supplier;
 #endif
 
+	if (!np)
+		return ret;
+
+	FTS_FUNC_ENTER();
+
+#ifdef CONFIG_FTS_MULTI_IC_EN
+	if (!active_panel_name) {
+		FTS_ERROR("active_panel null, ret=%d\n", ret);
+		return ret;
+	}
+
+	//multi focaltech ic
+	num_of_panel_supplier = of_property_count_strings(np, "focaltech,panel-supplier");
+	FTS_DEBUG("get focaltech,panel-supplier count=%d", num_of_panel_supplier);
+	if (num_of_panel_supplier > 1) {
+		int j;
+		for (j = 0; j < num_of_panel_supplier; j++) {
+			ret = of_property_read_string_index(np, "focaltech,panel-supplier", j, &fts_data->panel_supplier);
+			if (ret < 0) {
+				FTS_ERROR("cannot parse panel-supplier: %d\n", ret);
+				break;
+			} else if (fts_data->panel_supplier && strstr(active_panel_name, fts_data->panel_supplier)) {
+				FTS_INFO("matched panel_supplier: %s", fts_data->panel_supplier);
+				return 0;
+			}
+		}
+	} else {
+		if (num_of_panel_supplier) {
+			FTS_DEBUG("multi ic warn: not enough panel-supplier info\n");
+			ret = of_property_read_string(np, "focaltech,panel-supplier", &fts_data->panel_supplier);
+			if (ret < 0) {
+				fts_data->panel_supplier = NULL;
+				FTS_ERROR("fail get panel_supplier\n");
+			}
+			else {
+				FTS_INFO("multi ic warn: get one panel_supplier:%s\n", fts_data->panel_supplier);
+				return 0;
+			}
+		}
+		else
+			FTS_ERROR("multi ic warn: No panel-supplier info !\n");
+	}
+
+	return -1;
+#else
+	//single focaltech ic
+	ret = of_property_read_string(np, "focaltech,panel-supplier", &fts_data->panel_supplier);
+	if (ret < 0) {
+		fts_data->panel_supplier = NULL;
+		FTS_INFO("panel supplier not set\n");
+	} else
+		FTS_INFO("get panel_supplier:%s\n", fts_data->panel_supplier);
+
+	//needn't return -1 since checked panel before
+	return 0;
+#endif
+}
+#else
 static int fts_fb_check_dt(struct device_node *np)
 {
 	int ret = 0;
@@ -2098,6 +2189,8 @@ static int fts_fb_check_dt(struct device_node *np)
 
 	return -1;
 }
+#endif
+
 static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 {
     int ret = 0;
@@ -2626,10 +2719,10 @@ static int fts_ts_probe(struct spi_device *spi)
     struct fts_ts_data *ts_data = NULL;
 
     FTS_INFO("Touch Screen(SPI BUS) driver prboe...");
-#ifdef FT_FHD_MMI_GET_PANEL
-	ret = ft_get_panel();
+#if defined(FTS_MTK_CHECK_PANEL) || defined(FT_FHD_MMI_GET_PANEL)
+	ret = fts_get_panel();
 	if (ret) {
-		FTS_INFO("MTK get chipone panel error");
+		FTS_INFO("MTK get focaltech panel error");
 		return ret;
 	}
 #endif
