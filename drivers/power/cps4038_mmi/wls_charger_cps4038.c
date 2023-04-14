@@ -640,6 +640,7 @@ static void cps_epp_current_select(int  *icl, int *vbus);
 static void cps_wls_tx_enable(bool en);
 static bool cps_stop_epp_timeout(long ms);
 static void cps_wls_notify_tx_chrgfull(void);
+static int cps_get_bat_info(enum power_supply_property property);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
@@ -1360,7 +1361,9 @@ static int  cps_get_sys_op_mode(Sys_Op_Mode *sys_mode_type)
 				|| *sys_mode_type == Sys_Op_Mode_EPP
 				|| *sys_mode_type == Sys_Op_Mode_MOTO_WLC) {
 			cps_wls_log(CPS_LOG_DEBG, "CPS_REG_Sys_Op_Mode = 0x%02x, 0x%02x", temp, *sys_mode_type);
-
+			if (*sys_mode_type != Sys_Op_Mode_MOTO_WLC) {
+				chip->qi_mode_type = *sys_mode_type;
+			}
 			break;
 
 		}
@@ -2316,36 +2319,182 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
     }
 }
 
-#define WLS_ICL_INCREASE_STEP 100000
+#define WLS_ICL_INCREASE_STEP_mA 100 /*100mA*/
+#define WLS_ICL_INCREASE_DELAY 200 /*200ms*/
+#define WLS_BPP_ICL_MAX_mA 1000
+#define WLS_BPP_ROD_THRESHOLD_CURRENT_MAX 800 /*mA*/
+#define WLS_BPP_ROD_THRESHOLD_CURRENT_MIN 750 /*mA*/
+#define WLS_BPP_ROD_DETECT_COUNT_MAX 3
+#define WLS_ROD_STOP_BATERY_SOC 90
+
 static void cps_bpp_mode_icl_work(struct work_struct *work)
 {
 	struct cps_wls_chrg_chip *chg = chip;
 	int wls_icl = 0;
-	int wls_icl_max = 1000000;
+	int wls_icl_max = WLS_BPP_ICL_MAX_mA;
+	int wls_current_now = 0;
+	int wls_voltage_now = 0;
+	int retry = 2;
+	int i = 0;
 
-	wls_icl = 100000;
+	wls_icl = WLS_ICL_INCREASE_STEP_mA;
 	chg->bpp_icl_done = false;
 	if (chip && chip->wls_input_curr_max > 0) {
-		wls_icl_max = chip->wls_input_curr_max * 1000;
-		if (wls_icl_max > 1000000) {
-			wls_icl_max = 1000000;
+		wls_icl_max = chip->wls_input_curr_max;
+		if (wls_icl_max > WLS_BPP_ICL_MAX_mA) {
+			wls_icl_max = WLS_BPP_ICL_MAX_mA;
 		}
 	}
-	while((wls_icl + WLS_ICL_INCREASE_STEP) <= wls_icl_max) {
-		if(!chg->wls_online)
+	for (i = 0; i < retry; i++) {
+		while (wls_icl <= wls_icl_max) {
+			if (!chg->wls_online)
+				break;
+			if (!chip->chg1_dev)
+				cps_init_charge_hardware();
+			if (chip->chg1_dev)
+				charger_dev_set_input_current(chip->chg1_dev, wls_icl * 1000);
+			msleep(WLS_ICL_INCREASE_DELAY);
+			wls_current_now = cps_wls_get_rx_iout();
+			wls_voltage_now = cps_wls_get_rx_vout();
+
+			cps_wls_log(CPS_LOG_DEBG, "%s set icl=%dmA I=%dmA V=%dmV\n",
+					__func__, wls_icl, wls_current_now, wls_voltage_now);
+			wls_icl += WLS_ICL_INCREASE_STEP_mA;
+		}
+		if (wls_current_now < WLS_BPP_ROD_THRESHOLD_CURRENT_MAX) {
+			wls_icl = wls_current_now / WLS_ICL_INCREASE_STEP_mA * WLS_ICL_INCREASE_STEP_mA;
+		} else {
 			break;
-		wls_icl += WLS_ICL_INCREASE_STEP;
-		msleep(200);
-		if (chip->chg1_dev)
-			charger_dev_set_input_current(chip->chg1_dev, wls_icl);
-		else
-		{
-			cps_init_charge_hardware();
-			charger_dev_set_input_current(chip->chg1_dev, wls_icl);
 		}
-		cps_wls_log(CPS_LOG_DEBG, "cps wireless charging icl %d ua\n", wls_icl);
 	}
+
 	chg->bpp_icl_done = true;
+
+	if (chip->enable_rod)
+		queue_delayed_work(chip->wls_wq,
+			&chip->offset_detect_work,
+			msecs_to_jiffies(wls_current_now >= WLS_BPP_ROD_THRESHOLD_CURRENT_MAX ? 5000 : 0));
+}
+
+static void cps_wls_notify_thermal_input_current_limit(int thermal_icl)
+{
+	if (!chip)
+		return;
+	if (thermal_icl != -1) {
+		chip->thermal_icl = thermal_icl / 1000;
+		cps_wls_log(CPS_LOG_DEBG, "%s thermal_icl %d ma\n", __func__, chip->thermal_icl);
+	} else {
+		chip->thermal_icl = -1;
+	}
+}
+
+static bool cps_wls_check_iout(int target_current, int current_now)
+{
+	bool rt = false;
+	int batt_soc = 0;
+	bool skip_rod = false;
+
+	if (!chip)
+		return rt;
+
+	if (chip->thermal_icl != -1 &&
+		chip->thermal_icl < target_current) {
+		skip_rod = true;
+	} else if (chip->rod_stop_battery_soc > 0 &&
+			chip->rod_stop_battery_soc < 100) {
+		batt_soc = cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY);
+		skip_rod = (batt_soc > chip->rod_stop_battery_soc) ? true : false;
+	} else {
+		skip_rod = false;
+	}
+
+	cps_wls_log(CPS_LOG_DEBG, "[%s] skip:%d now:%dmA target:%dmA\n",
+				__func__, skip_rod, current_now, target_current);
+
+	return !skip_rod && (current_now < target_current);
+}
+
+#define OFFSET_DETECT_TIME_DELAY_DEFAULT_MS 1000
+static void cps_offset_detect_work(struct work_struct *work)
+{
+	Sys_Op_Mode wls_mode = Sys_Op_Mode_INVALID;
+	static int work_timedelay = 1000;
+	static int wls_current = 0;
+	int current_now = 0;
+
+	if (!chip)
+		return;
+
+	if (!chip->rx_ldo_on) {
+		chip->rx_offset_detect_count = 0;
+		chip->rx_offset = false;
+		return;
+	}
+
+	if (chip->mode_type != Sys_Op_Mode_MOTO_WLC) {
+		wls_mode = chip->mode_type;
+	} else {
+		wls_mode = chip->qi_mode_type;
+	}
+
+	current_now = cps_wls_get_rx_iout();
+	if (wls_mode == Sys_Op_Mode_BPP) {
+		if (!chip->rx_offset) {
+			if (cps_wls_check_iout(WLS_BPP_ROD_THRESHOLD_CURRENT_MIN, current_now)) {
+				chip->rx_offset_detect_count ++;
+			} else {
+				chip->rx_offset_detect_count = 0;
+			}
+			work_timedelay = OFFSET_DETECT_TIME_DELAY_DEFAULT_MS;
+			if (chip->rx_offset_detect_count >= WLS_BPP_ROD_DETECT_COUNT_MAX) {
+				chip->rx_offset = true;
+				chip->rx_offset_detect_count = 0;
+				cps_wls_log(CPS_LOG_DEBG, "[%s] offset true\n", __func__);
+				if (chip->wlc_status != WLC_DISCONNECTED)
+					cps_wls_set_status(WLC_ERR_LOWER_EFFICIENCY);
+				if (chip->chg1_dev) {
+					wls_current = current_now / WLS_ICL_INCREASE_STEP_mA * WLS_ICL_INCREASE_STEP_mA;
+					if (wls_current < WLS_ICL_INCREASE_STEP_mA)
+						wls_current = WLS_ICL_INCREASE_STEP_mA;
+					charger_dev_set_input_current(chip->chg1_dev, wls_current * 1000);
+					work_timedelay = WLS_ICL_INCREASE_DELAY;
+				}
+			}
+		} else {
+			work_timedelay = OFFSET_DETECT_TIME_DELAY_DEFAULT_MS / 2;
+			if (wls_current < WLS_BPP_ICL_MAX_mA) {
+				if (chip->chg1_dev) {
+					cps_wls_log(CPS_LOG_DEBG, "[%s] wls_current = %dmA current_now=%dmA\n",
+						 __func__, wls_current, current_now);
+					wls_current = wls_current + WLS_ICL_INCREASE_STEP_mA;
+					charger_dev_set_input_current(chip->chg1_dev, wls_current * 1000);
+					work_timedelay = WLS_ICL_INCREASE_DELAY;
+				}
+			} else {
+				if (!cps_wls_check_iout(WLS_BPP_ROD_THRESHOLD_CURRENT_MAX, current_now)) {
+					chip->rx_offset_detect_count ++;
+				} else {
+					chip->rx_offset_detect_count = 0;
+				}
+				if (chip->rx_offset_detect_count >= WLS_BPP_ROD_DETECT_COUNT_MAX) {
+					chip->rx_offset = false;
+					cps_wls_log(CPS_LOG_DEBG, "[%s] offset exit\n", __func__);
+					chip->rx_offset_detect_count = 0;
+					if (chip->wlc_status != WLC_DISCONNECTED)
+						cps_wls_set_status(WLC_CHGING);
+				}
+			}
+		}
+	} else if(wls_mode == Sys_Op_Mode_EPP) {
+		/*For EPP*/
+	}
+
+	if (chip->enable_rod) {
+		queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(work_timedelay));
+	} else if (chip->rx_offset) {
+		chip->rx_offset_detect_count = 0;
+		chip->rx_offset = false;
+	}
 }
 
 static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
@@ -2431,6 +2580,8 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			cps_wls_set_status(WLC_DISCONNECTED);
 			cps_rx_online_check(chip);
 			chip->rx_ldo_on = false;
+			chip->rx_offset_detect_count = 0;
+			chip->rx_offset = false;
 			if (chip->factory_wls_en == true) {
 				chip->factory_wls_en = false;
 				mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
@@ -2604,21 +2755,23 @@ static void cps_wls_fw_set_boost(bool val)
 	}
 }
 
-static int cps_get_bat_soc(void)
+static int cps_get_bat_info(enum power_supply_property property)
 {
 	union power_supply_propval prop;
-	struct power_supply *battery_psy = NULL;
-	int ret = 0;
+	int ret = CPS_WLS_FAIL;
 
-	battery_psy = power_supply_get_by_name("battery");
-	if (battery_psy == NULL || IS_ERR(battery_psy)) {
-		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get battery_psy\n", __func__);
-		return CPS_WLS_FAIL;
+	if (!chip)
+		return ret;
+
+	if (!chip->batt_psy)
+		chip->batt_psy = power_supply_get_by_name("battery");
+
+	if (chip->batt_psy == NULL || IS_ERR(chip->batt_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chip->batt_psy\n", __func__);
 	} else {
-		power_supply_get_property(battery_psy,
-			POWER_SUPPLY_PROP_CAPACITY, &prop);
-		cps_wls_log(CPS_LOG_DEBG,"%s battery soc:%d\n",
-				__func__, prop.intval);
+		power_supply_get_property(chip->batt_psy, property, &prop);
+		cps_wls_log(CPS_LOG_DEBG,"%s battery prop:%d value:%d\n",
+				__func__, property, prop.intval);
 		ret = prop.intval;
 	}
 	return ret;
@@ -2689,7 +2842,7 @@ static int wireless_fw_update(bool force)
 	int cfg_buf_size;
 	int addr,ret = CPS_WLS_SUCCESS;
 
-	if (cps_get_bat_soc() < 10 && !force) {
+	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
 			"Wireless fw update failed. Battery SOC should be at least 10%%\n");
 		return CPS_WLS_FAIL;
@@ -3338,10 +3491,8 @@ static DEVICE_ATTR(wlc_tx_type, 0444, show_wlc_tx_type, NULL);
 
 static ssize_t show_wlc_st_changed(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    int moto_wlc_status = 0;
-    if (chip && chip->moto_stand) {
-		moto_wlc_status = motoauth.WLC_STATUS;
-	} else {
+    int moto_wlc_status = WLC_DISCONNECTED;
+    if (chip) {
         moto_wlc_status = chip->wlc_status;
     }
 	return sprintf(buf, "%d\n", moto_wlc_status);
@@ -3383,6 +3534,41 @@ static ssize_t show_wlc_tx_sn(struct device *dev, struct device_attribute *attr,
 
 static DEVICE_ATTR(wlc_tx_sn, 0444, show_wlc_tx_sn, NULL);
 
+static ssize_t show_offset_detect_enable(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int enable = -1;
+
+	if (chip) {
+		enable = chip->enable_rod;
+	}
+
+	return sprintf(buf, "%d\n", enable);
+}
+
+static ssize_t store_offset_detect_enable(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int tmp = 0;
+
+	tmp = simple_strtoul(buf, NULL, 0);
+	if (chip && chip->enable_rx_offset_detect && chip->enable_rod != tmp) {
+		if (chip->rx_ldo_on) {
+			if (chip->rx_offset &&
+				chip->wlc_status == WLC_ERR_LOWER_EFFICIENCY &&
+				!tmp) {
+				cps_wls_set_status(WLC_CHGING);
+			} else if (tmp) {
+				queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(1000));
+			}
+		}
+		chip->rx_offset = false;
+		chip->rx_offset_detect_count = 0;
+		chip->enable_rod = tmp;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(offset_detect_enable, 0664, show_offset_detect_enable, store_offset_detect_enable);
+
 static void cps_wls_create_device_node(struct device *dev)
 {
     device_create_file(dev, &dev_attr_reg_addr);
@@ -3420,6 +3606,8 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_wlc_tx_capability);
     device_create_file(dev, &dev_attr_wlc_tx_id);
     device_create_file(dev, &dev_attr_wlc_tx_sn);
+//-----------------------MOTO RX Offset Detect---------
+    device_create_file(dev, &dev_attr_offset_detect_enable);
 }
 
 static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
@@ -3467,6 +3655,14 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 	chip->enable_stop_epp = 0x00;
 	of_property_read_u32(node, "enable_stop_epp", &chip->enable_stop_epp);
 	cps_wls_log(CPS_LOG_ERR,"[%s] enable_stop_epp %d\n", __func__, chip->enable_stop_epp);
+
+	chip->enable_rx_offset_detect = 0x00;
+	of_property_read_u32(node, "enable_rx_offset_detect", &chip->enable_rx_offset_detect);
+	cps_wls_log(CPS_LOG_DEBG,"[%s] enable_rx_offset_detect %d\n", __func__, chip->enable_rx_offset_detect);
+
+	chip->rod_stop_battery_soc = WLS_ROD_STOP_BATERY_SOC;
+	of_property_read_u32(node, "rod_stop_battery_soc", &chip->rod_stop_battery_soc);
+	cps_wls_log(CPS_LOG_DEBG,"[%s] rod_stop_battery_soc %d\n", __func__, chip->rod_stop_battery_soc);
 
     return 0;
 }
@@ -3756,7 +3952,7 @@ static void cps_wls_light_fan_work(struct work_struct *work)
 	if (!chip->rx_ldo_on)
 		return;
 
-	uisoc = cps_get_bat_soc();
+	uisoc = cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY);
 	cps_wls_log(CPS_LOG_DEBG, "%s moto:%d boot:%d uisoc:%d\n",
 			__func__, chip->moto_stand, chip->bootmode, uisoc);
 
@@ -3932,6 +4128,7 @@ static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 	cm->wls_chg_ops.wls_current_select = cps_wls_current_select;
 	cm->wls_chg_ops.wls_set_battery_soc = cps_wls_set_battery_soc;
 	cm->wls_chg_ops.wls_stop_epp = cps_wls_stop_epp;
+	cm->wls_chg_ops.wls_notify_thermal_icl = cps_wls_notify_thermal_input_current_limit;
 
 	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
 
@@ -4249,6 +4446,11 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&chip->light_fan_work,
 			  cps_wls_light_fan_work);
 
+	if (chip->enable_rx_offset_detect) {
+		chip->enable_rod = true;
+		INIT_DELAYED_WORK(&chip->offset_detect_work, cps_offset_detect_work);
+	}
+
     /* Register thermal zone cooling device */
     chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
 		"cps_wls_charger_l", chip, &cps_tcd_ops);
@@ -4261,6 +4463,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     motoauth.wls_get_ldo_on = cps_wls_get_ldo_on;
     motoauth.wls_send_ask_packet = cps_wls_send_ask_packet;
     motoauth.wls_sysfs_notify = cps_wls_sysfs_notify;
+    motoauth.wls_set_status = cps_wls_set_status;
     if (0 == moto_wls_auth_init(&motoauth)){
         cps_wls_log(CPS_LOG_DEBG, "[%s] moto_wls_auth_init successful!\n", __func__);
     } else {
