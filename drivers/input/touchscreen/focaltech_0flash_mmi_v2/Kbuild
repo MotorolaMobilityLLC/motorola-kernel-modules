@@ -39,6 +39,14 @@ ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_DEBUG_EN)),)
 	EXTRA_CFLAGS += -DFOCALTECH_DEBUG_EN
 endif
 
+ifneq ($(filter m y,$(CONFIG_FTS_MTK_CHECK_PANEL)),)
+	EXTRA_CFLAGS += -DFTS_MTK_CHECK_PANEL
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_MULTI_IC_EN)),)
+	EXTRA_CFLAGS += -DCONFIG_FTS_MULTI_IC_EN
+endif
+
 ifneq ($(filter m y,$(CONFIG_FT_FHD_MMI_GET_PANEL)),)
 	EXTRA_CFLAGS += -DFT_FHD_MMI_GET_PANEL
 endif
