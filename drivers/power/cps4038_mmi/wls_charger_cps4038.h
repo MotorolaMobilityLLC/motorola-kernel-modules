@@ -210,6 +210,11 @@ struct cps_wls_chrg_chip {
     int rx_neg_power;
     int rx_neg_protocol;
     int command_flag;
+    bool rx_offset;
+    int enable_rx_offset_detect;
+    bool enable_rod;
+    int rx_offset_detect_count;
+    int rod_stop_battery_soc;
 
     unsigned long flags;
     int rx_ldo_on;
@@ -229,10 +234,12 @@ struct cps_wls_chrg_chip {
     struct moto_chg_tcmd_client wls_tcmd_client;
     struct moto_wls_chg_ops  wls_chg_ops;
     Sys_Op_Mode mode_type;
+    Sys_Op_Mode qi_mode_type;
     uint32_t MaxV;
     uint32_t MaxI;
     uint32_t chip_id;
     bool factory_wls_en;
+    int thermal_icl;
 
     wait_queue_head_t  wait_que;
     bool wls_rx_check_thread_timeout;
@@ -241,6 +248,7 @@ struct cps_wls_chrg_chip {
     struct delayed_work fw_update_work;
     struct delayed_work	bpp_icl_work;
     struct delayed_work	light_fan_work;
+    struct delayed_work	offset_detect_work;
     uint32_t bootmode;
     struct thermal_cooling_device *tcd;
     bool ntc_thermal;
