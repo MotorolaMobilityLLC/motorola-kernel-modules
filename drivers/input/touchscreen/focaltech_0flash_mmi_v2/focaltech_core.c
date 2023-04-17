@@ -2078,6 +2078,9 @@ static int fts_get_panel(void)
 	}
 	return -1;
 }
+#else
+//TBD: pass build only.
+static char mtkfb_lcm_name[25] = {0};
 #endif //FTS_MTK_CHECK_PANEL
 
 #ifdef FTS_MTK_CHECK_PANEL
@@ -2160,6 +2163,7 @@ static int fts_fb_check_dt(struct device_node *np)
 		return ret;
 	}
 
+#ifdef CONFIG_FTS_MULTI_IC_EN
 	num_of_panel_supplier = of_property_count_strings(np, "focaltech,panel-supplier");
 	FTS_INFO("get focaltech,panel-supplier count=%d", num_of_panel_supplier);
 	if (num_of_panel_supplier > 1) {
@@ -2174,7 +2178,9 @@ static int fts_fb_check_dt(struct device_node *np)
 				return 0;
 			}
 		}
-	} else {
+	} else
+#else
+	{
 		ret = of_property_read_string(np, "focaltech,panel-supplier",
 			&fts_data->panel_supplier);
 		if (ret < 0) {
@@ -2190,6 +2196,7 @@ static int fts_fb_check_dt(struct device_node *np)
 				FTS_INFO("panel_supplier NULL!\n");
 		}
 	}
+#endif
 
 	return -1;
 }

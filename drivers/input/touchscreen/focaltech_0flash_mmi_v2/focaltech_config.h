@@ -187,12 +187,11 @@
 #define FTS_CHIP_NAME   "ft8726"
 #else
 #define FTS_CHIP_TYPE   _FT8726
-#ifdef CONFIG_GTP_LAST_TIME
-#define FTS_CHIP_NAME   "primary"
-#define FTS_CHIP_NAME_IC   "ft8726"
-#else
 #define FTS_CHIP_NAME   "ft8726"
-#endif//endif CONFIG_GTP_LAST_TIME
+#endif
+
+#if defined(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL) || defined(CONFIG_GTP_LAST_TIME)
+#define FTS_CHIP_NAME_PRIMARY   "primary"
 #endif
 
 /******************* Enables *********************/
