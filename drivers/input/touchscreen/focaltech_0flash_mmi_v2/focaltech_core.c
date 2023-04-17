@@ -38,11 +38,14 @@
 #include <linux/of_gpio.h>
 #include <linux/of_irq.h>
 #include "mtk_panel_ext.h"
-#include "mtk_disp_notify.h"
-#include <drm/drm_panel.h>
 
-#if 0//defined(CONFIG_DRM)
-#if 0//defined(CONFIG_DRM_PANEL)
+#include "focaltech_core.h"
+
+#ifdef CFG_MTK_PANEL_NOTIFIER
+#include "mtk_disp_notify.h"
+#else
+#if defined(CONFIG_DRM)
+#if defined(CONFIG_DRM_PANEL)
 #include <drm/drm_panel.h>
 #else
 #include <linux/msm_drm_notify.h>
@@ -53,8 +56,7 @@
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 #include <linux/earlysuspend.h>
 #define FTS_SUSPEND_LEVEL 1     /* Early-suspend level */
-#endif
-#include "focaltech_core.h"
+#endif //CONFIG_DRM
 
 #ifdef FOCALTECH_CONFIG_PANEL_NOTIFICATIONS
 #define register_panel_notifier panel_register_notifier
@@ -64,6 +66,7 @@ enum touch_state {
 	TOUCH_LOW_POWER_STATE,
 };
 #endif
+#endif //CFG_MTK_PANEL_NOTIFIER
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -1687,7 +1690,7 @@ static int disp_notifier_callback(struct notifier_block *nb,
 	return 0;
 }
 
-static int cts_deinit_pm_disp_notifier(struct fts_ts_data *ts_data)
+static int fts_deinit_pm_disp_notifier(struct fts_ts_data *ts_data)
 {
 	int ret = 0;
 	FTS_INFO("Deinit DISP notifier");
@@ -1700,9 +1703,9 @@ static int cts_deinit_pm_disp_notifier(struct fts_ts_data *ts_data)
 
 }
 
-#endif /* CFG_MTK_PANEL_NOTIFIER */
-#if 0//defined(CONFIG_DRM)
-#if 0//defined(CONFIG_DRM_PANEL)
+#else // CFG_MTK_PANEL_NOTIFIER
+#if defined(CONFIG_DRM)
+#if defined(CONFIG_DRM_PANEL)
 static struct drm_panel *active_panel;
 
 static int drm_check_dt(struct device_node *np)
@@ -1932,6 +1935,7 @@ static void fts_ts_late_resume(struct early_suspend *handler)
     queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
 }
 #endif
+#endif //CFG_MTK_PANEL_NOTIFIER
 
 #if FTS_USB_DETECT_EN
 static int fts_charger_notifier_callback(struct notifier_block *nb,
@@ -2214,8 +2218,8 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         if (ret)
             FTS_ERROR("device-tree parse fail");
 
-#if 0//defined(CONFIG_DRM)
-#if 0//defined(CONFIG_DRM_PANEL)
+#if !defined(CFG_MTK_PANEL_NOTIFIER)
+#if defined(CONFIG_DRM) && defined(CONFIG_DRM_PANEL)
         ret = drm_check_dt(ts_data->dev->of_node);
         if (ret) {
             FTS_ERROR("parse drm-panel fail");
@@ -2353,11 +2357,11 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 		FTS_ERROR("Failed to register disp notifier client:%d", ret);
 	return ret;
 	}
-#endif /* CFG_MTK_PANEL_NOTIFIER */
+#else //CFG_MTK_PANEL_NOTIFIER
 
-#if 0//defined(CONFIG_DRM)
+#if defined(CONFIG_DRM)
     ts_data->fb_notif.notifier_call = drm_notifier_callback;
-#if 0//defined(CONFIG_DRM_PANEL)
+#if defined(CONFIG_DRM_PANEL)
     if (active_panel) {
         ret = drm_panel_notifier_register(active_panel, &ts_data->fb_notif);
         if (ret)
@@ -2375,7 +2379,7 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         FTS_ERROR("register panel_notifier failed. ret=%d\n", ret);
     }
 #endif
-#endif
+#endif //CONFIG_DRM_PANEL
 #elif defined(CONFIG_FB)
     ts_data->fb_notif.notifier_call = fb_notifier_callback;
     ret = fb_register_client(&ts_data->fb_notif);
@@ -2387,7 +2391,8 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     ts_data->early_suspend.suspend = fts_ts_early_suspend;
     ts_data->early_suspend.resume = fts_ts_late_resume;
     register_early_suspend(&ts_data->early_suspend);
-#endif
+#endif //CONFIG_DRM
+#endif //CFG_MTK_PANEL_NOTIFIER
 
 #if FTS_USB_DETECT_EN
     if(ts_data->psy_name != NULL && ts_data->psp != NULL) {
@@ -2479,20 +2484,24 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     if (ts_data->ts_workqueue)
         destroy_workqueue(ts_data->ts_workqueue);
 
-#if 0//defined(CONFIG_DRM)
-#if 0//defined(CONFIG_DRM_PANEL)
+#ifdef CFG_MTK_PANEL_NOTIFIER
+	fts_deinit_pm_disp_notifier(ts_data);
+#else
+#if defined(CONFIG_DRM)
+#if defined(CONFIG_DRM_PANEL)
     if (active_panel)
         drm_panel_notifier_unregister(active_panel, &ts_data->fb_notif);
 #else
     if (msm_drm_unregister_client(&ts_data->fb_notif))
         FTS_ERROR("[DRM]Error occurred while unregistering fb_notifier.\n");
-#endif
+#endif //CONFIG_DRM_PANEL
 #elif defined(CONFIG_FB)
     if (fb_unregister_client(&ts_data->fb_notif))
         FTS_ERROR("[FB]Error occurred while unregistering fb_notifier.");
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
     unregister_early_suspend(&ts_data->early_suspend);
-#endif
+#endif //CONFIG_DRM
+#endif //CFG_MTK_PANEL_NOTIFIER
 
     if (gpio_is_valid(ts_data->pdata->reset_gpio))
         gpio_free(ts_data->pdata->reset_gpio);
@@ -2503,10 +2512,6 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 #if FTS_POWER_SOURCE_CUST_EN
     fts_power_source_exit(ts_data);
 #endif
-
-#ifdef CFG_MTK_PANEL_NOTIFIER
-		cts_deinit_pm_disp_notifier(ts_data);
-#endif /* CFG_MTK_PANEL_NOTIFIER */
 
     kfree_safe(ts_data->touch_buf);
     kfree_safe(ts_data->pdata);
