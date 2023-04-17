@@ -876,7 +876,7 @@ static ssize_t fts_ic_ver_show(struct device *dev,
     fts_esdcheck_proc_busy(1);
 #endif
 
-    count += snprintf(buf + count, PAGE_SIZE, "Product ID:%s\n", FTS_CHIP_NAME_IC);
+    count += snprintf(buf + count, PAGE_SIZE, "Product ID:%s\n", FTS_CHIP_NAME);
     fts_read_reg(FTS_REG_FW_VER, &val);
     count += snprintf(buf + count, PAGE_SIZE, "Build ID: 0000-%02x\n", val);
     fts_read_reg(FTS_REG_VENDOR_ID, &val);
@@ -1827,7 +1827,11 @@ static int fts_sysfs_class(void *_data, bool create)
 	dev_t devno;
 
 	if (create) {
+#ifdef FTS_CHIP_NAME_PRIMARY
+		error = alloc_chrdev_region(&devno, 0, 1, FTS_CHIP_NAME_PRIMARY);
+#else
 		error = alloc_chrdev_region(&devno, 0, 1, FTS_CHIP_NAME);
+#endif
 		if (error) {
 			FTS_ERROR("cant`t allocate chrdev");
 			return error;
@@ -1840,9 +1844,11 @@ static int fts_sysfs_class(void *_data, bool create)
 			return error;
 		}
 
-		ts_class_dev = device_create(touchscreen_class, NULL,
-				devno,
-				data, "%s", FTS_CHIP_NAME);
+#ifdef FTS_CHIP_NAME_PRIMARY
+		ts_class_dev = device_create(touchscreen_class, NULL, devno, data, "%s", FTS_CHIP_NAME_PRIMARY);
+#else
+		ts_class_dev = device_create(touchscreen_class, NULL, devno, data, "%s", FTS_CHIP_NAME);
+#endif
 		if (IS_ERR(ts_class_dev)) {
 			error = PTR_ERR(ts_class_dev);
 			ts_class_dev = NULL;
