@@ -88,13 +88,17 @@
 #define ERROR_CODE_OPENFILE		0xe6
 #define APP_SIZE					49152
 
-#define NFG1000_RESET_WAIT_TIME 100 //(100ms)
-#define NFG1000_write_WAIT_TIME 25
-#define NFG1000_com_WAIT_TIME 5
-#define NFG1000_erase_WAIT_TIME 1000
-#define NFG1000_boot_WAIT_TIME 2000
-#define NFG1000_seal_WAIT_TIME 1200
-#define NFG1000_SUCESS_CODE  0x79
+#define NFG1000_RESET_WAIT_TIME 50 //(50ms)
+#define NFG1000_erase_WAIT_TIME 170
+#define NFG1000_erase_DF_TIME	2
+#define NFG1000_write_WAIT_TIME	3
+#define NFG1000_crc32_WAIT_TIME	13
+#define NFG1000_boot_WAIT_TIME	2000
+#define NFG1000_seal_WAIT_TIME	1200
+#define NFG1000_hold_WAIT_TIME	800
+#define NFG1000_com_WAIT_TIME	5
+
+#define NFG1000_SUCESS_CODE  	0x79
 
 #define NAKE_DWORD_8BITS(HH,HL,LH,LL) ((u32)(HH)<<24)|((u32)(HL)<<16)|((u32)(LH)<<8)|((u32)(LL))
 enum mmi_fg_reg_idx {
@@ -584,7 +588,7 @@ static int nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(struct mmi_fg_chip *dev,
 		return -2;
 	}
 	memcpy(poutbuf,&block_data[2],len);
-	msleep(NFG1000_com_WAIT_TIME);
+	mdelay(NFG1000_com_WAIT_TIME);
 
 	return 0;
 }
@@ -614,7 +618,7 @@ static int nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(struct mmi_fg_chip *dev
 		printk("nfg1000_i2c_BLOCK_command_write_with_CHECKSUM:write reg:%d failed!!\n",reg);
 		return -1;
 	}
-	msleep(NFG1000_com_WAIT_TIME);
+	mdelay(NFG1000_com_WAIT_TIME);
 
 	return 0;
 }
@@ -637,7 +641,7 @@ static int nfg1000_ota_unseal(struct mmi_fg_chip *di)
 			mmi_err("nfg1000_ota_program_unseal_state_check: step1 unseal write error!%x\n", ret);
 			return -ERROR_CODE_I2C_WRITE;
 		}
-		msleep(NFG1000_write_WAIT_TIME);
+		mdelay(NFG1000_write_WAIT_TIME);
 
 		u8pwd[0] = ((NFG1000_UNSEAL_KEY>>8))&0xff;
 		u8pwd[1] = ((NFG1000_UNSEAL_KEY>>0))&0xff;
@@ -646,7 +650,7 @@ static int nfg1000_ota_unseal(struct mmi_fg_chip *di)
 			mmi_err("nfg1000_ota_program_unseal_state_check:step2 unseal write error!%x\n", ret);
 			return -ERROR_CODE_I2C_WRITE;
 		}
-		msleep(NFG1000_RESET_WAIT_TIME);
+		mdelay(NFG1000_RESET_WAIT_TIME);
 
 		mmi_info("unseal_key 0x05060708");
 		u8pwd[0] = ((NFG1000_FULL_KEY>>24))&0xff;
@@ -656,7 +660,7 @@ static int nfg1000_ota_unseal(struct mmi_fg_chip *di)
 			mmi_err("nfg1000_ota_program_unseal_state_check:step3 unseal write error!%x\n", ret);
 			return -ERROR_CODE_I2C_WRITE;
 		}
-		msleep(NFG1000_write_WAIT_TIME);
+		mdelay(NFG1000_write_WAIT_TIME);
 
 		u8pwd[0] = ((NFG1000_FULL_KEY>>8))&0xff;
 		u8pwd[1] = ((NFG1000_FULL_KEY>>0))&0xff;
@@ -665,12 +669,12 @@ static int nfg1000_ota_unseal(struct mmi_fg_chip *di)
 			mmi_err("nfg1000_ota_program_unseal_state_check:step4 unseal write error!%x\n", ret);
 			return -ERROR_CODE_I2C_WRITE;
 		}
-		msleep(NFG1000_write_WAIT_TIME);
+		mdelay(NFG1000_write_WAIT_TIME);
 
 		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, seal_state_cmd, seal_state_read, 4);
 		if(ret) {
 			mmi_err("nfg1000_ota_program_unseal_state_check:step5 unseal state read error!%x\n", ret);
-			msleep(NFG1000_boot_WAIT_TIME);
+			mdelay(NFG1000_boot_WAIT_TIME);
 			return -ERROR_CODE_I2C_WRITE;
 		}
 		if((seal_state_read[1] & 0x03) == 0x01) {
@@ -867,7 +871,7 @@ static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
 	mmi_info("reset nfg1000");
 	ret = fg_write_block(di, di->regs[BQ_FG_REG_ALT_MAC], u8Data, 2);
 
-	msleep(NFG1000_RESET_WAIT_TIME);
+	mdelay(NFG1000_RESET_WAIT_TIME);
 
 	u8Data[0] = 0x3f;
 	for(retry_cnt = 0; retry_cnt < 3; retry_cnt++)
@@ -879,7 +883,7 @@ static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
 	}
 	if(uReCode[0] != NFG1000_SUCESS_CODE)
 	{
-		msleep(NFG1000_boot_WAIT_TIME);
+		mdelay(NFG1000_boot_WAIT_TIME);
 		for(retry_cnt = 0; retry_cnt < 3; retry_cnt++)
 		{
 			ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 1);
@@ -941,7 +945,6 @@ static int nfg1000_ota_program_step2_ShaAuth(struct mmi_fg_chip *di)
 	if(ret) {
 		return ret;
 	}
-	msleep(NFG1000_RESET_WAIT_TIME);
 
 	memcpy(&u8Data[0], sha_256_pass_word, SHA_DATA_SIZE);
 	u8Data[SHA_DATA_SIZE] = CalcXorsum(sha_256_pass_word, SHA_DATA_SIZE);
@@ -950,7 +953,6 @@ static int nfg1000_ota_program_step2_ShaAuth(struct mmi_fg_chip *di)
 		mmi_err(":write reg: %x error!!\n",I2C_NO_REG_DATA);
 		return -ERROR_CODE_I2C_WRITE;
 	}
-	msleep(NFG1000_RESET_WAIT_TIME);
 
 	ret = nfg1000_GetReturnCode(di);
 	if(ret) {
@@ -1055,7 +1057,7 @@ static int nfg1000_ota_program_step4_EraseFlash(struct mmi_fg_chip *di)
 		mmi_err(":write reg: %x error!!\n", I2C_NO_REG_DATA);
 		return -ERROR_CODE_I2C_WRITE;
 	}
-	msleep(NFG1000_erase_WAIT_TIME);
+	mdelay(NFG1000_erase_WAIT_TIME);
 
 	ret = nfg1000_GetReturnCode(di);
 	if(ret) {
@@ -1122,7 +1124,7 @@ static int nfg1000_ota_program_step5_WriteUpdatefile(struct mmi_fg_chip *di)
 				mmi_err(":Error write fw data loop=%d,error: %d!!\n", i, ret);
 				return -ERROR_CODE_I2C_WRITE;
 			}
-			msleep(120);
+			mdelay(NFG1000_write_WAIT_TIME);
 			ret = nfg1000_GetReturnCode(di);
 			if(ret) {
 				mmi_err(":Error write fw data GetReturnCode loop=%d,error: %d!!\n", i, ret);
@@ -1182,7 +1184,6 @@ static int nfg1000_ota_program_step5_WriteUpdatefile(struct mmi_fg_chip *di)
 				mmi_err(":Error write before 252byte data loop=%d,error: %x !!\n", i, ret);
 				return -ERROR_CODE_I2C_WRITE;
 			}
-			msleep(NFG1000_write_WAIT_TIME);
 
 			ret = nfg1000_GetReturnCode(di);
 			if(ret) {
@@ -1249,7 +1250,7 @@ static int nfg1000_ota_program_step6_CheckCrc(struct mmi_fg_chip *di)
 		return ret;
 	}
 
-	msleep(NFG1000_RESET_WAIT_TIME);
+	mdelay(NFG1000_crc32_WAIT_TIME);
 	ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode, 4);
 	if(ret < 0) {
 		mmi_err("nfg1000_ota_program_step6_CheckCrc:read reg: %x error!!\n", I2C_NO_REG_DATA);
@@ -1306,7 +1307,7 @@ static int nfg1000_ota_program_step7_ExitBoot(struct mmi_fg_chip *di)
 		mmi_err("nfg1000_GetReturnCode fail 2");
 		return ret;
 	}
-	msleep(NFG1000_seal_WAIT_TIME);
+	mdelay(NFG1000_seal_WAIT_TIME);
 
 	return 0;
 }
@@ -1341,7 +1342,7 @@ static int nfg1000_ota_program_step8_EraseDATA(struct mmi_fg_chip *di)
 		return -ERROR_CODE_I2C_WRITE;
 	}
 
-	msleep(NFG1000_erase_WAIT_TIME);
+	mdelay(NFG1000_erase_DF_TIME);
 	ret = nfg1000_GetReturnCode(di);
 	if(ret)
 	{
@@ -1417,7 +1418,7 @@ static int nfg1000_ota_program_step9_WriteDatafile(struct mmi_fg_chip *di)
 			mmi_err("nfg1000_ota_program_step9_WriteDatafile:write reg: %x error!!\n",I2C_NO_REG_DATA);
 			return -ERROR_CODE_I2C_WRITE;
 		}
-		msleep(NFG1000_RESET_WAIT_TIME);
+		mdelay(NFG1000_write_WAIT_TIME);
 		ret = nfg1000_GetReturnCode(di);
 		if(ret)
 		{
@@ -1495,7 +1496,6 @@ static int nfg1000_ota_program_step10_CheckDataCrc(struct mmi_fg_chip *di)
 		mmi_err("nfg1000_GetReturnCode error");
 		return ret;
 	}
-	msleep(NFG1000_RESET_WAIT_TIME);
 
 	//read crc and compare
 	ret = fg_read_block(di, I2C_NO_REG_DATA,uReCode,4);
@@ -1538,7 +1538,7 @@ static int nfg1000_ota_updata_config(struct mmi_fg_chip *di)
 
 		ret = nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(di, dataflash_base_addr + addr_cmd, &di->params_data[addr_cmd*32],32);
 
-		msleep(NFG1000_RESET_WAIT_TIME);
+		mdelay(NFG1000_RESET_WAIT_TIME);
 		if(ret)
 		{
 			mmi_err("nfg1000_ota_updata_config:write reg: %x error!!\n",ret);
