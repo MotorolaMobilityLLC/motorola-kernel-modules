@@ -215,6 +215,8 @@ struct cps_wls_chrg_chip {
     bool enable_rod;
     int rx_offset_detect_count;
     int rod_stop_battery_soc;
+    ktime_t rx_start_ktime;
+    bool rod_stop;
 
     unsigned long flags;
     int rx_ldo_on;
