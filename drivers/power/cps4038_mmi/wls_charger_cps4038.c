@@ -2129,6 +2129,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	if (int_flag & RX_INT_LDO_ON)
 	{
 		chip->rx_ldo_on = true;
+		chip->rx_start_ktime = ktime_get_boottime();
 		if (chip->wlc_status == WLC_DISCONNECTED)
 		{
 			cps_wls_set_status(WLC_CONNECTED);
@@ -2323,9 +2324,10 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 #define WLS_ICL_INCREASE_DELAY 200 /*200ms*/
 #define WLS_BPP_ICL_MAX_mA 1000
 #define WLS_BPP_ROD_THRESHOLD_CURRENT_MAX 800 /*mA*/
-#define WLS_BPP_ROD_THRESHOLD_CURRENT_MIN 750 /*mA*/
+#define WLS_BPP_ROD_THRESHOLD_CURRENT_MIN 700 /*mA*/
 #define WLS_BPP_ROD_DETECT_COUNT_MAX 3
 #define WLS_ROD_STOP_BATERY_SOC 90
+#define WLS_ROD_STOP_TIME (60*1000*1000*1000uL) /*60s*/
 
 static void cps_bpp_mode_icl_work(struct work_struct *work)
 {
@@ -2370,10 +2372,12 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 
 	chg->bpp_icl_done = true;
 
-	if (chip->enable_rod)
+	if (chip->enable_rod) {
+		chip->rod_stop = false;
 		queue_delayed_work(chip->wls_wq,
 			&chip->offset_detect_work,
 			msecs_to_jiffies(wls_current_now >= WLS_BPP_ROD_THRESHOLD_CURRENT_MAX ? 5000 : 0));
+	}
 }
 
 static void cps_wls_notify_thermal_input_current_limit(int thermal_icl)
@@ -2425,7 +2429,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 	if (!chip)
 		return;
 
-	if (!chip->rx_ldo_on) {
+	if (!chip->rx_ldo_on || chip->rod_stop) {
 		chip->rx_offset_detect_count = 0;
 		chip->rx_offset = false;
 		return;
@@ -2435,6 +2439,15 @@ static void cps_offset_detect_work(struct work_struct *work)
 		wls_mode = chip->mode_type;
 	} else {
 		wls_mode = chip->qi_mode_type;
+	}
+
+	if ((ktime_get_boottime() - chip->rx_start_ktime >= WLS_ROD_STOP_TIME) &&
+		(chip->wlc_status != WLC_ERR_LOWER_EFFICIENCY)) {
+		cps_wls_log(CPS_LOG_DEBG, "[%s] rx offset detect stop,wls status:%d\n", __func__, chip->wlc_status);
+		chip->rod_stop = true;
+		chip->rx_offset_detect_count = 0;
+		chip->rx_offset = false;
+		return;
 	}
 
 	current_now = cps_wls_get_rx_iout();
@@ -2482,6 +2495,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 					chip->rx_offset_detect_count = 0;
 					if (chip->wlc_status != WLC_DISCONNECTED)
 						cps_wls_set_status(WLC_CHGING);
+					chip->rod_stop = true;
 				}
 			}
 		}
