@@ -140,6 +140,7 @@ enum mmi_fg_mac_cmd {
 	FG_MAC_CMD_SEAL		= 0x0030,
 	FG_MAC_CMD_DEV_RESET	= 0x0041,
 	FG_MAC_CMD_ENTER_ROM	= 0x0F00,
+	FG_MAC_CMD_PARAMS_VER	= 0x440B,
 };
 
 
@@ -205,7 +206,6 @@ struct mmi_fg_chip {
 	bool fake_battery;
 	int rbat_pull_up_r;
 
-	int unseal_key;
 	int mcu_auth_code;
 	const char *battsn_buf;
 	u32 batt_param_version;
@@ -617,13 +617,9 @@ static int nfg1000_ota_unseal(struct mmi_fg_chip *di)
 	u8 seal_state_read[32] = {0};
 	u16 seal_state_cmd = 0x0054;
 
-	if (di->unseal_key == 0) {
-		mmi_err("nfg1000_battery_unseal:unseal failed due to missing key\n");
-		return -ERROR_CODE_CHECKSUM;
-	}
-
 	for(i = 0;i < 3;i++)
-	{	mmi_info("unseal_key 0x01020304");
+	{
+		mmi_info("unseal_key 0x01020304");
 		//unseal_key:0x01020304
 		u8pwd[0] = ((NFG1000_UNSEAL_KEY>>24))&0xff;
 		u8pwd[1] = (NFG1000_UNSEAL_KEY>>16)&0xff;
@@ -820,7 +816,7 @@ static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di
 		return PROGRAM_ERROR_UNSEAL;
 	}
 
-	if (nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di,0x440B ,dataflash_ver_read,32) < 0)
+	if (nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di,FG_MAC_CMD_PARAMS_VER ,dataflash_ver_read,32) < 0)
 		return upgrade_status;
 
 	fg_param_version = ((dataflash_ver_read[25] - 0x30) << 8);
@@ -1581,7 +1577,6 @@ static int nfg1000_ota_updata_config(struct mmi_fg_chip *di)
 
 void nfg1000_ota_init(struct mmi_fg_chip *di)
 {
-	di->unseal_key = NFG1000_UNSEAL_KEY;
 	di->mcu_auth_code = NFG1000_CHIP_NAME;
 	di->fw_start_addr = 0;
 	di->param_start_addr = 0x30000;
@@ -2503,11 +2498,60 @@ static ssize_t fg_attr_show_Qmax(struct device *dev,
 	return len;
 }
 
+static ssize_t fg_attr_show_batt_params_ver(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct mmi_fg_chip *di = i2c_get_clientdata(client);
+	int ret = 0;
+	u8 dataflash_ver_read[32] = {0};
+	u16 fg_param_version = 0xFFFF;
+
+	if(nfg1000_ota_unseal(di))
+	{
+		return PROGRAM_ERROR_UNSEAL;
+	}
+
+	if (nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di,FG_MAC_CMD_PARAMS_VER ,dataflash_ver_read,32) == 0)
+	{
+		fg_param_version = ((dataflash_ver_read[25] - 0x30) << 8);
+		fg_param_version |= (dataflash_ver_read[26] - 0x30);
+		ret = sprintf(buf, "0x%04x\n", fg_param_version);
+	}
+	nfg1000_ota_seal(di);
+
+	return ret;
+}
+
+static ssize_t fg_attr_show_FW_ver(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct mmi_fg_chip *di = i2c_get_clientdata(client);
+	int ret = 0;
+	u8 fw_ver_read[12] = {0};
+
+	ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_FW_VER, fw_ver_read, 12);
+	if(ret) {
+		mmi_err(": From fg ic read the  firmware version error!\n");
+		return -1;
+	}
+
+	ret = sprintf(buf, "%02x.%02x.%02x.%c%c\n",
+		fw_ver_read[0], fw_ver_read[1],fw_ver_read[2],fw_ver_read[3],fw_ver_read[4]);
+
+	return ret;
+}
+
 static DEVICE_ATTR(RaTable, S_IRUGO, fg_attr_show_Ra_table, NULL);
 static DEVICE_ATTR(Qmax, S_IRUGO, fg_attr_show_Qmax, NULL);
+static DEVICE_ATTR(Params_Ver, S_IRUGO, fg_attr_show_batt_params_ver, NULL);
+static DEVICE_ATTR(FW_Ver, S_IRUGO, fg_attr_show_FW_ver, NULL);
 static struct attribute *fg_attributes[] = {
 	&dev_attr_RaTable.attr,
 	&dev_attr_Qmax.attr,
+	&dev_attr_Params_Ver.attr,
+	&dev_attr_FW_Ver.attr,
 	NULL,
 };
 
