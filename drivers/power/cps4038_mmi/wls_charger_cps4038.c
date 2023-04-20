@@ -3817,6 +3817,7 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
 {
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
+    int wls_voltage = 0;
 
     if (chip->cable_ready_wait_count < 3 && !chip->moto_stand)
     {
@@ -3845,7 +3846,9 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
     else if (chg->mode_type == Sys_Op_Mode_EPP)
     {
         wls_power = cps_wls_get_rx_neg_power() / 2;
-        cps_wls_log(CPS_LOG_DEBG, "%s cps4038 power %dW", __func__, wls_power);
+        wls_voltage = cps_wls_get_rx_vout();
+        cps_wls_log(CPS_LOG_DEBG, "%s cps4038 power:%dW vout:%dmV",
+                        __func__, wls_power, wls_voltage);
         if (wls_power >= WLS_RX_CAP_15W)
         {
             chg->MaxV = 12000;
@@ -3869,10 +3872,15 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
         }
         else if (wls_power >= WLS_RX_CAP_5W)
         {
-            chg->MaxV = 12000;
-            chg->MaxI = 400;
-            *icl = 400000;
-            *vbus = 12000;
+            if (wls_voltage < 5500) {
+                chg->MaxV = 5000;
+                chg->MaxI = 1000;
+            } else {
+                chg->MaxV = 12000;
+                chg->MaxI = 400;
+            }
+            *icl = chg->MaxI * 1000;
+            *vbus = chg->MaxV;
         }
         else
         {
@@ -3890,13 +3898,16 @@ static void cps_epp_current_select(int  *icl, int *vbus)
 {
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
+    int wls_voltage = 0;
 
     *icl = 400000;
     *vbus = 5000;
     if (chg->mode_type == Sys_Op_Mode_EPP)
     {
         wls_power = cps_wls_get_rx_neg_power() / 2;
-        cps_wls_log(CPS_LOG_DEBG, "%s cps4038 power %dW", __func__, wls_power);
+        wls_voltage = cps_wls_get_rx_vout();
+        cps_wls_log(CPS_LOG_DEBG, "%s cps4038 power:%dW vout:%dmV",
+                        __func__, wls_power, wls_voltage);
         if (wls_power >= WLS_RX_CAP_15W)
         {
             chg->MaxV = 12000;
@@ -3920,10 +3931,15 @@ static void cps_epp_current_select(int  *icl, int *vbus)
         }
         else if (wls_power >= WLS_RX_CAP_5W)
         {
-            chg->MaxV = 12000;
-            chg->MaxI = 400;
-            *icl = 400000;
-            *vbus = 12000;
+            if (wls_voltage < 5500) {
+                chg->MaxV = 5000;
+                chg->MaxI = 1000;
+            } else {
+                chg->MaxV = 12000;
+                chg->MaxI = 400;
+            }
+            *icl = chg->MaxI * 1000;
+            *vbus = chg->MaxV;
         }
         else
         {
