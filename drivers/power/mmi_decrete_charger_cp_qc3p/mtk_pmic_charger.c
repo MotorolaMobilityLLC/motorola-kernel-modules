@@ -37,6 +37,27 @@
 #include <linux/power_supply.h>
 #include "mmi_charger_core.h"
 
+static int mtk_pmic_enable_charging(struct mmi_charger_device *chrg, bool en)
+{
+	int rc;
+
+	if (!chrg->chg_dev) {
+		chrg_dev_info(chrg, "MMI SW chrg: chg_dev is null! \n");
+		return -ENODEV;
+	}
+
+	rc = charger_dev_enable(chrg->chg_dev, en);
+	if (rc<0) {
+		chrg_dev_info(chrg, "MMI chrg: sw charger_enabled failed, set to false\n");
+		//chrg->charger_enabled  = false;
+	} else {
+		chrg->charger_enabled = !!en;
+		chrg_dev_info(chrg, "MMI chrg: set sw charger_enabled = %d\n",chrg->charger_enabled);
+	}
+
+	return rc;
+}
+
 static int mtk_pmic_is_charging_enabled(struct mmi_charger_device *chrg, bool *en)
 {
 	int rc;
@@ -48,9 +69,7 @@ static int mtk_pmic_is_charging_enabled(struct mmi_charger_device *chrg, bool *e
 	}
 
 	rc = charger_dev_is_enabled(chrg->chg_dev, &val);
-	if (rc<0) {
-		chrg->charger_enabled  = false;
-	} else
+	if (rc>=0)
 		chrg->charger_enabled = !!val;
 
 	*en = chrg->charger_enabled;
@@ -68,10 +87,10 @@ static int mtk_pmic_get_input_voltage_settled(struct mmi_charger_device *chrg, u
 	}
 
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBUS, &vbus_voltage, &vbus_voltage);
-	if (rc < 0)
-		*vbus = 0;
-	else
-		*vbus = vbus_voltage;
+	if (rc>=0)
+		chrg->charger_data.vbus_volt = vbus_voltage;
+
+	*vbus = chrg->charger_data.vbus_volt;
 
 	return rc;
 }
@@ -86,10 +105,10 @@ static int mtk_pmic_get_input_current(struct mmi_charger_device *chrg, u32 *uA)
 	}
 
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_IBUS, &ibus, &ibus);
-	if (rc < 0)
-		*uA = 0;
-	else
-		*uA = ibus;
+	if (rc>=0)
+		chrg->charger_data.ibus_curr = ibus;
+
+	*uA = chrg->charger_data.ibus_curr;
 
 	return rc;
 }
@@ -104,10 +123,10 @@ static int mtk_pmic_get_charging_current(struct mmi_charger_device *chrg, u32 *u
 	}
 
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_IBAT, &ibat, &ibat);
-	if (rc < 0)
-		*uA = 0;
-	else
-		*uA = ibat;
+	if (rc>=0)
+		chrg->charger_data.ibatt_curr = ibat;
+
+	*uA = chrg->charger_data.ibatt_curr;
 
 	return rc;
 }
@@ -177,30 +196,22 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 
 	// vbat
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBAT, &vbat, &vbat);
-	if (rc < 0)
-		chrg->charger_data.vbatt_volt= 0;
-	else
+	if (rc>=0)
 		chrg->charger_data.vbatt_volt = vbat;
 
 	// ibat
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_IBAT, &ibat, &ibat);
-	if (rc < 0)
-		chrg->charger_data.ibatt_curr= 0;
-	else
+	if (rc>=0)
 		chrg->charger_data.ibatt_curr = ibat; //*-1
 
 	// vbus
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBUS, &vbus, &vbus);
-	if (rc < 0)
-		chrg->charger_data.vbus_volt= 0;
-	else
+	if (rc>=0)
 		chrg->charger_data.vbus_volt = vbus; //*-1
 
 	// ibus
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_IBUS, &ibus, &ibus);
-	if (rc < 0)
-		chrg->charger_data.ibus_curr= 0;
-	else
+	if (rc>=0)
 		chrg->charger_data.ibus_curr = ibus; //*-1
 
 	chrg->charger_data.batt_temp = 30;  //Force return 30 temp from main charger.
@@ -213,9 +224,7 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 
 	// is charging enable
 	rc = charger_dev_is_enabled(chrg->chg_dev, &enable);
-	if (rc<0) {
-		chrg->charger_enabled  = false;
-	} else
+	if (rc>=0)
 		chrg->charger_enabled = !!enable;
 
 	chrg_dev_info(chrg, "mtk SW chrg: status update: --- info---1");
@@ -231,6 +240,7 @@ static int mtk_pmic_update_charger_status(struct mmi_charger_device *chrg)
 }
 
 struct mmi_charger_ops mtk_pmic_charger_ops = {
+	.enable = mtk_pmic_enable_charging,
 	.is_enabled = mtk_pmic_is_charging_enabled,
 	.get_input_voltage_settled = mtk_pmic_get_input_voltage_settled,
 	.get_input_current = mtk_pmic_get_input_current,

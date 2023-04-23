@@ -118,9 +118,7 @@ const unsigned char *pm_state_str[] = {
 };
 
 static pm_sm_state_t	sm_state = PM_STATE_DISCONNECT;
-#ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 static pm_sm_state_t    prev_sm_state = PM_STATE_DISCONNECT;
-#endif
 static int chrg_cc_power_tunning_cnt = 0;
 static int chrg_cv_taper_tunning_cnt = 0;
 static int chrg_cv_delta_volt = 0;
@@ -133,6 +131,7 @@ static void mmi_chrg_sm_move_state(struct mmi_charger_manager *chip, pm_sm_state
 {
 	mmi_chrg_dbg(chip, PR_INTERRUPT, "pm_state change:%s -> %s\n",
 		pm_state_str[sm_state], pm_state_str[state]);
+	prev_sm_state = sm_state;
 	sm_state = state;
 	pd_constant_power_cnt = 0;
 	batt_curr_roof = 0;
@@ -397,6 +396,7 @@ void mmi_chrg_policy_clear(struct mmi_charger_manager *chip) {
 							DISABLE_CHRG_LIMIT_CURR_UA);
 	chrg_list->chrg_dev[PMIC_SW]->charger_limited = false;
 	sm_state = PM_STATE_DISCONNECT;
+	prev_sm_state = PM_STATE_DISCONNECT;
 	chip->pps_volt_comp = PPS_INIT_VOLT_COMP;
 	quit_slave_chrg_cnt = 0;
 	chrg_cc_power_tunning_cnt = 0;

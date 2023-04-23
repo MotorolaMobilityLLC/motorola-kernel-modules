@@ -91,7 +91,7 @@ static int cp_enable_charging(struct mmi_charger_device *chrg, bool en)
 	rc = charger_dev_enable(chrg->chg_dev, en);
 	if (rc<0) {
 		chrg_dev_info(chrg, "MMI chrg: charger_enabled failed, set to false\n");
-		chrg->charger_enabled  = false;
+		//chrg->charger_enabled  = false;
 	} else {
 		chrg->charger_enabled = !!en;
 		chrg_dev_info(chrg, "MMI chrg: set charger_enabled = %d\n",chrg->charger_enabled);
@@ -111,9 +111,7 @@ static int cp_is_charging_enabled(struct mmi_charger_device *chrg, bool *en)
 	}
 
 	rc = charger_dev_is_enabled(chrg->chg_dev, &val);
-	if (rc<0) {
-		chrg->charger_enabled  = false;
-	} else
+	if (rc>=0)
 		chrg->charger_enabled = !!val;
 
 	*en = chrg->charger_enabled;
@@ -145,10 +143,10 @@ static int cp_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vb
 	}
 
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBUS, &vbus_voltage, &vbus_voltage);
-	if (rc < 0)
-		*vbus = 0;
-	else
-		*vbus = vbus_voltage;
+	if (rc>=0)
+		chrg->charger_data.vbatt_volt = vbus_voltage;
+
+	*vbus = chrg->charger_data.vbatt_volt;
 
 	return rc;
 }
@@ -161,10 +159,10 @@ static int cp_get_input_current(struct mmi_charger_device *chrg, u32 *uA)
 		return -ENODEV;
 	}
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_IBUS, &ibus, &ibus);
-	if (rc < 0)
-		*uA = 0;
-	else
-		*uA = ibus;
+	if (rc>=0)
+		chrg->charger_data.ibus_curr = ibus;
+
+	*uA = chrg->charger_data.ibus_curr;
 
 	return rc;
 }
@@ -205,15 +203,11 @@ static int cp_update_charger_status(struct mmi_charger_device *chrg)
 		chrg->charger_data.batt_temp = prop.intval / 10;
 
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBUS, &vbus, &vbus);
-	if (rc < 0)
-		chrg->charger_data.vbus_volt = 0;
-	else
+	if (rc>=0)
 		chrg->charger_data.vbus_volt = vbus;
 
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_IBUS, &ibus, &ibus);
-	if (rc < 0)
-		chrg->charger_data.ibus_curr = 0;
-	else
+	if (rc>=0)
 		chrg->charger_data.ibus_curr = ibus;
 
 	rc = power_supply_get_property(chrg->chrg_psy,
@@ -222,9 +216,7 @@ static int cp_update_charger_status(struct mmi_charger_device *chrg)
 		chrg->charger_data.vbus_pres = !!prop.intval;
 
 	rc = charger_dev_is_enabled(chrg->chg_dev, &enable);
-	if (rc<0) {
-		chrg->charger_enabled  = false;
-	} else
+	if (rc>=0)
 		chrg->charger_enabled = !!enable;
 
 	chrg_dev_info(chrg, "BQ2597x chrg: %s status update: --- info--- 1\n",chrg->name);
