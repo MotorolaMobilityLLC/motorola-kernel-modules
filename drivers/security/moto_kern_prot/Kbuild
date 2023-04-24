@@ -1,0 +1,9 @@
+ccflags-y += -Wall
+ccflags-y += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/misc/moto_kern_prot
+ccflags-y += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+ccflags-y += -I$(ANDROID_BUILD_TOP)/kernel_platform/msm-kernel/include
+ccflags-y += -I$(ANDROID_BUILD_TOP)/kernel_platform/msm-kernel/
+
+moto_kern_prot-objs := moto_rkp_kickoff.o qcom_hvc.o
+
+obj-m += moto_kern_prot.o
