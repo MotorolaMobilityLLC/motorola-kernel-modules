@@ -18,6 +18,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/module.h>
 #include <linux/backlight.h>
+#include "sm5350_align.h"
 
 #define SM5350_NAME "sm5350-bl"
 
@@ -54,7 +55,7 @@
 
 enum backlight_exp_current_align {
 	ALIGN_NONE,
-	ALIGN_AW99703
+	ALIGN_BL_MAPPING_450
 };
 
 struct sm5350_data {
@@ -182,8 +183,19 @@ int sm5350_set_brightness(struct sm5350_data *drvdata, int brt_val)
 	int code, code1, code2;
 	printk("%s backlight_val = %d\n",__func__, brt_val);
 
-	if ((drvdata->map_mode == 0) && (drvdata->led_current_align == ALIGN_AW99703))
+	if (drvdata->map_mode == 0) {
+		//exponential mode
+		if (ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
+			brt_val = sm5350_bl_mapping_450[brt_val];
+			pr_info("%s bl_mapping brt_val: %d\n", __func__, brt_val);
+		}
+
+		//align to awinic bl by default
 		brt_val = brt_val*8383/10000+324;
+		pr_info("%s align awinic brt_val: %d\n", __func__, brt_val);
+	}
+	else
+		pr_info("%s: not exponential mode\n", __func__);
 
 	if (drvdata->brt_code_enable) {
 		index = brt_val / 10;
