@@ -2198,8 +2198,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		}
 		//check_factory_mode(&factory_mode);
 		if (chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
-			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT ||
-			chip->light_fan_reset_flag == true) {
+			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT) {
 			queue_delayed_work(chip->wls_wq, &chip->light_fan_work, msecs_to_jiffies(0));
 		}
 		else
@@ -2209,8 +2208,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		chip->moto_stand = false;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_FAIL");
 		if (chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
-			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT ||
-			chip->light_fan_reset_flag == true)
+			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT)
 			queue_delayed_work(chip->wls_wq, &chip->light_fan_work, msecs_to_jiffies(0));
 	}
 	if (int_flag & RX_INT_FC_FAIL) {
@@ -3975,10 +3973,6 @@ static void cps_wls_light_fan_work(struct work_struct *work)
 	if (!chip)
 		return;
 
-	if (chip->light_fan_reset_flag == true) {
-		chip->light_fan_reset_flag = false;
-	}
-
 	if (!chip->rx_ldo_on)
 		return;
 
@@ -3986,13 +3980,12 @@ static void cps_wls_light_fan_work(struct work_struct *work)
 	cps_wls_log(CPS_LOG_DEBG, "%s moto:%d boot:%d uisoc:%d\n",
 			__func__, chip->moto_stand, chip->bootmode, uisoc);
 
-	if (uisoc != 100)
-		return;
+	if (uisoc == 100)
+		CPS_RX_CHRG_FULL = true;
 
-	CPS_RX_CHRG_FULL = true;
 	if (chip->moto_stand) {
 		cps_wls_wlc_update_light_fan();
-	} else {
+	} else if(CPS_RX_CHRG_FULL) {
 		cps_wls_notify_tx_chrgfull();
 	}
 }
@@ -4118,7 +4111,6 @@ static bool cps_stop_epp_timeout(long ms)
 					(long int)ktime_now);
 		chip->stop_epp_ktime = 0;
 		chip->stop_epp_flag = false;
-		chip->light_fan_reset_flag = false;
 		cps_wls_mode_select("cps_stop_epp_timeout", true);
 		return true;
 	} else {
@@ -4129,25 +4121,40 @@ static bool cps_stop_epp_timeout(long ms)
 static void cps_wls_stop_epp(void)
 {
 	struct cps_wls_chrg_chip *chg = chip;
-	cps_wls_log(CPS_LOG_DEBG, "cps_wls_stop_epp mode_type:%d stop_epp_flag:%d\n",
-					chg->mode_type, chg->stop_epp_flag);
-	if (chg && chg->wls_online &&
-			chg->mode_type == Sys_Op_Mode_EPP &&
-			chip->enable_stop_epp) {
-		if (CPS_WLS_SUCCESS == cps_wls_mode_select("cps_wls_stop_epp", false)) {
-			chg->stop_epp_flag = true;
-			chg->stop_epp_ktime = ktime_get_boottime();
-			chip->light_fan_reset_flag = true;
-			if (chip->moto_stand &&
-				(chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
-				chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT)) {
-				chip->light_level = 0;
-				cps_wls_log(CPS_LOG_DEBG, "cps_wls_stop_epp moto stand set light level 0\n");
+
+	if (!chg) {
+		cps_wls_log(CPS_LOG_DEBG, "%s chg=NULL\n", __func__);
+		return;
+	}
+
+	if (!chg->wls_online) {
+		cps_wls_log(CPS_LOG_DEBG, "%s wls_online=0\n", __func__);
+		return;
+	}
+
+	cps_wls_log(CPS_LOG_DEBG, "%s mode_type:%d stop_epp_flag:%d\n",
+					__func__, chg->mode_type, chg->stop_epp_flag);
+
+	if (chip->enable_stop_epp &&
+		(chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
+		chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT)) {
+		if (chip->moto_stand) {
+			chip->light_level = 0;
+			cps_wls_log(CPS_LOG_DEBG, "%s moto stand set light level 0\n", __func__);
+			if (chg->mode_type == Sys_Op_Mode_BPP) {
+				cps_wls_wlc_update_light_fan();
 			}
-			cps_wls_log(CPS_LOG_DEBG, "cps_wls_stop_epp start\n");
-		} else {
-			cps_wls_log(CPS_LOG_ERR, "cps_wls_stop_epp failed\n");
 		}
+		if (chg->mode_type == Sys_Op_Mode_EPP) {
+			if (CPS_WLS_SUCCESS == cps_wls_mode_select("cps_wls_stop", false)) {
+				chg->stop_epp_flag = true;
+				chg->stop_epp_ktime = ktime_get_boottime();
+				cps_wls_log(CPS_LOG_DEBG, "%s start\n", __func__);
+			} else {
+				cps_wls_log(CPS_LOG_ERR, "%s failed\n", __func__);
+			}
+		}
+
 	}
 }
 
