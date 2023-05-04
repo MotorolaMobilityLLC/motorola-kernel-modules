@@ -196,7 +196,7 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 		}
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, " QI_ASK_CMD_TXCAPABILITY: cmd 0x%x, data[0] 0x%x, data[1] 0x%x, data[2] 0x%x, data[3] 0x%x, moto_auth_status %d",
 			data[0], data[1], data[2], data[3], data[4], moto_auth_status);
-
+		motoauth_timer_stop();
 		motoauth->WLS_WLC_TYPE = WLC_MOTO;
 		motoauth->WLS_WLC_CAPABILITY = data[1];
 		motoauth->WLC_STATUS = WLC_TX_CAPABILITY_CHANGED;
@@ -214,7 +214,7 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 		}
 		tx_id[0] = data[1];
 		tx_id[1] = data[2];
-
+		motoauth_timer_stop();
 		motoauth->WLS_WLC_TYPE = WLC_MOTO;
 		motoauth->WLS_WLC_ID = (uint32_t)(data[1] << 8 | data[2]);
 		motoauth->WLC_STATUS = WLC_TX_ID_CHANGED;
@@ -314,7 +314,6 @@ void motoauth_timer_work(struct work_struct *work)
 		motoauth->events = motoauth->events | (1 << MOTOAUTH_EVENT_TIMER_TO);
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, "%s event=0x%X", __func__, (uint32_t)motoauth->events);
 		motoauth_wake_up_events_thread();
-		schedule_delayed_work(&motoauth->work, msecs_to_jiffies(motoauth->work_delay_ms));
 	} else {
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, "%s cancel", __func__);
 	}
@@ -323,10 +322,11 @@ void motoauth_timer_work(struct work_struct *work)
 int motoauth_timer_start(int ms)
 {
 	motoauth_wls_log(MOTOAUTH_LOG_DEBG, " ms=%d", ms);
-	if (motoauth) {
+	if (!motoauth) {
 		return MOTO_WLS_AUTH_FAIL;
 	}
 	motoauth->work_running = true;
+	motoauth->work_delay_ms = ms;
 	schedule_delayed_work(&motoauth->work, msecs_to_jiffies(ms));
 	return 0;
 }
@@ -347,6 +347,7 @@ int motoauth_events_process(void)
 	unsigned int events, ev;
 	MOTOAUTH_EVENT_TYPE ev_t = 0;
 	uint32_t delay_time_ms = 1000;//, batt_soc = 0; //1s
+	static MOTO_AUTH_STATUS pre_st = MOTO_AUTH_INVALID;
 
 	if (motoauth == NULL) {
 		motoauth_wls_log(MOTOAUTH_LOG_ERR, " motoauth_events_process motoauth is NULL!");
@@ -377,6 +378,7 @@ int motoauth_events_process(void)
 				motoauth_wls_set_status(motoauth->WLC_STATUS);
 			}
 			moto_auth_send_ask_tx_capability();
+			motoauth_timer_start(delay_time_ms);
 			break;
 		case MOTOAUTH_EVENT_TX_ID:
 			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTO_AUTH_EVENT_TX_ID");
@@ -386,6 +388,7 @@ int motoauth_events_process(void)
 				motoauth_wls_set_status(motoauth->WLC_STATUS);
 			}
 			moto_auth_send_ask_tx_id();
+			motoauth_timer_start(delay_time_ms * 2);
 			break;
 		case MOTOAUTH_EVENT_TX_CAP:
 			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTO_AUTH_EVENT_TX_CAP");
@@ -444,8 +447,17 @@ int motoauth_events_process(void)
 			motoauth_timer_start( delay_time_ms * 2);
 			break;
 		case MOTOAUTH_EVENT_TIMER_TO:
-			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTO_AUTH_EVENT_TIMER_TO");
-			if (moto_auth_status == MOTO_AUTH_QFOD) {
+			if (pre_st != moto_auth_status) {
+				motoauth->timeout_retry = 0;
+				pre_st = moto_auth_status;
+			}
+			motoauth_timer_stop();
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTO_AUTH_EVENT_TIMER_TO st:%d\n",
+					moto_auth_status);
+			if (motoauth->timeout_retry ++ > 2) {
+				pre_st = MOTO_AUTH_INVALID;
+				motoauth_event_notify(MOTOAUTH_EVENT_DONE);
+			} else if (moto_auth_status == MOTO_AUTH_QFOD) {
 				motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTO_AUTH: Send QFOD again ");
 				motoauth_event_notify(MOTOAUTH_EVENT_QFOD);
 			} else if (moto_auth_status == MOTO_AUTH_SHA_ENCRY_NUM) {
@@ -454,7 +466,15 @@ int motoauth_events_process(void)
 			} else if (moto_auth_status == MOTO_AUTH_SHA_ENCRY_RESULT) {
 				motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTO_AUTH: Send SHA_ENCRY_RESULT again ");
 				motoauth_event_notify(MOTOAUTH_EVENT_SHA_ENCRY_RESULT);
+			} else if (moto_auth_status == MOTO_AUTH_TX_CAPABILITY) {
+				motoauth_event_notify(MOTOAUTH_EVENT_TX_CAPABILITY);
+			} else if (moto_auth_status == MOTO_AUTH_TX_ID) {
+				motoauth_event_notify(MOTOAUTH_EVENT_TX_ID);
+			} else if (moto_auth_status == MOTO_AUTH_TX_SN) {
+				motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
 			}
+			break;
+		case MOTOAUTH_EVENT_DONE:
 			break;
 		default:
 			status = MOTO_WLS_AUTH_FAIL;
@@ -548,6 +568,8 @@ int moto_wls_auth_clear(MOTO_WLS_AUTH_T *motoauth)
 		motoauth->WLS_WLC_CAPABILITY = 0;
 		motoauth->events = 0x00;
 		motoauth->WLC_STATUS = WLC_DISCONNECTED;
+		motoauth->timeout_retry = 0;
+		motoauth_timer_stop();
 	}
 	return MOTO_WLS_AUTH_SUCCESS;
 }
