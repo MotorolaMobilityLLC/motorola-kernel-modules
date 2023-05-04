@@ -121,6 +121,7 @@ struct aw_sar_dts_info {
 	bool use_pm;
 	bool update_fw_flag;
 	bool use_plug_cail_flag;
+	const char *plat_state[1];
 };
 
 struct aw_sar_irq_init_comm_t {
