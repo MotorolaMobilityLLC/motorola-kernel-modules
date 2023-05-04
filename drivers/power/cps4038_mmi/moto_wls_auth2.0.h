@@ -159,7 +159,7 @@ typedef struct moto_wls_auth
 	bool WLS_HS_OK;
 
 	long timer_delay;
-
+	int timeout_retry;
 	int (*wls_send_ask_packet)(uint8_t *data, uint8_t data_len);
 	int (*wls_get_fsk_packet)(uint8_t *data, int data_len);
 
