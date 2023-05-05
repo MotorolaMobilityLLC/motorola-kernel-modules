@@ -2273,7 +2273,7 @@ int fg_get_capacity(struct gauge_device *gauge_dev, int *soc)
 	if (mmi->do_upgrading)
 		*soc = mmi->batt_soc;
 	else if (mmi->fake_battery)
-		*soc = 50;
+		*soc = 10;
 	else {
 		ret = fg_read_rsoc(mmi);
 		if (ret >= 0)
