@@ -278,6 +278,9 @@ struct fts_ts_data {
     u8 *bus_rx_buf;
     int bus_type;
     const char *panel_supplier;
+#ifdef CONFIG_FTS_MULTI_IC_EN
+    const char *chip_name;
+#endif
     struct regulator *vdd;
     struct regulator *vcc_i2c;
 #if FTS_PINCTRL_EN

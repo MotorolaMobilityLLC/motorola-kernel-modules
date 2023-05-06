@@ -2102,7 +2102,16 @@ static int fts_fb_check_dt(struct device_node *np)
 		return ret;
 	}
 
-	//multi focaltech ic
+#ifdef FTS_CHIP_NAME_1
+	//multi chip
+	if (strstr(active_panel_name, FTS_CHIP_NAME_1))
+		fts_data->chip_name = FTS_CHIP_NAME_1;
+	else
+		fts_data->chip_name = FTS_CHIP_NAME;
+	FTS_INFO("get chip_name: %s", fts_data->chip_name);
+#endif
+
+	//multi suppliler
 	num_of_panel_supplier = of_property_count_strings(np, "focaltech,panel-supplier");
 	FTS_DEBUG("get focaltech,panel-supplier count=%d", num_of_panel_supplier);
 	if (num_of_panel_supplier > 1) {
@@ -2117,24 +2126,21 @@ static int fts_fb_check_dt(struct device_node *np)
 				return 0;
 			}
 		}
+		FTS_INFO("multi ic: panel-supplier not matched!\n");
 	} else {
 		if (num_of_panel_supplier) {
-			FTS_DEBUG("multi ic warn: not enough panel-supplier info\n");
 			ret = of_property_read_string(np, "focaltech,panel-supplier", &fts_data->panel_supplier);
 			if (ret < 0) {
 				fts_data->panel_supplier = NULL;
 				FTS_ERROR("fail get panel_supplier\n");
 			}
-			else {
-				FTS_INFO("multi ic warn: get one panel_supplier:%s\n", fts_data->panel_supplier);
-				return 0;
-			}
+			else
+				FTS_INFO("multi ic: single panel_supplier:%s\n", fts_data->panel_supplier);
 		}
 		else
 			FTS_ERROR("multi ic warn: No panel-supplier info !\n");
 	}
 
-	return -1;
 #else
 	//single focaltech ic
 	ret = of_property_read_string(np, "focaltech,panel-supplier", &fts_data->panel_supplier);
@@ -2143,10 +2149,10 @@ static int fts_fb_check_dt(struct device_node *np)
 		FTS_INFO("panel supplier not set\n");
 	} else
 		FTS_INFO("get panel_supplier:%s\n", fts_data->panel_supplier);
+#endif
 
 	//needn't return -1 since checked panel before
 	return 0;
-#endif
 }
 #else
 static int fts_fb_check_dt(struct device_node *np)
