@@ -862,6 +862,11 @@ static ssize_t fts_poweron_show(struct device *dev, struct device_attribute *att
 
 static ssize_t fts_productinfo_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
+#ifdef CONFIG_FTS_MULTI_IC_EN
+    if (fts_data->chip_name)
+        return scnprintf(buf, PAGE_SIZE, "%s\n", fts_data->chip_name);
+#endif
+
     return scnprintf(buf, PAGE_SIZE, "%s\n", FTS_CHIP_NAME);
 }
 
@@ -876,7 +881,14 @@ static ssize_t fts_ic_ver_show(struct device *dev,
     fts_esdcheck_proc_busy(1);
 #endif
 
+#ifdef CONFIG_FTS_MULTI_IC_EN
+    if (fts_data->chip_name)
+        count += snprintf(buf + count, PAGE_SIZE, "Product ID:%s\n", fts_data->chip_name);
+    else
+        count += snprintf(buf + count, PAGE_SIZE, "Product ID:%s\n", FTS_CHIP_NAME);
+#else
     count += snprintf(buf + count, PAGE_SIZE, "Product ID:%s\n", FTS_CHIP_NAME);
+#endif
     fts_read_reg(FTS_REG_FW_VER, &val);
     count += snprintf(buf + count, PAGE_SIZE, "Build ID: 0000-%02x\n", val);
     fts_read_reg(FTS_REG_VENDOR_ID, &val);
@@ -1281,11 +1293,25 @@ static ssize_t doreflash_store(struct device *dev,
             return -EINVAL;
         }
 
+#ifdef CONFIG_FTS_MULTI_IC_EN
+        {
+            const char* c_name = FTS_CHIP_NAME;
+
+            if (fts_data->chip_name)
+                c_name = fts_data->chip_name;
+            snprintf(template, sizeof(template), "-%s-", c_name);
+            if (!strnstr(buf + strnlen(prefix, sizeof(prefix)), template, count)) {
+                FTS_ERROR("%s: FW does not belong to %s\n", __func__, c_name);
+                return -EINVAL;
+            }
+        }
+#else
         snprintf(template, sizeof(template), "-%s-", FTS_CHIP_NAME);
         if (!strnstr(buf + strnlen(prefix, sizeof(prefix)), template, count)) {
             FTS_ERROR("%s: FW does not belong to %s\n", __func__, FTS_CHIP_NAME);
             return -EINVAL;
         }
+#endif
     }
 
     memset(fwname, 0, sizeof(fwname));
