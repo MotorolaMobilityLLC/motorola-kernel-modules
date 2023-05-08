@@ -2080,6 +2080,7 @@ static void cps_bpp_icl_on()
 static void cps_epp_icl_on()
 {
 	int icl, vbus;
+	int wls_icl = 0;
 
 	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
 
@@ -2091,6 +2092,18 @@ static void cps_epp_icl_on()
 		chip->mode_type = mode_type;
 		chip->wlc_tx_power = cps_wls_get_rx_neg_power() / 2;
 		cps_epp_current_select(&icl, &vbus);
+		if (chip->thermal_state &&
+			chip->thermal_wls_ccl > 0) {
+			wls_icl = chip->thermal_wls_ccl / 1000;
+			wls_icl *= 5000; /*follow moto_wlc*/
+			wls_icl /= vbus;
+			wls_icl *= 1000;
+			if (icl > wls_icl) {
+				icl = wls_icl;
+				cps_wls_log(CPS_LOG_DEBG, "%s set icl %duA\n",
+					__func__, wls_icl);
+			}
+		}
 		if (chip->chg1_dev)
 		{
 			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
@@ -2345,6 +2358,15 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 			wls_icl_max = WLS_BPP_ICL_MAX_mA;
 		}
 	}
+
+	if (chip &&
+		chip->thermal_state &&
+		chip->thermal_wls_ccl > 0 &&
+		wls_icl_max > chip->thermal_wls_ccl / 1000) {
+		wls_icl_max = chip->thermal_wls_ccl / 1000;
+		cps_wls_log(CPS_LOG_DEBG, "%s set wls_icl_max=thermal_wls_ccl %duA\n",
+					__func__, chip->thermal_wls_ccl);
+	}
 	for (i = 0; i < retry; i++) {
 		while (wls_icl <= wls_icl_max) {
 			if (!chg->wls_online)
@@ -2388,6 +2410,16 @@ static void cps_wls_notify_thermal_input_current_limit(int thermal_icl)
 	} else {
 		chip->thermal_icl = -1;
 	}
+}
+
+static void cps_wls_notify_cur_state(int state, int wls_ccl)
+{
+	if (!chip)
+		return;
+	chip->thermal_state = state;
+	chip->thermal_wls_ccl = wls_ccl;
+	cps_wls_log(CPS_LOG_DEBG, "%s state:%d ccl:%duA\n",
+		__func__, chip->thermal_state, chip->thermal_wls_ccl);
 }
 
 static bool cps_wls_check_iout(int target_current, int current_now)
@@ -4166,6 +4198,7 @@ static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 	cm->wls_chg_ops.wls_set_battery_soc = cps_wls_set_battery_soc;
 	cm->wls_chg_ops.wls_stop_epp = cps_wls_stop_epp;
 	cm->wls_chg_ops.wls_notify_thermal_icl = cps_wls_notify_thermal_input_current_limit;
+	cm->wls_chg_ops.wls_notify_cur_state = cps_wls_notify_cur_state;
 
 	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
 
