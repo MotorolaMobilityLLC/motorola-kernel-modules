@@ -57,6 +57,10 @@
 #include <linux/platform_data/spi-mt65xx.h>
 #endif
 
+#ifdef CONFIG_NVT_MTK_SPI
+#include <linux/platform_data/spi-mt65xx.h>
+#endif
+
 #include <linux/mmi_wake_lock.h>
 
 #define NVT_DEBUG 1
@@ -245,6 +249,9 @@ struct nvt_ts_data {
 	bool usb_psp_online;
 	const char *psy_name;
 #ifdef CONFIG_SPI_MT65XX
+    struct mtk_chip_config spi_ctrl;
+#endif
+#ifdef CONFIG_NVT_MTK_SPI
     struct mtk_chip_config spi_ctrl;
 #endif
 #ifdef NVT_SENSOR_EN
