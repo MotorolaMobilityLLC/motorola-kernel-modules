@@ -43,28 +43,49 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 	if (ilits->fw_update_stat != 100)
 		return 0;
 
-	psy = power_supply_get_by_name("usb");
+	if (ilits->psy_name)
+		psy = power_supply_get_by_name(ilits->psy_name);
+	else
+		psy= power_supply_get_by_name("usb");
 	if (!psy) {
-		ILI_ERR("Couldn't get usbpsy\n");
+		if (ilits->psy_name)
+			ILI_ERR("Couldn't get psy:%s\n", ilits->psy_name);
+		else
+			ILI_ERR("Couldn't get usbpsy\n");
 		return -EINVAL;
 	}
-	if (!strcmp(psy->desc->name, "usb")) {
+
+	if (!strcmp(psy->desc->name, "battery") && (val == POWER_SUPPLY_PROP_STATUS)) {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &prop);
+		if (ret < 0) {
+			ILI_ERR("Couldn't get POWER_SUPPLY_PROP_STATUS rc=%d\n", ret);
+			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
+			if (ret < 0) {
+				ILI_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
+				return ret;
+			}
+		}
+	}
+	else if (!strcmp(psy->desc->name, "usb")) {
 		if (psy && val == POWER_SUPPLY_PROP_STATUS) {
 			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &prop);
 			if (ret < 0) {
 				ILI_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
 				return ret;
-			} else {
-				if (ilits->usb_plug_status == 2)
-					ilits->usb_plug_status = prop.intval;
-				if (ilits->usb_plug_status != prop.intval) {
-					ILI_INFO("usb prop.intval =%d\n", prop.intval);
-					ilits->usb_plug_status = prop.intval;
-					if (!ilits->tp_suspend && (ilits->charger_notify_wq != NULL))
-						queue_work(ilits->charger_notify_wq, &ilits->update_charger);
-				}
 			}
 		}
+	}
+	if (!ret) {
+		if((prop.intval == USB_DETECT_IN) || (prop.intval == USB_DETECT_OUT)) {
+			if(ilits->usb_plug_status != prop.intval) {
+				ILI_INFO("usb prop.intval =%d\n", prop.intval);
+				ilits->usb_plug_status = prop.intval;
+				if(!ilits->tp_suspend && (ilits->charger_notify_wq != NULL))
+					queue_work(ilits->charger_notify_wq,&ilits->update_charger);
+			}
+		}
+		else
+			ILI_DBG("unsupport prop.intval =%d\n", prop.intval);
 	}
 	return 0;
 }
@@ -72,7 +93,10 @@ static void ilitek_update_charger(struct work_struct *work)
 {
 	int ret = 0;
 	mutex_lock(&ilits->touch_mutex);
-	ret = ili_ic_func_ctrl("plug", !ilits->usb_plug_status);/* plug in */
+	if (USB_DETECT_IN == ilits->usb_plug_status)
+		ret = ili_ic_func_ctrl("plug", 0);// plug in
+	else
+		ret = ili_ic_func_ctrl("plug", 1);// plug out
 	if (ret < 0) {
 		ILI_ERR("Write plug in failed\n");
 	}
@@ -81,6 +105,9 @@ static void ilitek_update_charger(struct work_struct *work)
 void ilitek_plat_charger_init(void)
 {
 	int ret = 0;
+	struct power_supply *psy = NULL;
+	union power_supply_propval prop;
+
 	ilits->usb_plug_status = 2;
 	ilits->charger_notify_wq = create_singlethread_workqueue("ili_charger_wq");
 	if (!ilits->charger_notify_wq) {
@@ -90,8 +117,34 @@ void ilitek_plat_charger_init(void)
 	INIT_WORK(&ilits->update_charger, ilitek_update_charger);
 	ilits->notifier_charger.notifier_call = ilitek_charger_notifier_callback;
 	ret = power_supply_reg_notifier(&ilits->notifier_charger);
-	if (ret < 0)
+	if (ret < 0) {
 		ILI_ERR("power_supply_reg_notifier failed\n");
+		return;
+	}
+
+	/* if power supply supplier registered brfore TP
+	* ps_notify_callback will not receive PSY_EVENT_PROP_ADDED
+	* event, and will cause miss to set TP into charger state.
+	* So check PS state in probe.
+	*/
+	if (ilits->psy_name)
+		psy = power_supply_get_by_name(ilits->psy_name);
+	else
+		psy = power_supply_get_by_name("usb");
+	if (psy) {
+		ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_STATUS, &prop);
+		if (ret < 0) {
+			ILI_ERR("Couldn't get POWER_SUPPLY_PROP_STATUS rc=%d\n", ret);
+			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT, &prop);
+			if (ret < 0) {
+				ILI_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
+			}
+		}
+		if (!ret) {
+			ilits->usb_plug_status = prop.intval;
+			ILI_INFO("boot check usb_plug_status = %d\n", prop.intval);
+		}
+	}
 }
 /* add_for_charger_end */
 #endif
@@ -119,7 +172,7 @@ static void ilitek_resume_by_ddi_work(struct work_struct *work)
 		} else {
 			ili_reset_ctrl(ilits->reset);
 		}
-	}	
+	}
 
 	ili_irq_enable();
 	ILI_INFO("TP resume end by wq\n");
@@ -672,7 +725,7 @@ int ili_sleep_handler(int mode)
 			if (ili_ic_func_ctrl("proximity", 0x01) < 0) {
 				ILI_ERR("Write proximity cmd failed\n");
 			}
-		}	
+		}
 		}
 
 		ILI_INFO("TP resume end\n");
@@ -711,7 +764,12 @@ int ili_fw_upgrade_handler(void *data)
 #if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
 		/* add_for_charger_start */
 		if (ilits->actual_tp_mode != P5_X_FW_TEST_MODE) {
-			ret = ili_ic_func_ctrl("plug", !ilits->usb_plug_status);/* plug in */
+			ILI_INFO("charge status is %d\n", ilits->usb_plug_status);
+			if (ilits->usb_plug_status == USB_DETECT_IN) {
+				ret = ili_ic_func_ctrl("plug", 0);/* plug in */
+			} else if (ilits->usb_plug_status == USB_DETECT_OUT) {
+				ret = ili_ic_func_ctrl("plug", 1);/* plug out */
+			}
 			if (ret < 0) {
 				ILI_ERR("Write plug in failed\n");
 			}
@@ -980,7 +1038,7 @@ int ili_set_tp_data_len(int format, bool send, u8 *data)
 				if (ilits->gesture_load_code == false) {
 					ret = ili_ic_func_ctrl("lpwg", 0x21);
 				}
-			} else {		
+			} else {
 				if (ilits->prox_face_mode == PROXIMITY_SUSPEND_RESUME) {
 				ilits->prox_face_gesture= true;
 				if (ili_ic_func_ctrl("proximity", 0x00) < 0) {
@@ -1060,7 +1118,7 @@ int ili_set_pen_data_len(u8 header, u8 ctrl, u8 type)
 			if (ilits->PenType == POSITION_PEN_TYPE_ON) {
 				len += P5_X_PEN_DATA_LEN;
 			}
-			
+
 			if (!ilits->compress_handonly_disable) {
 				len = COMPRESS_PACKET_LEN;
 			}
@@ -1134,7 +1192,7 @@ int ili_report_handler(void)
 			ILI_DBG("proxmity face status : Near, cmd : %X\n", ilits->tr_buf[1]);
 		} else if(ilits->tr_buf[1] == PROXIMITY_FAR_STATE_5) {
 			ILI_DBG("proxmity face status : Far, cmd : %X\n", ilits->tr_buf[1]);
-		} else {	
+		} else {
 			ILI_DBG("proxmity face status : Ignore, cmd : %X\n", ilits->tr_buf[1]);
 		}
 		}
@@ -1168,7 +1226,7 @@ int ili_report_handler(void)
 	}
 
 	ili_dump_data(ilits->tr_buf, 8, rlen, 0, "finger report");
-	
+
 	if (ilits->tr_buf[0] == P5_X_GESTURE_PACKET_ID) {
 		if (ilits->rib.nReportResolutionMode == POSITION_LOW_RESOLUTION) {
 			rlen = P5_X_GESTURE_INFO_LENGTH;
