@@ -583,6 +583,20 @@ int ili_core_spi_setup(int num)
 	return 0;
 }
 
+
+static int parse_dt(struct device_node *np)
+{
+	int32_t ret = 0;
+
+#if CHARGER_NOTIFIER_CALLBACK
+	ret = of_property_read_string(np, "touch,psy-name", &ilits->psy_name);
+	if (ilits->psy_name)
+		ILI_INFO("%s: get psy_name:%s", __func__, ilits->psy_name);
+#endif
+
+  return ret;
+}
+
 static int ilitek_spi_probe(struct spi_device *spi)
 {
 	struct touch_bus_info *info =
@@ -688,6 +702,9 @@ static int ilitek_spi_probe(struct spi_device *spi)
 #if MULTI_REPORT_RATE
 	ilits->current_report_rate_mode = DDI60_TP120; 	/*Default report mode*/
 #endif
+
+	//---parse dts---
+	parse_dt(spi->dev.of_node);
 
 #if ENABLE_GESTURE
 	ilits->gesture = DISABLE;

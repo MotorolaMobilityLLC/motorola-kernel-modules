@@ -149,7 +149,13 @@
 #define RESUME_BY_DDI			DISABLE
 #define MP_INT_LEVEL			DISABLE
 #define PLL_CLK_WAKEUP_TP_RESUME	DISABLE
+#ifdef ILI_CONFIG_MTK_CHARGER
+#define CHARGER_NOTIFIER_CALLBACK	ENABLE
+#define USB_DETECT_IN 			1
+#define USB_DETECT_OUT 			2
+#else
 #define CHARGER_NOTIFIER_CALLBACK	DISABLE
+#endif
 #define ENABLE_EDGE_PALM_PARA		DISABLE
 #define MULTI_REPORT_RATE		DISABLE
 #define ENGINEER_FLOW			ENABLE
@@ -1215,6 +1221,10 @@ struct ilitek_ts_data {
 	int gesture_demo_ctrl;
 	struct gesture_symbol ges_sym;
 	struct report_info_block rib;
+
+#if CHARGER_NOTIFIER_CALLBACK
+	const char *psy_name;
+#endif
 
 	u16 flash_mid;
 	u16 flash_devid;
