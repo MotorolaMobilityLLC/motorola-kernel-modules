@@ -180,6 +180,16 @@ const struct mtk_chip_config spi_ctrdata = {
 };
 #endif
 
+#ifdef CONFIG_NVT_MTK_SPI
+const struct mtk_chip_config spi_ctrdata = {
+	.cs_holdtime = 0,
+	.cs_idletime = 0,
+	.tick_delay = 0,
+	.sample_sel = 0,
+	.cs_setuptime = 50,
+};
+#endif
+
 #ifdef NVT_TOUCH_LAST_TIME
 static bool time_flag = 1;
 #endif
@@ -2561,6 +2571,12 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 
 #ifdef CONFIG_SPI_MT65XX
     /* new usage of MTK spi API */
+    memcpy(&ts->spi_ctrl, &spi_ctrdata, sizeof(struct mtk_chip_config));
+    ts->client->controller_data = (void *)&ts->spi_ctrl;
+#endif
+
+#ifdef CONFIG_NVT_MTK_SPI
+    /*cancun MTK spi API */
     memcpy(&ts->spi_ctrl, &spi_ctrdata, sizeof(struct mtk_chip_config));
     ts->client->controller_data = (void *)&ts->spi_ctrl;
 #endif
