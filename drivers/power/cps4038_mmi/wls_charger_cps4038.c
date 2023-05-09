@@ -1249,6 +1249,7 @@ static int cps_wls_get_rx_ss_pkt_value(void)
     cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_SS_VAL]);
     return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
+#endif
 
 static int cps_wls_get_rx_ce_pkt_value(void)
 {
@@ -1257,12 +1258,14 @@ static int cps_wls_get_rx_ce_pkt_value(void)
     return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
 
+#if 0
 static int cps_wls_get_rx_rp_pkt_value(void)
 {
     cps_reg_s *cps_reg;
     cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_RP_VAL]);
     return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
+#endif
 
 static int cps_wls_get_rx_fop_value(void)
 {
@@ -1277,7 +1280,6 @@ static int cps_wls_get_rx_ept_code(void)
     cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_EPT_VAL]);
     return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
-#endif
 
 static int cps_wls_get_rx_neg_power(void)
 {
@@ -1429,14 +1431,14 @@ static int cps_wls_set_fod_para(void)
 
     return CPS_WLS_SUCCESS;
 }
-#if 0
+
 static int cps_wls_get_rx_die_tmp(void)
 {
     cps_reg_s *cps_reg;
     cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_DIE_TMP]);
     return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
-
+#if 0
 static int cps_wls_set_rx_vout_target(int value)
 {
     cps_reg_s *cps_reg;
@@ -2149,6 +2151,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		}
 		cps_bpp_icl_on();
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
+		queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(2000));
 	}
     if(int_flag & RX_INT_READY){
             data[0] = 0x38;
@@ -3998,6 +4001,23 @@ static void cps_epp_current_select(int  *icl, int *vbus)
     cps_wls_log(CPS_LOG_DEBG, "%s icl=%duA vbus=%dmV wls_power=%d", __func__, *icl, *vbus, wls_power);
 }
 
+static void cps_wls_dump_info_work(struct work_struct *work)
+{
+	if (!chip)
+		return;
+
+	if (!chip->rx_ldo_on)
+		return;
+
+	chip->rx_fop = cps_wls_get_rx_fop_value();
+	chip->rx_ept = cps_wls_get_rx_ept_code();
+	chip->rx_ce = cps_wls_get_rx_ce_pkt_value();
+	chip->rx_dietmp = cps_wls_get_rx_die_tmp();
+	cps_wls_log(CPS_LOG_DEBG, "cps_dump_info fop %dkHz,ept 0x%04X, ce %d, dietmp %d\n",
+		chip->rx_fop, chip->rx_ept, chip->rx_ce, chip->rx_dietmp);
+	queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(3000));
+}
+
 static void cps_wls_light_fan_work(struct work_struct *work)
 {
 	int uisoc = 0;
@@ -4520,6 +4540,9 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 		chip->enable_rod = true;
 		INIT_DELAYED_WORK(&chip->offset_detect_work, cps_offset_detect_work);
 	}
+
+	INIT_DELAYED_WORK(&chip->dump_info_work,
+			  cps_wls_dump_info_work);
 
     /* Register thermal zone cooling device */
     chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
