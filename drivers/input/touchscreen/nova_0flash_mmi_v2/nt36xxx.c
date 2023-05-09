@@ -1528,6 +1528,8 @@ static int32_t nvt_ts_point_data_checksum(uint8_t *buf, uint8_t length)
 #define POINT_DATA_LEN 120
 #define MINOR_DATA_OFFSET 70
 #define ORIENT_DATA_OFFSET 110
+#elif defined(NVT_HIGH_RESOLUTION_4X)
+#define POINT_DATA_LEN 108
 #else
 #define POINT_DATA_LEN 65
 #endif
@@ -1637,6 +1639,21 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 			/* update interrupt timer */
 			irq_timer = jiffies;
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
+
+#ifdef NVT_HIGH_RESOLUTION_4X
+			input_x = (uint32_t)(point_data[position + 1] << 8) + (uint32_t) (point_data[position + 2]);
+			input_y = (uint32_t)(point_data[position + 3] << 8) + (uint32_t) (point_data[position + 4]);
+			if ((input_x < 0) || (input_y < 0))
+				continue;
+			if ((input_x > ts->abs_x_max * NVT_HIGH_RESOLUTION_4X) || (input_y > ts->abs_y_max * NVT_HIGH_RESOLUTION_4X))
+				continue;
+			input_major = (uint32_t)(point_data[position+ 5]);
+			if (input_major == 0)
+				input_major = 1;
+			input_p = (uint32_t)(point_data[1 + 98 + i]);
+			if (input_p == 0)
+				input_p = 1;
+#else /* #if NVT_HIGH_RESOLUTION_4X */
 			input_x = (uint32_t)(point_data[position + 1] << 4) + (uint32_t) (point_data[position + 3] >> 4);
 			input_y = (uint32_t)(point_data[position + 2] << 4) + (uint32_t) (point_data[position + 3] & 0x0F);
 			if ((input_x < 0) || (input_y < 0))
@@ -1683,6 +1700,7 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 			}
 			if (input_p == 0)
 				input_p = 1;
+#endif /* #if NVT_HIGH_RESOLUTION_4X */
 
 #if MT_PROTOCOL_B
 			press_id[input_id - 1] = 1;
@@ -2667,8 +2685,15 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 #else
 	input_set_abs_params(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);    //area = 255
 #endif
+
+#ifdef NVT_HIGH_RESOLUTION_4X
+	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, 0, ts->abs_x_max * NVT_HIGH_RESOLUTION_4X, 0, 0);
+	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0, ts->abs_y_max * NVT_HIGH_RESOLUTION_4X, 0, 0);
+#else
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_X, 0, ts->abs_x_max, 0, 0);
 	input_set_abs_params(ts->input_dev, ABS_MT_POSITION_Y, 0, ts->abs_y_max, 0, 0);
+#endif
+
 #if MT_PROTOCOL_B
 	// no need to set ABS_MT_TRACKING_ID, input_mt_init_slots() already set it
 #else
