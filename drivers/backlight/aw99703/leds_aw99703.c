@@ -25,6 +25,7 @@
 #include <linux/delay.h>
 #include <linux/backlight.h>
 #include "leds_aw99703.h"
+#include "aw99703_align.h"
 
 #define AW99703_LED_DEV "aw99703-bl"
 #define AW99703_NAME "aw99703-bl"
@@ -271,7 +272,7 @@ static int aw99703_backlight_init(struct aw99703_data *drvdata)
 	aw99703_i2c_write_bit(drvdata->client,
 				AW99703_REG_MODE,
 				AW99703_MODE_MAP_MASK,
-				AW99703_MODE_MAP_LINEAR);
+				drvdata->map_type);
 
 	/*default OVPSEL 38V*/
 	aw99703_i2c_write_bit(drvdata->client,
@@ -364,6 +365,15 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 	}
 
 	brt_val = aw99703_brightness_map(brt_val);
+
+	if(0 == drvdata->map_type) {
+		if(ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
+			brt_val = bl_mapping_450[brt_val];
+			pr_info("%s bl_mapping brt_val: %d\n", __func__, brt_val);
+		}
+		else if (drvdata->led_current_align)
+			pr_info("%s: unsupport align type: %d\n", __func__, drvdata->led_current_align);
+	}
 
 	if (brt_val > 0) {
 		/*enalbe bl mode*/
@@ -495,6 +505,22 @@ aw99703_get_dt_data(struct device *dev, struct aw99703_data *drvdata)
 		pr_err("%s pwm-mode not found\n", __func__);
 	else
 		pr_info("%s pwm_mode=%d\n", __func__, drvdata->pwm_mode);
+
+	rc = of_property_read_u32(np, "aw99703,map-type", &drvdata->map_type);
+	if (rc != 0) {
+		drvdata->map_type = AW99703_MODE_MAP_LINEAR;
+		pr_err("%s map-type not found\n", __func__);
+	}
+	else
+		pr_info("%s map-type=%d\n", __func__, drvdata->map_type);
+
+	rc = of_property_read_u32(np, "aw99703,current-align-type", &drvdata->led_current_align);
+	if (rc != 0) {
+		drvdata->led_current_align = ALIGN_NONE;
+		pr_err("%s current-align-type not found\n", __func__);
+	}
+	else
+		pr_info("%s current-align-type=%d\n", __func__, drvdata->led_current_align);
 
 	drvdata->using_lsb = of_property_read_bool(np, "aw99703,using-lsb");
 	pr_info("%s using_lsb --<%d>\n", __func__, drvdata->using_lsb);
