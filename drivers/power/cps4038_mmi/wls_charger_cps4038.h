@@ -209,6 +209,10 @@ struct cps_wls_chrg_chip {
     int rx_ntc;
     int rx_neg_power;
     int rx_neg_protocol;
+    int rx_fop;
+    int rx_ept;
+    int rx_ce;
+    int rx_dietmp;
     int command_flag;
     bool rx_offset;
     int enable_rx_offset_detect;
@@ -253,6 +257,7 @@ struct cps_wls_chrg_chip {
     struct delayed_work	bpp_icl_work;
     struct delayed_work	light_fan_work;
     struct delayed_work	offset_detect_work;
+    struct delayed_work	dump_info_work;
     uint32_t bootmode;
     struct thermal_cooling_device *tcd;
     bool ntc_thermal;
