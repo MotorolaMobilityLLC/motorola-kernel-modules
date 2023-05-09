@@ -29,6 +29,10 @@ struct touch_bus_info {
 
 struct ilitek_ts_data *ilits;
 
+#ifdef ILI_MTK_CHECK_PANEL
+const char *active_panel_name;
+#endif
+
 #if SPI_DMA_TRANSFER_SPLIT
 #if SPI_DMA_TRANSFER_SPLIT_OLD
 #define DMA_TRANSFER_MAX_CHUNK		64   /* number of chunks to be transferred. */
@@ -597,11 +601,53 @@ static int parse_dt(struct device_node *np)
   return ret;
 }
 
+#ifdef ILI_MTK_CHECK_PANEL
+static void ili_get_active_panel(void)
+{
+	int rc;
+	struct device_node *chosen = of_find_node_by_name(NULL, "chosen");
+
+	if(chosen) {
+		rc = of_property_read_string(chosen, "mmi,panel_name", (const char **)&active_panel_name);
+		if (rc)
+			ILI_INFO("mmi,panel_name null\n");
+		else
+			ILI_DBG("active_panel_name=%s\n", active_panel_name);
+	}
+	else
+		ILI_INFO("chosen node null\n");
+
+}
+
+static int ili_check_panel(void)
+{
+	ILI_DBG("enter");
+	ili_get_active_panel();
+
+	if (!active_panel_name)
+		ILI_INFO("active_panel NULL\n");
+	else if(strstr(active_panel_name, "ili78") || strstr(active_panel_name, "ili98"))
+	{
+		ILI_INFO("matched active_panel:%s ", active_panel_name);
+		return 0;
+	}
+	else
+		ILI_DBG("not macthed active_panel:%s\n", active_panel_name);
+
+	return -1;
+}
+
+#endif
+
 static int ilitek_spi_probe(struct spi_device *spi)
 {
 	struct touch_bus_info *info =
 	container_of(to_spi_driver(spi->dev.driver),
 		struct touch_bus_info, bus_driver);
+
+#ifdef ILI_MTK_CHECK_PANEL
+	int ret;
+#endif
 
 	ILI_INFO("ilitek spi probe\n");
 
@@ -609,6 +655,14 @@ static int ilitek_spi_probe(struct spi_device *spi)
 		ILI_ERR("spi device is NULL\n");
 		return -ENODEV;
 	}
+
+#ifdef ILI_MTK_CHECK_PANEL
+	ret = ili_check_panel();
+	if (ret) {
+		ILI_INFO("check panel error\n");
+		return ret;
+	}
+#endif
 
 	ilits = devm_kzalloc(&spi->dev, sizeof(struct ilitek_ts_data), GFP_KERNEL);
 	if (ERR_ALLOC_MEM(ilits)) {
