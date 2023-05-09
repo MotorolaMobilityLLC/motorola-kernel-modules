@@ -240,6 +240,11 @@ const unsigned char aw99703_reg_access[AW99703_REG_MAX] = {
 #define AW_READ_CHIPID_RETRIES 5
 #define AW_READ_CHIPID_RETRY_DELAY 2
 
+enum backlight_exp_current_align {
+	ALIGN_NONE,
+	ALIGN_BL_MAPPING_450
+};
+
 struct aw99703_data {
 	struct led_classdev led_dev;
 	struct i2c_client *client;
@@ -256,6 +261,8 @@ struct aw99703_data {
 	unsigned short *brt_code_table;
 	int hwen_gpio;
 	unsigned int  pwm_mode;
+	unsigned int map_type;
+	unsigned int led_current_align;
 	bool using_lsb;
 	bool skip_first_trans;
 	bool reset_trans_delay;
