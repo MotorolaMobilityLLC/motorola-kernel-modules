@@ -102,6 +102,10 @@
 #include <linux/msm_drm_notify.h>
 #endif
 
+#ifdef ILI_SENSOR_EN
+#include <linux/sensors.h>
+#endif
+
 #ifdef CONFIG_MTK_SPI
 #include "mt_spi.h"
 #include "sync_write.h"
@@ -142,7 +146,11 @@
 #define MT_PRESSURE				DISABLE
 #define ENABLE_WQ_ESD			DISABLE
 #define ENABLE_WQ_BAT			DISABLE
+#ifdef ILI_SENSOR_EN
 #define ENABLE_GESTURE			ENABLE
+#else
+#define ENABLE_GESTURE			DISABLE
+#endif
 #define REGULATOR_POWER			DISABLE
 #define TP_SUSPEND_PRIO			ENABLE
 #define BOOT_FW_UPDATE			ENABLE
@@ -510,7 +518,8 @@ struct gesture_symbol {
 	u8 alphabet_two_line_2_bottom :1;
 	u8 alphabet_F                 :1;
 	u8 alphabet_AT                :1;
-	u8 reserve0 		      :5;
+	u8 single_tap                 :1;
+	u8 reserve0 		      :4;
 };
 
 struct report_info_block {
@@ -827,6 +836,7 @@ struct ilitek_pen_info {
 
 /* The example for the gesture virtual keys */
 #define GESTURE_DOUBLECLICK				0x58
+#define GESTURE_SINGLECLICK				0x57
 #define GESTURE_UP					0x60
 #define GESTURE_DOWN					0x61
 #define GESTURE_LEFT					0x62
@@ -890,6 +900,7 @@ struct ilitek_pen_info {
 #define ALPHABET_TWO_LINE_2_BOTTOM			(ON)/* BIT16 */
 #define ALPHABET_F					(ON)/* BIT17 */
 #define ALPHABET_AT					(ON)/* BIT18 */
+#define SINGLE_TAP                                   	(ON)/* BIT19 */
 
 /* FW data format */
 #define DATA_FORMAT_DEMO_CMD				0x00
@@ -1073,6 +1084,26 @@ struct ilitek_pen_info {
 
 #define SRAM_TEST_GROUP_LEN     16
 #define SRAM_TEST_GROUP_STR_LEN 64
+
+#ifdef ILI_SENSOR_EN
+enum touch_panel_id {
+	TOUCH_PANEL_IDX_PRIMARY = 0,
+	TOUCH_PANEL_MAX_IDX,
+};
+
+enum touch_state {
+	TOUCH_DEEP_SLEEP_STATE = 0,
+	TOUCH_LOW_POWER_STATE,
+};
+struct ili_sensor_platform_data {
+	struct input_dev *input_sensor_dev;
+	struct sensors_classdev ps_cdev;
+	int sensor_opened;
+	char sensor_data; /* 0 near, 1 far */
+	struct ilitek_ts_data *data;
+};
+#define REPORT_MAX_COUNT 10000
+#endif
 
 struct sram_test_para {
 	/* ini param */
@@ -1298,6 +1329,25 @@ struct ilitek_ts_data {
 	atomic_t tp_sw_mode;
 	atomic_t cmd_int_check;
 	atomic_t esd_stat;
+
+#ifdef ILI_SENSOR_EN
+	bool wakeable;
+	bool should_enable_gesture;
+	bool gesture_enabled;
+	uint32_t report_gesture_key;
+#ifdef ILI_DOUBLE_TAP_CTRL
+	uint8_t supported_gesture_type;
+	uint8_t sys_gesture_type;
+#endif
+	struct mutex state_mutex;
+	struct ili_sensor_platform_data *sensor_pdata;
+#ifdef CONFIG_HAS_WAKELOCK
+	struct wake_lock gesture_wakelock;
+#else
+	struct wakeup_source *gesture_wakelock;
+#endif
+#endif //ILI_SENSOR_EN
+
 	atomic_t ignore_report;
 	atomic_t sync_stat;
 	atomic_t slave_ice_stat;
@@ -1575,6 +1625,14 @@ extern void ili_get_dma1_config(struct ilitek_dma_config *dma);
 extern void ili_set_dma1_config(struct ilitek_dma_config *dma);
 extern int file_write(struct file_buffer *file, bool new_open);
 extern int ili_ic_check_debug_lite_support(int format, bool send, u8 *data);
+
+#ifdef ILI_SET_TOUCH_STATE
+extern int touch_set_state(int state, int panel_idx);
+#endif
+
+#ifdef ILI_DOUBLE_TAP_CTRL
+void ili_gesture_state_switch(void);
+#endif
 
 static inline void ipio_kfree(void **mem)
 {
