@@ -592,6 +592,26 @@ static int parse_dt(struct device_node *np)
 {
 	int32_t ret = 0;
 
+#ifdef ILI_DOUBLE_TAP_CTRL
+	uint32_t value;
+
+	if (!of_property_read_u32(np, "ilitek,supported_gesture_type", &value)) {
+		ilits->supported_gesture_type = (uint8_t)value;
+		ILI_INFO("supported_gesture_type=%d\n", ilits->supported_gesture_type);
+	}
+	else
+		ILI_INFO("warn: supported_gesture_type not set\n");
+#endif //ILI_DOUBLE_TAP_CTRL
+
+#ifdef ILI_SENSOR_EN
+	if (of_property_read_bool(np, "ilitek,report_gesture_key")) {
+		ILI_INFO("ilitek,report_gesture_key set");
+		ilits->report_gesture_key = 1;
+	} else {
+		ilits->report_gesture_key = 0;
+	}
+#endif
+
 #if CHARGER_NOTIFIER_CALLBACK
 	ret = of_property_read_string(np, "touch,psy-name", &ilits->psy_name);
 	if (ilits->psy_name)
@@ -761,7 +781,7 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	parse_dt(spi->dev.of_node);
 
 #if ENABLE_GESTURE
-	ilits->gesture = DISABLE;
+	ilits->gesture = ENABLE;
 	ilits->ges_sym.double_tap = DOUBLE_TAP;
 	ilits->ges_sym.alphabet_line_2_top = ALPHABET_LINE_2_TOP;
 	ilits->ges_sym.alphabet_line_2_bottom = ALPHABET_LINE_2_BOTTOM;
@@ -781,6 +801,8 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	ilits->ges_sym.alphabet_two_line_2_bottom = ALPHABET_TWO_LINE_2_BOTTOM;
 	ilits->ges_sym.alphabet_F = ALPHABET_F;
 	ilits->ges_sym.alphabet_AT = ALPHABET_AT;
+
+	ILI_INFO("gesture eanble:%d\n", ilits->gesture);
 #endif
 
 	if (ili_core_spi_setup(SPI_CLK) < 0)

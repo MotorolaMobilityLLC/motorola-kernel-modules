@@ -3975,10 +3975,135 @@ static ssize_t ic_ver_show(struct device *dev,
 			(ilits->chip->core_ver >> 8) & 0xFF, ilits->chip->core_ver & 0xFF);
 }
 
+#ifdef ILI_DOUBLE_TAP_CTRL
+/*
+ * gesture value used to indicate which gesture mode type is supported
+ */
+static ssize_t gesture_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ILI_INFO("supported_gesture_type=%d", ilits->supported_gesture_type);
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", ilits->supported_gesture_type);
+}
+
+/*
+ * gesture value used to indicate which gesture mode type is supported.
+ * the gesture node will be stored when gesture mode updated from system
+ */
+static ssize_t gesture_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int value;
+	int err = 0;
+
+	err = sscanf(buf, "%d", &value);
+	if (err < 0) {
+		ILI_INFO("Failed to convert value\n");
+		return -EINVAL;
+	}
+
+	err = count;
+
+	switch (value) {
+		case 0x20:
+			ILI_INFO("single tap disable\n");
+			ilits->ges_sym.single_tap = OFF;
+			ilits->sys_gesture_type &= 0xFD;
+			break;
+		case 0x21:
+			ILI_INFO("single tap enable\n");
+			ilits->ges_sym.single_tap = SINGLE_TAP;
+			ilits->sys_gesture_type |= 0x02;
+			break;
+		case 0x30:
+			ILI_INFO("double tap disable\n");
+			ilits->ges_sym.double_tap = OFF;
+			ilits->sys_gesture_type &= 0xFB;
+			break;
+		case 0x31:
+			ILI_INFO("double tap enable\n");
+			ilits->ges_sym.double_tap = DOUBLE_TAP;
+			ilits->sys_gesture_type |= 0x04;
+			break;
+		default:
+			ILI_INFO("unsupport gesture mode type\n");
+			return err;
+	}
+
+	ili_gesture_state_switch();
+	ILI_INFO("sys_gesture_type=%d, should_enable_gesture=%d\n", ilits->sys_gesture_type, ilits->should_enable_gesture);
+
+	return err;
+}
+
+/*
+ * gesture type debug value used for nvt driver to check current gesture mode
+ */
+static ssize_t gesture_type_dbg_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", ilits->sys_gesture_type);
+}
+
+static ssize_t gesture_type_dbg_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int value;
+	int err = 0;
+
+	ILI_DBG("enter\n");
+	err = sscanf(buf, "%d", &value);
+	if (err < 0) {
+		ILI_INFO("Failed to convert value\n");
+		return -EINVAL;
+	}
+
+	err = count;
+	ILI_INFO("value=%d\n", value);
+
+	switch (value) {
+		case 2: //SYS_GESTURE_TYPE_SINGLE_ONLY:
+			ilits->sys_gesture_type = value;
+			ilits->ges_sym.single_tap = SINGLE_TAP;
+			ilits->ges_sym.double_tap = OFF;
+			ILI_INFO("sys_gesture_type: %d\n", ilits->sys_gesture_type);
+			break;
+		case 4: //SYS_GESTURE_TYPE_DOUBLE_ONLY:
+			ilits->sys_gesture_type = value;
+			ilits->ges_sym.single_tap = OFF;
+			ilits->ges_sym.double_tap = DOUBLE_TAP;
+			ILI_INFO("sys_gesture_type: %d\n", ilits->sys_gesture_type);
+			break;
+		case 6: //SYS_GESTURE_TYPE_SINGLE_DOUBLE:
+			ilits->sys_gesture_type = value;
+			ilits->ges_sym.single_tap = SINGLE_TAP;
+			ilits->ges_sym.double_tap = DOUBLE_TAP;
+			ILI_INFO("sys_gesture_type: %d\n", ilits->sys_gesture_type);
+			break;
+		default:
+			//disable gesture
+			ilits->sys_gesture_type = 0;
+			ilits->ges_sym.single_tap = OFF;
+			ilits->ges_sym.double_tap = OFF;
+			ILI_INFO("unsupport gesture mode type\n");
+			break;
+	}
+
+	ili_gesture_state_switch();
+	ILI_INFO("sys_gesture_type=%d, should_enable_gesture=%d\n", ilits->sys_gesture_type, ilits->should_enable_gesture);
+
+	return err;
+}
+#endif //ILI_DOUBLE_TAP_CTRL
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
+#ifdef ILI_DOUBLE_TAP_CTRL
+	__ATTR(gesture, S_IRUGO | S_IWUSR | S_IWGRP, gesture_show, gesture_store),
+	__ATTR(gesture_type_dbg, S_IRUGO | S_IWUSR | S_IWGRP, gesture_type_dbg_show, gesture_type_dbg_store),
+#endif
 	__ATTR_NULL
 };
 

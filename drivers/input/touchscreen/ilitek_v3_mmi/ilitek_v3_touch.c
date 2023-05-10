@@ -513,7 +513,8 @@ void ili_set_gesture_symbol(void)
 		return;
 	}
 
-	ILI_DBG(" double_tap = %d\n", ilits->ges_sym.double_tap);
+	ILI_INFO(" single_tap = %d\n", ilits->ges_sym.single_tap);
+	ILI_INFO(" double_tap = %d\n", ilits->ges_sym.double_tap);
 	ILI_DBG(" alphabet_line_2_top = %d\n", ilits->ges_sym.alphabet_line_2_top);
 	ILI_DBG(" alphabet_line_2_bottom = %d\n", ilits->ges_sym.alphabet_line_2_bottom);
 	ILI_DBG(" alphabet_line_2_left = %d\n", ilits->ges_sym.alphabet_line_2_left);
@@ -668,7 +669,7 @@ int ili_touch_esd_gesture_flash(void)
 	} else {
 		ret = ili_ice_mode_ctrl(ENABLE, OFF);
 	}
-	
+
 	if (ret < 0) {
 		ILI_ERR("Enable ice mode failed during gesture recovery\n");
 		return ret;
@@ -683,7 +684,7 @@ int ili_touch_esd_gesture_flash(void)
 	} else {
 		ret = ili_ice_mode_write(ges_pwd_addr, ges_pwd, pwd_len);
 	}
-	
+
 	if (ret < 0) {
 		ILI_ERR("write password failed\n");
 		goto out;
@@ -718,7 +719,7 @@ int ili_touch_esd_gesture_flash(void)
 	if (ilits->cascade_info_block.nNum != 0) {
 		do {
 			ret = ili_ice_mode_read_by_mode(ges_pwd_addr, &slave_answer, pwd_len, SLAVE);
-			
+
 			if (ret < 0) {
 				ILI_ERR("Read Slave gesture answer error\n");
 				goto out;
@@ -734,7 +735,7 @@ int ili_touch_esd_gesture_flash(void)
 	/* polling another specific register to see if gesutre is enabled properly */
 	do {
 		ret = ili_ice_mode_read_by_mode(ges_pwd_addr, &answer, pwd_len, MASTER);
-		
+
 		if (ret < 0) {
 			ILI_ERR("Read Master gesture answer error\n");
 			goto out;
@@ -813,7 +814,7 @@ int ili_touch_esd_gesture_iram(void)
 	} else {
 		ret = ili_ice_mode_ctrl(ENABLE, OFF);
 	}
-	
+
 	if (ret < 0) {
 		ILI_ERR("Enable ice mode failed during gesture recovery\n");
 		goto fail;
@@ -1349,7 +1350,7 @@ static void ili_pen_down(u16 x, u16 y, u16 pressure)
 	input_report_key(ilits->input_pen, BTN_STYLUS, ilits->pen_info.BarelSwitch);
 	input_report_key(ilits->input_pen, BTN_STYLUS2, ilits->pen_info.Eraser);
 	input_report_abs(ilits->input_pen, ABS_TILT_X, ilits->pen_info.tilt_x);
-	input_report_abs(ilits->input_pen, ABS_TILT_Y, ilits->pen_info.tilt_y);	
+	input_report_abs(ilits->input_pen, ABS_TILT_Y, ilits->pen_info.tilt_y);
 
 	/* Hover Report Rate Test */
 	if (ilits->pen_info.TipSwitch) {
@@ -1395,7 +1396,7 @@ void ili_pen_demo_mode_report_point(u8 *buf, int len)
 	} else if (ilits->rib.nCustomerType != ilits->customertype_off && ilits->rib.nReportResolutionMode == POSITION_LOW_RESOLUTION) {
 		PenStartIdx = P5_X_DEMO_LOW_RESOLUTION_FINGER_DATA_LENGTH + P5_X_P_SENSOR_KEY_LENGTH + P5_X_CUSTOMER_LENGTH;
 	} else if (ilits->rib.nCustomerType != ilits->customertype_off && ilits->rib.nReportResolutionMode == POSITION_HIGH_RESOLUTION) {
-		PenStartIdx = P5_X_DEMO_HIGH_RESOLUTION_FINGER_DATA_LENGTH + P5_X_P_SENSOR_KEY_LENGTH + P5_X_CUSTOMER_LENGTH;		
+		PenStartIdx = P5_X_DEMO_HIGH_RESOLUTION_FINGER_DATA_LENGTH + P5_X_P_SENSOR_KEY_LENGTH + P5_X_CUSTOMER_LENGTH;
 	} else if (ilits->rib.nCustomerType == ilits->customertype_off && ilits->rib.nReportResolutionMode == POSITION_HIGH_RESOLUTION) {
 		PenStartIdx = P5_X_DEMO_HIGH_RESOLUTION_FINGER_DATA_LENGTH + P5_X_P_SENSOR_KEY_LENGTH;
 	}
@@ -1494,7 +1495,7 @@ void ili_pen_demo_mode_report_point(u8 *buf, int len)
 			}
 			touch_info[PEN_INDEX].id = i;
 			touch_info[PEN_INDEX].pressure = ( buf[PenStartIdx + TOUCH_PRESS_OFFSET] << 8 ) + buf[PenStartIdx + TOUCH_PRESS_OFFSET + 1];
-			
+
 			ilits->pen++;
 			ilits->curt_touch[PEN_INDEX] = 1;
 			ilits->prev_touch[PEN_INDEX] = 1;
@@ -1634,7 +1635,7 @@ void ili_pen_debug_mode_report_point(u8 *buf, int len, u8 offset)
 		} else if (ilits->rib.nCustomerType != ilits->customertype_off && ilits->rib.nReportResolutionMode == POSITION_LOW_RESOLUTION) {
 			PenStartIdx = P5_X_DEBUG_LOW_RESOLUTION_FINGER_DATA_LENGTH + ilits->cdc_data_len + P5_X_CUSTOMER_LENGTH;
 		} else if (ilits->rib.nCustomerType != ilits->customertype_off && ilits->rib.nReportResolutionMode == POSITION_HIGH_RESOLUTION) {
-			PenStartIdx = P5_X_DEBUG_HIGH_RESOLUTION_FINGER_DATA_LENGTH + ilits->cdc_data_len + P5_X_CUSTOMER_LENGTH;					
+			PenStartIdx = P5_X_DEBUG_HIGH_RESOLUTION_FINGER_DATA_LENGTH + ilits->cdc_data_len + P5_X_CUSTOMER_LENGTH;
 		} else if (ilits->rib.nCustomerType == ilits->customertype_off && ilits->rib.nReportResolutionMode == POSITION_HIGH_RESOLUTION) {
 			PenStartIdx = P5_X_DEBUG_HIGH_RESOLUTION_FINGER_DATA_LENGTH + ilits->cdc_data_len;
 		}
@@ -1665,7 +1666,7 @@ void ili_pen_debug_mode_report_point(u8 *buf, int len, u8 offset)
 			ilits->pen_info.active = false;
 		}
 		ILI_DBG("Pen is active : %s\n", ilits->pen_info.active ? "True" : "False");
-			
+
 		if (i >= MAX_TOUCH_NUM) {
 			if (ilits->pen_info.active) {
 				xop = ((buf[PenStartIdx + 2] << 8) | (buf[PenStartIdx + 3]));
@@ -1742,7 +1743,7 @@ void ili_pen_debug_mode_report_point(u8 *buf, int len, u8 offset)
 
 			touch_info[PEN_INDEX].id = i;
 			touch_info[PEN_INDEX].pressure = ( buf[PenStartIdx + TOUCH_PRESS_OFFSET] << 8 ) + buf[PenStartIdx + TOUCH_PRESS_OFFSET + 1];
-			
+
 			ilits->pen++;
 			ilits->curt_touch[PEN_INDEX] = 1;
 			ilits->prev_touch[PEN_INDEX] = 1;
@@ -1977,7 +1978,7 @@ void ili_report_pen_debug_mode(u8 *buf, int len)
 	if (ilits->pen_info.report_type != P5_X_ONLY_PEN_TYPE) {
 		ilitek_tddi_touch_customer_data_parsing(buf);
 	}
-	
+
 	ilitek_tddi_touch_send_debug_data(buf, len);
 }
 
@@ -2010,7 +2011,7 @@ void ili_report_proximity_mode(u8 *buf, int len)
 		proxmity_face_status = PROXIMITY_IGNORE_STATE;
 		ILI_DBG("Set proximity State : Ignore, cmd : %X\n", buf[1]);
 	}
-	
+
 	if ((ilits->actual_tp_mode == P5_X_FW_AP_MODE) && (proxmity_face_status == PROXIMITY_NEAR_STATE) && (ilits->power_status == true) && (ilits->proxmity_face == false)) {
 		input_report_key(input, KEY_GESTURE_POWER, 1);
 		input_sync(input);
@@ -2036,7 +2037,11 @@ void ili_report_gesture_mode(u8 *buf, int len)
 {
 	int lu_x = 0, lu_y = 0, rd_x = 0, rd_y = 0, score = 0;
 	struct gesture_coordinate *gc = ilits->gcoord;
+#ifdef ILI_SENSOR_EN
+	static int report_cnt = 0;
+#else
 	struct input_dev *input = ilits->input;
+#endif
 	bool transfer = ilits->trans_xy;
 	u8 ges[P5_X_GESTURE_INFO_LENGTH_HIGH_RESOLUTION] = {0};
 
@@ -2083,12 +2088,47 @@ void ili_report_gesture_mode(u8 *buf, int len)
 	ILI_INFO("gesture code = 0x%x, score = %d\n", gc->code, score);
 
 	switch (gc->code) {
+	case GESTURE_SINGLECLICK:
 	case GESTURE_DOUBLECLICK:
-		ILI_INFO("Double Click key event\n");
+		ILI_INFO("Gesture Click key event 0x%x\n", gc->code);
+#ifdef ILI_SENSOR_EN
+		if (!(ilits->wakeable && ilits->should_enable_gesture)) {
+			ILI_INFO("Gesture got but wakeable not set. Skip this gesture.");
+			return;
+		}
+		if (ilits->report_gesture_key) {
+			int key_code = KEY_F1;
+#ifdef ILI_DOUBLE_TAP_CTRL
+			if (GESTURE_DOUBLECLICK == gc->code) {
+				key_code = KEY_F4;
+			}
+#endif
+			input_report_key(ilits->sensor_pdata->input_sensor_dev, key_code, 1);
+			input_sync(ilits->sensor_pdata->input_sensor_dev);
+			input_report_key(ilits->sensor_pdata->input_sensor_dev, key_code, 0);
+			input_sync(ilits->sensor_pdata->input_sensor_dev);
+			++report_cnt;
+			ILI_INFO("input report keycode %d, report_cnt: %d", key_code, report_cnt);
+		} else {
+			input_report_abs(ilits->sensor_pdata->input_sensor_dev,
+					ABS_DISTANCE,
+					++report_cnt);
+			input_sync(ilits->sensor_pdata->input_sensor_dev);
+		}
+		if (report_cnt >= REPORT_MAX_COUNT) {
+			report_cnt = 0;
+		}
+#ifdef CONFIG_HAS_WAKELOCK
+		wake_lock_timeout(&(ilits->gesture_wakelock), msecs_to_jiffies(5000));
+#else
+		PM_WAKEUP_EVENT(ilits->gesture_wakelock, 5000);
+#endif
+#else
 		input_report_key(input, KEY_GESTURE_POWER, 1);
 		input_sync(input);
 		input_report_key(input, KEY_GESTURE_POWER, 0);
 		input_sync(input);
+#endif
 		gc->type  = GESTURE_DOUBLECLICK;
 		gc->clockwise = 1;
 		gc->pos_end.x = gc->pos_start.x;
