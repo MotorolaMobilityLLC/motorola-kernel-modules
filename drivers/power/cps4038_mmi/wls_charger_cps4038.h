@@ -77,6 +77,7 @@
 #define RX_INT_HS_FAIL     (0x01<<21)
 #define RX_INT_FC_FAIL     (0x01<<22)
 #define RX_INT_NEGO_POWER_READY     (0x01<<23)
+#define RX_INT_PT     (0x01<<24)
 /*rx命令定义*/
 #define RX_CMD_SEND_ASK         (0x01<<0)
 #define RX_CMD_RESERVE2         (0x01<<1)
@@ -213,6 +214,7 @@ struct cps_wls_chrg_chip {
     int rx_ept;
     int rx_ce;
     int rx_dietmp;
+    int rx_vout_set;
     int command_flag;
     bool rx_offset;
     int enable_rx_offset_detect;
