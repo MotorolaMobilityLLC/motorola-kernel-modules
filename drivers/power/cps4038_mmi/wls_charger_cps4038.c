@@ -1438,6 +1438,13 @@ static int cps_wls_get_rx_die_tmp(void)
     cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_ADC_DIE_TMP]);
     return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
+
+static int cps_wls_get_rx_vout_set(void)
+{
+    cps_reg_s *cps_reg;
+    cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_VOUT_SET]);
+    return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
+}
 #if 0
 static int cps_wls_set_rx_vout_target(int value)
 {
@@ -2205,6 +2212,12 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		cps_epp_icl_on();
 	}
 
+	if (int_flag & RX_INT_PT) {
+		chip->rx_vout_set = cps_wls_get_rx_vout_set();
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_PT rx_vout_set %dmV",
+			chip->rx_vout_set);
+	}
+
 	if (int_flag & RX_INT_HS_OK) {
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_OK");
 		cps_get_sys_op_mode(&mode_type);
@@ -2629,6 +2642,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			chip->rx_ldo_on = false;
 			chip->rx_offset_detect_count = 0;
 			chip->rx_offset = false;
+			chip->rx_vout_set = 0;
 			if (chip->factory_wls_en == true) {
 				chip->factory_wls_en = false;
 				mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
