@@ -10,9 +10,20 @@ ifeq ($(filter m y, $(CONFIG_TOUCHSCREEN_ILITEK_CHIPSET)),)
 	obj-m += ilitek_v3_mmi.o
 endif
 
-ifneq ($(filter m y,$(CONFIG_INPUT_ILI_0FLASH_MMI_ENABLE_DOUBLE_TAP)),)
+ifneq ($(filter m y,$(CONFIG_INPUT_ILI_ENABLE_DOUBLE_TAP)),)
 	EXTRA_CFLAGS += -DILI_SENSOR_EN
+	KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 endif
+
+ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
+	EXTRA_CFLAGS += -DILI_DOUBLE_TAP_CTRL
+	EXTRA_CFLAGS += -DILI_PRIMARY_NODE
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_ILI_SET_TOUCH_STATE)),)
+	EXTRA_CFLAGS += -DILI_SET_TOUCH_STATE
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_ILI_PANEL_NOTIFICATIONS)),)
 EXTRA_CFLAGS += -DILI_CONFIG_PANEL_NOTIFICATIONS
 endif
@@ -24,9 +35,6 @@ EXTRA_CFLAGS += -DILI_CONFIG_MTK_CHARGER
 endif
 ifneq ($(filter m y,$(CONFIG_ILITEK_ESD)),)
 EXTRA_CFLAGS += -DILI_CONFIG_ESD
-endif
-ifneq ($(filter m y,$(CONFIG_ILITEK_GESTURE)),)
-EXTRA_CFLAGS += -DILI_CONFIG_GESTURE
 endif
 
 ifneq ($(filter m y,$(CONFIG_ILITEK_MTK_CHECK_PANEL)),)
