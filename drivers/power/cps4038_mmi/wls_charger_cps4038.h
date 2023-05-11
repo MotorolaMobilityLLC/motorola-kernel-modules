@@ -215,6 +215,7 @@ struct cps_wls_chrg_chip {
     int rx_ce;
     int rx_dietmp;
     int rx_vout_set;
+    int rx_vout_threshold;
     int command_flag;
     bool rx_offset;
     int enable_rx_offset_detect;
