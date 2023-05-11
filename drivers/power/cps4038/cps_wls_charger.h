@@ -83,6 +83,7 @@ struct tags_bootmode {
 #define RX_INT_HS_FAIL     (0x01<<21)
 #define RX_INT_FC_FAIL     (0x01<<22)
 #define RX_INT_NEGO_POWER_READY     (0x01<<23)
+#define RX_INT_PT     (0x01<<24)
 /*rx命令定义*/
 #define RX_CMD_SEND_DATA         (0x01<<0)
 #define RX_CMD_FAST_CHARGING         (0x01<<1)
@@ -298,6 +299,19 @@ struct cps_wls_chrg_chip {
     bool moto_stand;
     bool factory_mode;
     struct moto_chg_tcmd_client *chg_tcmd_client;
+
+    bool rx_offset;
+    int enable_rx_offset_detect;
+    bool enable_rod;
+    int rx_offset_detect_count;
+    int rod_stop_battery_soc;
+    Sys_Op_Mode qi_mode_type;
+    int thermal_icl;
+    struct delayed_work	offset_detect_work;
+    ktime_t rx_start_ktime;
+    bool rod_stop;
+    int rx_vout_set;
+    int rx_vout_threshold;
 };
 
 typedef enum ept_reason

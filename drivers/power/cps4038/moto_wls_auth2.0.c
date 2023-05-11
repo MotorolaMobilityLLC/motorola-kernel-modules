@@ -170,6 +170,15 @@ int motoauth_send_wls_sysfs_notify(const char *str)
 	return MOTO_WLS_AUTH_FAIL;
 }
 
+int motoauth_wls_set_status(wlc_status st)
+{
+	if (motoauth && motoauth->wls_set_status) {
+		motoauth->wls_set_status(st);
+		return MOTO_WLS_AUTH_SUCCESS;
+	}
+	return MOTO_WLS_AUTH_FAIL;
+}
+
 int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 {
 	int status = MOTO_WLS_AUTH_SUCCESS;
@@ -193,7 +202,7 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 		motoauth->WLC_STATUS = WLC_TX_CAPABILITY_CHANGED;
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, " WLC_MOTO, NOTIFY_EVENT_WLS_WLC_CHANGE , WLS_WLC_CAPABILITY %d", motoauth->WLS_WLC_CAPABILITY);
 
-		motoauth_send_wls_sysfs_notify("wlc_st_changed");
+		motoauth_wls_set_status(motoauth->WLC_STATUS);
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_ID next");
 		motoauth_event_notify(MOTOAUTH_EVENT_TX_ID);
 		break;
@@ -212,7 +221,7 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, " QI_ASK_CMD_TXID: cmd 0x%x, data[0] 0x%x, data[1] 0x%x",
 			data[0], data[1], data[2]);
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, " WLC_MOTO, NOTIFY_EVENT_WLS_WLC_CHANGE , WLS_WLC_ID %d", motoauth->WLS_WLC_ID);
-		motoauth_send_wls_sysfs_notify("wlc_st_changed");
+		motoauth_wls_set_status(motoauth->WLC_STATUS);
 		if (WLS_WLC_POWER_MAX <= 15) {
 			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_SN next");
 			motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
@@ -239,7 +248,7 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 			motoauth->WLS_WLC_POWER = data[2] / 2;
 			motoauth->WLC_STATUS = WLC_TX_POWER_CHANGED;
 			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " WLC_MOTO, NOTIFY_EVENT_WLS_WLC_CHANGE , wlc_power %d", motoauth->WLS_WLC_POWER);
-			motoauth_send_wls_sysfs_notify("wlc_st_changed");
+			motoauth_wls_set_status(motoauth->WLC_STATUS);
 			if (motoauth->WLS_WLC_POWER <= 5) {
 				motoauth_wls_log(MOTOAUTH_LOG_DEBG, " WLC_TYPE is still MOTO_WLC, power only 5W, Reset ICL to 1A");
 				//sw_set_wls_icl(1000);
@@ -282,7 +291,7 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 		motoauth->WLS_WLC_SN = (uint32_t)(data[1] << 24 | (data[2] << 16 | (data[3] << 8 | data[4])));
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, " WLC_MOTO, NOTIFY_EVENT_WLS_WLC_CHANGE , WLS_WLC_SN %d", motoauth->WLS_WLC_SN);
 		motoauth_timer_stop();
-		motoauth_send_wls_sysfs_notify("wlc_st_changed");
+		motoauth_wls_set_status(motoauth->WLC_STATUS);
 		motoauth_event_notify(MOTOAUTH_EVENT_DONE);
 		break;
 		default:
@@ -365,7 +374,7 @@ int motoauth_events_process(void)
 			moto_auth_status = MOTO_AUTH_TX_CAPABILITY;
 			if (motoauth->WLC_STATUS == WLC_DISCONNECTED) {
 				motoauth->WLC_STATUS = WLC_CONNECTED;
-				motoauth_send_wls_sysfs_notify("wlc_st_changed");
+				motoauth_wls_set_status(motoauth->WLC_STATUS);
 			}
 			moto_auth_send_ask_tx_capability();
 			break;
@@ -374,7 +383,7 @@ int motoauth_events_process(void)
 			moto_auth_status = MOTO_AUTH_TX_ID;
 			if (motoauth->WLC_STATUS == WLC_DISCONNECTED) {
 				motoauth->WLC_STATUS = WLC_CONNECTED;
-				motoauth_send_wls_sysfs_notify("wlc_st_changed");
+				motoauth_wls_set_status(motoauth->WLC_STATUS);
 			}
 			moto_auth_send_ask_tx_id();
 			break;
