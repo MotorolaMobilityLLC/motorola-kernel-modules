@@ -2124,6 +2124,11 @@ static void cps_epp_icl_on()
 			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
 			charger_dev_set_input_current(chip->chg1_dev, icl);
 		}
+		if (chip->enable_rod) {
+			chip->rx_start_ktime = ktime_get_boottime();
+			chip->rod_stop = false;
+			queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(3000));
+		}
 	}
 }
 
@@ -2356,6 +2361,12 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 #define WLS_ROD_STOP_BATERY_SOC 90
 #define WLS_ROD_STOP_TIME (60*1000*1000*1000uL) /*60s*/
 
+#define WLS_EPP_ROD_DETECT_COUNT_MAX 3
+#define WLS_EPP_ROD_THRESHOLD_CURRENT_MAX_PER 80 /*%*/
+#define WLS_EPP_ROD_THRESHOLD_CURRENT_MIN_PER 70 /*%*/
+#define WLS_EPP_ROD_THRESHOLD_12V 10500 /*mV*/
+#define WLS_EPP_ROD_THRESHOLD_10V 9000 /*mV*/
+
 static void cps_bpp_mode_icl_work(struct work_struct *work)
 {
 	struct cps_wls_chrg_chip *chg = chip;
@@ -2478,6 +2489,8 @@ static void cps_offset_detect_work(struct work_struct *work)
 	if (!chip->rx_ldo_on || chip->rod_stop) {
 		chip->rx_offset_detect_count = 0;
 		chip->rx_offset = false;
+		cps_wls_log(CPS_LOG_DEBG, "[%s] rx_ldo_on:%d,rod_stop:%d",
+			__func__, chip->rx_ldo_on, chip->rod_stop);
 		return;
 	}
 
@@ -2547,6 +2560,50 @@ static void cps_offset_detect_work(struct work_struct *work)
 		}
 	} else if(wls_mode == Sys_Op_Mode_EPP) {
 		/*For EPP*/
+		chip->rx_vout = cps_wls_get_rx_vout();
+		chip->rx_vout_set = cps_wls_get_rx_vout_set();
+		if (chip->rx_vout_set == 12000)
+			chip->rx_vout_threshold = WLS_EPP_ROD_THRESHOLD_12V;
+		else if (chip->rx_vout_set == 10000)
+			chip->rx_vout_threshold = WLS_EPP_ROD_THRESHOLD_10V;
+		else
+			chip->rx_vout_threshold = chip->MaxV * 80 / 100;
+
+		cps_wls_log(CPS_LOG_DEBG, "[%s] vout:%dmV iout:%dmA vout_threshold:%dmV MaxI:%dmA\n", __func__,
+			 chip->rx_vout, current_now, chip->rx_vout_threshold, chip->MaxI);
+		if (!chip->rx_offset) {
+			if (cps_wls_check_iout(chip->MaxI * WLS_EPP_ROD_THRESHOLD_CURRENT_MIN_PER / 100, current_now) ||
+				chip->rx_vout < chip->rx_vout_threshold) {
+				chip->rx_offset_detect_count ++;
+			} else {
+				chip->rx_offset_detect_count = 0;
+			}
+			work_timedelay = OFFSET_DETECT_TIME_DELAY_DEFAULT_MS;
+			if (chip->rx_offset_detect_count >= WLS_EPP_ROD_DETECT_COUNT_MAX) {
+				chip->rx_offset = true;
+				chip->rx_offset_detect_count = 0;
+				cps_wls_log(CPS_LOG_DEBG, "[%s] EPP offset true\n", __func__);
+				if (chip->wlc_status != WLC_DISCONNECTED)
+					cps_wls_set_status(WLC_ERR_LOWER_EFFICIENCY);
+				work_timedelay = WLS_ICL_INCREASE_DELAY;
+			}
+		} else {
+			work_timedelay = OFFSET_DETECT_TIME_DELAY_DEFAULT_MS / 2;
+			if (!cps_wls_check_iout(chip->MaxI * WLS_EPP_ROD_THRESHOLD_CURRENT_MAX_PER / 100, current_now) &&
+				chip->rx_vout > chip->rx_vout_threshold + 500) {
+				chip->rx_offset_detect_count ++;
+			} else {
+				chip->rx_offset_detect_count = 0;
+			}
+			if (chip->rx_offset_detect_count >= WLS_EPP_ROD_DETECT_COUNT_MAX) {
+				chip->rx_offset = false;
+				cps_wls_log(CPS_LOG_DEBG, "[%s] EPP offset exit\n", __func__);
+				chip->rx_offset_detect_count = 0;
+				if (chip->wlc_status != WLC_DISCONNECTED)
+					cps_wls_set_status(WLC_CHGING);
+				chip->rod_stop = true;
+			}
+		}
 	}
 
 	if (chip->enable_rod) {
