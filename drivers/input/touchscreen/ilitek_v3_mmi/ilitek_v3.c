@@ -40,9 +40,6 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 	struct power_supply *psy = NULL;
 	union power_supply_propval prop;
 
-	if (ilits->fw_update_stat != 100)
-		return 0;
-
 	if (ilits->psy_name)
 		psy = power_supply_get_by_name(ilits->psy_name);
 	else
@@ -92,6 +89,8 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 static void ilitek_update_charger(struct work_struct *work)
 {
 	int ret = 0;
+	if (ilits->fw_update_stat != 100)
+		return;
 	mutex_lock(&ilits->touch_mutex);
 	if (USB_DETECT_IN == ilits->usb_plug_status)
 		ret = ili_ic_func_ctrl("plug", 0);// plug in
