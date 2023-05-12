@@ -195,7 +195,7 @@ void ili_resume_by_ddi(void)
 		return;
 	}
 
-	mutex_lock(&ilits->touch_mutex);
+//	mutex_lock(&ilits->touch_mutex);
 
 	ILI_INFO("TP resume start called by ddi\n");
 	ilits->tp_suspend = false;
@@ -252,7 +252,7 @@ void ili_resume_by_ddi(void)
 		ILI_INFO("TP resume end by ddi\n");
 	}
 
-	mutex_unlock(&ilits->touch_mutex);
+//	mutex_unlock(&ilits->touch_mutex);
 }
 #endif
 
@@ -759,6 +759,8 @@ int ili_sleep_handler(int mode)
 #endif
 
 		ILI_INFO("TP resume end\n");
+#else
+		ili_resume_by_ddi();
 #endif
 		ili_wq_ctrl(WQ_ESD, ENABLE);
 		ili_wq_ctrl(WQ_BAT, ENABLE);
