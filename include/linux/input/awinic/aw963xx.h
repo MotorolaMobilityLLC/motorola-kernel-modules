@@ -84,8 +84,10 @@ struct aw963xx {
 	uint16_t read_reg;
 #ifdef USE_SENSORS_CLASS
 	struct sensors_classdev sensors_capsensor_chs[AW963XX_CHANNEL_NUM_MAX];
+	struct delayed_work work;
+	uint8_t enter_work_cnt;
+	uint32_t last_irq_en_state;
 #endif
-
 };
 
 #define REG_CPU_MODE_SET								(0xf800)
