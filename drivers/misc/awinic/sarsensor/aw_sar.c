@@ -2,7 +2,7 @@
 #include <aw_sar.h>
 
 #define AW_SAR_I2C_NAME		"awinic_sar"
-#define AW_SAR_DRIVER_VERSION	"v0.1.5.4"
+#define AW_SAR_DRIVER_VERSION	"v0.1.5.13"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
 #ifdef CONFIG_AW96XX_MTK_KERNEL419_CHARGER_TYPE
@@ -1434,10 +1434,10 @@ static void aw_sar_update_work(struct work_struct *work)
 
 	//3.active chip
 	aw_sar_mode_set(p_sar, p_sar->p_sar_para->p_chip_mode->init_mode);
-	if (p_sar->irq_init.host_irq_stat == IRQ_DISABLE) {
-		enable_irq(p_sar->irq_init.to_irq);
-		p_sar->irq_init.host_irq_stat = IRQ_ENABLE;
-	}
+//	if (p_sar->irq_init.host_irq_stat == IRQ_DISABLE) {
+//		enable_irq(p_sar->irq_init.to_irq);
+//		p_sar->irq_init.host_irq_stat = IRQ_ENABLE;
+//	}
 
 	mutex_unlock(&aw_sar_lock);
 
