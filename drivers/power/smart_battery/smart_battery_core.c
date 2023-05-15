@@ -244,6 +244,9 @@ static void smart_batt_update_thread(struct work_struct *work)
 	gauge_dev_get_soh(chip->gauge_dev, &chip->soh);
 	gauge_dev_get_cycle_count(chip->gauge_dev, &chip->cycle_count);
 
+	if (chip->sync_boardtemp_to_fg)
+		gauge_dev_set_temperature(chip->gauge_dev, chip->batt_temp);
+
 	rsoc = smart_batt_monotonic_soc(chip, rsoc);
 
 	if (chip->batt_psy) {
@@ -327,6 +330,15 @@ static int smart_battery_resume(struct device *dev)
 	return 0;
 }
 
+static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
+{
+	struct device_node *np = chip->dev->of_node;
+
+	chip->sync_boardtemp_to_fg = of_property_read_bool(np , "mmi,sync_boardtemp_to_fg");
+
+	return 0;
+}
+
 static int smart_battery_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -352,6 +364,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->voltage_now = -EINVAL;
 	chip->current_now = -EINVAL;
 	chip->batt_temp = -EINVAL;
+	smart_battery_parse_dt(chip);
 
 	chip->gauge_dev = get_gauge_by_name("bms");
 	if (chip->gauge_dev) {
