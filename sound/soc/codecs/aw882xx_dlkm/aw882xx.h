@@ -147,6 +147,9 @@ struct aw882xx {
 	unsigned char allow_pw;		/* allow power */
 	int reset_gpio;
 	int irq_gpio;
+#ifdef CONFIG_AW_MTK_RCV_SUPPORT
+	int rcv_gpio;
+#endif
 	unsigned char fw_status;
 	unsigned char fw_retry_cnt;
 	unsigned char rw_reg_addr;	/* rw attr node store read addr */
