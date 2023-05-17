@@ -53,6 +53,7 @@ struct gauge_ops {
 	int (*set_temperature)(struct gauge_device *gauge_dev, int temp);
 	int (*set_capacity)(struct gauge_device *gauge_dev, int soc);
 	int (*set_charge_type)(struct gauge_device *gauge_dev, int charge_type);
+	int (*set_shutdown_threshold)(struct gauge_device *gauge_dev, int voltage);
 };
 
 #define to_gauge_device(obj) container_of(obj, struct gauge_device, dev)
@@ -68,6 +69,8 @@ static inline void gauge_dev_set_drvdata(
 {
 	gauge_dev->driver_data = data;
 }
+
+extern int gauge_dev_set_shutdown_threshold(struct gauge_device *gauge_dev, int shutdown_voltage);
 
 extern int gauge_dev_set_charge_type(struct gauge_device *gauge_dev, int charge_type);
 
