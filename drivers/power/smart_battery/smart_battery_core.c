@@ -355,6 +355,8 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 		chip ->ui_full_soc = 100;
 	}
 
+	of_property_read_u32(np , "mmi,shutdown_vol_threshold", &chip->shutdown_threshold);
+
 	return 0;
 }
 
@@ -383,6 +385,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->voltage_now = -EINVAL;
 	chip->current_now = -EINVAL;
 	chip->batt_temp = -EINVAL;
+	chip->shutdown_threshold = -EINVAL;
 	smart_battery_parse_dt(chip);
 
 	chip->gauge_dev = get_gauge_by_name("bms");
@@ -405,6 +408,9 @@ static int smart_battery_probe(struct platform_device *pdev)
 		rc = PTR_ERR(chip->batt_psy);
 		goto cleanup;
 	}
+
+	if (chip->shutdown_threshold != -EINVAL)
+		gauge_dev_set_shutdown_threshold(chip->gauge_dev, chip->shutdown_threshold);
 
 	chip->fg_workqueue = create_singlethread_workqueue("smart_battery");
 	INIT_DELAYED_WORK(&chip->battery_delay_work, smart_batt_update_thread);
