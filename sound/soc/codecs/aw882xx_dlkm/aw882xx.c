@@ -1131,6 +1131,35 @@ static int aw882xx_get_rx_en(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+#ifdef CONFIG_AW_MTK_RCV_SUPPORT
+static int aw882xx_get_rcv_en(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	return 0;
+}
+
+static int aw882xx_set_rcv_en(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+
+	unsigned int ctrl_value = 0;
+	aw_snd_soc_codec_t *codec =
+		aw_componet_codec_ops.kcontrol_codec(kcontrol);
+	struct aw882xx *aw882xx =
+		aw_componet_codec_ops.codec_get_drvdata(codec);
+
+	ctrl_value = ucontrol->value.integer.value[0];
+	if (gpio_is_valid(aw882xx->rcv_gpio)) {
+	    if (ctrl_value==1) {
+		gpio_set_value_cansleep(aw882xx->rcv_gpio, 1);
+            } else {
+		gpio_set_value_cansleep(aw882xx->rcv_gpio, 0);
+            }
+        }
+	return 0;
+}
+#endif
+
 static int aw882xx_set_tx_en(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -1420,6 +1449,11 @@ static struct snd_kcontrol_new aw882xx_controls[] = {
 #endif
 	SOC_SINGLE_EXT("aw882xx_fadeout_us", 0, 0, 1000000, 0,
 		aw882xx_get_fade_out_time, aw882xx_set_fade_out_time),
+#ifdef CONFIG_AW_MTK_RCV_SUPPORT
+	SOC_SINGLE_EXT("aw882xx_rcv_en", 0, 0, 1000000, 0,
+		aw882xx_get_rcv_en, aw882xx_set_rcv_en),
+#endif
+
 };
 
 static struct snd_kcontrol_new aw882xx_spin_control[] = {
@@ -1729,6 +1763,9 @@ static int aw882xx_parse_gpio_dt(struct aw882xx *aw882xx,
 	if (!np) {
 		aw882xx->reset_gpio = -1;
 		aw882xx->irq_gpio = -1;
+#ifdef CONFIG_AW_MTK_RCV_SUPPORT
+		aw882xx->rcv_gpio = -1;
+#endif
 		return -EINVAL;
 	}
 
@@ -1744,6 +1781,14 @@ static int aw882xx_parse_gpio_dt(struct aw882xx *aw882xx,
 	} else {
 		aw_dev_info(aw882xx->dev, "irq gpio provided ok.");
 	}
+#ifdef CONFIG_AW_MTK_RCV_SUPPORT
+	aw882xx->rcv_gpio = of_get_named_gpio(np, "rcv-gpio", 0);
+	if (aw882xx->rcv_gpio < 0) {
+		aw_dev_info(aw882xx->dev, "no rcv-gpio provided");
+	} else {
+		aw_dev_info(aw882xx->dev, "rcv-gpio provided ok");
+	}
+#endif
 
 	return 0;
 }
@@ -1797,6 +1842,16 @@ static int aw882xx_gpio_request(struct aw882xx *aw882xx)
 		}
 	}
 
+#ifdef CONFIG_AW_MTK_RCV_SUPPORT
+	if (gpio_is_valid(aw882xx->rcv_gpio)) {
+		ret = devm_gpio_request_one(aw882xx->dev, aw882xx->rcv_gpio,
+			GPIOF_OUT_INIT_LOW, "aw882xx_rcv");
+		if (ret) {
+			aw_dev_err(aw882xx->dev, "rcv gpio request failed");
+			return ret;
+		}
+	}
+#endif
 	return 0;
 }
 
@@ -2528,6 +2583,11 @@ static int aw882xx_i2c_remove(struct i2c_client *i2c)
 		devm_gpio_free(&i2c->dev, aw882xx->irq_gpio);
 	if (gpio_is_valid(aw882xx->reset_gpio))
 		devm_gpio_free(&i2c->dev, aw882xx->reset_gpio);
+
+#ifdef CONFIG_AW_MTK_RCV_SUPPORT
+	if (gpio_is_valid(aw882xx->rcv_gpio))
+		devm_gpio_free(&i2c->dev, aw882xx->rcv_gpio);
+#endif
 
 	/*rm attr node*/
 	sysfs_remove_group(&i2c->dev.kobj, &aw882xx_attribute_group);
