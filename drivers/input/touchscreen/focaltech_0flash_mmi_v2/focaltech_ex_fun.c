@@ -1482,6 +1482,13 @@ static ssize_t fts_log_level_store(
     sscanf(buf, "%d", &value);
     FTS_DEBUG("log level:%d->%d", ts_data->log_level, value);
     ts_data->log_level = value;
+    if (ts_data->log_level > 1) {
+        dbg_level_en = 1;
+        FTS_DEBUG("debug log level: 1");
+    } else {
+        dbg_level_en = 0;
+        FTS_DEBUG("debug log level: 0");
+    }
     mutex_unlock(&input_dev->mutex);
     FTS_FUNC_EXIT();
 
@@ -1757,6 +1764,39 @@ static ssize_t ic_ver_show(struct device *dev,
 	return fts_ic_ver_show(dev, attr, buf);
 }
 
+static ssize_t debug_level_en_store(
+    struct device *dev,
+    struct device_attribute *attr, const char *buf, size_t count)
+{
+    int value = 0;
+    struct fts_ts_data *ts_data = dev_get_drvdata(dev);
+    struct input_dev *input_dev = ts_data->input_dev;
+
+    FTS_FUNC_ENTER();
+    mutex_lock(&input_dev->mutex);
+    sscanf(buf, "%d", &value);
+    FTS_DEBUG("dbg log level:%d->%d", dbg_level_en, value);
+    dbg_level_en = value;
+    mutex_unlock(&input_dev->mutex);
+    FTS_FUNC_EXIT();
+
+    return count;
+}
+
+static ssize_t debug_level_en_show(
+    struct device *dev, struct device_attribute *attr, char *buf)
+{
+    int count = 0;
+    struct fts_ts_data *ts_data = dev_get_drvdata(dev);
+    struct input_dev *input_dev = ts_data->input_dev;
+
+    mutex_lock(&input_dev->mutex);
+    count += snprintf(buf + count, PAGE_SIZE, "debug log level:%d\n",
+                      dbg_level_en);
+    mutex_unlock(&input_dev->mutex);
+
+    return count;
+}
 
 #ifdef CONFIG_GTP_LAST_TIME
 static ssize_t timestamp_show(struct device *dev,
@@ -1840,6 +1880,7 @@ static struct device_attribute touchscreen_attributes[] = {
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 	__ATTR_RW(gesture),
 #endif
+	__ATTR(debug_level_en, S_IRUGO | S_IWUSR | S_IWGRP, debug_level_en_show, debug_level_en_store),
 	__ATTR_NULL
 };
 
