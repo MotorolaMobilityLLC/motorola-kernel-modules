@@ -43,6 +43,13 @@
 #define mmi_err	pr_err
 #define mmi_log	pr_err
 
+#ifndef MAX
+#define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
+#endif
+#ifndef MIN
+#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#endif
+
 #define queue_delayed_work_time  8000
 #define queue_start_work_time    1
 
@@ -139,6 +146,7 @@ enum mmi_fg_mac_cmd {
 	FG_MAC_CMD_GAUGING	= 0x0021,
 	FG_MAC_CMD_SEAL		= 0x0030,
 	FG_MAC_CMD_DEV_RESET	= 0x0041,
+	FG_MAC_CMD_POWEROFF_THRESHOLD	= 0x0050,
 	FG_MAC_CMD_TEMPERATURE	= 0x00C0,
 	FG_MAC_CMD_ENTER_ROM	= 0x0F00,
 	FG_MAC_CMD_PARAMS_VER	= 0x440B,
@@ -2442,6 +2450,22 @@ int fg_set_temp(struct gauge_device *gauge_dev, int temp)
 	return 0;
 }
 
+int fg_set_shutdown_threshold(struct gauge_device *gauge_dev, int shutd_vol)
+{
+	struct mmi_fg_chip *mmi = dev_get_drvdata(&gauge_dev->dev);
+	union {
+		int shutd_vol;
+		u8 hex[4];
+	} data;
+
+	data.shutd_vol = MAX(shutd_vol, 3200);
+	data.shutd_vol = MIN(shutd_vol, 3400);
+	nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi,FG_MAC_CMD_POWEROFF_THRESHOLD, data.hex, 2);
+	mmi_log("set shutdown_threshold=%d mv to fg cell\n", data.shutd_vol);
+
+	return 0;
+}
+
 static const u8 fg_dump_regs[] = {
 	0x00, 0x02, 0x04, 0x06,
 	0x08, 0x0A, 0x0C, 0x0E,
@@ -2607,7 +2631,8 @@ static struct gauge_ops nfg1000_gauge_ops = {
 	.get_cycle_count = fg_get_cycle_count,
 	.get_soh = fg_get_soh,
 	.set_charge_type = fg_set_charge_type,
-	.set_temperature =fg_set_temp,
+	.set_temperature = fg_set_temp,
+	.set_shutdown_threshold = fg_set_shutdown_threshold,
 };
 
 static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)

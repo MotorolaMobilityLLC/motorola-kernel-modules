@@ -20,6 +20,16 @@
 
 static struct class *gauge_class;
 
+int gauge_dev_set_shutdown_threshold(struct gauge_device *gauge_dev, int shutdown_voltage)
+{
+	if (gauge_dev != NULL && gauge_dev->ops != NULL &&
+	    gauge_dev->ops->set_shutdown_threshold)
+		return gauge_dev->ops->set_shutdown_threshold(gauge_dev, shutdown_voltage);
+
+	return -ENOTSUPP;
+}
+EXPORT_SYMBOL(gauge_dev_set_shutdown_threshold);
+
 int gauge_dev_set_charge_type(struct gauge_device *gauge_dev, int charge_type)
 {
 	if (gauge_dev != NULL && gauge_dev->ops != NULL &&
