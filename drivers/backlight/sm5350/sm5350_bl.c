@@ -181,21 +181,22 @@ int sm5350_set_brightness(struct sm5350_data *drvdata, int brt_val)
 	u8 brt_MSB = 0;
 	int index = 0, remainder;
 	int code, code1, code2;
-	printk("%s backlight_val = %d\n",__func__, brt_val);
 
-	if (drvdata->map_mode == 0) {
+	if (drvdata->map_mode == 0 && brt_val) {
 		//exponential mode
+		int bl_ori = brt_val, bl_tmp2;
 		if (ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
 			brt_val = sm5350_bl_mapping_450[brt_val];
-			pr_info("%s bl_mapping brt_val: %d\n", __func__, brt_val);
+			bl_tmp2 = brt_val;
+			pr_debug("%s: bl_mapping brt_val: %d\n", __func__, brt_val);
 		}
 
 		//align to awinic bl by default
 		brt_val = brt_val*8383/10000+324;
-		pr_info("%s align awinic brt_val: %d\n", __func__, brt_val);
+		pr_info("sm5350: backlight_val:%d, bl_mapping:%d, to align awinic brt_val: %d\n", bl_ori, bl_tmp2, brt_val);
 	}
 	else
-		pr_info("%s: not exponential mode\n", __func__);
+		printk("%s backlight_val = %d\n",__func__, brt_val);
 
 	if (drvdata->brt_code_enable) {
 		index = brt_val / 10;
