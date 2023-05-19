@@ -184,7 +184,9 @@ int sm5350_set_brightness(struct sm5350_data *drvdata, int brt_val)
 
 	if (drvdata->map_mode == 0 && brt_val) {
 		//exponential mode
-		int bl_ori = brt_val, bl_tmp2;
+		int bl_ori = brt_val;
+		int bl_tmp2 = 0;
+
 		if (ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
 			brt_val = sm5350_bl_mapping_450[brt_val];
 			bl_tmp2 = brt_val;
