@@ -1870,6 +1870,8 @@ static void nfg1000_upgrade_func(struct work_struct *work)
 			di->fw_data = nfg1000_upgrade_read_firmware("NFG1000A_firmware.bin", di);
 		if (di->fw_data == NULL) {
 			mmi_err("fw data is null, exit upgrade.");
+			di->do_upgrading = false;
+			di->fake_battery = false;
 			goto upgrade_error;
 		}
 		mmi_info("ota unseal");
