@@ -60,6 +60,7 @@ struct mmi_smart_battery {
 	bool				resume_completed;
 
 	bool				sync_boardtemp_to_fg;
+	int				ui_full_soc;
 
 	int				voltage_now;
 	int				current_now;
