@@ -2131,7 +2131,8 @@ static const struct dev_pm_ops aw_sar_pm_ops = {
 };
 
 static const struct of_device_id aw_sar_dt_match[] = {
-	{ .compatible = "awinic,aw_sar" },
+	{ .compatible = "awinic,aw_sar", },
+	{ },
 };
 
 static const struct i2c_device_id aw_sar_i2c_id[] = {
