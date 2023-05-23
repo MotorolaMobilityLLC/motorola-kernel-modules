@@ -222,6 +222,19 @@ static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
 	return uisoc;
 }
 
+static int smart_batt_soc100_forward(struct mmi_smart_battery *chip, int rsoc)
+{
+	int logic_soc;
+
+	logic_soc = rsoc * 100 / chip->ui_full_soc;
+	mmi_info(chip, "original_soc=%d, logic_soc=%d", rsoc, logic_soc);
+
+	if (logic_soc > 100)
+		logic_soc = 100;
+
+	return logic_soc;
+}
+
 static void smart_batt_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
@@ -247,6 +260,8 @@ static void smart_batt_update_thread(struct work_struct *work)
 	if (chip->sync_boardtemp_to_fg)
 		gauge_dev_set_temperature(chip->gauge_dev, chip->batt_temp);
 
+	rsoc = smart_batt_soc100_forward(chip, rsoc);
+
 	rsoc = smart_batt_monotonic_soc(chip, rsoc);
 
 	if (chip->batt_psy) {
@@ -256,7 +271,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 		}
 	}
 
-	mmi_info(chip, "RSOC:%d, Volt:%d, Current:%d, Temperature:%d\n",
+	mmi_info(chip, "UISOC:%d, Volt:%d, Current:%d, Temperature:%d\n",
 		rsoc, chip->voltage_now, chip->current_now, chip->batt_temp);
 
 	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(QUEUS_DELAYED_WORK_TIME));
@@ -335,6 +350,10 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	struct device_node *np = chip->dev->of_node;
 
 	chip->sync_boardtemp_to_fg = of_property_read_bool(np , "mmi,sync_boardtemp_to_fg");
+
+	if (of_property_read_u32(np, "mmi,ui_full_soc", &chip ->ui_full_soc) < 0) {
+		chip ->ui_full_soc = 100;
+	}
 
 	return 0;
 }
