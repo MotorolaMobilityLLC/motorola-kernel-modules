@@ -218,17 +218,28 @@ int sm5350_set_brightness(struct sm5350_data *drvdata, int brt_val)
 	}
 	printk("brt_LSB %x, brt_MSB %x\n", brt_LSB, brt_MSB);
 
-	if (drvdata->enable == false)
+	if (drvdata->enable == false) {
+		if (gpio_is_valid(drvdata->en_gpio)) {
+                        pr_info("hwen pin is going to be high\n");
+                        gpio_set_value(drvdata->en_gpio, true);
+                        msleep(5);
+                }
 		sm5350_init_registers(drvdata);
+	}
 
 	if (drvdata->bank_B) {
 		sm5350_write_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_LSB_REG, brt_LSB);
 		sm5350_write_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_MSB_REG, brt_MSB);
 	}
 
-	if (brt_val == 0)
+	if (brt_val == 0) {
+		if (gpio_is_valid(drvdata->en_gpio)) {
+                        pr_info("hwen pin is going to be low\n");
+			msleep(3);
+                        gpio_set_value(drvdata->en_gpio, false);
+		}
 		drvdata->enable = false;
-
+	}
 	return 0;
 }
 
