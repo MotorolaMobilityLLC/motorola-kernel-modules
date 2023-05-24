@@ -2,7 +2,7 @@
 #include <aw_sar.h>
 
 #define AW_SAR_I2C_NAME		"awinic_sar"
-#define AW_SAR_DRIVER_VERSION	"v0.1.5.13"
+#define AW_SAR_DRIVER_VERSION	"v0.1.5.14"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
 #ifdef CONFIG_AW96XX_MTK_KERNEL419_CHARGER_TYPE
