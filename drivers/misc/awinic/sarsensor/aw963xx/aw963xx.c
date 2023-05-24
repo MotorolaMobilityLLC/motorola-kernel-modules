@@ -2,7 +2,7 @@
 #include <aw_sar.h>
 
 #define AW963XX_I2C_NAME "aw963xx_sar"
-#define AW963XX_DRIVER_VERSION "v0.1.1.13"
+#define AW963XX_DRIVER_VERSION "v0.1.1.14"
 
 static void aw963xx_set_cs_as_irq(struct aw_sar *p_sar, int flag);
 static void aw963xx_get_ref_ch_enable(struct aw_sar *p_sar);
@@ -233,6 +233,7 @@ static int32_t aw963xx_update_firmware(struct aw_bin *aw_bin, void *load_bin_par
 	struct i2c_client *i2c = p_sar->i2c;
 	int32_t ret = 0;
 
+	pr_info("%s enter\n",__func__);
 	if (aw963xx->start_mode == AW963XX_ROM_MODE) {
 		AWLOGI(p_sar->dev, "no need to update fw.");
 		return AW_OK;
@@ -972,6 +973,33 @@ static ssize_t cali_show(struct class *class,
 
 static CLASS_ATTR_RO(cali);
 
+static ssize_t
+reset_store(struct class *class, struct class_attribute *attr, const char *buf, size_t count)
+{
+	u32 temp = 0;
+	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
+	struct aw_sar *p_sar = NULL;
+
+	if (aw963xx == NULL)
+		return 0;
+
+	p_sar = aw963xx->p_aw_sar;
+	if (p_sar == NULL)
+		return 0;
+
+	aw_sar_i2c_read(p_sar->i2c, REG_WST, &temp);
+	if (!strncmp(buf, "reset", 5) || !strncmp(buf, "1", 1)) {
+		if (((temp >> 24) & 0x00000003) == 1) {
+			AWLOGD(p_sar->dev, "temp:0X%x", temp);
+			aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL1, ~0xfff, 0xfff);
+		}
+	}
+
+	return count;
+}
+
+static CLASS_ATTR_WO(reset);
+
 static ssize_t mode_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
@@ -1284,6 +1312,12 @@ static int32_t aw_sar_custom_flie_node_create(void *data)
 		return ret;
 	}
 
+	ret = class_create_file(&aw963xx->capsense_class, &class_attr_reset);
+	if (ret < 0) {
+		AWLOGE(p_sar->dev, "Create cali file failed (%d)\n", ret);
+		return ret;
+	}
+
 	ret = class_create_file(&aw963xx->capsense_class, &class_attr_int_state);
 	if (ret < 0) {
 		AWLOGE(p_sar->dev, "Create int_state file failed (%d)\n", ret);
@@ -1352,6 +1386,8 @@ static void aw_sar_custom_flie_node_free(void *data)
 	int i = 0;
 #endif
 
+	pr_info("%s enter\n",__func__);
+
 	if (data == NULL) {
 		return;
 	}
@@ -1376,6 +1412,7 @@ static void aw_sar_custom_flie_node_free(void *data)
 	class_remove_file(&aw963xx->capsense_class, &class_attr_mode);
 	class_remove_file(&aw963xx->capsense_class, &class_attr_int_state);
 	class_remove_file(&aw963xx->capsense_class, &class_attr_cali);
+	class_remove_file(&aw963xx->capsense_class, &class_attr_reset);
 
 	class_unregister(&aw963xx->capsense_class);
 }
@@ -1424,6 +1461,8 @@ int32_t aw963xx_init(struct aw_sar *p_sar)
 {
 	struct aw963xx *aw963xx = NULL;
 
+	pr_info("%s enter\n",__func__);
+
 	if (p_sar == NULL) {
 		AWLOGE(p_sar->dev, "para is NULL, error!");
 		return -AW_ERR;
@@ -1453,6 +1492,7 @@ void aw963xx_deinit(struct aw_sar *p_sar)
 {
 	struct aw963xx *aw963xx = NULL;
 
+	pr_info("%s enter\n",__func__);
 	if ((p_sar == NULL) || (p_sar->priv_data == NULL)) {
 		return;
 	}
