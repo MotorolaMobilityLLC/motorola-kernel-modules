@@ -137,6 +137,14 @@
 #define FACTORY_REG_OPEN_ADDR		    0xCF
 #endif
 
+#ifdef CONFIG_INPUT_HIGH_RESOLUTION_4
+#define FTS_TOUCH_HIRES_EN                  1
+#define FTS_TOUCH_HIRES_X                   4
+#define FTS_HI_RES_X_MAX                    16
+#else
+#define FTS_TOUCH_HIRES_EN                  0
+#endif
+
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
 *****************************************************************************/
@@ -324,6 +332,9 @@ enum _FTS_TOUCH_ETYPE {
     TOUCH_EVENT_NUM = 0x02,
     TOUCH_EXTRA_MSG = 0x08,
     TOUCH_PEN = 0x0B,
+#ifdef CONFIG_INPUT_HIGH_RESOLUTION_4
+    TOUCH_DEFAULT_HI_RES = 0x82,
+#endif
     TOUCH_GESTURE = 0x80,
     TOUCH_FW_INIT = 0x81,
     TOUCH_IGNORE = 0xFE,
