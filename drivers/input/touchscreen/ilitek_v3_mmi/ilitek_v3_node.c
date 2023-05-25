@@ -3941,6 +3941,20 @@ static char *mmi_kobject_get_path(struct kobject *kobj, gfp_t gfp_mask)
 	return path;
 }
 
+#ifdef ILI_TOUCH_LAST_TIME
+static ssize_t timestamp_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
+
+	last_ktime = ilits->last_event_time;
+	ilits->last_event_time = 0;
+
+	last_ts = ktime_to_timespec64(last_ktime);
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
+}
+#endif
+
 static ssize_t path_show(struct device *pDevice, struct device_attribute *pAttr, char *pBuf)
 {
 	ssize_t blen;
@@ -4100,6 +4114,9 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
+#ifdef ILI_TOUCH_LAST_TIME
+	__ATTR_RO(timestamp),
+#endif
 #ifdef ILI_DOUBLE_TAP_CTRL
 	__ATTR(gesture, S_IRUGO | S_IWUSR | S_IWGRP, gesture_show, gesture_store),
 	__ATTR(gesture_type_dbg, S_IRUGO | S_IWUSR | S_IWGRP, gesture_type_dbg_show, gesture_type_dbg_store),
