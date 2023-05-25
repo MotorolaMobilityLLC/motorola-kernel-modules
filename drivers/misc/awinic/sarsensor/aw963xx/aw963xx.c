@@ -2,7 +2,7 @@
 #include <aw_sar.h>
 
 #define AW963XX_I2C_NAME "aw963xx_sar"
-#define AW963XX_DRIVER_VERSION "v0.1.1.14"
+#define AW963XX_DRIVER_VERSION "V0.1.1.15"
 
 static void aw963xx_set_cs_as_irq(struct aw_sar *p_sar, int flag);
 static void aw963xx_get_ref_ch_enable(struct aw_sar *p_sar);
@@ -1167,107 +1167,6 @@ static ssize_t offset_show(struct class *class,
 static CLASS_ATTR_RO(offset);
 
 #ifdef USE_SENSORS_CLASS
-static struct aw963xx *g_aw963xx = NULL;
-static uint8_t g_aw963xx_last_enable_flag = 0xff;
-
-static void aw963xx_wait_cali_ready(struct work_struct *work)
-{
-	uint32_t reg = 0;
-	struct aw963xx *aw963xx = container_of(work, struct aw963xx, work.work);
-	struct aw_sar *p_sar = NULL;
-	int i = 0;
-	int cnt = 0;
-
-	if (aw963xx == NULL) {
-		return;
-	}
-
-	p_sar = aw963xx->p_aw_sar;
-
-	for (cnt = 0; cnt < 30; cnt++) {
-		aw_sar_i2c_read(p_sar->i2c, REG_IRQSRC, &reg);
-		if ((reg >> 3 & 0x1) == 1) {
-			for (i = 0; i < AW963XX_CHANNEL_NUM_MAX; i++) {
-				if ((p_sar->channels_arr[i].used == AW_FALSE) ||
-					(p_sar->channels_arr[i].input == NULL)) {
-					continue;
-				}
-				input_report_abs(p_sar->channels_arr[i].input, ABS_DISTANCE, 0);
-				input_sync(p_sar->channels_arr[i].input);
-			}
-			AWLOGD(p_sar->dev, "enable cap sensor");
-			break;
-		} else {
-			AWLOGD(p_sar->dev, "enter_work_cnt:%d", cnt);
-			mdelay(100);
-		}
-	}
-	if (p_sar->irq_init.host_irq_stat == IRQ_DISABLE) {
-		enable_irq(p_sar->irq_init.to_irq);
-		p_sar->irq_init.host_irq_stat = IRQ_ENABLE;
-	}
-}
-
-static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned int enable)
-{
-	uint8_t i = 0;
-	struct aw963xx *aw963xx = g_aw963xx;
-	struct aw_sar *p_sar = NULL;
-	uint8_t set_mode = 0;
-
-	if (aw963xx == NULL) {
-		return 0;
-	}
-
-	p_sar = aw963xx->p_aw_sar;
-	if (p_sar == NULL) {
-		return 0;
-	}
-
-	if (g_aw963xx_last_enable_flag == enable) {
-		AWLOGD(p_sar->dev, "g_aw963xx_last_enable_flag %d", g_aw963xx_last_enable_flag);
-		return 0;
-	}
-	g_aw963xx_last_enable_flag = enable;
-
-	AWLOGD(p_sar->dev, "enable %d", enable);
-
-	if (enable == 0x01) {
-		aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL1, ~0xfff, 0xfff);
-		set_mode = AW963XX_ACTIVE_MODE;
-	} else {
-		set_mode = AW963XX_SLEEP_MODE;
-		if (p_sar->irq_init.host_irq_stat == IRQ_ENABLE) {
-			disable_irq(p_sar->irq_init.to_irq);
-			p_sar->irq_init.host_irq_stat = IRQ_DISABLE;
-		}
-	}
-
-	aw_sar_mode_set(p_sar, set_mode);
-
-	if (enable == 0x01)
-		schedule_delayed_work(&aw963xx->work, msecs_to_jiffies(1500));
-
-	for (i = 0; i < AW963XX_CHANNEL_NUM_MAX; i++) {
-		if ((p_sar->channels_arr[i].used == AW_FALSE) ||
-			(p_sar->channels_arr[i].input == NULL)) {
-			continue;
-		}
-		if (enable == 1) {
-		//	input_report_abs(p_sar->channels_arr[i].input, ABS_DISTANCE, 0);
-		//	input_sync(p_sar->channels_arr[i].input);
-		} else {
-			input_report_abs(p_sar->channels_arr[i].input, ABS_DISTANCE, -1);
-			input_sync(p_sar->channels_arr[i].input);
-			p_sar->channels_arr[i].last_channel_info = -1;
-		}
-	}
-
-	AWLOGD(p_sar->dev, "enable over %d", enable);
-
-	return 0;
-}
-
 static const char *g_aw963xx_ch_name[] = {
 	"Moto CapSense Ch0", "Moto CapSense Ch1", "Moto CapSense Ch2",
 	"Moto CapSense Ch3", "Moto CapSense Ch4", "Moto CapSensor Ch5",
@@ -1276,6 +1175,58 @@ static const char *g_aw963xx_ch_name[] = {
 	"Moto CapSensor Ch12", "Moto CapSensor Ch13", "Moto CapSensor Ch14"
 };
 static int32_t g_aw963xx_counter = 0;
+static struct aw963xx *g_aw963xx = NULL;
+
+static int capsensor_set_enable(struct sensors_classdev *sensors_cdev, unsigned int enable)
+{
+	uint8_t i = 0;
+	struct aw963xx *aw963xx = g_aw963xx;
+	struct aw_sar *p_sar = NULL;
+	uint8_t set_mode = 0;
+
+	pr_info("%s enter\n",__func__);
+
+	if (aw963xx == NULL)
+		return 0;
+
+	p_sar = aw963xx->p_aw_sar;
+	if (p_sar == NULL)
+		return 0;
+
+	AWLOGD(p_sar->dev, "enable %d", enable);
+
+	for (i = 0; i < AW963XX_CHANNEL_NUM_MAX; i++) {
+		if ((p_sar->channels_arr[i].used == AW_FALSE) ||
+			(p_sar->channels_arr[i].input == NULL))
+				continue;
+
+		if (strcmp(sensors_cdev->name, p_sar->channels_arr[i].name) == 0) {
+			if (enable == 0x01) {
+				AWLOGD(p_sar->dev, "enable cap sensor : %s", sensors_cdev->name);
+				aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL1, ~0xfff, 0xfff);
+				set_mode = AW963XX_ACTIVE_MODE;
+				aw_sar_mode_set(p_sar, set_mode);
+
+				input_report_abs(p_sar->channels_arr[i].input, ABS_DISTANCE, 0);
+				input_sync(p_sar->channels_arr[i].input);
+			} else if (enable == 0) {
+				set_mode = AW963XX_SLEEP_MODE;
+				aw_sar_mode_set(p_sar, set_mode);
+
+				input_report_abs(p_sar->channels_arr[i].input, ABS_DISTANCE, -1);
+				input_sync(p_sar->channels_arr[i].input);
+				p_sar->channels_arr[i].last_channel_info = -1;
+			} else {
+				AWLOGD(p_sar->dev, "unknown enable symbol");
+			}
+			break;
+		}
+	}
+
+	AWLOGD(p_sar->dev, "enable over %d", enable);
+
+	return 0;
+}
 #endif
 
 //moto_customization
@@ -1480,10 +1431,6 @@ int32_t aw963xx_init(struct aw_sar *p_sar)
 	aw963xx = (struct aw963xx *)p_sar->priv_data;
 	aw963xx->p_aw_sar = (void *)p_sar;
 	g_aw963xx = aw963xx;
-
-#ifdef USE_SENSORS_CLASS
-	INIT_DELAYED_WORK(&aw963xx->work, aw963xx_wait_cali_ready);
-#endif
 
 	return AW_OK;
 }
