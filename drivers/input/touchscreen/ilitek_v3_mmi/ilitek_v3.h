@@ -1368,6 +1368,9 @@ struct ilitek_ts_data {
 	int (*ges_recover)(void);
 	void (*demo_debug_info[5])(u8 *, size_t);
 	int (*detect_int_stat)(bool status);
+#ifdef ILI_TOUCH_LAST_TIME
+	ktime_t last_event_time;
+#endif
 };
 extern struct ilitek_ts_data *ilits;
 
