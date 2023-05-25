@@ -154,6 +154,7 @@ enum mmi_fg_mac_cmd {
 	FG_MAC_CMD_TEMPERATURE	= 0x00C0,
 	FG_MAC_CMD_ENTER_ROM	= 0x0F00,
 	FG_MAC_CMD_PARAMS_VER	= 0x440B,
+	FG_MAC_CMD_BATT_SERIALNUM	= 0x440D,
 };
 
 
@@ -220,8 +221,12 @@ struct mmi_fg_chip {
 	int rbat_pull_up_r;
 
 	int mcu_auth_code;
-	const char *battsn_buf;
-	u32 batt_param_version;
+
+	const char **batt_serialnum_arry;
+	int battid_cnt;
+	u16 *batt_version_arry;
+	int batt_version_cnt;
+
 	u8 *fw_version;
 	u8 *fw_data;
 	u8 *params_data;
@@ -728,7 +733,6 @@ static int nfg1000_ota_seal(struct mmi_fg_chip *di)
 static bool nfg1000_ota_program_check_fw_upgrade(struct mmi_fg_chip *di)
 {
 	int ret = 0;
-	u8 i = 0;
 	u8 fw_ver_read[12] = {0};
 	bool upgrade_status = false;
 
@@ -740,54 +744,10 @@ static bool nfg1000_ota_program_check_fw_upgrade(struct mmi_fg_chip *di)
 
 	mmi_info(":Read From fuelgauge, Firmware version=[%02x %02x %02x %02x %02x]\n",
 		fw_ver_read[0], fw_ver_read[1],fw_ver_read[2],fw_ver_read[3],fw_ver_read[4]);
-	for(i = 0; i < 5; i++) {
-		if(fw_ver_read[i] != di->fw_version[i]) {
-			mmi_info(":firmware version is not same!into upgrade...\n");
-			upgrade_status = true;
-			break;
-		}
-	}
-
-	return upgrade_status;
-}
-
-static const char *get_battery_serialnumber(void)
-{
-	struct device_node *np = of_find_node_by_path("/chosen");
-	const char *battsn_buf;
-	int retval;
-
-	battsn_buf = NULL;
-
-	if (np)
-		retval = of_property_read_string(np, "mmi,battid",
-						 &battsn_buf);
-	else
-		return NULL;
-
-	if ((retval == -EINVAL) || !battsn_buf) {
-		mmi_info(" Battsn unused\n");
-		of_node_put(np);
-		return NULL;
-
-	} else
-		mmi_info("Battsn = %s\n", battsn_buf);
-
-	of_node_put(np);
-
-	return battsn_buf;
-}
-
-//battery id check
-static bool nfg1000_ota_program_check_batt_id(struct mmi_fg_chip *di)
-{
-	bool upgrade_status = false;
-	const char *dev_sn = NULL;
-
-	dev_sn = get_battery_serialnumber();
-	if (dev_sn != NULL && di->battsn_buf != NULL) {
-		if (strnstr(dev_sn, di->battsn_buf, 10)) {
-			mmi_info(":battsn compared,the battery parameter data need upgrade!\n");
+	fg_print_buf("dts config fw_version", di->fw_version, 5);
+	if (di->fw_version) {
+		if(strncmp(fw_ver_read, di->fw_version, 5) < 0) {
+			mmi_info(" current firmware version is not latest !need upgrading...\n");
 			upgrade_status = true;
 		}
 	}
@@ -795,64 +755,58 @@ static bool nfg1000_ota_program_check_batt_id(struct mmi_fg_chip *di)
 	return upgrade_status;
 }
 
+static u8 *nfg1000_upgrade_read_firmware(char *bin_name, struct mmi_fg_chip *mmi_fg);
 //battery parameter version check
 static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di)
 {
 	bool upgrade_status = false;
-	u8 dataflash_ver_read[32] = {0};
+	u8 dataflash_read[32] = {0};
 	u16 fg_param_version = 0xFFFF;
-	const char *dev_sn = NULL;
-	/*
-	int ret = 0;
-	u8 i = 0;
-	ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di,0x440D ,dataflash_ver_read,32);
-	if(ret)
-	{
-		printk("nfg1000_ota_program_dataflash_version_check:dataflash version read error!\n");
-		return -ERROR_CODE_I2C_WRITE;
-	}
-	for(i = 0;i < 10;i++)
-	{
-		if(dataflash_ver_read[i] != di->battsn_buf[i])
-		{
-			break;
-		}
-	}
-	if(i != 10)
-	{
-		mmi_info("nfg1000_ota_program_dataflash_version_check: battery version different!\n");
-		return -PROGRAM_BATTERY_VERSION;
-	}
-	*/
+	char batt_params_bin_name[50] = {0};
+	int i;
+
 	if(nfg1000_ota_unseal(di))
 	{
 		return PROGRAM_ERROR_UNSEAL;
 	}
 
-	if (nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di,FG_MAC_CMD_PARAMS_VER ,dataflash_ver_read,32) < 0)
+	if (nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_PARAMS_VER ,dataflash_read,32) < 0)
 		return upgrade_status;
 
-	fg_param_version = ((dataflash_ver_read[25] - 0x30) << 8);
-	fg_param_version |= (dataflash_ver_read[26] - 0x30);
+	fg_param_version = ((dataflash_read[25] - 0x30) << 8);
+	fg_param_version |= (dataflash_read[26] - 0x30);
 
-	mmi_info(":the fg_param_version=0x%04x\n", fg_param_version);
-	mmi_info(":latest battery parameter version=0x%04x\n", di->batt_param_version);
+	mmi_info(":the fg_param_version=0x%02x\n", fg_param_version);
 
-	if(fg_param_version != di->batt_param_version)
+	if(nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_BATT_SERIALNUM, dataflash_read, 32))
 	{
-		dev_sn = get_battery_serialnumber();
-		if (dev_sn != NULL && di->battsn_buf != NULL) {
-			if (strnstr(dev_sn, di->battsn_buf, 10)) {
-				mmi_info(":battsn compared,the battery parameter data need upgrade!\n");
+		mmi_err("nfg1000_ota_program_dataflash_version_check:dataflash version read error!\n");
+		return upgrade_status;
+	}
+	fg_print_buf("The batt_serialnum from FG", dataflash_read, 10);
+
+	if (di->battid_cnt !=0 && di->batt_version_cnt != 0) {
+		for (i = 0; i < di->battid_cnt; i++) {
+			if ((strncmp(dataflash_read, di->batt_serialnum_arry[i], 10) == 0) &&
+			    (fg_param_version < di->batt_version_arry[i]))  {
+				sprintf(batt_params_bin_name, "NFG1000A_battery_parameter_%s.bin",di->batt_serialnum_arry[i]);
+				mmi_info("Need to upgrading battery parameters: %s", batt_params_bin_name);
 				upgrade_status = true;
+				break;
 			}
 		}
 	}
 
-	if (upgrade_status == false)
-	{
-		nfg1000_ota_seal(di);
+	if (upgrade_status) {
+		di->params_data = nfg1000_upgrade_read_firmware(batt_params_bin_name, di);
+		if (di->params_data == NULL) {
+			mmi_err("battery paramter data is null, exit upgrade.");
+			upgrade_status = false;
+		}
 	}
+
+	if (!upgrade_status)
+		nfg1000_ota_seal(di);
 
 	return upgrade_status;
 }
@@ -1617,13 +1571,6 @@ static u8 *nfg1000_upgrade_read_firmware(char *bin_name, struct mmi_fg_chip *mmi
 
 static ssize_t nfg1000_upgrade_Params(struct mmi_fg_chip *di)
 {
-	if (di->params_data == NULL)
-		di->params_data = nfg1000_upgrade_read_firmware("NFG1000A_battery_parameter.bin", di);
-	if (di->params_data == NULL) {
-		mmi_err("battery paramter data is null, exit upgrade.");
-		return PROGRAM_ERROR_EXIT_BOOT;
-	}
-
 	mmi_info("step1 EnterBootLoad");
 	if(nfg1000_ota_program_step1_EnterBootLoad(di))
 	{
@@ -1800,10 +1747,9 @@ static void nfg1000_force_upgrade_func(struct work_struct *work)
 	for (count=1; count<=3; count++) {
 		if(nfg1000_ota_unseal(di))
 		{
-			mmi_err("ota unseal,failed, exit upgrade");
+			mmi_err("ota unseal,failed");
 			//goto upgrade_error;
 		}
-
 		if (nfg1000_upgrade_APP(di) != 0) {
 			mmi_err("nfg1000_upgrade_APP failed, retry=%d", count);
 			if (count == 3) {
@@ -1816,30 +1762,6 @@ static void nfg1000_force_upgrade_func(struct work_struct *work)
 		}
 	}
 
-
-	if (nfg1000_ota_program_check_batt_id(di) == false) {
-		mmi_info("battery id not need upgrade,exit");
-	} else {
-		for (count=1; count<=3; count++) {
-
-			if(nfg1000_ota_unseal(di))
-			{
-				mmi_err("ota unseal,failed, exit upgrade");
-				//goto upgrade_error;
-			}
-
-			if (nfg1000_upgrade_Params(di) != 0) {
-				mmi_err("nfg1000_upgrade_Params failed, retry=%d", count);
-				if (count == 3) {
-					mmi_err("nfg1000_upgrade_Params failed, use fake battery");
-					goto upgrade_error;
-				}
-			} else {
-				mmi_info("nfg1000_upgrade_Params successfully!!");
-				break;
-			}
-		}
-	}
 	di->do_upgrading = false;
 	di->fake_battery = false;
 	di->force_upgrade = false;
@@ -2644,6 +2566,8 @@ static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)
 	struct device_node *np = mmi_fg->client->dev.of_node;
 	int byte_len;
 	int rc;
+	int count;
+	int i;
 
 	rc = of_property_read_u32(np , "uirbat_pull_up_r_full", &mmi_fg->rbat_pull_up_r);
 	if (rc < 0) {
@@ -2664,18 +2588,33 @@ static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)
 			return -ENOMEM;
 		}
 	}
-	// read batt id
-	rc = of_property_read_string(np, "df_serialnum", &mmi_fg->battsn_buf);
-	if (rc)
-		mmi_err("No Default Serial Number defined\n");
-	else if (mmi_fg->battsn_buf)
-		mmi_info("Default Serial Number %s\n", mmi_fg->battsn_buf);
 
-	// read battery param version
-	rc = of_property_read_u32(np , "latest_batt_param_version", &mmi_fg->batt_param_version);
-	if (rc < 0) {
-		mmi_fg->batt_param_version = 0;
-		mmi_info("Failed to get batt_param_version, err:%d, set batt_param_versions=0\n", rc);
+	count = of_property_count_strings(np, "batt_serialnums");
+	if (count > 0) {
+		mmi_info("battid_cnt=%d", count);
+		mmi_fg->battid_cnt = count;
+		mmi_fg->batt_serialnum_arry = devm_kzalloc(&mmi_fg->client->dev, count * sizeof(char *), GFP_KERNEL);
+		if (mmi_fg->batt_serialnum_arry) {
+			for (i = 0; i < mmi_fg->battid_cnt; i++) {
+				rc = of_property_read_string_index(np, "batt_serialnums", i,
+								    &mmi_fg->batt_serialnum_arry[i]);
+				if (rc < 0)
+					mmi_fg->battid_cnt = 0;
+				else
+					mmi_info("support serialnum[%d](%s)\n", i, mmi_fg->batt_serialnum_arry[i]);
+			}
+		}
+	}
+	count = of_property_count_u16_elems(np, "batt_versions");
+	if (count > 0) {
+		mmi_info("batt_version_cnt=%d", count);
+		mmi_fg->batt_version_cnt = count;
+		mmi_fg->batt_version_arry = devm_kzalloc(&mmi_fg->client->dev, count * sizeof(u16), GFP_KERNEL);
+		rc = of_property_read_u16_array(np, "batt_versions", mmi_fg->batt_version_arry, count);
+		if (rc < 0) {
+			mmi_info("of_property_read_u16_array fail err:%d", rc);
+			mmi_fg->batt_version_cnt = 0;
+		}
 	}
 
 	return 0;
@@ -2708,7 +2647,6 @@ static int mmi_fg_probe(struct i2c_client *client,
 	mmi->fake_battery = false;
 	mmi->do_upgrading = false;
 	mmi->force_upgrade = false;
-	mmi->battsn_buf = NULL;
 	mmi->fw_data = NULL;
 	mmi->params_data = NULL;
 
