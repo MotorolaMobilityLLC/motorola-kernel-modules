@@ -759,6 +759,12 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
         return TOUCH_FW_INIT;
     }
 
+#if FTS_TOUCH_HIRES_EN
+    if (TOUCH_DEFAULT == ((touch_buf[FTS_TOUCH_E_NUM] >> 4) & 0x0F)) {
+        return TOUCH_DEFAULT_HI_RES;
+    }
+#endif
+
     return ((touch_buf[FTS_TOUCH_E_NUM] >> 4) & 0x0F);
 }
 
@@ -885,6 +891,60 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
         fts_input_pen_report(ts_data, touch_buf);
         mutex_unlock(&ts_data->report_mutex);
         break;
+#endif
+
+#if FTS_TOUCH_HIRES_EN
+    case TOUCH_DEFAULT_HI_RES:
+	finger_num = touch_buf[FTS_TOUCH_E_NUM] & 0x0F;
+	if (finger_num > max_touch_num) {
+		FTS_ERROR("invalid point_num(%d)", finger_num);
+		return -EIO;
+	}
+
+	for (i = 0; i < max_touch_num; i++) {
+		base = FTS_ONE_TCH_LEN * i + 2;
+		pointid = (touch_buf[FTS_TOUCH_OFF_ID_YH + base]) >> 4;
+		if (pointid >= FTS_MAX_ID)
+			break;
+		else if (pointid >= max_touch_num) {
+			FTS_ERROR("ID(%d) beyond max_touch_number", pointid);
+			return -EINVAL;
+		}
+
+		events[i].id = pointid;
+		events[i].flag = touch_buf[FTS_TOUCH_OFF_E_XH + base] >> 6;
+		events[i].x = ((touch_buf[FTS_TOUCH_OFF_E_XH + base] & 0x0F) << 12) \
+					  + ((touch_buf[FTS_TOUCH_OFF_XL + base] & 0xFF) << 4) \
+					  + ((touch_buf[FTS_TOUCH_OFF_PRE + base] >> 4) & 0x0F);
+		events[i].y = ((touch_buf[FTS_TOUCH_OFF_ID_YH + base] & 0x0F) << 12) \
+					  + ((touch_buf[FTS_TOUCH_OFF_YL + base] & 0xFF) << 4) \
+					  + (touch_buf[FTS_TOUCH_OFF_PRE + base] & 0x0F);
+		events[i].x = (events[i].x * FTS_TOUCH_HIRES_X ) / FTS_HI_RES_X_MAX;
+		events[i].y = (events[i].y * FTS_TOUCH_HIRES_X ) / FTS_HI_RES_X_MAX;
+		events[i].area = touch_buf[FTS_TOUCH_OFF_AREA + base];
+		events[i].p = touch_buf[FTS_TOUCH_OFF_PRE + base];
+		if (events[i].area <= 0) events[i].area = 0x09;
+		event_num++;
+		if (EVENT_DOWN(events[i].flag) && (finger_num == 0)) {
+			FTS_INFO("abnormal touch data from fw");
+			return -EIO;
+		}
+	}
+
+	if (event_num == 0) {
+		FTS_INFO("no touch point information(%02x)", touch_buf[2]);
+		return -EIO;
+	}
+	ts_data->touch_event_num = event_num;
+
+	mutex_lock(&ts_data->report_mutex);
+#if FTS_MT_PROTOCOL_B_EN
+	fts_input_report_b(ts_data, events);
+#else
+	fts_input_report_a(ts_data, events);
+#endif
+	mutex_unlock(&ts_data->report_mutex);
+	break;
 #endif
 
     case TOUCH_EVENT_NUM:
@@ -1522,8 +1582,13 @@ static int fts_get_dt_coords(struct device *dev, char *name,
     } else {
         pdata->x_min = coords[0];
         pdata->y_min = coords[1];
+#if FTS_TOUCH_HIRES_EN
+	pdata->x_max = coords[2] * FTS_TOUCH_HIRES_X;
+	pdata->y_max = coords[3] * FTS_TOUCH_HIRES_X;
+#else
         pdata->x_max = coords[2];
         pdata->y_max = coords[3];
+#endif
     }
 
     FTS_INFO("display x(%d %d) y(%d %d)", pdata->x_min, pdata->x_max,
