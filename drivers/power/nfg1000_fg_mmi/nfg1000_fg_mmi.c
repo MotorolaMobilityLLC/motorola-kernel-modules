@@ -2443,9 +2443,11 @@ int fg_set_temp(struct gauge_device *gauge_dev, int temp)
 		u8 hex[4];
 	} data;
 
-	data.temp = temp;
-	nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi,FG_MAC_CMD_TEMPERATURE, data.hex, 2);
-	mmi_log("set board temp to fg cell\n");
+	if (!mmi->fake_battery) {
+		data.temp = temp;
+		nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi,FG_MAC_CMD_TEMPERATURE, data.hex, 2);
+		mmi_log("set board temp to fg cell\n");
+	}
 
 	return 0;
 }
@@ -2458,10 +2460,12 @@ int fg_set_shutdown_threshold(struct gauge_device *gauge_dev, int shutd_vol)
 		u8 hex[4];
 	} data;
 
-	data.shutd_vol = MAX(shutd_vol, 3200);
-	data.shutd_vol = MIN(shutd_vol, 3400);
-	nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi,FG_MAC_CMD_POWEROFF_THRESHOLD, data.hex, 2);
-	mmi_log("set shutdown_threshold=%d mv to fg cell\n", data.shutd_vol);
+	if (!mmi->fake_battery) {
+		data.shutd_vol = MAX(shutd_vol, 3200);
+		data.shutd_vol = MIN(shutd_vol, 3400);
+		nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi,FG_MAC_CMD_POWEROFF_THRESHOLD, data.hex, 2);
+		mmi_log("set shutdown_threshold=%d mv to fg cell\n", data.shutd_vol);
+	}
 
 	return 0;
 }
