@@ -1662,9 +1662,11 @@ static int disp_notifier_callback(struct notifier_block *nb,
 			container_of(nb, struct fts_ts_data, disp_notifier);
 	int *data = (int *)v;
 
-	if (!data || !ts_data)
+	if (!data || !ts_data) {
 		FTS_DEBUG("data null, ret");
 		return 0;
+	}
+
 	if (v) {
 		FTS_INFO("mtk notifier callback value:%lu, data:%d", value, *data);
 		if (value == MTK_DISP_EARLY_EVENT_BLANK) {

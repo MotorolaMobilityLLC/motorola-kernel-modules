@@ -175,6 +175,10 @@ extern bool dbg_level_en;
 #define FTS_FUNC_EXIT() do { \
     printk("[FTS_TS]%s: Exit(%d)\n", __func__, __LINE__); \
 } while (0)
+#define FTS_DBG_LEVEL(fmt, args...) do { \
+    if (dbg_level_en) \
+       printk("[FTS_TS/D]%s:"fmt"\n", __func__, ##args); \
+} while (0)
 #else /* #if FTS_DEBUG_EN*/
 #define FTS_DEBUG(fmt, args...) do { \
     pr_debug("[FTS_TS]%s:"fmt"\n", __func__, ##args); \
@@ -187,12 +191,11 @@ extern bool dbg_level_en;
 #define FTS_FUNC_EXIT() do { \
     pr_debug("[FTS_TS]%s: Exit(%d)\n", __func__, __LINE__); \
 } while (0)
-#endif
 
 #define FTS_DBG_LEVEL(fmt, args...) do { \
-    if (dbg_level_en) \
-       printk("[FTS_TS/D]%s:"fmt"\n", __func__, ##args); \
+    pr_debug("[FTS_TS/D]%s:"fmt"\n", __func__, ##args); \
 } while (0)
+#endif
 
 #define FTS_INFO(fmt, args...) do { \
     printk(KERN_INFO "[FTS_TS/I]%s:"fmt"\n", __func__, ##args); \
