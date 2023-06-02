@@ -13,7 +13,7 @@
 #include "focaltech_ts_config.h"
 
 struct focaltech_ic_report_rate_config report_rate_config_info = {
-#if defined(PRODUCT_AION)
+#if defined(PRODUCT_AION) || defined(PRODUCT_MANAUS)
 	.rate_config_count = 2,
 	.refresh_rate_ctrl = 0,
 	.interpolation_ctrl = 1,
