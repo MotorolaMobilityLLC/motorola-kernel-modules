@@ -755,6 +755,33 @@ static bool nfg1000_ota_program_check_fw_upgrade(struct mmi_fg_chip *di)
 	return upgrade_status;
 }
 
+static const char *get_battery_serialnumber(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	const char *battsn_buf;
+	int retval;
+
+	battsn_buf = NULL;
+
+	if (np)
+		retval = of_property_read_string(np, "mmi,battid",
+						 &battsn_buf);
+	else
+		return NULL;
+
+	if ((retval == -EINVAL) || !battsn_buf) {
+		mmi_info(" Battsn unused\n");
+		of_node_put(np);
+		return NULL;
+
+	} else
+		mmi_info("Battsn = %s\n", battsn_buf);
+
+	of_node_put(np);
+
+	return battsn_buf;
+}
+
 static u8 *nfg1000_upgrade_read_firmware(char *bin_name, struct mmi_fg_chip *mmi_fg);
 //battery parameter version check
 static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di)
@@ -763,6 +790,7 @@ static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di
 	u8 dataflash_read[32] = {0};
 	u16 fg_param_version = 0xFFFF;
 	char batt_params_bin_name[50] = {0};
+	const char *dev_sn = NULL;
 	int i;
 
 	if(nfg1000_ota_unseal(di))
@@ -778,16 +806,20 @@ static bool nfg1000_ota_program_check_batt_params_version(struct mmi_fg_chip *di
 
 	mmi_info(":the fg_param_version=0x%02x\n", fg_param_version);
 
-	if(nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_BATT_SERIALNUM, dataflash_read, 32))
-	{
-		mmi_err("nfg1000_ota_program_dataflash_version_check:dataflash version read error!\n");
-		return upgrade_status;
+	dev_sn = get_battery_serialnumber();
+	if (!dev_sn) {
+		if(nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_BATT_SERIALNUM, dataflash_read, 32))
+		{
+			mmi_err("nfg1000_ota_program_dataflash_version_check:dataflash version read error!\n");
+			return upgrade_status;
+		}
+		dev_sn = dataflash_read;
+		fg_print_buf("The batt_serialnum from FG", dataflash_read, 13);
 	}
-	fg_print_buf("The batt_serialnum from FG", dataflash_read, 10);
 
-	if (di->battid_cnt !=0 && di->batt_version_cnt != 0) {
+	if (dev_sn && di->battid_cnt !=0 && di->batt_version_cnt != 0) {
 		for (i = 0; i < di->battid_cnt; i++) {
-			if ((strncmp(dataflash_read, di->batt_serialnum_arry[i], 10) == 0) &&
+			if ((strnstr(dev_sn, di->batt_serialnum_arry[i], 32)) &&
 			    (fg_param_version < di->batt_version_arry[i]))  {
 				sprintf(batt_params_bin_name, "NFG1000A_battery_parameter_%s.bin",di->batt_serialnum_arry[i]);
 				mmi_info("Need to upgrading battery parameters: %s", batt_params_bin_name);
