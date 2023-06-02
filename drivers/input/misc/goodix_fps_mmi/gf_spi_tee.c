@@ -180,6 +180,10 @@ int gf_parse_dts(struct gf_device *gf_dev)
 	int rc = 0;
 	struct device *dev = gf_dev->device;
 	struct device_node *np = NULL;
+	if (gf_dev->system_status) {
+		gf_debug(INFO_LOG, "%s: system re-started======\n", __func__);
+		return 0;
+	}
 	np = of_find_compatible_node(NULL, NULL, "mediatek,fingerprint-goodix");
 	gf_debug(DEBUG_LOG, "%s, from gpio\n", __func__);
 
@@ -1030,6 +1034,10 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	case GF_IOC_SPIDEVICE_EN:
 		pr_err(" GF_IOC_SPIDEVICE_EN %s %d\n", __func__, __LINE__);
+		if (gf_dev->system_status) {
+			gf_debug(INFO_LOG, "%s: system re-started======\n", __func__);
+			break;
+		}
 		retval = spi_register_driver(&gf_spi_driver);
 		if (retval < 0) {
 			gf_debug(ERR_LOG, "%s, Failed to register SPI driver.\n",
