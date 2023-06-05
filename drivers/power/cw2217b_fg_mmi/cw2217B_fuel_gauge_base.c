@@ -411,6 +411,9 @@ static void cw_get_batt_status(struct cw_battery *cw_bat)
 	batt_curr = cw_bat->cw_current * CW_CUR_UNIT * (-1);
 	batt_curr *= cw_bat->ibat_polority;
 
+	// MMI_STOPSHIP IKSWT-144617: Debug Logs
+	cw_printk("CW2015[%d]: cw_bat->cw_current=%ld, batt_curr=%ld, cw_bat->ibat_polority:%d, CW_CUR_UNIT:%d", __LINE__, cw_bat->cw_current, batt_curr, cw_bat->ibat_polority, CW_CUR_UNIT);
+
 	if (cw_bat->voltage <= 0 || cw_bat->temp <= CW_BPD_TEMP)
 		cw_bat->present = 0;
 	else
@@ -427,6 +430,9 @@ static void cw_get_batt_status(struct cw_battery *cw_bat)
 	} else {
 		cw_bat->batt_status = POWER_SUPPLY_STATUS_DISCHARGING;
 	}
+
+	// MMI_STOPSHIP IKSWT-144617: Debug Logs
+	cw_printk("CW2015[%d]: cw_bat->batt_status=%d\n", __LINE__, cw_bat->batt_status);
 }
 
 static int cw_get_capacity(struct cw_battery *cw_bat)
@@ -445,6 +451,8 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 	int ui_full_temp = 0;
 #endif
 
+	// MMI_STOPSHIP IKSWT-144617: Debug Logs
+	cw_printk("CW2015[%d]: cw_bat->batt_status: %d\n", __LINE__, cw_bat->batt_status);
 	cw_get_batt_status(cw_bat);
 
 	if (cw_bat->batt_status == POWER_SUPPLY_STATUS_CHARGING)
@@ -502,6 +510,9 @@ static int cw_get_capacity(struct cw_battery *cw_bat)
 		cw_printk("CW2015[%d]: UI_SOC = %d larger 100!!!!\n", __LINE__, ui_soc);
 		ui_soc = 100;
 	}
+
+	// MMI_STOPSHIP IKSWT-144617: Debug Logs
+	cw_printk("CW2015[%d]: cw_bat->cw_current=%ld\n", __LINE__, cw_bat->cw_current);
 
 	if ((cw_bat->ui_soc == 0) ||
 		(chr_st_now && ui_soc > cw_bat->ui_soc) ||
