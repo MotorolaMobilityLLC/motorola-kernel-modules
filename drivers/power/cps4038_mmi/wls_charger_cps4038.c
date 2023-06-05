@@ -2362,8 +2362,6 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 #define WLS_ROD_STOP_TIME (60*1000*1000*1000uL) /*60s*/
 
 #define WLS_EPP_ROD_DETECT_COUNT_MAX 3
-#define WLS_EPP_ROD_THRESHOLD_CURRENT_MAX_PER 80 /*%*/
-#define WLS_EPP_ROD_THRESHOLD_CURRENT_MIN_PER 70 /*%*/
 #define WLS_EPP_ROD_THRESHOLD_12V 10500 /*mV*/
 #define WLS_EPP_ROD_THRESHOLD_10V 9000 /*mV*/
 
@@ -2459,7 +2457,7 @@ static bool cps_wls_check_iout(int target_current, int current_now)
 		return rt;
 
 	if (chip->thermal_icl != -1 &&
-		chip->thermal_icl < target_current) {
+		chip->thermal_icl < chip->MaxI) {
 		skip_rod = true;
 	} else if (chip->rod_stop_battery_soc > 0 &&
 			chip->rod_stop_battery_soc < 100) {
@@ -2512,6 +2510,12 @@ static void cps_offset_detect_work(struct work_struct *work)
 	current_now = cps_wls_get_rx_iout();
 	if (wls_mode == Sys_Op_Mode_BPP) {
 		if (!chip->rx_offset) {
+			if (chip->thermal_state != 0 &&
+				chip->thermal_wls_ccl < chip->MaxI) {
+				chip->rod_stop = true;
+				chip->rx_offset_detect_count = 0;
+				return;
+			}
 			if (cps_wls_check_iout(WLS_BPP_ROD_THRESHOLD_CURRENT_MIN, current_now)) {
 				chip->rx_offset_detect_count ++;
 			} else {
@@ -2572,8 +2576,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 		cps_wls_log(CPS_LOG_DEBG, "[%s] vout:%dmV iout:%dmA vout_threshold:%dmV MaxI:%dmA\n", __func__,
 			 chip->rx_vout, current_now, chip->rx_vout_threshold, chip->MaxI);
 		if (!chip->rx_offset) {
-			if (cps_wls_check_iout(chip->MaxI * WLS_EPP_ROD_THRESHOLD_CURRENT_MIN_PER / 100, current_now) ||
-				chip->rx_vout < chip->rx_vout_threshold) {
+			if (chip->rx_vout < chip->rx_vout_threshold) {
 				chip->rx_offset_detect_count ++;
 			} else {
 				chip->rx_offset_detect_count = 0;
@@ -2589,8 +2592,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 			}
 		} else {
 			work_timedelay = OFFSET_DETECT_TIME_DELAY_DEFAULT_MS / 2;
-			if (!cps_wls_check_iout(chip->MaxI * WLS_EPP_ROD_THRESHOLD_CURRENT_MAX_PER / 100, current_now) &&
-				chip->rx_vout > chip->rx_vout_threshold + 500) {
+			if (chip->rx_vout > chip->rx_vout_threshold + 500) {
 				chip->rx_offset_detect_count ++;
 			} else {
 				chip->rx_offset_detect_count = 0;
