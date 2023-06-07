@@ -922,7 +922,6 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
 		events[i].x = (events[i].x * FTS_TOUCH_HIRES_X ) / FTS_HI_RES_X_MAX;
 		events[i].y = (events[i].y * FTS_TOUCH_HIRES_X ) / FTS_HI_RES_X_MAX;
 		events[i].area = touch_buf[FTS_TOUCH_OFF_AREA + base];
-		events[i].p = touch_buf[FTS_TOUCH_OFF_PRE + base];
 		if (events[i].area <= 0) events[i].area = 0x09;
 		event_num++;
 		if (EVENT_DOWN(events[i].flag) && (finger_num == 0)) {
