@@ -222,7 +222,7 @@ int sm5350_set_brightness(struct sm5350_data *drvdata, int brt_val)
 		if (gpio_is_valid(drvdata->en_gpio)) {
                         pr_info("hwen pin is going to be high\n");
                         gpio_set_value(drvdata->en_gpio, true);
-                        msleep(5);
+                        msleep(1);
                 }
 		sm5350_init_registers(drvdata);
 	}
@@ -235,7 +235,7 @@ int sm5350_set_brightness(struct sm5350_data *drvdata, int brt_val)
 	if (brt_val == 0) {
 		if (gpio_is_valid(drvdata->en_gpio)) {
                         pr_info("hwen pin is going to be low\n");
-			msleep(3);
+			msleep(1);
                         gpio_set_value(drvdata->en_gpio, false);
 		}
 		drvdata->enable = false;
