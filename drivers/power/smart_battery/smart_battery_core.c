@@ -163,6 +163,7 @@ static int batt_set_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
 		gauge_dev_set_charge_type(chip->gauge_dev, val->intval);
+		chip->is_ffc_charge = val->intval;
 		break;
 	default:
 		return -EINVAL;
@@ -222,11 +223,32 @@ static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
 	return uisoc;
 }
 
+#define TAPER_COUNT 5
 static int smart_batt_soc100_forward(struct mmi_smart_battery *chip, int rsoc)
 {
 	int logic_soc;
 
 	logic_soc = rsoc * 100 / chip->ui_full_soc;
+	if (chip->soc100_curr_threshod) {
+		if ((mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING) &&
+			(chip->is_ffc_charge) && (logic_soc >= 100) && (chip->uisoc != 100)) {
+
+			if (chip->current_now <= chip->soc100_curr_threshod)  {
+				if (chip->taper_count >= TAPER_COUNT)
+					chip->taper_count = 0;
+				else
+					chip->taper_count ++;
+			} else {
+				chip->taper_count = 0;
+			}
+
+			if ( chip->taper_count < TAPER_COUNT) {
+				logic_soc = 99;
+				mmi_info(chip, "the current is greater than requested,force soc to 99");
+			}
+		}
+	}
+
 	mmi_info(chip, "original_soc=%d, logic_soc=%d", rsoc, logic_soc);
 
 	if (logic_soc > 100)
@@ -357,6 +379,10 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 
 	of_property_read_u32(np , "mmi,shutdown_vol_threshold", &chip->shutdown_threshold);
 
+	if (chip ->ui_full_soc != 100) {
+		of_property_read_u32(np , "mmi,soc100_curr_threshod", &chip->soc100_curr_threshod);
+	}
+
 	return 0;
 }
 
@@ -386,6 +412,8 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->current_now = -EINVAL;
 	chip->batt_temp = -EINVAL;
 	chip->shutdown_threshold = -EINVAL;
+	chip->soc100_curr_threshod = 0;
+	chip->taper_count = 0;
 	smart_battery_parse_dt(chip);
 
 	chip->gauge_dev = get_gauge_by_name("bms");
