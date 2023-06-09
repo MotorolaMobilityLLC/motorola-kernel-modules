@@ -343,7 +343,7 @@ static int aw99703_backlight_enable(struct aw99703_data *drvdata)
 
 int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 {
-	pr_info("%s brt_val is %d, drvdata->enable=%d\n", __func__, brt_val, drvdata->enable);
+	pr_info("%s brt_val is %d\n", __func__, brt_val);
 
 	if (drvdata->enable == false) {
 		if (brt_val == 0) {
@@ -351,7 +351,6 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 			return 0;
 		}
 		aw99703_backlight_init(drvdata);
-		aw99703_backlight_enable(drvdata);
 	}
 	else if ( drvdata->skip_first_trans && drvdata->reset_trans_delay){
 		aw99703_transition_ramp(drvdata);
@@ -386,11 +385,14 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 				(brt_val >> 3)&0xff);
 
 		/* backlight enable */
-		aw99703_i2c_write_bit(drvdata->client,
+		if (drvdata->enable == false) {
+			aw99703_i2c_write_bit(drvdata->client,
 					AW99703_REG_MODE,
 					AW99703_MODE_WORKMODE_MASK,
 					AW99703_MODE_WORKMODE_BACKLIGHT);
-
+			drvdata->enable = true;
+			pr_info("%s bl enable=%d\n", __func__, drvdata->enable);
+		}
 	} else {
 		/* standby mode*/
 		aw99703_i2c_write_bit(drvdata->client,
