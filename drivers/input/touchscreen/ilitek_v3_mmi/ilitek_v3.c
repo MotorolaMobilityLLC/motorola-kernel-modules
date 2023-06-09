@@ -1452,21 +1452,19 @@ int ili_reset_ctrl(int mode)
 	return ret;
 }
 
+#if 0
 static int ilitek_get_tp_module(void)
 {
-	/*
-	 * TODO: users should implement this function
-	 * if there are various tp modules been used in projects.
-	 */
-
-	return 0;
+	ILI_DBG("return tp_module: %d", ilits->tp_module);
+	return ilits->tp_module;
 }
+#endif
 
 static void ili_update_tp_module_info(void)
 {
 	int module;
 
-	module = ilitek_get_tp_module();
+	module = ilits->tp_module;
 
 	switch (module) {
 	case MODEL_CSOT:
@@ -1533,10 +1531,10 @@ static void ili_update_tp_module_info(void)
 		ilits->md_fw_ili_size = sizeof(CTPM_FW_TM);
 		break;
 	default:
-		break;
-	}
-
-	if (module == 0 || ilits->md_fw_ili_size < ILI_FILE_HEADER) {
+		if(module) {
+			ILI_INFO("No md info for module:%d, use default\n", module);
+			module = 0;
+		}
 		ILI_ERR("Couldn't find any tp modules, applying default settings\n");
 		ilits->md_name = "DEF";
 		ilits->md_fw_filp_path = DEF_FW_FILP_PATH;
@@ -1545,6 +1543,7 @@ static void ili_update_tp_module_info(void)
 		ilits->md_ini_rq_path = DEF_INI_REQUEST_PATH;
 		ilits->md_fw_ili = CTPM_FW_DEF;
 		ilits->md_fw_ili_size = sizeof(CTPM_FW_DEF);
+		break;
 	}
 
 	ILI_INFO("Found %s module: ini path = %s, fw path = (%s, %s, %d)\n",

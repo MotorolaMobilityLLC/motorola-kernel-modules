@@ -29,7 +29,7 @@ struct touch_bus_info {
 
 struct ilitek_ts_data *ilits;
 
-#ifdef ILI_MTK_CHECK_PANEL
+#if defined(ILI_MTK_CHECK_PANEL) || defined(ILI_TP_MODULE_EN)
 const char *active_panel_name;
 #endif
 
@@ -587,6 +587,43 @@ int ili_core_spi_setup(int num)
 	return 0;
 }
 
+void ili_parse_tp_module(void)
+{
+	int tp_module = 0;
+
+#ifdef ILI_TP_MODULE_EN
+	if(active_panel_name) {
+		if (strstr(active_panel_name, "tm") || strstr(active_panel_name, "tianma")) {
+			tp_module = MODEL_TM;
+		}
+		else if (strstr(active_panel_name, "djn")) {
+			tp_module = MODEL_DJ;
+		}
+		else if (strstr(active_panel_name, "txd")) {
+			tp_module = MODEL_TXD;
+		}
+		else if (strstr(active_panel_name, "csot")) {
+			tp_module = MODEL_CSOT;
+		}
+		else if (strstr(active_panel_name, "boe")) {
+			tp_module = MODEL_BOE;
+		}
+		else if (strstr(active_panel_name, "auo")) {
+			tp_module = MODEL_AUO;
+		}
+		else
+			ILI_INFO("MODEL for panel:%s to be added!\n", active_panel_name);
+
+		if (tp_module)
+			ILI_INFO("get tp_module:%d\n", tp_module);
+	}
+	else
+		ILI_INFO("active_panel NULL\n");
+
+#endif
+
+	ilits->tp_module = tp_module;
+}
 
 static int parse_dt(struct device_node *np)
 {
@@ -646,7 +683,7 @@ static int ili_check_panel(void)
 
 	if (!active_panel_name)
 		ILI_INFO("active_panel NULL\n");
-	else if(strstr(active_panel_name, "ili78") || strstr(active_panel_name, "ili98"))
+	else if(strstr(active_panel_name, "ili78") || strstr(active_panel_name, "ili98") || strstr(active_panel_name, "il77"))
 	{
 		ILI_INFO("matched active_panel:%s ", active_panel_name);
 		return 0;
@@ -779,6 +816,9 @@ static int ilitek_spi_probe(struct spi_device *spi)
 
 	//---parse dts---
 	parse_dt(spi->dev.of_node);
+
+	//---parse tp module---
+	ili_parse_tp_module();
 
 #if ENABLE_GESTURE
 	ilits->gesture = ENABLE;
