@@ -719,8 +719,6 @@ int ili_sleep_handler(int mode)
 		ILI_INFO("TP resume start\n");
 		ilits->tp_suspend = false;
 		ilits->report = ENABLE;
-		if (ilits->gesture)
-			disable_irq_wake(ilits->irq_num);
 
 		/* Set tp as demo mode and reload code if it's iram. */
 		ilits->actual_tp_mode = P5_X_FW_AP_MODE;
@@ -756,6 +754,9 @@ int ili_sleep_handler(int mode)
 		ilits->gesture_enabled = false;
 		ilits->wakeable = false;
 	}
+#else
+	if (ilits->gesture)
+		disable_irq_wake(ilits->irq_num);
 #endif
 
 		ILI_INFO("TP resume end\n");

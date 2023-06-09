@@ -465,7 +465,7 @@ static int ili_disp_notifier_callback(struct notifier_block *nb,
 					ILI_ERR("TP resume failed\n");
 			}
 			else if (*data == MTK_DISP_BLANK_POWERDOWN) {
-#if ILI_DOUBLE_TAP_CTRL
+#ifdef ILI_DOUBLE_TAP_CTRL
 				if (ilits->should_enable_gesture) {
 					ILI_INFO("TP suspend: tap gesture suspend\n");
 					if (ili_sleep_handler(TP_SUSPEND) < 0)
