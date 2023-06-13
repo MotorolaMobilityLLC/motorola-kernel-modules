@@ -829,10 +829,6 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
     u8 *touch_buf = ts_data->touch_buf;
     struct ts_event *events = ts_data->events;
 
-#if FTS_USB_DETECT_EN
-	fts_cable_detect_func(false);
-#endif
-
     touch_etype = fts_read_parse_touchdata(ts_data, touch_buf);
     switch (touch_etype) {
     case TOUCH_DEFAULT:
@@ -2012,6 +2008,7 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 	int ret = 0;
 	struct power_supply *psy = NULL;
 	struct fts_ts_data *ts = container_of(nb, struct fts_ts_data, charger_notif);
+	struct fts_ts_data *ts_data = fts_data;
 	union power_supply_propval prop;
 	int psp_name;
 
@@ -2054,6 +2051,11 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 			}
 		}
 	}
+
+	if (ts_data->suspended == false) {
+		fts_cable_detect_func(false);
+	}
+
 	return 0;
 }
 #endif
@@ -2739,6 +2741,10 @@ static int fts_ts_resume(struct device *dev)
     fts_esdcheck_resume(ts_data);
 #endif
 
+#if FTS_USB_DETECT_EN
+        fts_cable_detect_func(true);
+#endif
+
 #if FTS_GESTURE_EN
 #ifdef FOCALTECH_SENSOR_EN
     if (ts_data->wakeable && (fts_gesture_resume(ts_data) == 0)) {
@@ -2756,10 +2762,6 @@ static int fts_ts_resume(struct device *dev)
 #endif
 
     ts_data->suspended = false;
-
-#if FTS_USB_DETECT_EN
-	fts_cable_detect_func(true);
-#endif
 
     FTS_FUNC_EXIT();
 #ifdef FOCALTECH_SENSOR_EN
