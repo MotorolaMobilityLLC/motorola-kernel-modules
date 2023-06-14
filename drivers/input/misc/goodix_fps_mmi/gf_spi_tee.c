@@ -50,6 +50,7 @@
 #include <linux/spi/spi.h>
 #include <linux/spi/spidev.h>
 #include <linux/platform_device.h>//shasha
+#include <linux/version.h>
 
 #include "gf_spi_tee.h"
 
@@ -686,7 +687,9 @@ static irqreturn_t gf_irq(int irq, void *handle)
 	struct gf_device *gf_dev = (struct gf_device *)handle;
 	FUNC_ENTRY();
 	gf_debug(ERR_LOG, "%s gf irq...!\n", __func__);
-    //__pm_wakeup_event(&gf_dev->fp_wakesrc, WAKELOCK_HOLD_TIME);
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+        __pm_wakeup_event(&gf_dev->fp_wakesrc, WAKELOCK_HOLD_TIME);
+#endif
 	gf_netlink_send(gf_dev, GF_NETLINK_IRQ);
 	gf_dev->sig_count++;
 
@@ -1389,7 +1392,9 @@ static int gf_platform_probe(struct platform_device *pldev)
 		mutex_unlock(&gf_dev->release_lock);
 		goto err_input;
 	}
-	//wakeup_source_add(&gf_dev->fp_wakesrc);
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	wakeup_source_add(&gf_dev->fp_wakesrc);
+#endif
 
 	gf_dev->probe_finish = 1;
 	gf_dev->is_sleep_mode = 0;
@@ -1439,7 +1444,9 @@ static int gf_platform_remove(struct platform_device *pldev)
 	struct gf_device *gf_dev = dev_get_drvdata(dev);
 
 	FUNC_ENTRY();
-	//wakeup_source_remove(&gf_dev->fp_wakesrc);
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,14,0)
+	wakeup_source_remove(&gf_dev->fp_wakesrc);
+#endif
 	/* make sure ops on existing fds can abort cleanly */
 	if (gf_dev->irq) {
 		free_irq(gf_dev->irq, gf_dev);
