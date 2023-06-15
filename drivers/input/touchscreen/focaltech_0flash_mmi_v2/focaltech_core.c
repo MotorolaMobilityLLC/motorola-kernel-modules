@@ -2715,7 +2715,11 @@ static int fts_ts_resume(struct device *dev)
     mutex_lock(&ts_data->state_mutex);
 #endif
 
-    FTS_FUNC_ENTER();
+    if(ts_data->fw_ver)
+        FTS_INFO("enter. supplier:%s, fw_ver:%02x\n", ts_data->panel_supplier, ts_data->fw_ver);
+    else
+        FTS_INFO("enter");
+
     if (!ts_data->suspended) {
 #ifdef FOCALTECH_SENSOR_EN
         mutex_unlock(&ts_data->state_mutex);
@@ -2763,11 +2767,12 @@ static int fts_ts_resume(struct device *dev)
 
     ts_data->suspended = false;
 
-    FTS_FUNC_EXIT();
 #ifdef FOCALTECH_SENSOR_EN
     mutex_unlock(&ts_data->state_mutex);
     ts_data->screen_state = SCREEN_ON;
 #endif
+
+    FTS_INFO("exit");
 
     return 0;
 }
