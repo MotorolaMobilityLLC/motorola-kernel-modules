@@ -782,13 +782,13 @@ static void fts_mcu_usb_detect_set(uint8_t usb_connected)
 			ret = fts_write_reg(FTS_REG_CHARGER_MODE_EN, write_data);
 			if (ret < 0)
 				FTS_ERROR("set register USB IN fail, ret=%d", ret);
-			FTS_INFO("%s: USB detect status IN!\n", __func__);
+			FTS_INFO("USB detect status IN!\n");
 		} else {
 			write_data= 0x00;
 			ret = fts_write_reg(FTS_REG_CHARGER_MODE_EN, write_data);
 			if (ret < 0)
 				FTS_ERROR("set register USB OUT fail, ret=%d", ret);
-			FTS_INFO("%s: USB detect status OUT!\n", __func__);
+			FTS_INFO("USB detect status OUT!\n");
 		}
 
 		ret = fts_read_reg(FTS_REG_CHARGER_MODE_EN, &read_data);
@@ -812,7 +812,7 @@ void fts_cable_detect_func(bool force_renew)
 		}
 
 		fts_mcu_usb_detect_set(ts_data->usb_connected);
-		FTS_INFO("%s: Cable status change: 0x%2.2X\n", __func__, ts_data->usb_connected);
+		FTS_DEBUG("Cable status change: 0x%2.2X\n", ts_data->usb_connected);
 	}
 }
 #endif
@@ -2037,17 +2037,24 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 				FTS_ERROR("Couldn't get POWER_SUPPLY_PROP_ONLINE rc=%d\n", ret);
 				return ret;
 			} else {
-				FTS_INFO("USB Charge detect:%s %d prop.intval = %d ret = %d\n",__func__,__LINE__,prop.intval,ret);
+				//FTS_DEBUG("USB Charge detect:%s %d prop.intval = %d ret = %d\n",__func__,__LINE__,prop.intval,ret);
 				if(prop.intval == MTK_USB_DETECT_IN) {
-					ts->usb_detect_flag = prop.intval;
+					ts->usb_detect_flag = 1;
 				}
 				else if(prop.intval == MTK_USB_DETECT_OUT) {
 					ts->usb_detect_flag = 0;
 				}
 				else {
-					ts->usb_detect_flag = -EINVAL;
+					FTS_INFO("skip unsupport state:%d\n", prop.intval);
+					return 0;
 				}
-				//FTS_ERROR("usb prop.intval =%d\n", prop.intval);
+
+				if (ts_data->usb_detect_flag != ts_data->usb_connected)
+					FTS_INFO("USB Charge detect: %d prop.intval = %d\n",__LINE__,prop.intval);
+				else {
+					FTS_DBG_LEVEL("skip same usb prop.intval:%d", prop.intval);
+					return 0;
+				}
 			}
 		}
 	}
