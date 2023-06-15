@@ -1849,23 +1849,23 @@ static ssize_t gesture_store(struct device *dev,
 
 	switch (value) {
 	case 0x20:
-		FTS_DEBUG("[%s %d]:  single tap disable\n", __func__, __LINE__);
+		FTS_DEBUG("[%d]: single tap disable\n", __LINE__);
 			ts_data->s_tap_flag = 0;
 		break;
 	case 0x21:
-		FTS_DEBUG("[%s %d]:  single tap enable\n", __func__, __LINE__);
+		FTS_DEBUG("[%d]: single tap enable\n", __LINE__);
 			ts_data->s_tap_flag = 1;
 		break;
 	case 0x30:
-		FTS_DEBUG("[%s %d]:  double tap disable\n", __func__, __LINE__);
+		FTS_DEBUG("[%d]: double tap disable\n", __LINE__);
 			ts_data->d_tap_flag = 0;
 		break;
 	case 0x31:
-		FTS_DEBUG("[%s %d]:  double tap enable\n", __func__, __LINE__);
+		FTS_DEBUG("[%d]: double tap enable\n", __LINE__);
 			ts_data->d_tap_flag = 1;
 		break;
 	default:
-		FTS_ERROR("[%s %d]: unsupport gesture mode type\n", __func__, __LINE__);
+		FTS_ERROR("[%d]: unsupport gesture mode type\n", __LINE__);
 		;
 	}
 	mutex_unlock(&input_dev->mutex);
