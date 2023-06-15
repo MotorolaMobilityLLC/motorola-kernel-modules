@@ -243,6 +243,7 @@ struct fts_ts_data {
     int log_level;
     int fw_is_running;      /* confirm fw is running when using spi:default 0 */
     int dummy_byte;
+    u8 fw_ver;
 #if defined(CONFIG_PM) && FTS_PATCH_COMERR_PM
     struct completion pm_completion;
     bool pm_suspend;

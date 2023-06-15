@@ -891,6 +891,11 @@ static ssize_t fts_ic_ver_show(struct device *dev,
 #endif
     fts_read_reg(FTS_REG_FW_VER, &val);
     count += snprintf(buf + count, PAGE_SIZE, "Build ID: 0000-%02x\n", val);
+    if(val != fts_data->fw_ver) {
+        fts_data->fw_ver = val;
+        FTS_DEBUG("get fw_ver=%02x\n", fts_data->fw_ver);
+    }
+
     fts_read_reg(FTS_REG_VENDOR_ID, &val);
     count += scnprintf(buf + count, PAGE_SIZE, "Config ID: 0x%02x\n", val);
 #if FTS_ESDCHECK_EN
