@@ -12,6 +12,10 @@
 #include "cts_earjack_detect.h"
 #include "cts_oem.h"
 
+#ifdef CFG_MTK_PANEL_NOTIFIER
+#include "mtk_panel_ext.h"
+#endif
+
 static void cts_resume_work_func(struct work_struct *work);
 #ifdef CFG_CTS_DRM_NOTIFIER
 #include <drm/drm_panel.h>
@@ -19,7 +23,7 @@ static struct drm_panel *active_panel;
 static int check_dt(struct device_node *np);
 #endif
 bool cts_show_debug_log;
-#ifdef CTS_MTK_GET_PANEL
+#if defined(CTS_MTK_CHECK_PANEL) || defined(CTS_MTK_GET_PANEL)
 static char *active_panel_name;
 #endif
 
@@ -111,6 +115,67 @@ static void cts_resume_work_func(struct work_struct *work)
     cts_info("%s", __func__);
     cts_resume(cts_data);
 }
+
+#ifdef CFG_MTK_PANEL_NOTIFIER
+static int disp_notifier_callback(struct notifier_block *nb,
+				unsigned long value, void *v)
+{
+	const struct cts_platform_data *pdata =
+			container_of(nb, struct cts_platform_data, disp_notifier);
+	struct chipone_ts_data *cts_data =
+			container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
+	int *data = (int *)v;
+
+	cts_info("mtk disp notifier callback");
+	if (!data || !cts_data)
+		return 0;
+
+	if (pdata && v) {
+		if (value == MTK_DISP_EARLY_EVENT_BLANK) {
+			/* before fb blank */
+			if (*data == MTK_DISP_BLANK_POWERDOWN) {
+						cts_suspend(cts_data);
+			}
+
+		} else if (value == MTK_DISP_EVENT_BLANK) {
+			if (*data == MTK_DISP_BLANK_UNBLANK) {
+				/* cts_resume(cts_data); */
+				queue_work(cts_data->workqueue,
+						&cts_data->ts_resume_work);
+			}
+		}
+	}
+
+	return 0;
+}
+
+static int cts_init_pm_disp_notifier(struct chipone_ts_data *cts_data)
+{
+	int ret = -ENODEV;
+
+	cts_info("Init DISP notifier");
+
+	cts_data->pdata->disp_notifier.notifier_call = disp_notifier_callback;
+	ret = mtk_disp_notifier_register("Touch", &cts_data->pdata->disp_notifier);
+	if (ret)
+		cts_err("Failed to register disp notifier client:%d", ret);
+	return ret;
+}
+
+static int cts_deinit_pm_disp_notifier(struct chipone_ts_data *cts_data)
+{
+	int ret = 0;
+	cts_info("Deinit DISP notifier");
+
+	ret = mtk_disp_notifier_unregister(&cts_data->pdata->disp_notifier);
+	if (ret)
+		cts_err("Failed to register disp notifier client:%d", ret);
+
+	return ret;
+
+}
+
+#endif /* CFG_MTK_PANEL_NOTIFIER */
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
 #ifdef CFG_CTS_DRM_NOTIFIER
@@ -281,6 +346,44 @@ static int check_default_tp(struct device_node *dt, const char *prop)
 }
 #endif
 
+#ifdef CTS_MTK_CHECK_PANEL
+static void cts_get_active_panel(void)
+{
+	int rc;
+	struct device_node *chosen = of_find_node_by_name(NULL, "chosen");
+
+	if(chosen) {
+		rc = of_property_read_string(chosen, "mmi,panel_name", (const char **)&active_panel_name);
+		if (rc)
+			cts_info("mmi,panel_name null\n");
+		else
+			cts_dbg("active_panel_name=%s\n", active_panel_name);
+	}
+	else
+		cts_info("chosen node null\n");
+
+}
+
+static int cts_check_panel(void)
+{
+	cts_dbg("enter");
+	cts_get_active_panel();
+
+	if (!active_panel_name)
+		cts_info("active_panel NULL\n");
+	else if(strstr(active_panel_name, "icnl9922") || strstr(active_panel_name, "icnl9916"))
+	{
+		cts_info("matched active_panel:%s ", active_panel_name);
+		return 0;
+	}
+	else
+		cts_info("not macthed active_panel:%s\n", active_panel_name);
+
+	return -1;
+}
+
+#endif
+
 #ifdef CTS_MTK_GET_PANEL
 char panel_name[50] = { 0 };
 
@@ -344,7 +447,13 @@ static int cts_driver_probe(struct spi_device *client)
     struct chipone_ts_data *cts_data = NULL;
     int ret = 0;
 
-#ifdef CTS_MTK_GET_PANEL
+#ifdef CTS_MTK_CHECK_PANEL
+	ret = cts_check_panel();
+	if (ret) {
+		cts_info("MTK check chipone panel error");
+		return ret;
+	}
+#elif defined(CTS_MTK_GET_PANEL)
     ret = cts_get_panel();
     if (ret) {
         cts_info("MTK get chipone panel error");
@@ -487,6 +596,14 @@ static int cts_driver_probe(struct spi_device *client)
     if (ret < 0)
         cts_warn("Add sysfs entry for device failed %d", ret);
 
+#ifdef CFG_MTK_PANEL_NOTIFIER
+	ret = cts_init_pm_disp_notifier(cts_data);
+	if (ret) {
+		cts_err("Init disp notifier failed %d", ret);
+		goto err_disp_deinit_sysfs;
+	}
+#endif /* CFG_MTK_PANEL_NOTIFIER */
+
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
     ret = cts_init_pm_fb_notifier(cts_data);
     if (ret) {
@@ -547,6 +664,10 @@ err_deinit_oem:
     cts_plat_free_irq(cts_data->pdata);
 
 err_register_fb:
+#ifdef CFG_MTK_PANEL_NOTIFIER
+	cts_deinit_pm_disp_notifier(cts_data);
+err_disp_deinit_sysfs:
+#endif // CFG_MTK_PANEL_NOTIFIER
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
     cts_deinit_pm_fb_notifier(cts_data);
 err_deinit_sysfs:
@@ -627,6 +748,10 @@ static int cts_driver_remove(struct spi_device *client)
 #endif
 
         cts_plat_free_irq(cts_data->pdata);
+
+#ifdef CFG_MTK_PANEL_NOTIFIER
+		cts_deinit_pm_disp_notifier(cts_data);
+#endif /* CFG_MTK_PANEL_NOTIFIER */
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
         cts_deinit_pm_fb_notifier(cts_data);
