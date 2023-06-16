@@ -8,18 +8,21 @@
 
 #define CFG_CTS_DRIVER_VERSION              "v3.4.3"
 
-/** Use software reset */
-/* #define CONFIG_CTS_ICTYPE_ICNL9922 */
-
 /** 1: hwid register addr 0x70000
  *  2: Use spi drw protocol */
+#ifdef CONFIG_CTS_IC_NAME_ICNL9922C
 #define CONFIG_CTS_ICTYPE_ICNL9922C
-
-/** Feature: hwid register addr 0x70000 */
-/* #define CONFIG_CTS_ICTYPE_ICNL9951 */
+#elif defined(CONFIG_CTS_IC_NAME_ICNL9922)
+#define CONFIG_CTS_ICTYPE_ICNL9922
+#elif defined(CONFIG_CTS_IC_NAME_ICNL9951)
+#define CONFIG_CTS_ICTYPE_ICNL9951
+#else
+//deafult IC: icnl9922c
+#define CONFIG_CTS_ICTYPE_ICNL9922C
+#endif
 
 /* For Goole Security */
-/* #define CFG_CTS_FOR_GKI */
+#define CFG_CTS_FOR_GKI
 
 /** Whether reset pin is used */
 #define CFG_CTS_HAS_RESET_PIN
@@ -49,14 +52,14 @@
 /* #define CFG_CTS_FIRMWARE_FORCE_UPDATE */
 
 /** Use build in firmware or firmware file in fs*/
-#define CFG_CTS_DRIVER_BUILTIN_FIRMWARE
+// #define CFG_CTS_DRIVER_BUILTIN_FIRMWARE
 #define CFG_CTS_FIRMWARE_IN_FS
 #ifdef CFG_CTS_FIRMWARE_IN_FS
 /* Add FW custom process. */
 /* #define CFG_CTS_FW_UPDATE_SYS */
 
 /* Load config fw bin as default. */
-/* #define CFG_CTS_FW_UPDATE_FILE_LOAD  */
+#define CFG_CTS_FW_UPDATE_FILE_LOAD
 #ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
 #define CFG_CTS_FW_FILE_NAME_MAX_LEN        128
 #define CFG_CTS_FW_FILE_PATH                "/vendor/firmware/"
@@ -70,7 +73,15 @@
 #define CFG_CTS_FACTORY_LIMIT_FILENAME      "chipone_limit.bin"
 
 /* IC type support */
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+#define CFG_CTS_CHIP_PRIMARY                   "primary"
+#endif
+
+#ifdef CONFIG_CTS_ICTYPE_ICNL9922C
+#define CFG_CTS_CHIP_NAME                   "ICNL9922C"
+#else
 #define CFG_CTS_CHIP_NAME                   "CHIPONE-TDDI"
+#endif
 
 #ifdef CONFIG_PROC_FS
 /* Proc FS for backward compatibility for APK tool com.ICN85xx */
@@ -133,13 +144,18 @@
 #endif /* CFG_CTS_GESTURE */
 
 /* #define CONFIG_CTS_GLOVE */
+#ifdef CONFIG_CHIPONE_EARJACK_EN
 #define CONFIG_CTS_EARJACK_DETECT
+#endif
+
 #define CONFIG_CTS_CHARGER_DETECT
 
 /* #define CONFIG_CTS_TP_PROXIMITY */
 
 /* ESD protection */
+#ifdef CONFIG_CHIPONE_ESD_EN
 #define CONFIG_CTS_ESD_PROTECTION
+#endif
 #ifdef CONFIG_CTS_ESD_PROTECTION
 #define CFG_CTS_ESD_PROTECTION_CHECK_PERIOD   (2 * HZ)
 #define CFG_CTS_ESD_FAILED_CONFIRM_CNT        3
@@ -160,7 +176,11 @@
 /****************************************************************************
  * Platform configurations
  ****************************************************************************/
+#ifdef CONFIG_MTK_PANEL_NOTIFICATIONS
+#define CFG_MTK_PANEL_NOTIFIER
+#else
 //#define CONFIG_CTS_PM_FB_NOTIFIER
+#endif //CONFIG_MTK_PANEL_NOTIFICATIONS
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
 #ifdef CONFIG_DRM
