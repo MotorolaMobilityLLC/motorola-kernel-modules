@@ -3076,6 +3076,41 @@ static struct attribute_group ts_suspend_attr_group = {
 #include <linux/major.h>
 #include <linux/kdev_t.h>
 
+static char *ts_mmi_kobject_get_path(struct kobject *kobj, gfp_t gfp_mask)
+{
+	char *path;
+	int len = 1;
+	struct kobject *parent = kobj;
+
+	do {
+		if (parent->name == NULL) {
+			len = 0;
+			break;
+		}
+		len += strlen(parent->name) + 1;
+		parent = parent->parent;
+	} while (parent);
+
+	if (len == 0)
+		return NULL;
+
+	path = kzalloc(len, gfp_mask);
+	if (!path)
+		return NULL;
+
+	--len;
+	for (parent = kobj; parent; parent = parent->parent) {
+		int cur = strlen(parent->name);
+		len -= cur;
+		memcpy(path + len, parent->name, cur);
+		*(path + --len) = '/';
+	}
+	pr_debug("kobject: '%s' (%p): %s: path = '%s'\n", kobj->name,
+		kobj, __func__, path);
+
+	return path;
+}
+
 /* Attribute: path (RO) */
 static ssize_t path_show(struct device *dev,
         struct device_attribute *attr, char *buf)
@@ -3088,10 +3123,11 @@ static ssize_t path_show(struct device *dev,
         cts_err("Read 'path' with chipone_ts_data NULL");
         return (ssize_t) 0;
     }
+
 #ifdef CONFIG_CTS_I2C_HOST
-    path = kobject_get_path(&data->i2c_client->dev.kobj, GFP_KERNEL);
+	path = ts_mmi_kobject_get_path(&data->i2c_client->dev.kobj, GFP_KERNEL);
 #else
-    path = kobject_get_path(&data->spi_client->dev.kobj, GFP_KERNEL);
+	path = ts_mmi_kobject_get_path(&data->spi_client->dev.kobj, GFP_KERNEL);
 #endif
     blen = scnprintf(buf, PAGE_SIZE, "%s", path ? path : "na");
     kfree(path);
@@ -3147,14 +3183,21 @@ static int cts_fw_class_init(void *_data, bool create)
     static struct class *touchscreen_class;
     static struct device *ts_class_dev;
     dev_t devno;
+    const char* node_name;
 
     cts_info("%s touchscreen class files", create ? "Add" : "Remove");
 
     if (create) {
+#ifdef CFG_CTS_CHIP_PRIMARY
+        node_name = CFG_CTS_CHIP_PRIMARY;
+#else
         if (data->cts_dev.hwdata->name != NULL)
-            error = alloc_chrdev_region(&devno, 0, 1, data->cts_dev.hwdata->name);
+            node_name = data->cts_dev.hwdata->name;
         else
-            error = alloc_chrdev_region(&devno, 0, 1, CFG_CTS_CHIP_NAME);
+            node_name = CFG_CTS_CHIP_NAME;
+#endif
+
+        error = alloc_chrdev_region(&devno, 0, 1, node_name);
 
         if (error) {
             cts_info("Alloc input devno failed %d", error);
@@ -3171,18 +3214,12 @@ static int cts_fw_class_init(void *_data, bool create)
             return error;
         }
 
-        if (data->cts_dev.hwdata->name != NULL) {
-            ts_class_dev = device_create(touchscreen_class, NULL,
-                    devno, data, "%s", data->cts_dev.hwdata->name);
-            cts_info("Create device for IC: %s", data->cts_dev.hwdata->name);
-        } else {
-            ts_class_dev = device_create(touchscreen_class, NULL,
-                    devno, data, "%s", CFG_CTS_CHIP_NAME);
-            cts_info("Create device '" CFG_CTS_CHIP_NAME "'");
-        }
+        ts_class_dev = device_create(touchscreen_class, NULL,
+                devno, data, "%s", node_name);
+        cts_info("Create device for %s", node_name);
+
         if (IS_ERR(ts_class_dev)) {
-            cts_err("Create device '" CFG_CTS_CHIP_NAME
-                "'failed %ld", PTR_ERR(ts_class_dev));
+            cts_err("Create device %s failed %ld", node_name, PTR_ERR(ts_class_dev));
             error = PTR_ERR(ts_class_dev);
             ts_class_dev = NULL;
             return error;
