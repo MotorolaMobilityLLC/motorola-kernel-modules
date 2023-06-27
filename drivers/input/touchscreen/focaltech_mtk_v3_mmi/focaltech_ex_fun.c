@@ -1321,7 +1321,7 @@ static ssize_t fts_panel_supplier_show(struct device *dev,
 			data->panel_supplier);
 	return 0;
 }
-static DEVICE_ATTR(panel_supplier, 0444, fts_panel_supplier_show, NULL);
+//static DEVICE_ATTR(panel_supplier, 0444, fts_panel_supplier_show, NULL);
 
 
 /* fts_pen node */
