@@ -41,6 +41,10 @@
 
 #include "focaltech_core.h"
 
+#ifdef CONFIG_FTS_MTK_SPI
+#include <linux/platform_data/spi-mt65xx.h>
+#endif
+
 #ifdef CFG_MTK_PANEL_NOTIFIER
 #include "mtk_disp_notify.h"
 #else
@@ -88,6 +92,16 @@ enum touch_state {
 * Global variable or extern global variabls/functions
 *****************************************************************************/
 struct fts_ts_data *fts_data;
+
+#ifdef CONFIG_FTS_MTK_SPI
+const struct mtk_chip_config st_spi_ctrdata = {
+       .sample_sel = 0,
+       .cs_setuptime = 45,
+       .cs_holdtime = 0,
+       .cs_idletime = 0,
+       .tick_delay = 0,
+};
+#endif
 
 bool dbg_level_en = 0;
 
@@ -2857,6 +2871,10 @@ static int fts_ts_probe(struct spi_device *spi)
 
     ts_data->bus_type = BUS_TYPE_SPI_V2;
     spi_set_drvdata(spi, ts_data);
+
+#ifdef CONFIG_FTS_MTK_SPI
+    ts_data->spi->controller_data = (void *)&st_spi_ctrdata;
+#endif
 
     ret = fts_ts_probe_entry(ts_data);
     if (ret) {
