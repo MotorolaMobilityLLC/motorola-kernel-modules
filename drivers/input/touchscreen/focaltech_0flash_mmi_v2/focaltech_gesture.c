@@ -406,6 +406,7 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 static int fts_sensor_set_enable(struct sensors_classdev *sensors_cdev,
     unsigned int enable)
 {
+#ifndef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
     FTS_INFO("Gesture set enable %d!", enable);
     mutex_lock(&fts_data->state_mutex);
     if (enable == 1)
@@ -416,6 +417,7 @@ static int fts_sensor_set_enable(struct sensors_classdev *sensors_cdev,
         FTS_INFO("unknown enable symbol\n");
 
     mutex_unlock(&fts_data->state_mutex);
+#endif
     return 0;
 }
 
