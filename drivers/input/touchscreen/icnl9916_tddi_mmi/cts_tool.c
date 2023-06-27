@@ -719,6 +719,15 @@ static long cts_tool_ioctl(struct file *file, unsigned int cmd,
     return -ENOTSUPP;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0))
+static struct proc_ops cts_tool_fops = {
+    .proc_lseek = no_llseek,
+    .proc_open = cts_tool_open,
+    .proc_read  = cts_tool_read,
+    .proc_write = cts_tool_write,
+    .proc_ioctl = cts_tool_ioctl,
+};
+#else
 static struct file_operations cts_tool_fops = {
     .owner = THIS_MODULE,
     .llseek = no_llseek,
@@ -727,6 +736,7 @@ static struct file_operations cts_tool_fops = {
     .write = cts_tool_write,
     .unlocked_ioctl = cts_tool_ioctl,
 };
+#endif
 
 int cts_tool_init(struct chipone_ts_data *cts_data)
 {

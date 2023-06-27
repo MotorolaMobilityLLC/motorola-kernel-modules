@@ -22,7 +22,7 @@ static u8 dump_flag = 1;
 
 void dump_spi(const char *prefix, u8 *data, size_t datalen)
 {
-    u8 str[1024];
+    u8 *str = NULL;
     int offset = 0;
     int i;
 
@@ -30,11 +30,19 @@ void dump_spi(const char *prefix, u8 *data, size_t datalen)
         return ;
     }
 
+    str = kzalloc(1024, GFP_KERNEL);
+    if (str == NULL) {
+        return;
+    }
+
     offset += snprintf(str + offset, sizeof(str) - offset, "%s", prefix);
     for (i = 0; i < datalen; i++) {
         offset += snprintf(str + offset, sizeof(str) - offset, " %02x", data[i]);
     }
     cts_err("%s", str);
+
+    kfree(str);
+    str = NULL;
 }
 
 static int cts_tcs_spi_xtrans(const struct cts_device *cts_dev, u8 *tx,
