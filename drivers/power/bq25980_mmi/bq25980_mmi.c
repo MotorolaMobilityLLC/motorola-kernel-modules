@@ -202,8 +202,13 @@ static struct reg_default sc8541_reg_init_val[] = {
 	{BQ25980_BATOCP_ALM,	0x7F},//0x7F:12700mA
 	{BQ25980_CHRGR_CFG_1,	0x00},
 	{BQ25980_CHRGR_CTRL_1,	0x49},
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+	{BQ25980_BUSOVP,	0x7F},//0X6B:12350mV 0x7F:13350mv
+	{BQ25980_BUSOVP_ALM,	0x6B},//0X6B:12350mV 0X7F:13350mV
+#else
 	{BQ25980_BUSOVP,	0x64},//0X50:11000mV 0x64:12000mv
 	{BQ25980_BUSOVP_ALM,	0x50},//0X46:10500mV 0X50:11000mV
+#endif
 	{BQ25980_BUSOCP,	0x0C},//0X0c:4000mA
 	{BQ25980_REG_09,	0x00},
 	{BQ25980_TEMP_CONTROL,	0x2C},
@@ -238,8 +243,13 @@ static struct reg_default bq25960_reg_init_val[] = {
 	{BQ25980_BATOCP_ALM,	0x7F},//0x7F:12700mA
 	{BQ25980_CHRGR_CFG_1,	0xA8},
 	{BQ25980_CHRGR_CTRL_1,	0x49},
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+	{BQ25980_BUSOVP,	0x7F},//0X6B:12350mV 0x7F:13350mv
+	{BQ25980_BUSOVP_ALM,	0x6B},//0X6B:12350mV 0X7F:13350mV
+#else
 	{BQ25980_BUSOVP,	0x64},//0X50:11000mV 0x64:12000mv
 	{BQ25980_BUSOVP_ALM,	0x50},//0X46:10500mV 0X50:11000mV
+#endif
 	{BQ25980_BUSOCP,	0x0C},//0X0c:4000mA
 	{BQ25980_REG_09,	0x8C},
 	{BQ25980_TEMP_CONTROL,	0x2C},
@@ -689,6 +699,53 @@ static int bq25980_get_adc_vbat(struct bq25980_device *bq)
 
 	return vsys_adc * bq->chip_info->adc_vbat_volt_step / 10;
 }
+
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+static int bq25980_get_adc_vac1(struct bq25980_device *bq)
+{
+	int vac1_adc_lsb, vac1_adc_msb;
+	u16 vac1_adc;
+	int ret;
+
+	ret = regmap_read(bq->regmap, BQ25980_VAC1_ADC_MSB, &vac1_adc_msb);
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBAT_ADC_MS fail ret = %d\n", ret);
+		return ret;
+	}
+
+	ret = regmap_read(bq->regmap, BQ25980_VAC1_ADC_LSB, &vac1_adc_lsb);
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBAT_ADC_LS fail ret = %d\n", ret);
+		return ret;
+	}
+
+	vac1_adc = (vac1_adc_msb << 8) | vac1_adc_lsb;
+	return vac1_adc * 5;
+}
+
+static int bq25980_get_adc_vac2(struct bq25980_device *bq)
+{
+	int vac2_adc_lsb, vac2_adc_msb;
+	u16 vac2_adc;
+	int ret;
+
+	ret = regmap_read(bq->regmap, BQ25980_VAC2_ADC_MSB, &vac2_adc_msb);
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBAT_ADC_MSB fail ret = %d\n", ret);
+		return ret;
+	}
+
+	ret = regmap_read(bq->regmap, BQ25980_VAC2_ADC_LSB, &vac2_adc_lsb);
+	if (ret) {
+		dev_err(bq->dev, "read BQ25980_VBAT_ADC_LSB fail ret = %d\n", ret);
+		return ret;
+	}
+
+	vac2_adc = (vac2_adc_msb << 8) | vac2_adc_lsb;
+
+	return vac2_adc * 5;
+}
+#endif
 
 static int bq25980_notify_state(struct bq25980_device *bq,
 				struct bq25980_state *state)
@@ -1795,6 +1852,30 @@ static int sc8541_config_mux(struct bq25980_device *bq,
                 dev_err(bq->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
                 return ret;
             }
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+        } else if (typec_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
+            ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+                BQ25980_EN_OTG, BQ25980_EN_OTG);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux  en otg fail ret=%d", __func__, ret);
+                return ret;
+            }
+
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ACDRV_MANUAL_EN, SC8541_ACDRV_MANUAL_EN);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+                return ret;
+            }
+            udelay(100);
+
+            ret = regmap_update_bits(bq->regmap, SC8541_CTRL6_REG,
+                    SC8541_ENABLE_TYPEC_MOS, 0);
+            if (ret) {
+                dev_err(bq->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
+                return ret;
+            }
+#endif
         }
 
         if (wls_mos == MMI_DVCHG_MUX_CHG_OPEN) {
@@ -1955,6 +2036,43 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 				return ret;
 			}
 		}
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+	} else if (typec_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
+		ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &val);
+		if (ret) {
+			dev_err(bq->dev, "mmi_mux Reg BQ25980_CHRGR_CTRL_2] fail ret=%d", ret);
+			return ret;
+		}
+		if ((val & (BQ25980_ENABLE_TYPEC_MOS | BQ25980_EN_OTG))
+			!= (BQ25980_ENABLE_TYPEC_MOS | BQ25980_EN_OTG))	 {
+			dev_err(bq->dev, "mmi_mux into MMI_DVCHG_MUX_OTG_WOPEN");
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+				BQ25980_EN_OTG, BQ25980_EN_OTG);
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux  en otg fail ret=%d", ret);
+				return ret;
+			}
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+					BQ25980_DIS_MOS_BOTH, BQ25980_DIS_MOS_BOTH);
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux dis mos both fail ret=%d", ret);
+				return ret;
+			}
+			udelay(1000);
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+					BQ25980_DIS_MOS_BOTH, 0);
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux enable mos both fail ret=%d", ret);
+				return ret;
+			}
+			ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
+					BQ25980_DIS_MOS_BOTH | BQ25980_ENABLE_TYPEC_MOS, 0);
+			if (ret) {
+				dev_err(bq->dev, "mmi_mux enable otg typec mos fail ret=%d", ret);
+				return ret;
+			}
+		}
+#endif
 	}
 
 	if (wls_mos == MMI_DVCHG_MUX_CHG_OPEN
@@ -1989,6 +2107,26 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 	return 0;
 }
 
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+static int bq25980_get_vmos_chg(struct charger_device *chg_dev, bool type, int *mos_vbus)
+{
+	struct bq25980_device *bq = charger_get_data(chg_dev);
+	if (!bq) {
+		pr_err("bq25980 chip not valid\n");
+		return -ENODEV;
+	}
+
+	if (type) {
+		*mos_vbus = bq25980_get_adc_vac1(bq);
+		pr_err("vac1 val = %d\n", *mos_vbus);
+	} else {
+		*mos_vbus = bq25980_get_adc_vac2(bq);
+		pr_err("vac2 val = %d\n", *mos_vbus);
+	}
+	return 0;
+}
+#endif
+
 static const struct charger_ops bq25980_chg_ops = {
 	.enable = bq25980_enable_chg,
 	.is_enabled = bq25980_is_chg_enabled,
@@ -2006,6 +2144,9 @@ static const struct charger_ops bq25980_chg_ops = {
 	.get_adc_accuracy = bq25980_get_adc_accuracy,
 	.config_mux = bq25980_config_mux,
 	.enable_adc = bq25980_enable_adc,
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+	.get_vmos_chg = bq25980_get_vmos_chg,
+#endif
 };
 
 static int bq25980_register_chgdev(struct bq25980_device *bq)

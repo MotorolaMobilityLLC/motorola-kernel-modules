@@ -14,6 +14,10 @@
 #include "mtk_charger.h"
 #include "moto_wlc.h"
 #include "moto_wls_auth2.0.h"
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+#include <linux/../../drivers/misc/mediatek/typec/tcpc/inc/tcpci_core.h>
+#include <linux/../../drivers/misc/mediatek/typec/tcpc/inc/tcpm.h>
+#endif
 
 #define CPS_WLS_FAIL    -1
 #define CPS_WLS_SUCCESS 0
