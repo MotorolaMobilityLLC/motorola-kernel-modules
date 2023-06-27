@@ -28,7 +28,7 @@ typedef struct {
     u8 isWrite;
     u8 isData;
 } TcsCmdValue_t;
-#pragma pack(0)
+#pragma pack()
 
 int cts_tcs_get_fw_ver(const struct cts_device *cts_dev, u16 *fwver);
 int cts_tcs_get_lib_ver(const struct cts_device *cts_dev, u16 *libver);
