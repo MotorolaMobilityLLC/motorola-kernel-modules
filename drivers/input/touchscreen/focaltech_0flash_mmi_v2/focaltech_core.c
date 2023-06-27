@@ -2613,6 +2613,36 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     return 0;
 }
 
+static void fts_gesture_type_store()
+{
+	int ret = 0, gest_type = 0;
+
+	if (fts_data->s_tap_flag && fts_data->d_tap_flag) {
+		gest_type = 0x03;
+		FTS_INFO("single & double tap enabled\n");
+	}
+	else if (fts_data->s_tap_flag) {
+		gest_type = 0x01;
+		FTS_INFO("single tap enabled\n");
+	}
+	else if (fts_data->d_tap_flag) {
+		gest_type = 0x02;
+		FTS_INFO("double tap enabled\n");
+	}
+	else {
+		gest_type = 0;
+		FTS_INFO("tap disabled\n");
+	}
+
+	ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, gest_type);
+	if (ret < 0)
+		FTS_ERROR("set gesture type:%d fail, ret=%d", gest_type, ret);
+	else
+		FTS_DEBUG("set gesture type:%d done\n", gest_type);
+
+	return;
+}
+
 static int fts_ts_suspend(struct device *dev)
 {
     int ret = 0;
@@ -2644,30 +2674,7 @@ static int fts_ts_suspend(struct device *dev)
 #endif
 
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
-
-    if (ts_data->s_tap_flag == 1 && ts_data->d_tap_flag == 1) {
-        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x03);
-    if (ret < 0)
-            FTS_ERROR("set s_tap d_tap fail, ret=%d", ret);
-    }
-    else if (ts_data->s_tap_flag == 0 && ts_data->d_tap_flag == 0) {
-        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x00);
-    if (ret < 0)
-            FTS_ERROR("close s_tap d_tap fail, ret=%d", ret);
-    }
-    else if (ts_data->s_tap_flag == 1) {
-        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x01);
-    if (ret < 0)
-            FTS_ERROR("set s_tap fail, ret=%d", ret);
-    }
-    else if (ts_data->d_tap_flag == 1) {
-        ret = fts_write_reg(FACTORY_REG_OPEN_ADDR, 0x02);
-    if (ret < 0)
-            FTS_ERROR("set d_tap fail, ret=%d", ret);
-    }
-    else {
-            FTS_ERROR("unsupport gesture mode type ret=%d", ret);
-    }
+    fts_gesture_type_store();
 #endif
 
 #if FTS_GESTURE_EN
