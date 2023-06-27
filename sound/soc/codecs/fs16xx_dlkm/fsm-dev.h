@@ -218,7 +218,9 @@ enum dev_id_index {
 #define FSM_DEV_MAX   (4)
 #define FSM_ADDR_BASE (0x34)
 #define MIN(a, b)     ((a) < (b) ? (a) : (b))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
 #define BIT(nr)       (1UL << (nr))
+#endif
 #define HIGH8(val)    ((val >> 8) & 0xFF)
 #define LOW8(val)     (val & 0xFF)
 #define WORD(addr)    ((*(addr) << 8) & *((addr) + 1))
