@@ -30,7 +30,9 @@
 
 #include <linux/input/abov_sar_mmi_overlay_7ch.h> /* main struct, interrupt,init,pointers */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
 #include <asm/segment.h>
+#endif
 #include <asm/uaccess.h>
 #include <asm/atomic.h>
 #include <linux/async.h>
