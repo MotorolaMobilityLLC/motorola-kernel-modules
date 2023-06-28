@@ -746,7 +746,7 @@ static bool nfg1000_ota_program_check_fw_upgrade(struct mmi_fg_chip *di)
 		fw_ver_read[0], fw_ver_read[1],fw_ver_read[2],fw_ver_read[3],fw_ver_read[4]);
 	fg_print_buf("dts config fw_version", di->fw_version, 5);
 	if (di->fw_version) {
-		if(strncmp(fw_ver_read, di->fw_version, 5) < 0) {
+		if(memcmp(fw_ver_read, di->fw_version, 5) < 0) {
 			mmi_info(" current firmware version is not latest !need upgrading...\n");
 			upgrade_status = true;
 		}
