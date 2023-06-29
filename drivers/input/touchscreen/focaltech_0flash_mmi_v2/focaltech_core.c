@@ -105,6 +105,10 @@ const struct mtk_chip_config st_spi_ctrdata = {
 
 bool dbg_level_en = 0;
 
+#ifdef CONFIG_FTS_LAST_TIME
+static bool time_flag = 0;
+#endif
+
 /*****************************************************************************
 * Static function prototypes
 *****************************************************************************/
@@ -527,6 +531,9 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
     u32 max_touch_num = ts_data->pdata->max_touch_number;
     bool touch_event_coordinate = false;
     struct input_dev *input_dev = ts_data->input_dev;
+#ifdef CONFIG_FTS_LAST_TIME
+    bool b_touch_up = 0;
+#endif
 
     for (i = 0; i < ts_data->touch_event_num; i++) {
         if (fts_input_report_key(ts_data, &events[i]) == 0) {
@@ -540,15 +547,20 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
 #if FTS_REPORT_PRESSURE_EN
             input_report_abs(input_dev, ABS_MT_PRESSURE, events[i].p);
 #endif
-#ifdef CONFIG_GTP_LAST_TIME
-            ts_data->last_event_time = ktime_get_boottime();
-#endif
             input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR, events[i].area);
             input_report_abs(input_dev, ABS_MT_POSITION_X, events[i].x);
             input_report_abs(input_dev, ABS_MT_POSITION_Y, events[i].y);
 
             touch_down_point_cur |= (1 << events[i].id);
             touch_point_pre |= (1 << events[i].id);
+
+#ifdef CONFIG_FTS_LAST_TIME
+            if (FTS_TOUCH_DOWN == events[i].flag) {
+                time_flag = 1;
+                if (ts_data->log_level > 2)
+                    FTS_DEBUG("last event: touch down");
+            }
+#endif
 
             if ((ts_data->log_level >= 2) ||
                 (dbg_level_en && (FTS_TOUCH_DOWN == events[i].flag))) {
@@ -580,10 +592,25 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
         if (ts_data->touch_points && dbg_level_en)
             FTS_DEBUG("[B]Points All Up!");
         input_report_key(input_dev, BTN_TOUCH, 0);
+#ifdef CONFIG_FTS_LAST_TIME
+        b_touch_up = 1;
+#endif
     }
 
     ts_data->touch_points = touch_down_point_cur;
     input_sync(input_dev);
+
+#ifdef CONFIG_FTS_LAST_TIME
+    //check time_flag to get boot time only once in one touch session,
+    //to avoid impact touch performance for multi touch & moving cases
+    if (b_touch_up && time_flag) {
+        ts_data->last_event_time = ktime_get_boottime();
+        time_flag = 0;
+        if (ts_data->log_level > 1)
+            FTS_DEBUG("save last_event_time when touch up");
+    }
+#endif
+
     return 0;
 }
 #else
