@@ -53,6 +53,33 @@
 #define SM5350_HVLED_SHORT_FAULTS_REG			0xB2
 #define SM5350_LED_FAULT_ENABLES_REG			0xB4
 
+#define SM5350_REG_ACCESS_MAX				0x25
+#define REG_NONE_ACCESS					0
+#define REG_RD_ACCESS					(1 << 0)
+#define REG_WR_ACCESS					(1 << 1)
+
+const unsigned char sm5350_reg_access[] = {
+	[SM5350_REVISION_REG] = REG_RD_ACCESS,
+	[SM5350_SW_RESET_REG] = REG_RD_ACCESS,
+	[SM5350_HVLED_CURR_SINK_OUT_CFG_REG] = REG_RD_ACCESS,
+	[SM5350_CTL_A_RAMP_TIME_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_B_RAMP_TIME_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_RUNTIME_RAMP_TIME_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_RUNTIME_RAMP_CFG_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_A_BRIGHTNESS_LSB_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_A_BRIGHTNESS_MSB_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_B_BRIGHTNESS_LSB_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_B_BRIGHTNESS_MSB_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_BRIGHTNESS_CFG_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_A_FULL_SCALE_CURR_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_CTL_B_FULL_SCALE_CURR_REG] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[SM5350_HVLED_CURR_SINK_FEEDBACK_REG] = REG_RD_ACCESS,
+	[SM5350_BOOST_CTL_REG] = REG_RD_ACCESS,
+	[SM5350_AUTO_FREQ_THRESHOLD_REG] = REG_RD_ACCESS,
+	[SM5350_PWM_CFG_REG] = REG_RD_ACCESS,
+	[SM5350_CTL_B_BANK_EN_REG] = REG_RD_ACCESS,
+};
+
 enum backlight_exp_current_align {
 	ALIGN_NONE,
 	ALIGN_BL_MAPPING_450
@@ -182,54 +209,68 @@ int sm5350_set_brightness(struct sm5350_data *drvdata, int brt_val)
 	int index = 0, remainder;
 	int code, code1, code2;
 
-	if (drvdata->map_mode == 0 && brt_val) {
-		//exponential mode
-		int bl_ori = brt_val;
-		int bl_tmp2 = 0;
+	if ((drvdata->enable == false) && (brt_val == 0)) {
+		//avoid duplicate standy
+		pr_info("sm5350: already disabled before\n");
+		return 0;
+	}
 
-		if (ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
-			brt_val = sm5350_bl_mapping_450[brt_val];
-			bl_tmp2 = brt_val;
-			pr_debug("%s: bl_mapping brt_val: %d\n", __func__, brt_val);
+	if(brt_val) {
+		if (drvdata->map_mode == 0) {
+			//exponential mode
+			int bl_ori = brt_val;
+			int bl_tmp2 = 0;
+
+			if (ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
+				brt_val = sm5350_bl_mapping_450[brt_val];
+				bl_tmp2 = brt_val;
+				pr_debug("%s: bl_mapping brt_val: %d\n", __func__, brt_val);
+			}
+
+			//align to awinic bl by default
+			brt_val = brt_val*8383/10000+324;
+			pr_info("sm5350: backlight_val:%d, bl_mapping:%d, to align awinic brt_val: %d\n", bl_ori, bl_tmp2, brt_val);
 		}
+		else
+			printk("%s backlight_val = %d\n",__func__, brt_val);
 
-		//align to awinic bl by default
-		brt_val = brt_val*8383/10000+324;
-		pr_info("sm5350: backlight_val:%d, bl_mapping:%d, to align awinic brt_val: %d\n", bl_ori, bl_tmp2, brt_val);
+		if (drvdata->brt_code_enable) {
+			index = brt_val / 10;
+			remainder = brt_val % 10;
+
+			code1 = drvdata->brt_code_table[index];
+			code2 = drvdata->brt_code_table[index+1];
+
+			code = (code2 - code1) * remainder / 10 + code1;
+
+			brt_LSB = code % 0x7;
+			brt_MSB = (code >> 3) & 0xFF;
+			printk("brt_LSB_1 %x, brt_MSB_1 %x\n", brt_LSB, brt_MSB);
+		} else {
+			brt_LSB = brt_val & 0x7;
+			brt_MSB = (brt_val >> 3) & 0xFF;
+		}
+		printk("brt_LSB %x, brt_MSB %x\n", brt_LSB, brt_MSB);
 	}
 	else
 		printk("%s backlight_val = %d\n",__func__, brt_val);
-
-	if (drvdata->brt_code_enable) {
-		index = brt_val / 10;
-		remainder = brt_val % 10;
-
-		code1 = drvdata->brt_code_table[index];
-		code2 = drvdata->brt_code_table[index+1];
-
-		code = (code2 - code1) * remainder / 10 + code1;
-
-		brt_LSB = code % 0x7;
-		brt_MSB = (code >> 3) & 0xFF;
-		printk("brt_LSB_1 %x, brt_MSB_1 %x\n", brt_LSB, brt_MSB);
-	} else {
-		brt_LSB = brt_val & 0x7;
-		brt_MSB = (brt_val >> 3) & 0xFF;
-	}
-	printk("brt_LSB %x, brt_MSB %x\n", brt_LSB, brt_MSB);
 
 	if (drvdata->enable == false) {
 		if (gpio_is_valid(drvdata->en_gpio)) {
                         pr_info("hwen pin is going to be high\n");
                         gpio_set_value(drvdata->en_gpio, true);
                         msleep(1);
-                }
+        }
 		sm5350_init_registers(drvdata);
 	}
 
 	if (drvdata->bank_B) {
 		sm5350_write_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_LSB_REG, brt_LSB);
 		sm5350_write_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_MSB_REG, brt_MSB);
+	}
+	else {
+		sm5350_write_reg(drvdata->client, SM5350_CTL_A_BRIGHTNESS_LSB_REG, brt_LSB);
+		sm5350_write_reg(drvdata->client, SM5350_CTL_A_BRIGHTNESS_MSB_REG, brt_MSB);
 	}
 
 	if (brt_val == 0) {
@@ -273,9 +314,16 @@ static void dump_sm5350_regs(struct sm5350_data *drvdata)
 	sm5350_read_reg(drvdata->client, SM5350_BOOST_CTL_REG, &boost_ctl);
 	sm5350_read_reg(drvdata->client, SM5350_PWM_CFG_REG, &pwm_cfg);
 	sm5350_read_reg(drvdata->client, SM5350_CTL_B_BANK_EN_REG, &ctl_bank_en);
-	sm5350_read_reg(drvdata->client, SM5350_CTL_A_FULL_SCALE_CURR_REG, &full_scale_current);
-	sm5350_read_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_LSB_REG, &brt_LSB);
-	sm5350_read_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_MSB_REG, &brt_MSB);
+	if (drvdata->bank_B) {
+		sm5350_read_reg(drvdata->client, SM5350_CTL_B_FULL_SCALE_CURR_REG, &full_scale_current);
+		sm5350_read_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_LSB_REG, &brt_LSB);
+		sm5350_read_reg(drvdata->client, SM5350_CTL_B_BRIGHTNESS_MSB_REG, &brt_MSB);
+	}
+	else {
+		sm5350_read_reg(drvdata->client, SM5350_CTL_A_FULL_SCALE_CURR_REG, &full_scale_current);
+		sm5350_read_reg(drvdata->client, SM5350_CTL_A_BRIGHTNESS_LSB_REG, &brt_LSB);
+		sm5350_read_reg(drvdata->client, SM5350_CTL_A_BRIGHTNESS_MSB_REG, &brt_MSB);
+	}
 	sm5350_read_reg(drvdata->client, SM5350_REVISION_REG, &revision);
 
 	pr_err(">>-- boost_ctl(0x%x), pwm_cfg(0x%x), ctl_bank_en(0x%x), full_scale_current(0x%x), brt_LSB(0x%x), brt_MSB(0x%x), revision(0x%x).\n",
@@ -438,6 +486,57 @@ static int sm5350_read_revision(struct sm5350_data *drvdata)
 	return -EINVAL;
 }
 
+/******************************************************
+ *
+ * sys group attribute: reg
+ *
+ ******************************************************/
+static ssize_t sm5350_i2c_reg_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct sm5350_data *sm5350 = dev_get_drvdata(dev);
+
+	unsigned int databuf[2] = {0, 0};
+
+	if (sscanf(buf, "%x %x", &databuf[0], &databuf[1]) == 2) {
+		sm5350_write_reg(sm5350->client,
+				(unsigned char)databuf[0],
+				(unsigned char)databuf[1]);
+	}
+
+	return count;
+}
+
+static ssize_t sm5350_i2c_reg_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct sm5350_data *data = dev_get_drvdata(dev);
+	ssize_t len = 0;
+	unsigned char i = 0, num = 0;
+	unsigned char reg_val = 0;
+
+	num = sizeof(sm5350_reg_access)/sizeof(sm5350_reg_access[0]);
+	for (i = 0; i < num; i++) {
+		if (!(sm5350_reg_access[i]&REG_RD_ACCESS))
+			continue;
+		sm5350_read_reg(data->client, i, &reg_val);
+		len += snprintf(buf+len, PAGE_SIZE-len, "reg:0x%02x=0x%02x\n",
+				i, reg_val);
+	}
+
+	return len;
+}
+
+static DEVICE_ATTR(reg, 0664, sm5350_i2c_reg_show, sm5350_i2c_reg_store);
+static struct attribute *sm5350_attributes[] = {
+	&dev_attr_reg.attr,
+	NULL
+};
+
+static struct attribute_group sm5350_attribute_group = {
+	.attrs = sm5350_attributes
+};
+
 static int sm5350_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
@@ -508,6 +607,11 @@ static int sm5350_probe(struct i2c_client *client,
 	sm5350_init_registers(drvdata);
 	dump_sm5350_regs(drvdata);
 	sm5350_set_brightness(drvdata, drvdata->default_brightness);
+
+	err = sysfs_create_group(&client->dev.kobj, &sm5350_attribute_group);
+	if (err < 0) {
+		dev_info(&client->dev, "%s error creating sysfs attr files\n", __func__);
+	}
 
 	printk("sm-sm5350 probe okay\n");
 	return 0;
