@@ -292,6 +292,11 @@ struct fts_ts_data {
 #endif
     struct regulator *vdd;
     struct regulator *vcc_i2c;
+#if FTS_SPI_SET_DRIVE_STRENGTH
+    struct pinctrl *pinctrl;
+    struct pinctrl_state *spi_default;
+    struct pinctrl_state *spi_active;
+#endif
 #if FTS_PINCTRL_EN
     struct pinctrl *pinctrl;
     struct pinctrl_state *pins_active;
