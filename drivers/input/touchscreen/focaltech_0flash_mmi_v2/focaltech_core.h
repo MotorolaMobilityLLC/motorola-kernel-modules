@@ -73,7 +73,7 @@
 #ifdef FOCALTECH_CONFIG_PANEL_NOTIFICATIONS
 #include <linux/panel_notifier.h>
 #endif
-#ifdef CONFIG_GTP_LAST_TIME
+#ifdef CONFIG_FTS_LAST_TIME
 #include <linux/ktime.h>
 #endif
 
@@ -309,7 +309,7 @@ struct fts_ts_data {
     uint8_t usb_connected;
     struct notifier_block charger_notif;
 #endif
-#ifdef CONFIG_GTP_LAST_TIME
+#ifdef CONFIG_FTS_LAST_TIME
     ktime_t last_event_time;
 #endif
     const char *psy_name;
