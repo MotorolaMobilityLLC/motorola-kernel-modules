@@ -197,7 +197,7 @@
 #define FTS_CHIP_NAME   "ft8726"
 #endif
 
-#if defined(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL) || defined(CONFIG_GTP_LAST_TIME)
+#if defined(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL) || defined(CONFIG_FTS_LAST_TIME)
 #define FTS_CHIP_NAME_PRIMARY   "primary"
 #endif
 

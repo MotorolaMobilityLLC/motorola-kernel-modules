@@ -1803,7 +1803,7 @@ static ssize_t debug_level_en_show(
     return count;
 }
 
-#ifdef CONFIG_GTP_LAST_TIME
+#ifdef CONFIG_FTS_LAST_TIME
 static ssize_t timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -1879,7 +1879,7 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
 	__ATTR_RO(panel_supplier),
-#ifdef CONFIG_GTP_LAST_TIME
+#ifdef CONFIG_FTS_LAST_TIME
 	__ATTR_RO(timestamp),
 #endif
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
