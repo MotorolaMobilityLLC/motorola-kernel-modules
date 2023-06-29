@@ -1274,6 +1274,54 @@ static int fts_buffer_init(struct fts_ts_data *ts_data)
     return 0;
 }
 
+#if FTS_SPI_SET_DRIVE_STRENGTH
+static int fts_spi_pinctrl_init(struct fts_ts_data *data)
+{
+    int ret;
+
+    FTS_FUNC_ENTER();
+
+    data->pinctrl = devm_pinctrl_get(data->spi->controller->dev.parent);
+    if (IS_ERR(data->pinctrl)) {
+        ret = PTR_ERR(data->pinctrl);
+        FTS_ERROR("Cannot find touch pc!\n");
+        goto err_pinctrl_get;
+    }
+
+    data->spi_default = pinctrl_lookup_state(data->pinctrl, "default");
+    if (IS_ERR(data->spi_default)) {
+        ret = PTR_ERR(data->spi_default);
+        FTS_ERROR("Cannot find touch pinctrl default %d!", ret);
+    }
+
+    data->spi_active = pinctrl_lookup_state(data->pinctrl, "ft8725_spi_mode");
+    if (IS_ERR(data->spi_active)) {
+        ret = PTR_ERR(data->spi_active);
+        FTS_ERROR("Cannot find touch pinctrl state_spi!");
+        goto err_pinctrl_lookup;
+    }
+
+    ret = pinctrl_select_state(data->pinctrl, data->spi_active);
+    if (ret < 0) {
+	FTS_ERROR("cannot set spi_active!");
+	return ret;
+    }
+    FTS_FUNC_EXIT();
+    return 0;
+
+err_pinctrl_lookup:
+    if (data->pinctrl) {
+        devm_pinctrl_put(data->pinctrl);
+    }
+err_pinctrl_get:
+    data->pinctrl = NULL;
+    data->spi_default = NULL;
+    data->spi_active = NULL;
+    FTS_FUNC_EXIT();
+    return ret;
+}
+#endif
+
 #if FTS_POWER_SOURCE_CUST_EN
 /*****************************************************************************
 * Power Control
@@ -2407,6 +2455,13 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         FTS_ERROR("configure the gpios fail");
         goto err_gpio_config;
     }
+
+#if FTS_SPI_SET_DRIVE_STRENGTH
+    ret = fts_spi_pinctrl_init(ts_data);
+    if (ret < 0) {
+        FTS_INFO("spi drive strength set fail\n");
+    }
+#endif
 
 #if FTS_POWER_SOURCE_CUST_EN
     ret = fts_power_source_init(ts_data);
