@@ -261,6 +261,12 @@
  * Pinctrl enable
  * default: disable
  */
+#ifdef CONFIG_FOCAL_SPI_DRIVE
+#define FTS_SPI_SET_DRIVE_STRENGTH		1
+#else
+#define FTS_SPI_SET_DRIVE_STRENGTH              0
+#endif
+
 #define FTS_PINCTRL_EN                          0
 
 /*
