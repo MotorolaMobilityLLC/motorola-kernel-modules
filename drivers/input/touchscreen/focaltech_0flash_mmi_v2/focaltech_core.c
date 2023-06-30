@@ -2878,6 +2878,7 @@ static int fts_ts_probe(struct spi_device *spi)
 
     spi->mode = SPI_MODE_0;
     spi->bits_per_word = 8;
+    spi->chip_select = 0;
     ret = spi_setup(spi);
     if (ret) {
         FTS_ERROR("spi setup fail");
