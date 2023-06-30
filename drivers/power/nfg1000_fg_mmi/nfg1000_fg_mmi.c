@@ -2545,15 +2545,42 @@ static ssize_t fg_attr_show_FW_ver(struct device *dev,
 	return ret;
 }
 
+static ssize_t fg_attr_store_FW_update(struct device *dev,
+				struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct mmi_fg_chip *mmi = i2c_get_clientdata(client);
+
+	if (mmi == NULL) {
+		mmi_err("%s: can't get fg_chip!\n", __func__);
+	} else {
+		mmi_info("%s:do_upgrading:%d fake_battery:%d count:%ld buf:%s\n",
+				__func__, mmi->do_upgrading, mmi->fake_battery, count, buf);
+		if (count == 2 && !mmi->do_upgrading && !mmi->fake_battery) {
+			if (buf[0] == '1') {
+				schedule_work(&mmi->fg_upgrade_work);
+			} else if (buf[0] == '2') {
+				mmi->force_upgrade = true;
+				schedule_work(&mmi->fg_force_upgrade_work);
+			}
+		}
+	}
+
+	return count;
+}
+
 static DEVICE_ATTR(RaTable, S_IRUGO, fg_attr_show_Ra_table, NULL);
 static DEVICE_ATTR(Qmax, S_IRUGO, fg_attr_show_Qmax, NULL);
 static DEVICE_ATTR(Params_Ver, S_IRUGO, fg_attr_show_batt_params_ver, NULL);
 static DEVICE_ATTR(FW_Ver, S_IRUGO, fg_attr_show_FW_ver, NULL);
+static DEVICE_ATTR(FW_update, S_IWUSR|S_IWGRP, NULL, fg_attr_store_FW_update);
+
 static struct attribute *fg_attributes[] = {
 	&dev_attr_RaTable.attr,
 	&dev_attr_Qmax.attr,
 	&dev_attr_Params_Ver.attr,
 	&dev_attr_FW_Ver.attr,
+	&dev_attr_FW_update.attr,
 	NULL,
 };
 
