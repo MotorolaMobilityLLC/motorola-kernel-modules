@@ -252,7 +252,11 @@ static struct reg_default bq25960_reg_init_val[] = {
 #endif
 	{BQ25980_BUSOCP,	0x0C},//0X0c:4000mA
 	{BQ25980_REG_09,	0x8C},
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+	{BQ25980_TEMP_CONTROL,	0x4C},
+#else
 	{BQ25980_TEMP_CONTROL,	0x2C},
+#endif
 	{BQ25980_TDIE_ALM,	0x78},//0x78:85C
 	{BQ25980_TSBUS_FLT,	0x15},
 	{BQ25980_TSBAT_FLG,	0x15},
