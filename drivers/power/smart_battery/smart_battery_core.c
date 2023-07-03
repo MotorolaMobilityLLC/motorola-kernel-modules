@@ -208,6 +208,9 @@ static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
 	if (chip->uisoc == -EINVAL)
 		return uisoc;
 
+	if (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_FULL)
+		return 100;
+
 	if (rsoc > chip->uisoc) {
 		/* SOC increased */
 		if (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING) {
