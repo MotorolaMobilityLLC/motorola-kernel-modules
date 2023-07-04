@@ -1704,7 +1704,6 @@ static ssize_t nfg1000_upgrade_APP(struct mmi_fg_chip *di)
 	return 0;
 }
 
-#if 0
 static bool is_atm_mode()
 {
 	const char *bootargs_ptr = NULL;
@@ -1756,7 +1755,6 @@ err_putnode:
 
 	return factory_mode;
 }
-#endif
 
 static void nfg1000_force_upgrade_func(struct work_struct *work)
 {
@@ -2766,9 +2764,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 		return ret;
 	}
 
-	//MMI_STOPSHIP: <fuelgauge>: remove the limits of fg upgrade function.
-	//if (mmi->fake_battery == false && is_atm_mode() == true) {
-	if (mmi->fake_battery == false) {
+	if (mmi->fake_battery == false && is_atm_mode() == true) {
 		INIT_WORK(&mmi->fg_force_upgrade_work, nfg1000_force_upgrade_func);
 		schedule_work(&mmi->fg_force_upgrade_work);
 
