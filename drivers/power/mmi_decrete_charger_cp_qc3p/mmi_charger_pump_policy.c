@@ -2154,8 +2154,11 @@ int qc3p_select_pdo(struct mmi_charger_manager *chip,int target_uv, int target_u
 			break;
                 } else{
 			// Need to check if vbus voltage change as expected.
+#ifdef CONFIG_MOTO_CHARGER_PUMP_MEASURE_AVG_VOL
+			mdelay((5 * abs(count)) + 100);
+#else
 			udelay(10000*abs(count));
-
+#endif
 			if (chrg_list->cp_master) {
 		                rc = mmi_get_input_voltage_settled(chrg_list->chrg_dev[CP_MASTER],&vbus_val);
 		        }
