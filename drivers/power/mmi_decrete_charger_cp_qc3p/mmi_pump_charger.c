@@ -36,6 +36,7 @@
 #include "mmi_charger_class.h"
 #include <linux/power_supply.h>
 #include "mmi_charger_core.h"
+#include <linux/math64.h>
 
 #define	BAT_OVP_FAULT_SHIFT			8
 #define	BAT_OCP_FAULT_SHIFT			9
@@ -78,6 +79,19 @@
 #define	BUS_THERM_ALARM_MASK		(1 << BUS_THERM_ALARM_SHIFT)
 #define	DIE_THERM_ALARM_MASK		(1 << DIE_THERM_ALARM_SHIFT)
 #define	BAT_UCP_ALARM_MASK		(1 << BAT_UCP_ALARM_SHIFT)
+
+#ifdef CONFIG_MOTO_CHARGER_PUMP_MEASURE_AVG_VOL
+#define PRECISION_ENHANCE	5
+#define CP_MEASURE_R_AVG_TIMES 5
+
+static u32 cp_precise_div(u64 dividend, u64 divisor)
+{
+	u64 _val = div64_u64(dividend << PRECISION_ENHANCE, divisor);
+
+	return (u32)((_val + (1 << (PRECISION_ENHANCE - 1))) >>
+		PRECISION_ENHANCE);
+}
+#endif
 
 static int cp_enable_charging(struct mmi_charger_device *chrg, bool en)
 {
@@ -133,6 +147,48 @@ static int cp_get_charging_current(struct mmi_charger_device *chrg, u32 *uA)
 	return 0;
 }
 
+#ifdef CONFIG_MOTO_CHARGER_PUMP_MEASURE_AVG_VOL
+static int cp_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vbus)
+{
+	int rc, vbus_voltage;
+	int vbus1 = 0, vbus_max = 0, vbus_min = 0;
+	int i = 0;
+
+	if (!chrg->chg_dev) {
+		chrg_dev_info(chrg, "MMI CP chrg: chg_dev is null! \n");
+		return -ENODEV;
+	}
+
+	for (i = 0; i < CP_MEASURE_R_AVG_TIMES + 2; i++) {
+		rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBUS, &vbus_voltage, &vbus_voltage);
+		if (rc < 0) {
+			chrg_dev_info(chrg, "cp get vbus fail! \n");
+			return rc;
+		}
+
+		if (i == 0) {
+			vbus_max = vbus_min = vbus_voltage;
+		} else {
+			vbus_max = max(vbus_max, vbus_voltage);
+			vbus_min = min(vbus_min, vbus_voltage);
+		}
+		vbus1 += vbus_voltage;
+		msleep(30);
+		chrg_dev_info(chrg, "vbus=%d vbus(max,min)=(%d,%d) vbus1=%d",
+				vbus_voltage, vbus_max, vbus_min, vbus1);
+	}
+
+	vbus1 -= (vbus_min + vbus_max);
+	vbus1 = cp_precise_div(vbus1, CP_MEASURE_R_AVG_TIMES);
+
+	chrg->charger_data.vbus_volt = vbus1;
+	*vbus = chrg->charger_data.vbus_volt;
+
+	chrg_dev_info(chrg, "get final vbus: %d\n", chrg->charger_data.vbus_volt);
+	return rc;
+}
+
+#else
 static int cp_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vbus)
 {
 	int rc, vbus_voltage;
@@ -144,12 +200,13 @@ static int cp_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vb
 
 	rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBUS, &vbus_voltage, &vbus_voltage);
 	if (rc>=0)
-		chrg->charger_data.vbatt_volt = vbus_voltage;
+		chrg->charger_data.vbus_volt = vbus_voltage;
 
-	*vbus = chrg->charger_data.vbatt_volt;
+	*vbus = chrg->charger_data.vbus_volt;
 
 	return rc;
 }
+#endif
 
 static int cp_get_input_current(struct mmi_charger_device *chrg, u32 *uA)
 {
