@@ -532,7 +532,8 @@ static const struct i2c_device_id sm5350_id[] = {
 	{}
 };
 static struct of_device_id match_table[] = {
-       {.compatible = "sm-sm5350",}
+       {.compatible = "sm-sm5350",},
+       {}
 };
 
 MODULE_DEVICE_TABLE(i2c, sm5350_id);
