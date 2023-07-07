@@ -2259,20 +2259,6 @@ static int bq25980_probe(struct i2c_client *client,
 	client->irq = irqn;
 #endif
 
-	if (client->irq) {
-		ret = devm_request_threaded_irq(dev, client->irq, NULL,
-						bq25980_irq_handler_thread,
-						IRQF_TRIGGER_FALLING |
-						IRQF_ONESHOT,
-						dev_name(&client->dev), bq);
-		if (ret < 0) {
-			dev_err(bq->dev,"request irq for irq=%d failed, ret =%d\n",
-				   client->irq, ret);
-			goto free_mem;
-		}
-		enable_irq_wake(client->irq);
-	}
-
 	ret = bq25980_power_supply_init(bq, dev, id->driver_data);
 	if (ret)
 		goto free_mem;
@@ -2282,16 +2268,35 @@ static int bq25980_probe(struct i2c_client *client,
 		dev_err(dev, "Cannot initialize the chip.\n");
 		goto free_psy;
 	}
+
 	ret = bq25980_register_chgdev(bq);
 	if (ret < 0) {
 		dev_err(dev, "%s reg chgdev fail(%d)\n", __func__, ret);
 		goto free_psy;
 	}
 
+	if (client->irq) {
+		ret = devm_request_threaded_irq(dev, client->irq, NULL,
+						bq25980_irq_handler_thread,
+						IRQF_TRIGGER_FALLING |
+						IRQF_ONESHOT,
+						dev_name(&client->dev), bq);
+		if (ret < 0) {
+			dev_err(bq->dev,"request irq for irq=%d failed, ret =%d\n",
+				   client->irq, ret);
+			goto free_chgdev;
+		}
+		enable_irq_wake(client->irq);
+	}
+
 	bq25980_create_device_node(bq->dev);
 	dump_all_reg(bq);
 	printk("-------bq25980 driver probe success--------%s\n",dev_name(&client->dev));
 	return 0;
+
+free_chgdev:
+	charger_device_unregister(bq->chg_dev);
+
 free_psy:
 	power_supply_unregister(bq->charger);
 
