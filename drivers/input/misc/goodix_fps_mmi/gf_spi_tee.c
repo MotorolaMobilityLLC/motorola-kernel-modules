@@ -1461,20 +1461,19 @@ static int gf_platform_remove(struct platform_device *pldev)
 	fb_unregister_client(&gf_dev->notifier);
 #endif
 
-	mutex_lock(&gf_dev->release_lock);
 	if (gf_dev->input == NULL) {
 		kfree(gf_dev);
-		mutex_unlock(&gf_dev->release_lock);
 		FUNC_EXIT();
 		return 0;
 	}
+	mutex_lock(&gf_dev->release_lock);
 	input_unregister_device(gf_dev->input);
 	gf_dev->input = NULL;
 	mutex_unlock(&gf_dev->release_lock);
 
-	mutex_lock(&gf_dev->release_lock);
+//	mutex_lock(&gf_dev->release_lock);
 
-	mutex_unlock(&gf_dev->release_lock);
+//	mutex_unlock(&gf_dev->release_lock);
 
 	gf_netlink_destroy(gf_dev);
 	cdev_del(&gf_dev->cdev);
