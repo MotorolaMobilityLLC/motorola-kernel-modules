@@ -2865,23 +2865,6 @@ static void cps_wls_set_boost(bool val)
 }
 
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
-static bool usb_online()
-{
-	union power_supply_propval prop;
-	struct power_supply *chg_psy = NULL;
-
-	chg_psy = power_supply_get_by_name("mtk-master-charger");
-	if (chg_psy == NULL || IS_ERR(chg_psy)) {
-		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n", __func__);
-		prop.intval = 0;
-	} else {
-		power_supply_get_property(chg_psy,
-			POWER_SUPPLY_PROP_ONLINE, &prop);
-		cps_wls_log(CPS_LOG_ERR,"%s online:%d\n", __func__, prop.intval);
-	}
-
-	return prop.intval;
-}
 
 static bool cps_wls_query_typec_attached_state(void)
 {
@@ -2925,7 +2908,8 @@ static void cps_wls_fw_set_boost(bool val)
 		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n",__func__);
 		return ;
 	}
-	if((usb_online() == true || otg_status == val) && otg_status != true) {
+        mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG_OTG, !!val);
+	if((otg_status == val) && otg_status != true) {
 		cps_wls_log(CPS_LOG_ERR,"%s usb online or otg status same, no need switch\n",__func__);
 		return;
 	}
@@ -2941,7 +2925,6 @@ static void cps_wls_fw_set_boost(bool val)
 		otg_status = val;
 	}
 
-    mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG_OTG, !!val);
 #else
 	/* Assume if we turned the boost on we want to stay awake */
 	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, !!val);
