@@ -54,7 +54,9 @@
 #include "mach/gpio_const.h"
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
 #include <mt-plat/sync_write.h>
+#endif
 #include <linux/of_address.h>
 
 
@@ -656,10 +658,18 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	* from the kernel perspective; so they look reversed.
 	*/
 	if (_IOC_DIR(cmd) & _IOC_READ)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(5,10,0)
+		retval = !access_ok((void __user *)arg, _IOC_SIZE(cmd));
+#else
 		retval = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+#endif
 
 	if (retval == 0 && _IOC_DIR(cmd) & _IOC_WRITE)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(5,10,0)
+		retval = !access_ok((void __user *)arg, _IOC_SIZE(cmd));
+#else
 		retval = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+#endif
 
 	if (retval)
 		return -EINVAL;
