@@ -322,6 +322,7 @@ struct goodix_ts_board_data {
 	bool sample_ctrl;
 	bool report_rate_ctrl;
 	bool edge_ctrl;
+	bool stowed_mode_ctrl;
 	bool gesture_wait_pm;
 };
 
@@ -508,6 +509,7 @@ struct goodix_mode_info {
 	int sample;
 	int report_rate_mode;
 	int edge_mode[2];
+	int stowed;
 };
 
 struct goodix_ts_core {
@@ -541,6 +543,7 @@ struct goodix_ts_core {
 
 	atomic_t irq_enabled;
 	atomic_t suspended;
+	atomic_t post_suspended;
 	/* when this flag is true, driver should not clean the sync flag */
 	bool tools_ctrl_sync;
 
