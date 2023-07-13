@@ -54,4 +54,5 @@ static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device
 #define EXIT_HIGH_REPORT_RATE_CMD 0xC100
 #define SAMPLE_SWITCH_CMD   0xC2
 #define ENTER_GESTURE_MODE_CMD   0xA6
+#define ENTER_STOWED_MODE_CMD   0x97
 #endif
