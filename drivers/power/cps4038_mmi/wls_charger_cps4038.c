@@ -4684,10 +4684,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 
     kthread_run(cps_rx_check_events_thread, chip, "cps_rx_check_thread");
 
-#ifdef CONFIG_MOTO_CHANNEL_SWITCH
-    chip->chip_id = 0x4038;
-#endif
-
     cps_wls_log(CPS_LOG_DEBG, "[%s] wireless charger addr low probe successful!\n", __func__);
 
     motoauth.wls_get_ldo_on = cps_wls_get_ldo_on;
