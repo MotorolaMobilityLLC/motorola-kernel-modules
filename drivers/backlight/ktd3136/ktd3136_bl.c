@@ -594,6 +594,58 @@ static void ktd3136_get_dt_data(struct device *dev, struct ktd3136_data *drvdata
 	}
 }
 
+
+/******************************************************
+ *
+ * sys group attribute: reg
+ *
+ ******************************************************/
+static ssize_t ktd3136_i2c_reg_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct ktd3136_data *ktd3136 = dev_get_drvdata(dev);
+
+	unsigned int databuf[2] = {0, 0};
+
+	if (sscanf(buf, "%x %x", &databuf[0], &databuf[1]) == 2) {
+		ktd3136_write_reg(ktd3136->client,
+				(unsigned char)databuf[0],
+				(unsigned char)databuf[1]);
+	}
+
+	return count;
+}
+
+static ssize_t ktd3136_i2c_reg_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	struct ktd3136_data *data = dev_get_drvdata(dev);
+	ssize_t len = 0;
+	unsigned char i = 0, num = 0;
+	unsigned char reg_val = 0;
+
+	num = sizeof(ktd3136_reg_access)/sizeof(ktd3136_reg_access[0]);
+	for (i = 0; i < num; i++) {
+		if (!(ktd3136_reg_access[i]&REG_RD_ACCESS))
+			continue;
+		ktd3136_read_reg(data->client, i, &reg_val);
+		len += snprintf(buf+len, PAGE_SIZE-len, "reg:0x%02x=0x%02x\n",
+				i, reg_val);
+	}
+
+	return len;
+}
+
+static DEVICE_ATTR(reg, 0664, ktd3136_i2c_reg_show, ktd3136_i2c_reg_store);
+static struct attribute *ktd3136_attributes[] = {
+	&dev_attr_reg.attr,
+	NULL
+};
+
+static struct attribute_group ktd3136_attribute_group = {
+	.attrs = ktd3136_attributes
+};
+
 static int ktd3136_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
@@ -676,6 +728,11 @@ static int ktd3136_probe(struct i2c_client *client,
 	if (err)
 		pr_err("%s : Unable to register fb_notifier: %d\n", __func__, err);
 #endif
+
+	err = sysfs_create_group(&client->dev.kobj, &ktd3136_attribute_group);
+	if (err < 0) {
+		dev_info(&client->dev, "%s error creating sysfs attr files\n", __func__);
+	}
 
 	pr_info("%s exit\n", __func__);
 	return 0;
