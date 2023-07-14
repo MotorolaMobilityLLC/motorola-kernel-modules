@@ -53,6 +53,27 @@
 
 #define RESET_CONDITION_BITS	 (BIT_CH3_FAULT | BIT_CH2_FAULT | BIT_CH1_FAULT | BIT_OVP | BIT_OCP)
 
+/********************************************
+ * Register Access
+ *******************************************/
+#define KTD3136_REG_ACCESS_MAX				0x20
+#define REG_NONE_ACCESS					0
+#define REG_RD_ACCESS					(1 << 0)
+#define REG_WR_ACCESS					(1 << 1)
+
+const unsigned char ktd3136_reg_access[] = {
+	[REG_DEV_ID] = REG_RD_ACCESS,
+	[REG_SW_RESET] = REG_RD_ACCESS,
+	[REG_MODE] = REG_RD_ACCESS,
+	[REG_CONTROL] = REG_RD_ACCESS,
+	[REG_RATIO_LSB] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[REG_RATIO_MSB] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[REG_PWM] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[REG_RAMP_ON] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[REG_TRANS_RAMP] = REG_RD_ACCESS|REG_WR_ACCESS,
+	[REG_FLASH_SETTING] = REG_RD_ACCESS,
+	[REG_STATUS] = REG_RD_ACCESS,
+};
 
 int ktd3136_brightness_table_reg4[256] = {0x01,0x02,0x04,0x04,0x07,0x02,0x00,0x06,0x04,0x02,0x03,0x04,0x05,0x06,0x02,0x06,0x02,
 			0x06,0x02,0x06,0x02,0x06,0x02,0x04,0x05,0x06,0x05,0x03,0x00,0x05,0x02,0x06,0x02,0x06,0x02,0x06,0x02,0x06,0x02,0x06,
