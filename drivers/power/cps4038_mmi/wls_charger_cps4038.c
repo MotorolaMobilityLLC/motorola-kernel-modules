@@ -3232,6 +3232,9 @@ static int wireless_fw_update(bool force)
 	}
 
 free_bug:
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+        chip->chip_id = cps_wls_get_chip_id();
+#endif
 	cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
 	msleep(20);//20ms
 	kfree(firmware_buf);
