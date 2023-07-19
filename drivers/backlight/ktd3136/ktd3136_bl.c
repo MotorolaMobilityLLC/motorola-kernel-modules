@@ -24,6 +24,7 @@
 #endif
 
 #include "ktd3136_bl.h"
+#include "ktd3136_align.h"
 
 #define KTD3136_LED_DEV 	"ktd3136-BL"
 #define KTD3136_NAME 		"ktd3136-bl"
@@ -277,13 +278,10 @@ static int ktd3136_backlight_init(struct ktd3136_data *drvdata)
 {
 	int err = 0;
 	u8 value;
-	u8 update_value;
-	pr_info("%s enter.\n", __func__);
-	update_value = (drvdata->ovp_level == 32) ? 0x20 : 0x00;
-	(drvdata->induct_current == 2600) ? update_value |=0x08 : update_value;
-	(drvdata->frequency == 1000) ? update_value |=0x40: update_value;
 
-	ktd3136_write_reg(drvdata->client, REG_CONTROL, update_value | 0x06); /* Linear default*/
+	pr_info("%s enter.\n", __func__);
+
+	ktd3136_write_reg(drvdata->client, REG_CONTROL, drvdata->reg_ctrl_val);
 	ktd3136_bl_enable_channel(drvdata);
 		if (drvdata->pwm_mode) {
 			ktd3136_pwm_mode_enable(drvdata, true);
@@ -298,7 +296,7 @@ static int ktd3136_backlight_init(struct ktd3136_data *drvdata)
 		}
 	ktd3136_read_reg(drvdata->client, REG_CONTROL, &value);
 	pr_debug("read control register -before--<0x%x> -after--<0x%x> \n",
-					update_value, value);
+					drvdata->reg_ctrl_val, value);
 
 	pr_info("%s exit\n", __func__);
 	return err;
@@ -318,11 +316,25 @@ int ktd3136_set_brightness(struct ktd3136_data *drvdata, int brt_val)
 {
 	pr_info("%s brt_val is %d\n", __func__, brt_val);
 
-	if (drvdata->enable == false)
+	if (drvdata->enable == false) {
+		if (brt_val == 0) {
+			//avoid duplicate standby
+			return 0;
+		}
 		ktd3136_backlight_init(drvdata);
+	}
 	else if ( drvdata->skip_first_trans && drvdata->reset_trans_delay){
 		ktd3136_transition_ramp(drvdata);
 		drvdata->reset_trans_delay = false;
+	}
+
+	if(0 == drvdata->map_type) {
+		if(ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
+			brt_val = bl_mapping_450[brt_val];
+			pr_info("%s bl_mapping brt_val: %d\n", __func__, brt_val);
+		}
+		else if (drvdata->led_current_align)
+			pr_info("%s: unsupport align type: %d\n", __func__, drvdata->led_current_align);
 	}
 
 	if (brt_val>0) {
@@ -481,14 +493,29 @@ static void ktd3136_get_dt_data(struct device *dev, struct ktd3136_data *drvdata
 	drvdata->pwm_mode = of_property_read_bool(np,"ktd,pwm-mode");
 	pr_debug("pwmmode --<%d> \n", drvdata->pwm_mode);
 
+	rc = of_property_read_u32(np, "ktd,map-type", &drvdata->map_type);
+	if (rc != 0) {
+		//Linear default
+		drvdata->map_type = 1;
+		pr_info("%s map-type default linear:1\n", __func__);
+	}
+	else
+		pr_info("%s map-type=%d\n", __func__, drvdata->map_type);
+
+	rc = of_property_read_u32(np, "ktd,current-align-type", &drvdata->led_current_align);
+	if (rc != 0) {
+		drvdata->led_current_align = ALIGN_NONE;
+		pr_err("%s current-align-type not found\n", __func__);
+	}
+	else
+		pr_info("%s current-align-type=%d\n", __func__, drvdata->led_current_align);
+
 	drvdata->using_lsb = of_property_read_bool(np, "ktd,using-lsb");
 	pr_info("%s using_lsb --<%d>\n", __func__, drvdata->using_lsb);
 
 	if (drvdata->using_lsb) {
-		drvdata->default_brightness = 0x7ff;
 		drvdata->max_brightness = 2047;
 	} else {
-		drvdata->default_brightness = 0xff;
 		drvdata->max_brightness = 255;
 	}
 
@@ -505,6 +532,14 @@ static void ktd3136_get_dt_data(struct device *dev, struct ktd3136_data *drvdata
 		drvdata->pwm_period = temp;
 		pr_debug("pwm-frequency --<%d> \n", drvdata->pwm_period);
 	}
+
+	rc = of_property_read_u32(np, "ktd,default-brightness", &drvdata->default_brightness);
+	if (rc != 0) {
+		drvdata->default_brightness = drvdata->max_brightness;
+		pr_err("%s default-brightness not found, set to max %d\n", __func__, drvdata->default_brightness);
+	}
+	else
+		pr_info("%s default_brightness=%d\n", __func__, drvdata->default_brightness);
 
 	rc = of_property_read_u32(np, "ktd,bl-fscal-led", &temp);
 	if (rc) {
@@ -594,6 +629,26 @@ static void ktd3136_get_dt_data(struct device *dev, struct ktd3136_data *drvdata
 	}
 }
 
+static void ktd3136_data_init(struct ktd3136_data *drvdata)
+{
+	u8 update_value;
+
+	update_value = (drvdata->ovp_level == 32) ? 0x20 : 0x00;
+	((drvdata->induct_current == 2600) || (drvdata->induct_current == 1)) ? update_value |=0x08 : update_value;
+	(drvdata->frequency == 1000) ? update_value |=0x40: update_value;
+
+	pr_info("%s update_value:0x%2x\n", __func__, update_value);
+	if (0 == drvdata->map_type) {
+		// exponential
+		drvdata->reg_ctrl_val = update_value & 0xF8;
+		pr_info("ktd: exponential map mode, reg_ctrl:0x%02x\n", drvdata->reg_ctrl_val);
+	}
+	else {
+		//Linear
+		drvdata->reg_ctrl_val = update_value | 0x06;
+		pr_info("ktd: linear map mode, reg_ctrl:0x%02x\n", drvdata->reg_ctrl_val);
+	}
+}
 
 /******************************************************
  *
@@ -718,6 +773,7 @@ static int ktd3136_probe(struct i2c_client *client,
 	bl_dev = backlight_device_register(KTD3136_NAME, &client->dev,
 					drvdata, &ktd3136_bl_ops, &props);
 #endif
+	ktd3136_data_init(drvdata);
 	ktd3136_backlight_init(drvdata);
 	ktd3136_backlight_enable(drvdata);
 	ktd3136_check_status(drvdata);
