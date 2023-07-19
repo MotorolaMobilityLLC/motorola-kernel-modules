@@ -219,7 +219,10 @@ static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
 			uisoc = chip->uisoc;
 	} else if (rsoc < chip->uisoc) {
 		/* SOC dropped */
-		uisoc = chip->uisoc - 1;
+		if (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
+			uisoc = chip->uisoc - 1;
+		} else
+			uisoc = chip->uisoc;
 	}
 	uisoc = CAP(0, 100, uisoc);
 
