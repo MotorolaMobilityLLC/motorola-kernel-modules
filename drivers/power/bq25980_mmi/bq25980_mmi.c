@@ -710,6 +710,7 @@ static int bq25980_get_adc_vac1(struct bq25980_device *bq)
 	int vac1_adc_lsb, vac1_adc_msb;
 	u16 vac1_adc;
 	int ret;
+        bq25980_set_adc_enable(bq,true);
 
 	ret = regmap_read(bq->regmap, BQ25980_VAC1_ADC_MSB, &vac1_adc_msb);
 	if (ret) {
