@@ -41,7 +41,6 @@
 #define mmi_info	pr_info
 #define mmi_dbg	pr_debug
 #define mmi_err	pr_err
-#define mmi_log	pr_err
 
 #ifndef MAX
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
@@ -493,7 +492,7 @@ static int fg_read_HW_version(struct mmi_fg_chip *mmi)
 		return ret;
 	}
 	version =  buf[0] << 8 | buf[1];
-	mmi_log("hw Ver:0x%04X\n", version);
+	mmi_info("hw Ver:0x%04X\n", version);
 
 	return version;
 }
@@ -608,7 +607,7 @@ static int nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(struct mmi_fg_chip *dev
 
 	if(!pinbuf || (len>=I2C_BLOCK_MAX_BUFFER_SIZE))
 	{
-		printk("nfg1000_i2c_BLOCK_command_write_with_CHECKSUM:condition is error!!\n");
+		mmi_err("nfg1000_i2c_BLOCK_command_write_with_CHECKSUM:condition is error!!\n");
 		return -1;
 	}
 
@@ -620,7 +619,7 @@ static int nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(struct mmi_fg_chip *dev
 	ret = fg_write_block(dev,dev->regs[BQ_FG_REG_ALT_MAC],databuf,36);
 	if(ret < 0)
 	{
-		printk("nfg1000_i2c_BLOCK_command_write_with_CHECKSUM:write reg:%d failed!!\n",reg);
+		mmi_err("nfg1000_i2c_BLOCK_command_write_with_CHECKSUM:write reg:%d failed!!\n",reg);
 		return -1;
 	}
 	mdelay(NFG1000_com_WAIT_TIME);
@@ -2400,7 +2399,7 @@ int fg_set_temp(struct gauge_device *gauge_dev, int temp)
 	if (!mmi->fake_battery) {
 		data.temp = temp;
 		nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi,FG_MAC_CMD_TEMPERATURE, data.hex, 2);
-		mmi_log("set board temp to fg cell\n");
+		mmi_dbg("set board temp=%d to fg cell\n", temp);
 	}
 
 	return 0;
@@ -2418,7 +2417,7 @@ int fg_set_shutdown_threshold(struct gauge_device *gauge_dev, int shutd_vol)
 		data.shutd_vol = MAX(shutd_vol, 3200);
 		data.shutd_vol = MIN(shutd_vol, 3400);
 		nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi,FG_MAC_CMD_POWEROFF_THRESHOLD, data.hex, 2);
-		mmi_log("set shutdown_threshold=%d mv to fg cell\n", data.shutd_vol);
+		mmi_info("set shutdown_threshold=%d mv to fg cell\n", data.shutd_vol);
 	}
 
 	return 0;
@@ -2772,7 +2771,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 		schedule_work(&mmi->fg_upgrade_work);
 	}
 
-	mmi_log("mmi fuel gauge probe successfully, %s\n", device2str[mmi->chip]);
+	mmi_info("mmi fuel gauge probe successfully, %s\n", device2str[mmi->chip]);
 
 	return 0;
 }
