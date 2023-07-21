@@ -810,7 +810,7 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
 }
 
 #if FTS_USB_DETECT_EN
-static void fts_mcu_usb_detect_set(uint8_t usb_connected)
+static void fts_mcu_usb_detect_set(bool usb_connected)
 {
 	uint8_t write_data = 0;
 	uint8_t read_data = 0;
@@ -845,15 +845,15 @@ void fts_cable_detect_func(bool force_renew)
 	uint8_t connect_status = 0;
 	connect_status = ts_data->usb_detect_flag;
 
-	if ((connect_status != ts_data->usb_connected) || force_renew) {
+	if ((connect_status != ts_data->charger_mode) || force_renew) {
 		if (connect_status) {
-			ts_data->usb_connected = 0x01;
+			ts_data->charger_mode = 0x01;
 		} else {
-			ts_data->usb_connected = 0x00;
+			ts_data->charger_mode = 0x00;
 		}
 
-		fts_mcu_usb_detect_set(ts_data->usb_connected);
-		FTS_DEBUG("Cable status change: 0x%2.2X\n", ts_data->usb_connected);
+		fts_mcu_usb_detect_set(ts_data->charger_mode);
+		FTS_DEBUG("Cable status change: 0x%2.2X\n", ts_data->charger_mode);
 	}
 }
 #endif
@@ -2138,7 +2138,7 @@ static int fts_charger_notifier_callback(struct notifier_block *nb,
 					return 0;
 				}
 
-				if (ts_data->usb_detect_flag != ts_data->usb_connected)
+				if (ts_data->usb_detect_flag != ts_data->charger_mode)
 					FTS_INFO("USB Charge detect: %d prop.intval = %d\n",__LINE__,prop.intval);
 				else {
 					FTS_DBG_LEVEL("skip same usb prop.intval:%d", prop.intval);
@@ -2583,7 +2583,7 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 
 #if FTS_USB_DETECT_EN
     if(ts_data->psy_name != NULL && ts_data->psp != NULL) {
-	ts_data->usb_connected = 0x00;
+	ts_data->charger_mode = 0x00;
 	ts_data->charger_notif.notifier_call = fts_charger_notifier_callback;
 	ret = power_supply_reg_notifier(&ts_data->charger_notif);
 	if (ret) {

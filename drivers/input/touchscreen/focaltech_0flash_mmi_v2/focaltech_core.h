@@ -311,7 +311,6 @@ struct fts_ts_data {
 
 #if FTS_USB_DETECT_EN
     bool usb_detect_flag;
-    uint8_t usb_connected;
     struct notifier_block charger_notif;
 #endif
 #ifdef CONFIG_FTS_LAST_TIME
