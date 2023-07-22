@@ -100,6 +100,11 @@ static int nvt_disp_notifier_callback(struct notifier_block *nb,
 	unsigned long value, void *v);
 #endif
 
+#if NVT_TOUCH_VDD_TP_RECOVERY
+static int nvt_disp_esd_notifier_callback(struct notifier_block *nb,
+        unsigned long value, void *v);
+#endif
+
 #ifdef NVT_MTK_CHECK_PANEL
 const char *active_panel_name;
 #endif
@@ -2886,6 +2891,16 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	}
 #endif
 
+#if NVT_TOUCH_VDD_TP_RECOVERY
+	ts->disp_esd_notifier.notifier_call = nvt_disp_esd_notifier_callback;
+        ret = panel_esd_register_client("NVT ESD Touch", &ts->disp_esd_notifier);
+        if (ret) {
+                NVT_ERR("Failed to register disp notifier client:%d", ret);
+		if (panel_esd_unregister_client(&ts->disp_esd_notifier))
+			NVT_ERR("Error occurred while unregistering disp_esd_notifier.\n");
+        }
+#endif
+
 #ifdef NOVATECH_PEN_NOTIFIER
 	ts->fw_ready_flag = false;
 	ts->nvt_pen_detect_flag = PEN_DETECTION_INSERT;
@@ -3382,6 +3397,26 @@ static int nvt_disp_notifier_callback(struct notifier_block *nb,
 	return 0;
 }
 
+#endif
+
+#if NVT_TOUCH_VDD_TP_RECOVERY
+static int nvt_disp_esd_notifier_callback(struct notifier_block *nb,
+        unsigned long value, void *v)
+{
+        struct nvt_ts_data *ts = container_of(nb, struct nvt_ts_data, disp_esd_notifier);
+	NVT_INFO("esd event is %lu\n", value);
+	if (ts) {
+		if (value == 0x01) {
+			nvt_bootloader_reset_noflash_locked();
+		} else if (value == 0x02) {
+			nvt_esd_vdd_tp_recovery();
+		} else {
+			NVT_INFO("no true event");
+			return -1;
+		}
+	}
+        return 0;
+}
 #endif
 
 static const struct spi_device_id nvt_ts_id[] = {

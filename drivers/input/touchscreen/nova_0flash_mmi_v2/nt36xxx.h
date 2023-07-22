@@ -157,6 +157,11 @@ extern const uint16_t gesture_key_array[];
 #else
 #define NVT_TOUCH_ESD_DISP_RECOVERY 0
 #endif
+#ifdef  NVT_ESD_RECOVERY_SUPPORT
+#define NVT_TOUCH_VDD_TP_RECOVERY 1
+#else
+#define NVT_TOUCH_VDD_TP_RECOVERY 0
+#endif
 
 #if NVT_TOUCH_ESD_PROTECT
 extern struct delayed_work nvt_esd_check_work;
@@ -218,6 +223,9 @@ struct nvt_ts_data {
 	int8_t phys[32];
 #if defined(CFG_MTK_PANEL_NOTIFIER) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
 	struct notifier_block disp_notifier;
+#endif
+#if NVT_TOUCH_VDD_TP_RECOVERY
+	struct notifier_block disp_esd_notifier;
 #endif
 	uint8_t fw_delay_que;
 	uint8_t bTouchIsAwake;
@@ -391,6 +399,14 @@ extern int nvt_mcu_pen_detect_set(uint8_t pen_detect);
 #endif
 #ifdef PALM_GESTURE
 extern int nvt_palm_set(bool enabled);
+#endif
+#if NVT_TOUCH_VDD_TP_RECOVERY
+extern void nvt_bootloader_reset_noflash_locked(void);
+extern int32_t nvt_esd_vdd_tp_recovery(void);
+extern int __attribute__ ((weak)) panel_esd_register_client(const char *source, struct notifier_block *nb);
+extern int __attribute__ ((weak)) panel_esd_unregister_client(struct notifier_block *nb);
+extern int __attribute__ ((weak)) panel_esd_notifier_call_chain(unsigned long val, void *v);
+extern int __attribute__ ((weak)) touch_set_esd_recovery_state(int state, int panel_idx);
 #endif
 
 #endif /* _LINUX_NVT_TOUCH_H */
