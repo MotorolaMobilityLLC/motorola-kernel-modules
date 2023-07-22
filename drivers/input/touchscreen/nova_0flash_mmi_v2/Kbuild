@@ -74,6 +74,11 @@ endif
 ifneq ($(filter m y,$(CONFIG_NVT_ESD_RST_SUPPORT)),)
         EXTRA_CFLAGS += -DNVT_ESD_RST_SUPPORT
 endif
+ifneq ($(filter m y,$(CONFIG_NVT_ESD_RECOVERY_SUPPORT)),)
+	EXTRA_CFLAGS += \
+                -I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/gpu/drm/panel/include
+        EXTRA_CFLAGS += -DNVT_ESD_RECOVERY_SUPPORT
+endif
 
 ifneq ($(filter m y,$(CONFIG_NOVA_CHECK_DEVICE_BOOTMODE)),)
 	EXTRA_CFLAGS += -DNVT_CHECK_DEVICE_BOOTMODE

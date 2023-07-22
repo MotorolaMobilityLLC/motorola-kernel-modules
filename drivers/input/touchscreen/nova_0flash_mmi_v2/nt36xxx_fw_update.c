@@ -34,6 +34,11 @@
 #define NVT_DUMP_PARTITION_LEN  (1024)
 #define NVT_DUMP_PARTITION_PATH "/data/local/tmp"
 
+#if NVT_TOUCH_VDD_TP_RECOVERY
+void nvt_bootloader_reset_noflash_locked(void);
+int32_t nvt_esd_vdd_tp_recovery(void);
+#endif /* NVT_TOUCH_VDD_TP_RECOVERY */
+
 struct TIME_TYPE start, end;
 const struct firmware *fw_entry = NULL;
 static size_t fw_need_write_size = 0;
@@ -938,6 +943,50 @@ static int32_t nvt_f2c_disp_off(void)
 }
 #endif /* NVT_TOUCH_ESD_DISP_RECOVERY */
 
+#if NVT_TOUCH_VDD_TP_RECOVERY
+extern uint32_t SWRST_N8_ADDR;
+void nvt_bootloader_reset_noflash_locked(void)
+{
+    mutex_lock(&ts->lock);
+
+	NVT_ERR("start\n");
+	//---reset cmds to SWRST_N8_ADDR---
+	nvt_write_addr(SWRST_N8_ADDR, 0x69);
+	mutex_unlock(&ts->lock);
+	mdelay(5);  //wait tBRST2FR after Bootload RST
+	NVT_ERR("end\n");
+}
+EXPORT_SYMBOL(nvt_bootloader_reset_noflash_locked);
+
+int32_t nvt_esd_vdd_tp_recovery(void)
+{
+	int32_t ret = 0;
+
+    mutex_lock(&ts->lock);
+
+    NVT_ERR("%s: run VDD_TP recovery\n", __func__);
+    nvt_write_addr(0x3F302, 0x1F);
+    nvt_write_addr(0x3F344, 0x02);
+    nvt_write_addr(0x3F50E, 0x0A);
+    nvt_write_addr(0x3F384, 0x00);
+    nvt_write_addr(0x3F380, 0x01);
+
+    nvt_write_addr(0x3F2C0, 0x18);
+    nvt_write_addr(0x3F2C1, 0x5B);
+    nvt_write_addr(0x3F2C2, 0x52);
+    nvt_write_addr(0x3F2CB, 0x5B);
+    nvt_write_addr(0x3F2C8, 0x01);
+    msleep(100);
+
+    mutex_unlock(&ts->lock);
+    touch_set_esd_recovery_state(0, TOUCH_PANEL_IDX_PRIMARY);
+
+    return ret;
+}
+EXPORT_SYMBOL(nvt_esd_vdd_tp_recovery);
+
+#endif /* NVT_TOUCH_VDD_TP_RECOVERY */
+
 /*******************************************************
 Description:
 	Novatek touchscreen Download_Firmware with HW CRC
@@ -1000,6 +1049,9 @@ fail:
 			if (nvt_check_crc_done_ilm_err()) {
 				NVT_ERR("set display off to trigger display esd recovery.\n");
 				nvt_f2c_disp_off();
+#if NVT_TOUCH_VDD_TP_RECOVERY
+				touch_set_esd_recovery_state(1, TOUCH_PANEL_IDX_PRIMARY);
+#endif /* #if NVT_TOUCH_VDD_TP_RECOVERY */
 			}
 #endif /* #if NVT_TOUCH_ESD_DISP_RECOVERY */
 			break;
