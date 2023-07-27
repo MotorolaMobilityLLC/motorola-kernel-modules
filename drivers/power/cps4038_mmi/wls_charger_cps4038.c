@@ -2891,19 +2891,12 @@ static void cps_wls_fw_set_boost(bool val)
 {
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	int ret = 0;
-	struct charger_manager *info = NULL;
 	struct charger_device *chg_psy = NULL;
 	static bool otg_status = false;
 
 	chg_psy = get_charger_by_name("primary_chg");
 	if(chg_psy) {
-		info = (struct charger_manager *)charger_dev_get_drvdata(chg_psy);
-		if(info)
-			cps_wls_log(CPS_LOG_ERR,"%s could  get charger_manager\n",__func__);
-		else {
-			cps_wls_log(CPS_LOG_ERR,"%s Couldn't get charger_manager\n",__func__);
-			return ;
-		}
+	        cps_wls_log(CPS_LOG_ERR,"%s get chg_psy\n",__func__);
 	} else {
 		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n",__func__);
 		return ;
