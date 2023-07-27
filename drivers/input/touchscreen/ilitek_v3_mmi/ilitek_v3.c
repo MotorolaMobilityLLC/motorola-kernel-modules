@@ -22,6 +22,11 @@
 #include "firmware/ilitek_v3_fw.h"
 #include "ilitek_v3.h"
 
+#ifdef ILI_FW_MULTI_CHIP_EN
+#define FW_NAME_LENGTH 	20
+char tp_fwname[FW_NAME_LENGTH] = {0};
+#endif
+
 /* Debug level */
 bool debug_en = DEBUG_OUTPUT;
 EXPORT_SYMBOL(debug_en);
@@ -1546,6 +1551,17 @@ static void ili_update_tp_module_info(void)
 		ilits->md_fw_ili_size = sizeof(CTPM_FW_DEF);
 		break;
 	}
+
+#ifdef ILI_FW_MULTI_CHIP_EN
+	if(ilits->chip && ilits->chip->product_id) {
+		ILI_DBG("product_id=0x%x", ilits->chip->product_id);
+		snprintf(tp_fwname, FW_NAME_LENGTH, "%s_%X", ilits->md_fw_rq_path, ilits->chip->product_id);
+		ilits->md_fw_rq_path = tp_fwname;
+		ILI_INFO("reconfig md_fw_rq_path=%s\n", ilits->md_fw_rq_path);
+	}
+	else
+		ILI_INFO("skip, no vaild product_id\n");
+#endif
 
 	ILI_INFO("Found %s module: ini path = %s, fw path = (%s, %s, %d)\n",
 			ilits->md_name,
