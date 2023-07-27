@@ -45,6 +45,10 @@ ifneq ($(filter m y,$(CONFIG_ILITEK_MULTI_TP_MODULE)),)
 	EXTRA_CFLAGS += -DILI_TP_MODULE_EN
 endif
 
+ifneq ($(filter m y,$(CONFIG_ILITEK_FW_MULTI_CHIP)),)
+	EXTRA_CFLAGS += -DILI_FW_MULTI_CHIP_EN
+endif
+
 ifneq ($(filter m y,$(CONFIG_ILI_TOUCH_LAST_TIME)),)
 	EXTRA_CFLAGS += -DILI_TOUCH_LAST_TIME
 endif
