@@ -1,6 +1,7 @@
 # add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/gpu/drm/mediatek/mediatek_v2/ \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_mtk_v3_mmi \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_mtk_v3_mmi/include \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_mtk_v3_mmi/focaltech_test
@@ -15,6 +16,14 @@ focaltech_mtk_v3_mmi-objs += focaltech_point_report_check.o
 focaltech_mtk_v3_mmi-objs += focaltech_flash.o
 focaltech_mtk_v3_mmi-objs += focaltech_spi.o
 
+ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
+     EXTRA_CFLAGS += -DCONFIG_MTK_PANEL_NOTIFICATIONS
+endif
+
+ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
+     EXTRA_CFLAGS += -DCFG_MTK_PANEL_NOTIFIER
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_MMI_ENABLE_DOUBLE_TAP)),)
 	EXTRA_CFLAGS += -DFOCALTECH_SENSOR_EN
 endif
@@ -25,6 +34,12 @@ endif
 
 ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_POWER_RECOVER_EN)),)
 	EXTRA_CFLAGS += -DFOCALTECH_POWER_RECOVER_EN
+endif
+
+ifneq ($(filter m y,$(CONFIG_DRM_PANEL_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCONFIG_DRM_PANEL_NOTIFICATIONS
+	KBUILD_EXTRA_SYMBOLS += $(KBUILD_EXTMOD)/../../mmi_relay.ko_intermediates/LINKED/Module.symvers
+	KBUILD_EXTRA_SYMBOLS += $(KBUILD_EXTMOD)/../../touchscreen_mmi.ko_intermediates/LINKED/Module.symvers
 endif
 
 ifneq ($(filter m y,$(CONFIG_INPUT_FTS_TEST_SUPPORT)),)
