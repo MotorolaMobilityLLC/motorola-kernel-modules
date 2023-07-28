@@ -52,6 +52,8 @@
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+
 u8 fw_file[] = {
 #include FTS_UPGRADE_FW_FILE
 };
@@ -757,15 +759,22 @@ static int fts_read_file_default(char *file_name, u8 **file_buf)
         filp_close(filp, NULL);
         return -ENOMEM;
     }
+    pos = 0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+    ret = kernel_read(filp, *file_buf, file_len , &pos);
+	(void)old_fs; // avoid warning since we don't use it at recent kernel
+#else
     old_fs = get_fs();
     set_fs(KERNEL_DS);
-    pos = 0;
     ret = vfs_read(filp, *file_buf, file_len , &pos);
+#endif
     if (ret < 0)
         FTS_ERROR("read file fail");
     FTS_INFO("file len:%d read len:%d pos:%d", (u32)file_len, ret, (u32)pos);
     filp_close(filp, NULL);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
     set_fs(old_fs);
+#endif
 
     return ret;
 }

@@ -51,6 +51,9 @@
 #define FTS_SUSPEND_LEVEL 1     /* Early-suspend level */
 #endif
 #include "focaltech_core.h"
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+#include <linux/touchscreen_mmi.h>
+#endif
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
@@ -1697,7 +1700,11 @@ static int fb_notifier_callback(struct notifier_block *self,
 }
 #elif defined(CONFIG_DRM)
 #if defined(CONFIG_DRM_PANEL)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+struct drm_panel *active_panel;
+#else
 static struct drm_panel *active_panel;
+#endif
 
 static int drm_check_dt(struct device_node *np)
 {
@@ -2001,7 +2008,11 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     ts_data->fb_notif.notifier_call = drm_notifier_callback;
 #if defined(CONFIG_DRM_PANEL)
     if (active_panel) {
+#if defined(CFG_MTK_PANEL_NOTIFIER)
+        ret = mtk_disp_notifier_register("Touch", &ts_data->disp_notifier);
+#else
         ret = drm_panel_notifier_register(active_panel, &ts_data->fb_notif);
+#endif
         if (ret)
             FTS_ERROR("[DRM]drm_panel_notifier_register fail: %d\n", ret);
     }
@@ -2087,7 +2098,11 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 #elif defined(CONFIG_DRM)
 #if defined(CONFIG_DRM_PANEL)
     if (active_panel)
+#if defined(CFG_MTK_PANEL_NOTIFIER)
+        mtk_disp_notifier_unregister(&ts_data->disp_notifier);
+#else
         drm_panel_notifier_unregister(active_panel, &ts_data->fb_notif);
+#endif
 #else
     if (msm_drm_unregister_client(&ts_data->fb_notif))
         FTS_ERROR("[DRM]Error occurred while unregistering fb_notifier.\n");
