@@ -39,7 +39,7 @@ enum cts_test_item {
     CTS_TEST_SHORT,
     CTS_TEST_COMPENSATE_CAP,
 };
-
+#pragma pack(1)
 struct cts_test_param {
     int test_item;
 
@@ -77,7 +77,7 @@ struct cts_noise_test_priv_param {
     __u32 frames;
     //__u8  work_mode;
 };
-
+#pragma pack()
 extern const char *cts_test_item_str(int test_item);
 extern int cts_write_file(struct file *filp, const void *data, size_t size);
 extern int cts_mkdir_for_file(const char *filepath, umode_t mode);
