@@ -73,12 +73,12 @@ enum cts_tool_cmd_code {
     CTS_TOOL_CMD_SET_INT_DATA_TYPE_AND_METHOD = 31,
 
 };
-
+#pragma pack(1)
 struct cts_test_ioctl_data {
     __u32 ntests;
     struct cts_test_param __user *tests;
 };
-
+#pragma pack()
 
 #define CTS_TOOL_IOCTL_GET_DRIVER_VERSION   _IOR('C', 0x00, u32 *)
 #define CTS_TOOL_IOCTL_GET_DEVICE_TYPE      _IOR('C', 0x01, u32 *)

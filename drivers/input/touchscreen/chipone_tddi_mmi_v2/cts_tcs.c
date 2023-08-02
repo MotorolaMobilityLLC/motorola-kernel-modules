@@ -1223,6 +1223,20 @@ int cts_tcs_set_openshort_mode(const struct cts_device *cts_dev, u8 mode)
             sizeof(mode));
 }
 
+int cts_tcs_get_curr_mode(const struct cts_device *cts_dev, u8 *currmode)
+{
+    u8 buf = 0;
+    int ret;
+
+    ret = cts_tcs_read(cts_dev, CMD_SYS_STS_CURRENT_WORKMODE_RO,
+            &buf, sizeof(buf));
+    if (ret == 0) {
+        *currmode = buf;
+    }
+
+    return ret;
+}
+
 int cts_tcs_set_tx_vol(const struct cts_device *cts_dev, u8 txvol)
 {
     return cts_tcs_write(cts_dev, CMD_SYS_STS_VSTIM_LVL_RW, &txvol,
