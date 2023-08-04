@@ -17,6 +17,38 @@ bool cts_show_debug_log = false;
 static char *active_panel_name = NULL;
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+char *saved_command_line = 0; // not exported anymore
+char *get_cmd(void);
+
+static char __cmdline[512];
+static char *cmdline = __cmdline;
+
+char *get_cmd(void)
+{
+	struct device_node * of_chosen = NULL;
+	char *bootargs = NULL;
+
+	if (__cmdline[0] != 0) // CONFIG_INIT_STACK_ALL_ZERO
+		return cmdline;
+
+	of_chosen = of_find_node_by_path("/chosen");
+	if (of_chosen) {
+		bootargs = (char *)of_get_property(
+					of_chosen, "bootargs", NULL);
+		if (!bootargs)
+			cts_err("%s: failed to get bootargs\n", __func__);
+		else {
+			strncpy(__cmdline, bootargs, 511);
+			cts_err("%s: bootargs: %s\n", __func__, bootargs);
+		}
+	} else
+		cts_err("%s: failed to get /chosen \n", __func__);
+
+	return cmdline;
+}
+#endif
+
 module_param_named(debug_log, cts_show_debug_log, bool, 0660);
 MODULE_PARM_DESC(debug_log, "Show debug log control");
 
@@ -282,6 +314,9 @@ static int cts_get_panel(void)
 {
 	//bringup, parse panel name from cmdline
 	cts_info("enter");
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+	saved_command_line = get_cmd();
+#endif
 	if (saved_command_line) {
 		char *sub;
 		char key_prefix[] = "mipi_mot_vid_";
