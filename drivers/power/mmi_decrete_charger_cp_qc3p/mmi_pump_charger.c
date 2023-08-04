@@ -82,7 +82,7 @@
 
 #ifdef CONFIG_MOTO_CHARGER_PUMP_MEASURE_AVG_VOL
 #define PRECISION_ENHANCE	5
-#define CP_MEASURE_R_AVG_TIMES 5
+#define CP_MEASURE_R_AVG_TIMES 10
 
 static u32 cp_precise_div(u64 dividend, u64 divisor)
 {
@@ -152,21 +152,22 @@ static int cp_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vb
 {
 	int rc, vbus_voltage;
 	int vbus1 = 0, vbus_max = 0, vbus_min = 0;
-	int i = 0;
+	int i = 0, valid_count = 0;;
 
 	if (!chrg->chg_dev) {
 		chrg_dev_info(chrg, "MMI CP chrg: chg_dev is null! \n");
 		return -ENODEV;
 	}
 
-	for (i = 0; i < CP_MEASURE_R_AVG_TIMES + 2; i++) {
+	for (i = 0; i < CP_MEASURE_R_AVG_TIMES + 2 && valid_count < 7; i++) {
 		rc = charger_dev_get_adc(chrg->chg_dev, ADC_CHANNEL_VBUS, &vbus_voltage, &vbus_voltage);
 		if (rc < 0) {
-			chrg_dev_info(chrg, "cp get vbus fail! \n");
-			return rc;
+			chrg_dev_info(chrg, "cp get vbus fail! retry\n");
+			msleep(50);
+			continue;
 		}
 
-		if (i == 0) {
+		if (i == 0 || valid_count == 0) {
 			vbus_max = vbus_min = vbus_voltage;
 		} else {
 			vbus_max = max(vbus_max, vbus_voltage);
@@ -176,10 +177,20 @@ static int cp_get_input_voltage_settled(struct mmi_charger_device *chrg, u32 *vb
 		msleep(30);
 		chrg_dev_info(chrg, "vbus=%d vbus(max,min)=(%d,%d) vbus1=%d",
 				vbus_voltage, vbus_max, vbus_min, vbus1);
+		valid_count++;
 	}
 
 	vbus1 -= (vbus_min + vbus_max);
-	vbus1 = cp_precise_div(vbus1, CP_MEASURE_R_AVG_TIMES);
+
+	if (valid_count > 3) {
+		chrg_dev_info(chrg, "vbus total = %d, valid_count = %d", vbus1, valid_count);
+		vbus1 = cp_precise_div(vbus1, valid_count - 2);
+	} else {
+		*vbus = chrg->charger_data.vbus_volt;
+		chrg_dev_info(chrg, "cp get vbus fail all times! valid_count = %d, use pre vbus_voltage = %d\n",
+				valid_count, chrg->charger_data.vbus_volt);
+		return rc;
+	}
 
 	chrg->charger_data.vbus_volt = vbus1;
 	*vbus = chrg->charger_data.vbus_volt;
