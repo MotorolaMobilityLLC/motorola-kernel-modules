@@ -1,7 +1,15 @@
 #ifndef CTS_PLAT_QCOM_CONFIG_H
 #define CTS_PLAT_QCOM_CONFIG_H
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+#ifndef CONFIG_DRM
+#define CONFIG_DRM
+#endif
+#define CFG_CTS_DRM_NOTIFIER
+#else
 #define CONFIG_CTS_PM_FB_NOTIFIER
+#endif
 
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
 /*
