@@ -3,6 +3,11 @@
 
 #include "cts_config.h"
 
+#include <linux/mmi_wake_lock.h>
+#ifdef CHIPONE_SENSOR_EN
+#include <linux/sensors.h>
+#endif
+
 enum cts_dev_hw_reg {
 #if defined(CONFIG_CTS_ICTYPE_ICNL9922C) ||\
     defined(CONFIG_CTS_ICTYPE_ICNL9951)
@@ -390,6 +395,20 @@ struct cts_device {
 
 struct cts_platform_data;
 
+#define MAX_PANEL_IDX 2
+enum touch_panel_id {
+    TOUCH_PANEL_IDX_PRIMARY = 0,
+    TOUCH_PANEL_MAX_IDX,
+};
+
+#ifdef CHIPONE_SENSOR_EN
+struct chipone_sensor_platform_data {
+    struct input_dev *input_sensor_dev;
+    struct sensors_classdev ps_cdev;
+    struct chipone_ts_data *data;
+};
+#endif
+
 struct chipone_ts_data {
 #ifdef CONFIG_CTS_I2C_HOST
     struct i2c_client *i2c_client;
@@ -430,6 +449,21 @@ struct chipone_ts_data {
 
     bool force_reflash;
     struct kobject *suspend_kobj;
+
+#ifdef CHIPONE_SENSOR_EN
+    bool should_enable_gesture;
+    struct mutex state_mutex;
+    struct chipone_sensor_platform_data *sensor_pdata;
+#ifdef CONFIG_HAS_WAKELOCK
+    struct wake_lock gesture_wakelock;
+#else
+    struct wakeup_source *gesture_wakelock;
+#endif
+#endif
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+    bool d_tap_flag;
+    bool s_tap_flag;
+#endif
 };
 
 static inline u32 get_unaligned_le24(const void *p)
@@ -865,6 +899,7 @@ extern const char *cts_dev_boot_mode2str(u8 boot_mode);
 extern bool cts_is_fwid_valid(u16 fwid);
 
 extern int cts_reset_device(struct cts_device *cts_dev);
+extern int touch_set_state(int state, int panel_idx);
 
 extern int kstrtobool(const char *s, bool *res);
 #endif /* CTS_CORE_H */

@@ -7,6 +7,11 @@
 #include "cts_sysfs.h"
 #include "cts_tcs.h"
 
+extern struct chipone_ts_data *g_cts_data;
+#ifdef CHIPONE_SENSOR_EN
+static struct wakeup_source *gesture_wakelock;
+#endif
+
 #ifdef CFG_CTS_FW_LOG_REDIRECT
 size_t cts_plat_get_max_fw_log_size(struct cts_platform_data *pdata)
 {
@@ -602,6 +607,11 @@ static int cts_plat_parse_dt(struct cts_platform_data *pdata,
         cts_warn("read panel supplier failed, ret=%d", ret);
     } else
         cts_info("panel supplier=%s", (char *)pdata->panel_supplier);
+#endif
+
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	if (!of_property_read_u32(dev_node, "chipone,supported_gesture_type", &pdata->supported_gesture_type))
+		cts_info("chipone,supported_gesture_type=%02x\n", pdata->supported_gesture_type);
 #endif
 
     return 0;
@@ -1269,6 +1279,14 @@ int cts_plat_init_gesture(struct cts_platform_data *pdata)
                 pdata->gesture_keymap[i][1]);
     }
 
+#ifdef CHIPONE_SENSOR_EN
+    PM_WAKEUP_REGISTER(g_cts_data->device, gesture_wakelock, "poll-wake-lock");
+    if (!gesture_wakelock) {
+        cts_warn("failed to allocate wakeup source\n");
+        return -ENOMEM;
+    }
+#endif
+
     return 0;
 }
 
@@ -1288,12 +1306,19 @@ int cts_plat_process_gesture_info(struct cts_platform_data *pdata,
     for (i = 0; i < CFG_CTS_NUM_GESTURE; i++) {
         if (gesture_info->gesture_id == pdata->gesture_keymap[i][0]) {
             cts_info("Report key[%u]", pdata->gesture_keymap[i][1]);
+#ifdef CHIPONE_SENSOR_EN
+            PM_WAKEUP_EVENT(gesture_wakelock, 5000);
+            input_report_key(g_cts_data->sensor_pdata->input_sensor_dev, pdata->gesture_keymap[i][1], 1);
+            input_sync(g_cts_data->sensor_pdata->input_sensor_dev);
+            input_report_key(g_cts_data->sensor_pdata->input_sensor_dev, pdata->gesture_keymap[i][1], 0);
+            input_sync(g_cts_data->sensor_pdata->input_sensor_dev);
+#else
             input_report_key(pdata->ts_input_dev, pdata->gesture_keymap[i][1], 1);
             input_sync(pdata->ts_input_dev);
 
             input_report_key(pdata->ts_input_dev, pdata->gesture_keymap[i][1], 0);
             input_sync(pdata->ts_input_dev);
-
+#endif
             return 0;
         }
     }

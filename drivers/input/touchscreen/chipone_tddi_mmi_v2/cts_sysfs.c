@@ -239,6 +239,113 @@ static const struct attribute_group cts_dev_fw_up_attr_group = {
 };
 #endif
 
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+static ssize_t gesture_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", cts_data->pdata->supported_gesture_type);
+}
+
+static ssize_t gesture_store(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
+{
+	unsigned int value = 0;
+	int err = 0;
+	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+
+	cts_lock_device(&cts_data->cts_dev);
+	err = sscanf(buf, "%d", &value);
+	if (err < 0) {
+		cts_err("error: Failed to convert value");
+		return -EINVAL;
+	}
+
+	switch (value) {
+		case 0x20:
+			cts_info("[%s %d]:  single tap disable", __func__, __LINE__);
+			cts_data->s_tap_flag = 0;
+			break;
+		case 0x21:
+			cts_info("[%s %d]:  single tap enable", __func__, __LINE__);
+			cts_data->s_tap_flag = 1;
+			break;
+		case 0x30:
+			cts_info("[%s %d]:  double tap disable", __func__, __LINE__);
+			cts_data->d_tap_flag = 0;
+			break;
+		case 0x31:
+			cts_info("[%s %d]:  double tap enable", __func__, __LINE__);
+			cts_data->d_tap_flag = 1;
+			break;
+		default:
+			cts_info("[%s %d]: unsupport gesture mode type", __func__, __LINE__);
+	}
+
+	cts_data->should_enable_gesture = cts_data->s_tap_flag || cts_data->d_tap_flag;
+	cts_dbg("single tap:%d, double tap:%d, should_enable_gesture:%d\n", cts_data->s_tap_flag, cts_data->d_tap_flag, cts_data->should_enable_gesture);
+	cts_unlock_device(&cts_data->cts_dev);
+	return count;
+}
+
+static ssize_t gesture_type_dbg_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+	unsigned int tmp;
+
+	tmp = (cts_data->d_tap_flag << 2) | (cts_data->s_tap_flag << 1);
+	cts_info("s_tap:%d, d_tap:%d, type:%02x\n", cts_data->s_tap_flag, cts_data->d_tap_flag, tmp);
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", tmp);
+}
+
+static ssize_t gesture_type_dbg_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int value;
+	int err = 0;
+	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+
+	cts_info("enter\n");
+	err = sscanf(buf, "%d", &value);
+	if (err < 0) {
+		cts_info("Failed to convert value\n");
+		return -EINVAL;
+	}
+
+	err = count;
+	cts_info("value=%d\n", value);
+	switch (value) {
+		case 2: //SINGLE_ONLY:
+			cts_data->s_tap_flag = 0;
+			cts_data->d_tap_flag = 1;
+			cts_info("single tap only\n");
+			break;
+		case 4: //DOUBLE_ONLY:
+			cts_data->s_tap_flag = 0;
+			cts_data->d_tap_flag = 1;
+			cts_info("double tap only\n");
+			break;
+		case 6: //SINGLE_DOUBLE:
+			cts_data->s_tap_flag = 1;
+			cts_data->d_tap_flag = 1;
+			cts_info("single & double tap enabled\n");
+			break;
+		default:
+			//disable gesture
+			cts_data->s_tap_flag = 0;
+			cts_data->d_tap_flag = 0;
+			cts_info("unsupport gesture mode type, disable tap\n");
+			break;
+	}
+
+	cts_data->should_enable_gesture = cts_data->s_tap_flag || cts_data->d_tap_flag;
+	cts_info("s_tap=%d, d_tap=%d, should_enable_gesture=%d\n", cts_data->s_tap_flag, cts_data->d_tap_flag, cts_data->should_enable_gesture);
+
+	return err;
+}
+#endif
 
 static ssize_t write_tcs_register_store(struct device *dev,
         struct device_attribute *attr, const char *buf, size_t count)
@@ -3161,6 +3268,10 @@ static struct device_attribute touchscreen_attributes[] = {
     __ATTR_RO(path),
     __ATTR_RO(vendor),
     __ATTR_RO(ic_ver),
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	__ATTR_RW(gesture),
+	__ATTR_RW(gesture_type_dbg),
+#endif
     __ATTR_NULL
 };
 

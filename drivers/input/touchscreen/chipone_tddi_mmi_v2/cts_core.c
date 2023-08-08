@@ -11,6 +11,12 @@
 #include "cts_earjack_detect.h"
 #include "cts_tcs.h"
 
+#ifdef CHIPONE_SENSOR_EN
+enum touch_state {
+	TOUCH_DEEP_SLEEP_STATE = 0,
+	TOUCH_LOW_POWER_STATE,
+};
+#endif
 
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_i2c_writeb(const struct cts_device *cts_dev,
@@ -1543,6 +1549,9 @@ int cts_suspend_device(struct cts_device *cts_dev)
 {
     int ret;
     u8 buf;
+#ifdef CHIPONE_SENSOR_EN
+    struct chipone_ts_data *cts_data = container_of(cts_dev, struct chipone_ts_data, cts_dev);
+#endif
 
     cts_info("Suspend device");
 
@@ -1561,6 +1570,24 @@ int cts_suspend_device(struct cts_device *cts_dev)
             return ret;
         }
     }
+
+#ifdef CHIPONE_SENSOR_EN
+	if (cts_data->should_enable_gesture)
+		cts_enable_gesture_wakeup(cts_dev);
+	else
+		cts_disable_gesture_wakeup(cts_dev);
+
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+	cts_tcs_set_gesture_en_mask(cts_dev, cts_data->d_tap_flag, cts_data->s_tap_flag);
+#endif
+
+#ifdef CHIPONE_SET_TOUCH_STATE
+	if (cts_data->should_enable_gesture)
+		touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
+	else
+		touch_set_state(TOUCH_DEEP_SLEEP_STATE, TOUCH_PANEL_IDX_PRIMARY);
+#endif
+#endif //CHIPONE_SENSOR_EN
 
     cts_info("Set suspend mode:%s",
         cts_dev->rtdata.gesture_wakeup_enabled ? "gesture" : "sleep");
