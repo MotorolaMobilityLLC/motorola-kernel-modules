@@ -339,6 +339,37 @@ static int gf_get_gpio_dts_info(struct gf_device *gf_dev)
 	return 0;
 }
 */
+#ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+static int  power_user_num=0;
+static int mt_power_flag = 0;
+///The regulator-allways-on needs to be undone in the devices tree
+static void fpsensor_power_enable(u8 power_onoff)
+{
+	int retval = 0;
+	gf_debug(ERR_LOG, "fpsensor_power_enable power_onoff = %d, mt_power_flag = %d\n", power_onoff,mt_power_flag);
+	if((power_onoff == 0) && (mt_power_flag == 1)){
+		if((gf_sensor->fp_regulator != NULL) && (regulator_is_enabled(gf_sensor->fp_regulator))){
+			retval = regulator_disable(gf_sensor->fp_regulator);
+			power_user_num--;
+			gf_debug(ERR_LOG, "regulator_disable retal = %d power_user_num = %d \n", retval,power_user_num);
+		if(retval){
+			gf_debug(ERR_LOG, "regulator vdd disable failed status  = %d\n", retval);
+			}
+			mt_power_flag = 0;
+		}
+	}else if((power_onoff == 1) && (mt_power_flag == 0)){
+		if((gf_sensor->fp_regulator != NULL) && ((regulator_is_enabled(gf_sensor->fp_regulator)) <= 0) ){
+			retval = regulator_enable(gf_sensor->fp_regulator);
+			power_user_num++;
+			gf_debug(ERR_LOG, "regulator_enable retal = %d power_user_num = %d \n", retval,power_user_num);
+			if(retval){
+				gf_debug(ERR_LOG, "regulator vdd enable failed status  = %d\n", retval);
+			}
+		mt_power_flag = 1;
+		}
+	}
+}
+#endif
 
 static int gf_get_sensor_dts_info(void)
 {
@@ -877,13 +908,21 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case GF_IOC_ENABLE_POWER:
 		gf_debug(INFO_LOG, "%s: gf_regulator_enable ======\n", __func__);
 //		gf_hw_power_enable(gf_dev, 1);
-        regulator_enable(gf_sensor->fp_regulator);
+                #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+		fpsensor_power_enable(1);
+                #else
+                regulator_enable(gf_sensor->fp_regulator);
+                #endif
 		break;
 
 	case GF_IOC_DISABLE_POWER:
 		gf_debug(INFO_LOG, "%s: GF_IOC_DISABLE_POWER ======\n", __func__);
 //		gf_hw_power_enable(gf_dev, 0);
-        regulator_disable(gf_sensor->fp_regulator);
+                #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+		fpsensor_power_enable(0);
+                #else
+                regulator_disable(gf_sensor->fp_regulator);
+                #endif
 		break;
 
 	case GF_IOC_INPUT_KEY_EVENT:
@@ -1246,7 +1285,10 @@ static int gf_platform_probe(struct platform_device *pldev)
 	struct gf_device *gf_dev = NULL;
 	int status = -EINVAL;
 	struct device *dev = &pldev->dev;
-    int retval = 0;
+        #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+        #else
+        int retval = 0;
+        #endif
 	FUNC_ENTRY();
 
 	/* Allocate driver data */
@@ -1279,8 +1321,11 @@ static int gf_platform_probe(struct platform_device *pldev)
 			gf_debug(INFO_LOG, "%s, VDD setting error==========\n", __func__);
 		}
     }
-
+        #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+	fpsensor_power_enable(1);
+        #else
 	retval = regulator_enable(gf_sensor->fp_regulator);
+        #endif
 
 	/*setup gf configurations.*/
 	gf_debug(INFO_LOG, "%s, Setting gf device configuration==========\n", __func__);
@@ -1427,7 +1472,11 @@ err_devno:
 
 err_class:
 //	gf_hw_power_enable(gf_dev, 0);
+        #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+	fpsensor_power_enable(0);
+	#else
     regulator_disable(gf_sensor->fp_regulator);
+        #endif
 	mutex_destroy(&gf_dev->release_lock);
 	dev_set_drvdata(dev, NULL);
 	kfree(gf_dev);
@@ -1484,8 +1533,11 @@ static int gf_platform_remove(struct platform_device *pldev)
 	unregister_chrdev_region(gf_dev->devno, 1);
 	class_destroy(gf_dev->class);
 //	gf_hw_power_enable(gf_dev, 0);
+        #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+        fpsensor_power_enable(0);
+        #else
         regulator_disable(gf_sensor->fp_regulator);
-
+        #endif
 	dev_set_drvdata(dev, NULL);
 	mutex_destroy(&gf_dev->release_lock);
 

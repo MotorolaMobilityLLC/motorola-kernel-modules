@@ -1,6 +1,10 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
+ifeq ($(MOTO_FPS_PRECISE_POWERON), true)
+    KERNEL_CFLAGS += CONFIG_MOTO_FPS_PRECISE_POWERON=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_fps_tee.ko
 LOCAL_MODULE_TAGS := optional
