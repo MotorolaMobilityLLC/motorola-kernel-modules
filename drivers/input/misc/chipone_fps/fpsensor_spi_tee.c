@@ -81,6 +81,39 @@ static void spidev_gpio_as_int(fpsensor_data_t *fpsensor)
     mutex_unlock(&spidev_set_gpio_mutex);
     FUNC_EXIT();
 }
+
+#ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+static int mt_power_flag = 0;
+static int power_user_num =0;
+///The regulator-allways-on needs to be undone in the devices tree
+static void fpsensor_power_enable(u8 power_onoff)
+{
+    int retval = 0;
+    fpsensor_debug(ERR_LOG, "fpsensor_power_enable power_onoff = %d, mt_power_flag = %d\n", power_onoff,mt_power_flag);
+    if((power_onoff == 0) && (mt_power_flag == 1)){
+      if((g_fpsensor->fp_regulator != NULL) && (regulator_is_enabled(g_fpsensor->fp_regulator))){
+          retval = regulator_disable(g_fpsensor->fp_regulator);
+		power_user_num--;
+          fpsensor_debug(ERR_LOG, "regulator_disable retal = %d power_user_num = %d \n", retval,power_user_num);
+          if(retval){
+            fpsensor_debug(ERR_LOG, "regulator vdd disable failed status  = %d\n", retval);
+            }
+            mt_power_flag = 0;
+        }
+    }else if((power_onoff == 1) && (mt_power_flag == 0)){
+        if((g_fpsensor->fp_regulator != NULL)){
+          retval = regulator_enable(g_fpsensor->fp_regulator);
+	power_user_num++;
+          fpsensor_debug(ERR_LOG, "regulator_enable retal = %d power_user_num = %d \n", retval,power_user_num);
+          if(retval){
+            fpsensor_debug(ERR_LOG, "regulator vdd enable failed status  = %d\n", retval);
+           }
+            mt_power_flag = 1;
+       }
+     }
+}
+#endif
+
 static int fpsensor_irq_gpio_cfg(fpsensor_data_t *fpsensor)
 {
     struct device_node *node;
@@ -175,7 +208,10 @@ int fpsensor_spidev_dts_init(fpsensor_data_t *fpsensor)
         pdev = of_find_device_by_node(node);
         if(pdev) {
             #if FPSENSOR_PMIC_LDO
-            fpsensor->fp_regulator = regulator_get(&pdev->dev, FPSENSOR_VDD_NAME);
+            if(fpsensor->fp_regulator == NULL){
+                fpsensor_debug(ERR_LOG, "regulator_get\n");
+                fpsensor->fp_regulator = regulator_get(&pdev->dev, FPSENSOR_VDD_NAME);
+            }
 
             if (IS_ERR(fpsensor->fp_regulator)) {
                 ret = PTR_ERR(fpsensor->fp_regulator);
@@ -276,7 +312,12 @@ int fpsensor_spidev_dts_uninit(fpsensor_data_t *fpsensor)
     fpsensor_debug(ERR_LOG,"fpsensor_spidev_dts_uinit Enter.\n");
 #if FPSENSOR_PMIC_LDO
     if (fpsensor->fp_regulator != NULL) {
-        regulator_force_disable(fpsensor->fp_regulator);
+#ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+	fpsensor_debug(INFO_LOG, "%s: fpsensor_power_enable(0) ======\n", __func__);
+        fpsensor_power_enable(0);
+#else
+    regulator_force_disable(fpsensor->fp_regulator);
+#endif
         regulator_put(fpsensor->fp_regulator);
         fpsensor->fp_regulator = NULL;
     }
@@ -453,18 +494,23 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
                 break;
             }
         }
+#ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+	fpsensor_debug(INFO_LOG, "%s: fpsensor_power_enable(1) ======\n", __func__);
+        fpsensor_power_enable(1);
+#else
         retval = regulator_enable(fpsensor_dev->fp_regulator);
         if (retval) {
             fpsensor_debug(ERR_LOG, "Regulator vdd enable failed retval = %d\n", retval);
             break;
         }
+#endif
+
     }
 #endif
     if(fpsensor_irq_gpio_cfg(fpsensor_dev) != 0) {
         fpsensor_debug(ERR_LOG, "fpsensor_irq_gpio_cfg failed\n");
         break;;
     }
-	
         irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;
         retval = request_threaded_irq(fpsensor_dev->irq, fpsensor_irq, NULL,
                                       irqf, FPSENSOR_DEV_NAME, fpsensor_dev);
@@ -529,6 +575,10 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         break;
     case FPSENSOR_IOC_ENABLE_POWER:
         #if FPSENSOR_PMIC_LDO
+        #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+	fpsensor_debug(INFO_LOG, "%s:  fpsensor_power_enable(1) ======\n", __func__);
+        fpsensor_power_enable(1);
+        #else
         if (fpsensor_dev->fp_regulator != NULL) {
             if(regulator_is_enabled(fpsensor_dev->fp_regulator) > 0)
             {
@@ -538,7 +588,7 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
             regulator_enable(fpsensor_dev->fp_regulator);
         }
         #endif
-		
+        #endif
 #if FPSENSOR_USE_POWER_GPIO
         fpsensor_gpio_output_dts(FPSENSOR_POWER_PIN, 1);
         fpsensor_debug(INFO_LOG, "%s: gpio FPSENSOR_IOC_ENABLE_POWER ======\n", __func__);
@@ -548,12 +598,17 @@ static long fpsensor_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
         break;
     case FPSENSOR_IOC_DISABLE_POWER:
         #if FPSENSOR_PMIC_LDO
+        #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+	fpsensor_debug(INFO_LOG, "%s:  fpsensor_power_enable(0) ======\n", __func__);
+        fpsensor_power_enable(0);
+        #else
         if (fpsensor_dev->fp_regulator != NULL && regulator_is_enabled(fpsensor_dev->fp_regulator) > 0) {
             regulator_force_disable(fpsensor_dev->fp_regulator);
             fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
         }
         #endif
-		
+        fpsensor_debug(INFO_LOG, "%s: FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
+        #endif
 #if FPSENSOR_USE_POWER_GPIO
         fpsensor_gpio_output_dts(FPSENSOR_POWER_PIN, 0);
 	fpsensor_debug(INFO_LOG, "%s: gpio FPSENSOR_IOC_DISABLE_POWER ======\n", __func__);
@@ -694,6 +749,10 @@ static int fpsensor_release(struct inode *inode, struct file *filp)
 #endif
 
     fpsensor_dev->device_available = 0;
+#ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
+    fpsensor_debug(INFO_LOG, "%s: fpsensor_power_enable(0) ======\n", __func__);
+    fpsensor_power_enable(0);
+#endif
     FUNC_EXIT();
     return status;
 }
@@ -935,6 +994,7 @@ err2:
 //err0:
 #if FPSENSOR_PMIC_LDO
     if (fpsensor_dev->fp_regulator != NULL) {
+	fpsensor_debug(INFO_LOG, " regulator_put \n" );
         regulator_put(fpsensor_dev->fp_regulator);
         fpsensor_dev->fp_regulator = NULL;
     }
