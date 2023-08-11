@@ -59,7 +59,7 @@
 /* #define CFG_CTS_FW_UPDATE_SYS */
 
 /* Load config fw bin as default. */
-#define CFG_CTS_FW_UPDATE_FILE_LOAD
+// #define CFG_CTS_FW_UPDATE_FILE_LOAD
 #ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
 #define CFG_CTS_FW_FILE_NAME_MAX_LEN        128
 #define CFG_CTS_FW_FILE_PATH                "/vendor/firmware/"
