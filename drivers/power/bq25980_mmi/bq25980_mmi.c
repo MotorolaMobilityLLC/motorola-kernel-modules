@@ -54,6 +54,8 @@ enum bq_work_mode {
 
 #define BQ_MODE_COUNT 3
 #define SC8541_PART_NO 0x41
+#define VAC1_STAT_MASK  0x10
+#define VAC1_STAT_SHIFT  4
 
 enum bq_device_id {
 	BQ25980 = 0,
@@ -707,25 +709,21 @@ static int bq25980_get_adc_vbat(struct bq25980_device *bq)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 static int bq25980_get_adc_vac1(struct bq25980_device *bq)
 {
-	int vac1_adc_lsb, vac1_adc_msb;
-	u16 vac1_adc;
-	int ret;
-        bq25980_set_adc_enable(bq,true);
-
-	ret = regmap_read(bq->regmap, BQ25980_VAC1_ADC_MSB, &vac1_adc_msb);
+	int vac1_stat;
+	int ret = 0;
+	ret = regmap_read(bq->regmap, BQ25980_STAT3, &vac1_stat);
+        dev_err(bq->dev,"the vac1 stat = :%x",vac1_stat);
 	if (ret) {
-		dev_err(bq->dev, "read BQ25980_VBAT_ADC_MS fail ret = %d\n", ret);
-		return ret;
+		return 0;
 	}
 
-	ret = regmap_read(bq->regmap, BQ25980_VAC1_ADC_LSB, &vac1_adc_lsb);
-	if (ret) {
-		dev_err(bq->dev, "read BQ25980_VBAT_ADC_LS fail ret = %d\n", ret);
-		return ret;
-	}
+        if((vac1_stat& VAC1_STAT_MASK) >> VAC1_STAT_SHIFT){
+            ret = 1;//VAC_ONLINE
+        }else{
+            ret = 0;//VAC_NOT_ONLINE
+        }
 
-	vac1_adc = (vac1_adc_msb << 8) | vac1_adc_lsb;
-	return vac1_adc * 5;
+	return ret;
 }
 
 static int bq25980_get_adc_vac2(struct bq25980_device *bq)
