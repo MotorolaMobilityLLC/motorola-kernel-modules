@@ -205,32 +205,36 @@ void fts_irq_disable(void)
 {
     unsigned long irqflags;
 
-    FTS_FUNC_ENTER();
-    spin_lock_irqsave(&fts_data->irq_lock, irqflags);
-
     if (!fts_data->irq_disabled) {
+        FTS_FUNC_ENTER();
+        spin_lock_irqsave(&fts_data->irq_lock, irqflags);
+
         disable_irq_nosync(fts_data->irq);
         fts_data->irq_disabled = true;
-    }
 
-    spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
-    FTS_FUNC_EXIT();
+        spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
+        FTS_DBG_LEVEL("exit");
+    }
+    else
+        FTS_DBG_LEVEL("skip irq_disabled:1");
 }
 
 void fts_irq_enable(void)
 {
     unsigned long irqflags = 0;
 
-    FTS_FUNC_ENTER();
-    spin_lock_irqsave(&fts_data->irq_lock, irqflags);
-
     if (fts_data->irq_disabled) {
+        FTS_FUNC_ENTER();
+        spin_lock_irqsave(&fts_data->irq_lock, irqflags);
+
         enable_irq(fts_data->irq);
         fts_data->irq_disabled = false;
-    }
 
-    spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
-    FTS_FUNC_EXIT();
+        spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
+        FTS_DBG_LEVEL("exit");
+    }
+    else
+        FTS_DBG_LEVEL("skip irq_disabled:0");
 }
 
 void fts_hid2std(void)
@@ -1832,9 +1836,16 @@ static int disp_notifier_callback(struct notifier_block *nb,
 #endif
 				fts_ts_suspend(ts_data->dev);
 			}
+#ifdef FTS_IRQ_DISABLE_FOR_RESET
+			else if (*data == MTK_DISP_BLANK_UNBLANK) {
+				//ft8725 trigger irq after reset before resume ready
+				//disable irq before touch resume when early unblank to avoid SPI error
+				if (ts_data->suspended)
+				    fts_irq_disable();
+			}
+#endif
 		} else if (value == MTK_DISP_EVENT_BLANK) {
 			if (*data == MTK_DISP_BLANK_UNBLANK) {
-				/* cts_resume(ts_data); */
 				queue_work(ts_data->ts_workqueue,
 						&ts_data->resume_work);
 			}
@@ -2789,6 +2800,8 @@ static int fts_ts_suspend(struct device *dev)
     }
 #endif
 
+    //disable irq when deep sleep
+    fts_irq_disable();
     FTS_INFO("make TP enter into sleep mode");
     ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_SLEEP);
     if (ret < 0)
@@ -2830,6 +2843,7 @@ static int fts_ts_resume(struct device *dev)
     else
         FTS_INFO("enter");
 
+    fts_irq_enable();
     if (!ts_data->suspended) {
 #ifdef FOCALTECH_SENSOR_EN
         mutex_unlock(&ts_data->state_mutex);
