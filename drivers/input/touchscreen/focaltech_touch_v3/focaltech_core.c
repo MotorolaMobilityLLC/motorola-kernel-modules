@@ -156,6 +156,26 @@ void fts_tp_state_recovery(struct fts_ts_data *ts_data)
     FTS_FUNC_EXIT();
 }
 
+/*****************************************************************************
+*  Name: fts_tp_resume_recovery
+*  Brief: Need execute this function when reset
+*  Input:
+*  Output:
+*  Return:
+*****************************************************************************/
+void fts_tp_resume_recovery(struct fts_ts_data *ts_data)
+{
+    FTS_FUNC_ENTER();
+    /* wait tp stable */
+    fts_wait_tp_to_valid(10);
+    /* recover TP charger state 0x8B */
+    /* recover TP glove state 0xC0 */
+    /* recover TP cover state 0xC1 */
+    fts_ex_mode_recovery(ts_data);
+    FTS_FUNC_EXIT();
+}
+
+
 int fts_reset_proc(int hdelayms)
 {
     FTS_DEBUG("tp reset");
