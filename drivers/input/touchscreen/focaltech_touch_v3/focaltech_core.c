@@ -1950,6 +1950,11 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 	if (pdata->sample_ctrl)
 		FTS_INFO("support focaltech sample mode");
 
+	pdata->stowed_mode_ctrl = of_property_read_bool(np,
+					"focaltech,stowed-mode-ctrl");
+	if (pdata->stowed_mode_ctrl)
+		FTS_INFO("Support focaltech touch stowed mode");
+
 	chosen = of_find_node_by_name(NULL, "chosen");
 	if (chosen) {
 		ret = of_property_read_string(chosen, PRIM_PANEL_NAME,
