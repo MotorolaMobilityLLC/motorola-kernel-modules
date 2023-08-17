@@ -2134,25 +2134,30 @@ static void cps_epp_icl_on()
 
 static int cps_wls_rx_irq_handler(int int_flag)
 {
-    int rc = 0;
+	int rc = 0;
 	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
-     uint8_t data[8] = {0};
-    if (int_flag & RX_INT_POWER_ON)
-    {
+	uint8_t data[8] = {0};
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+	Sys_Op_Mode sys_mode_type;
+	uint32_t temp = 0;
+	cps_reg_s *cps_reg;
+#endif
+	if (int_flag & RX_INT_POWER_ON)
+	{
 		CPS_RX_MODE_ERR = false;
 		CPS_RX_CHRG_FULL = false;
 		chip->cable_ready_wait_count = 0;
 		cps_rx_online_check(chip);
-        /* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
-        /* 9 = LOW_POWER_OFF_CHARGING_BOOT */
-        if(chip->bootmode == 8 || chip->bootmode == 9)
-            cps_rx_online_check(chip);
+	/* 8 = KERNEL_POWER_OFF_CHARGING_BOOT */
+	/* 9 = LOW_POWER_OFF_CHARGING_BOOT */
+		if(chip->bootmode == 8 || chip->bootmode == 9)
+			cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_POWER_ON");
-    }
-    if(int_flag & RX_INT_LDO_OFF)
-    {
+	}
+	if(int_flag & RX_INT_LDO_OFF)
+	{
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_OFF");
-    }
+	}
 	if (int_flag & RX_INT_LDO_ON)
 	{
 		chip->rx_ldo_on = true;
@@ -2165,35 +2170,35 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
 		queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(2000));
 	}
-    if(int_flag & RX_INT_READY){
-            data[0] = 0x38;
-            data[1] = 0x3B;
-            data[2] = 0x88;
-            data[3] = 0x66;
-            //data[0] = 0x38;
-           // cps_wls_send_handshake_packet(data,4);
+	if(int_flag & RX_INT_READY){
+		data[0] = 0x38;
+		data[1] = 0x3B;
+		data[2] = 0x88;
+		data[3] = 0x66;
+		//data[0] = 0x38;
+		// cps_wls_send_handshake_packet(data,4);
 		chip->rx_int_ready = true;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_READY");
-     }
-     if(int_flag & RX_INT_FSK_ACK){}
-     if(int_flag & RX_INT_FSK_TIMEOUT){}
-     if(int_flag & RX_INT_FSK_PKT){
-          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_FSK_PKT");
-           cps_wls_get_fsk_packet(data);
-     }
+	}
+	if(int_flag & RX_INT_FSK_ACK){}
+	if(int_flag & RX_INT_FSK_TIMEOUT){}
+	if(int_flag & RX_INT_FSK_PKT){
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_FSK_PKT");
+		cps_wls_get_fsk_packet(data);
+	}
 	if (int_flag & RX_INT_OVP)
 	{
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OVP");
 	}
-    if(int_flag & RX_INT_AC_LOSS){}
-    if(int_flag & RX_INT_OVP_TO){}
-    if(int_flag & RX_INT_AC_SHORT){}
+	if(int_flag & RX_INT_AC_LOSS){}
+	if(int_flag & RX_INT_OVP_TO){}
+	if(int_flag & RX_INT_AC_SHORT){}
 	if (int_flag & RX_INT_OTP)
 	{
 		//int_type |= INT_OTP;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_OTP");
 	}
-    if(int_flag & RX_INT_SR_OCP){}
+	if(int_flag & RX_INT_SR_OCP){}
 	if (int_flag & RX_INT_OCP)
 	{
 		CPS_RX_MODE_ERR = true;
@@ -2207,8 +2212,8 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	{
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_SCP");
 	}
-    if(int_flag & RX_INT_SR_SW_R){}
-    if(int_flag & RX_INT_SR_SW_F){}
+	if(int_flag & RX_INT_SR_SW_R){}
+	if(int_flag & RX_INT_SR_SW_F){}
 	if(int_flag & RX_INT_HTP){}
 
 	if (int_flag & RX_INT_NEGO_POWER_READY)
@@ -2222,7 +2227,12 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_PT rx_vout_set %dmV",
 			chip->rx_vout_set);
 	}
-
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+	cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_NEGO_PRO]);
+	temp =  cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
+	sys_mode_type = (temp & CPS_MASK(7, 0));
+	cps_wls_log(CPS_LOG_DEBG, "CPS_REG_Sys_Op_Mode = 0x%02x, 0x%02x", temp, sys_mode_type);
+#endif
 	if (int_flag & RX_INT_HS_OK) {
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_OK");
 		cps_get_sys_op_mode(&mode_type);
