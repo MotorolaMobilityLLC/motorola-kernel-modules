@@ -63,6 +63,7 @@
 #define pr_fmt(fmt) "%s: " fmt "\n", __func__
 #endif
 #if defined(__KERNEL__)
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/regmap.h>
 //#include <linux/miscdevice.h>
