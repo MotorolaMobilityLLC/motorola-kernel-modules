@@ -12,6 +12,7 @@
 #define DRIVER_NAME "abov_sar"
 #define USE_SENSORS_CLASS
 
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/i2c.h>
@@ -37,7 +38,6 @@
 #include <asm/atomic.h>
 #include <linux/async.h>
 #include <linux/firmware.h>
-#include <linux/version.h>
 #include "base.h"
 
 #define SLEEP(x)	mdelay(x)
