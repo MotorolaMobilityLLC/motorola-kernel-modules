@@ -239,10 +239,6 @@ struct mmi_fg_chip {
 
 };
 
-extern int mmi_batt_health_check(void);
-#ifdef CONFIG_MOTO_REMOVE_MTK_GAUGE
-extern int mmi_charger_update_batt_status(void);
-#endif
 static int fg_get_capacity(struct gauge_device *gauge_dev, int *soc);
 
 static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
