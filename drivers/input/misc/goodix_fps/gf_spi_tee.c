@@ -3,6 +3,7 @@
  * All Rights Reserved.
  */
 
+#include <linux/version.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/io.h>
@@ -54,6 +55,7 @@
 #include "mach/gpio_const.h"
 #endif
 
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
 #include <mt-plat/sync_write.h>
 #endif
@@ -62,7 +64,6 @@
 
 #include "gf_spi_tee.h"
 #include  <linux/regulator/consumer.h>
-#include <linux/version.h>
 
 /**************************defination******************************/
 #define GF_DEV_NAME "goodix_fp"
