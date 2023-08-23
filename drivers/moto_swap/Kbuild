@@ -1,0 +1,36 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+
+ifneq ($(filter m y,$(CONFIG_HYBRIDSWAP_ZRAM)),)
+EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP_ZRAM
+endif
+
+ifneq ($(filter m y,$(CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK)),)
+EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+endif
+
+ifneq ($(filter m y,$(CONFIG_HYBRIDSWAP)),)
+EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP
+endif
+
+ifneq ($(filter m y,$(CONFIG_HYBRIDSWAP_SWAPD)),)
+EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP_SWAPD
+endif
+
+ifneq ($(filter m y,$(CONFIG_HYBRIDSWAP_CORE)),)
+EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP_CORE
+endif
+
+moto_swap-objs += zram_drv.o
+moto_swap-objs += hybridswap/hybridswap_main.o
+moto_swap-objs += hybridswap/hybridswap_eswap.o
+
+ifneq ($(filter m y,$(CONFIG_HYBRIDSWAP_ASYNC_COMPRESS)),)
+moto_swap-objs += hybridswap/hybridswap_akcompress.o
+endif
+
+moto_swap-objs += hybridswap/hybridswap_swapd.o
+moto_swap-objs += zcomp.o
+
+obj-m += moto_swap.o
