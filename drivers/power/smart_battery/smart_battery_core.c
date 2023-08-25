@@ -234,7 +234,7 @@ static int smart_batt_soc100_forward(struct mmi_smart_battery *chip, int rsoc)
 {
 	int logic_soc;
 
-	logic_soc = rsoc * 100 / chip->ui_full_soc;
+	logic_soc = (rsoc * 100 * 100 / chip->ui_full_soc + 50) / 100;
 	if (chip->soc100_curr_threshod) {
 		if ((mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING) &&
 			(chip->is_ffc_charge) && (logic_soc >= 100) && (chip->uisoc != 100)) {
