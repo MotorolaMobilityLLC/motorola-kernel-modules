@@ -347,6 +347,24 @@ static ssize_t gesture_type_dbg_store(struct device *dev,
 }
 #endif
 
+#ifdef CONFIG_CTS_LAST_TIME
+static ssize_t timestamp_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
+
+	cts_lock_device(&cts_data->cts_dev);
+	last_ktime = cts_data->last_event_time;
+	cts_data->last_event_time = 0;
+	cts_unlock_device(&cts_data->cts_dev);
+
+	last_ts = ktime_to_timespec64(last_ktime);
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
+}
+#endif
+
 static ssize_t write_tcs_register_store(struct device *dev,
         struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -3268,6 +3286,9 @@ static struct device_attribute touchscreen_attributes[] = {
     __ATTR_RO(path),
     __ATTR_RO(vendor),
     __ATTR_RO(ic_ver),
+#ifdef CONFIG_CTS_LAST_TIME
+    __ATTR_RO(timestamp),
+#endif
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 	__ATTR_RW(gesture),
 	__ATTR_RW(gesture_type_dbg),

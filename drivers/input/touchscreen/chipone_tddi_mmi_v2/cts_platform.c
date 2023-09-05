@@ -12,6 +12,10 @@ extern struct chipone_ts_data *g_cts_data;
 static struct wakeup_source *gesture_wakelock;
 #endif
 
+#ifdef CONFIG_CTS_LAST_TIME
+static bool touch_down = 0;
+#endif
+
 #ifdef CFG_CTS_FW_LOG_REDIRECT
 size_t cts_plat_get_max_fw_log_size(struct cts_platform_data *pdata)
 {
@@ -1051,6 +1055,10 @@ int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
             input_report_abs(input_dev, ABS_MT_POSITION_Y, y);
             input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR, msgs[i].pressure);
             input_report_abs(input_dev, ABS_MT_PRESSURE, msgs[i].pressure);
+#ifdef CONFIG_CTS_LAST_TIME
+            if (CTS_DEVICE_TOUCH_EVENT_DOWN == msgs[i].event)
+                touch_down = 1;
+#endif
             break;
 
         case CTS_DEVICE_TOUCH_EVENT_UP:
@@ -1133,6 +1141,17 @@ int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
                     &cts_data->heart_work, msecs_to_jiffies(2000));
         }
     }
+#endif
+
+#ifdef CONFIG_CTS_LAST_TIME
+	if (!contact) {
+		//get boottime once for one touch session to avoid impact multi touch & moving performance
+		if (touch_down) {
+		    cts_data->last_event_time = ktime_get_boottime();
+		    cts_dbg("contact 0, get last_event_time\n");
+		}
+		touch_down = 0;
+	}
 #endif
 
     return 0;
