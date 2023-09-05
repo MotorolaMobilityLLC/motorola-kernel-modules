@@ -895,8 +895,8 @@ exit:
 		}
 	}
 
-	if (pdata->stowed_mode_ctrl && ts_data->get_mode.stowed) {
-		ts_data->get_mode.stowed = 0;
+	if (pdata->stowed_mode_ctrl) {
+		ts_data->set_mode.stowed = 0;
 	}
 
 	mutex_unlock(&ts_data->mode_lock);
