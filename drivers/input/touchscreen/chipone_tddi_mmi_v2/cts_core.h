@@ -8,6 +8,10 @@
 #include <linux/sensors.h>
 #endif
 
+#ifdef CONFIG_CTS_LAST_TIME
+#include <linux/ktime.h>
+#endif
+
 enum cts_dev_hw_reg {
 #if defined(CONFIG_CTS_ICTYPE_ICNL9922C) ||\
     defined(CONFIG_CTS_ICTYPE_ICNL9951)
@@ -449,6 +453,10 @@ struct chipone_ts_data {
 
     bool force_reflash;
     struct kobject *suspend_kobj;
+
+#ifdef CONFIG_CTS_LAST_TIME
+    ktime_t last_event_time;
+#endif
 
 #ifdef CHIPONE_SENSOR_EN
     bool should_enable_gesture;

@@ -73,7 +73,7 @@
 #define CFG_CTS_FACTORY_LIMIT_FILENAME      "chipone_limit.bin"
 
 /* IC type support */
-#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+#if defined(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL) || defined(CONFIG_CTS_LAST_TIME)
 #define CFG_CTS_CHIP_PRIMARY                   "primary"
 #endif
 

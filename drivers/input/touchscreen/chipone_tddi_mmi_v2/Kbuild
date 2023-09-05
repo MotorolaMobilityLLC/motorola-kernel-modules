@@ -56,6 +56,10 @@ ifneq ($(filter m y,$(CONFIG_TARGET_BUILD_FACTORY)),)
 	EXTRA_CFLAGS += -DTARGET_BUILD_FACTORY
 endif
 
+ifneq ($(filter m y,$(CONFIG_CTS_LAST_TIME)),)
+    EXTRA_CFLAGS += -DCONFIG_CTS_LAST_TIME
+endif
+
 obj-m := chipone_tddi_mmi_v2.o
 
 chipone_tddi_mmi_v2-objs := cts_driver.o
