@@ -310,7 +310,6 @@ static void aw963xx_irq_handle_func(uint32_t irq_status, void *data)
 {
 	int8_t i = 0;
 	int8_t j = 0;
-	int32_t ret = 0;
 	uint32_t curr_status_val[4] = { 0 };
 
 	struct aw_sar *p_sar = (struct aw_sar *)data;
@@ -318,7 +317,7 @@ static void aw963xx_irq_handle_func(uint32_t irq_status, void *data)
 	AWLOGD(p_sar->dev, "IRQSRC = 0x%x", irq_status);
 
 	for (i = 0; i < AW963XX_VALID_TH; i++)
-		ret = aw_sar_i2c_read(p_sar->i2c, REG_STAT0 + i * (REG_STAT1 - REG_STAT0), &curr_status_val[i]);
+		aw_sar_i2c_read(p_sar->i2c, REG_STAT0 + i * (REG_STAT1 - REG_STAT0), &curr_status_val[i]);
 
 	for (j = 0; j < AW963XX_CHANNEL_NUM_MAX; j++) {
 		if (p_sar->channels_arr[j].input == NULL) {
