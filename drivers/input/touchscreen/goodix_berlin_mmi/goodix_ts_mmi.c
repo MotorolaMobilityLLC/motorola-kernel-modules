@@ -1165,7 +1165,7 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	}
 
 	if (core_data->board_data.stowed_mode_ctrl) {
-		core_data->get_mode.stowed = 0;
+		core_data->set_mode.stowed = 0;
 	}
 	mutex_unlock(&core_data->mode_lock);
 #ifdef CONFIG_GTP_FOD
