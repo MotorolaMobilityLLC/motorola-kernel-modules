@@ -522,6 +522,8 @@ struct sx93XX
 
 	int irqTimeout; /* msecs only set if useIrqTimer is true */
 
+	int read_flag; /* used for dump specified register*/
+	u16 read_reg; /* record reg address which want to read*/
 	/* struct workqueue_struct *ts_workq;  */  /* if want to use non default */
 	struct delayed_work dworker; /* work struct for worker function */
 	u8 phaseselect;
