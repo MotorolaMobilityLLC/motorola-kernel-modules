@@ -1,0 +1,6 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/power/supply \
+
+obj-m += leds-pmic.o
