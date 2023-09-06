@@ -31,7 +31,7 @@ int argc;
 char *argv[MAX_ARG_NUM];
 
 static int jitter_test_frame = 10;
-
+u8 dbg_log_level = 0;
 
 int parse_arg(const char *buf, size_t count)
 {
@@ -287,6 +287,33 @@ static ssize_t gesture_store(struct device *dev,
 	cts_dbg("single tap:%d, double tap:%d, should_enable_gesture:%d\n", cts_data->s_tap_flag, cts_data->d_tap_flag, cts_data->should_enable_gesture);
 	cts_unlock_device(&cts_data->cts_dev);
 	return count;
+}
+
+static ssize_t debug_log_level_store(struct device *dev,
+    struct device_attribute *attr, const char *buf, size_t count)
+{
+    int value = 0;
+
+    sscanf(buf, "%d", &value);
+    cts_info("dbg_log_level:%d->%d", dbg_log_level, value);
+    dbg_log_level = value;
+
+    if (dbg_log_level > 2)
+        cts_show_debug_log = 1;
+    else
+        cts_show_debug_log = 0;
+
+    cts_info("set cts_show_debug_log to %d", cts_show_debug_log);
+
+    return count;
+}
+
+static ssize_t debug_log_level_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    int count = 0;
+
+    count += snprintf(buf + count, PAGE_SIZE, "debug log level:%d\n", dbg_log_level);
+    return count;
 }
 
 static ssize_t gesture_type_dbg_show(struct device *dev,
@@ -3293,6 +3320,7 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RW(gesture),
 	__ATTR_RW(gesture_type_dbg),
 #endif
+	__ATTR(debug_log_level, S_IRUGO | S_IWUSR | S_IWGRP, debug_log_level_show, debug_log_level_store),
     __ATTR_NULL
 };
 
