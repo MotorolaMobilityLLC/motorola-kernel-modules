@@ -155,6 +155,12 @@ struct cts_platform_data {
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
     int supported_gesture_type;
 #endif
+
+#ifdef CTS_STOWED_MODE_EN
+    int stowed_set;
+    int stowed_get;
+#endif
+
 #ifdef TOUCHSCREEN_PM_BRL_SPI
     bool gesture_wait_pm;
 #endif

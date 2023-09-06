@@ -76,6 +76,28 @@ int cts_suspend(struct chipone_ts_data *cts_data)
         cts_err("Stop device failed %d", ret);
         return ret;
     }
+#ifdef CTS_STOWED_MODE_EN
+    atomic_set(&cts_data->post_suspended, 1);
+    cts_lock_device(&cts_data->cts_dev);
+    cts_err("stowed_get = %d\n", cts_data->pdata->stowed_get);
+    if(cts_data->pdata->stowed_get &&  cts_data->cts_dev.rtdata.gesture_wakeup_enabled)
+    {
+        ret = enter_gesture_pocket_mode(&cts_data->cts_dev);
+        if(ret)
+        {
+                cts_info("Failed to set stowed mode%d\n", cts_data->pdata->stowed_get);
+        }
+        else
+        {
+                cts_data->pdata->stowed_set = cts_data->pdata->stowed_get;
+                cts_info("Enable stowed mode %d success.\n", cts_data->pdata->stowed_set);
+        }
+
+    }
+    cts_unlock_device(&cts_data->cts_dev);
+#endif
+
+
 #ifdef CFG_CTS_GESTURE
     /* Enable IRQ wake if gesture wakeup enabled */
     if (cts_is_gesture_wakeup_enabled(&cts_data->cts_dev)) {
@@ -112,6 +134,11 @@ int cts_resume(struct chipone_ts_data *cts_data)
     int ret;
 
     cts_info("Resume");
+
+#ifdef CTS_STOWED_MODE_EN
+    cts_data->pdata->stowed_set = 0;
+    atomic_set(&cts_data->post_suspended, 0);
+#endif
 
 #ifdef CFG_CTS_GESTURE
     if (cts_is_gesture_wakeup_enabled(&cts_data->cts_dev)) {

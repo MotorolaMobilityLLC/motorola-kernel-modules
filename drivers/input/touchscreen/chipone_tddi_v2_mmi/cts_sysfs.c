@@ -3177,6 +3177,75 @@ static ssize_t gesture_store(struct device *dev,
 }
 #endif
 
+#ifdef CTS_STOWED_MODE_EN
+static ssize_t stowed_show(struct device *dev,
+                struct device_attribute *attr, char *buf)
+{
+        struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+	cts_info("Stowed state = %d.\n", cts_data->pdata->stowed_set);
+        return scnprintf(buf, PAGE_SIZE, "0x%d\n", cts_data->pdata->stowed_set);
+}
+
+static ssize_t stowed_store(struct device *dev,
+                                             struct device_attribute *attr,
+                                             const char *buf, size_t size)
+{
+        unsigned long mode = 0;
+        int ret = 0;
+        struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+
+        ret = kstrtoul(buf, 0, &mode);
+        if (ret < 0) {
+                cts_err("error: Failed to convert value");
+                return -EINVAL;
+        }
+	cts_lock_device(&cts_data->cts_dev);
+	cts_data->pdata->stowed_get = mode;
+	if(cts_data->pdata->stowed_set == mode)
+	{
+		cts_err("The mode = %lu is same, so not to write\n", mode);
+		ret = size;
+		goto exit;
+	}
+	if((atomic_read(&cts_data->post_suspended) == 1) && (cts_data->cts_dev.rtdata.gesture_wakeup_enabled == true))
+	{
+		switch (mode)
+		{
+                case 1:
+			ret = enter_gesture_pocket_mode(&cts_data->cts_dev);
+			if(ret)
+			{
+				cts_info("enter stowed mode failed\n");
+				goto exit;
+			}
+                        break;
+                case 0:
+			ret = exit_gesture_pocket_mode(&cts_data->cts_dev);
+			if(ret)
+			{
+				cts_info("exit stowed mode failed\n");
+				goto exit;
+			}
+                        break;
+                default:
+                        cts_info("unsupport stowed mode type\n");
+		}
+	}
+	else
+	{
+		cts_info("Skip stowed mode, setting post_suspended:%d\n", cts_data->post_suspended);
+		ret = size;
+		goto exit;
+	}
+	cts_data->pdata->stowed_set = mode;
+	cts_err("Success to set stowed mode %lu\n", mode);
+	ret = size;
+exit:
+        cts_unlock_device(&cts_data->cts_dev);
+        return ret;
+}
+#endif
+
 /* Attribute: vendor (RO) */
 static ssize_t ic_ver_show(struct device *dev,
         struct device_attribute *attr, char *buf)
@@ -3202,6 +3271,9 @@ static struct device_attribute touchscreen_attributes[] = {
 #endif
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
         __ATTR_RW(gesture),
+#endif
+#ifdef CTS_STOWED_MODE_EN
+    __ATTR_RW(stowed),
 #endif
     __ATTR_NULL
 };

@@ -485,6 +485,11 @@ struct chipone_ts_data {
 
     bool force_reflash;
     struct kobject *suspend_kobj;
+
+#ifdef CTS_STOWED_MODE_EN
+    atomic_t post_suspended;
+#endif
+
 #ifdef TOUCHSCREEN_PM_BRL_SPI
     atomic_t pm_resume;
     wait_queue_head_t pm_wq;
@@ -805,6 +810,8 @@ extern void cts_enable_gesture_wakeup(struct cts_device *cts_dev);
 extern void cts_disable_gesture_wakeup(struct cts_device *cts_dev);
 extern bool cts_is_gesture_wakeup_enabled(const struct cts_device *cts_dev);
 extern int cts_get_gesture_info(struct cts_device *cts_dev, void *gesture_info);
+extern int enter_gesture_pocket_mode(struct cts_device *cts_dev);
+extern int exit_gesture_pocket_mode(struct cts_device *cts_dev);
 #endif /* CFG_CTS_GESTURE */
 
 extern int cts_set_int_data_types(struct cts_device *cts_dev, u16 types);

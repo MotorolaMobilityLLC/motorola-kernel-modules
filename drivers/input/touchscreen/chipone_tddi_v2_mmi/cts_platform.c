@@ -652,7 +652,6 @@ static int cts_plat_parse_dt(struct cts_platform_data *pdata,
         if (!of_property_read_u32(dev_node, "chipone,supported_gesture_type", &pdata->supported_gesture_type))
                 cts_info("chipone,supported_gesture_type=%02x\n", pdata->supported_gesture_type);
 #endif
-
     return 0;
 }
 #endif /* CONFIG_CTS_OF */
@@ -1184,13 +1183,11 @@ int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
 int cts_plat_release_all_touch(struct cts_platform_data *pdata)
 {
     struct input_dev *input_dev = pdata->ts_input_dev;
-
 #if defined(CONFIG_CTS_SLOTPROTOCOL)
     int id;
 #endif /* CONFIG_CTS_SLOTPROTOCOL */
 
     cts_info("Release all touch");
-
 #ifdef CONFIG_CTS_SLOTPROTOCOL
     for (id = 0; id < CFG_CTS_MAX_TOUCH_NUM; id++) {
         input_mt_slot(input_dev, id);

@@ -11,7 +11,6 @@
 #include "cts_earjack_detect.h"
 #include "cts_tcs.h"
 
-
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_i2c_writeb(const struct cts_device *cts_dev,
         u32 addr, u8 b, int retry, int delay)
@@ -2211,6 +2210,49 @@ init_hwdata:
 }
 
 #ifdef CFG_CTS_GESTURE
+int enter_gesture_pocket_mode(struct cts_device *cts_dev)
+{
+    int ret = 0;
+    u8 pockmode = 2;
+    u16 fwid = CTS_DEV_FWID_INVALID;
+
+    cts_err("enter gesture_pocket_mode start");
+    if (cts_dev->rtdata.gesture_wakeup_enabled) {
+        if (cts_dev->fwdata.int_data_method != INT_DATA_METHOD_HOST) {
+            ret = cts_tcs_get_fw_id(cts_dev, &fwid);
+            cts_warn("Get firmware id: 0x%02x", fwid);
+            if (ret){
+                cts_err("enter ready gesture_pocket_mode failed");
+            }
+            ret = cts_tcs_set_pwr_mode(cts_dev, pockmode);
+            if (ret){
+                cts_warn("enter gesture_pocket_mode failed %d", ret);
+            }
+            cts_err("enter gesture_pocket_mode success");
+        }
+    } else {
+        cts_warn("enter Not enabled to pocket mode");
+    }
+    return ret;
+}
+
+int exit_gesture_pocket_mode(struct cts_device *cts_dev)
+{
+    int ret;
+    u8 pockmode_exit = 3;
+    u16 fwid = CTS_DEV_FWID_INVALID;
+
+    cts_err("exit gesture_pocket_mode start");
+    ret = cts_tcs_get_fw_id(cts_dev, &fwid);
+    cts_warn("Get firmware id: 0x%02x", fwid);
+    ret = cts_tcs_set_pwr_mode(cts_dev, pockmode_exit);
+    if (ret){
+        cts_warn("exit gesture_pocket_mode_exit failed %d", ret);
+    }
+    cts_err("exit gesture_pocket_mode success");
+    return ret;
+}
+
 void cts_enable_gesture_wakeup(struct cts_device *cts_dev)
 {
     cts_info("Enable gesture wakeup");
