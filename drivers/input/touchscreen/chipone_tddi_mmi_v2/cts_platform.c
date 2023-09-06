@@ -1148,7 +1148,7 @@ int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
 		//get boottime once for one touch session to avoid impact multi touch & moving performance
 		if (touch_down) {
 		    cts_data->last_event_time = ktime_get_boottime();
-		    cts_dbg("contact 0, get last_event_time\n");
+		    cts_log_level("contact 0, get last_event_time\n");
 		}
 		touch_down = 0;
 	}

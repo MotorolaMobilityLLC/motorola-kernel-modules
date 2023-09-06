@@ -68,6 +68,7 @@ extern int cts_start_driver_log_redirect(const char *filepath, bool append_to_fi
 extern void cts_stop_driver_log_redirect(void);
 extern int cts_get_driver_log_redirect_size(void);
 extern void cts_log(int level, const char *fmt, ...);
+extern u8 dbg_log_level;
 
 #define cts_err(fmt, ...)   \
     cts_log(CTS_DRIVER_LOG_ERROR, "<E>CTS-" LOG_TAG " " fmt"\n", ##__VA_ARGS__)
@@ -77,7 +78,10 @@ extern void cts_log(int level, const char *fmt, ...);
     cts_log(CTS_DRIVER_LOG_INFO,  "<I>CTS-" LOG_TAG " " fmt"\n", ##__VA_ARGS__)
 #define cts_dbg(fmt, ...)   \
     cts_log(CTS_DRIVER_LOG_DEBUG, "<D>CTS-" LOG_TAG " " fmt"\n", ##__VA_ARGS__)
-
+#define cts_log_level(fmt, args...) do { \
+    if (dbg_log_level) \
+       printk("<D>CTS-%s:"fmt"\n", __func__, ##args); \
+} while (0)
 
 struct cts_device;
 struct cts_device_touch_msg;
