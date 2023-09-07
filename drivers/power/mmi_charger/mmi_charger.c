@@ -1088,6 +1088,25 @@ static int mmi_get_charger_profile(struct mmi_charger_chip *chip,
 }
 
 #define TURBO_CHRG_FFC_THRSH_MW 25000
+static bool mmi_is_ffc_enabled(struct mmi_charger *charger)
+{
+	struct mmi_charger_info *chg_info = &charger->chg_info;
+
+	if (!charger->profile.num_ffc_zones || !charger->profile.ffc_zones)
+		return false;
+
+	if (charger->driver->is_ffc_enabled) {
+		return charger->driver->is_ffc_enabled(charger->driver->data,charger->status.pres_chrg_step);
+	}
+	else if (chg_info->chrg_pmax_mw > TURBO_CHRG_FFC_THRSH_MW) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+
 static void mmi_update_charger_profile(struct mmi_charger_chip *chip,
 			       struct mmi_charger *charger)
 {
@@ -1095,14 +1114,13 @@ static void mmi_update_charger_profile(struct mmi_charger_chip *chip,
 	int temp;
 	int num_zones;
 	struct mmi_ffc_zone *zones;
-	struct mmi_charger_info *chg_info = &charger->chg_info;
 
 	if (!chip) {
 		pr_err("called before chg valid!\n");
 		return;
 	}
 
-	if (!(chg_info->chrg_pmax_mw > TURBO_CHRG_FFC_THRSH_MW)) {
+	if (!mmi_is_ffc_enabled(charger)) {
 		charger->profile.max_fv_mv = charger->profile.noffc_max_fv_mv;
 		charger->profile.fg_iterm = charger->profile.noffc_fg_iterm;
 		charger->profile.chrg_iterm = charger->profile.noffc_chrg_iterm;

@@ -113,6 +113,7 @@ struct mmi_charger_driver {
 	int (*config_charge)(void *data, struct mmi_charger_cfg *config);
 	bool (*is_charge_tapered)(void *data, int tapered_ma);
 	bool (*is_charge_halt)(void *data);
+	bool (*is_ffc_enabled)(void *data, int chrg_step);
 	void (*set_constraint)(void *data, struct mmi_charger_constraint *constraint);
 	void (*notify_paired_battery)(void *data, struct mmi_battery_info *batt_info);
 	void *data;
