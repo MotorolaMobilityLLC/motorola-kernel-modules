@@ -1,6 +1,10 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
+ifeq ($(HALL_PASSIVE_PEN),true)
+	KBUILD_OPTIONS += CONFIG_HALL_PASSIVE_PEN=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := hall_pen.ko
 LOCAL_MODULE_TAGS := optional

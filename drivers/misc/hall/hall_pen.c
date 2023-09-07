@@ -21,6 +21,9 @@
 #include <linux/irq.h>
 #include <linux/sensors.h>
 #include <linux/regulator/consumer.h>
+#ifdef CONFIG_HALL_PASSIVE_PEN
+#include <linux/pen_detection_notify.h>
+#endif
 
 #define DRIVER_NAME "hall_pen_detect"
 #define LOG_DBG(fmt, args...)    pr_debug(DRIVER_NAME " [DBG]" "<%s:%d>"fmt, __func__, __LINE__, ##args)
@@ -70,6 +73,50 @@ static struct platform_driver hall_pen_driver = {
 	},
 };
 
+#ifdef CONFIG_HALL_PASSIVE_PEN
+static BLOCKING_NOTIFIER_HEAD(pen_detection_notifier_list);
+
+/**
+ * pen_detection_register_client - register a client notifier
+ * @nb: notifier block to callback on events
+ *
+ * This function registers a notifier callback function
+ * to pen_detection_notifier_list, which would be called when
+ * the passive pen is inserted or pulled out.
+ */
+int pen_detection_register_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&pen_detection_notifier_list,
+						nb);
+}
+EXPORT_SYMBOL(pen_detection_register_client);
+
+/**
+ * pen_detection_unregister_client - unregister a client notifier
+ * @nb: notifier block to callback on events
+ *
+ * This function unregisters the callback function from
+ * pen_detection_notifier_list.
+ */
+int pen_detection_unregister_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&pen_detection_notifier_list,
+						  nb);
+}
+EXPORT_SYMBOL(pen_detection_unregister_client);
+
+/**
+ * pen_detection_notifier_call_chain - notify clients of pen_detection_events
+ * @val: event PEN_DETECTION_INSERT or PEN_DETECTION_PULL
+ * @v: notifier data, inculde display pen detection event.
+ */
+static int pen_detection_notifier_call_chain(unsigned long val, void *v)
+{
+	return blocking_notifier_call_chain(&pen_detection_notifier_list, val,
+					    v);
+}
+#endif
+
 void check_and_send(void)
 {
 	int i;
@@ -89,6 +136,13 @@ void check_and_send(void)
 		input_report_abs(hall_sensor_dev->hall_dev, ABS_DISTANCE, report_val);
 		input_sync(hall_sensor_dev->hall_dev);
 	}
+
+#ifdef CONFIG_HALL_PASSIVE_PEN
+	if(hall_sensor_dev->report_val)
+		pen_detection_notifier_call_chain(PEN_DETECTION_INSERT, NULL);
+	else
+		pen_detection_notifier_call_chain(PEN_DETECTION_PULL, NULL);
+#endif
 }
 
 void hall_enable(bool enable)
@@ -294,7 +348,9 @@ static int hall_sensor_probe(struct platform_device *pdev)
 				hall_sensor_dev->gpio_list[i].irq = 0;
 				goto fail_for_irq;
 			}
+#ifndef CONFIG_HALL_PASSIVE_PEN
 			disable_irq(hall_sensor_dev->gpio_list[i].irq);
+#endif
 		}
 	}
 

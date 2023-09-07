@@ -8,6 +8,10 @@ KERNEL_PLATFORM_PATH = $(shell find $(ANDROID_BUILD_TOP) -maxdepth 1 -name "kern
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 
+ifneq ($(filter m y,$(CONFIG_HALL_PASSIVE_PEN)),)
+	EXTRA_CFLAGS += -DCONFIG_HALL_PASSIVE_PEN
+endif
+
 
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 
