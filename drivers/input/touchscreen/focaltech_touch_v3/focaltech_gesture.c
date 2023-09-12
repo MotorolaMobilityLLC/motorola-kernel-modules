@@ -594,7 +594,10 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
 #ifdef FOCALTECH_SENSOR_EN
         if(fts_data->zero_enable) {
             fts_write_reg(0xCF, 0x02);
+        } else {
+            fts_write_reg(0xCF, 0x00);
         }
+
 #endif
         fts_write_reg(0xD2, 0xFF);
         fts_write_reg(0xD5, 0xFF);
