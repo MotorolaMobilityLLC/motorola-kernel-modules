@@ -59,6 +59,9 @@
 #define SX937x_CONN_ERROR	3
 #define SX937x_I2C_ERROR	4
 
+#define NUM_RETRY_ON_I2C_ERR    5
+#define SLEEP_BETWEEN_RETRY     10
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
 #ifdef CONFIG_SX937X_MTK_KERNEL419_CHARGER_TYPE
 #define USB_POWER_SUPPLY_NAME   "mtk_charger_type"
@@ -104,6 +107,7 @@ static int sx937x_i2c_write_16bit(psx93XX_t this, u16 reg_addr, u32 buf)
 	struct i2c_client *i2c = 0;
 	struct i2c_msg msg;
 	unsigned char w_buf[6];
+	int num_retried = 0;
 
 	if (this && this->bus)
 	{
@@ -120,10 +124,23 @@ static int sx937x_i2c_write_16bit(psx93XX_t this, u16 reg_addr, u32 buf)
 		msg.len = 6; //2bytes regaddr + 4bytes data
 		msg.buf = (u8 *)w_buf;
 
-		ret = i2c_transfer(i2c->adapter, &msg, 1);
-		if (ret < 0)
-			LOG_ERR(" i2c write reg 0x%x error %d\n", reg_addr, ret);
-
+		while(true)
+		{
+			ret = i2c_transfer(i2c->adapter, &msg, 1);
+			if (ret > 0)
+				break;
+			if (num_retried++ < NUM_RETRY_ON_I2C_ERR)
+			{
+				LOG_ERR("i2c write reg 0x%x error %d. Going to retry", reg_addr, ret);
+				if (SLEEP_BETWEEN_RETRY != 0)
+					msleep(SLEEP_BETWEEN_RETRY);
+			}
+			else {
+				LOG_ERR("i2c write reg 0x%x error %d after retried %d times",
+					reg_addr, ret, NUM_RETRY_ON_I2C_ERR);
+				break;
+			}
+		}
 	}
 	return ret;
 }
@@ -142,6 +159,7 @@ static int sx937x_i2c_read_16bit(psx93XX_t this, u16 reg_addr, u32 *data32)
 	struct i2c_msg msg[2];
 	u8 w_buf[2];
 	u8 buf[4];
+	int num_retried = 0;
 
 	if (this && this->bus)
 	{
@@ -160,12 +178,24 @@ static int sx937x_i2c_read_16bit(psx93XX_t this, u16 reg_addr, u32 *data32)
 		msg[1].len = 4;
 		msg[1].buf = (u8 *)buf;
 
-		ret = i2c_transfer(i2c->adapter, msg, 2);
-		if (ret < 0)
-			LOG_ERR("i2c read reg 0x%x error %d\n", reg_addr, ret);
-
-		data32[0] = ((u32)buf[0]<<24) | ((u32)buf[1]<<16) | ((u32)buf[2]<<8) | ((u32)buf[3]);
-
+		while (true)
+		{
+			ret = i2c_transfer(i2c->adapter, msg, 2);
+			if (ret > 0){
+				data32[0] = ((u32)buf[0]<<24) | ((u32)buf[1]<<16) | ((u32)buf[2]<<8) | ((u32)buf[3]);
+				break;
+			}
+			if (num_retried++ < NUM_RETRY_ON_I2C_ERR)
+			{
+				LOG_ERR("i2c read reg 0x%x error %d. Going to retry", reg_addr, ret);
+				if (SLEEP_BETWEEN_RETRY != 0)
+					msleep(SLEEP_BETWEEN_RETRY);
+			}
+			else {
+				LOG_ERR("i2c read reg 0x%x error %d after retried %d times", reg_addr, ret, NUM_RETRY_ON_I2C_ERR);
+				break;
+			}
+		}
 	}
 	return ret;
 }
