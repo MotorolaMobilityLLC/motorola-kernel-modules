@@ -33,7 +33,6 @@ static struct goodix_ts_log ts_log_dev;
 /* Save a byte to a FIFO and discard the oldest byte if FIFO is full */
 void put_fifo_with_discard(char *log_buf, int len)
 {
-	int ret = 0;
 	if (!kfifo_initialized(&ts_log_dev.fifo))
 		return;
 	if (kfifo_is_full(&ts_log_dev.fifo)) {
@@ -41,7 +40,7 @@ void put_fifo_with_discard(char *log_buf, int len)
 		ts_info("Save a byte to a FIFO and discard the oldest byte if FIFO is full");
 	}
 
-	ret = kfifo_in(&ts_log_dev.fifo, log_buf, len);
+	kfifo_in(&ts_log_dev.fifo, log_buf, len);
 
 	wake_up_interruptible(&ts_log_dev.wq);
 }
