@@ -203,6 +203,18 @@ struct wls_dump
 };
 #endif
 
+struct msb_dev_info
+{
+    u32  usb_iin;
+    u32  usb_vout;
+    u32  usb_suspend;
+    u32  batt_fcc;
+    u32  batt_fv;
+    u32  chg_en;
+    u32  chg_st;
+    u32  chg_fault;
+};
+
 struct qti_charger {
 	char				*name;
 	struct device			*dev;
@@ -700,13 +712,31 @@ void qti_wireless_charge_dump_info(struct qti_charger *chg, struct wls_dump wls_
 }
 #endif
 
+#if defined(MSB_DEV)
+void qti_msb_dev_info(struct qti_charger *chg, struct msb_dev_info msb_dev)
+{
+	mmi_info(chg, "msb dev info : usb_iin: %dma, usb_vout: %dmv, usb_suspend: %d, "
+		"batt_fcc: %dma, batt_fv: %dmv, chg_en: %d,  chg_fault: 0x%x, chg_st: 0x%x",
+		msb_dev.usb_iin,
+		msb_dev.usb_vout,
+		msb_dev.usb_suspend,
+		msb_dev.batt_fcc,
+		msb_dev.batt_fv,
+		msb_dev.chg_en,
+		msb_dev.chg_fault,
+		msb_dev.chg_st);	
+}
+#endif
+
 static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_info)
 {
 	int rc;
 	struct qti_charger *chg = data;
 	struct charger_info info;
 	struct wls_dump wls_info;
-
+#if defined(MSB_DEV)
+       struct msb_dev_info msb_dev;
+#endif
 	rc = qti_charger_read(chg, OEM_PROP_CHG_INFO,
 				&info,
 				sizeof(struct charger_info));
@@ -755,6 +785,13 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 
 		qti_wireless_charge_dump_info(chg, wls_info);
 	}
+
+#if defined(MSB_DEV)
+	qti_charger_read(chg, OEM_PROP_MSB_DEV_INFO,
+				&msb_dev,
+				sizeof(struct msb_dev_info));
+	qti_msb_dev_info(chg, msb_dev);
+#endif
 
 	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
 
