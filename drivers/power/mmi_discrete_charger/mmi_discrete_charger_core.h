@@ -57,6 +57,17 @@ struct mmi_discrete_chg_client {
 	u32				chrg_taper_cnt;
 };
 
+typedef enum {
+	CHARGER_FFC_STATE_INITIAL,
+	CHARGER_FFC_STATE_PROBING,
+	CHARGER_FFC_STATE_STANDBY,
+	CHARGER_FFC_STATE_GOREADY,
+	CHARGER_FFC_STATE_RUNNING,
+	CHARGER_FFC_STATE_AVGEXIT,
+	CHARGER_FFC_STATE_FFCDONE,
+	CHARGER_FFC_STATE_INVALID,
+} CHARGER_FFC_STATE_T;
+
 struct mmi_discrete_charger {
 	struct device		*dev;
 	char				*name;
@@ -137,6 +148,23 @@ struct mmi_discrete_charger {
 
 	/*FG*/
 	bool			chgmod_to_fg;
+
+	//For 10w ffc
+	bool			enable_10w_ffc;
+	int			dcp_noneffc_cv;
+	CHARGER_FFC_STATE_T	ffc_state;
+	int 			ffc_entry_threshold;
+	int 			ffc_exit_threshold;
+	int 			ffc_uisoc_threshold;
+	long 			ffc_ibat_windowsum;
+	long 			ffc_ibat_count;
+	int 			ffc_ibat_windowsize;
+	int 			ffc_iavg;
+	unsigned long 		ffc_iavg_update_timestamp;
+	bool			is_ffc_enable;
+	int			chrg_step;
+	int			max_fv_mv;
+	bool			ffc_stop_chrg;
 };
 
 int mmi_discrete_otg_enable(struct mmi_discrete_charger *chip, bool en);
