@@ -647,6 +647,11 @@ static int mmi_discrete_handle_usb_current(struct mmi_discrete_charger *chg,
 			return 0;
 		}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+		if (chg->real_charger_type == POWER_SUPPLY_TYPE_USB_CDP)
+			return 0;
+#endif
+
 		rc = vote(chg->usb_icl_votable, USB_PSY_VOTER, true,
 							usb_current);
 		if (rc < 0) {
