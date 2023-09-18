@@ -216,6 +216,8 @@ int mmi_ram_info_init(void)
 	vid = smem_ddr_info->mr5 & 0xFF;
 	if (vid < ARRAY_SIZE(vendors))
 		vname = vendors[vid];
+	else if (vid == 0x13)
+		vname = "CXMT";
 	else if (vid == 0xFE)
 		vname = "Numonyx";
 	else if (vid == 0xFF)
