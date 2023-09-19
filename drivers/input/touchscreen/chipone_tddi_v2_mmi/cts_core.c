@@ -2351,6 +2351,11 @@ static void cts_esd_protection_work(struct work_struct *work)
 
     cts_dbg("ESD protection work");
     cts_data = container_of(work, struct chipone_ts_data, esd_work.work);
+    if (!cts_is_device_enabled(&cts_data->cts_dev)) {
+        cts_info("stop esd check when suspend");
+        return;
+    }
+
     cts_lock_device(&cts_data->cts_dev);
     if (!cts_plat_is_normal_mode(cts_data->pdata)) {
         cts_data->esd_check_fail_cnt++;
