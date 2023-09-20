@@ -2784,8 +2784,8 @@ static ssize_t stowed_store(struct device *dev,
 		NVT_LOG("Failed to convert value.\n");
 		return -EINVAL;
 	}
-
-	if (ts->stowed == mode) {
+	ts->get_stowed = mode;
+	if (ts->set_stowed == mode) {
 		NVT_LOG("The value = %lu is same, so not to write", mode);
 		ret = size;
 		return ret;
@@ -2805,7 +2805,7 @@ static ssize_t stowed_store(struct device *dev,
 		return ret;
 	}
 
-	ts->stowed = mode;
+	ts->set_stowed = ts->get_stowed ;
 	ret = size;
 	NVT_LOG("Success to set stowed mode %lu\n", mode);
         mutex_unlock(&ts->lock);
@@ -2815,8 +2815,8 @@ static ssize_t stowed_store(struct device *dev,
 static ssize_t stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	NVT_LOG("Stowed state = %d.\n", ts->stowed);
-	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts->stowed);
+	NVT_LOG("Stowed state = %d.\n", ts->set_stowed);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts->get_stowed);
 }
 #endif
 
@@ -3904,9 +3904,10 @@ int32_t nvt_ts_suspend(struct device *dev)
 
 
 #if defined(NVT_SENSOR_EN) && defined(NOVA_STOWED_MODE_EN)
-	if (ts->should_enable_gesture && ts->stowed && (!ts->bTouchIsAwake)) {
+	if (ts->should_enable_gesture && ts->get_stowed && (!ts->bTouchIsAwake)) {
                 nvt_cmd_ext_store(NVT_STOWED_MODE_CMD, NVT_STOWED_MODE_EN);
 		NVT_LOG("Enable stowed mode suspend\n");
+		ts->set_stowed = ts->get_stowed;
 	}
 #endif
 
@@ -4012,9 +4013,7 @@ int32_t nvt_ts_resume(struct device *dev)
 	}
 #endif
 #if defined(NVT_SENSOR_EN) && defined(NOVA_STOWED_MODE_EN)
-	if (ts->stowed) {
-		ts->stowed = 0;
-	}
+		ts->set_stowed = 0;
 #endif
 
 	NVT_LOG("end\n");

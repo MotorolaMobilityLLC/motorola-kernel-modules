@@ -4071,8 +4071,8 @@ static ssize_t gesture_store(struct device *dev,
 static ssize_t stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	ILI_INFO("Stowed state = %d.\n", ilits->stowed);
-	return scnprintf(buf, PAGE_SIZE, "0x%02x", ilits->stowed);
+	ILI_INFO("Stowed state = %d.\n", ilits->set_stowed);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", ilits->set_stowed);
 }
 
 static ssize_t stowed_store(struct device *dev,
@@ -4086,8 +4086,8 @@ static ssize_t stowed_store(struct device *dev,
 		ILI_INFO("Failed to convert value.\n");
 		return -EINVAL;
 	}
-
-	if (ilits->stowed == mode) {
+	ilits->set_stowed = ilits->get_stowed;
+	if (ilits->set_stowed == mode) {
 		ILI_INFO("The value = %lu is same, so not to write", mode);
 		ret = size;
 		return ret;
@@ -4107,7 +4107,7 @@ static ssize_t stowed_store(struct device *dev,
 		return ret;
 	}
 
-	ilits->stowed = mode;
+	ilits->get_stowed = mode;
 	ret = size;
 	ILI_INFO("Success to set stowed mode %lu\n", mode);
         mutex_unlock(&ilits->touch_mutex);

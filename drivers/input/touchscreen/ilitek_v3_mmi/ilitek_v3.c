@@ -689,8 +689,9 @@ int ili_sleep_handler(int mode)
 		}
 #endif
 #if defined (ILI_STOWED_MODE_EN) && defined (ILI_SENSOR_EN)
-		if (ilits->should_enable_gesture && ilits->stowed && ilits->tp_suspend) {
+		if (ilits->should_enable_gesture && ilits->get_stowed && ilits->tp_suspend) {
 			ili_proximity_near(DDI_POWER_ON);
+			ilits->set_stowed = ilits->get_stowed;
 			ILI_INFO("Enable stowed mode suspend\n");
 		}
 #endif
@@ -765,11 +766,9 @@ int ili_sleep_handler(int mode)
 			disable_irq_wake(ilits->irq_num);
 #endif
 #if defined (ILI_STOWED_MODE_EN) && defined (ILI_SENSOR_EN)
-		if (ilits->stowed) {
-			ilits->stowed = 0;
-                        ilits->prox_near = false;
-                        ILI_ERR("ilits->stowed = %d,ilits->prox_near = %d\n", ilits->stowed,ilits->prox_near);
-		}
+		ilits->set_stowed = 0;
+                ilits->prox_near = false;
+                ILI_ERR("ilits->set_stowed = %d,ilits->prox_near = %d\n", ilits->set_stowed,ilits->prox_near);
 #endif
 		ILI_INFO("TP resume end\n");
 #else

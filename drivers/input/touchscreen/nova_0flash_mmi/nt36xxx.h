@@ -303,7 +303,8 @@ struct nvt_ts_data {
 	uint8_t edge_cmd[3];	/* /< edge switching command */
 	uint8_t rotate_cmd;	/* /< rotate switching command */
 	bool edge_ctrl;	/* /< edge rate switching */
-	int stowed;
+	int set_stowed;
+	int get_stowed;
 };
 
 #if NVT_TOUCH_PROC
