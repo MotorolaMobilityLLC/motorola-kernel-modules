@@ -15,6 +15,10 @@ ifneq ($(filter m y,$(CONFIG_MSB_DEV)),)
 	EXTRA_CFLAGS += -DMSB_DEV
 endif
 
+ifneq ($(filter m y,$(CONFIG_SWITCHEDCAP_DUMP)),)
+	EXTRA_CFLAGS += -DSWITCHEDCAP_DUMP
+endif
+
 ifneq ($(filter m y,$(CONFIG_SKIP_QTI_CHARGER_CONFIRMAION)),)
 	EXTRA_CFLAGS += -DSKIP_QTI_CHARGER_CONFIRMAION
 endif

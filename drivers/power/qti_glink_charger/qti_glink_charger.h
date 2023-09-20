@@ -71,6 +71,7 @@ enum oem_property_type {
 	OEM_PROP_LPD_MITIGATE_MODE,
 	OEM_PROP_CHG_PARTNER_ICL,
 	OEM_PROP_MSB_DEV_INFO,
+	OEM_PROP_MASTER_SWITCHEDCAP_INFO,
 	OEM_PROP_MAX,
 };
 
@@ -92,6 +93,19 @@ enum mmi_charger_sku_type
 	MMI_CHARGER_SKU_ITA,
 	MMI_CHARGER_SKU_NAE,
 	MMI_CHARGER_SKU_SUPERSET,
+};
+
+struct switched_dev_info
+{
+	bool chg_en;
+	u8 chg_role;
+	u8 work_mode;
+	u8 int_stat;
+	s32 ibat_ma;
+	s32 ibus_ma;
+	s32 vbus_mv;
+	s32 vout_mv;
+	s32 vbat_mv;
 };
 
 struct qti_charger_notify_data {

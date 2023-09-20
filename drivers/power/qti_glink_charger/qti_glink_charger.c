@@ -724,7 +724,18 @@ void qti_msb_dev_info(struct qti_charger *chg, struct msb_dev_info msb_dev)
 		msb_dev.batt_fv,
 		msb_dev.chg_en,
 		msb_dev.chg_fault,
-		msb_dev.chg_st);	
+		msb_dev.chg_st);
+}
+#endif
+
+#if defined(SWITCHEDCAP_DUMP)
+void qti_switched_dump_info(struct qti_charger *chg, struct switched_dev_info switched_info)
+{
+	mmi_info(chg, "switchedcap dump info [%d]: chg_en %d, work_mode 0x%x, int_stat 0x%x, "
+			"ibat_ma %d, ibus_ma %d, vbus_mv %d, vout_mv %d, vbat_mv %d",
+			switched_info.chg_role, switched_info.chg_en, switched_info.work_mode,
+			switched_info.int_stat, switched_info.ibat_ma, switched_info.ibus_ma,
+			switched_info.vbus_mv, switched_info.vout_mv, switched_info.vbat_mv);
 }
 #endif
 
@@ -735,7 +746,10 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	struct charger_info info;
 	struct wls_dump wls_info;
 #if defined(MSB_DEV)
-       struct msb_dev_info msb_dev;
+	struct msb_dev_info msb_dev;
+#endif
+#if defined(SWITCHEDCAP_DUMP)
+	struct switched_dev_info master_switched_info;
 #endif
 	rc = qti_charger_read(chg, OEM_PROP_CHG_INFO,
 				&info,
@@ -791,6 +805,13 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 				&msb_dev,
 				sizeof(struct msb_dev_info));
 	qti_msb_dev_info(chg, msb_dev);
+#endif
+
+#if defined(SWITCHEDCAP_DUMP)
+	qti_charger_read(chg, OEM_PROP_MASTER_SWITCHEDCAP_INFO,
+							&master_switched_info,
+							sizeof(struct switched_dev_info));
+	qti_switched_dump_info(chg, master_switched_info);
 #endif
 
 	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
