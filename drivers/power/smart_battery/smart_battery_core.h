@@ -44,12 +44,29 @@
 				__func__, ##__VA_ARGS__);	\
 	} while (0)
 
+struct mmi_battery_pack {
+	int	status;
+	int	voltage_now;
+	int	current_now;
+	int	soc;
+	int	batt_temp;
+	int	batt_tte;
+	int	charge_full;
+	int	charge_full_design;
+	int	charge_counter;
+	int	soh;
+	int	cycle_count;
+	struct gauge_device	*gauge_dev;
+	struct list_head list;
+};
+
 struct mmi_smart_battery {
 	struct device		*dev;
 	char				*name;
 
 	struct gauge_device	*gauge_dev;
 	struct power_supply	*batt_psy;
+	struct list_head		battery_list;
 	struct moto_chg_tcmd_client batt_tcmd_client;
 
 	struct workqueue_struct	*fg_workqueue;
@@ -61,17 +78,16 @@ struct mmi_smart_battery {
 
 	bool				sync_boardtemp_to_fg;
 	int				ui_full_soc;
-
-	int				voltage_now;
-	int				current_now;
 	int				uisoc;
-	int				batt_temp;
 	int				batt_tte;
-	int				charge_full;
-	int				charge_full_design;
-	int				charge_counter;
-	int				soh;
-	int				cycle_count;
+	int				combo_voltage_now;
+	int				combo_current_now;
+	int				combo_batt_temp;
+	int				combo_charge_full;
+	int				combo_charge_full_design;
+	int				combo_charge_counter;
+	int				combo_soh;
+	int				combo_cycle_count;
 	int				shutdown_threshold;
 	int				soc100_curr_threshod;
 	int				taper_count;
@@ -79,6 +95,9 @@ struct mmi_smart_battery {
 
 	int				fake_soc;
 	int				fake_temp;
+	int				gauge_count;
+	const char		**gauge_name_arry;
+	struct mmi_battery_pack *battery;
 };
 
 #define QUEUS_DELAYED_WORK_TIME  8000
