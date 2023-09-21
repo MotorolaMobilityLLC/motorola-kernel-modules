@@ -15,10 +15,8 @@
 #include <linux/regulator/consumer.h>
 #include <linux/jiffies.h>
 #include <linux/version.h>
-
-#define CWFG_ENABLE_LOG 1 /* CHANGE Customer need to change this for enable/disable log */
-
-#define CW_PROPERTIES cw_bat->bms_name
+#include <linux/debugfs.h>
+#include <linux/mmi_gauge_class.h>
 
 #define REG_CHIP_ID             0x00
 #define REG_VCELL_H             0x02
@@ -56,29 +54,19 @@
 #define GPIO_ENABLE_MAX_TEMP    0
 #define GPIO_ENABLE_SOC_CHANGE  0
 #define GPIO_SOC_IRQ_VALUE      0x0    /* 0x7F */
-#define DEFINED_MAX_TEMP        45
-#define DEFINED_MIN_TEMP        0
 
 #define CWFG_NAME               "cw2217"
 #define SIZE_OF_PROFILE         80
 #define USER_RSENSE             (10*1000)  /* mhom rsense * 1000  for convenience calculation */
 
-#define queue_delayed_work_time  8000
-#define queue_start_work_time    50
-
 #define CW_SLEEP_20MS           20
 #define CW_SLEEP_10MS           10
-#define CW_UI_FULL              100
 #define COMPLEMENT_CODE_U16     0x8000
 #define CW_SLEEP_100MS          100
 #define CW_SLEEP_200MS          200
 #define CW_SLEEP_COUNTS         50
 #define CW_TRUE                 1
 #define CW_RETRY_COUNT          3
-#define CW_VOL_UNIT             1000
-#define CW_CUR_UNIT             1000
-
-#define CW_CUR_ACCURACY		10000
 
 #define CW2217_NOT_ACTIVE          1
 #define CW2217_PROFILE_NOT_READY   2
@@ -86,18 +74,20 @@
 
 #define CW_BPD_TEMP (-400)
 
-#define cw_printk(fmt, arg...)                                                 \
-	{                                                                          \
-		if (CWFG_ENABLE_LOG)                                                   \
-			printk("FG_CW2217 : %s-%d : " fmt, __FUNCTION__ ,__LINE__,##arg);  \
-		else {}                                                                \
-	}
+#define cw_err(fg, fmt, ...)			\
+	do {						\
+		pr_err("FG_CW2217-%s error: %s: " fmt, fg->battName,	\
+		       __func__, ##__VA_ARGS__);	\
+	} while (0)
 
-#define cw_info(fmt, arg...)  \
+#define cw_info(fg, fmt, ...)			\
+	do {						\
+		pr_info("FG_CW2217-%s: %s: " fmt, fg->battName,	\
+		       __func__, ##__VA_ARGS__);	\
+	} while (0)
+
+#define cw_printk(fmt, arg...)  \
 	printk("FG_CW2217 : %s-%d : " fmt, __FUNCTION__ ,__LINE__,##arg)
-
-
-static unsigned char config_profile_info[SIZE_OF_PROFILE] = {0};
 /*
 static unsigned char config_profile_info[SIZE_OF_PROFILE] = {
 	0x5A,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -114,93 +104,83 @@ static unsigned char config_profile_info[SIZE_OF_PROFILE] = {
 */
 struct cw_battery {
 	struct i2c_client *client;
-
-	struct workqueue_struct *cwfg_workqueue;
-	struct delayed_work battery_delay_work;
-	struct work_struct  hw_init_work;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0)
-	struct power_supply cw_bat;
-#else
-	struct power_supply *cw_bat;
-	struct power_supply *batt_psy;
-	struct power_supply *usb_psy;
-#endif
+	struct device *dev;
+	struct gauge_device *gauge_dev;
+	struct regulator *vdd_i2c_vreg;
+	struct power_supply *cw_bat_psy;
+	unsigned char config_profile_info[SIZE_OF_PROFILE];
 	int  chip_id;
-	int  voltage;
+	int  voltage_now;
 	int  ic_soc_h;
 	int  ic_soc_l;
-	int  ui_soc;
 	int  raw_soc;
 	int  temp;
-	long cw_current;
+	int  current_now;
 	int  cycle;
 	int  soh;
+	int  charge_counter;
 	int  fw_version;
 	int  fcc_design;
 	int  fcc;
-	int  ui_full;
 	int  ntc_exist;
 	int  batt_status;
 	bool present;
 	bool factory_mode;
 	int  sense_r_mohm;
-#if 0
-	long stb_current;
-#endif
-	int ibat_polority;
-	const char *bms_name;
-	struct regulator *vdd_i2c_vreg;
+	const char *battName;
 };
 
 /* CW2217 iic read function */
-static int cw_read(struct i2c_client *client, unsigned char reg, unsigned char buf[])
+static int cw_read(struct cw_battery *cw_bat, unsigned char reg, unsigned char buf[])
 {
 	int ret;
+	struct i2c_client *client = cw_bat->client;
 
-	ret = i2c_smbus_read_i2c_block_data( client, reg, 1, buf);
+	ret = i2c_smbus_read_i2c_block_data(client, reg, 1, buf);
 	if (ret < 0)
-		printk("IIC error %d\n", ret);
+		cw_err(cw_bat, "IIC error %d\n", ret);
 
 	return ret;
 }
 
 /* CW2217 iic write function */
-static int cw_write(struct i2c_client *client, unsigned char reg, unsigned char const buf[])
+static int cw_write(struct cw_battery *cw_bat, unsigned char reg, unsigned char const buf[])
 {
 	int ret;
+	struct i2c_client *client = cw_bat->client;
 
-	ret = i2c_smbus_write_i2c_block_data( client, reg, 1, &buf[0] );
+	ret = i2c_smbus_write_i2c_block_data(client, reg, 1, &buf[0] );
 	if (ret < 0)
-		printk("IIC error %d\n", ret);
+		cw_err(cw_bat, "IIC error %d\n", ret);
 
 	return ret;
 }
 
 /* CW2217 iic read word function */
-static int cw_read_word(struct i2c_client *client, unsigned char reg, unsigned char buf[])
+static int cw_read_word(struct cw_battery *cw_bat, unsigned char reg, unsigned char buf[])
 {
 	int ret;
 	unsigned char reg_val[2] = { 0, 0 };
 	unsigned int temp_val_buff;
 	unsigned int temp_val_second;
+	struct i2c_client *client = cw_bat->client;
 
 	ret = i2c_smbus_read_i2c_block_data( client, reg, 2, reg_val );
 	if (ret < 0)
-		printk("IIC error %d\n", ret);
+		cw_err(cw_bat, "IIC error %d\n", ret);
 	temp_val_buff = (reg_val[0] << 8) + reg_val[1];
 
 	msleep(1);
-	ret = i2c_smbus_read_i2c_block_data( client, reg, 2, reg_val );
+	ret = i2c_smbus_read_i2c_block_data(client, reg, 2, reg_val );
 	if (ret < 0)
-		printk("IIC error %d\n", ret);
+		cw_err(cw_bat, "IIC error %d\n", ret);
 	temp_val_second = (reg_val[0] << 8) + reg_val[1];
 
 	if (temp_val_buff != temp_val_second) {
 		msleep(1);
 		ret = i2c_smbus_read_i2c_block_data( client, reg, 2, reg_val );
 		if (ret < 0)
-			printk("IIC error %d\n", ret);
+			cw_err(cw_bat, "IIC error %d\n", ret);
 		temp_val_buff = (reg_val[0] << 8) + reg_val[1];
 	}
 
@@ -211,15 +191,15 @@ static int cw_read_word(struct i2c_client *client, unsigned char reg, unsigned c
 }
 
 /* CW2217 iic write profile function */
-static int cw_write_profile(struct i2c_client *client, unsigned char const buf[])
+static int cw_write_profile(struct cw_battery *cw_bat, unsigned char const buf[])
 {
 	int ret;
 	int i;
 
 	for (i = 0; i < SIZE_OF_PROFILE; i++) {
-		ret = cw_write(client, REG_BAT_PROFILE + i, &buf[i]);
+		ret = cw_write(cw_bat, REG_BAT_PROFILE + i, &buf[i]);
 		if (ret < 0) {
-			printk("IIC error %d\n", ret);
+			cw_info(cw_bat, "IIC error %d\n", ret);
 			return ret;
 		}
 	}
@@ -242,15 +222,15 @@ static int cw2217_active(struct cw_battery *cw_bat)
 	int ret;
 	unsigned char reg_val = CONFIG_MODE_RESTART;
 
-	cw_printk("\n");
+	cw_info(cw_bat, "%s\n", __func__);
 
-	ret = cw_write(cw_bat->client, REG_MODE_CONFIG, &reg_val);
+	ret = cw_write(cw_bat, REG_MODE_CONFIG, &reg_val);
 	if (ret < 0)
 		return ret;
 	msleep(CW_SLEEP_20MS);  /* Here delay must >= 20 ms */
 
 	reg_val = CONFIG_MODE_ACTIVE;
-	ret = cw_write(cw_bat->client, REG_MODE_CONFIG, &reg_val);
+	ret = cw_write(cw_bat, REG_MODE_CONFIG, &reg_val);
 	if (ret < 0)
 		return ret;
 	msleep(CW_SLEEP_10MS);
@@ -273,15 +253,15 @@ static int cw2217_sleep(struct cw_battery *cw_bat)
 	int ret;
 	unsigned char reg_val = CONFIG_MODE_RESTART;
 
-	cw_printk("\n");
+	cw_info(cw_bat, "%s\n", __func__);
 
-	ret = cw_write(cw_bat->client, REG_MODE_CONFIG, &reg_val);
+	ret = cw_write(cw_bat, REG_MODE_CONFIG, &reg_val);
 	if (ret < 0)
 		return ret;
 	msleep(CW_SLEEP_20MS);  /* Here delay must >= 20 ms */
 
 	reg_val = CONFIG_MODE_SLEEP;
-	ret = cw_write(cw_bat->client, REG_MODE_CONFIG, &reg_val);
+	ret = cw_write(cw_bat, REG_MODE_CONFIG, &reg_val);
 	if (ret < 0)
 		return ret;
 	msleep(CW_SLEEP_10MS);
@@ -299,13 +279,13 @@ static int cw_get_chip_id(struct cw_battery *cw_bat)
 	unsigned char reg_val;
 	int chip_id;
 
-	ret = cw_read(cw_bat->client, REG_CHIP_ID, &reg_val);
+	ret = cw_read(cw_bat, REG_CHIP_ID, &reg_val);
 	if (ret < 0)
 		return ret;
 
 	chip_id = reg_val;  /* This value must be 0xA0! */
-	cw_printk("chip_id = %d\n", chip_id);
 	cw_bat->chip_id = chip_id;
+	cw_info(cw_bat, "chip_id=%d", chip_id);
 
 	return 0;
 }
@@ -315,18 +295,23 @@ static int cw_get_chip_id(struct cw_battery *cw_bat)
  * Battery voltage is measured between the VCELL pin and VSS pin, which is the ground reference. A 14bit
  * sigma-delta A/D converter is used and the voltage resolution is 312.5uV. (0.3125mV is *5/16)
  */
-static int cw_get_voltage(struct cw_battery *cw_bat)
+static int cw_get_voltage(struct gauge_device *gauge_dev, int *mV)
 {
 	int ret;
 	unsigned char reg_val[2] = {0 , 0};
 	unsigned int voltage;
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
 
-	ret = cw_read_word(cw_bat->client, REG_VCELL_H, reg_val);
-	if (ret < 0)
+	ret = cw_read_word(cw_bat, REG_VCELL_H, reg_val);
+	if (ret < 0) {
+		cw_info(cw_bat, "error\n");
 		return ret;
+	}
 	voltage = (reg_val[0] << 8) + reg_val[1];
 	voltage = voltage  * 5 / 16;
-	cw_bat->voltage = voltage;
+	cw_bat->voltage_now= voltage;
+	*mV = voltage;
+	cw_info(cw_bat, "voltage =%d mV\n", *mV);
 
 	return 0;
 }
@@ -340,195 +325,24 @@ static int cw_get_voltage(struct cw_battery *cw_bat)
  * enough for the application. The low byte(0x05) provides more accurate fractional part of the SOC and its
  * LSB is (1/256) %.
  */
- #ifndef MAX_VAL
-   #define  MAX_VAL( x, y ) ( ((x) > (y)) ? (x) : (y) )
-#endif
-
-#ifdef DYNAMIC_UPDATE_UI_FULL
-#define TIMER_INTERVALS                          1000 * 60    /* unit:ms */
-static bool jiffies_timer_expire(bool clear_flag) {
-	unsigned long cur_jiffies = jiffies;
-	static unsigned long last_jiffies = 0;
-	bool ret = false;
-
-	if (!last_jiffies || clear_flag) {
-		last_jiffies = cur_jiffies;
-		return ret;
-	}
-
-	if (time_after(cur_jiffies, msecs_to_jiffies(TIMER_INTERVALS) + last_jiffies))
-		ret = true;
-	else
-		ret = false;
-
-	if (ret) {
-		cw_printk("expire 60s, curr_jiffies:%dms, last jiffies %d",
-                              jiffies_to_msecs(cur_jiffies), jiffies_to_msecs(last_jiffies));
-		last_jiffies = cur_jiffies;
-
-	}
-	return ret;
-}
-
-static int cw_set_ui_full(struct cw_battery *cw_bat, int ui_full)
+static int cw_get_capacity(struct gauge_device *gauge_dev, int *soc)
 {
-	int i, ret = 0;
-	int retry = 3;
-	unsigned char reg_val = ui_full;
-
-	for (i = 0; i < retry; i++) {
-		ret = cw_write(cw_bat->client, REG_USER_CONF, &reg_val);
-		if (ret < 0) {
-			msleep(CW_SLEEP_10MS);
-			cw_printk("failed to write ui_full to reg, retry = %d", i);
-		} else {
-			cw_printk("success save ui_full %d to reg", ui_full);
-			break;
-		}
-	}
-	return ret;
-}
-
-static int cw_get_ui_full(struct cw_battery *cw_bat, int *ui_full) {
-	int i, ret = 0;
-	int retry = 3;
-	unsigned char reg_val;
-
-	for (i = 0; i < retry; i++) {
-		ret = cw_read(cw_bat->client, REG_USER_CONF, &reg_val);
-		if (ret >= 0 && reg_val <= CW_UI_FULL && reg_val >= cw_bat->ui_full) {
-			*ui_full = reg_val;
-			cw_printk("success read ui_full %d from reg", *ui_full);
-			break;
-		}
-		msleep(CW_SLEEP_10MS);
-	}
-	return ret;
-}
-#endif
-
-static void cw_get_batt_status(struct cw_battery *cw_bat)
-{
-	long batt_curr = 0;
-	batt_curr = cw_bat->cw_current * CW_CUR_UNIT;
-	batt_curr *= cw_bat->ibat_polority;
-
-	if (cw_bat->voltage <= 0 || cw_bat->temp <= CW_BPD_TEMP)
-		cw_bat->present = 0;
-	else
-		cw_bat->present = 1;
-
-	if (!cw_bat->present) {
-		cw_bat->batt_status = POWER_SUPPLY_STATUS_UNKNOWN;
-	} else if (cw_bat->ui_soc == CW_UI_FULL) {
-		cw_bat->batt_status = POWER_SUPPLY_STATUS_FULL;
-	} else if (abs(batt_curr) < CW_CUR_ACCURACY) {
-		cw_bat->batt_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
-	} else if (batt_curr < 0) {
-		cw_bat->batt_status = POWER_SUPPLY_STATUS_CHARGING;
-	} else {
-		cw_bat->batt_status = POWER_SUPPLY_STATUS_DISCHARGING;
-	}
-}
-
-static int cw_get_capacity(struct cw_battery *cw_bat)
-{
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
 	int ret;
 	unsigned char reg_val[2] = { 0, 0 };
-	int soc_h;
-	int soc_l;
-	int ui_soc;
-	int remainder;
-	int chr_st_now = 0;// 0 discharge, 1 charging;
-	union power_supply_propval usb_online = {0};
-#ifndef DYNAMIC_UPDATE_UI_FULL
-	int ui_100 = cw_bat->ui_full;
-#else
-	static int ui_full_pre = 0;
-	int ui_full_temp = 0;
-#endif
 
-	cw_get_batt_status(cw_bat);
-
-	if (cw_bat->batt_status == POWER_SUPPLY_STATUS_CHARGING)
-		chr_st_now = 1;
-	else
-		chr_st_now = 0;
-
-	ret = cw_read_word(cw_bat->client, REG_SOC_INT, reg_val);
+	ret = cw_read_word(cw_bat, REG_SOC_INT, reg_val);
 	if (ret < 0)
 		return ret;
-	soc_h = reg_val[0];
-	soc_l = reg_val[1];
-	cw_bat->raw_soc = soc_h;
+	cw_bat->ic_soc_h = reg_val[0];
+	cw_bat->ic_soc_l = reg_val[1];
+	cw_bat->raw_soc = cw_bat->ic_soc_h;
 
-#ifndef DYNAMIC_UPDATE_UI_FULL
-	ui_soc = ((soc_h * 256 + soc_l) * 100)/ (ui_100 * 256);
-	remainder = (((soc_h * 256 + soc_l) * 100 * 100) / (ui_100 * 256)) % 100;
-#else
-	if (ui_full_pre == 0) {
-		ret = cw_get_ui_full(cw_bat, &ui_full_temp);
-		if (ret < 0 || ui_full_temp == 0) {
-			ui_full_pre = cw_bat->ui_full;
-		} else {
-			ui_full_pre = ui_full_temp;
-		}
-		cw_printk("CW2015[%d]: UI_FULL INIT is %d", __LINE__, ui_full_pre);
-	}
-	ui_full_temp = ui_full_pre;
+	 //if ((soc_h * 256 + soc_l) * 100 /256) > 70)
+	//	cw_bat->raw_soc ++;
 
-	if (chr_st_now) {
-		if (ui_full_temp > cw_bat->ui_full) {
-			if (jiffies_timer_expire(false)) {
-				ui_full_temp -= 1;
-				cw_set_ui_full(cw_bat, ui_full_temp);
-				cw_printk("CW2015[%d]: UI_FULL-- %d!!!!\n", __LINE__, ui_full_temp);
-			}
-		}
-	}
-
-	if (!chr_st_now) {
-		if ((soc_h * 256 + soc_l) / 256 > ui_full_temp) {
-			cw_printk("CW2015[%d]: update UI_FULL to %d from %d !!!!\n", __LINE__, (soc_h * 256 + soc_l) / 256, ui_full_temp);
-			ui_full_temp = (soc_h * 256 + soc_l) / 256;
-			cw_set_ui_full(cw_bat, ui_full_temp);
-		}
-		jiffies_timer_expire(true);
-	}
-
-	ui_full_pre = ui_full_temp;
-	ui_soc = ((soc_h * 256 + soc_l) * 100)/ (ui_full_pre * 256);
-	remainder = (((soc_h * 256 + soc_l) * 100 * 100) / (ui_full_pre * 256)) % 100;
-#endif
-
-	if (ui_soc >= 100){
-		cw_printk("CW2015[%d]: UI_SOC = %d larger 100!!!!\n", __LINE__, ui_soc);
-		ui_soc = 100;
-	}
-
-	if (cw_bat->usb_psy) {
-		power_supply_get_property(cw_bat->usb_psy, POWER_SUPPLY_PROP_ONLINE, &usb_online);
-	}
-
-	if (usb_online.intval && (cw_bat->ui_soc == 100) && (ui_soc < cw_bat->ui_soc) &&
-		(cw_bat->batt_status != POWER_SUPPLY_STATUS_DISCHARGING)) {
-		cw_printk("CW2015[%d]: usb online = %d, ui_soc_reg = %d, remainder:%d", __LINE__, usb_online.intval, ui_soc, remainder);
-		ui_soc = 100;
-	}
-
-	if ((cw_bat->ui_soc == 0) ||
-		(chr_st_now && ui_soc > cw_bat->ui_soc) ||
-		(!chr_st_now && ui_soc < cw_bat->ui_soc)) {
-		cw_bat->ui_soc = ui_soc;
-	}
-
-	if (cw_bat->ui_soc != ui_soc) {
-		cw_printk("CW2015[%d]: not update, cw_bat->ui_soc %d, ui_soc %d, chrg_st_now %d",
-			__LINE__, cw_bat->ui_soc, ui_soc, chr_st_now);
-	}
-
-	cw_bat->ic_soc_h = soc_h;
-	cw_bat->ic_soc_l = soc_l;
+	*soc = cw_bat->raw_soc;
+	 cw_info(cw_bat, "soc=%d\n", *soc);
 
 	return 0;
 }
@@ -567,13 +381,15 @@ bool is_factory_mode(void)
  * measured at TS pin. The scope is from -40 to 87.5 degrees Celsius,
  * LSB is 0.5 degree Celsius. TEMP(C) = - 40 + Value(0x06 Reg) / 2
  */
-static int cw_get_temp(struct cw_battery *cw_bat)
+static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 {
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
 	int ret;
 	unsigned char reg_val;
 	int temp;
 
-	ret = cw_read(cw_bat->client, REG_TEMP, &reg_val);
+
+	ret = cw_read(cw_bat, REG_TEMP, &reg_val);
 	if (ret < 0)
 		return ret;
 
@@ -583,6 +399,8 @@ static int cw_get_temp(struct cw_battery *cw_bat)
 		temp = 250;
 
 	cw_bat->temp = temp;
+	*temp_out = temp;
+	cw_info(cw_bat, "temprature=%d\n", *temp_out);
 
 	return 0;
 }
@@ -615,22 +433,23 @@ static long get_complement_code(unsigned short raw_code)
  * The default value is 0x0000, stands for 0mA. 0x7FFF stands for the maximum charging current and 0x8001 stands for
  * the maximum discharging current.
  */
-static int cw_get_current(struct cw_battery *cw_bat)
+static int cw_get_current(struct gauge_device *gauge_dev, int *mA)
 {
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
 	int ret;
 	unsigned char reg_val[2] = {0 , 0};
-	long long cw_current; /* use long long type to guarantee 8 bytes space*/
+	int cw_current;
 	unsigned short current_reg;  /* unsigned short must u16 */
 
-	ret = cw_read_word(cw_bat->client, REG_CURRENT_H, reg_val);
+	ret = cw_read_word(cw_bat, REG_CURRENT_H, reg_val);
 	if (ret < 0)
 		return ret;
 
 	current_reg = (reg_val[0] << 8) + reg_val[1];
 	cw_current = get_complement_code(current_reg);
-//	cw_current = cw_current  * 160 * 1000 / USER_RSENSE / 100;
-	cw_current = cw_current  * 160 * 1000 / cw_bat->sense_r_mohm / 100;
-	cw_bat->cw_current = cw_current;
+	cw_bat->current_now = cw_current  * 160 / cw_bat->sense_r_mohm / 100;
+	*mA = cw_bat->current_now;
+	cw_info(cw_bat, "current=%dmA\n", *mA);
 
 	return 0;
 }
@@ -639,18 +458,21 @@ static int cw_get_current(struct cw_battery *cw_bat)
  * CYCLECNT is an UNSIGNED 16bit register(0xA4 0xA5) that counts cycle life of the battery. The LSB of 0xA5 stands
  * for 1/16 cycle. This register will be clear after enters shutdown mode
  */
-static int cw_get_cycle_count(struct cw_battery *cw_bat)
+static int cw_get_cycle_count(struct gauge_device *gauge_dev, int *cycle_count)
 {
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
 	int ret;
 	unsigned char reg_val[2] = {0, 0};
 	int cycle;
 
-	ret = cw_read_word(cw_bat->client, REG_CYCLE_H, reg_val);
+	ret = cw_read_word(cw_bat, REG_CYCLE_H, reg_val);
 	if (ret < 0)
 		return ret;
 
 	cycle = (reg_val[0] << 8) + reg_val[1];
 	cw_bat->cycle = cycle / 16;
+	*cycle_count = cw_bat->cycle;
+	cw_info(cw_bat, "cycle_count=%d\n", *cycle_count);
 
 	return 0;
 }
@@ -661,18 +483,18 @@ static int cw_get_cycle_count(struct cw_battery *cw_bat)
  * by default. Its range is 0x00 to 0x64, indicating 0 to 100%. This register will be clear after enters shutdown
  * mode.
  */
-static int cw_get_soh(struct cw_battery *cw_bat)
+static int cw_get_soh(struct gauge_device *gauge_dev, int *soh)
 {
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
 	int ret;
 	unsigned char reg_val;
-	int soh;
 
-	ret = cw_read(cw_bat->client, REG_SOH, &reg_val);
+	ret = cw_read(cw_bat, REG_SOH, &reg_val);
 	if (ret < 0)
 		return ret;
-
-	soh = reg_val;
-	cw_bat->soh = soh;
+	cw_bat->soh = reg_val;
+	*soh = reg_val;
+	cw_info(cw_bat, "soh=%d\n", *soh);
 
 	return 0;
 }
@@ -685,7 +507,7 @@ static int cw_get_stb_current(struct cw_battery *cw_bat)
 	long long stb_current;
 	unsigned short stb_current_reg;  /*unsigned short must u16*/
 
-	ret = cw_read_word(cw_bat->client, REG_STB_CUR_H, reg_val);
+	ret = cw_read_word(cw_bat, REG_STB_CUR_H, reg_val);
 	if (ret < 0)
 		return ret;
 
@@ -697,6 +519,39 @@ static int cw_get_stb_current(struct cw_battery *cw_bat)
 	return 0;
 }
 #endif
+
+static int cw_get_charge_full(struct gauge_device *gauge_dev, int *charge_full)
+{
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
+
+	*charge_full = (cw_bat->fcc_design * cw_bat->soh ) / 100;
+	cw_bat->fcc = *charge_full;
+	cw_info(cw_bat, "charge_full=%d\n", *charge_full);
+
+	return 0;
+}
+
+static int cw_get_charge_full_design(struct gauge_device *gauge_dev, int *charge_full_design)
+{
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
+
+	*charge_full_design = cw_bat->fcc_design;
+
+	return 0;
+}
+
+static int cw_get_charge_counter(struct gauge_device *gauge_dev, int *charge_counter)
+{
+	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
+	int full_capacity;
+
+	full_capacity = (cw_bat->fcc_design * cw_bat->soh) / 100;
+	*charge_counter = div_s64(full_capacity * cw_bat->raw_soc, 100);
+	cw_bat->charge_counter = *charge_counter;
+	cw_info(cw_bat, "charge_counter=%d\n", *charge_counter);
+
+	return 0;
+}
 
 /*
  * FW_VERSION register reports the firmware (FW) running in the chip. It is fixed to 0x00 when the chip is
@@ -710,7 +565,7 @@ static int cw_get_fw_version(struct cw_battery *cw_bat)
 	unsigned char reg_val;
 	int fw_version;
 
-	ret = cw_read(cw_bat->client, REG_FW_VERSION, &reg_val);
+	ret = cw_read(cw_bat, REG_FW_VERSION, &reg_val);
 	if (ret < 0)
 		return ret;
 
@@ -720,38 +575,19 @@ static int cw_get_fw_version(struct cw_battery *cw_bat)
 	return 0;
 }
 
-static int cw_update_data(struct cw_battery *cw_bat)
+static int cw_init_data(struct gauge_device *gauge_dev)
 {
-	int ret = 0;
+	int value = 0;
 
-	ret += cw_get_voltage(cw_bat);
-	ret += cw_get_capacity(cw_bat);
-	ret += cw_get_temp(cw_bat);
-	ret += cw_get_current(cw_bat);
-	ret += cw_get_cycle_count(cw_bat);
-	ret += cw_get_soh(cw_bat);
-	cw_printk("vol = %d  current = %ld cap = %d temp = %d raw_soc = %d age=%d\n",
-		cw_bat->voltage, cw_bat->cw_current, cw_bat->ui_soc, cw_bat->temp, cw_bat->raw_soc, cw_bat->soh);
+	cw_get_voltage(gauge_dev,&value);
+	cw_get_capacity(gauge_dev,&value);
+	cw_get_temp(gauge_dev,&value);
+	cw_get_current(gauge_dev,&value);
+	cw_get_soh(gauge_dev, &value);
+	cw_get_charge_full(gauge_dev,&value);
+	cw_get_charge_counter(gauge_dev,&value);
 
-	return ret;
-}
-
-static int cw_init_data(struct cw_battery *cw_bat)
-{
-	int ret = 0;
-
-	ret += cw_get_chip_id(cw_bat);
-	ret += cw_get_voltage(cw_bat);
-	ret += cw_get_capacity(cw_bat);
-	ret += cw_get_temp(cw_bat);
-	ret += cw_get_current(cw_bat);
-	ret += cw_get_cycle_count(cw_bat);
-	ret += cw_get_soh(cw_bat);
-	ret += cw_get_fw_version(cw_bat);
-	cw_printk("chip_id = %d vol = %d  cur = %ld cap = %d raw_soc = %d temp = %d  fw_version = %d\n",
-		cw_bat->chip_id, cw_bat->voltage, cw_bat->cw_current, cw_bat->ui_soc, cw_bat->raw_soc, cw_bat->temp, cw_bat->fw_version);
-
-	return ret;
+	return 0;
 }
 
 /*CW2217 update profile function, Often called during initialization*/
@@ -766,29 +602,37 @@ static int cw_config_start_ic(struct cw_battery *cw_bat)
 		return ret;
 
 	/* update new battery info */
-	ret = cw_write_profile(cw_bat->client, config_profile_info);
-	if (ret < 0)
+	ret = cw_write_profile(cw_bat, cw_bat->config_profile_info);
+	if (ret < 0) {
+		cw_err(cw_bat, "cw_write_profile error %d\n", ret);
 		return ret;
+	}
 
 	/* set UPDATE_FLAG AND SOC INTTERRUP VALUE*/
 	reg_val = CONFIG_UPDATE_FLG | GPIO_SOC_IRQ_VALUE;
-	ret = cw_write(cw_bat->client, REG_SOC_ALERT, &reg_val);
-	if (ret < 0)
+	ret = cw_write(cw_bat, REG_SOC_ALERT, &reg_val);
+	if (ret < 0) {
+		cw_err(cw_bat, "error set UPDATE_FLAG AND SOC INTTERRUP VALUE %d\n", ret);
 		return ret;
+	}
 
 	/*close all interruptes*/
 	reg_val = 0;
-	ret = cw_write(cw_bat->client, REG_GPIO_CONFIG, &reg_val);
-	if (ret < 0)
+	ret = cw_write(cw_bat, REG_GPIO_CONFIG, &reg_val);
+	if (ret < 0) {
+		cw_err(cw_bat, "close all interruptes error %d\n", ret);
 		return ret;
+	}
 
 	ret = cw2217_active(cw_bat);
-	if (ret < 0)
+	if (ret < 0) {
+		cw_err(cw_bat, "cw2217_active error %d\n", ret);
 		return ret;
+	}
 
 	while (CW_TRUE) {
 		msleep(CW_SLEEP_100MS);
-		cw_read(cw_bat->client, REG_IC_STATE, &reg_val);
+		cw_read(cw_bat, REG_IC_STATE, &reg_val);
 		if (IC_READY_MARK == (reg_val & IC_READY_MARK))
 			break;
 		count++;
@@ -812,28 +656,28 @@ static int cw2217_get_state(struct cw_battery *cw_bat)
 	int i;
 	int reg_profile;
 
-	ret = cw_read(cw_bat->client, REG_MODE_CONFIG, &reg_val);
+	ret = cw_read(cw_bat, REG_MODE_CONFIG, &reg_val);
 	if (ret < 0)
 		return ret;
 
-	cw_printk("REG_MODE_CONFIG 0x%2x = 0x%2x\n", REG_MODE_CONFIG, reg_val);
+	cw_info(cw_bat, "REG_MODE_CONFIG 0x%2x = 0x%2x\n", REG_MODE_CONFIG, reg_val);
 	if (reg_val != CONFIG_MODE_ACTIVE)
 		return CW2217_NOT_ACTIVE;
 
-	ret = cw_read(cw_bat->client, REG_SOC_ALERT, &reg_val);
+	ret = cw_read(cw_bat, REG_SOC_ALERT, &reg_val);
 	if (ret < 0)
 		return ret;
 	if (0x00 == (reg_val & CONFIG_UPDATE_FLG))
 		return CW2217_PROFILE_NOT_READY;
 
 	for (i = 0; i < SIZE_OF_PROFILE; i++) {
-		ret = cw_read(cw_bat->client, (REG_BAT_PROFILE + i), &reg_val);
+		ret = cw_read(cw_bat, (REG_BAT_PROFILE + i), &reg_val);
 		if (ret < 0)
 			return ret;
 		reg_profile = REG_BAT_PROFILE + i;
-		if (config_profile_info[i] != reg_val) {
-			cw_printk("config profile mismatch, config_profile_info[%d]: 0x%2x, reg_val[0x%2x]: 0x%2x\n",
-				i, config_profile_info[i], reg_profile, reg_val);
+		if (cw_bat->config_profile_info[i] != reg_val) {
+			cw_info(cw_bat, "config profile mismatch, config_profile_info[%d]: 0x%2x, reg_val[0x%2x]: 0x%2x\n",
+				i, cw_bat->config_profile_info[i], reg_profile, reg_val);
 			break;
 		}
 	}
@@ -848,82 +692,33 @@ static int cw_init(struct cw_battery *cw_bat)
 {
 	int ret;
 
-	cw_printk("\n");
+	cw_info(cw_bat, "%s\n", __func__);
 	ret = cw2217_get_state(cw_bat);
 	if (ret < 0) {
-		printk("iic read write error");
+		cw_err(cw_bat, "iic read write error");
 		return ret;
 	}
 
 	if (ret != 0) {
+		cw_info(cw_bat, "update profile and restart ic!\n");
 		ret = cw_config_start_ic(cw_bat);
-		if (ret < 0)
+		if (ret < 0) {
+			cw_err(cw_bat, "cw_config_start_ic error, %d\n", ret);
 			return ret;
+		}
 	}
-	cw_printk("cw2217 init success!\n");
+	cw_info(cw_bat, "cw2217 init success!\n");
 
 	return 0;
 }
 
-static void cw_bat_work(struct work_struct *work)
+static void cw_hw_init_work(struct cw_battery *cw_bat)
 {
-	struct delayed_work *delay_work;
-	struct cw_battery *cw_bat;
-	int ret;
-	int ui_soc;
-	uint32_t elapsed_ms;
-	struct timespec64 now;
-	static struct timespec64 start = {0};
 
-	delay_work = container_of(work, struct delayed_work, work);
-	cw_bat = container_of(delay_work, struct cw_battery, battery_delay_work);
-
-	ktime_get_real_ts64(&now);
-	if (now.tv_sec >= start.tv_sec) {
-		elapsed_ms = (now.tv_sec - start.tv_sec) * 1000;
-		elapsed_ms += (now.tv_nsec - start.tv_nsec) / 1000000;
-	} else {
-		elapsed_ms = 0;
-		start = now;
-	}
-
-	ui_soc = cw_bat->ui_soc;
-	if (elapsed_ms >= queue_delayed_work_time) {
-		ret = cw_update_data(cw_bat);
-		if (ret < 0)
-			printk(KERN_ERR "iic read error when update data");
-	}
-
-	/* get battery power supply */
-	if (!cw_bat->batt_psy) {
-		cw_bat->batt_psy = power_supply_get_by_name("battery");
-		if (!cw_bat->batt_psy)
-			cw_printk("%s: get batt_psy fail\n", __func__);
-	}
-
-	if (!cw_bat->usb_psy) {
-		cw_bat->usb_psy = power_supply_get_by_name("usb");
-		if (!cw_bat->usb_psy)
-			cw_printk("%s: get batt_psy fail\n", __func__);
-	}
-
-	if (cw_bat->batt_psy && ui_soc != cw_bat->ui_soc) {
-		power_supply_changed(cw_bat->batt_psy);
-	}
-}
-
-static void cw_hw_init_work(struct work_struct *work)
-{
-	struct cw_battery *cw_bat;
 	int ret;
 	int loop = 0;
 
-	cw_bat = container_of(work, struct cw_battery, hw_init_work);
-
-	ret = cw_init_data(cw_bat);
-	if (ret) {
-		printk("%s : cw2217 init data fail!\n", __func__);
-	}
+	cw_get_fw_version(cw_bat);
 
 	ret = cw_init(cw_bat);
 	while ((loop++ < CW_RETRY_COUNT) && (ret != 0)) {
@@ -931,18 +726,11 @@ static void cw_hw_init_work(struct work_struct *work)
 		ret = cw_init(cw_bat);
 	}
 	if (ret) {
-		printk("%s : cw2217 init fail!\n", __func__);
+		cw_info(cw_bat, "%s : cw2217 init fail!\n", __func__);
 		return ;
 	}
 
-	ret = cw_init_data(cw_bat);
-	if (ret) {
-		printk("%s : cw2217 init data fail!\n", __func__);
-		return ;
-	}
-
-	queue_delayed_work(cw_bat->cwfg_workqueue, &cw_bat->battery_delay_work , msecs_to_jiffies(queue_start_work_time));
-
+	return ;
 }
 
 static const char *cw_get_battery_serialnumber(void)
@@ -954,18 +742,16 @@ static const char *cw_get_battery_serialnumber(void)
 	battsn_buf = NULL;
 
 	if (np)
-		retval = of_property_read_string(np, "mmi,battid",
-						 &battsn_buf);
+		retval = of_property_read_string(np, "mmi,battid", &battsn_buf);
 	else
 		return NULL;
 
 	if ((retval == -EINVAL) || !battsn_buf) {
-		cw_info(" Battsn unused\n");
+		cw_printk(" Battsn unused\n");
 		of_node_put(np);
 		return NULL;
-
 	} else
-		cw_info("Battsn = %s\n", battsn_buf);
+		cw_printk("Battsn = %s\n", battsn_buf);
 
 	of_node_put(np);
 
@@ -973,8 +759,9 @@ static const char *cw_get_battery_serialnumber(void)
 }
 
 static struct device_node *cw_get_profile_by_serialnumber(
-		const struct device_node *np)
+		struct cw_battery *cw_bat)
 {
+	struct device_node *np = cw_bat->client->dev.of_node;
 	struct device_node *node, *df_node, *sn_node;
 	const char *sn_buf, *df_sn, *dev_sn;
 	int rc;
@@ -993,9 +780,9 @@ static struct device_node *cw_get_profile_by_serialnumber(
 	rc = of_property_read_string(np, "df-serialnum",
 				     &df_sn);
 	if (rc)
-		cw_info("No Default Serial Number defined\n");
+		cw_info(cw_bat, "No Default Serial Number defined\n");
 	else if (df_sn)
-		cw_info("Default Serial Number %s\n", df_sn);
+		cw_info(cw_bat, "Default Serial Number %s\n", df_sn);
 
 	for_each_child_of_node(np, node) {
 		rc = of_property_read_string(node, "serialnum",
@@ -1013,14 +800,14 @@ static struct device_node *cw_get_profile_by_serialnumber(
 	if (sn_node) {
 		node = sn_node;
 		df_node = NULL;
-		cw_info("Battery Match Found using %s\n", sn_node->name);
+		cw_info(cw_bat, "Battery Match Found using %s\n", sn_node->name);
 	} else if (df_node) {
 		node = df_node;
 		sn_node = NULL;
-		cw_info("Battery Match Found using default %s\n",
+		cw_info(cw_bat, "Battery Match Found using default %s\n",
 				df_node->name);
 	} else {
-		cw_info("No Battery Match Found!\n");
+		cw_info(cw_bat, "No Battery Match Found!\n");
 		return NULL;
 	}
 
@@ -1033,208 +820,135 @@ static int cw_parse_dts(struct cw_battery *cw_bat)
 	struct device_node *batt_profile_node = NULL;
 	int rc;
 
+	rc = of_property_read_string(np, "fg-psy-name", &cw_bat->battName);
+	if (rc) {
+		cw_bat->battName = "bms";
+		rc = 0;
+	}
+
 	rc = of_property_read_u32(np, "sense_r_mohm", &cw_bat->sense_r_mohm);
 	if(rc < 0)
 		cw_bat->sense_r_mohm = USER_RSENSE;
 	else
 		cw_bat->sense_r_mohm *= 1000;
 
-	batt_profile_node = cw_get_profile_by_serialnumber(np);
+	batt_profile_node = cw_get_profile_by_serialnumber(cw_bat);
 	if (!batt_profile_node)
 		return -1;
 
-	rc = of_property_read_u8_array(batt_profile_node, "config_profile_info", config_profile_info, SIZE_OF_PROFILE);
+	rc = of_property_read_u8_array(batt_profile_node, "config_profile_info", cw_bat->config_profile_info, SIZE_OF_PROFILE);
 	if (rc < 0)
-		cw_info("error,get profile_info fail from dts,exit \n");
+		cw_info(cw_bat, "error,get profile_info fail from dts,exit \n");
+	else
+		cw_info(cw_bat, "get profile_info fail from dts \n");
 
 	rc = of_property_read_u32(batt_profile_node, "fcc_design", &cw_bat->fcc_design);
 	if (rc < 0)
-		cw_info("error,get fcc_design,exit \n");
-
-	rc = of_property_read_u32(batt_profile_node, "ui_full", &cw_bat->ui_full);
-	if (rc < 0) {
-		cw_bat->ui_full = CW_UI_FULL;
-		cw_info("dts get ui_full fail. use default ui_full=%d \n", CW_UI_FULL);
-		rc = 0;
-	}
+		cw_info(cw_bat, "error,get fcc_design,exit \n");
+	else
+		cw_info(cw_bat, "get fcc_design=%d \n", cw_bat->fcc_design);
 
 	rc = of_property_read_u32(np, "factory_mode_ntc_exist", &cw_bat->ntc_exist);
 	if (rc < 0) {
 		cw_bat->ntc_exist = true;
-		cw_info("dts get ntc_exist fail. use default ntc_exist=%d \n", cw_bat->ntc_exist);
+		cw_info(cw_bat, "dts get ntc_exist fail. use default ntc_exist=%d \n", cw_bat->ntc_exist);
 		rc = 0;
 	}
 
-	rc = of_property_read_string(np, "fg-psy-name", &cw_bat->bms_name);
-	if (rc) {
-		cw_bat->bms_name = "bms";
-		rc = 0;
-	}
-
-	if (of_property_read_bool(np, "ibat-invert-polority"))
-		cw_bat->ibat_polority = 1;
-	else
-		cw_bat->ibat_polority = -1;
-
-	cw_info("ibat_polority=%d \n", cw_bat->ibat_polority);
 	return rc;
 }
 
-#ifdef CW_PROPERTIES
-static int cw_battery_set_property(struct power_supply *psy,
-				enum power_supply_property psp,
-				const union power_supply_propval *val)
-{
-	int ret = 0;
-	struct cw_battery *cw_bat;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0)
-	cw_bat = container_of(psy, struct cw_battery, cw_bat);
-#else
-	cw_bat = power_supply_get_drvdata(psy);
-#endif
-
-	switch(psp) {
-	default:
-		ret = -EINVAL;
-		break;
-	}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
-	cw_info("%s, cw ntc_exist:%d\n", __func__, cw_bat->ntc_exist);
-#endif
-
-	return ret;
-}
-
-static unsigned int cw_get_charge_counter(struct cw_battery *cw_bat)
-{
-	int charge_counter;
-	int full_capacity;
-
-	full_capacity = (cw_bat->fcc_design * cw_bat->soh * 1000) / 100;
-	charge_counter = div_s64(full_capacity * cw_bat->ui_soc, 100);
-
-	return charge_counter;
-}
-
 static int cw_battery_get_property(struct power_supply *psy,
-				enum power_supply_property psp,
-				union power_supply_propval *val)
+				   enum power_supply_property psp,
+				   union power_supply_propval *val)
 {
-	int ret = 0;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0)
 	struct cw_battery *cw_bat;
-	cw_bat = container_of(psy, struct cw_battery, cw_bat);
-#else
-	struct cw_battery *cw_bat = power_supply_get_drvdata(psy);
-#endif
 
+	cw_bat = power_supply_get_drvdata(psy);
 	switch (psp) {
-	case POWER_SUPPLY_PROP_STATUS:
-		cw_get_current(cw_bat);
-		cw_get_batt_status(cw_bat);
-		val->intval = cw_bat->batt_status;
-		break;
-	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		cw_get_cycle_count(cw_bat);
-		val->intval = cw_bat->cycle;
-		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		cw_get_capacity(cw_bat);
-		val->intval = cw_bat->ui_soc;
-		break;
-	case POWER_SUPPLY_PROP_HEALTH:
-		val->intval= POWER_SUPPLY_HEALTH_GOOD;
+		val->intval = cw_bat->raw_soc;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-		if (cw_bat->voltage <= 0)
-			val->intval = 0;
-		else if (cw_bat->temp <= CW_BPD_TEMP)
-			val->intval = 0;
-		else
-			val->intval = 1;
+		val->intval = !!cw_bat->voltage_now;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		cw_get_voltage(cw_bat);
-		val->intval = cw_bat->voltage * CW_VOL_UNIT;
+		val->intval = cw_bat->voltage_now * 1000;
 		break;
-	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
-		/* voltage_ocv invalid, use voltage_now instead*/
-		val->intval = cw_bat->voltage * CW_VOL_UNIT;
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+		val->intval = cw_bat->charge_counter * 1000;
 		break;
-	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		cw_get_current(cw_bat);
-		val->intval = cw_bat->cw_current * CW_CUR_UNIT;
-		val->intval *= cw_bat->ibat_polority;
-		break;
-	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+	case POWER_SUPPLY_PROP_CHARGE_FULL:
+		val->intval = cw_bat->fcc * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		val->intval = cw_bat->fcc_design * 1000;
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		val->intval = (cw_bat->fcc_design * cw_bat->soh * 1000)/100;
+	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		val->intval = cw_bat->current_now* 1000;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		cw_get_temp(cw_bat);
 		val->intval = cw_bat->temp;
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-		cw_get_soh(cw_bat);
-		val->intval = cw_get_charge_counter(cw_bat);
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		val->intval = cw_bat->cycle;
 		break;
 	default:
-		ret = -EINVAL;
 		break;
 	}
-
-	return ret;
+	return 0;
 }
 
 static enum power_supply_property cw_battery_properties[] = {
-	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_CAPACITY,
-	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_OCV,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
-	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 };
-#endif
 
+static struct gauge_ops cw_gauge_ops = {
+	.get_voltage_now = cw_get_voltage,
+	.get_current_now = cw_get_current,
+	.get_capacity = cw_get_capacity,
+	.get_temperature =cw_get_temp,
+	//.get_tte = cw_get_tte,
+	.get_charge_full = cw_get_charge_full,
+	.get_charge_full_design = cw_get_charge_full_design,
+	.get_charge_counter = cw_get_charge_counter,
+	.get_cycle_count = cw_get_cycle_count,
+	.get_soh = cw_get_soh,
+	//.set_charge_type = cw_set_charge_type,
+};
+
+static const struct gauge_properties cw_gauge_props = {
+	.alias_name = CWFG_NAME,
+};
 static int cw2217_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int ret;
 	struct cw_battery *cw_bat;
-#ifdef CW_PROPERTIES
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0)
 	struct power_supply_desc *psy_desc;
 	struct power_supply_config psy_cfg = {0};
-#endif
-#endif
-
-	cw_printk("\n");
 
 	cw_bat = devm_kzalloc(&client->dev, sizeof(*cw_bat), GFP_KERNEL);
 	if (!cw_bat) {
-		printk("%s : cw_bat create fail!\n", __func__);
+		cw_printk("%s : cw_bat create fail!\n", __func__);
 		return -ENOMEM;
 	}
 
 	i2c_set_clientdata(client, cw_bat);
 	cw_bat->client = client;
+	cw_bat->dev = &client->dev;
 
 	ret = cw_parse_dts(cw_bat);
 	if (ret) {
-		printk("%s : cw2217 prase dts  fail!\n", __func__);
+		cw_err(cw_bat, "Failed to parse cw2217 properties\n");
 		return ret;
 	}
 
@@ -1242,69 +956,60 @@ static int cw2217_probe(struct i2c_client *client, const struct i2c_device_id *i
 					&cw_bat->client->dev,
 					"vdd-i2c");
 	if (IS_ERR_OR_NULL(cw_bat->vdd_i2c_vreg)) {
-		printk("%s: Could not get vdd-i2c power regulator\n", __func__);
+		cw_info(cw_bat, "%s: Could not get vdd-i2c power regulator\n", __func__);
 		cw_bat->vdd_i2c_vreg = NULL;
 	} else {
 		ret = regulator_enable(cw_bat->vdd_i2c_vreg);
-		printk("%s: Enable vdd-i2c, ret=%d\n", __func__, ret);
+		cw_info(cw_bat, "%s: Enable vdd-i2c, ret=%d\n", __func__, ret);
 		ret = 0;
 	}
 
 	ret = cw_get_chip_id(cw_bat);
 	if (ret < 0) {
-		printk("iic read write error");
+		cw_err(cw_bat,"iic read write error");
 		goto error;
 	}
 	if (cw_bat->chip_id != IC_VCHIP_ID){
-		printk("not cw2217B\n");
+		cw_err(cw_bat,"not cw2217B\n");
 		goto error;
 	}
 
-#ifdef CW_PROPERTIES
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0)
-	cw_bat->cw_bat.name = CW_PROPERTIES;
-	cw_bat->cw_bat.type = POWER_SUPPLY_TYPE_MAINS;
-	cw_bat->cw_bat.properties = cw_battery_properties;
-	cw_bat->cw_bat.num_properties = ARRAY_SIZE(cw_battery_properties);
-	cw_bat->cw_bat.get_property = cw_battery_get_property;
-	cw_bat->cw_bat.set_property = cw_battery_set_property;
-	ret = power_supply_register(&client->dev, &cw_bat->cw_bat);
-	if (ret < 0) {
-		power_supply_unregister(&cw_bat->cw_bat);
+	cw_hw_init_work(cw_bat);
+
+	if(is_factory_mode())
+		cw_bat->factory_mode = true;
+
+	cw_bat->gauge_dev= gauge_device_register(cw_bat->battName,
+					      &client->dev, cw_bat,
+					      &cw_gauge_ops,
+					      &cw_gauge_props);
+	if (IS_ERR_OR_NULL(cw_bat->gauge_dev)) {
+		ret = PTR_ERR(cw_bat->gauge_dev);
+		cw_err(cw_bat, "failed to register battery: %d\n", ret);
 		goto error;
 	}
-#else
+
+	cw_init_data(cw_bat->gauge_dev);
+
 	psy_desc = devm_kzalloc(&client->dev, sizeof(*psy_desc), GFP_KERNEL);
 	if (!psy_desc) {
 		ret = -ENOMEM;
 		goto error;
 	}
 	psy_cfg.drv_data = cw_bat;
-	psy_desc->name = CW_PROPERTIES;
+	psy_desc->name = cw_bat->battName;
 	psy_desc->type = POWER_SUPPLY_TYPE_MAINS;
 	psy_desc->properties = cw_battery_properties;
 	psy_desc->num_properties = ARRAY_SIZE(cw_battery_properties);
 	psy_desc->get_property = cw_battery_get_property;
-	psy_desc->set_property = cw_battery_set_property;
-	cw_bat->cw_bat = power_supply_register(&client->dev, psy_desc, &psy_cfg);
-	if (IS_ERR(cw_bat->cw_bat)) {
-		ret = PTR_ERR(cw_bat->cw_bat);
-		printk(KERN_ERR"failed to register battery: %d\n", ret);
+	cw_bat->cw_bat_psy = power_supply_register(&client->dev, psy_desc, &psy_cfg);
+	if (IS_ERR_OR_NULL(cw_bat->cw_bat_psy)) {
+		ret = PTR_ERR(cw_bat->cw_bat_psy);
+		cw_err(cw_bat, "failed to register battery: %d\n", ret);
 		goto error;
 	}
-#endif
-#endif
 
-	cw_bat->cwfg_workqueue = create_singlethread_workqueue("cwfg_gauge");
-	INIT_DELAYED_WORK(&cw_bat->battery_delay_work, cw_bat_work);
-
-	INIT_WORK(&cw_bat->hw_init_work, cw_hw_init_work);
-	schedule_work(&cw_bat->hw_init_work);
-
-	if(is_factory_mode())
-		cw_bat->factory_mode = true;
-
-	cw_printk("cw2217 driver probe success!\n");
+	cw_info(cw_bat, "cw2217 driver probe success!\n");
 
 	return 0;
 
@@ -1321,7 +1026,6 @@ static int cw2217_remove(struct i2c_client *client)
 {
 	struct cw_battery *cw_bat = i2c_get_clientdata(client);
 
-	cw_printk("\n");
 	if (cw_bat->vdd_i2c_vreg) {
 		if (regulator_is_enabled(cw_bat->vdd_i2c_vreg))
 			regulator_disable(cw_bat->vdd_i2c_vreg);
@@ -1333,19 +1037,17 @@ static int cw2217_remove(struct i2c_client *client)
 #ifdef CONFIG_PM
 static int cw_bat_suspend(struct device *dev)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	struct cw_battery *cw_bat = i2c_get_clientdata(client);
-
-	cancel_delayed_work(&cw_bat->battery_delay_work);
+	//struct i2c_client *client = to_i2c_client(dev);
+	//struct cw_battery *cw_bat = i2c_get_clientdata(client);
+	// ??
 	return 0;
 }
 
 static int cw_bat_resume(struct device *dev)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	struct cw_battery *cw_bat = i2c_get_clientdata(client);
-
-	queue_delayed_work(cw_bat->cwfg_workqueue, &cw_bat->battery_delay_work, msecs_to_jiffies(20));
+	//struct i2c_client *client = to_i2c_client(dev);
+	//struct cw_battery *cw_bat = i2c_get_clientdata(client);
+	// ??
 	return 0;
 }
 
@@ -1355,15 +1057,27 @@ static const struct dev_pm_ops cw_bat_pm_ops = {
 };
 #endif
 
-static const struct i2c_device_id cw2217_id_table[] = {
-	{ CWFG_NAME, 0 },
-	{ }
+enum cw2217_compatible_id {
+	CW2217_STANDALONE,
+	CW2217_MASTER,
+	CW2217_SLAVE,
 };
 
-static struct of_device_id cw2217_match_table[] = {
-	{ .compatible = "cellwise,cw2217", },
+static const struct i2c_device_id cw2217_id_table[] = {
+	{ "cw2217-standalone", CW2217_STANDALONE },
+	{ "cw2217-master", CW2217_MASTER },
+	{ "cw2217-slave", CW2217_SLAVE },
+	{},
+};
+MODULE_DEVICE_TABLE(i2c, cw2217_id_table);
+
+static const struct of_device_id cw2217_match_table[] = {
+	{ .compatible = "cellwise,cw2217-standalone", .data = (void *)CW2217_STANDALONE},
+	{ .compatible = "cellwise,cw2217-master", .data = (void *)CW2217_MASTER},
+	{ .compatible = "cellwise,cw2217-slave", .data = (void *)CW2217_SLAVE},
 	{ },
 };
+MODULE_DEVICE_TABLE(of, cw2217_match_table);
 
 static struct i2c_driver cw2217_driver = {
 	.driver   = {
@@ -1379,17 +1093,9 @@ static struct i2c_driver cw2217_driver = {
 	.id_table = cw2217_id_table,
 };
 
-/*
-	//Add to dsti file
-	cw2217@64 {
-		compatible = "cellwise,cw2217";
-		reg = <0x64>;
-	};
-*/
-
 static int __init cw2217_init(void)
 {
-	cw_printk("\n");
+	cw_printk("cw2217_init \n");
 	i2c_add_driver(&cw2217_driver);
 	return 0;
 }
