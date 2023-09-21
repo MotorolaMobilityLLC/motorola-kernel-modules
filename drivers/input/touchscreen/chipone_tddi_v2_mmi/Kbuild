@@ -45,6 +45,10 @@ ifneq ($(filter m y,$(TOUCHSCREEN_PM_BRL_SPI)),)
 	EXTRA_CFLAGS += -DTOUCHSCREEN_PM_BRL_SPI
 endif
 
+ifneq ($(filter m y,$(CONFIG_CHIPONE_CHECK_DEVICE_BOOTMODE)),)
+	EXTRA_CFLAGS += -DCTS_CHECK_DEVICE_BOOTMODE
+endif
+
 #obj-$(CONFIG_TOUCHSCREEN_CHIPONE) += chipone-tddi.o
 obj-m += chipone_tddi_v2_mmi.o
 

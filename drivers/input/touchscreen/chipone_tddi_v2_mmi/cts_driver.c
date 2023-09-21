@@ -609,6 +609,41 @@ int chipone_sensor_remove(struct chipone_ts_data *data)
 }
 #endif
 
+#ifdef CTS_CHECK_DEVICE_BOOTMODE
+static bool cts_is_charger_mode(void)
+{
+    struct device_node *np = of_find_node_by_path("/chosen");
+    bool charger_mode = false;
+    const char *bootargs = NULL;
+    char *bootmode = NULL;
+    char *end = NULL;
+
+    if (!np)
+        return charger_mode;
+
+#ifdef CONFIG_BOOT_CONFIG
+    if (!of_property_read_string(np, "mmi,bootconfig", &bootargs)) {
+#else
+    if (!of_property_read_string(np, "bootargs", &bootargs)) {
+#endif
+        bootmode = strstr(bootargs, "androidboot.mode=");
+        if (bootmode) {
+            end = strpbrk(bootmode, " ");
+            bootmode = strpbrk(bootmode, "=");
+        }
+        if (bootmode &&
+            end > bootmode &&
+            strnstr(bootmode, "charger", end - bootmode)) {
+                charger_mode = true;
+        }
+    }
+    of_node_put(np);
+    cts_info("Charger mode = %d", charger_mode);
+
+    return charger_mode;
+}
+#endif
+
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_driver_probe(struct i2c_client *client,
         const struct i2c_device_id *id)
@@ -652,6 +687,13 @@ static int cts_driver_probe(struct spi_device *client)
             return -ENODEV;
         }
 #endif
+#endif
+
+#ifdef CTS_CHECK_DEVICE_BOOTMODE
+    if (cts_is_charger_mode()) {
+        cts_info("Charger mode, ignore insmod chipone modules.\n");
+        return -ENODEV;
+    }
 #endif
 
 #ifdef CONFIG_CTS_I2C_HOST
