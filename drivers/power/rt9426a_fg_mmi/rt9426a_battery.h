@@ -159,6 +159,15 @@ enum {
 	RT9426A_TEMP_FROM_IC,
 };
 
+enum {
+	RT9426A_CV4500_IEOC243 = 0,
+	RT9426A_CV4500_IEOC670,
+	RT9426A_CV4200_IEOC243,
+	RT9426A_CV4530_IEOC506,
+	RT9426A_CV4530_IEOC560,
+	RT9426A_CV4530_IEOC965,
+};
+
 struct fg_ocv_table {
 	int data[8];
 };
@@ -170,6 +179,7 @@ struct fg_extreg_table {
 struct rt9426a_platform_data {
 	u32 dtsi_version[2];
 	u32 para_version;
+	u32 fc_vth_ith[6];
 	int soc_offset_size[2];
 	struct soc_offset_table soc_offset;
 	int offset_interpolation_order[2];

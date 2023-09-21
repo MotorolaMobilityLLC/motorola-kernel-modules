@@ -1324,11 +1324,10 @@ static void mmi_discrete_config_chgmod_to_fg(struct mmi_discrete_charger *chip)
 {
 	union power_supply_propval val;
 	int rc = 0;
-
-	if (!chip->bms_psy || !chip->chgmod_to_fg)
+	if (!chip->bms_psy)
 		return;
-
-	if (chip->chg_info.chrg_pmax_mw > TURBO_CHRG_FFC_THRSH_MW) {
+	if (chip->chg_info.chrg_pmax_mw > TURBO_CHRG_FFC_THRSH_MW||
+			(chip->is_ffc_enable && chip->enable_10w_ffc)) {
 		val.intval = MMI_CHARGER_MODE_FFC;
 	} else if (chip->chg_info.chrg_type == POWER_SUPPLY_TYPE_USB) {
 		val.intval = MMI_CHARGER_MODE_USB;
@@ -1337,7 +1336,7 @@ static void mmi_discrete_config_chgmod_to_fg(struct mmi_discrete_charger *chip)
 	}
 
 	rc = power_supply_set_property(chip->bms_psy, POWER_SUPPLY_PROP_TYPE, &val);
-	mmi_dbg(chip, "%s config charger mode to fg\n", rc? "Can't" : "success");
+	mmi_dbg(chip,"%s config charger mode to fg\n", rc? "Can't" : "success");
 
 }
 

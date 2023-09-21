@@ -910,6 +910,9 @@ static void rt9426a_update_info(struct rt9426a_chip *chip)
 	regval = rt9426a_get_soh(chip);
 	dev_info(chip->dev, "SOH(%d)\n", regval);
 
+	rt9426a_write_page_cmd(chip, RT9426A_PAGE_5);
+	regval = rt9426a_reg_read_word(chip->i2c, RT9426A_REG_SWINDOW3);
+	dev_info(chip->dev, "FC_ITH,FC_VTH =(0x%04x)\n", regval);
 	/* rt9426a_update_ieoc_setting(chip); */
 
 	if (batt_psy) {
@@ -1171,6 +1174,52 @@ out:
 	return offset;
 }
 
+static int rt9426a_set_ffc_mode(struct rt9426a_chip *chip,u8 mode)
+{
+	int i = 0;
+	int ret = 0;
+	if (mode == 0) {
+		if (chip->btemp < 250 && chip->btemp >= 0)
+			i = RT9426A_CV4500_IEOC243;
+		else if(chip->btemp < 250)
+			i = RT9426A_CV4530_IEOC506;
+		else if (chip->btemp < 350)
+			i = RT9426A_CV4530_IEOC560;
+		else if (chip->btemp < 450)
+			i = RT9426A_CV4530_IEOC965;
+		else
+			i = RT9426A_CV4200_IEOC243;
+	} else {
+		if (chip->btemp < 350 && chip->btemp >= 0)
+			i = RT9426A_CV4500_IEOC243;
+		else if (chip->btemp < 450)
+			i = RT9426A_CV4500_IEOC670;
+		else
+			i = RT9426A_CV4200_IEOC243;
+	}
+	mutex_lock(&chip->update_lock);
+	if (rt9426a_unseal_wi_retry(chip) == RT9426A_UNSEAL_FAIL) {
+		ret = -EINVAL;
+		goto ccv_out;
+	}
+	rt9426a_write_page_cmd(chip, RT9426A_PAGE_5);
+	ret = rt9426a_reg_read_word(chip->i2c, RT9426A_REG_SWINDOW3);
+	if (ret < 0)
+		goto ccv_out;
+	if (ret != chip->pdata->fc_vth_ith[i])
+		ret = rt9426a_reg_write_word(chip->i2c,
+					    RT9426A_REG_SWINDOW3,
+					    chip->pdata->fc_vth_ith[i]);
+	else
+		ret = 0;
+ccv_out:
+	mutex_unlock(&chip->update_lock);
+	dev_notice(chip->dev, "RT9426A ffc_mode:%d chip->btemp:%d fc_vth_ith %x\n",
+		mode,chip->btemp,chip->pdata->fc_vth_ith[i]);
+
+	return ret;
+}
+
 static int rt_fg_get_property(struct power_supply *psy,
 			      enum power_supply_property psp,
 			      union power_supply_propval *val)
@@ -1266,11 +1315,14 @@ static int rt_fg_set_property(struct power_supply *psy,
 		chip->ocv_checksum_dtsi = *((u32 *)chip->pdata->ocv_table +
 	                          (chip->ocv_index * 80) + RT9426A_IDX_OF_OCV_CKSUM);
 		break;
+	case POWER_SUPPLY_PROP_TYPE:
+		if (chip->pdata->fc_vth_ith[0] != 0x0)
+			rc = rt9426a_set_ffc_mode(chip,val->intval);
+		break;
 	default:
 		rc = -EINVAL;
 		break;
 	}
-
 	return rc;
 }
 
@@ -1281,6 +1333,7 @@ static int rt_fg_property_is_writeable(struct power_supply *psy, enum power_supp
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 	/* add for aging cv */
 	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
+	case POWER_SUPPLY_PROP_TYPE:
 		return true;
 	default:
 		return false;
@@ -1297,6 +1350,7 @@ static enum power_supply_property rt_fg_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_VOLTAGE_OCV,
+	POWER_SUPPLY_PROP_TYPE,
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 };
@@ -2680,7 +2734,12 @@ static int rt_parse_dt(struct device *dev, struct rt9426a_platform_data *pdata)
 	ret = of_property_read_u32(np, "rt,para_version", &pdata->para_version);
 	if (ret < 0)
 		pdata->para_version = 0;
-
+	ret = of_property_read_u32_array(np, "rt,fc_vth-fc_ith", pdata->fc_vth_ith, 6);
+	if (ret < 0) {
+		dev_notice(dev, "no fc_vth-fc_ith, use defaut 0x4CAC\n");
+		for (i = 0; i < 6; i++)
+			pdata->fc_vth_ith[i] = 0x0;
+	}
 	ret = of_property_read_string(np, "rt,bat_name",
 				      (const char **)&pdata->bat_name);
 	if (ret < 0)
