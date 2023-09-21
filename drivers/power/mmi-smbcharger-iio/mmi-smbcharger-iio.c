@@ -2212,6 +2212,7 @@ static int mmi_increase_vbus_power(struct smb_mmi_charger *chg, int cur_mv)
 
 		chg->inc_hvdcp_cnt = HVDCP_PULSE_COUNT_MAX;
 		vote(chg->chg_dis_votable, MMI_HB_VOTER, true, 0);
+		msleep(100);
 
 		while (cur_mv < HVDCP_VOLTAGE_NOM && pulse_cnt < chg->inc_hvdcp_cnt) {
 			val.intval = QTI_POWER_SUPPLY_DP_DM_DP_PULSE;
