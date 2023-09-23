@@ -3253,11 +3253,7 @@ static int vibrator_init(struct aw_haptic *aw_haptic)
 	if (!ret)
 		aw_haptic->vib_dev.name = "vibrator_r";
 #else
-#ifdef KERNEL_OVER_5_10
-	aw_haptic->vib_dev.name = "aw_vibrator";
-#else
 	aw_haptic->vib_dev.name = "vibrator";
-#endif
 #endif
 	aw_haptic->vib_dev.brightness_get = brightness_get;
 	aw_haptic->vib_dev.brightness_set = brightness_set;
@@ -3273,6 +3269,18 @@ static int vibrator_init(struct aw_haptic *aw_haptic)
 		aw_err("error creating sysfs common attr files");
 		return ret;
 	}
+		/*
+	 * Android has a habit of trying to set the vibrator trigger to "transient",
+	 * which destroys our own "activate", "duration", and "state" attributes.
+	 * Remove the "trigger" attribute provided by leds_class so that no one can
+	 * change the trigger of the vibrator LED device.
+	 *
+	 * Luckily, `sysfs_remove_file` only uses the `name` field, so we can use a
+	 * compound literal instead of having to find the proper attribute struct
+	 */
+	sysfs_remove_file(&aw_haptic->vib_dev.dev->kobj,
+	                  &((struct attribute){.name = "trigger"}));
+
 	if (aw_haptic->is_used_irq_pin) {
 		ret = sysfs_create_group(&aw_haptic->vib_dev.dev->kobj, &rtp_attribute_group);
 		if (ret < 0) {
