@@ -18,9 +18,15 @@
 #if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
 #include <linux/msm_drm_notify.h>
 #endif
+#include <linux/version.h>
 
-#include "../zram_drv.h"
-#include "../zram_drv_internal.h"
+#ifdef CONFIG_ZRAM_5_4
+#include "../zram-5.4/zram_drv.h"
+#include "../zram-5.4/zram_drv_internal.h"
+#else
+#include "../zram-5.10/zram_drv.h"
+#include "../zram-5.10/zram_drv_internal.h"
+#endif
 #include "hybridswap_internal.h"
 
 #define MOTO_SWAP_VERSION 1
@@ -51,7 +57,7 @@ struct hybridswapd_task {
 #define COMPRESS_RATIO 33
 #define SWAPD_MAX_LEVEL_NUM 4
 #define SWAPD_DEFAULT_BIND_CPUS "0-3"
-#define MAX_RECLAIMIN_SZ (200llu << 20)
+#define MAX_RECLAIMIN_SZ (100llu << 20)
 #define page_to_kb(nr) (nr << (PAGE_SHIFT - 10))
 #define SWAPD_SHRINK_WINDOW (HZ * 10)
 #define SWAPD_SHRINK_SIZE_PER_WINDOW 1024
@@ -737,8 +743,13 @@ unsigned int system_cur_usable_mem(void)
 	pagecache -= min(pagecache / 2, wmark_low);
 	buffers += pagecache;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+	reclaimable = global_node_page_state(NR_SLAB_RECLAIMABLE) +
+		global_node_page_state(NR_KERNEL_MISC_RECLAIMABLE);
+#else
 	reclaimable = global_node_page_state(NR_SLAB_RECLAIMABLE_B) +
 		global_node_page_state(NR_KERNEL_MISC_RECLAIMABLE);
+#endif
 	buffers += reclaimable - min(reclaimable / 2, wmark_low);
 
 	if (buffers < 0)
@@ -786,7 +797,7 @@ bool fetch_memcg_pagefault_status(struct mem_cgroup *memcg,
 	const unsigned int percent_constant = 100;
 	unsigned long long cur_anon_pagefault;
 	unsigned long anon_total;
-	unsigned long long scale, thresh;
+	unsigned int scale, thresh;
 	memcg_hybs_t *hybs;
 
 	if (!memcg || !MEMCGRP_ITEM_DATA(memcg))
@@ -806,7 +817,7 @@ bool fetch_memcg_pagefault_status(struct mem_cgroup *memcg,
 		hybridswap_read_mcg_stats(memcg, MCG_ZRAM_STORED_PG_SZ);
 	scale = (cur_anon_pagefault - hybs->reclaimed_pagefault) *
 		percent_constant / (anon_total + 1);
-	hybp(HYB_INFO, "memcg %16s scale %8llu level %8llu\n", hybs->name,
+	hybp(HYB_INFO, "CHECK MEMCG PAGEFAULT %s: anon pagefault %u%%(%u)\n", hybs->name,
 			scale, thresh);
 
 	if (scale >= thresh)
@@ -1416,6 +1427,11 @@ static inline u64 calc_shrink_scale(pg_data_t *pgdat)
 		}
 
 		nr_anon = memcg_anon_pages(memcg);
+		if (nr_anon == 0) {
+			hybs->can_reclaimed = 0;
+			continue;
+		}
+
 		nr_zram = hybridswap_read_mcg_stats(memcg, MCG_ZRAM_STORED_PG_SZ);
 		nr_eswap = hybridswap_read_mcg_stats(memcg, MCG_DISK_STORED_PG_SZ);
 		total = nr_anon + nr_zram + nr_eswap;
@@ -1425,7 +1441,7 @@ static inline u64 calc_shrink_scale(pg_data_t *pgdat)
 			hybs->can_reclaimed = 0;
 		else
 			hybs->can_reclaimed = can_reclaimed - (nr_zram + nr_eswap);
-		hybp(HYB_DEBUG, "memcg %s can_reclaimed %lu nr_anon %lu zram %lu eswap %lu total %lu scale %lu thresh %lu\n",
+		hybp(HYB_INFO, "CHECK MEMCG %s: can_reclaim %luKB nr_anon %luKB zram %luKB eswap %luKB total %luKB reclaimed %lu%%(%lu)\n",
 				hybs->name, (unsigned long)page_to_kb(hybs->can_reclaimed),
 				(unsigned long)page_to_kb(nr_anon), (unsigned long)page_to_kb(nr_zram),
 				(unsigned long)page_to_kb(nr_eswap), (unsigned long)page_to_kb(total),
@@ -1445,9 +1461,10 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 	unsigned long reclaim_memcg_cnt = 0;
 	u64 total_can_reclaimed = calc_shrink_scale(pgdat);
 	unsigned long start_js = jiffies;
-	unsigned long reclaim_cycles;
 	bool exit = false;
-	unsigned long reclaim_size_per_cycle = PAGES_PER_1MB >> 1;
+	unsigned long RECLAIM_PAGES_PER_CYCLE = PAGES_PER_1MB * 100;
+	unsigned long reclaim_pages_this_cycle = 0;
+	unsigned long reclaim_cycles = 0;
 
 	if (unlikely(total_can_reclaimed == 0))
 		goto out;
@@ -1455,13 +1472,21 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 	if (total_can_reclaimed < nr_to_reclaim)
 		nr_to_reclaim = total_can_reclaimed;
 
-	reclaim_cycles = nr_to_reclaim / reclaim_size_per_cycle;
+	reclaim_cycles = (nr_to_reclaim / RECLAIM_PAGES_PER_CYCLE) + (nr_to_reclaim % RECLAIM_PAGES_PER_CYCLE > 0 ? 1 : 0);
+
+	hybp(HYB_INFO, "SWAPD_SHRINK ANON + available %uMB(%lu) to_reclaim %luKB can_reclaimed %luKB reclaim_cycles %lu",
+			(unsigned int)system_cur_usable_mem(), (unsigned long)fetch_high_mem_watermark_value(),
+			page_to_kb(nr_to_reclaim), (unsigned long)page_to_kb(total_can_reclaimed), reclaim_cycles);
+
 	while (reclaim_cycles) {
+        reclaim_pages_this_cycle = min(nr_to_reclaim - nr_reclaimed, RECLAIM_PAGES_PER_CYCLE);
+        if (reclaim_pages_this_cycle <= 0) break;
+
 		while ((memcg = fetch_next_memcg(memcg))) {
 			unsigned long memcg_nr_reclaimed, memcg_to_reclaim;
 			memcg_hybs_t *hybs;
 
-			if (high_buffer_is_suitable()) {
+			if (high_buffer_is_suitable() || atomic_read(&swapd_pause)) {
 				fetch_next_memcg_break(memcg);
 				exit = true;
 				break;
@@ -1471,21 +1496,23 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 			if (!hybs->can_reclaimed)
 				continue;
 
-			memcg_to_reclaim = reclaim_size_per_cycle * hybs->can_reclaimed / total_can_reclaimed;
-			memcg_nr_reclaimed = try_to_free_mem_cgroup_pages(memcg,
-					memcg_to_reclaim, GFP_KERNEL, true);
-			reclaim_memcg_cnt++;
-			hybs->can_reclaimed -= memcg_nr_reclaimed;
-			hybp(HYB_DEBUG, "memcg %s reclaim %lu want %lu\n", hybs->name,
-					memcg_nr_reclaimed, memcg_to_reclaim);
-			nr_reclaimed += memcg_nr_reclaimed;
+			memcg_to_reclaim = reclaim_pages_this_cycle * hybs->can_reclaimed / total_can_reclaimed;
+			if (memcg_to_reclaim > 0) {
+				memcg_nr_reclaimed = try_to_free_mem_cgroup_pages(memcg,
+						memcg_to_reclaim, GFP_KERNEL, true);
+				reclaim_memcg_cnt++;
+				hybs->can_reclaimed -= memcg_nr_reclaimed;
+				hybp(HYB_INFO, "SHRINK MEMCG %s: to_reclaim %lu reclaimed %lu\n", hybs->name,
+						memcg_to_reclaim, memcg_nr_reclaimed);
+				nr_reclaimed += memcg_nr_reclaimed;
+			}
 			if (nr_reclaimed >= nr_to_reclaim) {
 				fetch_next_memcg_break(memcg);
 				exit = true;
 				break;
 			}
 
-			if (hybs->can_reclaimed < 0)
+			if (hybs->can_reclaimed < 0 || memcg_nr_reclaimed == 0) // no pages can be reclaimed, skip it.
 				hybs->can_reclaimed = 0;
 
 			if (swapd_nap_jiffies && time_after_eq(jiffies, start_js + swapd_nap_jiffies)) {
@@ -1503,9 +1530,9 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 	}
 
 out:
-	hybp(HYB_INFO, "total_reclaim %lu nr_to_reclaim %lu from memcg %lu total_can_reclaimed %lu\n",
-			page_to_kb(nr_reclaimed), page_to_kb(nr_to_reclaim),
-			reclaim_memcg_cnt, (unsigned long)page_to_kb(total_can_reclaimed));
+	hybp(HYB_INFO, "SWAPD_SHRINK ANON - available %uMB(%lu) reclaimed %luKB from memcg %lu\n",
+			(unsigned int)system_cur_usable_mem(), (unsigned long)fetch_high_mem_watermark_value(),
+			page_to_kb(nr_reclaimed), reclaim_memcg_cnt);
 	return nr_reclaimed;
 }
 
@@ -1514,8 +1541,6 @@ static void swapd_shrink_node(pg_data_t *pgdat)
 	const unsigned int increase_rate = 2;
 	unsigned long nr_reclaimed = 0;
 	unsigned long nr_to_reclaim;
-	unsigned int before_avail = system_cur_usable_mem();
-	unsigned int after_avail;
 
 #if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
 	if (atomic_read(&display_off))
@@ -1567,14 +1592,12 @@ static void swapd_shrink_node(pg_data_t *pgdat)
 			swapd_skip_interval =
 				fetch_nothing_ignore_skip_interval_value();
 		last_round_is_empty = true;
+		hybp(HYB_INFO, "SWAPD_SHRINK_EMPTY_ROUND, reclaimed %lu KB, swapd_skip_interval %llu\n",
+				(unsigned long)nr_reclaimed * 4, swapd_skip_interval);
 	} else {
 		swapd_skip_interval = 0;
 		last_round_is_empty = false;
 	}
-
-	after_avail = system_cur_usable_mem();
-	hybp(HYB_INFO, "total_reclaimed %lu KB, avail buffer %lu %lu MB, swapd_skip_interval %llu\n",
-			(unsigned long)nr_reclaimed * 4, (unsigned long)before_avail, (unsigned long)after_avail, swapd_skip_interval);
 }
 
 static int swapd(void *p)
@@ -1595,8 +1618,8 @@ static int swapd(void *p)
 	swapd_last_window_start = jiffies - swapd_shrink_window;
 	while (!kthread_should_stop()) {
 		bool pagefault = false;
-		u64 curr_buffers, avail;
-		u64 size, swapout_size = 0;
+		u64 available, wmhigh;
+		u64 to_swapout, swapped_size = 0;
 
 		wait_event_freezable(hyb_task->swapd_wait,
 				atomic_read(&hyb_task->swapd_wait_flag));
@@ -1604,6 +1627,7 @@ static int swapd(void *p)
 		if (unlikely(kthread_should_stop()))
 			break;
 		count_swapd_event(SWAPD_WAKEUP);
+		hybp(HYB_INFO, "SWAPD_WAKEUP");
 
 		if (fetch_infos_pagefault_status() && hybridswap_scale_ok()) {
 			pagefault = true;
@@ -1621,26 +1645,25 @@ do_eswap:
 		if (!hybridswap_reclaim_work_running() && display_un_blank &&
 				(zram_need_swapout() || pagefault) && !page_fault_pause_value &&
 				jiffies_to_msecs(jiffies - last_reclaimin_jiffies) >= 50) {
-			avail = fetch_high_mem_watermark_value();
-			curr_buffers = system_cur_usable_mem();
+			wmhigh = fetch_high_mem_watermark_value();
+			available = system_cur_usable_mem();
 
-			if (curr_buffers < avail) {
-				size = (avail - curr_buffers) * SZ_1M;
-				size = min_t(u64, size, max_reclaimin_size);
+			if (available < wmhigh && !atomic_read(&swapd_pause)) {
+				to_swapout = (wmhigh - available) * SZ_1M;
+				to_swapout = min_t(u64, to_swapout, max_reclaimin_size);
 #ifdef CONFIG_HYBRIDSWAP_CORE
-				swapout_size = hybridswap_out_to_eswap(size);
+				hybp(HYB_INFO, "SWAPD_ESWAPOUT + available %uMB(%lu) to_swapout %luMB",
+						(unsigned int)available, (unsigned long)wmhigh, (unsigned long)(to_swapout / SZ_1M));
+				swapped_size = hybridswap_out_to_eswap(to_swapout);
 				count_swapd_event(SWAPD_SWAPOUT);
 				last_reclaimin_jiffies = jiffies;
+				hybp(HYB_INFO, "SWAPD_ESWAPOUT - swapped out %luMB\n", (unsigned long)(swapped_size / SZ_1M));
 #endif
-				hybp(HYB_DEBUG, "SWAPD_SWAPOUT curr %u avail %lu size %lu maybe swapout %lu\n",
-						(unsigned int)curr_buffers, (unsigned long)avail,
-						(unsigned long)(size / SZ_1M), (unsigned long)(swapout_size / SZ_1M));
 			} else  {
-				hybp(HYB_INFO, "SWAPD_SKIP_SWAPOUT curr %u avail %lu\n",
-						(unsigned int)curr_buffers, (unsigned long)avail);
 				count_swapd_event(SWAPD_SKIP_SWAPOUT);
 			}
 		}
+		hybp(HYB_INFO, "SWAPD_SLEEP");
 	}
 
 	return 0;

@@ -15,9 +15,15 @@
 #ifdef CONFIG_FG_TASK_UID
 #include <linux/healthinfo/fg.h>
 #endif
+#include <linux/version.h>
 
-#include "../zram_drv.h"
-#include "../zram_drv_internal.h"
+#ifdef CONFIG_ZRAM_5_4
+#include "../zram-5.4/zram_drv.h"
+#include "../zram-5.4/zram_drv_internal.h"
+#else
+#include "../zram-5.10/zram_drv.h"
+#include "../zram-5.10/zram_drv_internal.h"
+#endif
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
 
@@ -1466,8 +1472,10 @@ void hybperf_warning(struct timer_list *t)
 
 	hybridswap_dump_lat(record, ktime_get(), false);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	if (likely(record->task))
 		sched_show_task(record->task);
+#endif
 	last_dumpiowrkjiffies = jiffies;
 	record->warn_level <<= 2;
 	record->timeout_flag = true;
@@ -1844,7 +1852,7 @@ static void update_size_info(struct zram *zram, u32 index)
 		return;
 
 	eswapid = esentry_extid(zram_get_handle(zram, index));
-	hybp(HYB_INFO, "eswapid %d index %d\n", eswapid, index);
+	hybp(HYB_DEBUG, "eswapid %d index %d\n", eswapid, index);
 
 	if (eswapid >= 0 && eswapid < zram->infos->nr_es)
 		atomic_dec(&zram->infos->eswap_stored_pages[eswapid]);
@@ -4119,7 +4127,11 @@ struct file *hybridswap_open_bdev(const char *file_name)
 {
 	struct file *backing_dev = NULL;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+	backing_dev = filp_open(file_name, O_RDWR|O_LARGEFILE, 0);
+#else
 	backing_dev = filp_open_block(file_name, O_RDWR|O_LARGEFILE, 0);
+#endif
 	if (unlikely(IS_ERR(backing_dev))) {
 		hybp(HYB_ERR, "open the %s failed! eno = %ld\n",
 				file_name, PTR_ERR(backing_dev));

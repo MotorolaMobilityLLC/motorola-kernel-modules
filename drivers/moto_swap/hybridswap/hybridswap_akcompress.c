@@ -11,8 +11,13 @@
 #include <linux/idr.h>
 #include <linux/freezer.h>
 
-#include "../zram_drv.h"
-#include "../zram_drv_internal.h"
+#ifdef CONFIG_ZRAM_5_4
+#include "../zram-5.4/zram_drv.h"
+#include "../zram-5.4/zram_drv_internal.h"
+#else
+#include "../zram-5.10/zram_drv.h"
+#include "../zram-5.10/zram_drv_internal.h"
+#endif
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
 

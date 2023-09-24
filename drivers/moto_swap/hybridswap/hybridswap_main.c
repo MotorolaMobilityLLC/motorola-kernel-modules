@@ -14,8 +14,13 @@
 #include <linux/swap.h>
 #include <linux/version.h>
 
-#include "../zram_drv.h"
-#include "../zram_drv_internal.h"
+#ifdef CONFIG_ZRAM_5_4
+#include "../zram-5.4/zram_drv.h"
+#include "../zram-5.4/zram_drv_internal.h"
+#else
+#include "../zram-5.10/zram_drv.h"
+#include "../zram-5.10/zram_drv_internal.h"
+#endif
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
 
@@ -512,9 +517,10 @@ static ssize_t mem_cgroup_force_shrink_anon(struct kernfs_open_file *of,
 	else
 		nr_need_reclaim = memcg_inactive_anon_pages(memcg);
 
+	hybp(HYB_INFO, "FORCE SHRINK +\n");
 	nr_reclaimed = try_to_free_mem_cgroup_pages(memcg, nr_need_reclaim,
 			GFP_KERNEL, true);
-
+	hybp(HYB_INFO, "FORCE SHRINK - to_reclaim %lu reclaimed %lu\n", nr_need_reclaim, nr_reclaimed);
 	return nbytes;
 }
 
@@ -733,7 +739,7 @@ static s64 mem_cgroup_ufs2zram_scale_read(struct cgroup_subsys_state *css,
 	return atomic64_read(&MEMCGRP_ITEM(memcg, ufs2zram_scale));
 }
 
-static int mem_cgroup_force_swapin_write(struct cgroup_subsys_state *css,
+static int mem_cgroup_force_eswapin_write(struct cgroup_subsys_state *css,
 		struct cftype *cft, s64 val)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
@@ -758,7 +764,7 @@ static int mem_cgroup_force_swapin_write(struct cgroup_subsys_state *css,
 	return 0;
 }
 
-static int mem_cgroup_force_swapout_write(struct cgroup_subsys_state *css,
+static int mem_cgroup_force_eswapout_write(struct cgroup_subsys_state *css,
 		struct cftype *cft, s64 val)
 {
 #ifdef CONFIG_HYBRIDSWAP_CORE
@@ -850,12 +856,12 @@ static struct cftype mem_cgroup_hybridswap_legacy_files[] = {
 		.read_s64 = mem_cgroup_ufs2zram_scale_read,
 	},
 	{
-		.name = "force_swapin",
-		.write_s64 = mem_cgroup_force_swapin_write,
+		.name = "force_eswapin",
+		.write_s64 = mem_cgroup_force_eswapin_write,
 	},
 	{
-		.name = "force_swapout",
-		.write_s64 = mem_cgroup_force_swapout_write,
+		.name = "force_eswapout",
+		.write_s64 = mem_cgroup_force_eswapout_write,
 	},
 #ifdef CONFIG_HYBRIDSWAP_CORE
 	{
