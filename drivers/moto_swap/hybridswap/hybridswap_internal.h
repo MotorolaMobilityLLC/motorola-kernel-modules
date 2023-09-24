@@ -42,7 +42,7 @@ void hybridswap_loglevel_set(int level);
 int hybridswap_loglevel(void);
 
 #define DUMP_STACK_ON_ERR 0
-#define pt(l, f, ...)	pr_err("[%s]<%d:%s>:"f, #l, __LINE__, __func__, ##__VA_ARGS__)
+#define pt(l, f, ...)	pr_err("[%s][%s]:"f, #l, __func__, ##__VA_ARGS__)
 static inline void pr_none(void) {}
 #define hybp(l, f, ...) do {\
 	(l <= hybridswap_loglevel()) ? pt(l, f, ##__VA_ARGS__) : pr_none();\
