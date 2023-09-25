@@ -3407,13 +3407,7 @@ static int mmi_charger_check_ffc_status(struct smb_mmi_charger *chip, struct smb
 						pr_debug("uisoc is up to %d, ffc probing starts\n", chip->ffc_uisoc_threshold);
 					}
 				}
-				else {
-					if (chip->real_charger_type == POWER_SUPPLY_TYPE_UNKNOWN) {
-						max_fv_mv = mmi_get_ffc_fv(chip, prm->pres_temp_zone, false);
-					} else
-						chip->ffc_state = CHARGER_FFC_STATE_INVALID;
-					mmi_info(chip,"ui_soc:%d, charge_type:%d not for ffc\n", stat->batt_soc, chip->real_charger_type);
-				}
+
 				loop = false;
 			break;
 			case CHARGER_FFC_STATE_PROBING:
@@ -3762,8 +3756,13 @@ static void mmi_basic_charge_sm(struct smb_mmi_charger *chip,
 
 	vote(chip->fv_votable, MMI_HB_VOTER, true, target_fv * 1000);
 
-	if (chip->ffc_stop_chg) {
-		target_fcc = -EINVAL;
+	if (chip->enable_dcp_ffc) {
+		if (target_fcc == -EINVAL)
+			mmi_charger_ffc_init(chip);
+
+		if (chip->ffc_stop_chg) {
+			target_fcc = -EINVAL;
+		}
 	}
 
 	vote(chip->chg_dis_votable, MMI_HB_VOTER,
