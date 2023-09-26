@@ -37,6 +37,7 @@ struct wl2868c {
 	struct regmap *regmap;
 	struct regulator_desc *rdesc[WL2868C_MAX_REGULATORS];
 	struct regulator_dev *rdev[WL2868C_MAX_REGULATORS];
+	struct regulator *vio_reg;
 	int chip_cs_pin;
 };
 
@@ -330,11 +331,20 @@ static int wl2868c_i2c_probe(struct i2c_client *client, const struct i2c_device_
 {
 	struct device *dev = &client->dev;
 	struct wl2868c *chip;
+	struct regulator *vio_reg;
 	int error, cs_gpio, ret;
 	chip = devm_kzalloc(dev, sizeof(struct wl2868c), GFP_KERNEL);
 	if (!chip) {
 		dev_err(chip->dev, "wl2868c_i2c_probe Memory error...\n");
 		return -ENOMEM;
+	}
+	vio_reg = devm_regulator_get(dev, "vio");
+	if (vio_reg != NULL) {
+		dev_info(chip->dev, "wl2868c vio regulator get successed\n");
+		ret = regulator_enable(vio_reg);
+		chip->vio_reg = vio_reg;
+	} else {
+		dev_warn(dev, "VIO regulator get failed or absent!!!\n");
 	}
 
 	dev_info(chip->dev, "wl2868c_i2c_probe Enter...\n");
@@ -441,6 +451,11 @@ static int wl2868c_i2c_remove(struct i2c_client *client)
 	if (chip->chip_cs_pin > 0) {
 		desc = gpio_to_desc(chip->chip_cs_pin);
 		ret = gpiod_direction_output_raw(desc, GPIOF_INIT_LOW);
+	}
+
+	if (NULL != chip->vio_reg) {
+		regulator_disable(chip->vio_reg);
+		regulator_put(chip->vio_reg);
 	}
 
 	return ret;
