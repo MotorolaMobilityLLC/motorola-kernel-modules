@@ -72,6 +72,7 @@ enum oem_property_type {
 	OEM_PROP_CHG_PARTNER_ICL,
 	OEM_PROP_MSB_DEV_INFO,
 	OEM_PROP_MASTER_SWITCHEDCAP_INFO,
+	OEM_PROP_SLAVE_SWITCHEDCAP_INFO,
 	OEM_PROP_MAX,
 };
 
@@ -105,7 +106,11 @@ struct switched_dev_info
 	s32 ibus_ma;
 	s32 vbus_mv;
 	s32 vout_mv;
+	s32 vac_mv;
 	s32 vbat_mv;
+	s32 vusb_mv;
+	s32 vwpc_mv;
+	s32 die_temp;
 };
 
 struct qti_charger_notify_data {
