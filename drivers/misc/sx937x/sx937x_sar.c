@@ -74,6 +74,15 @@
 #define USB_POWER_SUPPLY_NAME   "usb"
 #endif
 
+#define SX937X_I2C_WATCHDOG_TIME 10000
+#define SX937X_I2C_WATCHDOG_TIME_ERR 2000
+
+#define NUM_PHASES 8
+#define CHECK_TIMES 3
+
+static void sx937x_reinitialize(psx93XX_t this);
+static void sx937x_i2c_watchdog_work(struct work_struct *work);
+
 /*! \struct sx937x
  * Specialized struct containing input event data, platform data, and
  * last cap state read if needed.
@@ -1120,6 +1129,8 @@ static int sx937x_parse_dt(struct sx937x_platform_data *pdata, struct device *de
 #ifdef CONFIG_CAPSENSE_FLIP_CAL
 	pdata->phone_flip_update_regs = parse_flip_dt_params(pdata, dev);
 #endif
+	pdata->esd_reinit_on = of_property_read_bool(dNode, "esd-reinit-on");
+	LOG_INFO("esd_reinit_on %d\n", pdata->esd_reinit_on);
 	LOG_INFO("-[%d] parse_dt complete\n", pdata->irq_gpio);
 	return 0;
 }
@@ -1679,6 +1690,10 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	pplatData->exit_platform_hw = sx937x_exit_platform_hw;
 
 	global_sx937x = this;
+	if (pplatData->esd_reinit_on) {
+		INIT_DELAYED_WORK(&this->i2c_watchdog_work, sx937x_i2c_watchdog_work);
+		schedule_delayed_work(&this->i2c_watchdog_work,msecs_to_jiffies(SX937X_I2C_WATCHDOG_TIME));
+	}
 	LOG_INFO("sx937x_probe() Done\n");
 	return 0;
 
@@ -1750,20 +1765,22 @@ static int sx937x_remove(struct i2c_client *client)
 static int sx937x_suspend(struct device *dev)
 {
 	psx93XX_t this = dev_get_drvdata(dev);
-#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 	psx937x_t pDevice = NULL;
 	psx937x_platform_data_t pdata = NULL;
-#endif
 
 	if (this) {
-#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 		pDevice = this->pDevice;
 		pdata = pDevice->hw;
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 		if (pdata->cap_vdd_en) {
 #endif
+		if (pdata && pdata->esd_reinit_on) {
+			cancel_delayed_work_sync(&this->i2c_watchdog_work);
+		}
 		sx937x_i2c_write_16bit(this,SX937X_COMMAND,0xD);//make sx937x in Sleep mode
 		LOG_DBG(LOG_TAG "sx937x suspend:disable irq!\n");
 		disable_irq(this->irq);
+		this->suspended = 1;
 #ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 		}
 #endif
@@ -1774,14 +1791,12 @@ static int sx937x_suspend(struct device *dev)
 static int sx937x_resume(struct device *dev)
 {
 	psx93XX_t this = dev_get_drvdata(dev);
-#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 	psx937x_t pDevice = NULL;
 	psx937x_platform_data_t pdata = NULL;
-#endif
 	if (this) {
-#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 		pDevice = this->pDevice;
 		pdata = pDevice->hw;
+#ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 		if (pdata->cap_vdd_en) {
 #endif
 		LOG_DBG(LOG_TAG "sx937x resume:enable irq!\n");
@@ -1791,6 +1806,11 @@ static int sx937x_resume(struct device *dev)
 #ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
 		}
 #endif
+		this->suspended = 0;
+		if (pdata && pdata->esd_reinit_on) {
+			schedule_delayed_work(&this->i2c_watchdog_work,
+			msecs_to_jiffies(SX937X_I2C_WATCHDOG_TIME_ERR));
+		}
 	}
 	return 0;
 }
@@ -1973,3 +1993,166 @@ int sx93XX_IRQ_init(psx93XX_t this)
 	}
 	return -ENOMEM;
 }
+/* Read i2c every 10 seconds, if there is an error, schedule again in 2 seconds
+ * and if it fails a few more times we can assume there is a device error and reset
+ */
+static void vdd_power_off_on(psx93XX_t this, bool on)
+{
+	int err = 0;
+	psx937x_t pDevice = this->pDevice;
+	psx937x_platform_data_t pdata = pDevice->hw;
+
+	if(pdata->eldo_vdd_en) {
+		err = gpio_direction_output(pdata->eldo_gpio,on);
+		LOG_INFO("SX937x reused eLDO_gpio 0x%x status:%d\n",pdata->eldo_gpio, on );
+		if(err < 0){
+			LOG_ERR("SX937x eLDO_gpio output fail,%d\n", err);
+		}
+	} else {
+		 LOG_ERR("SX937x using other power supply\n");
+	}
+}
+
+static void sx937x_register_err(psx93XX_t this)
+{
+	int ph = 0, idx = 0, num_same_val;
+	u32 reg_val, phen;
+	static int check_round = 0;
+	static u32 ph_useful[NUM_PHASES][CHECK_TIMES] ={0};
+
+	sx937x_i2c_read_16bit(this, 0x8024, &phen);
+	phen &= 0xFF; //current enabled phases
+
+	//update useful of each phase
+	for(ph=0; ph<NUM_PHASES; ph++) {
+		if(phen & 1<<ph) {
+			sx937x_i2c_read_16bit(this, SX937X_USEFUL_PH0 + ph*4, &reg_val);
+			ph_useful[ph][check_round] = reg_val;
+		} else {
+			ph_useful[ph][check_round] = 0;
+		}
+		LOG_DBG("phen = %d useful[%d][%d] = %d\n",phen,ph,check_round,ph_useful[ph][check_round]);
+	}
+	//reset if any phase read the same value by CHECK_TIMES
+	for(ph=0; ph<NUM_PHASES; ph++) {
+		num_same_val = 0;
+		if(phen & 1<<ph) {
+			for(idx=1; idx<CHECK_TIMES; idx++) {
+				if(ph_useful[ph][idx] != 0 && ph_useful[ph][idx-1] == ph_useful[ph][idx]) {
+					if(++num_same_val >= CHECK_TIMES-1) {
+						LOG_ERR("sx937x ph[%d] no change:%d %d %d\n",ph,ph_useful[ph][idx-2],ph_useful[ph][idx-1],ph_useful[ph][idx]);
+						sx937x_reinitialize(this);
+						goto reinit_end;
+					}
+				}
+			}
+		}
+	}
+reinit_end:
+	check_round = (check_round + 1) % CHECK_TIMES;
+}
+
+static void sx937x_i2c_watchdog_work(struct work_struct *work)
+{
+	static int i2c_err_cnt = 0;
+	psx93XX_t this = container_of(work, sx93XX_t, i2c_watchdog_work.work);
+	int ret;
+	u32 temp;
+	int delay = SX937X_I2C_WATCHDOG_TIME;
+
+	LOG_DBG("sx937x_i2c_watchdog_work\n");
+
+	if(!this->suspended) {
+		//err_1:i2c fail
+		ret = sx937x_i2c_read_16bit(this, 0x4004, &temp);
+		if (ret < 0) {
+			i2c_err_cnt++;
+			LOG_ERR("sx937x_i2c_watchdog_work i2c_err_cnt: %d\n", i2c_err_cnt);
+			delay = SX937X_I2C_WATCHDOG_TIME_ERR;
+			if (i2c_err_cnt >= 3) {
+				i2c_err_cnt = 0;
+				vdd_power_off_on(this, 0);
+				msleep(100);
+				vdd_power_off_on(this, 1);
+				sx937x_reinitialize(this);
+				delay = SX937X_I2C_WATCHDOG_TIME;
+			}
+		} else {
+			i2c_err_cnt = 0;
+			//err_2:default value of 0x4004 is 0x60 and usually will be configured to 0x70
+			if(temp == 0x60) {
+				LOG_ERR("sx937x_i2c_watchdog_work 0x4004 used default value: %d\n", temp);
+				sx937x_reinitialize(this);
+			} else {
+				//err_3:reset if any phase read the same value by CHECK_TIMES
+				LOG_DBG("sx937x_i2c_watchdog_work:checking enabled phase\n");
+				sx937x_register_err(this);
+			}
+		}
+	} else {
+		LOG_ERR("sx937x_i2c_watchdog_work before resume.\n");
+	}
+	schedule_delayed_work(&this->i2c_watchdog_work,msecs_to_jiffies(delay));
+}
+
+static void sx937x_reinitialize(psx93XX_t this)
+{
+	psx937x_t pDevice = this->pDevice;
+	psx937x_platform_data_t pdata = 0;
+	struct _buttonInfo *pCurrentbutton;
+	u32 temp;
+	//u32 phen = 0;
+	int i=0;
+	int retry;
+
+	LOG_INFO("SX937x start reinit....\n");
+	if (this && (pdata = pDevice->hw)) {
+		if (!pdata->esd_reinit_on)
+			return;
+		if (!atomic_add_unless(&this->init_busy, 1, 1))
+			return;
+		disable_irq(this->irq);
+		/* perform a reset */
+		for ( retry = 10; retry > 0; retry-- ) {
+			if (sx937x_i2c_write_16bit(this, SX937X_DEVICE_RESET, 0xDE) >= 0)
+				break;
+			LOG_INFO("SX937x write SX937X_DEVICE_RESET retry:%d\n", 11 - retry);
+			msleep(10);
+		}
+		/* wait until the reset has finished by monitoring NIRQ */
+		LOG_INFO("Sent Software Reset. Waiting until device is back from reset to continue.\n");
+		/* just sleep for awhile instead of using a loop with reading irq status */
+		msleep(100);
+		sx937x_reg_init(this);
+		/* re-enable interrupt handling */
+		enable_irq(this->irq);
+
+		/* make sure no interrupts are pending since enabling irq will only
+		 * work on next falling edge */
+		read_regStat(this);
+
+		/* If one of the sensors is on, re-enable it */
+		sx937x_i2c_read_16bit(this, SX937X_GENERAL_SETUP, &temp);   //0x8024
+		for (i=0; i < pDevice->pbuttonInformation->buttonSize; i++) {
+			pCurrentbutton = &(pDevice->pbuttonInformation->buttons[i]);
+			if (pCurrentbutton->enabled) {
+				sx937x_i2c_write_16bit(this, SX937X_GENERAL_SETUP, temp | 0x0000007F);
+				break;
+			}
+		}
+		/*for (i=0; i < pDevice->pbuttonInformation->buttonSize; i++) {
+			pCurrentbutton = &(pDevice->pbuttonInformation->buttons[i]);
+			if (pCurrentbutton->enabled) {
+				phen |= 1<<i;
+				phen |= 1<<(i+8);
+			}
+		}
+		sx937x_i2c_write_16bit(this, SX937X_GENERAL_SETUP, phen);*/
+		LOG_INFO("write reg[0x8024]:0x%x\n",temp | 0x0000007F);
+		manual_offset_calibration(this);
+		atomic_set(&this->init_busy, 0);
+		LOG_ERR("reinitialized sx937x, count %d\n", this->reset_count++);
+	}
+}
+
+

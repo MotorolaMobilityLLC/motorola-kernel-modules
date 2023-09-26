@@ -437,6 +437,7 @@ struct sx937x_platform_data
 	int ref_phase_c;
 	int eldo_gpio;
 	bool eldo_vdd_en;
+	bool esd_reinit_on;
 	sx937x_power_supply_type_t power_supply_type;
 #ifdef CONFIG_CAPSENSE_HEADSET_STATE
 	int headset_operate_reg_num;
@@ -527,6 +528,10 @@ struct sx93XX
 	/* struct workqueue_struct *ts_workq;  */  /* if want to use non default */
 	struct delayed_work dworker; /* work struct for worker function */
 	u8 phaseselect;
+	int reset_count;
+	atomic_t init_busy;
+	struct delayed_work i2c_watchdog_work;
+	int suspended;
 };
 
 int sx93XX_IRQ_init(psx93XX_t this);
