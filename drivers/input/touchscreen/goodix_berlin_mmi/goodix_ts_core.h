@@ -586,6 +586,14 @@ struct goodix_ts_core {
 #endif
 	atomic_t pm_resume;
 	wait_queue_head_t pm_wq;
+
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+	atomic_t trigger_enable;
+	u8 trigger_buf[2500];
+	atomic_t allow_capture;
+	bool data_valid;
+	struct mutex frame_log_lock;
+#endif
 };
 
 /* external module structures */
@@ -754,5 +762,14 @@ void goodix_dda_process_pen_report(struct goodix_pen_data *pen_data);
 #endif
 #ifdef CONFIG_GTP_DELAY_RELEASE
 void goodix_start_delay_work(bool start, int delay_ms);
+#endif
+
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+int frame_log_capture_start(struct goodix_ts_core *cd);
+int frame_log_capture_stop(struct goodix_ts_core *cd);
+void put_fifo_with_discard(char *log_buf, int len);
+void clear_kfifo(void);
+int goodix_log_capture_register_misc(struct goodix_ts_core *cd);
+int goodix_log_capture_unregister_misc(struct goodix_ts_core *cd);
 #endif
 #endif

@@ -2803,6 +2803,15 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		goto err_register_gesture_wakelock;
 	}
 
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+	goodix_log_capture_register_misc(core_data);
+	if (ret)
+		ts_err("Failed register log device, %d", ret);
+
+	atomic_set(&core_data->allow_capture, 1);
+	ts_info("Enable ghost log capture after probe");
+#endif
+
 	ts_info("goodix_ts_core probe success");
 	return 0;
 
@@ -2834,6 +2843,10 @@ static int goodix_ts_remove(struct platform_device *pdev)
 	goodix_stylus_dda_exit();
 #endif
 	goodix_tools_exit();
+
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+	goodix_log_capture_unregister_misc(core_data);
+#endif
 
 	if (core_data->init_stage >= CORE_INIT_STAGE2) {
 		gesture_module_exit();

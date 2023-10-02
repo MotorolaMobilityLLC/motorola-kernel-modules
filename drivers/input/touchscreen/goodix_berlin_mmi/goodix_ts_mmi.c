@@ -56,6 +56,13 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 #endif
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+static ssize_t goodix_ts_log_trigger_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count);
+static ssize_t goodix_ts_log_trigger_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+#endif
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -71,6 +78,10 @@ static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	goodix_ts_stowed_show, goodix_ts_stowed_store);
 #ifdef CONFIG_GTP_LAST_TIME
 static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
+#endif
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+static DEVICE_ATTR(log_trigger, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_log_trigger_show, goodix_ts_log_trigger_store);
 #endif
 
 /* hal settings */
@@ -130,6 +141,10 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 #ifdef CONFIG_GTP_LAST_TIME
 	ADD_ATTR(timestamp);
+#endif
+
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+	ADD_ATTR(log_trigger);
 #endif
 
 	if (idx) {
@@ -767,6 +782,39 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 }
 #endif
 
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+static ssize_t goodix_ts_log_trigger_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	if (!buf || count <= 0)
+		return 0;
+
+	clear_kfifo();
+	frame_log_capture_start(core_data);
+
+	return count;
+}
+
+static ssize_t goodix_ts_log_trigger_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", 0x01);
+}
+#endif
+
 static int goodix_ts_mmi_methods_get_vendor(struct device *dev, void *cdata) {
 	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "goodix");
 }
@@ -1175,6 +1223,12 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	core_data->zerotap_data[0] = 0;
 #endif
 	ts_info("Resume end");
+
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+	atomic_set(&core_data->allow_capture, 1);
+	ts_info("Resume end, enable ghost log capture");
+#endif
+
 	return 0;
 }
 
@@ -1187,6 +1241,19 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev) {
 
 	ts_info("Suspend start");
 	atomic_set(&core_data->suspended, 1);
+#ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
+	//disable/stop ghost log capture
+	atomic_set(&core_data->allow_capture, 0);
+	ts_info("Suspend start, disable ghost log capture");
+
+	mutex_lock(&core_data->frame_log_lock);
+	if(atomic_read(&core_data->trigger_enable) == 1) {
+		atomic_set(&core_data->trigger_enable, 0);
+		core_data->data_valid = 0;
+		frame_log_capture_stop(core_data);
+	}
+	mutex_unlock(&core_data->frame_log_lock);
+#endif
 
 	if (core_data->board_data.stylus_mode_ctrl && core_data->set_mode.stylus_mode) {
 		mutex_lock(&core_data->mode_lock);

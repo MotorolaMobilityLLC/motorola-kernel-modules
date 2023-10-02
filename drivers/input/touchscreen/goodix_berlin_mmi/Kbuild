@@ -83,6 +83,13 @@ ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
 	EXTRA_CFLAGS += -DCONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 endif
 
+ifeq ($(TARGET_BUILD_VARIANT), userdebug)
+ifneq ($(filter m y, $(CONFIG_GTP_GHOST_LOG_CAPTURE)),)
+	EXTRA_CFLAGS += -DCONFIG_GTP_GHOST_LOG_CAPTURE
+	goodix_brl_mmi-objs += goodix_ts_log_capture.o
+endif
+endif
+
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
 USE_TARGET_PRODUCT := $(strip $(subst _factory,, $(TARGET_PRODUCT)))
 else
