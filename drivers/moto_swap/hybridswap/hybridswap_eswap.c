@@ -4668,10 +4668,10 @@ static unsigned long memcg_reclaim_size(struct mem_cgroup *memcg)
 		return 0;
 
 	zram_size = atomic64_read(&hybs->zram_stored_size);
-        if (hybs->force_swapout) {
+	if (hybs->force_swapout) {
 		hybs->can_eswaped = zram_size;
-                return zram_size;
-        }
+		return zram_size;
+	}
 
 	cur_size = atomic64_read(&hybs->hybridswap_stored_size);
 	new_size = (zram_size + cur_size) *
