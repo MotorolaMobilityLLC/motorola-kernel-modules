@@ -1441,6 +1441,12 @@ static inline u64 calc_shrink_scale(pg_data_t *pgdat)
 			hybs->can_reclaimed = 0;
 		else
 			hybs->can_reclaimed = can_reclaimed - (nr_zram + nr_eswap);
+
+		if (hybs->can_reclaimed < PAGES_PER_1MB) { // Skip small reclaim
+			hybs->can_reclaimed = 0;
+			continue;
+		}
+
 		hybp(HYB_INFO, "CHECK MEMCG %s: can_reclaim %luKB nr_anon %luKB zram %luKB eswap %luKB total %luKB reclaimed %lu%%(%lu)\n",
 				hybs->name, (unsigned long)page_to_kb(hybs->can_reclaimed),
 				(unsigned long)page_to_kb(nr_anon), (unsigned long)page_to_kb(nr_zram),
