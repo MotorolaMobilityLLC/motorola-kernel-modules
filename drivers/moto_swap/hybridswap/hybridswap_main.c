@@ -7,6 +7,7 @@
 
 #include <linux/slab.h>
 #include <linux/cpu.h>
+#include <linux/pagemap.h>
 #include <trace/hooks/mm.h>
 #include <trace/hooks/vmscan.h>
 #include <linux/genhd.h>
@@ -17,9 +18,29 @@
 #ifdef CONFIG_ZRAM_5_4
 #include "../zram-5.4/zram_drv.h"
 #include "../zram-5.4/zram_drv_internal.h"
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
+#elif defined CONFIG_ZRAM_5_15
+#include "../zram-5.15/zram_drv.h"
+#include "../zram-5.15/zram_drv_internal.h"
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
+static unsigned long memcg_page_state_local(struct mem_cgroup *memcg, int idx)
+{
+	long x = 0;
+	int cpu;
+
+	for_each_possible_cpu(cpu)
+		x += per_cpu(memcg->vmstats_percpu->state[idx], cpu);
+#ifdef CONFIG_SMP
+	if (x < 0)
+		x = 0;
+#endif
+	return x;
+}
 #else
 #include "../zram-5.10/zram_drv.h"
 #include "../zram-5.10/zram_drv_internal.h"
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
 #endif
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
@@ -119,9 +140,17 @@ static inline void sum_hybridswap_vm_events(unsigned long *ret)
 
 static inline void all_hybridswap_vm_events(unsigned long *ret)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
 	get_online_cpus();
+#else
+	cpus_read_lock();
+#endif
 	sum_hybridswap_vm_events(ret);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
 	put_online_cpus();
+#else
+	cpus_read_unlock();
+#endif
 }
 
 ssize_t hybridswap_vmstat_show(struct device *dev,
@@ -191,7 +220,7 @@ memcg_hybs_t *hybridswap_cache_alloc(struct mem_cgroup *memcg, bool atomic)
 	u64 ret;
 	gfp_t flags = GFP_KERNEL;
 
-	if (memcg->android_oem_data1)
+	if (MEMCG_OEM_DATA(memcg))
 		BUG();
 
 	if (atomic)
@@ -232,7 +261,7 @@ memcg_hybs_t *hybridswap_cache_alloc(struct mem_cgroup *memcg, bool atomic)
 	hybs->memcg = memcg;
 	refcount_set(&hybs->usage, 1);
 
-	ret = atomic64_cmpxchg((atomic64_t *)&memcg->android_oem_data1, 0, (u64)hybs);
+	ret = atomic64_cmpxchg((atomic64_t *)&MEMCG_OEM_DATA(memcg), 0, (u64)hybs);
 	if (ret != 0) {
 #ifdef CONFIG_HYBRIDSWAP_ASYNC_COMPRESS
 		hybs->cache.dead = 1;
@@ -286,7 +315,7 @@ static void tune_swappiness_hook(void *data, int *swappiness)
 
 static void mem_cgroup_alloc_hook(void *data, struct mem_cgroup *memcg)
 {
-	if (memcg->android_oem_data1)
+	if (MEMCG_OEM_DATA(memcg))
 		BUG();
 
 	hybridswap_cache_alloc(memcg, true);
@@ -296,11 +325,11 @@ static void mem_cgroup_free_hook(void *data, struct mem_cgroup *memcg)
 {
 	memcg_hybs_t *hybs;
 
-	if (!memcg->android_oem_data1)
+	if (!MEMCG_OEM_DATA(memcg))
 		return;
 
-	hybs = (memcg_hybs_t *)memcg->android_oem_data1;
-	memcg->android_oem_data1 = 0;
+	hybs = (memcg_hybs_t *)MEMCG_OEM_DATA(memcg);
+	MEMCG_OEM_DATA(memcg) = 0;
 #ifdef CONFIG_HYBRIDSWAP_ASYNC_COMPRESS
 	clear_page_memcg(&hybs->cache);
 #endif
@@ -329,7 +358,7 @@ void memcg_app_grade_update(struct mem_cgroup *tarfetch)
 static void mem_cgroup_css_online_hook(void *data,
 		struct cgroup_subsys_state *css, struct mem_cgroup *memcg)
 {
-	if (memcg->android_oem_data1)
+	if (MEMCG_OEM_DATA(memcg))
 		memcg_app_grade_update(memcg);
 
 	css_get(css);
@@ -340,7 +369,7 @@ static void mem_cgroup_css_offline_hook(void *data,
 {
 	unsigned long flags;
 
-	if (memcg->android_oem_data1) {
+	if (MEMCG_OEM_DATA(memcg)) {
 		spin_lock_irqsave(&grade_list_lock, flags);
 		list_del_init(&MEMCGRP_ITEM(memcg, grade_node));
 		spin_unlock_irqrestore(&grade_list_lock, flags);
@@ -457,6 +486,7 @@ unsigned long memcg_anon_pages(struct mem_cgroup *memcg)
 	return (lruvec_page_state(lruvec, NR_ACTIVE_ANON) +
 			lruvec_page_state(lruvec, NR_INACTIVE_ANON));
 #endif
+
 #else
 	return (memcg_page_state_local(memcg, NR_ACTIVE_ANON) +
 			memcg_page_state_local(memcg, NR_INACTIVE_ANON));
