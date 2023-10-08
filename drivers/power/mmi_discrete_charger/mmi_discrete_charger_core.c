@@ -2978,6 +2978,11 @@ static int mmi_discrete_get_chg_info(void *data, struct mmi_charger_info *chg_in
 		if (chip->chg_info.chrg_pmax_mw < (usb_icl * 5 / 1000))
 			chip->chg_info.chrg_pmax_mw = usb_icl * 5 / 1000;
 
+		if(!typec_rp_med_high(chip, chip->typec_mode)
+			&& (usb_type == POWER_SUPPLY_TYPE_USB_DCP)
+			&& (chip->chg_info.chrg_pmax_mw > 12500)) {
+			chip->chg_info.chrg_pmax_mw = 12000; //Show normal charge rate for default DCP
+		}
 		rc = 0;
 		goto completed;
 	}
