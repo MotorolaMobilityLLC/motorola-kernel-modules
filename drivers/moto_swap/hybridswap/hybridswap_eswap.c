@@ -20,9 +20,16 @@
 #ifdef CONFIG_ZRAM_5_4
 #include "../zram-5.4/zram_drv.h"
 #include "../zram-5.4/zram_drv_internal.h"
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
+#elif defined CONFIG_ZRAM_5_15
+#include "../zram-5.15/zram_drv.h"
+#include "../zram-5.15/zram_drv_internal.h"
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
 #else
 #include "../zram-5.10/zram_drv.h"
 #include "../zram-5.10/zram_drv_internal.h"
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
 #endif
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
@@ -1973,7 +1980,7 @@ static void __move_to_zram(struct zram *zram, u32 index, unsigned long handle,
 static int move_to_zram(struct zram *zram, u32 index, struct io_eswapent *io_eswap)
 {
 	unsigned long handle, eswpentry;
-	struct mem_cgroup *mcg = NULL;
+//	struct mem_cgroup *mcg = NULL;
 	int size, i;
 	u8 *dst = NULL;
 
@@ -1990,7 +1997,7 @@ static int move_to_zram(struct zram *zram, u32 index, struct io_eswapent *io_esw
 		return -EINVAL;
 	}
 
-	mcg = io_eswap->mcg;
+//	mcg = io_eswap->mcg;
 	zram_slot_lock(zram, index);
 	eswpentry = zram_get_handle(zram, index);
 	if (zram_test_overwrite(zram, index, io_eswap->eswapid)) {
@@ -4389,7 +4396,7 @@ ssize_t hybridswap_loop_device_store(struct device *dev,
 
 	memcpy(loop_device, buf, len);
 	loop_device[len] = '\0';
-	strstrip(loop_device);
+	(void) strstrip(loop_device);
 
 	zram = dev_to_zram(dev);
 	down_write(&zram->init_lock);
@@ -5495,7 +5502,7 @@ void hybridswap_force_reclaim(struct mem_cgroup *mcg)
 
 void mem_cgroup_id_remove_hook(void *data, struct mem_cgroup *memcg)
 {
-	if (!memcg->android_oem_data1)
+	if (!MEMCG_OEM_DATA(memcg))
 		return;
 
 	hybridswap_mem_cgroup_deinit(memcg);
