@@ -14,9 +14,16 @@
 #ifdef CONFIG_ZRAM_5_4
 #include "../zram-5.4/zram_drv.h"
 #include "../zram-5.4/zram_drv_internal.h"
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
+#elif defined CONFIG_ZRAM_5_15
+#include "../zram-5.15/zram_drv.h"
+#include "../zram-5.15/zram_drv_internal.h"
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
 #else
 #include "../zram-5.10/zram_drv.h"
 #include "../zram-5.10/zram_drv_internal.h"
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
 #endif
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
