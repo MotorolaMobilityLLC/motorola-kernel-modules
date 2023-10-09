@@ -152,6 +152,10 @@ struct ctrl {
 #include <linux/blkdev.h>
 #include <linux/bio.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#define PDE_DATA(x) pde_data(x)
+#endif
+
 static struct page *addr_to_page(void *addr)
 {
 	if (is_vmalloc_addr(addr))
@@ -176,13 +180,19 @@ static int utags_submit_bio(struct block_device *bdev, void *buf, int pages, int
 	while (left_pages > 0) {
 		num = (left_pages >= NR_BIO_MAX_PAGES) ? NR_BIO_MAX_PAGES : left_pages;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		bio = bio_alloc(bdev, num, 0, GFP_KERNEL);
+#else
 		bio = bio_alloc(GFP_KERNEL, num);
+#endif
 		if (!bio)
 			return -ENOMEM;
 
 		bio->bi_iter.bi_sector = (pages - left_pages) * (PAGE_SIZE >> 9);
 		bio->bi_opf = opf;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 		bio_set_dev(bio, bdev);
+#endif
 
 		for (i = 0; i < num; i++) {
 			if (!bio_add_page(bio, addr_to_page(buf + (pages - left_pages + i) * PAGE_SIZE), PAGE_SIZE, 0)) {
