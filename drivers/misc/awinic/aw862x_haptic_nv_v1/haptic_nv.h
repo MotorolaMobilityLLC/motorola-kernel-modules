@@ -11,7 +11,7 @@
 #define AW_INPUT_FRAMEWORK
 #define AW_TIKTAP
 /* #define AW_DOUBLE */
-/* #define AW_DURATION_DECIDE_WAVEFORM */
+#define AW_DURATION_DECIDE_WAVEFORM
 /* #define AW_ENABLE_RTP_PRINT_LOG */
 /* #define AW862X_MUL_GET_F0 */
 /* #define AW_MAXIMUM_F0_CALI_DATA */
