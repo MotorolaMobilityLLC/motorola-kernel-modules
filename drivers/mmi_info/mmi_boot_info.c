@@ -32,6 +32,9 @@
 #include <soc/qcom/mmi_boot_info.h>
 #include "mmi_info.h"
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#define PDE_DATA(x) pde_data(x)
+#endif
 /*
  * EMIT_BOOTINFO and EMIT_BOOTINFO_STR are used to emit the bootinfo
  * information for data provided via DEVICE TREE.
