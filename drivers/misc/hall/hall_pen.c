@@ -55,6 +55,8 @@ static struct hall_sensor_str {
 #ifdef CONFIG_HALL_PASSIVE_PEN
 	struct delayed_work hall_sensor_work;
 	struct delayed_work hall_sensor_dowork;
+	struct input_handler pen_handler;
+	struct input_handle pen_handle;
 #endif
 }* hall_sensor_dev;
 
@@ -146,14 +148,17 @@ static void pen_report_function(struct work_struct *dat)
 	if(hall_sensor_dev->report_val != report_val){
 		LOG_INFO("hall report %d", report_val);
 		hall_sensor_dev->report_val = report_val;
-		input_report_abs(hall_sensor_dev->hall_dev, ABS_DISTANCE, report_val);
+		if(hall_sensor_dev->report_val)
+			hall_sensor_dev->status = 0;
+		else
+			hall_sensor_dev->status = 1;
+		input_report_switch(hall_sensor_dev->hall_dev, SW_PEN_INSERTED, !hall_sensor_dev->status);
 		input_sync(hall_sensor_dev->hall_dev);
+		if(hall_sensor_dev->report_val)
+			pen_detection_notifier_call_chain(PEN_DETECTION_INSERT, NULL);
+		else
+			pen_detection_notifier_call_chain(PEN_DETECTION_PULL, NULL);
 	}
-
-	if(hall_sensor_dev->report_val)
-		pen_detection_notifier_call_chain(PEN_DETECTION_INSERT, NULL);
-	else
-		pen_detection_notifier_call_chain(PEN_DETECTION_PULL, NULL);
 }
 #endif
 
@@ -208,6 +213,7 @@ static int hallpen_enable(struct sensors_classdev *sensors_cdev,
 		unsigned int enable)
 {
 	hall_sensor_dev->report_val = -1;
+#ifndef CONFIG_HALL_PASSIVE_PEN
 	hall_sensor_dev->pen_detect = enable;
 	hall_enable(enable);
 	if (enable == 0)
@@ -215,6 +221,7 @@ static int hallpen_enable(struct sensors_classdev *sensors_cdev,
 		input_report_abs(hall_sensor_dev->hall_dev, ABS_DISTANCE, -1);
 		input_sync(hall_sensor_dev->hall_dev);
 	}
+#endif
 	return 0;
 }
 static ssize_t hall_enable_store(struct class *class,
@@ -258,6 +265,33 @@ struct class hall_class = {
 };
 
 #ifdef CONFIG_HALL_PASSIVE_PEN
+static struct input_device_id mID[] = {
+	{ .driver_info = 1 },		//scan all device to match hall sensor
+	{ },
+};
+int pen_connect(struct input_handler *handler, struct input_dev *dev, const struct input_device_id *id){
+	LOG_INFO("[%s] hall_sensor connect to handler\n", DRIVER_NAME);
+	return 0;
+}
+
+void pen_event(struct input_handle *handle, unsigned int type, unsigned int code, int value){
+	if(type==EV_SW && code==SW_PEN_INSERTED ){
+		if(value != 2 && !!test_bit(code, hall_sensor_dev->hall_dev->sw) != !hall_sensor_dev->status){
+			__change_bit(code,  hall_sensor_dev->hall_dev->sw);
+			LOG_INFO("[%s] reset dev->sw=%d \n", DRIVER_NAME,!hall_sensor_dev->status);
+		}
+	}
+}
+
+bool pen_match(struct input_handler *handler, struct input_dev *dev){
+	if( (dev->name && handler->name) &&
+		!strcmp(dev->name,"pen_input") &&
+		!strcmp(handler->name,"pen_input_handler"))
+		    return true;
+
+	return false;
+}
+
 static irqreturn_t hall_sensor_interrupt_handler(int irq, void *dev_id)
 {
 	LOG_DBG("hall_sensor_interrupt_handler = %d", irq);
@@ -282,7 +316,6 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	enum of_gpio_flags flags;
 	struct device_node *np = pdev->dev.of_node;
 	int i;
-	int err ;
 	const char *name_temp;
 	//struct totalHallInformation *pHallInformationData = NULL;
 
@@ -295,8 +328,13 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	}
 
 	spin_lock_init(&hall_sensor_dev->mHallSensorLock);
+#ifdef CONFIG_HALL_PASSIVE_PEN
+	hall_sensor_dev->enable = 1;
+	hall_sensor_dev->pen_detect = 1;
+#else
 	hall_sensor_dev->enable = 0;
 	hall_sensor_dev->pen_detect = 0;
+#endif
 	//tcmd node
 	ret = of_property_read_string(np, "hall,factory-class-name", &hall_class.name);
 	ret = class_register(&hall_class);
@@ -318,18 +356,47 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	hall_sensor_dev->hall_dev->name = name_temp;
 	hall_sensor_dev->hall_dev->dev.parent= NULL;
 	LOG_INFO("hall_ num :%s", hall_sensor_dev->hall_dev->name);
+#ifdef CONFIG_HALL_PASSIVE_PEN
 	/* Set all the keycodes */
-	//input_set_capability(hall_sensor_dev->hall_dev, EV_SW, SW_CAMERA_LENS_COVER);
+	hall_sensor_dev->hall_dev->phys= "/dev/input/pen_detect";
+	input_set_capability(hall_sensor_dev->hall_dev, EV_SW, SW_PEN_INSERTED);
+#else
 	__set_bit(EV_ABS, hall_sensor_dev->hall_dev->evbit);
 	input_set_abs_params(hall_sensor_dev->hall_dev, ABS_DISTANCE, -1, 100, 0, 0);
+#endif
 
-	err = input_register_device(hall_sensor_dev->hall_dev);
+	ret = input_register_device(hall_sensor_dev->hall_dev);
 	if (ret) {
-		LOG_ERR("halinput registration fails\n");
-		return -ENOMEM;
+		LOG_ERR("[%s] input registration fails\n", DRIVER_NAME);
+		ret = -1;
+		goto exit_input_free;
 	}
+#ifdef CONFIG_HALL_PASSIVE_PEN
+	hall_sensor_dev->pen_handler.match=pen_match;
+	hall_sensor_dev->pen_handler.connect=pen_connect;
+	hall_sensor_dev->pen_handler.event=pen_event;
+	hall_sensor_dev->pen_handler.name="pen_detect_handler";
+	hall_sensor_dev->pen_handler.id_table = mID;
+	ret = input_register_handler(& hall_sensor_dev->pen_handler);
+	if(ret){
+		LOG_ERR("[%s] handler registration fails\n", DRIVER_NAME);
+		ret = -1;
+		goto exit_unregister_input_dev;
+	}
+	hall_sensor_dev->pen_handle.name="pen_detect_handle";
+	hall_sensor_dev->pen_handle.open=1;         //receive any event from hall sensor
+	hall_sensor_dev->pen_handle.dev=hall_sensor_dev->hall_dev;
+	hall_sensor_dev->pen_handle.handler=&hall_sensor_dev->pen_handler;
+	ret = input_register_handle(& hall_sensor_dev->pen_handle);
+	if(ret){
+		LOG_ERR("[%s] handle registration fails\n", DRIVER_NAME);
+		ret = -1;
+		goto exit_unregister_handler;
+	}
+#else
 	input_report_abs(hall_sensor_dev->hall_dev, ABS_DISTANCE, -1);
 	input_sync(hall_sensor_dev->hall_dev);
+#endif
 
 	hall_sensor_dev->sensors_pen_cdev.sensors_enable = hallpen_enable;
 	hall_sensor_dev->sensors_pen_cdev.sensors_poll_delay = NULL;
@@ -346,9 +413,9 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	hall_sensor_dev->sensors_pen_cdev.delay_msec = 100;
 	hall_sensor_dev->sensors_pen_cdev.enabled = 0;
 
-	err = sensors_classdev_register(&hall_sensor_dev->hall_dev->dev, &hall_sensor_dev->sensors_pen_cdev);
-	if (err < 0)
-		LOG_ERR("create cap sensor_class  file failed (%d)\n", err);
+	ret = sensors_classdev_register(&hall_sensor_dev->hall_dev->dev, &hall_sensor_dev->sensors_pen_cdev);
+	if (ret < 0)
+		LOG_ERR("create cap sensor_class  file failed (%d)\n", ret);
 
 	hall_sensor_dev->gpio_list = kzalloc(sizeof (struct hall_gpio) * hall_sensor_dev->gpio_num, GFP_KERNEL);
 	if (!hall_sensor_dev->gpio_list) {
@@ -439,6 +506,15 @@ fail_for_mem:
 		kfree(hall_sensor_dev->gpio_list);
 	if (hall_sensor_dev)
 		kfree(hall_sensor_dev);
+#ifdef CONFIG_HALL_PASSIVE_PEN
+exit_unregister_handler:
+	input_unregister_handler(& hall_sensor_dev->pen_handler);
+exit_unregister_input_dev:
+	input_unregister_device(hall_sensor_dev->hall_dev);
+#endif
+exit_input_free:
+	input_free_device(hall_sensor_dev->hall_dev);
+	hall_sensor_dev->hall_dev = NULL;
 	return ret;
 }
 
