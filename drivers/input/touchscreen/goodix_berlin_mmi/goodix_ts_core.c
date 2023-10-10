@@ -2449,6 +2449,40 @@ static void goodix_palm_sensor_release_timer_handler(struct timer_list *t)
 }
 #endif
 
+#ifdef GTP_PEN_NOTIFIER
+static int pen_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	int ret = 0;
+	struct goodix_ts_core *cd = container_of(self,
+		struct goodix_ts_core, pen_notif);
+
+	ts_info("Received event(%lu) for pen detection\n", event);
+
+	if (event == PEN_DETECTION_INSERT)
+		cd->gtp_pen_detect_flag = 0x0;
+	else if (event == PEN_DETECTION_PULL)
+		cd->gtp_pen_detect_flag = 0x1;
+
+	mutex_lock_interruptible(&cd->mode_lock);
+
+	if (cd->power_on == 0) {
+		ts_err("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	ret = goodix_ts_send_cmd(cd, 0x32, 5, cd->gtp_pen_detect_flag, 0x00);
+	if (ret < 0) {
+		ts_err("failed to send passive pen mode cmd");
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&cd->mode_lock);
+	return ret;
+}
+#endif
+
 /**
  * goodix_ts_probe - called by kernel when Goodix touch
  *  platform driver is added.
@@ -2603,6 +2637,14 @@ static int goodix_ts_probe(struct platform_device *pdev)
 
 	atomic_set(&core_data->allow_capture, 1);
 	ts_info("Enable ghost log capture after probe");
+#endif
+
+#ifdef GTP_PEN_NOTIFIER
+	core_data->gtp_pen_detect_flag = PEN_DETECTION_INSERT;
+	core_data->pen_notif.notifier_call = pen_notifier_callback;
+	ret = pen_detection_register_client(&core_data->pen_notif);
+	if (ret)
+		ts_err("[PEN]Unable to register pen_notifier: %d\n", ret);
 #endif
 
 	ts_info("goodix_ts_core probe success");

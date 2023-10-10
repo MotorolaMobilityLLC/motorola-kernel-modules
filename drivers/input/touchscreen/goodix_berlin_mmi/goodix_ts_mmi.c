@@ -1275,6 +1275,14 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	if (core_data->board_data.stowed_mode_ctrl) {
 		core_data->set_mode.stowed = 0;
 	}
+
+#ifdef GTP_PEN_NOTIFIER
+	if (core_data->gtp_pen_detect_flag) {
+		ret = goodix_ts_send_cmd(core_data, 0x32, 5, 0x1, 0x00);
+		if (ret < 0)
+			ts_err("failed to send passive pen mode cmd");
+	}
+#endif
 	mutex_unlock(&core_data->mode_lock);
 #ifdef CONFIG_GTP_FOD
 	if(core_data->zerotap_data[0]) {

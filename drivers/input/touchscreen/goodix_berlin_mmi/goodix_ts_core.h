@@ -31,6 +31,10 @@
 #include <linux/ktime.h>
 #endif
 
+#ifdef GTP_PEN_NOTIFIER
+#include <linux/pen_detection_notify.h>
+#endif
+
 #define GOODIX_CORE_DRIVER_NAME			"goodix_ts"
 #define GOODIX_PEN_DRIVER_NAME			"goodix_ts,pen"
 #define GOODIX_DRIVER_VERSION			"v1.2.3"
@@ -583,6 +587,11 @@ struct goodix_ts_core {
 	atomic_t allow_capture;
 	bool data_valid;
 	struct mutex frame_log_lock;
+#endif
+
+#ifdef GTP_PEN_NOTIFIER
+	int gtp_pen_detect_flag;
+	struct notifier_block pen_notif;
 #endif
 };
 
