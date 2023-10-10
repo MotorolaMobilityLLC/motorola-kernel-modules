@@ -52,6 +52,10 @@ static struct hall_sensor_str {
 	spinlock_t mHallSensorLock;
 	struct input_dev *hall_dev;
 	struct sensors_classdev sensors_pen_cdev;
+#ifdef CONFIG_HALL_PASSIVE_PEN
+	struct delayed_work hall_sensor_work;
+	struct delayed_work hall_sensor_dowork;
+#endif
 }* hall_sensor_dev;
 
 #ifdef CONFIG_OF
@@ -74,6 +78,8 @@ static struct platform_driver hall_pen_driver = {
 };
 
 #ifdef CONFIG_HALL_PASSIVE_PEN
+static struct workqueue_struct *hall_sensor_wq;
+static struct workqueue_struct *hall_sensor_do_wq;
 static BLOCKING_NOTIFIER_HEAD(pen_detection_notifier_list);
 
 /**
@@ -115,6 +121,40 @@ static int pen_detection_notifier_call_chain(unsigned long val, void *v)
 	return blocking_notifier_call_chain(&pen_detection_notifier_list, val,
 					    v);
 }
+
+static void pen_do_work_function(struct work_struct *dat)
+{
+	LOG_INFO("[%s] hall_sensor_interrupt = %d\n", DRIVER_NAME,hall_sensor_dev->pen_detect);
+	cancel_delayed_work(&hall_sensor_dev->hall_sensor_work);
+	queue_delayed_work(hall_sensor_wq, &hall_sensor_dev->hall_sensor_work, 0);
+}
+
+static void pen_report_function(struct work_struct *dat)
+{
+	int i;
+	unsigned long flags;
+	int report_val = 0;
+	for (i = 0; i < hall_sensor_dev->gpio_num; i++)
+	{
+		spin_lock_irqsave(&hall_sensor_dev->mHallSensorLock, flags);
+		if (gpio_get_value(hall_sensor_dev->gpio_list[i].gpio) > 0)
+			report_val |= hall_sensor_dev->gpio_list[i].gpio_high_report_val;
+		else if (gpio_get_value(hall_sensor_dev->gpio_list[i].gpio) == 0)
+			report_val |= hall_sensor_dev->gpio_list[i].gpio_low_report_val;
+		spin_unlock_irqrestore(&hall_sensor_dev->mHallSensorLock, flags);
+	}
+	if(hall_sensor_dev->report_val != report_val){
+		LOG_INFO("hall report %d", report_val);
+		hall_sensor_dev->report_val = report_val;
+		input_report_abs(hall_sensor_dev->hall_dev, ABS_DISTANCE, report_val);
+		input_sync(hall_sensor_dev->hall_dev);
+	}
+
+	if(hall_sensor_dev->report_val)
+		pen_detection_notifier_call_chain(PEN_DETECTION_INSERT, NULL);
+	else
+		pen_detection_notifier_call_chain(PEN_DETECTION_PULL, NULL);
+}
 #endif
 
 void check_and_send(void)
@@ -136,13 +176,6 @@ void check_and_send(void)
 		input_report_abs(hall_sensor_dev->hall_dev, ABS_DISTANCE, report_val);
 		input_sync(hall_sensor_dev->hall_dev);
 	}
-
-#ifdef CONFIG_HALL_PASSIVE_PEN
-	if(hall_sensor_dev->report_val)
-		pen_detection_notifier_call_chain(PEN_DETECTION_INSERT, NULL);
-	else
-		pen_detection_notifier_call_chain(PEN_DETECTION_PULL, NULL);
-#endif
 }
 
 void hall_enable(bool enable)
@@ -224,6 +257,14 @@ struct class hall_class = {
 	.class_groups           = hall_class_groups,
 };
 
+#ifdef CONFIG_HALL_PASSIVE_PEN
+static irqreturn_t hall_sensor_interrupt_handler(int irq, void *dev_id)
+{
+	LOG_DBG("hall_sensor_interrupt_handler = %d", irq);
+	queue_delayed_work(hall_sensor_do_wq, &hall_sensor_dev->hall_sensor_dowork, msecs_to_jiffies(0));
+	return IRQ_HANDLED;
+}
+#else
 static irqreturn_t hall_sensor_interrupt_handler(int irq, void *dev_id)
 {
 	unsigned long flags;
@@ -233,6 +274,7 @@ static irqreturn_t hall_sensor_interrupt_handler(int irq, void *dev_id)
 	spin_unlock_irqrestore(&hall_sensor_dev->mHallSensorLock, flags);
 	return IRQ_HANDLED;
 }
+#endif
 
 static int hall_sensor_probe(struct platform_device *pdev)
 {
@@ -314,6 +356,15 @@ static int hall_sensor_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto fail_for_mem;
 	}
+
+#ifdef CONFIG_HALL_PASSIVE_PEN
+	hall_sensor_wq = create_singlethread_workqueue("hall_sensor_wq");
+	hall_sensor_do_wq = create_singlethread_workqueue("hall_sensor_do_wq");
+	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_work, pen_report_function);
+	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_dowork, pen_do_work_function);
+	queue_delayed_work(hall_sensor_do_wq, &hall_sensor_dev->hall_sensor_dowork, 0);
+#endif
+
 	for (i = 0; i < hall_sensor_dev->gpio_num; i++)
 	{
 		char *gpio_name = hall_sensor_dev->gpio_list[i].gpio_name;
