@@ -4086,7 +4086,7 @@ static ssize_t stowed_store(struct device *dev,
 		ILI_INFO("Failed to convert value.\n");
 		return -EINVAL;
 	}
-	ilits->set_stowed = ilits->get_stowed;
+	ilits->get_stowed = mode;
 	if (ilits->set_stowed == mode) {
 		ILI_INFO("The value = %lu is same, so not to write", mode);
 		ret = size;
@@ -4107,7 +4107,7 @@ static ssize_t stowed_store(struct device *dev,
 		return ret;
 	}
 
-	ilits->get_stowed = mode;
+	ilits->set_stowed = mode;
 	ret = size;
 	ILI_INFO("Success to set stowed mode %lu\n", mode);
         mutex_unlock(&ilits->touch_mutex);

@@ -182,6 +182,11 @@ static void ilitek_resume_by_ddi_work(struct work_struct *work)
 	}
 
 	ili_irq_enable();
+#if defined (ILI_STOWED_MODE_EN)&& defined(ILI_SENSOR_EN)
+	ilits->set_stowed = 0;
+	ilits->prox_near = false;
+	ILI_ERR("ilits->set_stowed = %d,ilits->prox_near = %d\n",ilits->set_stowed,ilits->prox_near);
+#endif
 	ILI_INFO("TP resume end by wq\n");
 	ili_wq_ctrl(WQ_ESD, ENABLE);
 	ili_wq_ctrl(WQ_BAT, ENABLE);
