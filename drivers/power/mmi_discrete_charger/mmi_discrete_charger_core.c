@@ -3482,6 +3482,76 @@ static int mmi_discrete_init_hw(struct mmi_discrete_charger *chip)
 	return 0;
 }
 
+/*************************
+ * battery cooling device *
+ *************************/
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+static int battery_tcd_get_max_state(struct thermal_cooling_device *cdev,
+	unsigned long *state)
+{
+	struct mmi_discrete_charger *chip = cdev->devdata;
+	union power_supply_propval val;
+	int rc = 0;
+
+	if (!chip->batt_psy)
+		return -EINVAL;
+
+	rc = power_supply_get_property(chip->batt_psy,
+				       POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX, &val);
+	if (rc)
+		mmi_err(chip, "Couldn't get battery charge control limit max prop rc=%d\n", rc);
+
+	*state = val.intval;
+
+	return 0;
+}
+
+static int battery_tcd_get_cur_state(struct thermal_cooling_device *cdev,
+	unsigned long *state)
+{
+	struct mmi_discrete_charger *chip = cdev->devdata;
+	union power_supply_propval val;
+	int rc = 0;
+
+	if (!chip->batt_psy)
+		return -EINVAL;
+
+	rc = power_supply_get_property(chip->batt_psy,
+				       POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT, &val);
+	if (rc)
+		mmi_err(chip, "Couldn't get battery charge control limit prop rc=%d\n", rc);
+
+	*state = val.intval;
+
+	return 0;
+}
+
+static int battery_tcd_set_cur_state(struct thermal_cooling_device *cdev,
+	unsigned long state)
+{
+	struct mmi_discrete_charger *chip = cdev->devdata;
+	union power_supply_propval val;
+	int rc = 0;
+
+	if (!chip->batt_psy)
+		return -EINVAL;
+
+	val.intval = state;
+	rc = power_supply_set_property(chip->batt_psy,
+				       POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT, &val);
+	if (rc)
+		mmi_err(chip, "Couldn't set battery charge control limit prop rc=%d\n", rc);
+
+	return 0;
+}
+
+static const struct thermal_cooling_device_ops battery_tcd_ops = {
+	.get_max_state = battery_tcd_get_max_state,
+	.get_cur_state = battery_tcd_get_cur_state,
+	.set_cur_state = battery_tcd_set_cur_state,
+};
+#endif
+
 static int mmi_discrete_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -3592,6 +3662,19 @@ static int mmi_discrete_probe(struct platform_device *pdev)
 		rc = PTR_ERR(chip->batt_psy);
 		goto cleanup;
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+	/* Register thermal zone cooling device for battery */
+	chip->cdev = thermal_of_cooling_device_register(dev_of_node(chip->dev),
+		batt_psy_desc.name, chip, &battery_tcd_ops);
+
+	if (IS_ERR(chip->cdev)) {
+		mmi_err(chip, "Cooling register failed for battery, ret:%ld\n",
+			PTR_ERR(chip->cdev));
+		//return PTR_ERR(chip->cdev);
+	} else {
+		mmi_info(chip, "Cooling register success for battery.");
+	}
+#endif
 
 	rc = mmi_discrete_check_battery_supplies(chip);
 	if (rc) {
