@@ -30,7 +30,7 @@
 #define _SC760X_CHARGER_H
 
 #include <linux/i2c.h>
-#include "mmi_charger.h"
+#include <charger_class.h>
 
 #define SC760X_MANUFACTURER	"South Chip"
 #define SC760X_NAME		"sc7603"
@@ -109,7 +109,7 @@ enum sc760x_fields {
     F_MAX_FIELDS,
 };
 
-struct sc760x_cfg_e {
+struct sc760x_chg_platform_data {
     int bat_chg_lim_disable;
     int bat_chg_lim;
     int pow_lim_disable;
@@ -130,6 +130,7 @@ struct sc760x_cfg_e {
     int tdie_flt_disable;
     int tdie_alm_disable;
     int tdie_alm;
+    const char *chg_name;
 };
 
 struct sc760x_init_data {
@@ -142,16 +143,6 @@ struct sc760x_init_data {
 };
 
 struct sc760x_state {
-	bool therm_limit;
-	bool online;
-	bool usb_online;
-	bool wls_online;
-
-	CHG_STAT_T chrg_stat;
-	int chrg_type;
-	int ibat_limit;
-	int ibus_limit;
-
 	int vbus_adc;
 	int ibus_adc;
 	int ibat_adc;
@@ -162,21 +153,6 @@ struct sc760x_state {
 	WORK_MODE_T work_mode;
 };
 
-struct sc760x_mmi_charger {
-	struct sc760x_chip		*sc;
-	struct mmi_battery_info		batt_info;
-	struct mmi_charger_info		chg_info;
-	struct mmi_charger_cfg		chg_cfg;
-	struct mmi_charger_constraint	constraint;
-	struct mmi_charger_driver	*driver;
-	u32				chrg_taper_cnt;
-	const char			*fg_psy_name;
-	struct power_supply		*fg_psy;
-	int ichg_polority;
-
-	struct mmi_battery_info		paired_batt_info;
-};
-
 struct sc760x_chip {
     struct device *dev;
     struct i2c_client *client;
@@ -184,13 +160,11 @@ struct sc760x_chip {
     struct regmap_field *rmap_fields[F_MAX_FIELDS];
     struct mutex lock;
     struct mutex i2c_rw_lock;
-    struct dentry *debug_root;
-    struct power_supply		*wls_psy;
-    struct power_supply		*usb_psy;
     struct power_supply		*charger_psy;
     struct wakeup_source *charger_wakelock;
-	
-    struct sc760x_cfg_e *cfg;
+    struct charger_device *chgdev;
+
+    struct sc760x_chg_platform_data *pdata;
     struct sc760x_init_data init_data;
     struct sc760x_state state;
     int user_ichg; /* user charge current		*/
@@ -203,18 +177,8 @@ struct sc760x_chip {
     bool irq_enabled;
     int role;
     int sc760x_enable;
-    u32 *thermal_levels;
-    u32 thermal_fcc_ua;
-    int curr_thermal_level;
-    int num_thermal_levels;
-    int thermal_ratio_nums;
 
-    bool use_ext_usb_psy;
-    bool use_ext_wls_psy;
-    struct delayed_work charge_detect_delayed_work;
     struct delayed_work charge_monitor_work;
-    struct notifier_block psy_nb;
-    struct sc760x_mmi_charger *mmi_charger;
 };
 
 #endif /* _SC760X_CHARGER_H */

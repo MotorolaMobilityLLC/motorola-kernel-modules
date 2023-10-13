@@ -70,7 +70,7 @@ static int sc760x_role_data[] = {
     [SC760X_SLAVE] = SC760X_SLAVE,
 };
 
-static struct sc760x_cfg_e default_cfg = {
+static struct sc760x_chg_platform_data default_cfg = {
     .bat_chg_lim_disable = 0,
     .bat_chg_lim = 39,
     .pow_lim_disable = 0,
@@ -181,10 +181,8 @@ __attribute__((unused)) static int sc760x_set_iprechg(struct sc760x_chip *sc, in
 __attribute__((unused)) static int sc760x_set_vfcchg(struct sc760x_chip *sc, int volt);
 __attribute__((unused)) static int sc760x_set_batovp(struct sc760x_chip *sc, int volt);
 __attribute__((unused)) static int sc760x_set_adc_enable(struct sc760x_chip *sc, bool en);
-__attribute__((unused)) static void sc760x_mmi_charger_deinit(struct sc760x_mmi_charger *chg);
 __attribute__((unused)) static int sc760x_set_power_limit_dis(struct sc760x_chip *sc, bool en);
 
-static int sc760x_mmi_charger_init(struct sc760x_mmi_charger *chg);
 static int sc760x_get_state(struct sc760x_chip *sc,
 			     struct sc760x_state *state);
 static int sc760x_init_device(struct sc760x_chip *sc);
@@ -542,7 +540,7 @@ static ssize_t sc760x_enable_show(struct device *dev,
 {
     struct sc760x_chip *sc = dev_get_drvdata(dev);
 
-	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", sc->sc760x_enable);
+	return scnprintf(buf, 50, "%d\n", sc->sc760x_enable);
 }
 
 static DEVICE_ATTR(sc760x_enable, S_IRUGO|S_IWUSR, sc760x_enable_show, sc760x_enable_store);
@@ -714,63 +712,16 @@ static void sc760x_remove_device_node(struct device *dev)
     device_remove_file(dev, &dev_attr_chg_en);
 }
 
-static int sc760x_set_thermal_mitigation(struct sc760x_chip *sc, int val)
-{
-
-	if (!sc->num_thermal_levels)
-		return 0;
-
-	if (sc->num_thermal_levels < 0) {
-		pr_err("Incorrect num_thermal_levels\n");
-		return -EINVAL;
-	}
-
-	if (val < 0 || val > sc->num_thermal_levels) {
-		pr_err("Invalid thermal level: %d\n", val);
-		return -EINVAL;
-	}
-
-	sc->thermal_fcc_ua = sc->thermal_levels[val];
-	sc->curr_thermal_level = val;
-
-	pr_info("thermal level: %d, thermal fcc: %d\n", sc->curr_thermal_level, sc->thermal_fcc_ua);
-
-	return 0;
-}
-
-
-static int get_charger_type(struct sc760x_chip * sc)
-{
-	enum power_supply_usb_type usb_type =  POWER_SUPPLY_USB_TYPE_UNKNOWN;
-
-	if (sc->use_ext_usb_psy && sc->usb_psy) {
-		int ret = 0;
-		union power_supply_propval val = {0};
-		ret = power_supply_get_property(sc->usb_psy,
-				POWER_SUPPLY_PROP_USB_TYPE, &val);
-		if (!ret) {
-			usb_type = val.intval;
-		}
-	}
-	pr_debug("usb_type:%d\n", usb_type);
-	return usb_type;
-}
-
 static enum power_supply_property sc760x_power_supply_props[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_ONLINE,
-	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
-	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT,
-	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT,
-	POWER_SUPPLY_PROP_CHARGE_TYPE,
-	POWER_SUPPLY_PROP_USB_TYPE,
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_PRESENT
 };
@@ -800,7 +751,6 @@ static int sc760x_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
-	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
 	case POWER_SUPPLY_PROP_PRECHARGE_CURRENT:
 	case POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT:
 		return true;
@@ -839,9 +789,6 @@ static int sc760x_charger_set_property(struct power_supply *psy,
 			pr_info("Set user charging current limit: %duA\n", sc->user_ichg);
 		}
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
-		ret = sc760x_set_thermal_mitigation(sc, val->intval);
-		break;
 	default:
 		return -EINVAL;
 	}
@@ -854,28 +801,12 @@ static int sc760x_charger_get_property(struct power_supply *psy,
 				union power_supply_propval *val)
 {
 	struct sc760x_chip *sc = power_supply_get_drvdata(psy);
-	struct sc760x_state state;
-	int chrg_status = 0;
+	struct sc760x_state state = sc->state;
 	int ret = 0;
-
-	mutex_lock(&sc->lock);
-	ret = sc760x_get_state(sc, &state);
-	mutex_unlock(&sc->lock);
-	if (ret)
-		return ret;
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
-		if (state.chrg_stat == CHARGING)
-			val->intval = POWER_SUPPLY_STATUS_CHARGING;
-		else if (state.chrg_stat == DISCHARGING)
-			val->intval = POWER_SUPPLY_STATUS_DISCHARGING;
-		else if (state.chrg_stat == NOT_CHARGING)
-			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;	
-		break;
-	case POWER_SUPPLY_PROP_CHARGE_TYPE:
-		sc760x_get_work_mode(sc, &chrg_status);
-		switch (chrg_status) {
+		switch (state.work_mode) {
 		case WORK_TRICKLE_CHARGE:
 		case WORK_PRE_CHARGE:
 			val->intval = POWER_SUPPLY_CHARGE_TYPE_TRICKLE;
@@ -902,6 +833,7 @@ static int sc760x_charger_get_property(struct power_supply *psy,
 
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = sc760x_is_enabled_charging(sc);
+		break;
 
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = sc->sc760x_enable;
@@ -909,14 +841,6 @@ static int sc760x_charger_get_property(struct power_supply *psy,
 
 	case POWER_SUPPLY_PROP_TYPE:
 		val->intval = sc760x_power_supply_desc.type;
-		break;
-
-	case POWER_SUPPLY_PROP_USB_TYPE:
-		val->intval = get_charger_type(sc);
-		break;
-
-	case POWER_SUPPLY_PROP_HEALTH:
-		val->intval = POWER_SUPPLY_HEALTH_GOOD;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
@@ -933,14 +857,6 @@ static int sc760x_charger_get_property(struct power_supply *psy,
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		val->intval = state.ibat_adc;
-		break;
-
-	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT:
-		val->intval = sc->curr_thermal_level;
-		break;
-
-	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX:
-		val->intval = sc->num_thermal_levels;
 		break;
 
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
@@ -998,10 +914,7 @@ static int sc760x_power_supply_init(struct sc760x_chip *sc,
 
 static int sc760x_parse_dt(struct sc760x_chip *sc, struct device *dev)
 {
-    int i, len, ret;
-    u32 prev, val;
-    const char *usb_psy_name = NULL;
-    const char *wls_psy_name = NULL;
+    int i, ret;
 
     struct device_node *node = dev->of_node;
 
@@ -1009,26 +922,26 @@ static int sc760x_parse_dt(struct sc760x_chip *sc, struct device *dev)
         char *name;
         int *conv_data;
     } props[] = {
-        {"sc,sc760x,bat-chg-lim-disable", &(sc->cfg->bat_chg_lim_disable)},
-        {"sc,sc760x,bat-chg-lim", &(sc->cfg->bat_chg_lim)},
-        {"sc,sc760x,pow-lim-disable", &(sc->cfg->pow_lim_disable)},
-        {"sc,sc760x,ilim-disable", &(sc->cfg->ilim_disable)},
-        {"sc,sc760x,load-switch-disable", &(sc->cfg->load_switch_disable)},
-        {"sc,sc760x,low-power-mode-enable", &(sc->cfg->lp_mode_enable)},
-        {"sc,sc760x,itrichg", &(sc->cfg->itrichg)},
-        {"sc,sc760x,iprechg", &(sc->cfg->iprechg)},
-        {"sc,sc760x,vfc-chg", &(sc->cfg->vfc_chg)},
-        {"sc,sc760x,chg-ovp-disable", &(sc->cfg->chg_ovp_disable)},
-        {"sc,sc760x,chg-ovp", &(sc->cfg->chg_ovp)},
-        {"sc,sc760x,bat-ovp-disable", &(sc->cfg->bat_ovp_disable)},
-        {"sc,sc760x,bat-ovp", &(sc->cfg->bat_ovp)},
-        {"sc,sc760x,chg-ocp-disable", &(sc->cfg->chg_ocp_disable)},
-        {"sc,sc760x,chg-ocp", &(sc->cfg->chg_ocp)},
-        {"sc,sc760x,dsg-ocp-disable", &(sc->cfg->dsg_ocp_disable)},
-        {"sc,sc760x,dsg-ocp", &(sc->cfg->dsg_ocp)},
-        {"sc,sc760x,tdie-flt-disable", &(sc->cfg->tdie_flt_disable)},
-        {"sc,sc760x,tdie-alm-disable", &(sc->cfg->tdie_alm_disable)},
-        {"sc,sc760x,tdie-alm", &(sc->cfg->tdie_alm)},
+        {"sc,sc760x,bat-chg-lim-disable", &(sc->pdata->bat_chg_lim_disable)},
+        {"sc,sc760x,bat-chg-lim", &(sc->pdata->bat_chg_lim)},
+        {"sc,sc760x,pow-lim-disable", &(sc->pdata->pow_lim_disable)},
+        {"sc,sc760x,ilim-disable", &(sc->pdata->ilim_disable)},
+        {"sc,sc760x,load-switch-disable", &(sc->pdata->load_switch_disable)},
+        {"sc,sc760x,low-power-mode-enable", &(sc->pdata->lp_mode_enable)},
+        {"sc,sc760x,itrichg", &(sc->pdata->itrichg)},
+        {"sc,sc760x,iprechg", &(sc->pdata->iprechg)},
+        {"sc,sc760x,vfc-chg", &(sc->pdata->vfc_chg)},
+        {"sc,sc760x,chg-ovp-disable", &(sc->pdata->chg_ovp_disable)},
+        {"sc,sc760x,chg-ovp", &(sc->pdata->chg_ovp)},
+        {"sc,sc760x,bat-ovp-disable", &(sc->pdata->bat_ovp_disable)},
+        {"sc,sc760x,bat-ovp", &(sc->pdata->bat_ovp)},
+        {"sc,sc760x,chg-ocp-disable", &(sc->pdata->chg_ocp_disable)},
+        {"sc,sc760x,chg-ocp", &(sc->pdata->chg_ocp)},
+        {"sc,sc760x,dsg-ocp-disable", &(sc->pdata->dsg_ocp_disable)},
+        {"sc,sc760x,dsg-ocp", &(sc->pdata->dsg_ocp)},
+        {"sc,sc760x,tdie-flt-disable", &(sc->pdata->tdie_flt_disable)},
+        {"sc,sc760x,tdie-alm-disable", &(sc->pdata->tdie_alm_disable)},
+        {"sc,sc760x,tdie-alm", &(sc->pdata->tdie_alm)},
     };
 
     /* initialize data for optional properties */
@@ -1041,22 +954,11 @@ static int sc760x_parse_dt(struct sc760x_chip *sc, struct device *dev)
         }
     }
 
-	ret = device_property_read_string(sc->dev,
-					"mmi,ext-usb-psy-name",
-					&usb_psy_name);
-	if (!ret && usb_psy_name)
-		sc->use_ext_usb_psy = true;
-	else
-		sc->use_ext_usb_psy = false;
+	/*chgdev name */
+	if (of_property_read_string(node, "chg_name", &sc->pdata->chg_name))
+		dev_err(sc->dev, "failed to get chg_name\n");
 
-	ret = device_property_read_string(sc->dev,
-					"mmi,ext-wls-psy-name",
-					&wls_psy_name);
-	if (!ret && wls_psy_name)
-		sc->use_ext_wls_psy = true;
-	else
-		sc->use_ext_wls_psy = false;
-
+	dev->platform_data = sc->pdata;
 
 	sc->init_data.charger_disabled = of_property_read_bool(node,
 					"init-charger-disabled");
@@ -1085,53 +987,6 @@ static int sc760x_parse_dt(struct sc760x_chip *sc, struct device *dev)
 	if (ret)
 		sc->init_data.ichg = SC760x_ICHRG_I_DEF_uA;
 
-	ret = of_property_count_elems_of_size(node, "mmi,thermal-mitigation",
-							sizeof(u32));
-	if (ret <= 0) {
-		return 0;
-	}
-
-	len = ret;
-	prev = sc->init_data.max_ichg;
-	for (i = 0; i < len; i++) {
-		ret = of_property_read_u32_index(node,
-					"mmi,thermal-mitigation",
-					i, &val);
-		if (ret < 0) {
-			pr_err("failed to get thermal-mitigation[%d], ret=%d\n", i, ret);
-			return ret;
-		}
-		pr_info("thermal-mitigation[%d], val=%d, prev=%d\n", i, val, prev);
-		if (val > prev) {
-			pr_err("Thermal levels should be in descending order\n");
-			sc->num_thermal_levels = -EINVAL;
-			return 0;
-		}
-		prev = val;
-	}
-
-	sc->thermal_levels = devm_kcalloc(sc->dev, len + 1,
-					sizeof(*sc->thermal_levels),
-					GFP_KERNEL);
-	if (!sc->thermal_levels)
-		return -ENOMEM;
-
-	sc->thermal_levels[0] = sc->init_data.max_ichg;
-	ret = of_property_read_u32_array(node, "mmi,thermal-mitigation",
-						&sc->thermal_levels[1], len);
-	if (ret < 0) {
-		pr_err("Error in reading mmi,thermal-mitigation, rc=%d\n", ret);
-		return ret;
-	}
-	sc->num_thermal_levels = len;
-	sc->thermal_fcc_ua = sc->init_data.max_ichg;
-
-	ret = device_property_read_u32(sc->dev,
-				       "mmi,thermal-ratio-nums",
-				       &sc->thermal_ratio_nums);
-	if (ret)
-		sc->thermal_ratio_nums = 1;
-
 	return 0;
 }
 
@@ -1143,26 +998,26 @@ static int sc760x_init_device(struct sc760x_chip *sc)
         enum sc760x_fields field_id;
         int conv_data;
     } props[] = {
-        {IBAT_CHG_LIM_DIS, sc->cfg->bat_chg_lim_disable},
-        {IBAT_CHG_LIM, sc->cfg->bat_chg_lim},
-        {POW_LIM_DIS, sc->cfg->pow_lim_disable},
-        {ILIM_DIS, sc->cfg->ilim_disable},
-        {LS_OFF, sc->cfg->load_switch_disable},
-        {EN_LOWPOWER, sc->cfg->lp_mode_enable},
-        {ITRICHG, sc->cfg->itrichg},
-        {IPRECHG, sc->cfg->iprechg},
-        {VFC_CHG, sc->cfg->vfc_chg},
-        {CHG_OVP_DIS, sc->cfg->chg_ovp_disable},
-        {CHG_OVP, sc->cfg->chg_ovp},
-        {BAT_OVP_DIS, sc->cfg->bat_ovp_disable},
-        {BAT_OVP, sc->cfg->bat_ovp},
-        {CHG_OCP_DIS, sc->cfg->chg_ocp_disable},
-        {CHG_OCP, sc->cfg->chg_ocp},
-        {DSG_OCP_DIS, sc->cfg->dsg_ocp_disable},
-        {DSG_OCP, sc->cfg->dsg_ocp},
-        {TDIE_FLT_DIS, sc->cfg->tdie_flt_disable},
-        {TDIE_ALRM_DIS, sc->cfg->tdie_alm_disable},
-        {TDIE_ALRM, sc->cfg->tdie_alm},
+        {IBAT_CHG_LIM_DIS, sc->pdata->bat_chg_lim_disable},
+        {IBAT_CHG_LIM, sc->pdata->bat_chg_lim},
+        {POW_LIM_DIS, sc->pdata->pow_lim_disable},
+        {ILIM_DIS, sc->pdata->ilim_disable},
+        {LS_OFF, sc->pdata->load_switch_disable},
+        {EN_LOWPOWER, sc->pdata->lp_mode_enable},
+        {ITRICHG, sc->pdata->itrichg},
+        {IPRECHG, sc->pdata->iprechg},
+        {VFC_CHG, sc->pdata->vfc_chg},
+        {CHG_OVP_DIS, sc->pdata->chg_ovp_disable},
+        {CHG_OVP, sc->pdata->chg_ovp},
+        {BAT_OVP_DIS, sc->pdata->bat_ovp_disable},
+        {BAT_OVP, sc->pdata->bat_ovp},
+        {CHG_OCP_DIS, sc->pdata->chg_ocp_disable},
+        {CHG_OCP, sc->pdata->chg_ocp},
+        {DSG_OCP_DIS, sc->pdata->dsg_ocp_disable},
+        {DSG_OCP, sc->pdata->dsg_ocp},
+        {TDIE_FLT_DIS, sc->pdata->tdie_flt_disable},
+        {TDIE_ALRM_DIS, sc->pdata->tdie_alm_disable},
+        {TDIE_ALRM, sc->pdata->tdie_alm},
     };
 
     ret = sc760x_reg_reset(sc);
@@ -1206,98 +1061,12 @@ static int sc760x_register_interrupt(struct sc760x_chip *sc, struct i2c_client *
     return 0;
 }
 
-static int is_wls_online(struct sc760x_chip *sc)
-{
-	int rc;
-	union power_supply_propval val;
-
-	if (!sc->use_ext_wls_psy || !sc->wls_psy)
-		return 0;
-
-	rc = power_supply_get_property(sc->wls_psy,
-			POWER_SUPPLY_PROP_ONLINE, &val);
-	if (rc < 0) {
-		pr_err("Error wls online rc = %d\n", rc);
-		return 0;
-	}
-
-	pr_debug("wireless online is %d", val.intval);
-	return val.intval;
-}
-
-static int is_usb_online(struct sc760x_chip *sc)
-{
-	int rc;
-	union power_supply_propval val;
-
-	if (!sc->use_ext_usb_psy || !sc->usb_psy)
-		return 0;
-
-	rc = power_supply_get_property(sc->usb_psy,
-			POWER_SUPPLY_PROP_ONLINE, &val);
-	if (rc < 0) {
-		pr_err("Error usb online rc = %d\n", rc);
-		return 0;
-	}
-
-	pr_debug("usb online is %d", val.intval);
-	return val.intval;
-}
-
 static int sc760x_get_state(struct sc760x_chip *sc,
 			     struct sc760x_state *state)
 {
-	int ret = 0, chrg_status = 0;
-	union power_supply_propval val = {0};
-
-	if (sc->use_ext_usb_psy && sc->usb_psy) {
-
-		ret = power_supply_get_property(sc->usb_psy,
-				POWER_SUPPLY_PROP_VOLTAGE_NOW, &val);
-		if (!ret)
-			state->vbus_adc = val.intval;
-		ret = power_supply_get_property(sc->usb_psy,
-				POWER_SUPPLY_PROP_CURRENT_NOW, &val);
-		if (!ret)
-			state->ibus_adc = val.intval;
-		ret = power_supply_get_property(sc->usb_psy,
-				POWER_SUPPLY_PROP_ONLINE, &val);
-		if (!ret) {
-			state->usb_online = val.intval;
-			state->online = val.intval;
-		}
-		ret = power_supply_get_property(sc->usb_psy,
-				POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT, &val);
-		if (!ret)
-			state->ibus_limit = val.intval;
-
-		ret = power_supply_get_property(sc->usb_psy,
-				POWER_SUPPLY_PROP_USB_TYPE, &val);
-		if (!ret)
-			state->chrg_type = val.intval;
-	} else if (sc->use_ext_usb_psy) {
-		state->chrg_stat = DISCHARGING;
-		state->online = 0;
-		state->ibus_limit = 0;
-		state->chrg_type = 0;
-	}
-
-	if (!state->online && is_wls_online(sc)) {
-		state->online = 1;
-		state->chrg_type = 3;
-		state->chrg_stat = CHARGING;
-	}
+	sc760x_get_work_mode(sc, (int *)&state->work_mode);
 
 	sc760x_get_adc(sc, ADC_IBAT, &state->ibat_adc);
-	sc760x_get_work_mode(sc, &chrg_status);
-
-	if (state->ibat_adc > 10 && chrg_status)
-		state->chrg_stat = CHARGING;
-	else if (state->online)
-		state->chrg_stat = NOT_CHARGING;
-	else
-		state->chrg_stat = DISCHARGING;
-
 	sc760x_get_adc(sc, ADC_IBAT, &state->ibat_adc);
 	sc760x_get_adc(sc, ADC_VBAT, &state->vbat_adc);
 	sc760x_get_adc(sc, ADC_VCHG, &state->vchg_adc);
@@ -1306,640 +1075,64 @@ static int sc760x_get_state(struct sc760x_chip *sc,
 	state->ibat_adc = state->ibat_adc * 1000;
 	state->vbat_adc = state->vbat_adc * 1000;
 	state->vchg_adc = state->vchg_adc * 1000;
+
 	return 0;
-}
-
-static bool sc760x_state_changed(struct sc760x_chip *sc,
-				  struct sc760x_state *new_state)
-{
-	struct sc760x_state old_state;
-
-	mutex_lock(&sc->lock);
-	old_state = sc->state;
-	mutex_unlock(&sc->lock);
-
-	return (old_state.chrg_stat != new_state->chrg_stat ||
-		old_state.online != new_state->online ||
-		old_state.chrg_type != new_state->chrg_type ||
-		old_state.ibus_limit != new_state->ibus_limit
-		);
 }
 
 static void charger_monitor_work_func(struct work_struct *work)
 {
-	bool state_changed = false;
-	struct sc760x_state state;
 	struct sc760x_chip *sc = container_of(work,
 					struct sc760x_chip,
 					charge_monitor_work.work);
 
-	sc760x_get_state(sc, &state);
-	state_changed = sc760x_state_changed(sc, &state);
-	mutex_lock(&sc->lock);
-	sc->state = state;
-	mutex_unlock(&sc->lock);
+	sc760x_get_state(sc, &sc->state);
 
-	if (state_changed) {
-		if (!sc->state.chrg_type)
-			pr_info("No charger is present\n");
-		sc760x_dump_reg(sc);
-		schedule_delayed_work(&sc->charge_detect_delayed_work, 0);
-		power_supply_changed(sc->charger_psy);
-	}
+	sc760x_dump_reg(sc);
 
 	schedule_delayed_work(&sc->charge_monitor_work, 10*HZ);
 }
 
-static void charger_detect_work_func(struct work_struct *work)
+static int sc760x_plug_in(struct charger_device *chgdev)
 {
-	int ret;
-	bool state_changed = false;
-	struct sc760x_state state;
-	struct sc760x_chip *sc = container_of(work,
-					struct sc760x_chip,
-					charge_detect_delayed_work.work);
+	struct sc760x_chip *sc = charger_get_data(chgdev);
 
-	if (!sc->charger_wakelock->active)
-		__pm_stay_awake(sc->charger_wakelock);
+	sc760x_set_auto_bsm_dis(sc, true);
+	cancel_delayed_work(&sc->charge_monitor_work);
+	schedule_delayed_work(&sc->charge_monitor_work,
+					msecs_to_jiffies(200));
 
-	if (sc->use_ext_usb_psy) {
-		if (!sc->usb_psy) {
-			const char *usb_psy_name = NULL;
-			ret = device_property_read_string(sc->dev,
-						"mmi,ext-usb-psy-name",
-						&usb_psy_name);
-			if (!ret && usb_psy_name)
-				sc->usb_psy = power_supply_get_by_name(usb_psy_name);
-			if (!sc->usb_psy) {
-				pr_info("No USB power supply found, redetecting...\n");
-				cancel_delayed_work(&sc->charge_detect_delayed_work);
-				schedule_delayed_work(&sc->charge_detect_delayed_work,
-							msecs_to_jiffies(1000));
-			       goto err;
-			} else {
-				pr_info("USB power supply is found\n");
-			}
-		}
-	}
-
-	if (sc->use_ext_wls_psy) {
-		if (!sc->wls_psy) {
-			const char *wls_psy_name = NULL;
-			ret = device_property_read_string(sc->dev,
-						"mmi,ext-wls-psy-name",
-						&wls_psy_name);
-			if (!ret && wls_psy_name)
-				sc->wls_psy = power_supply_get_by_name(wls_psy_name);
-			if (!sc->wls_psy) {
-				pr_info("No Wireless power supply found, redetecting...\n");
-				cancel_delayed_work(&sc->charge_detect_delayed_work);
-				schedule_delayed_work(&sc->charge_detect_delayed_work,
-							msecs_to_jiffies(1000));
-			       goto err;
-			} else {
-				pr_info("WLS power supply is found\n");
-			}
-		}
-	}
-
-	if (sc->mmi_charger &&
-	    (!sc->mmi_charger->fg_psy || !sc->mmi_charger->driver)) {
-		sc760x_mmi_charger_init(sc->mmi_charger);
-	}
-
-	ret = sc760x_get_state(sc, &state);
-	state_changed = sc760x_state_changed(sc, &state);
-	mutex_lock(&sc->lock);
-	sc->state = state;
-	mutex_unlock(&sc->lock);
-
-	if(!state.online)
-	{
-		dev_err(sc->dev, "Vbus not online\n");
-		goto err;
-	}
-
-	if (state_changed) {
-		sc760x_dump_reg(sc);
-		power_supply_changed(sc->charger_psy);
-	}
-	return;
-err:
-	//release wakelock
-	if (state_changed)
-		power_supply_changed(sc->charger_psy);
-	dev_info(sc->dev, "Relax wakelock\n");
-	__pm_relax(sc->charger_wakelock);
-	return;
-}
-
-
-static int sc760x_psy_notifier_call(struct notifier_block *nb,
-				unsigned long val, void *v)
-{
-	struct sc760x_chip *sc = container_of(nb,
-				struct sc760x_chip, psy_nb);
-	struct power_supply *psy = v;
-	struct sc760x_mmi_charger *chg = NULL;
-
-	if (!sc) {
-		pr_err("called before sc760x valid!\n");
-		return NOTIFY_DONE;
-	}
-
-	pr_err("psy notifier call , val %d\n", (int)val);
-	if (!psy || val != PSY_EVENT_PROP_CHANGED)
-		return NOTIFY_OK;
-
-	chg = sc->mmi_charger;
-	if ((sc->usb_psy && !strcmp(psy->desc->name, sc->usb_psy->desc->name)) ||
-	    (chg && chg->fg_psy_name && !strcmp(psy->desc->name, chg->fg_psy_name))) {
-		cancel_delayed_work(&sc->charge_detect_delayed_work);
-		schedule_delayed_work(&sc->charge_detect_delayed_work,
-						msecs_to_jiffies(0));
-	}
-
-	return NOTIFY_OK;
-}
-
-#define EMPTY_BATTERY_VBAT 3200
-static int sc760x_charger_get_batt_info(void *data, struct mmi_battery_info *batt_info)
-{
-	int rc;
-	struct sc760x_mmi_charger *chg = data;
-	union power_supply_propval val = {0};
-
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_VOLTAGE_NOW, &val);
-	if (!rc)
-		chg->batt_info.batt_mv = val.intval / 1000;
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_CURRENT_NOW, &val);
-	if (!rc)
-		chg->batt_info.batt_ma = val.intval / 1000 * chg->ichg_polority;
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_CAPACITY, &val);
-	if (!rc)
-		chg->batt_info.batt_soc = val.intval;
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_TEMP, &val);
-	if (!rc)
-		chg->batt_info.batt_temp = val.intval / 10;
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_STATUS, &val);
-	if (!rc)
-		chg->batt_info.batt_status = val.intval;
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_CHARGE_FULL, &val);
-	if (!rc)
-		chg->batt_info.batt_full_uah = val.intval;
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN, &val);
-	if (!rc)
-		chg->batt_info.batt_design_uah = val.intval;
-	rc = power_supply_get_property(chg->fg_psy, POWER_SUPPLY_PROP_CHARGE_COUNTER, &val);
-	if (!rc)
-		chg->batt_info.batt_chg_counter = val.intval;
-
-	if (chg->chg_cfg.full_charged)
-		chg->batt_info.batt_status = POWER_SUPPLY_STATUS_FULL;
-
-	if (!chg->sc->state.online) {
-		chg->batt_info.batt_status = POWER_SUPPLY_STATUS_DISCHARGING;
-	}
-
-	memcpy(batt_info, &chg->batt_info, sizeof(struct mmi_battery_info));
-	if (chg->paired_batt_info.batt_soc == 0 &&
-	    chg->paired_batt_info.batt_mv < EMPTY_BATTERY_VBAT) {
-		batt_info->batt_soc = 0;
-		pr_warn("Force %s to empty from %d for empty paired battery\n",
-					chg->fg_psy->desc->name,
-					chg->batt_info.batt_soc);
-	}
-
-        return rc;
-}
-
-static int sc760x_charger_get_chg_info(void *data, struct mmi_charger_info *chg_info)
-{
-	int work_mode = 0;
-	struct sc760x_mmi_charger *chg = data;
-	struct sc760x_state state = chg->sc->state;
-
-	sc760x_get_state(chg->sc, &state);
-	sc760x_get_work_mode(chg->sc, &work_mode);
-	chg->chg_info.chrg_mv = state.vbus_adc / 1000;
-	chg->chg_info.chrg_ma = state.ibus_adc / 1000;
-	chg->chg_info.chrg_type = get_charger_type(chg->sc);
-	chg->chg_info.vbus_present = state.online;
-	if (chg->chg_info.chrg_type == POWER_SUPPLY_USB_TYPE_UNKNOWN &&
-			is_wls_online(chg->sc)) {
-		chg->chg_info.chrg_type = 0xFF;
-		chg->chg_info.vbus_present = false;
-	}
-
-	chg->chg_info.chrg_present = state.online;
-	chg->chg_info.chrg_pmax_mw = 0;
-
-	memcpy(chg_info, &chg->chg_info, sizeof(struct mmi_charger_info));
-
-	pr_info("sc760x_chg_info : gpio_en %d, workmode %d, chrg_stat =%d, usb_online = %d, wls_online %d, vbus = %d, ibus = %d, ibus_limit = %d, ibat = %d, vbat = %d, vchg = %d, tbat = %d\n",
-		chg->sc->sc760x_enable, work_mode, state.chrg_stat, state.usb_online, state.wls_online, state.vbus_adc, state.ibus_adc, state.ibus_limit, state.ibat_adc, state.vbat_adc, state.vchg_adc,
-		state.tbat_adc);
-	sc760x_dump_reg(chg->sc);
 	return 0;
 }
 
-static int sc760x_charger_config_charge(void *data, struct mmi_charger_cfg *config)
+static int sc760x_plug_out(struct charger_device *chgdev)
 {
-	int rc = 0, sc760x_ibat_limit_set = 0, ibat_limit_vote = 0;
-	u32 value;
-	bool chg_en;
-	bool cfg_changed = false;
+	struct sc760x_chip *sc = charger_get_data(chgdev);
 	
-	struct sc760x_mmi_charger *chg = data;
-	struct sc760x_state state = chg->sc->state;
+	sc760x_disable_charger(sc);
+	sc760x_set_auto_bsm_dis(sc, false);
 
-	sc760x_get_state(chg->sc, &state);
-	/* Monitor vbat and ibat for OVP and OCP */
-/*
-	if (chg->batt_info.batt_mv >= chg->sc->vbat_ovp_threshold) {
-		pr_err("ERROR: vbat OVP is triggered, batt_mv=%dmV, thre=%d\n",
-				chg->batt_info.batt_mv,
-				chg->sc->vbat_ovp_threshold);
-	}
-*/
-
-	rc = sc760x_get_ibat_limit(chg->sc, &sc760x_ibat_limit_set);
-	if (rc < 0)
-		sc760x_ibat_limit_set = ibat_limit_vote;
-
-	if (!config->charging_disable &&
-	    !config->charger_suspend &&
-	    config->target_fcc != chg->chg_cfg.target_fcc) {
-		cfg_changed = true;
-		chg->chg_cfg.target_fcc = config->target_fcc;
-	}
-
-	/* configure the charger if changed */
-	if (config->target_fv != chg->chg_cfg.target_fv) {
-		cfg_changed = true;
-		chg->chg_cfg.target_fv = config->target_fv;
-	}
-
-	if (chg->chg_cfg.target_fv > 0 && (chg->batt_info.batt_mv > chg->chg_cfg.target_fv)) {
-		sc760x_ibat_limit_set -= IBAT_CHG_LIM_BASE;
-		sc760x_set_ibat_limit(chg->sc, sc760x_ibat_limit_set);
-		pr_info("update new sc760x_ibat_limit_set %d, state.vbat_adc %d, batt_mv %d > chg->chg_cfg.target_fv %d\n",
-			sc760x_ibat_limit_set, state.vbat_adc / 1000, chg->batt_info.batt_mv, chg->chg_cfg.target_fv);
-	} else {
-
-		ibat_limit_vote = MIN_VAL(chg->chg_cfg.target_fcc, chg->sc->thermal_fcc_ua / 1000);
-
-#ifdef THERMAL_RATIO_CONTROL
-		/* The thermal_radio step is 0.5, this is equivalent to (batt_fcc_ma / (0.5 * thermal_ratio_nums)) */
-		chg->sc->thermal_fcc_ua = (chg->paired_batt_info.batt_fcc_ma * 2 / chg->sc->thermal_ratio_nums) * 1000;
-		ibat_limit_vote = MIN_VAL(chg->chg_cfg.target_fcc, chg->sc->thermal_fcc_ua / 1000);
-#endif
-
-		if (sc760x_ibat_limit_set > (ibat_limit_vote + IBAT_CHG_LIM_BASE)) {
-			sc760x_ibat_limit_set -= IBAT_CHG_LIM_BASE;
-			sc760x_set_ibat_limit(chg->sc, sc760x_ibat_limit_set);
-			pr_info("Devide to decrease ichg, update new sc760x_ibat_limit_set %d\n",
-				sc760x_ibat_limit_set);
-		} else if (sc760x_ibat_limit_set < (ibat_limit_vote - IBAT_CHG_LIM_BASE)) {
-			sc760x_ibat_limit_set += IBAT_CHG_LIM_BASE;
-			sc760x_set_ibat_limit(chg->sc, sc760x_ibat_limit_set);
-			pr_info("Devide to increase ichg, update new sc760x_ibat_limit_set %d\n",
-				sc760x_ibat_limit_set);
-		}
-	}
-
-	if (config->charger_suspend != chg->chg_cfg.charger_suspend) {
-		rc = sc760x_set_load_switch(chg->sc, config->charger_suspend);
-		if (!rc) {
-			cfg_changed = true;
-			chg->chg_cfg.charger_suspend = config->charger_suspend;
-		}
-	}
-
-	chg_en = sc760x_is_enabled_charging(chg->sc);
-	if (chg->sc->user_chg_en >= 0 && chg_en != !!chg->sc->user_chg_en) {
-		if (!!chg->sc->user_chg_en)
-			rc = sc760x_enable_charger(chg->sc);
-		else
-			rc = sc760x_disable_charger(chg->sc);
-		if (!rc) {
-			cfg_changed = true;
-			chg_en = !!chg->sc->user_chg_en;
-		}
-	}
-
-	if (config->charging_disable != chg->chg_cfg.charging_disable ||
-	    (chg_en == config->charging_disable && chg->sc->user_chg_en < 0)) {
-		value = config->charging_disable;
-		if (!value)
-			rc = sc760x_enable_charger(chg->sc);
-		else
-			rc = sc760x_disable_charger(chg->sc);
-		if (!rc) {
-			cfg_changed = true;
-			chg->chg_cfg.charging_disable = config->charging_disable;
-			chg_en = !value;
-		}
-	}
-
-	if (config->taper_kickoff != chg->chg_cfg.taper_kickoff) {
-		chg->chg_cfg.taper_kickoff = config->taper_kickoff;
-		chg->chrg_taper_cnt = 0;
-	}
-
-	if (config->full_charged != chg->chg_cfg.full_charged) {
-		chg->chg_cfg.full_charged = config->full_charged;
-	}
-
-	if (!config->charging_disable &&
-	    !config->charger_suspend &&
-	    config->chrg_iterm != chg->chg_cfg.chrg_iterm) {
-		value = config->chrg_iterm * 1000;
-		if (!rc) {
-			cfg_changed = true;
-			chg->chg_cfg.chrg_iterm = config->chrg_iterm;
-		}
-	}
-
-	if (!config->charging_disable &&
-	    !config->charger_suspend &&
-	    config->fg_iterm != chg->chg_cfg.fg_iterm) {
-		if (chg->fg_psy) {
-			union power_supply_propval val = {0};
-			val.intval = config->fg_iterm * 1000;
-			rc = power_supply_set_property(chg->fg_psy,
-				POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT,
-				&val);
-			if (!rc) {
-				cfg_changed = true;
-				chg->chg_cfg.fg_iterm = config->fg_iterm;
-			}
-		} else {
-			chg->chg_cfg.fg_iterm = config->fg_iterm;
-		}
-	}
-
-	if (!config->charging_disable &&
-	    !config->charger_suspend &&
-	    config->charging_reset != chg->chg_cfg.charging_reset) {
-		if (config->charging_reset) {
-			chg->chg_cfg.target_fv = -EINVAL;
-			chg->chg_cfg.target_fcc = -EINVAL;
-			chg->chg_cfg.charging_disable = true;
-			pr_info("Battery charging reset triggered\n");
-		}
-		cfg_changed = true;
-		chg->chg_cfg.charging_reset = config->charging_reset;
-	}
-
-	if (cfg_changed) {
-		cancel_delayed_work(&chg->sc->charge_monitor_work);
-		schedule_delayed_work(&chg->sc->charge_monitor_work,
-						msecs_to_jiffies(200));
-	}
-
-	if (!is_usb_online(chg->sc) &&
-		!is_wls_online(chg->sc)) {
-
-	    rc = sc760x_set_auto_bsm_dis(chg->sc, false);
-	    if (rc < 0) {
-	        pr_err("Failed to enable audo bsm(%d)\n", rc);
-	    }
-	} else {
-
-	    rc = sc760x_set_auto_bsm_dis(chg->sc, true);
-	    if (rc < 0) {
-	        pr_err("Failed to disable audo bsm(%d)\n", rc);
-	    }
-	}
-
-	pr_info("chg_en:%d, online %d, chg_st:%d\n",
-			chg_en, state.online, state.chrg_stat);
-	sc760x_get_ibat_limit(chg->sc, &sc760x_ibat_limit_set);
-	pr_info("sc760x_ibat_limit_set %d, ibat_limit_vote %d, target_fcc %d, target_fv %d, thermal_fcc_ua %d\n",
-			sc760x_ibat_limit_set, ibat_limit_vote, chg->chg_cfg.target_fcc, chg->chg_cfg.target_fv, chg->sc->thermal_fcc_ua);
 	return 0;
 }
 
-#define TAPER_COUNT 3
-static bool sc760x_charger_is_charge_tapered(void *data, int tapered_ma)
+static const struct charger_ops sc760x_chg_ops = {
+	/* cable plug in/out */
+	.plug_in = sc760x_plug_in,
+	.plug_out = sc760x_plug_out,
+};
+
+static const struct charger_properties sc760x_chg_props = {
+	.alias_name = "sc760x_chg",
+};
+
+static int sc760x_chg_init_chgdev(struct sc760x_chip *sc)
 {
-	bool is_tapered = false;
-	struct sc760x_mmi_charger *chg = data;
+	struct sc760x_chg_platform_data *pdata = dev_get_platdata(sc->dev);
 
-	if (abs(chg->batt_info.batt_ma) <= tapered_ma) {
-		if (chg->chrg_taper_cnt >= TAPER_COUNT) {
-			is_tapered = true;
-			chg->chrg_taper_cnt = 0;
-		} else
-			chg->chrg_taper_cnt++;
-	} else
-		chg->chrg_taper_cnt = 0;
-
-	return is_tapered;
-}
-
-static bool sc760x_charger_is_charge_halt(void *data)
-{
-//	int rc = 0;
-//	int chrg_stat = 0;
-	bool chrg_halt = false;
-	struct sc760x_mmi_charger *chg = data;
-
-	if (chg->batt_info.batt_status == POWER_SUPPLY_STATUS_NOT_CHARGING ||
-	    chg->batt_info.batt_status == POWER_SUPPLY_STATUS_FULL)
-		chrg_halt = true;
-
-	return chrg_halt;
-}
-
-static void sc760x_charger_set_constraint(void *data,
-                        struct mmi_charger_constraint *constraint)
-{
-	struct sc760x_mmi_charger *chg = data;
-
-	if (constraint->demo_mode != chg->constraint.demo_mode) {
-		chg->constraint.demo_mode = constraint->demo_mode;
-	}
-
-	if (constraint->factory_version != chg->constraint.factory_version) {
-		chg->constraint.factory_version = constraint->factory_version;
-	}
-
-	if (constraint->factory_mode != chg->constraint.factory_mode) {
-		chg->constraint.factory_mode = constraint->factory_mode;
-	}
-
-	if (constraint->dcp_pmax != chg->constraint.dcp_pmax) {
-		chg->constraint.dcp_pmax = constraint->dcp_pmax;
-	}
-
-	if (constraint->hvdcp_pmax != chg->constraint.hvdcp_pmax) {
-		chg->constraint.hvdcp_pmax = constraint->hvdcp_pmax;
-	}
-
-	if (constraint->pd_pmax != chg->constraint.pd_pmax) {
-		chg->constraint.pd_pmax = constraint->pd_pmax;
-	}
-
-	if (constraint->wls_pmax != chg->constraint.wls_pmax) {
-		chg->constraint.wls_pmax = constraint->wls_pmax;
-	}
-}
-
-#define DUAL_VBATT_DELTA_MV 200
-static void sc760x_paired_battery_notify(void *data,
-			struct mmi_battery_info *batt_info)
-{
-	int partner_fg_vbatt = 0, fg_vbatt = 0;
-	struct sc760x_mmi_charger *chg = data;
-
-	if (!chg) {
-		pr_err("sc mmi_charger not valid\n");
-		return;
-	}
-
-	if (!chg->sc) {
-		pr_err("sc chip not valid\n");
-		return;
-	}
-
-	memcpy(&chg->paired_batt_info, batt_info, sizeof(struct mmi_battery_info));
-	if (chg->sc->sc760x_enable) {
-		pr_info("sc760x has been power on\n");
-		return;
-	}
-
-	pr_info("parnter battery : batt_mv %d, batt_ma %d, batt_soc %d,"
-		" batt_temp %d, batt_status %d, batt_sn %s, batt_fv_mv %d,"
-		" batt_fcc_ma %d\n",
-		batt_info->batt_mv,
-		batt_info->batt_ma,
-		batt_info->batt_soc,
-		batt_info->batt_temp,
-		batt_info->batt_status,
-		batt_info->batt_sn,
-		batt_info->batt_fv_mv,
-		batt_info->batt_fcc_ma);
-
-	partner_fg_vbatt = batt_info->batt_mv;
-	fg_vbatt = chg->batt_info.batt_mv;
-
-	pr_info("sc760x checking, partner_fg_vbatt %d, fg_vbatt %d\n", partner_fg_vbatt, fg_vbatt);
-	if (!is_usb_online(chg->sc) &&
-		!is_wls_online(chg->sc) &&
-		(DUAL_VBATT_DELTA_MV < (partner_fg_vbatt - fg_vbatt))) {
-		pr_err("partner_fg_vbatt > fg_vbatt, and delta value > %d, Does not turn on sc760x\n", DUAL_VBATT_DELTA_MV);
-		return;
-	} else {
-		if (chg->sc->user_gpio_en < 0)
-			sc760x_enable_chip(chg->sc, true);
-		return;
-	}
-
-    return;
-}
-
-static int sc760x_mmi_charger_init(struct sc760x_mmi_charger *chg)
-{
-	int rc;
-	const char *df_sn = NULL;
-	struct mmi_charger_driver *driver;
-
-	if (!chg->fg_psy && !chg->fg_psy_name) {
-		chg->fg_psy_name = "fg_battery";
-		device_property_read_string(chg->sc->dev,
-					"mmi,fg-psy-name",
-					&chg->fg_psy_name);
-	}
-
-	if (!chg->fg_psy) {
-		chg->fg_psy = power_supply_get_by_name(chg->fg_psy_name);
-		if (!chg->fg_psy) {
-			pr_err("No %s power supply found\n", chg->fg_psy_name);
-			return -ENODEV;
-		}
-		pr_info("%s power supply is found\n", chg->fg_psy_name);
-	}
-
-	if (chg->driver) {
-		pr_info("sc760x_mmi_charger has already registered\n");
-		return 0;
-	}
-
-	rc = device_property_read_string(chg->sc->dev,
-					"mmi,df-serialnum",
-					&df_sn);
-	if (!rc && df_sn) {
-		pr_info("Default Serial Number %s\n", df_sn);
-	} else {
-		pr_err("No Default Serial Number defined\n");
-		df_sn = "unknown-sn";
-	}
-	strcpy(chg->batt_info.batt_sn, df_sn);
-	chg->paired_batt_info.batt_soc = -EINVAL;
-	chg->chg_cfg.target_fcc = chg->sc->init_data.ichg / 1000;
-	chg->chg_cfg.charging_disable = chg->sc->init_data.charger_disabled;
-	chg->chg_cfg.charger_suspend = chg->sc->init_data.charger_disabled;
-
-	if (of_property_read_bool(chg->sc->dev->of_node, "mmi,ichg-invert-polority"))
-		chg->ichg_polority = -1;
-	else
-		chg->ichg_polority = 1;
-	pr_info("ichg_polority %d\n", chg->ichg_polority);
-
-	driver = devm_kzalloc(chg->sc->dev,
-				sizeof(struct mmi_charger_driver),
-				GFP_KERNEL);
-	if (!driver)
-		return -ENOMEM;
-
-	/* init driver */
-	driver->name = SC760X_NAME;
-	driver->dev = chg->sc->dev;
-	driver->data = chg;
-	driver->get_batt_info = sc760x_charger_get_batt_info;
-	driver->get_chg_info = sc760x_charger_get_chg_info;
-	driver->config_charge = sc760x_charger_config_charge;
-	driver->is_charge_tapered = sc760x_charger_is_charge_tapered;
-	driver->is_charge_halt = sc760x_charger_is_charge_halt;
-	driver->set_constraint = sc760x_charger_set_constraint;
-	driver->notify_paired_battery = sc760x_paired_battery_notify;
-	chg->driver = driver;
-
-	/* register driver to mmi charger */
-	rc = mmi_register_charger_driver(driver);
-	if (rc) {
-		pr_err("sc760x_mmi_charger init failed, rc=%d\n", rc);
-	} else {
-		pr_info("sc760x_mmi_charger init successfully\n");
-	}
-
-	return rc;
-}
-
-static void sc760x_mmi_charger_deinit(struct sc760x_mmi_charger *chg)
-{
-	int rc;
-
-	if (!chg->driver) {
-		pr_info("sc760x_mmi_charger has not inited yet\n");
-		return;
-	}
-
-	/* unregister driver from mmi charger */
-	rc = mmi_unregister_charger_driver(chg->driver);
-	if (rc) {
-		pr_err("sc760x_mmi_charger deinit failed, rc=%d\n", rc);
-	} else {
-		devm_kfree(chg->sc->dev, chg->driver);
-		chg->driver = NULL;
-	}
-
-	if (chg->fg_psy) {
-		power_supply_put(chg->fg_psy);
-		chg->fg_psy = NULL;
-	}
+	pr_debug("%s\n", __func__);
+	sc->chgdev = charger_device_register(pdata->chg_name, sc->dev,
+						sc, &sc760x_chg_ops,
+						&sc760x_chg_props);
+	return IS_ERR(sc->chgdev) ? PTR_ERR(sc->chgdev) : 0;
 }
 
 static struct of_device_id sc760x_charger_match_table[] = {
@@ -2013,11 +1206,18 @@ static int sc760x_charger_probe(struct i2c_client *client,
     dev_err(sc->dev, "sc760x[%s] probe running!!!\n",
             sc->role == SC760X_MASTER ? "master" : "slave");
 
-    sc->cfg = &default_cfg;
+    sc->pdata = &default_cfg;
     ret = sc760x_parse_dt(sc, &client->dev);
     if (ret < 0) {
         dev_err(sc->dev, "%s parse dt failed(%d)\n", __func__, ret);
         goto err_parse_dt;
+    }
+
+    ret = sc760x_chg_init_chgdev(sc);
+    if (ret < 0) {
+        dev_err(sc->dev, "%s init chg dev fail(%d)\n",
+                    __func__, ret);
+        goto err_init_chgdev;
     }
 
     ret = sc760x_register_interrupt(sc, client);
@@ -2038,21 +1238,16 @@ static int sc760x_charger_probe(struct i2c_client *client,
         goto err_init_device;
     }
 
-    INIT_DELAYED_WORK(&sc->charge_detect_delayed_work, charger_detect_work_func);
-    INIT_DELAYED_WORK(&sc->charge_monitor_work, charger_monitor_work_func);
-    sc->psy_nb.notifier_call = sc760x_psy_notifier_call;
-    ret = power_supply_reg_notifier(&sc->psy_nb);
-    if (ret)
-        pr_err("Failed to reg power supply notifier: %d\n", ret);
-
-    sc->mmi_charger = devm_kzalloc(dev, sizeof(*sc->mmi_charger), GFP_KERNEL);
-    if (sc->mmi_charger) {
-        sc->mmi_charger->sc = sc;
-        sc760x_mmi_charger_init(sc->mmi_charger);
-
-    schedule_delayed_work(&sc->charge_detect_delayed_work,
-						msecs_to_jiffies(0));
+    ret = sc760x_enable_chip(sc, true);
+    if (ret) {
+        dev_err(dev, "Failed to enable sc760x chip, ret=%d\n", ret);
+        goto err_init_device;
     }
+
+    INIT_DELAYED_WORK(&sc->charge_monitor_work, charger_monitor_work_func);
+
+    schedule_delayed_work(&sc->charge_monitor_work,
+						msecs_to_jiffies(0));
 
     dev_err(sc->dev, "sc760x[%s] probe successfully!!!\n",
             sc->role == SC760X_MASTER ? "master" : "slave");
@@ -2060,6 +1255,7 @@ static int sc760x_charger_probe(struct i2c_client *client,
 
 err_register_irq:
 err_init_device:
+err_init_chgdev:
 err_parse_dt:
 err_get_match:
     dev_err(sc->dev, "sc760x probe failed!\n");
@@ -2068,21 +1264,19 @@ err_get_match:
 }
 
 
-static int sc760x_charger_remove(struct i2c_client *client)
+static void sc760x_charger_remove(struct i2c_client *client)
 {
     struct sc760x_chip *sc = i2c_get_clientdata(client);
     sc760x_remove_device_node(&(client->dev));
 
     cancel_delayed_work_sync(&sc->charge_monitor_work);
 
-    if (sc->mmi_charger)
-        sc760x_mmi_charger_deinit(sc->mmi_charger);
-
-    power_supply_unreg_notifier(&sc->psy_nb);
     power_supply_unregister(sc->charger_psy);
 
+    sc760x_enable_chip(sc, false);
+
     mutex_destroy(&sc->lock);
-    return 0;
+    return;
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -2103,6 +1297,8 @@ static int sc760x_suspend(struct device *dev)
     if (ret < 0) {
         dev_err(sc->dev, "%s Failed to enter lowpower(%d)\n", __func__, ret);
     }
+
+    cancel_delayed_work_sync(&sc->charge_monitor_work);
 
     return 0;
 }
@@ -2125,6 +1321,10 @@ static int sc760x_resume(struct device *dev)
         dev_err(sc->dev, "%s Failed to enable adc(%d)\n", __func__, ret);
     }
 
+    cancel_delayed_work_sync(&sc->charge_monitor_work);
+    schedule_delayed_work(&sc->charge_monitor_work,
+					msecs_to_jiffies(200));
+
     return 0;
 }
 
@@ -2142,8 +1342,9 @@ static void sc760x_charger_shutdown(struct i2c_client *client)
 		dev_err(sc->dev, "%s Failed to enable adc(%d)\n", __func__, ret);
 	}
 
+	ret = sc760x_enable_chip(sc, false);
 	if (ret) {
-		pr_err("Failed to disable charger, ret = %d\n", ret);
+		pr_err("Failed to disable sc760x chip, ret = %d\n", ret);
 	}
 	pr_info("sc760x_charger_shutdown\n");
 }
