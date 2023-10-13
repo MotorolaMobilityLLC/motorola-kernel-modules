@@ -35,6 +35,9 @@
 #include <linux/reboot.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
+#if KERNEL_VERSION(5, 15, 0) <= LINUX_VERSION_CODE
+#include <linux/sysrq.h>
+#endif
 
 #define RESET_EXTRA_RESET_KUNPOW_REASON        BIT(9)
 
@@ -94,6 +97,7 @@ static unsigned int get_boot_seq(void)
 	return boot_seq;
 }
 
+#if KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE
 static int print_blocked_tasks(void)
 {
 	mm_segment_t fs;
@@ -143,6 +147,14 @@ static int print_blocked_tasks(void)
 
 	return rc;
 }
+#else
+static int print_blocked_tasks(void)
+{
+	handle_sysrq('7');
+	handle_sysrq('w');
+	return 0;
+}
+#endif
 
 static void kpd_bark_work_func(struct work_struct *work)
 {
@@ -159,7 +171,11 @@ static void kpd_bark_work_func(struct work_struct *work)
 		qpnp_pon_store_extra_reset_info(RESET_EXTRA_RESET_KUNPOW_REASON,
 			mmi_kungpow_check() ? 0 : RESET_EXTRA_RESET_KUNPOW_REASON);
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+#if KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE
 		kernel_halt();
+#else
+		kernel_power_off();
+#endif
 	}
 }
 
