@@ -3517,6 +3517,10 @@ static int sgm4154x_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, sgm);
 
 	ret = sgm4154x_hw_chipid_detect(sgm);
+	if (ret < 0) {
+		pr_info("[%s] device not found, ret = %d!!!\n", __func__, ret);
+		return ret;
+	}
 #ifdef __SGM41513_CHIP_ID__
 	if ((ret & SGM4154x_PN_MASK) != SGM4154x_PN_41513_ID){
 
