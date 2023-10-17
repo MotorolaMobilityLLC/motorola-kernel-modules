@@ -556,6 +556,58 @@ int chipone_sensor_remove(struct chipone_ts_data *data)
 }
 #endif
 
+#ifdef CTS_CHECK_DEVICE_BOOTMODE
+static bool is_charger_mode(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool charger_mode = false;
+    int ret;
+	const char *bootargs = NULL;
+	char *bootmode = NULL;
+
+	cts_info("is_charger_mode enter");
+    if (!np){
+        cts_err("chosen node NULL");
+		return false;
+    }
+
+#ifdef CONFIG_BOOT_CONFIG
+    cts_info("BOOT_CONFIG is define");
+    ret = of_property_read_string(np, "mmi,bootconfig", &bootargs);
+#else
+    cts_info("BOOT_CONFIG is not define");
+    ret = of_property_read_string(np, "bootargs", &bootargs);
+#endif
+
+    cts_info("ret=%d, bootargs=%s", ret, bootargs);
+    if(!ret && bootargs) {
+        bootmode = strstr(bootargs, "androidboot.mode=");
+        if(bootmode) {
+            cts_info("bootmode info: %s\n", bootmode);
+            bootmode = strpbrk(bootmode, "=");
+            if (bootmode && (strlen(bootmode) > 1)) {
+                bootmode++;
+                cts_info("bootmode=%s\n", bootmode);
+                if (bootmode && !strncmp(bootmode, "charger", strlen("charger"))) {
+                    charger_mode = true;
+                    cts_info("Charger_smode true");
+                }
+            }
+        } else {
+            cts_err("bootmode NULL");
+        }
+    } else {
+        cts_err("get boottargs fail");
+    }
+
+	of_node_put(np);
+
+    cts_info("Charger mode = %d",charger_mode);
+
+	return charger_mode;
+}
+#endif
+
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_driver_probe(struct i2c_client *client,
         const struct i2c_device_id *id)
@@ -596,6 +648,13 @@ static int cts_driver_probe(struct spi_device *client)
             cts_err("%s: %s not actived\n", __func__, dp->name);
             return ret;
         }
+    }
+#endif
+
+#ifdef CTS_CHECK_DEVICE_BOOTMODE
+    if(is_charger_mode()){
+        cts_info("Charger mode,ignore insmod chipone modules\n");
+        return -ENODEV;
     }
 #endif
 
