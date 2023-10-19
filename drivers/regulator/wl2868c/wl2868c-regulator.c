@@ -19,6 +19,7 @@
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
 #include <linux/regulator/of_regulator.h>
+#include <linux/version.h>
 #include "wl2868c-regulator.h"
 static int ldo_chipid = -1;
 enum slg51000_regulators {
@@ -442,6 +443,24 @@ static void wl2868c_i2c_shutdown(struct i2c_client *client)
 	}
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void wl2868c_i2c_remove(struct i2c_client *client)
+{
+	struct wl2868c *chip = i2c_get_clientdata(client);
+	struct gpio_desc *desc;
+
+	if (chip->chip_cs_pin > 0) {
+		desc = gpio_to_desc(chip->chip_cs_pin);
+		gpiod_direction_output_raw(desc, GPIOF_INIT_LOW);
+	}
+
+	if (NULL != chip->vio_reg) {
+		regulator_disable(chip->vio_reg);
+		regulator_put(chip->vio_reg);
+	}
+
+}
+#else
 static int wl2868c_i2c_remove(struct i2c_client *client)
 {
 	struct wl2868c *chip = i2c_get_clientdata(client);
@@ -460,6 +479,7 @@ static int wl2868c_i2c_remove(struct i2c_client *client)
 
 	return ret;
 }
+#endif
 
 static const struct i2c_device_id wl2868c_i2c_id[] = {
 	{"wl2868c", 0},
