@@ -16,6 +16,7 @@
 #include <linux/completion.h>
 #include <linux/of_irq.h>
 #include <linux/clk.h>
+#include <linux/version.h>
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>

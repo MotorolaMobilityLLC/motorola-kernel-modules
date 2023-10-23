@@ -11,4 +11,6 @@ modules_install:
 
 KBUILD_EXTRA_SYMBOLS += $(M)/../../../sensors/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(M)/../../../mmi_relay/Module.symvers
+ifneq ($(filter m y, $(CONFIG_DRM_DYNAMIC_REFRESH_RATE)),)
 KBUILD_EXTRA_SYMBOLS += $(OUT_DIR)/../../vendor/qcom/opensource/display-drivers/msm/Module.symvers
+endif

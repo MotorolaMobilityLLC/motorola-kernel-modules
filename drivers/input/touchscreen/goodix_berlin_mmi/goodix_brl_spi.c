@@ -264,11 +264,18 @@ err_pdev:
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+static void goodix_spi_remove(struct spi_device *spi)
+{
+	platform_device_unregister(goodix_pdev);
+}
+#else
 static int goodix_spi_remove(struct spi_device *spi)
 {
 	platform_device_unregister(goodix_pdev);
 	return 0;
 }
+#endif
 
 #ifdef CONFIG_OF
 static const struct of_device_id spi_matchs[] = {

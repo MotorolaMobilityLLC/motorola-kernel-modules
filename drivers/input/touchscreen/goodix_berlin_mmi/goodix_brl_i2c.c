@@ -228,11 +228,18 @@ err_pdev:
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void goodix_i2c_remove(struct i2c_client *client)
+{
+	platform_device_unregister(goodix_pdev);
+}
+#else
 static int goodix_i2c_remove(struct i2c_client *client)
 {
 	platform_device_unregister(goodix_pdev);
 	return 0;
 }
+#endif
 
 #ifdef CONFIG_OF
 static const struct of_device_id i2c_matchs[] = {

@@ -14,24 +14,27 @@
   * General Public License for more details.
   *
   */
-#include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
+#include "goodix_ts_core.h"
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38)
 #include <linux/input/mt.h>
 #define INPUT_TYPE_B_PROTOCOL
 #endif
 
-#include "goodix_ts_core.h"
 #include "goodix_ts_mmi.h"
 
 #define PINCTRL_STATE_ACTIVE    "pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND   "pmx_ts_suspend"
 #define GOODIX_DEFAULT_CFG_NAME 	"goodix_cfg_group.cfg"
 #define GOOIDX_INPUT_PHYS			"goodix_ts/input0"
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+#define PDE_DATA(x) pde_data(x)
+#endif
 
 struct goodix_module goodix_modules;
 int core_module_prob_sate = CORE_MODULE_UNPROBED;
@@ -2237,6 +2240,7 @@ static int goodix_generic_noti_callback(struct notifier_block *self,
 		ret = goodix_send_ic_config(cd, CONFIG_TYPE_NORMAL);
 		if (ret)
 			ts_info("failed send normal config[ignore]");
+		fallthrough;
 	case NOTIFY_FWUPDATE_FAILED:
 		if (hw_ops->read_version(cd, &cd->fw_version))
 			ts_info("failed read fw version info[ignore]");
