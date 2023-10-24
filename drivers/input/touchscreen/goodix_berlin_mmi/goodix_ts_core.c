@@ -1266,6 +1266,10 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 					touch_data->coords[i].y);
 			input_report_abs(dev, ABS_MT_TOUCH_MAJOR,
 					touch_data->coords[i].w);
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+			input_report_abs(dev, ABS_MT_PRESSURE,
+					touch_data->coords[i].w);
+#endif
 		} else {
 			if (touchdown[i] == 1) {
 				ts_debug("TOUCH: [%d] release\n", i);
@@ -1715,6 +1719,10 @@ static int goodix_ts_input_dev_config(struct goodix_ts_core *core_data)
 			     0, ts_bdata->panel_max_y, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_TOUCH_MAJOR,
 			     0, ts_bdata->panel_max_w, 0, 0);
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+	input_set_abs_params(input_dev, ABS_MT_PRESSURE,
+			     0, ts_bdata->panel_max_w, 0, 0);
+#endif
 #ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
 	input_set_abs_params(input_dev, ABS_MT_TOOL_TYPE,
 			     MT_TOOL_FINGER, MT_TOOL_PALM, 0, 0);

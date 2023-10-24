@@ -60,6 +60,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_DDA_STYLUS)),)
     goodix_brl_mmi-objs += goodix_ts_dda.o
 endif
 
+ifneq ($(filter m y,$(CONFIG_MOTO_DDA_PASSIVE_STYLUS)),)
+    EXTRA_CFLAGS += -DCONFIG_MOTO_DDA_PASSIVESTYLUS
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_TOUCHSCREEN_MMI)),)
     EXTRA_CFLAGS += -DCONFIG_INPUT_TOUCHSCREEN_MMI
     goodix_brl_mmi-objs += goodix_ts_mmi.o
