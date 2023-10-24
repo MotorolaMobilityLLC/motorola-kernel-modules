@@ -1267,12 +1267,12 @@ bool zram_watermark_ok(void)
 	return cur_scale > wm;
 }
 
-static inline bool zram_is_full(void)
+static inline bool zram_is_low(void)
 {
 	unsigned long nr_used = hybridswap_fetch_zram_used_pages();
 	unsigned long nr_total = fetch_nr_zram_total();
 
-	return nr_used >= nr_total;
+	return ((nr_total - nr_used) < fetch_free_swap_level_value());
 }
 
 bool free_zram_is_ok(void)
@@ -1454,7 +1454,7 @@ static inline u64 calc_shrink_scale(pg_data_t *pgdat)
 			continue;
 		}
 
-		hybp(HYB_INFO, "CHECK MEMCG %s: can_reclaim %luKB nr_anon %luKB zram %luKB eswap %luKB total %luKB reclaimed %lu%%(%lu)\n",
+		hybp(HYB_DEBUG, "CHECK MEMCG %s: can_reclaim %luKB nr_anon %luKB zram %luKB eswap %luKB total %luKB reclaimed %lu%%(%lu)\n",
 				hybs->name, (unsigned long)page_to_kb(hybs->can_reclaimed),
 				(unsigned long)page_to_kb(nr_anon), (unsigned long)page_to_kb(nr_zram),
 				(unsigned long)page_to_kb(nr_eswap), (unsigned long)page_to_kb(total),
@@ -1515,7 +1515,7 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 						memcg_to_reclaim, GFP_KERNEL, true);
 				reclaim_memcg_cnt++;
 				hybs->can_reclaimed -= memcg_nr_reclaimed;
-				hybp(HYB_INFO, "SHRINK MEMCG %s: to_reclaim %lu reclaimed %lu\n", hybs->name,
+				hybp(HYB_DEBUG, "SHRINK MEMCG %s: to_reclaim %lu reclaimed %lu\n", hybs->name,
 						memcg_to_reclaim, memcg_nr_reclaimed);
 				nr_reclaimed += memcg_nr_reclaimed;
 			}
@@ -1537,7 +1537,7 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 		if (exit)
 			break;
 
-		if (zram_is_full())
+		if (zram_is_low())
 			break;
 		reclaim_cycles--;
 	}
@@ -1560,7 +1560,7 @@ static void swapd_shrink_node(pg_data_t *pgdat)
 		return;
 #endif
 
-	if (zram_is_full())
+	if (zram_is_low())
 		return;
 
 	if (high_buffer_is_suitable())
