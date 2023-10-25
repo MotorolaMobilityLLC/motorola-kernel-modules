@@ -983,7 +983,11 @@ err_exit:
 	return ret;
 }
 
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 static int st21nfc_remove(struct i2c_client *client)
+#else
+static void st21nfc_remove(struct i2c_client *client)
+#endif
 {
 	struct st21nfc_dev *st21nfc_dev;
 
@@ -1002,8 +1006,9 @@ static int st21nfc_remove(struct i2c_client *client)
 	kfree(st21nfc_dev->write_buf);
 	kfree(st21nfc_dev->read_buf);
 	kfree(st21nfc_dev);
-
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 	return 0;
+#endif
 }
 
 static int st21nfc_suspend(struct device *device)
