@@ -401,6 +401,8 @@ static void swapd_mcgs_setup_parse(int level_num)
 
 	while ((memcg = fetch_next_memcg(memcg))) {
 		hybs = MEMCGRP_ITEM_DATA(memcg);
+		
+		if (!hybs) continue;
 
 		for (i = 0; i < level_num; ++i) {
 			if (atomic64_read(&hybs->app_grade) >= zswap_param[i].min_grade &&
