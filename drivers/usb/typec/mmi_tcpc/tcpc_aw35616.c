@@ -355,6 +355,11 @@ static irqreturn_t aw35616_irq_work_handler(int irq, void *data)
 		case DUG_ACC:
 			if (chip->reg.status.snk_det_rp_dbg) {
 				AW_LOG("plug int Rp-Rp\n");
+
+				AW_LOG("snk_cur_md:%d\n",chip->reg.status.snk_cur_md);
+                                chip->tcpc->typec_usb_sink_curr = chip->reg.status.snk_cur_md;
+                                chip->tcpc->typec_remote_rp_level = aw35616_remote_rp_level(chip->tcpc);
+
 				if (chip->tcpc->typec_attach_new != TYPEC_ATTACHED_SNK) {
 					chip->tcpc->typec_attach_new = TYPEC_ATTACHED_SNK;
 					tcpci_notify_typec_state(chip->tcpc);
