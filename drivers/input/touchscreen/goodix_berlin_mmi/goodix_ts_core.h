@@ -73,6 +73,10 @@
 #define GOODIX_GESTURE_UNDER_WATER		0x20
 #define GOODIX_GESTURE_PALM_DETECTION		0x40
 
+#ifndef fallthrough
+#define fallthrough do {} while (0) /* fallthrough */
+#endif
+
 enum GOODIX_GESTURE_TYP {
 	GESTURE_SINGLE_TAP = (1 << 0),
 	GESTURE_DOUBLE_TAP = (1 << 1),
