@@ -621,7 +621,7 @@ static void usb_ether_setup(struct net_device *dev)
 
 	ether_setup(dev);
 
-	random_ether_addr(dev->dev_addr);
+	eth_random_addr((u8 *)dev->dev_addr);
 }
 
 /*-------------------------------------------------------------------------*/
