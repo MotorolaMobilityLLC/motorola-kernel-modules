@@ -1317,7 +1317,11 @@ error:
 	return ret;
 }
 
+#if (KERNEL_VERSION(6, 1, 25) > LINUX_VERSION_CODE)
 static int cw2217_remove(struct i2c_client *client)
+#else
+static void cw2217_remove(struct i2c_client *client)
+#endif
 {
 	struct cw_battery *cw_bat = i2c_get_clientdata(client);
 
@@ -1327,7 +1331,9 @@ static int cw2217_remove(struct i2c_client *client)
 			regulator_disable(cw_bat->vdd_i2c_vreg);
 		devm_regulator_put(cw_bat->vdd_i2c_vreg);
 	}
+#if (KERNEL_VERSION(6, 1, 25) > LINUX_VERSION_CODE)
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_PM
