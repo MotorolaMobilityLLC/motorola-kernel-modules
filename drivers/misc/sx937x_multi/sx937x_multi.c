@@ -1528,7 +1528,11 @@ Hardware_CheckFail:
  * \param client Pointer to i2c_client struct
  * \return Value 0
  */
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
 static int sx937x_remove(struct i2c_client *client)
+#else
+static void sx937x_remove(struct i2c_client *client)
+#endif
 {
 	psx937x_platform_data_t pplatData =0;
 	struct _buttonInfo *pCurrentbutton;
@@ -1563,7 +1567,10 @@ static int sx937x_remove(struct i2c_client *client)
 			}
 		}
 	}
-	return 0;
+#if KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE
+       return 0;
+#endif
+
 }
 /*====================================================*/
 /***** Kernel Suspend *****/
