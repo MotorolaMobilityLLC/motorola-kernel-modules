@@ -56,6 +56,7 @@
 #include <linux/acpi.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/of_gpio.h>
+#include <linux/version.h>
 
 #include "sc760x_charger_mmi.h"
 
@@ -902,6 +903,7 @@ static int sc760x_charger_get_property(struct power_supply *psy,
 
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = sc760x_is_enabled_charging(sc);
+		break;
 
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = sc->sc760x_enable;
@@ -2067,8 +2069,11 @@ err_get_match:
     return ret;
 }
 
-
+#if (KERNEL_VERSION(6, 1, 25) > LINUX_VERSION_CODE)
 static int sc760x_charger_remove(struct i2c_client *client)
+#else
+static void sc760x_charger_remove(struct i2c_client *client)
+#endif
 {
     struct sc760x_chip *sc = i2c_get_clientdata(client);
     sc760x_remove_device_node(&(client->dev));
@@ -2082,7 +2087,10 @@ static int sc760x_charger_remove(struct i2c_client *client)
     power_supply_unregister(sc->charger_psy);
 
     mutex_destroy(&sc->lock);
+
+#if (KERNEL_VERSION(6, 1, 25) > LINUX_VERSION_CODE)
     return 0;
+#endif
 }
 
 #ifdef CONFIG_PM_SLEEP
