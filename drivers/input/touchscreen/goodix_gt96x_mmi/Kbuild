@@ -1,0 +1,23 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+
+obj-m := goodix_gt96x_mmi.o
+goodix_gt96x_mmi-objs := \
+					goodix_brl_i2c.o \
+					goodix_brl_spi.o \
+					goodix_ts_core.o \
+					goodix_brl_hw.o \
+					goodix_cfg_bin.o \
+					goodix_ts_utils.o \
+					goodix_brl_fwupdate.o \
+					goodix_ts_inspect.o \
+					goodix_ts_tools.o \
+					goodix_ts_gesture.o
+
+ifneq ($(filter m y,$(CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI)),)
+    EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_GOODIX_BRL_SPI
+endif
+
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers

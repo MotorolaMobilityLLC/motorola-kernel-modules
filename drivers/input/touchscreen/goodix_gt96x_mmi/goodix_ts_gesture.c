@@ -217,7 +217,7 @@ const static struct attribute_group gesture_sysfs_group = {
 
 int gesture_module_init(struct goodix_ts_core *core_data)
 {
-	int ret;
+	int ret = 0;
 	struct kobject *parent = &core_data->pdev->dev.kobj;
 
 	/* gesture sysfs init */

@@ -1,12 +1,16 @@
-obj-$(CONFIG_TOUCHSCREEN_GOODIX_BRL) += goodix_core.o
-goodix_core-y := \
-				goodix_brl_i2c.o \
-				goodix_brl_spi.o \
-				goodix_ts_core.o \
-				goodix_brl_hw.o \
-				goodix_cfg_bin.o \
-				goodix_ts_utils.o \
-				goodix_brl_fwupdate.o \
-				goodix_ts_gesture.o \
-				goodix_ts_inspect.o \
-				goodix_ts_tools.o
+all: modules
+
+modules:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)
+
+modules_install:
+	$(MAKE) INSTALL_MOD_STRIP=1 -C $(KERNEL_SRC) M=$(M) modules_install
+
+%:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) $@ $(KBUILD_OPTIONS)
+
+clean:
+	rm -f *.o *.ko *.mod.c *.mod.o *~ .*.cmd Module.symvers
+	rm -rf .tmp_versions
+
+KBUILD_EXTRA_SYMBOLS += $(M)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers

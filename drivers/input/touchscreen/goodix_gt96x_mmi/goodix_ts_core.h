@@ -33,6 +33,11 @@
 #include <linux/interrupt.h>
 #include <linux/completion.h>
 #include <linux/of_irq.h>
+#include <linux/seq_file.h>
+#include <linux/version.h>
+
+#include <linux/unistd.h>
+
 #if IS_ENABLED(CONFIG_OF)
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
@@ -65,6 +70,10 @@
 
 #define TS_DEFAULT_FIRMWARE				"goodix_firmware.bin"
 #define TS_DEFAULT_CFG_BIN				"goodix_cfg_group.bin"
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+#define PDE_DATA(x) pde_data(x)
+#endif
 
 enum GOODIX_GESTURE_TYP {
 	GESTURE_C			= (1 << 0),

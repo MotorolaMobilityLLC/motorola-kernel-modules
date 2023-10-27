@@ -1454,7 +1454,7 @@ static int brld_get_framedata(struct goodix_ts_core *cd,
 	int ret;
 	unsigned char val;
 	int retry = 20;
-	unsigned char frame_buf[GOODIX_MAX_FRAMEDATA_LEN];
+	static unsigned char frame_buf[GOODIX_MAX_FRAMEDATA_LEN];
 	unsigned char *cur_ptr;
 	unsigned int flag_addr = cd->ic_info.misc.frame_data_addr;
 	int tx = cd->ic_info.parm.drv_num;

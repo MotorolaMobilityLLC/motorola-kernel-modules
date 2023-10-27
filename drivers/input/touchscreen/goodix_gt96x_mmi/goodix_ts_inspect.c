@@ -21,7 +21,7 @@
 #include <linux/version.h>
 #include <linux/proc_fs.h>
 #include <linux/fs.h>
-#include <stdarg.h>
+#include <linux/stdarg.h>
 #include <asm/uaccess.h>
 
 
@@ -2687,7 +2687,8 @@ static void *seq_start(struct seq_file *s, loff_t *pos)
 
 static int seq_show(struct seq_file *s, void *v)
 {
-	seq_printf(s, (u8 *)v);
+	//seq_printf(s, (u8 *)v);
+	seq_printf(s, "%s", (u8 *)v);
 	return 0;
 }
 

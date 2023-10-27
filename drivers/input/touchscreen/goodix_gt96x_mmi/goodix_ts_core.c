@@ -14,18 +14,16 @@
   * General Public License for more details.
   *
   */
-#include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
-#include <linux/seq_file.h>
 #include <linux/uaccess.h>
+#include "goodix_ts_core.h"
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38)
 #include <linux/input/mt.h>
 #define INPUT_TYPE_B_PROTOCOL
 #endif
 
-#include "goodix_ts_core.h"
 /* goodix fb test */
 // #include "../../../video/fbdev/core/fb_firefly.h"
 
@@ -1415,13 +1413,12 @@ void goodix_ts_esd_on(struct goodix_ts_core *cd)
 void goodix_ts_esd_off(struct goodix_ts_core *cd)
 {
 	struct goodix_ts_esd *ts_esd = &cd->ts_esd;
-	int ret;
 
 	if (!atomic_read(&ts_esd->esd_on))
 		return;
 
 	atomic_set(&ts_esd->esd_on, 0);
-	ret = cancel_delayed_work_sync(&ts_esd->esd_work);
+	cancel_delayed_work_sync(&ts_esd->esd_work);
 	ts_info("Esd off");
 }
 
