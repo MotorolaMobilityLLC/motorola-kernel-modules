@@ -79,6 +79,12 @@ static struct sensors_classdev __maybe_unused sensors_touch_cdev = {
 
 void ili_tp_reset(void)
 {
+        int ret = 0;
+        ret = gpio_request(ilits->tp_rst,"TP_RESET");
+        if(ret<0){
+            ILI_ERR("Request RESET GPIO failed, ret = %d\n",ret);
+            gpio_free(ilits->tp_rst);
+        }
 	ILI_INFO("edge delay = %d\n", ilits->rst_edge_delay);
 
 	/* Need accurate power sequence, do not change it to msleep */
@@ -87,6 +93,7 @@ void ili_tp_reset(void)
 	gpio_set_value(ilits->tp_rst, 0);
 	mdelay(5);
 	gpio_set_value(ilits->tp_rst, 1);
+        gpio_free(ilits->tp_rst);
 	mdelay(ilits->rst_edge_delay);
 }
 
