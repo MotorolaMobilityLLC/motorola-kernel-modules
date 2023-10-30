@@ -26,6 +26,7 @@
  * QM35 FW ROM protocol SPI ops
  */
 
+#include <linux/interrupt.h>
 #include <linux/spi/spi.h>
 
 #include <linux/uwb/qmrom_spi.h>
@@ -51,6 +52,7 @@ void qmrom_set_fwname(const char *name)
 int qmrom_spi_transfer(void *handle, char *rbuf, const char *wbuf, size_t size)
 {
 	struct spi_device *spi = (struct spi_device *)handle;
+	struct qm35_ctx *qm35_ctx = spi_get_drvdata(spi);
 	int rc;
 
 	struct spi_transfer xfer[] = {
@@ -62,6 +64,7 @@ int qmrom_spi_transfer(void *handle, char *rbuf, const char *wbuf, size_t size)
 		},
 	};
 
+	qm35_ctx->qmrom_qm_ready = false;
 	rc = spi_sync_transfer(spi, xfer, ARRAY_SIZE(xfer));
 
 	if (trace_spi_xfers) {
@@ -174,11 +177,17 @@ void qmrom_spi_release_firmware(const struct firmware *fw)
 
 int qmrom_spi_wait_for_ready_line(void *handle, unsigned int timeout_ms)
 {
-	int count_down = (int)timeout_ms;
-	while (!gpiod_get_value(handle) && (--count_down >= 0)) {
-		udelay(1000);
-	}
-	return gpiod_get_value(handle) ? 0 : -1;
+	struct qm35_ctx *qm35_ctx = (struct qm35_ctx *)handle;
+
+	wait_event_interruptible_timeout(qm35_ctx->qmrom_wq_ready,
+					 qm35_ctx->qmrom_qm_ready,
+					 msecs_to_jiffies(timeout_ms));
+	return gpiod_get_value(qm35_ctx->gpio_ss_rdy) > 0 ? 0 : -1;
+}
+
+int qmrom_spi_read_irq_line(void *handle)
+{
+	return gpiod_get_value(handle);
 }
 
 void qmrom_spi_set_freq(unsigned int freq)

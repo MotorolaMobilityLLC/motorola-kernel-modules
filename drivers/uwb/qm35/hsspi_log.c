@@ -134,6 +134,7 @@ static int parse_log_sources_response(struct log_layer *layer, uint8_t *data,
 {
 	struct qm35_ctx *qm35_hdl;
 	int idx = 0;
+	uint16_t current_len = 0;
 
 	qm35_hdl = container_of(layer, struct qm35_ctx, log_layer);
 
@@ -150,8 +151,15 @@ static int parse_log_sources_response(struct log_layer *layer, uint8_t *data,
 		layer->log_modules[idx].debug = &qm35_hdl->debug;
 		layer->log_modules[idx].id = *data++;
 		layer->log_modules[idx].lvl = *data++;
-		strcpy(layer->log_modules[idx].name, (char *)data);
-		data += (strlen((char *)data) + 1);
+		current_len = strlen((char *)data) + 1;
+		if (current_len > sizeof(layer->log_modules[idx].name)) {
+			pr_err("qm35: log module name bigger than allocated buffer: current_len = %d bytes\n",
+			       current_len);
+			strncpy(layer->log_modules[idx].name, "ERROR", 6);
+		} else
+			strncpy(layer->log_modules[idx].name, (char *)data,
+				current_len);
+		data += current_len;
 
 		debug_create_module_entry(&qm35_hdl->debug,
 					  &layer->log_modules[idx]);
@@ -168,8 +176,6 @@ static int parse_get_log_lvl_response(struct log_layer *layer, uint8_t *data,
 
 	src_id = *data++;
 	src_lvl = *data;
-
-	//qm35_hdl = container_of(layer, struct qm35_ctx, log_layer);
 
 	for (idx = 0; idx < layer->log_modules_count; idx++) {
 		if (layer->log_modules[idx].id == src_id) {
@@ -240,7 +246,7 @@ static void log_received(struct hsspi_layer *hlayer, struct hsspi_block *blk,
 
 	switch (hdr.cmd_id) {
 	case LOG_CID_TRACE_NTF:
-		rb_push(&layer->rb, body, hdr.b_size);
+		rb_push(&layer->rb, (const char *)body, hdr.b_size);
 		debug_new_trace_available(&qm35_hdl->debug);
 		break;
 	case LOG_CID_SET_LOG_LVL:

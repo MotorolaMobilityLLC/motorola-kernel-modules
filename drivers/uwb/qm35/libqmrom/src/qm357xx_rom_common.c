@@ -80,13 +80,13 @@ int qm357xx_rom_probe_device(struct qmrom_handle *handle)
 {
 	int rc;
 
-	/* Test B0 first */
-	//rc = qm357xx_rom_b0_probe_device(handle);
-	//if (!rc)
-		//return rc;
-
-	/* Test C0 next */
+	/* Test C0 first */
 	rc = qm357xx_rom_c0_probe_device(handle);
+	if (!rc)
+		return rc;
+
+	/* Test B0 next */
+	rc = qm357xx_rom_b0_probe_device(handle);
 	if (!rc)
 		return rc;
 
@@ -315,22 +315,33 @@ int qm357xx_rom_unpack_fw_macro_pkg(const struct firmware *fw,
 				    struct unstitched_firmware *all_fws)
 {
 	int rc = 0;
-	uint8_t *p_key1;
-	uint8_t *p_key2;
-	uint8_t *p_crt;
-	uint8_t *p_fw;
 	char *fw_data;
 	uint32_t fw_size;
-	struct fw_pkg_img_hdr_t *fw_pkg_img_hdr;
+	struct firmware fw_pkg;
 
 	rc = qm357xx_rom_fw_macro_pkg_get_fw_idx(fw, 0, &fw_size, &fw_data);
 	if (rc) {
 		LOG_ERR("%s: FW MACRO PACKAGE corupted = %d\n", __func__, rc);
-		goto err;
+		return rc;
 	}
 
+	fw_pkg.data = (const uint8_t *)fw_data;
+	fw_pkg.size = fw_size;
+	return qm357xx_rom_unpack_fw_pkg(&fw_pkg, all_fws);
+}
+
+int qm357xx_rom_unpack_fw_pkg(const struct firmware *fw_pkg,
+			      struct unstitched_firmware *all_fws)
+{
+	int rc = 0;
+	uint8_t *p_key1;
+	uint8_t *p_key2;
+	uint8_t *p_crt;
+	uint8_t *p_fw;
+	struct fw_pkg_img_hdr_t *fw_pkg_img_hdr;
+
 	fw_pkg_img_hdr =
-		(struct fw_pkg_img_hdr_t *)(fw_data +
+		(struct fw_pkg_img_hdr_t *)(fw_pkg->data +
 					    sizeof(struct fw_pkg_hdr_t));
 
 	if (fw_pkg_img_hdr->magic != CRYPTO_FIRMWARE_IMAGE_MAGIC_VALUE) {

@@ -29,11 +29,11 @@
 #ifndef __HSSPI_COREDUMP_H__
 #define __HSSPI_COREDUMP_H__
 
+#include <linux/completion.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
 
 #include "hsspi.h"
-#include "debug.h"
 
 struct coredump_packet {
 	struct hsspi_block blk;
@@ -47,9 +47,51 @@ struct coredump_layer {
 	uint16_t coredump_crc;
 	uint8_t coredump_status;
 	struct timer_list timer;
+	wait_queue_head_t wq;
 };
 
-int coredump_layer_init(struct coredump_layer *coredump, struct debug *debug);
+void coredump_layer_init(struct coredump_layer *coredump);
 void coredump_layer_deinit(struct coredump_layer *coredump);
+
+/**
+ * coredump_layer_force_coredump() - force coredump
+ * @coredump: pointer to &struct coredump_layer
+ *
+ * Return: true if ok, false otherwise.
+ */
+bool coredump_layer_force_coredump(struct coredump_layer *coredump);
+
+/**
+ * coredump_layer_new_coredump_available() - checks if the layer has 
+ * ack coredump data to be read
+ * @coredump: pointer to &struct coredump_layer
+ *
+ * Return: true if coredump is available, false otherwise.
+ */
+bool coredump_layer_new_coredump_available(struct coredump_layer *coredump);
+
+/**
+ * coredump_layer_get_coredump() - get coredump
+ * @coredump: pointer to &struct coredump_layer
+ *
+ * Return: a &uint8_t pointing to the coredump data if succeed, NULL otherwise
+ */
+uint8_t *coredump_layer_get_coredump(struct coredump_layer *coredump);
+
+/**
+ * coredump_layer_get_coredump_size() - get coredump size
+ * @coredump: pointer to &struct coredump_layer
+ *
+ * Return: a uint32_t holding the size of the current coredump
+ */
+uint32_t coredump_layer_get_coredump_size(struct coredump_layer *coredump);
+
+/**
+ * coredump_layer_reset_status() - resets coredump status
+ * @coredump: pointer to &struct coredump_layer
+ *
+ * Return: void,
+ */
+void coredump_layer_reset_status(struct coredump_layer *coredump);
 
 #endif // __HSSPI_COREDUMP_H__

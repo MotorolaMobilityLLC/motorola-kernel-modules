@@ -75,6 +75,8 @@ int qm357xx_rom_fw_macro_pkg_get_fw_idx(const struct firmware *fw, int idx,
 					uint32_t *fw_size, char **fw_fata);
 int qm357xx_rom_unpack_fw_macro_pkg(const struct firmware *fw,
 				    struct unstitched_firmware *all_fws);
+int qm357xx_rom_unpack_fw_pkg(const struct firmware *fw_pkg,
+			      struct unstitched_firmware *all_fws);
 int qm357xx_rom_flash_dbg_cert(struct qmrom_handle *handle,
 			       struct firmware *dbg_cert);
 int qm357xx_rom_erase_dbg_cert(struct qmrom_handle *handle);

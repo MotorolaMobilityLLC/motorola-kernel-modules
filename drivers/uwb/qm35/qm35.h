@@ -4,17 +4,22 @@
 #define __QM35_H___
 
 #include <linux/gpio.h>
+#include <linux/wait.h>
 #include <linux/delay.h>
 #include <linux/spi/spi.h>
 #include <linux/spinlock.h>
 #include <linux/miscdevice.h>
 
 #include "uci_ioctls.h"
+#include "qm35_coredump_ioctls.h"
 #include "hsspi.h"
 #include "hsspi_uci.h"
 #include "hsspi_coredump.h"
 #include "hsspi_log.h"
 #include "debug.h"
+
+#define FWUPDATER_SPI_SPEED_HZ 20000000
+#define DEFAULT_SPI_CLOCKRATE 3000000
 
 #define DEBUG_CERTIFICATE_SIZE 2560
 #define QM_RESET_LOW_MS 2
@@ -24,7 +29,7 @@
 #define QM_BOOT_MS 450
 #define QM_BEFORE_RESET_MS 450
 
-#define DRV_VERSION "7.1.0-rc2"
+#define DRV_VERSION "magenta-7.4.0-rc2"
 
 struct regulator;
 
@@ -35,6 +40,7 @@ struct regulator;
 struct qm35_ctx {
 	unsigned int state;
 	struct miscdevice uci_dev;
+	struct miscdevice coredump_dev;
 	struct spi_device *spi;
 	struct gpio_desc *gpio_csn;
 	struct gpio_desc *gpio_reset;
@@ -42,6 +48,7 @@ struct qm35_ctx {
 	struct gpio_desc *gpio_ss_irq;
 	struct gpio_desc *gpio_exton;
 	struct gpio_desc *gpio_wakeup;
+	int ss_rdy_irq;
 	spinlock_t lock;
 	bool out_data_wait;
 	bool out_active;
@@ -57,6 +64,11 @@ struct qm35_ctx {
 	struct regulator *vdd4;
 	bool regulators_enabled;
 	bool log_qm_traces;
+
+	/* qmrom support */
+	struct wait_queue_head qmrom_wq_ready;
+	bool qmrom_qm_ready;
+	bool flashing;
 };
 
 static inline unsigned int qm35_get_state(struct qm35_ctx *qm35_hdl)
@@ -78,7 +90,7 @@ static inline int qm35_reset(struct qm35_ctx *qm35_hdl, int timeout_ms)
 	if (qm35_hdl->gpio_reset) {
 		qm35_set_state(qm35_hdl, QM35_CTRL_STATE_RESET);
 		gpiod_set_value(qm35_hdl->gpio_reset, 1);
-		usleep_range(timeout_ms * 1000, timeout_ms * 1000);
+		usleep_range(timeout_ms * 1000UL, timeout_ms * 1000UL);
 		gpiod_set_value(qm35_hdl->gpio_reset, 0);
 		qm35_set_state(qm35_hdl, QM35_CTRL_STATE_UNKNOWN);
 		return 0;

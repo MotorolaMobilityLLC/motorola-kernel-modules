@@ -36,13 +36,15 @@
 #include <linux/spi/spi.h>
 #include <linux/wait.h>
 
-enum { UL_RESERVED,
-       UL_BOOT_FLASH,
-       UL_UCI_APP,
-       UL_COREDUMP,
-       UL_LOG,
-       UL_TEST_HSSPI,
-       UL_MAX_IDX };
+enum {
+	UL_RESERVED,
+	UL_BOOT_FLASH,
+	UL_UCI_APP,
+	UL_COREDUMP,
+	UL_LOG,
+	UL_TEST_HSSPI,
+	UL_MAX_IDX
+};
 
 struct stc_header {
 	u8 flags;
@@ -172,6 +174,8 @@ struct hsspi {
 
 	struct gpio_desc *gpio_ss_rdy;
 	struct gpio_desc *gpio_exton;
+
+	volatile bool waiting_ss_rdy;
 };
 
 /**

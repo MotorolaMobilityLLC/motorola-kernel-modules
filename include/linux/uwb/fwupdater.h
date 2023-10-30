@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0 OR Apache-2.0
 /*
- * Copyright 2021 Qorvo US, Inc.
+ * Copyright 2023 Qorvo US, Inc.
  *
  */
 
@@ -16,6 +16,12 @@
 
 #include "qmrom.h"
 #include "qm357xx_fwpkg.h"
+
+#ifndef CONFIG_NB_RETRIES
+#define CONFIG_NB_RETRIES 10
+#endif
+
+// #define CONFIG_INJECT_ERROR 1
 
 enum fw_pkg_error_e {
 	FW_PKG_SUCESS = 0,
@@ -52,9 +58,16 @@ enum fw_pkg_error_e {
 
 /*! Firmware Update Status fields */
 struct fw_updater_status_t {
+	uint32_t magic;
 	uint32_t status;
 	uint32_t suberror;
+	uint32_t spi_errors;
+	uint32_t crc_errors;
+	uint32_t rram_errors;
+	uint32_t crypto_errors;
 } __attribute__((packed));
+
+#define FWUPDATER_STATUS_MAGIC 0xCAFECAFE
 
 void run_fwupdater_unit_tests(void *spi_handle);
 int run_fwupdater(struct qmrom_handle *handle, char *fwpkg_bin, size_t size);

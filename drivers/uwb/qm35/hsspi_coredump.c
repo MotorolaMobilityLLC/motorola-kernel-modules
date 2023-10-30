@@ -114,7 +114,7 @@ static uint16_t coredump_get_checksum(struct coredump_layer *layer)
 	return crc;
 }
 
-static void corredump_on_expired_timer(struct timer_list *timer)
+static void coredump_on_expired_timer(struct timer_list *timer)
 {
 	struct coredump_layer *layer =
 		container_of(timer, struct coredump_layer, timer);
@@ -234,7 +234,8 @@ static void coredump_received(struct hsspi_layer *hlayer,
 		break;
 
 	case COREDUMP_BODY_NTF:
-		pr_info("qm35: coredump: saving coredump data with len: %d [%d/%d]\n",
+		pr_debug(
+			"qm35: coredump: saving coredump data with len: %d [%d/%d]\n",
 			cch_body_size,
 			layer->coredump_data_wr_idx + cch_body_size,
 			layer->coredump_size);
@@ -253,6 +254,8 @@ static void coredump_received(struct hsspi_layer *hlayer,
 
 			coredump_send_rcv_status(layer, layer->coredump_status);
 
+			if (layer->coredump_status == COREDUMP_RCV_ACK)
+				wake_up_interruptible(&layer->wq);
 			break;
 		}
 
@@ -289,18 +292,27 @@ static const struct hsspi_layer_ops coredump_ops = {
 	.sent = coredump_sent,
 };
 
-char *debug_coredump_get(struct debug *dbg, size_t *len)
+void coredump_layer_init(struct coredump_layer *layer)
 {
-	char *data;
-	struct qm35_ctx *qm35_hdl = container_of(dbg, struct qm35_ctx, debug);
-
-	*len = qm35_hdl->coredump_layer.coredump_data_wr_idx;
-	data = qm35_hdl->coredump_layer.coredump_data;
-
-	return data;
+	layer->hlayer.name = "QM35 COREDUMP";
+	layer->hlayer.id = UL_COREDUMP;
+	layer->hlayer.ops = &coredump_ops;
+	layer->coredump_data = NULL;
+	layer->coredump_data_wr_idx = 0;
+	layer->coredump_size = 0;
+	layer->coredump_crc = 0;
+	layer->coredump_status = 0;
+	init_waitqueue_head(&layer->wq);
+	timer_setup(&layer->timer, coredump_on_expired_timer, 0);
 }
 
-int debug_coredump_force(struct debug *dbg)
+void coredump_layer_deinit(struct coredump_layer *layer)
+{
+	wake_up_interruptible(&layer->wq);
+	kfree(layer->coredump_data);
+}
+
+bool coredump_layer_force_coredump(struct coredump_layer *coredump)
 {
 	struct coredump_packet *p;
 	struct coredump_common_hdr hdr = { .cmd_id = COREDUMP_FORCE_CMD };
@@ -308,7 +320,7 @@ int debug_coredump_force(struct debug *dbg)
 
 	pr_info("qm35: force coredump");
 
-	qm35_hdl = container_of(dbg, struct qm35_ctx, debug);
+	qm35_hdl = container_of(coredump, struct qm35_ctx, coredump_layer);
 
 	p = coredump_packet_alloc(sizeof(hdr));
 	if (!p)
@@ -320,30 +332,22 @@ int debug_coredump_force(struct debug *dbg)
 			  &p->blk);
 }
 
-static const struct debug_coredump_ops debug_coredump_ops = {
-	.coredump_get = debug_coredump_get,
-	.coredump_force = debug_coredump_force,
-};
-
-int coredump_layer_init(struct coredump_layer *layer, struct debug *debug)
+bool coredump_layer_new_coredump_available(struct coredump_layer *coredump)
 {
-	layer->hlayer.name = "QM35 COREDUMP";
-	layer->hlayer.id = UL_COREDUMP;
-	layer->hlayer.ops = &coredump_ops;
-
-	layer->coredump_data = NULL;
-	layer->coredump_data_wr_idx = 0;
-	layer->coredump_size = 0;
-	layer->coredump_crc = 0;
-	layer->coredump_status = 0;
-	timer_setup(&layer->timer, corredump_on_expired_timer, 0);
-
-	debug->coredump_ops = &debug_coredump_ops;
-
-	return 0;
+	return coredump->coredump_status == COREDUMP_RCV_ACK;
 }
 
-void coredump_layer_deinit(struct coredump_layer *layer)
+uint8_t *coredump_layer_get_coredump(struct coredump_layer *coredump)
 {
-	kfree(layer->coredump_data);
+	return coredump->coredump_data;
+}
+
+uint32_t coredump_layer_get_coredump_size(struct coredump_layer *coredump)
+{
+	return coredump->coredump_data_wr_idx;
+}
+
+void coredump_layer_reset_status(struct coredump_layer *coredump)
+{
+	coredump->coredump_status = COREDUMP_RCV_NACK;
 }

@@ -174,7 +174,7 @@ int qm357xx_rom_b0_probe_device(struct qmrom_handle *handle)
 	if (handle->chip_rev != CHIP_REVISION_B0) {
 		LOG_ERR("%s: wrong chip revision 0x%x\n", __func__,
 			handle->chip_rev);
-		handle->chip_rev = -1;
+		handle->chip_rev = CHIP_REVISION_UNKNOWN;
 		return -1;
 	}
 
@@ -378,7 +378,7 @@ static int qm357xx_rom_b0_flash_debug_cert(struct qmrom_handle *handle,
 				       WAITING_FOR_DEBUG_CERT_DATA);
 	check_stcs(__func__, __LINE__, handle);
 	qmrom_msleep(SPI_READY_TIMEOUT_MS);
-	return 0;
+	return rc;
 }
 
 static int qm357xx_rom_b0_erase_debug_cert(struct qmrom_handle *handle)

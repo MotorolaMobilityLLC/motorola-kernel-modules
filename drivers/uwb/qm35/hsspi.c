@@ -141,6 +141,8 @@ static int hsspi_wait_ss_ready(struct hsspi *hsspi)
 {
 	int ret;
 
+	hsspi->waiting_ss_rdy = true;
+
 	if (!test_bit(HSSPI_FLAGS_SS_BUSY, hsspi->flags)) {
 		/* The ss_ready went low, so the fw is not busy anymore,
 		 * if the ss_ready is high, we can proceed, else,
@@ -180,6 +182,8 @@ static int hsspi_wait_ss_ready(struct hsspi *hsspi)
 	 */
 	if (!gpiod_get_value(hsspi->gpio_ss_rdy))
 		return -EAGAIN;
+
+	hsspi->waiting_ss_rdy = false;
 	return 0;
 }
 
@@ -270,6 +274,7 @@ static int spi_xfer(struct hsspi *hsspi, const void *tx, void *rx,
 			hsspi->soc->flags);
 	}
 
+	hsspi->waiting_ss_rdy = false;
 	return ret;
 }
 
@@ -376,7 +381,8 @@ static int hsspi_tx(struct hsspi *hsspi, struct hsspi_layer *layer,
 	/* Ignore tx check flags */
 	check_soc_flag(&hsspi->spi->dev, __func__, hsspi->soc->flags, true);
 
-	if (hsspi->host->flags & STC_HOST_PRD)
+	if ((hsspi->host->flags & STC_HOST_PRD) &&
+	    (hsspi->soc->flags & STC_SOC_ODW))
 		return hsspi_rx(hsspi, hsspi->soc->ul, hsspi->soc->length);
 
 	return ret;
@@ -406,7 +412,11 @@ static int hsspi_pre_read(struct hsspi *hsspi)
 	/* Ignore pre-read check flags */
 	check_soc_flag(&hsspi->spi->dev, __func__, hsspi->soc->flags, true);
 
-	return hsspi_rx(hsspi, hsspi->soc->ul, hsspi->soc->length);
+	if (hsspi->soc->flags & STC_SOC_ODW)
+		return hsspi_rx(hsspi, hsspi->soc->ul, hsspi->soc->length);
+	else
+		/* Pre-read error. Maybe FW is a little late to setup HSSPI header. */
+		return -1;
 }
 
 /**

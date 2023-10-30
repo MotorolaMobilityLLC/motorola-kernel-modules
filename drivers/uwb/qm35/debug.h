@@ -50,17 +50,11 @@ struct debug_trace_ops {
 	int (*get_soc_id)(struct debug *dbg, uint8_t *soc_id);
 };
 
-struct debug_coredump_ops {
-	char *(*coredump_get)(struct debug *dbg, size_t *len);
-	int (*coredump_force)(struct debug *dbg);
-};
-
 struct debug {
 	struct dentry *root_dir;
 	struct dentry *fw_dir;
 	struct dentry *chip_dir;
 	const struct debug_trace_ops *trace_ops;
-	const struct debug_coredump_ops *coredump_ops;
 	struct wait_queue_head wq;
 	struct file *pv_filp;
 	struct mutex pv_filp_lock;

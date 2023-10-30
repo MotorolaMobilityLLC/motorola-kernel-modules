@@ -81,6 +81,7 @@ struct qmrom_handle {
 	void *spi_handle;
 	void *reset_handle;
 	void *ss_rdy_handle;
+	void *ss_irq_handle;
 	int comms_retries;
 	enum device_generation_e dev_gen;
 	enum chip_revision_e chip_rev;
@@ -98,11 +99,13 @@ struct qmrom_handle {
 		struct qm358xx_soc_infos qm358xx_soc_info;
 	};
 	bool is_be;
+	bool skip_check_fw_boot;
 };
 
 struct qmrom_handle *qmrom_init(void *spi_handle, void *reset_handle,
-				void *ss_rdy_handle, int spi_speed,
-				int comms_retries, reset_device_fn reset,
+				void *ss_rdy_handle, void *ss_irq_handle,
+				int spi_speed, int comms_retries,
+				reset_device_fn reset,
 				enum device_generation_e dev_gen_hint);
 void qmrom_deinit(struct qmrom_handle *handle);
 int qmrom_reboot_bootloader(struct qmrom_handle *handle);

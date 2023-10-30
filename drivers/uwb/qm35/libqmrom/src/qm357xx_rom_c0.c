@@ -15,6 +15,11 @@
 #define CHIP_VERSION_DEV_REV_PAYLOAD_OFFSET 6
 #define CHUNK_SIZE_C0 2040
 #define SPI_READY_TIMEOUT_MS_C0 200
+#define SPI_ERROR_DETECTED_DELAY_MS 65
+
+#ifndef CONFIG_CHUNK_FLASHING_RETRIES
+#define CONFIG_CHUNK_FLASHING_RETRIES 10
+#endif
 
 #ifdef C0_WRITE_STATS
 #include <linux/ktime.h>
@@ -187,11 +192,11 @@ static int qm357xx_rom_c0_poll_cmd_resp(struct qmrom_handle *handle)
 		} else
 			qm357xx_rom_c0_poll_soc(handle);
 	} while (retries--);
-	if (retries <= 0)
-		LOG_ERR("%s failed after %d replies\n", __func__,
-			handle->comms_retries);
 
-	return retries > 0 ? 0 : -1;
+	LOG_ERR("%s failed after %d replies\n", __func__,
+		handle->comms_retries);
+
+	return -EPERM;
 }
 
 int qm357xx_rom_c0_probe_device(struct qmrom_handle *handle)
@@ -235,7 +240,7 @@ int qm357xx_rom_c0_probe_device(struct qmrom_handle *handle)
 	    ((handle->chip_rev != CHIP_REVISION_C2))) {
 		LOG_ERR("%s: wrong chip revision %#x\n", __func__,
 			handle->chip_rev);
-		handle->chip_rev = -1;
+		handle->chip_rev = CHIP_REVISION_UNKNOWN;
 		return -1;
 	}
 
@@ -311,7 +316,7 @@ static int qm357xx_rom_c0_flash_data(struct qmrom_handle *handle,
 				     struct firmware *fw, uint8_t cmd,
 				     uint8_t resp, bool skip_last_check)
 {
-	int rc, sent = 0;
+	int rc, sent = 0, nb_poll_retry, chunk = 0;
 	const char *bin_data = (const char *)fw->data;
 #ifdef C0_WRITE_STATS
 	ktime_t start_time;
@@ -338,6 +343,18 @@ static int qm357xx_rom_c0_flash_data(struct qmrom_handle *handle,
 			break;
 		}
 		qm357xx_rom_c0_poll_soc(handle);
+		nb_poll_retry = CONFIG_CHUNK_FLASHING_RETRIES;
+		while (handle->sstc->soc_flags.err && --nb_poll_retry >= 0) {
+			qmrom_msleep(SPI_ERROR_DETECTED_DELAY_MS);
+			qm357xx_rom_c0_poll_soc(handle);
+			LOG_ERR("%s: spi error detected for cmd %#x chunk %d, retry %d, soc_flags 0x%02x\n",
+				__func__, cmd, chunk,
+				CONFIG_CHUNK_FLASHING_RETRIES - nb_poll_retry,
+				handle->sstc->raw_flags);
+			rc = qm357xx_rom_write_size_cmd32_c0(
+				handle, cmd, tx_bytes, bin_data - tx_bytes);
+			qm357xx_rom_c0_poll_soc(handle);
+		}
 #ifdef C0_WRITE_STATS
 		if (tx_bytes == CHUNK_SIZE_C0)
 			update_write_max_chunk_stats(start_time);
@@ -354,6 +371,7 @@ static int qm357xx_rom_c0_flash_data(struct qmrom_handle *handle,
 			else
 				return SPI_PROTO_WRONG_RESP;
 		}
+		chunk++;
 	}
 	qmrom_msleep(SPI_READY_TIMEOUT_MS_C0);
 	return 0;
@@ -364,10 +382,12 @@ qm357xx_rom_c0_flash_unstitched_fw(struct qmrom_handle *handle,
 				   const struct unstitched_firmware *all_fws)
 {
 	int rc = 0;
-	uint8_t flash_cmd = handle->qm357xx_soc_info.lcs_state ==
-					    CC_BSV_SECURE_LCS ?
-				    ROM_CMD_C0_SEC_LOAD_OEM_IMG_TO_RRAM :
-				    ROM_CMD_C0_SEC_LOAD_ICV_IMG_TO_RRAM;
+	uint8_t flash_cmd =
+		handle->qm357xx_soc_info.lcs_state == CC_BSV_SECURE_LCS ||
+				handle->qm357xx_soc_info.lcs_state ==
+					CC_BSV_RMA_LCS ?
+			ROM_CMD_C0_SEC_LOAD_OEM_IMG_TO_RRAM :
+			ROM_CMD_C0_SEC_LOAD_ICV_IMG_TO_RRAM;
 
 	if (all_fws->key1_crt->data[HBK_LOC] == HBK_2E_ICV &&
 	    handle->qm357xx_soc_info.lcs_state != CC_BSV_CHIP_MANUFACTURE_LCS) {
@@ -378,7 +398,8 @@ qm357xx_rom_c0_flash_unstitched_fw(struct qmrom_handle *handle,
 	}
 
 	if (all_fws->key1_crt->data[HBK_LOC] == HBK_2E_OEM &&
-	    handle->qm357xx_soc_info.lcs_state != CC_BSV_SECURE_LCS) {
+	    handle->qm357xx_soc_info.lcs_state != CC_BSV_SECURE_LCS &&
+	    handle->qm357xx_soc_info.lcs_state != CC_BSV_RMA_LCS) {
 		LOG_ERR("%s: Trying to flash an OEM fw on a non OEM platform\n",
 			__func__);
 		rc = -EINVAL;
@@ -416,6 +437,7 @@ qm357xx_rom_c0_flash_unstitched_fw(struct qmrom_handle *handle,
 		LOG_ERR("%s: Waiting for WAITING_FOR_FIRST_KEY_CERT(%#x) but got %#x\n",
 			__func__, WAITING_FOR_FIRST_KEY_CERT,
 			handle->sstc->payload[0]);
+		rc = -1;
 		goto end;
 	}
 
@@ -446,6 +468,43 @@ qm357xx_rom_c0_flash_unstitched_fw(struct qmrom_handle *handle,
 #ifdef C0_WRITE_STATS
 	dump_stats();
 #endif
+
+	if (qmrom_spi_read_irq_line(handle->ss_irq_handle)) {
+		int retries = handle->comms_retries;
+
+		do {
+			/* A final product id error likely occured */
+			qmrom_pre_read_c0(handle);
+			qmrom_read_c0(handle);
+			rc = handle->sstc->payload[0];
+			if (rc) {
+				LOG_ERR("%s: flashing error %d (0x%x) detected\n",
+					__func__, rc, rc);
+				break;
+			}
+		} while (--retries);
+
+		if (retries <= 0) {
+			LOG_ERR("%s: flashing error detected but couldn't be fetched\n",
+				__func__);
+			rc = -1;
+		}
+	}
+
+	/* Flashing is done, the fw should reboot, check we are not still talking to the ROM code */
+	if (!rc && !handle->skip_check_fw_boot) {
+		uint8_t raw_flags;
+
+		qmrom_msleep(SPI_READY_TIMEOUT_MS_C0);
+		qm357xx_rom_c0_poll_soc(handle);
+		raw_flags = handle->sstc->raw_flags;
+		/* The ROM code sends the same quartets for the first byte of each xfers */
+		if (((raw_flags & 0xf0) >> 4) == (raw_flags & 0xf)) {
+			LOG_ERR("%s: firmware not properly started: %#x\n",
+				__func__, raw_flags);
+			rc = -2;
+		}
+	}
 
 end:
 	qmrom_free(all_fws->fw_img);

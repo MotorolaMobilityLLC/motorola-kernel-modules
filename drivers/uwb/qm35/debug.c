@@ -145,12 +145,10 @@ static ssize_t debug_traces_read(struct file *filp, char __user *buff,
 {
 	char *entry;
 	rb_entry_size_t entry_size;
-	//struct qm35_ctx *qm35_hdl;
 	uint16_t ret;
 	struct debug *debug;
 
 	debug = priv_from_file(filp);
-	//qm35_hdl = container_of(debug, struct qm35_ctx, debug);
 
 	if (!debug->trace_ops)
 		return -ENOSYS;
@@ -233,46 +231,6 @@ static int debug_traces_release(struct inode *inodep, struct file *filep)
 	return 0;
 }
 
-static ssize_t debug_coredump_read(struct file *filep, char __user *buff,
-				   size_t count, loff_t *off)
-{
-	//struct qm35_ctx *qm35_hdl;
-	struct debug *debug;
-	char *cd;
-	size_t cd_len = 0;
-
-	debug = priv_from_file(filep);
-	//qm35_hdl = container_of(debug, struct qm35_ctx, debug);
-
-	if (!debug->coredump_ops)
-		return -ENOSYS;
-
-	cd = debug->coredump_ops->coredump_get(debug, &cd_len);
-
-	return simple_read_from_buffer(buff, count, off, cd, cd_len);
-}
-
-static ssize_t debug_coredump_write(struct file *filp, const char __user *buff,
-				    size_t count, loff_t *off)
-{
-	struct debug *debug;
-	u8 force;
-
-	debug = priv_from_file(filp);
-
-	if (kstrtou8_from_user(buff, count, 10, &force))
-		return -EFAULT;
-
-	if (debug->coredump_ops && force != 0)
-		debug->coredump_ops->coredump_force(debug);
-	else if (force == 0)
-		pr_warn("qm35: write non null value to force coredump\n");
-	else
-		return -ENOSYS;
-
-	return count;
-}
-
 static ssize_t debug_hw_reset_write(struct file *filp, const char __user *buff,
 				    size_t count, loff_t *off)
 {
@@ -324,12 +282,6 @@ static const struct file_operations debug_traces_fops = {
 	.read = debug_traces_read,
 	.poll = debug_traces_poll,
 	.llseek = no_llseek,
-};
-
-static const struct file_operations debug_coredump_fops = {
-	.owner = THIS_MODULE,
-	.read = debug_coredump_read,
-	.write = debug_coredump_write,
 };
 
 static const struct file_operations debug_hw_reset_fops = {
@@ -478,13 +430,6 @@ int debug_init(struct debug *debug)
 				   &debug_traces_fops);
 	if (!file) {
 		pr_err("qm35: failed to create /sys/kernel/debug/uwb0/fw/traces\n");
-		goto unregister;
-	}
-
-	file = debugfs_create_file("coredump", 0444, debug->fw_dir, debug,
-				   &debug_coredump_fops);
-	if (!file) {
-		pr_err("qm35: failed to create /sys/kernel/debug/uwb0/fw/coredump\n");
 		goto unregister;
 	}
 

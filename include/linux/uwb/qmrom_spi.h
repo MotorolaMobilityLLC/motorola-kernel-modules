@@ -10,7 +10,7 @@
 #ifndef __QMROM_SPI_H__
 #define __QMROM_SPI_H__
 
-#include <stddef.h>
+#include <linux/stddef.h>
 #include "qmrom_error.h"
 #include "qmrom.h"
 
@@ -56,6 +56,7 @@ const struct firmware *qmrom_spi_get_firmware_package(void *handle,
 						      int lcs_state);
 void qmrom_spi_release_firmware(const struct firmware *fw);
 int qmrom_spi_wait_for_ready_line(void *handle, unsigned int timeout_ms);
+int qmrom_spi_read_irq_line(void *handle);
 void qmrom_spi_set_freq(unsigned int freq);
 unsigned int qmrom_spi_get_freq(void);
 

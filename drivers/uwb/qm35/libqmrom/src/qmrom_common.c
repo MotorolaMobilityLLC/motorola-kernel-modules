@@ -121,8 +121,9 @@ int qmrom_probe_device(struct qmrom_handle *handle,
 }
 
 struct qmrom_handle *qmrom_init(void *spi_handle, void *reset_handle,
-				void *ss_rdy_handle, int spi_speed,
-				int comms_retries, reset_device_fn reset,
+				void *ss_rdy_handle, void *ss_irq_handle,
+				int spi_speed, int comms_retries,
+				reset_device_fn reset,
 				enum device_generation_e dev_gen_hint)
 {
 	struct qmrom_handle *handle;
@@ -144,10 +145,12 @@ struct qmrom_handle *qmrom_init(void *spi_handle, void *reset_handle,
 	handle->spi_handle = spi_handle;
 	handle->reset_handle = reset_handle;
 	handle->ss_rdy_handle = ss_rdy_handle;
+	handle->ss_irq_handle = ss_irq_handle;
 	handle->comms_retries = comms_retries;
 	handle->chip_rev = CHIP_REVISION_UNKNOWN;
 	handle->device_version = -1;
 	handle->spi_speed = spi_speed;
+	handle->skip_check_fw_boot = false;
 
 	handle->dev_ops.reset = reset;
 
