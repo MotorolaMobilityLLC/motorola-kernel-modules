@@ -1788,15 +1788,14 @@ static int fts_sysfs_class(void *_data, bool create)
 	int i, error = 0;
 	static struct class *touchscreen_class;
 	static struct device *ts_class_dev;
-	static int minor;
+	dev_t devno;
 
 	if (create) {
-		minor = input_get_new_minor(data->spi->chip_select,
-						1, false);
-		if (minor < 0)
-			minor = input_get_new_minor(TSDEV_MINOR_BASE,
-					TSDEV_MINOR_MAX, true);
-		pr_info("assigned minor %d\n", minor);
+		error = alloc_chrdev_region(&devno, 0, 1, FTS_CHIP_NAME);
+		if (error) {
+			pr_err("Alloc input devno failed\n");
+			return error;
+		}
 
 		touchscreen_class = class_create(THIS_MODULE, "touchscreen");
 		if (IS_ERR(touchscreen_class)) {
@@ -1807,11 +1806,11 @@ static int fts_sysfs_class(void *_data, bool create)
 
 #ifdef FTS_LAST_TIME_EN
 		ts_class_dev = device_create(touchscreen_class, NULL,
-				MKDEV(INPUT_MAJOR, minor),
+				devno,
 				data, FTS_PRIMARY_NAME);
 #else
 		ts_class_dev = device_create(touchscreen_class, NULL,
-				MKDEV(INPUT_MAJOR, minor),
+				devno,
 				data, FTS_CHIP_NAME);
 #endif
 
@@ -1845,7 +1844,7 @@ static int fts_sysfs_class(void *_data, bool create)
 device_destroy:
 	for (--i; i >= 0; --i)
 		device_remove_file(ts_class_dev, &attrs[i]);
-	device_destroy(touchscreen_class, MKDEV(INPUT_MAJOR, minor));
+	device_destroy(touchscreen_class, devno);
 	ts_class_dev = NULL;
 	class_unregister(touchscreen_class);
 	pr_err("error creating touchscreen class\n");
