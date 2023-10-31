@@ -13,6 +13,7 @@
  * GNU General Public License for more details.
  *
  */
+#include <linux/version.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/of_gpio.h>
@@ -28,6 +29,10 @@
 #include <linux/spi/spidev.h>
 #elif defined(USE_PLATFORM_BUS)
 #include <linux/platform_device.h>
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 25))
+#define devm_gpio_free(a, b) NULL
 #endif
 
 int gf_parse_dts(struct gf_dev *gf_dev)
@@ -129,7 +134,9 @@ err_pwr:
 
 void gf_cleanup(struct gf_dev *gf_dev)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 25))
 	struct device *dev = &gf_dev->spi->dev;
+#endif
 	pr_info("goodix:  %s\n", __func__);
 
 	if (gpio_is_valid(gf_dev->irq_gpio)) {
