@@ -237,7 +237,7 @@ static int fsm_cal_f0_zmdata(fsm_dev_t *fsm_dev,
         return -EINVAL;
     }
     if (zmdata == 0 || zmdata == 0xFFFF) {
-        pr_addr(warning, "invalid data:%04X, skip", zmdata);
+        pr_addr(warn, "invalid data:%04X, skip", zmdata);
         return -EINVAL;
     }
     count = f0->count;
@@ -1428,7 +1428,7 @@ int fsm_write_preset_eq(fsm_dev_t *fsm_dev,
     }
     dev_list = fsm_dev->dev_list;
     if ((dev_list->eq_scenes & scene) == 0) {
-        pr_addr(warning, "scene:%04X None-EQ", scene);
+        pr_addr(warn, "scene:%04X None-EQ", scene);
         if ((dev_list->reg_scenes & scene) != 0) {
                 pr_addr(info, "scene:%04X has REG-TBL", scene);
             return 0;
@@ -1794,7 +1794,7 @@ static int fsm_set_threshold(fsm_dev_t *fsm_dev,
     }
     ret = fsm_reg_read(fsm_dev, REG(FSM_OTPPG1W2), &value);
     if (ret || value == 0) {
-        pr_warning("use default rs_trim value");
+        pr_warn("use default rs_trim value");
         value = FSM_RS_TRIM_DEFAULT;
     }
     fsm_dev->rstrim = value;
@@ -1908,7 +1908,7 @@ int fsm_check_otp(fsm_dev_t *fsm_dev)
         fsm_set_threshold(fsm_dev, re25, FSM_DATA_TYPE_RE25);
     }
     else {
-        pr_addr(warning, "otp write count max");
+        pr_addr(warn, "otp write count max");
         ret = -9527; // count limit
     }
     ret |= fsm_access_key(fsm_dev, 0);
@@ -2636,7 +2636,7 @@ void fsm_set_volume(int volume)
     }
     fsm_mutex_lock();
     if (volume < 0 || volume > FSM_VOLUME_MAX) {
-        pr_warning("invalid volume: %d, default 0dB", volume);
+        pr_warn("invalid volume: %d, default 0dB", volume);
         volume = FSM_VOLUME_MAX;
     }
     cfg->volume = volume;

@@ -347,7 +347,7 @@ static void fsm_work_monitor(struct work_struct *work)
     //ret = fsm_dev_recover(fsm_dev);
     fsm_mutex_unlock();
     if (fsm_dev->rec_count >= 5) { // 5 time max
-        pr_addr(warning, "recover max time, stop it");
+        pr_addr(warn, "recover max time, stop it");
         return;
     }
     /* reschedule */
