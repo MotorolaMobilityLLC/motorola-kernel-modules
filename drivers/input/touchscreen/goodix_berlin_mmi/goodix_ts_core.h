@@ -383,6 +383,9 @@ enum touch_point_status {
 /* coordinate package */
 struct goodix_ts_coords {
 	int status; /* NONE, RELEASE, TOUCH */
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+	int plam_status;
+#endif
 	unsigned int x, y, w, p;
 };
 

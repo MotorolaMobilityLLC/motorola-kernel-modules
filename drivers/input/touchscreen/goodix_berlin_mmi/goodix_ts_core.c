@@ -1219,9 +1219,15 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 #endif
 	for (i = 0; i < GOODIX_MAX_TOUCH; i++) {
 		if (touch_data->coords[i].status == TS_TOUCH) {
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+			ts_debug("report: id %d, x %d, y %d, w %d, palm %d", i,
+				touch_data->coords[i].x, touch_data->coords[i].y,
+				touch_data->coords[i].w, touch_data->coords[i].plam_status);
+#else
 			ts_debug("report: id %d, x %d, y %d, w %d", i,
 				touch_data->coords[i].x, touch_data->coords[i].y,
 				touch_data->coords[i].w);
+#endif
 			if (touchdown[i] == 0) {
 #ifdef CONFIG_GTP_LAST_TIME
 				core_data->last_event_time = ktime_get_boottime();
@@ -1256,7 +1262,13 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 
 			input_mt_slot(dev, i);
 #ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
+#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+			if ((tool_type != MT_TOOL_PALM) && touch_data->coords[i].plam_status)
+				tool_type = MT_TOOL_PALM;
 			input_mt_report_slot_state(dev, tool_type, true);
+#else
+			input_mt_report_slot_state(dev, tool_type, true);
+#endif
 #else
 			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
 #endif
