@@ -57,7 +57,7 @@
 
 #define CWFG_NAME               "cw2217"
 #define SIZE_OF_PROFILE         80
-#define USER_RSENSE             (10*1000)  /* mhom rsense * 1000  for convenience calculation */
+#define USER_RSENSE             10 /* mhom rsense */
 
 #define CW_SLEEP_20MS           20
 #define CW_SLEEP_10MS           10
@@ -513,7 +513,7 @@ static int cw_get_stb_current(struct cw_battery *cw_bat)
 
 	stb_current_reg = (reg_val[0] << 8) + reg_val[1];
 	stb_current = get_complement_code(STB_current_reg);
-	stb_current = stb_current  * 160 * 1000 / 16 / USER_RSENSE / 100;
+	stb_current = stb_current  * 160 / 16 / USER_RSENSE / 100;
 	cw_bat->stb_current = stb_current;
 
 	return 0;
@@ -829,8 +829,6 @@ static int cw_parse_dts(struct cw_battery *cw_bat)
 	rc = of_property_read_u32(np, "sense_r_mohm", &cw_bat->sense_r_mohm);
 	if(rc < 0)
 		cw_bat->sense_r_mohm = USER_RSENSE;
-	else
-		cw_bat->sense_r_mohm *= 1000;
 
 	batt_profile_node = cw_get_profile_by_serialnumber(cw_bat);
 	if (!batt_profile_node)
