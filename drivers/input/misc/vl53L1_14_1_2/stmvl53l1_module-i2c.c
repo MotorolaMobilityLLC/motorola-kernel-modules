@@ -501,6 +501,30 @@ done_freemem:
 	return -1;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void stmvl53l1_remove(struct i2c_client *client)
+{
+	struct stmvl53l1_data *data = i2c_get_clientdata(client);
+	struct i2c_data *i2c_data = (struct i2c_data *)data->client_object;
+
+	vl53l1_dbgmsg("Enter\n");
+	mutex_lock(&data->work_mutex);
+
+	stmvl53l1_sysfs_laser(data, false);
+
+	/* main driver cleanup */
+	stmvl53l1_cleanup(data);
+
+	/* release gpios */
+	stmvl53l1_release_gpios(i2c_data);
+
+	mutex_unlock(&data->work_mutex);
+
+	stmvl53l1_put(data->client_object);
+
+	vl53l1_dbgmsg("End\n");
+}
+#else
 static int stmvl53l1_remove(struct i2c_client *client)
 {
 	struct stmvl53l1_data *data = i2c_get_clientdata(client);
@@ -525,6 +549,7 @@ static int stmvl53l1_remove(struct i2c_client *client)
 
 	return 0;
 }
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 static int stmvl53l1_suspend(struct device *dev)
