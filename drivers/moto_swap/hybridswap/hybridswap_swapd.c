@@ -397,21 +397,26 @@ static void swapd_mcgs_setup_parse(int level_num)
 {
 	struct mem_cgroup *memcg = NULL;
 	memcg_hybs_t *hybs = NULL;
-	int i;
+	int i, k;
 
 	while ((memcg = fetch_next_memcg(memcg))) {
 		hybs = MEMCGRP_ITEM_DATA(memcg);
 		
 		if (!hybs) continue;
 
-		for (i = 0; i < level_num; ++i) {
+		for (i = level_num - 1, k = 0; i >= 0; i--) {
 			if (atomic64_read(&hybs->app_grade) >= zswap_param[i].min_grade &&
-					atomic64_read(&hybs->app_grade) <= zswap_param[i].max_grade)
+					atomic64_read(&hybs->app_grade) <= zswap_param[i].max_grade) {
+				k = i;
 				break;
+			}
+			else if (atomic64_read(&hybs->app_grade) <= zswap_param[i].max_grade) {
+				k = i;
+			}
 		}
-		atomic_set(&hybs->mem2zram_scale, zswap_param[i].mem2zram_scale);
-		atomic_set(&hybs->zram2ufs_scale, zswap_param[i].zram2ufs_scale);
-		atomic_set(&hybs->pagefault_level, zswap_param[i].pagefault_level);
+		atomic_set(&hybs->mem2zram_scale, zswap_param[k].mem2zram_scale);
+		atomic_set(&hybs->zram2ufs_scale, zswap_param[k].zram2ufs_scale);
+		atomic_set(&hybs->pagefault_level, zswap_param[k].pagefault_level);
 	}
 }
 
