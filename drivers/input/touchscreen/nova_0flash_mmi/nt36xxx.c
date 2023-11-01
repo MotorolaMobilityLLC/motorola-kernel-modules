@@ -3871,6 +3871,14 @@ int32_t nvt_ts_suspend(struct device *dev)
 
 	ts->bTouchIsAwake = 0;
 
+#if defined(NVT_SENSOR_EN) && defined(NOVA_STOWED_MODE_EN)
+	if (ts->should_enable_gesture && ts->get_stowed && (!ts->bTouchIsAwake)) {
+                nvt_cmd_ext_store(NVT_STOWED_MODE_CMD, NVT_STOWED_MODE_EN);
+		NVT_LOG("Enable stowed mode suspend\n");
+		ts->set_stowed = ts->get_stowed;
+	}
+#endif
+
 #if WAKEUP_GESTURE
 #ifdef NVT_SENSOR_EN
 	if (ts->should_enable_gesture) {
@@ -3903,13 +3911,6 @@ int32_t nvt_ts_suspend(struct device *dev)
 #endif // WAKEUP_GESTURE
 
 
-#if defined(NVT_SENSOR_EN) && defined(NOVA_STOWED_MODE_EN)
-	if (ts->should_enable_gesture && ts->get_stowed && (!ts->bTouchIsAwake)) {
-                nvt_cmd_ext_store(NVT_STOWED_MODE_CMD, NVT_STOWED_MODE_EN);
-		NVT_LOG("Enable stowed mode suspend\n");
-		ts->set_stowed = ts->get_stowed;
-	}
-#endif
 
 	mutex_unlock(&ts->lock);
 
