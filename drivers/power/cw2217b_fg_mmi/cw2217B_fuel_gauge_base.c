@@ -1020,7 +1020,7 @@ error:
 	return ret;
 }
 
-static int cw2217_remove(struct i2c_client *client)
+static void cw2217_remove(struct i2c_client *client)
 {
 	struct cw_battery *cw_bat = i2c_get_clientdata(client);
 
@@ -1029,7 +1029,6 @@ static int cw2217_remove(struct i2c_client *client)
 			regulator_disable(cw_bat->vdd_i2c_vreg);
 		devm_regulator_put(cw_bat->vdd_i2c_vreg);
 	}
-	return 0;
 }
 
 #ifdef CONFIG_PM
