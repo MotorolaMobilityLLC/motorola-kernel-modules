@@ -2,6 +2,11 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 
+
+ifneq ($(filter m y,$(CONFIG_QM35_SPI_DEBUG_FW)),)
+        EXTRA_CFLAGS += -DCONFIG_QM35_SPI_DEBUG_FW
+endif
+
 obj-m := qm35.o
 
 qm35-y := \
@@ -21,7 +26,9 @@ qm35-y := \
 	debug.o \
 	hsspi_test.o
 
-qm35-y += debug_qmrom.o
+ifneq ($(filter m y,$(CONFIG_QM35_SPI_DEBUG_FW)),)
+        qm35-y += debug_qmrom.o
+endif
 qm35-y += qm35-trace.o
 
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../mmi_info/Module.symvers

@@ -36,9 +36,9 @@
 #include "debug.h"
 #include "hsspi_test.h"
 
-//#if IS_ENABLED(CONFIG_QM35_SPI_DEBUG_FW)
+#if IS_ENABLED(CONFIG_QM35_SPI_DEBUG_FW)
 extern void debug_rom_code_init(struct debug *debug);
-//#endif
+#endif
 
 static const struct file_operations debug_enable_fops;
 static const struct file_operations debug_log_level_fops;
@@ -318,8 +318,11 @@ int debug_create_module_entry(struct debug *debug,
 
 void debug_new_trace_available(struct debug *debug)
 {
-	if (debug->pv_filp)
+	if (debug->pv_filp) {
+#if IS_ENABLED(CONFIG_QM35_SPI_DEBUG_FW)
 		fsnotify_modify(debug->pv_filp);
+#endif
+	}
 
 	wake_up_interruptible(&debug->wq);
 }
@@ -440,9 +443,9 @@ int debug_init(struct debug *debug)
 		goto unregister;
 	}
 
-//#if IS_ENABLED(CONFIG_QM35_SPI_DEBUG_FW)
+#if IS_ENABLED(CONFIG_QM35_SPI_DEBUG_FW)
 	debug_rom_code_init(debug);
-//#endif
+#endif
 
 	return 0;
 
