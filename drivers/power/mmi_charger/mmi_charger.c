@@ -71,6 +71,7 @@ enum {
 	NOTIFY_EVENT_TYPE_LPD_PRESENT,
 	NOTIFY_EVENT_TYPE_VBUS_PRESENT,
 	NOTIFY_EVENT_TYPE_POWER_WATT,
+	NOTIFY_EVENT_TYPE_CHG_REAL_TYPE,
 };
 
 static char *charge_rate[] = {
@@ -219,6 +220,7 @@ struct mmi_charger_chip {
 	int			charge_full_design;
 	int			init_cycles;
 	int			max_charger_rate;
+	int			real_charger_type;
 	bool			vbus_present;
 	bool			lpd_present;
 	int			power_watt;
@@ -361,6 +363,8 @@ static ssize_t state_sync_store(struct device *dev,
 					NOTIFY_EVENT_TYPE_VBUS_PRESENT);
 		mmi_notify_charger_event(this_chip,
 					NOTIFY_EVENT_TYPE_POWER_WATT);
+		mmi_notify_charger_event(this_chip,
+					NOTIFY_EVENT_TYPE_CHG_REAL_TYPE);
 		mutex_unlock(&this_chip->charger_lock);
 		cancel_delayed_work(&this_chip->heartbeat_work);
 		schedule_delayed_work(&this_chip->heartbeat_work,
@@ -1776,6 +1780,11 @@ static void mmi_notify_charger_event(struct mmi_charger_chip *chip, int type)
 				"POWER_SUPPLY_POWER_WATT=%d",
 				chip->power_watt / 1000);
 			break;
+		case NOTIFY_EVENT_TYPE_CHG_REAL_TYPE:
+			scnprintf(event_string, CHG_SHOW_MAX_SIZE,
+				"POWER_SUPPLY_CHARGE_REAL_TYPE=%d",
+				chip->real_charger_type);
+			break;
 		default:
 			mmi_err(chip, "Invalid notify event type %d\n", type);
 			kfree(event_string);
@@ -1989,6 +1998,8 @@ static void mmi_update_battery_status(struct mmi_charger_chip *chip)
 	int batt_health = POWER_SUPPLY_HEALTH_UNKNOWN;
 	int charger_rate = MMI_POWER_SUPPLY_CHARGE_RATE_NONE;
 	int max_charger_rate = MMI_POWER_SUPPLY_CHARGE_RATE_NONE;
+	int charger_type = 0;
+	int real_charger_type = 0;
 	struct mmi_charger *charger = NULL;
 	struct mmi_battery_pack *battery = NULL;
 	struct mmi_battery_info *batt_info = NULL;
@@ -2027,6 +2038,11 @@ static void mmi_update_battery_status(struct mmi_charger_chip *chip)
 		if (charger->chg_info.chrg_pmax_mw > power_watt)
 			power_watt = charger->chg_info.chrg_pmax_mw;
 
+		/* update charger type */
+		charger_type = charger->chg_info.chrg_type;
+		if (charger_type != 0xFF && real_charger_type < charger_type)
+			real_charger_type = charger_type;
+
 		/* update charging status */
 		if (batt_info->batt_status == POWER_SUPPLY_STATUS_FULL ||
 		    battery->status == POWER_SUPPLY_STATUS_FULL ||
@@ -2056,6 +2072,7 @@ static void mmi_update_battery_status(struct mmi_charger_chip *chip)
 			battery->cycles,
 			charge_rate[battery->charger_rate]);
 		}
+
 		/* update vbus and liquid present detection status */
 		if (!vbus_present && charger->chg_info.vbus_present)
 			vbus_present = true;
@@ -2125,6 +2142,13 @@ static void mmi_update_battery_status(struct mmi_charger_chip *chip)
 		chip->power_watt = power_watt;
 		mmi_notify_charger_event(chip, NOTIFY_EVENT_TYPE_POWER_WATT);
 		mmi_info(chip, "charger power is %d mW\n", power_watt);
+	}
+
+	if ((chip->real_charger_type) != real_charger_type) {
+		mmi_changed = true;
+		chip->real_charger_type = real_charger_type;
+		mmi_notify_charger_event(chip, NOTIFY_EVENT_TYPE_CHG_REAL_TYPE);
+		mmi_info(chip, "charger real type is %d\n", real_charger_type);
 	}
 
 	list_for_each_entry(battery, &chip->battery_list, list) {
