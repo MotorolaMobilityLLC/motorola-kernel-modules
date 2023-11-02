@@ -474,7 +474,7 @@ static int open_utags(struct blkdev *cb)
 	cb->bdev = bdev;
 	cb->size = i_size_read(bdev->bd_inode);
 	cb->filep = NULL;
-	pr_debug("%s: read inode size %u\n", __func__, cb->size);
+	pr_debug("%s: read inode size %zu\n", __func__, cb->size);
 #else
 	struct inode *inode = NULL;
 
