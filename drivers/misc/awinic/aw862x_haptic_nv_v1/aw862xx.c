@@ -294,7 +294,7 @@ static void aw862xx_play_mode(struct aw_haptic *aw_haptic, uint8_t play_mode)
 	case AW_RTP_MODE:
 		aw_info("enter rtp mode");
 		aw_haptic->play_mode = AW_RTP_MODE;
-		aw862xx_set_pwm(aw_haptic, AW_PWM_24K);
+		aw862xx_set_pwm(aw_haptic, AW_PWM_12K);
 		aw862xx_auto_brk_config(aw_haptic, true);
 		haptic_nv_i2c_write_bits(aw_haptic, AW862XX_REG_PLAYCFG3,
 					 AW862XX_BIT_PLAYCFG3_PLAY_MODE_MASK,
