@@ -1752,6 +1752,22 @@ static void zram_slot_free_notify(struct block_device *bdev,
 	zram_slot_unlock(zram, index);
 }
 
+static int zram_ioctl(struct block_device *bdev, fmode_t mode,
+				 unsigned int cmd, unsigned long index)
+{
+	struct zram *zram;
+	int has_sync_io = 1;
+
+	if (cmd != SWP_SYNCHRONOUS_IO) return -EINVAL;
+
+	zram = bdev->bd_disk->private_data;
+	zram_slot_lock(zram, index);
+	has_sync_io = zram_test_flag(zram, index, ZRAM_WB) ? 0 : 1;
+	zram_slot_unlock(zram, index);
+
+	return has_sync_io;
+}
+
 static int zram_rw_page(struct block_device *bdev, sector_t sector,
 		       struct page *page, unsigned int op)
 {
@@ -1944,6 +1960,7 @@ static int zram_open(struct block_device *bdev, fmode_t mode)
 static const struct block_device_operations zram_devops = {
 	.open = zram_open,
 	.swap_slot_free_notify = zram_slot_free_notify,
+	.ioctl = zram_ioctl,
 	.rw_page = zram_rw_page,
 	.owner = THIS_MODULE
 };
