@@ -524,6 +524,8 @@ struct smb_mmi_charger {
 	/* DCP FFC */
 	bool			ffc_stop_chg;
 	bool			enable_dcp_ffc;
+
+	bool			enable_fcc_large_qg_iterm;
 };
 
 #define CHGR_FAST_CHARGE_CURRENT_CFG_REG	(CHGR_BASE + 0x61)
@@ -3317,6 +3319,33 @@ vote_now:
 	return sched_time;
 }
 
+static int mmi_set_qg_iterm(struct smb_mmi_charger *chip, int qg_iterm)
+{
+	int rc = 0;
+	int fcc = 0;
+	union power_supply_propval val;
+
+	rc = power_supply_get_property(chip->batt_psy,
+			POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT, &val);
+	if (rc < 0) {
+		mmi_err(chip, "Couldn't get batt FCC, rc=%d\n", rc);
+		return rc;
+	}
+
+	fcc = val.intval / 1000;
+
+	if (chip->enable_fcc_large_qg_iterm && (qg_iterm > (fcc - 50)))
+		qg_iterm = fcc - 50;
+
+	rc = smb_mmi_write_iio_chan(chip,
+			SMB5_QG_BATT_FULL_CURRENT, qg_iterm);
+	if (rc < 0) {
+		mmi_err(chip, "Couldn't set batt full current, rc=%d\n", rc);
+	}
+
+	return rc;
+}
+
 static int mmi_get_ffc_fv(struct smb_mmi_charger *chip, int zone, bool force_ffc)
 {
        int rc;
@@ -3334,8 +3363,7 @@ static int mmi_get_ffc_fv(struct smb_mmi_charger *chip, int zone, bool force_ffc
 		if ((zone == ZONE_35C_TO_45C) && (chip->noffc_chg_iterm_45c != -EINVAL)) {
 			prm->chrg_iterm = chip->noffc_chg_iterm_45c;
 
-			rc = smb_mmi_write_iio_chan(chip,
-				SMB5_QG_BATT_FULL_CURRENT,
+			rc = mmi_set_qg_iterm(chip,
 				(chip->noffc_qg_iterm_45c != -EINVAL) ?
 				chip->noffc_qg_iterm_45c : chip->noffc_qg_iterm);
 			if (rc < 0) {
@@ -3344,8 +3372,7 @@ static int mmi_get_ffc_fv(struct smb_mmi_charger *chip, int zone, bool force_ffc
 		} else {
 			prm->chrg_iterm = chip->noffc_chg_iterm;
 
-			rc = smb_mmi_write_iio_chan(chip,
-				SMB5_QG_BATT_FULL_CURRENT, chip->noffc_qg_iterm);
+			rc = mmi_set_qg_iterm(chip, chip->noffc_qg_iterm);
 			if (rc < 0) {
 				mmi_err(chip, "Couldn't set batt full current, rc=%d\n", rc);
 			}
@@ -3356,8 +3383,7 @@ static int mmi_get_ffc_fv(struct smb_mmi_charger *chip, int zone, bool force_ffc
 		return ffc_max_fv;
 	}
 
-	rc = smb_mmi_write_iio_chan(chip,
-			SMB5_QG_BATT_FULL_CURRENT, prm->ffc_zones[zone].ffc_qg_iterm);
+	rc = mmi_set_qg_iterm(chip, prm->ffc_zones[zone].ffc_qg_iterm);
 	if (rc < 0) {
 		mmi_err(chip, "Couldn't set batt full current, rc=%d\n", rc);
 	}
@@ -4759,6 +4785,8 @@ static int parse_mmi_dt(struct smb_mmi_charger *chg)
 		chg->ffc_uisoc_threshold = 70;
 
 	chg->enable_dcp_ffc = of_property_read_bool(node, "mmi,enable-dcp-ffc");
+
+	chg->enable_fcc_large_qg_iterm = of_property_read_bool(node, "mmi,enable-fcc-large-qg-iterm");
 
 	return rc;
 }
