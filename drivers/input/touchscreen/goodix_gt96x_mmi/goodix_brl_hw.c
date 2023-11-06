@@ -1585,7 +1585,8 @@ static int brl_get_capacitance_data(struct goodix_ts_core *cd,
 	}
 
 	if (cd->bus->ic_type == IC_TYPE_BERLIN_D ||
-			cd->bus->ic_type == IC_TYPE_NOTTINGHAM)
+			cd->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			cd->bus->ic_type == IC_TYPE_MARSEILLE)
 		return brld_get_cap_data(cd, info);
 
 	/* disable irq & close esd */

@@ -40,16 +40,20 @@
 #define ISP_RAM_ADDR_BRA				0x18400
 #define ISP_RAM_ADDR_BRB				0x57000
 #define ISP_RAM_ADDR_BRD				0x23800
+#define ISP_RAM_ADDR_MAR				0x3B800
 #define HW_REG_CPU_RUN_FROM				0x10000
 #define FLASH_CMD_REG_BRA				0x10400
 #define FLASH_CMD_REG_BRB				0x13400
 #define FLASH_CMD_REG_BRD				0x12400
+#define FLASH_CMD_REG_MAR				0x10174
 #define HW_REG_ISP_BUFFER_BRA			0x10410
 #define HW_REG_ISP_BUFFER_BRB			0x13410
 #define HW_REG_ISP_BUFFER_BRD			0x12410
+#define HW_REG_ISP_BUFFER_MAR			0x12400
 #define CONFIG_DATA_ADDR_BRA			0x3E000
 #define CONFIG_DATA_ADDR_BRB			0x40000
 #define CONFIG_DATA_ADDR_BRD			0x3E000
+#define CONFIG_DATA_ADDR_MAR			0x3F000
 
 #define HOLD_CPU_REG_W					0x0002
 #define HOLD_CPU_REG_R					0x2000
@@ -126,6 +130,19 @@ struct update_info_t update_brd = {
 	FLASH_CMD_REG_BRD,
 	HW_REG_ISP_BUFFER_BRD,
 	CONFIG_DATA_ADDR_BRD,
+	MISCTL_REG_BRD,
+	WATCH_DOG_REG_BRD,
+	ENABLE_MISCTL_BRD,
+};
+
+/* Marseille update info */
+struct update_info_t update_mar = {
+	FW_HEADER_SIZE,
+	FW_SUBSYS_INFO_OFFSET,
+	ISP_RAM_ADDR_MAR,
+	FLASH_CMD_REG_MAR,
+	HW_REG_ISP_BUFFER_MAR,
+	CONFIG_DATA_ADDR_MAR,
 	MISCTL_REG_BRD,
 	WATCH_DOG_REG_BRD,
 	ENABLE_MISCTL_BRD,
@@ -484,7 +501,8 @@ static int goodix_update_prepare(struct fw_update_ctrl *fwu_ctrl)
 
 	/* enable misctl clock */
 	if (fwu_ctrl->core_data->bus->ic_type == IC_TYPE_BERLIN_D ||
-			fwu_ctrl->core_data->bus->ic_type == IC_TYPE_NOTTINGHAM)
+			fwu_ctrl->core_data->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			fwu_ctrl->core_data->bus->ic_type == IC_TYPE_MARSEILLE)
 		hw_ops->write(cd, misctl_reg, (u8 *)&enable_misctl_val, 4);
 	else
 		hw_ops->write(cd, misctl_reg, (u8 *)&enable_misctl_val, 1);
@@ -1202,6 +1220,8 @@ int goodix_fw_update_init(struct goodix_ts_core *core_data)
 		core_data->update_ctrl.update_info = &update_bra;
 	else if (core_data->bus->ic_type == IC_TYPE_BERLIN_B)
 		core_data->update_ctrl.update_info = &update_brb;
+	else if (core_data->bus->ic_type == IC_TYPE_MARSEILLE)
+		core_data->update_ctrl.update_info = &update_mar;
 	else
 		core_data->update_ctrl.update_info = &update_brd;
 

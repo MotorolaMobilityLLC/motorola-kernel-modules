@@ -273,6 +273,11 @@ int goodix_get_ic_type(struct device_node *node,
 		bus_inf->ic_type = IC_TYPE_NOTTINGHAM;
 		return 0;
 	}
+	if (strstr(ic_name, "marseille")) {
+		ts_info("ic type is marseille");
+		bus_inf->ic_type = IC_TYPE_MARSEILLE;
+		return 0;
+	}
 
 	ts_err("unsupported ic type %s", ic_name);
 	return -EINVAL;

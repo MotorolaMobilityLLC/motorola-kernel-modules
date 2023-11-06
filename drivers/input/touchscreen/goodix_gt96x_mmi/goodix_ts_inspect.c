@@ -1495,7 +1495,8 @@ static int goodix_cap_test_prepare(struct goodix_ts_test *ts_test)
 
 	/* switch rawdata mode */
 	if (ts_test->ts->bus->ic_type == IC_TYPE_BERLIN_D ||
-			ts_test->ts->bus->ic_type == IC_TYPE_NOTTINGHAM) {
+			ts_test->ts->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE) {
 		temp_cmd.cmd = 0x90;
 		temp_cmd.data[0] = 0x81;
 		temp_cmd.len = 5;
@@ -1532,7 +1533,8 @@ static int goodix_poll_rawdata(struct goodix_ts_test *ts_test, u8 data_type, u8 
 	int retry;
 
 	if (ts_test->ts->bus->ic_type == IC_TYPE_BERLIN_D ||
-			ts_test->ts->bus->ic_type == IC_TYPE_NOTTINGHAM)
+			ts_test->ts->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE)
 		flag_addr = ts_test->ts->ic_info.misc.frame_data_addr;
 
 	if (data_type == GTP_MUTUAL_RAW) {
@@ -1563,7 +1565,8 @@ static int goodix_poll_rawdata(struct goodix_ts_test *ts_test, u8 data_type, u8 
 
 	frame_buf = kzalloc(FRAME_DATA_MAX_SIZE, GFP_KERNEL);
 	if (cd->bus->ic_type == IC_TYPE_BERLIN_D ||
-			cd->bus->ic_type == IC_TYPE_NOTTINGHAM) {
+			cd->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			cd->bus->ic_type == IC_TYPE_MARSEILLE) {
 		ret = ts_test_read(ts_test, flag_addr, frame_buf, FRAME_DATA_MAX_SIZE);
 		if (ret < 0)
 			goto free_exit;
@@ -1611,7 +1614,8 @@ static int goodix_cache_rawdata(struct goodix_ts_test *ts_test)
 	u32 flag_addr = ts_test->ts->ic_info.misc.touch_data_addr;
 
 	if (ts_test->ts->bus->ic_type == IC_TYPE_BERLIN_D ||
-			ts_test->ts->bus->ic_type == IC_TYPE_NOTTINGHAM)
+			ts_test->ts->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE)
 		flag_addr = ts_test->ts->ic_info.misc.frame_data_addr;
 
 	for (i = 0; i < DISCARD_FRAMES; i++) {
@@ -1717,7 +1721,8 @@ static int goodix_cache_noisedata(struct goodix_ts_test *ts_test)
 	u32 flag_addr = ts_test->ts->ic_info.misc.touch_data_addr;
 
 	if (cd->bus->ic_type == IC_TYPE_BERLIN_D ||
-			cd->bus->ic_type == IC_TYPE_NOTTINGHAM) {
+			cd->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			cd->bus->ic_type == IC_TYPE_MARSEILLE) {
 		flag_addr = ts_test->ts->ic_info.misc.frame_data_addr;
 		temp_cmd.cmd = 0x90;
 		temp_cmd.data[0] = 0x82;

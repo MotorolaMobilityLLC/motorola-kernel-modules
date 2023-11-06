@@ -208,6 +208,7 @@ static const struct of_device_id i2c_matchs[] = {
 	{.compatible = "goodix,brl-b",},
 	{.compatible = "goodix,brl-d",},
 	{.compatible = "goodix,nottingham",},
+	{.compatible = "goodix,marseille",},
 	{},
 };
 MODULE_DEVICE_TABLE(of, i2c_matchs);
