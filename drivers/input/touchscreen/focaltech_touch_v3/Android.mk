@@ -1,7 +1,7 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
-ifeq ($(call is-board-platform-in-list,taro kalama), true)
+ifeq ($(call is-board-platform-in-list,taro kalama parrot), true)
 
 ifneq ($(FOCALTECH_TOUCH_IC_NAME),)
 	KBUILD_OPTIONS += CONFIG_INPUT_FOCALTECH_V3_MMI_IC_NAME=$(FOCALTECH_TOUCH_IC_NAME)
