@@ -4090,6 +4090,9 @@ unsigned long hybridswap_quota_day(void)
 void hybridswap_set_quota_day(unsigned long val)
 {
 	global_settings.quota_day = val;
+	if (stat) {
+		atomic64_set(&stat->reclaimin_bytes_daily, 0);
+	}
 }
 
 bool hybridswap_reach_life_protect(void)
