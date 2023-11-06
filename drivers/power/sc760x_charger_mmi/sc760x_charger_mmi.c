@@ -232,7 +232,7 @@ static int sc760x_enable_chip(struct sc760x_chip *sc, bool en)
 
 	if (sc->sc760x_enable) {
 
-		if (!sc->irq_enabled) {
+		if (sc->irq && !sc->irq_enabled) {
 			enable_irq_wake(sc->irq);
 			enable_irq(sc->irq);
 			sc->irq_enabled = true;
@@ -242,7 +242,7 @@ static int sc760x_enable_chip(struct sc760x_chip *sc, bool en)
 		    pr_info("init device failed(%d)\n", ret);
 		}
 	} else {
-		if (sc->irq_enabled) {
+		if (sc->irq && sc->irq_enabled) {
 			disable_irq_wake(sc->irq);
 			disable_irq(sc->irq);
 			sc->irq_enabled = false;
@@ -1063,6 +1063,9 @@ static int sc760x_parse_dt(struct sc760x_chip *sc, struct device *dev)
 	sc->init_data.charger_disabled = of_property_read_bool(node,
 					"init-charger-disabled");
 
+	sc->irq_dis_cfg =
+		of_property_read_bool(node, "irq-dis-cfg");
+
 	ret = device_property_read_u32(sc->dev,
 				       "iterm-microamp",
 				       &sc->init_data.iterm);
@@ -1193,6 +1196,12 @@ static int sc760x_register_interrupt(struct sc760x_chip *sc, struct i2c_client *
 {
     int ret = 0;
 
+    if (sc->irq_dis_cfg) {
+        sc->irq = 0;
+        dev_err(sc->dev, "irq_dis_cfg is ture\n");
+        return 0;
+    }
+
     ret = devm_request_threaded_irq(sc->dev, client->irq, NULL,
                     sc760x_irq_handler,
                     IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
@@ -1202,6 +1211,8 @@ static int sc760x_register_interrupt(struct sc760x_chip *sc, struct i2c_client *
         return ret;
     }
 
+    disable_irq_wake(client->irq);
+    disable_irq(client->irq);
     sc->irq_enabled = false;
     sc->irq = client->irq;
     dev_err(sc->dev, "request thread irq success\n");
@@ -2099,9 +2110,13 @@ static int sc760x_suspend(struct device *dev)
     struct sc760x_chip *sc = dev_get_drvdata(dev);
     int ret = 0;
     dev_info(sc->dev, "Suspend successfully!");
-    if (device_may_wakeup(dev))
-        enable_irq_wake(sc->irq);
-    disable_irq(sc->irq);
+
+    if (sc->irq) {
+        if (device_may_wakeup(dev))
+            enable_irq_wake(sc->irq);
+        disable_irq(sc->irq);
+        sc->irq_enabled = false;
+    }
     ret = sc760x_set_adc_enable(sc, false);
     if (ret < 0) {
         dev_err(sc->dev, "%s Failed to disable adc(%d)\n", __func__, ret);
@@ -2119,10 +2134,12 @@ static int sc760x_resume(struct device *dev)
     struct sc760x_chip *sc = dev_get_drvdata(dev);
     int ret = 0;
     dev_info(sc->dev, "Resume successfully!");
-    if (device_may_wakeup(dev))
-        disable_irq_wake(sc->irq);
-    enable_irq(sc->irq);
-
+    if (sc->irq) {
+        if (device_may_wakeup(dev))
+            disable_irq_wake(sc->irq);
+        enable_irq(sc->irq);
+        sc->irq_enabled = true;
+    }
     ret = sc760x_set_lowpower_mode(sc, false);
     if (ret < 0) {
         dev_err(sc->dev, "%s Failed to exit lowpower(%d)\n", __func__, ret);

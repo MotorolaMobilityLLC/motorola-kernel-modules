@@ -201,6 +201,7 @@ struct sc760x_chip {
 
     int irq;
     bool irq_enabled;
+    bool irq_dis_cfg;
     int role;
     int sc760x_enable;
     u32 *thermal_levels;
