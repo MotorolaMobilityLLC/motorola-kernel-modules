@@ -47,7 +47,7 @@
 #include <linux/fb.h>
 #endif
 
-#define GOODIX_CORE_DRIVER_NAME			"goodix_ts"
+#define GOODIX_CORE_DRIVER_NAME			"gdx_cli"
 #define GOODIX_PEN_DRIVER_NAME			"goodix_ts,pen"
 #define GOODIX_DRIVER_VERSION			"v1.3.14"
 #define GOODIX_MAX_TOUCH				10
@@ -778,12 +778,12 @@ extern int goodix_device_register(struct goodix_device_resource *device);
 /* log macro */
 extern bool debug_log_flag;
 #define ts_info(fmt, arg...) \
-		pr_info("[GTP-INF][%s] "fmt"\n", __func__, ##arg)
+		pr_info("[GDX-CLI-INF][%s] "fmt"\n", __func__, ##arg)
 #define	ts_err(fmt, arg...) \
-		pr_err("[GTP-ERR][%s] "fmt"\n", __func__, ##arg)
+		pr_err("[GDX-CLI-ERR][%s] "fmt"\n", __func__, ##arg)
 #define ts_debug(fmt, arg...) \
 		{if (debug_log_flag) \
-		pr_info("[GTP-DBG][%s] "fmt"\n", __func__, ##arg);}
+		pr_info("[GDX-CLI-DBG][%s] "fmt"\n", __func__, ##arg);}
 
 struct goodix_ts_hw_ops *goodix_get_hw_ops(void);
 int goodix_get_config_proc(struct goodix_ts_core *cd);

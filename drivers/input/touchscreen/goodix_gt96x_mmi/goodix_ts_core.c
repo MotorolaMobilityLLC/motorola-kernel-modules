@@ -1233,7 +1233,7 @@ static int goodix_ts_input_dev_config(struct goodix_ts_core *core_data)
 	core_data->input_dev = input_dev;
 	input_set_drvdata(input_dev, core_data);
 
-	sprintf(core_data->input_name, "%s.%d", GOODIX_CORE_DRIVER_NAME, dev_id);
+	sprintf(core_data->input_name, "%s_%d", GOODIX_CORE_DRIVER_NAME, dev_id);
 
 	input_dev->name = core_data->input_name;
 	input_dev->id.bustype = core_data->bus->bus_type;
