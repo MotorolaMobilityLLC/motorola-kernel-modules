@@ -225,6 +225,7 @@ struct bq2589x {
 	/* enable dynamic adjust vindpm */
 	bool enable_dynamic_adjust_vindpm;
 	int			vindpm_flag;
+	bool			vindpm_track_flag;
 
 	/*mmi qc3*/
 	bool mmi_qc3_support;
@@ -2730,7 +2731,31 @@ static void bq2589x_monitor_workfunc(struct work_struct *work)
 	schedule_delayed_work(&bq->monitor_work, 10 * HZ);
 }
 
+static void bq2589x_set_vindpm_track(struct bq2589x *bq, bool enable)
+{
+	u8 val;
+	int ret;
 
+	ret = bq2589x_read_byte(bq, &val, 0x85);
+        if (ret < 0) {
+		bq2589x_write_byte(bq, 0x7D, 0x48);
+		bq2589x_write_byte(bq, 0x7D, 0x54);
+		bq2589x_write_byte(bq, 0x7D, 0x53);
+		bq2589x_write_byte(bq, 0x7D, 0x38);
+		bq2589x_read_byte(bq, &val, 0x85);
+	}
+	dev_info(bq->dev, "%s:0x85_1 = %x\n", __func__,val);
+	if (enable)
+		bq2589x_write_byte(bq, 0x85, val|0x06);
+	else
+		bq2589x_write_byte(bq, 0x85, val & 0xF9);
+	bq2589x_read_byte(bq, &val, 0x85);
+	dev_info(bq->dev, "%s:0x85_2 = %x\n", __func__,val);
+	bq2589x_write_byte(bq, 0x7D, 0x48);
+	bq2589x_write_byte(bq, 0x7D, 0x54);
+	bq2589x_write_byte(bq, 0x7D, 0x53);
+	bq2589x_write_byte(bq, 0x7D, 0x38);
+}
 
 static void bq2589x_charger_irq_workfunc(struct work_struct *work)
 {
@@ -2784,12 +2809,21 @@ static void bq2589x_charger_irq_workfunc(struct work_struct *work)
 			bq->cv_tune = 0;
 			bq2589x_set_chargevoltage(bq, bq->final_cv/1000);
 		}
+		if (bq->part_no == SC89890H && bq->vindpm_track_flag) {
+                        bq2589x_set_vindpm_track(bq,false);
+			bq->vindpm_track_flag = false;
+		}
 	} else if ((bq->vbus_type != BQ2589X_VBUS_NONE) && (bq->vbus_type != BQ2589X_VBUS_OTG)
 			&& (!(bq->status & BQ2589X_STATUS_PLUGIN) || (reapsd_complete == true))
 			&& state.online) {
 		dev_info(bq->dev, "%s:adapter plugged in\n", __func__);
 		bq->status |= BQ2589X_STATUS_PLUGIN;
 		bq2589x_adapter_in_func(bq);
+		if ((bq->part_no == SC89890H) && (bq->vbus_type == BQ2589X_VBUS_USB_CDP)
+				&& !bq->vindpm_track_flag) {
+			bq2589x_set_vindpm_track(bq,true);
+			bq->vindpm_track_flag = true;
+		}
 	}
 
 
