@@ -4091,7 +4091,9 @@ void hybridswap_set_quota_day(unsigned long val)
 
 	// reset reclaimin_bytes_daily when set quota, so we can only
 	// set quota once per day.
-	atomic64_set(&stat->reclaimin_bytes_daily, 0);
+	if (stat) {
+		atomic64_set(&stat->reclaimin_bytes_daily, 0);
+	}
 }
 
 bool hybridswap_reach_life_protect(void)
