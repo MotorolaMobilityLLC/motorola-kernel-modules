@@ -242,6 +242,7 @@ struct mmi_charger_chip {
         bool                    enable_factory_poweroff;
 	bool			factory_syspoweroff_wait;
 	bool			start_factory_kill_disabled;
+	int			upper_limit_en_mv;
 	int			upper_limit_capacity;
 	int			lower_limit_capacity;
 
@@ -1506,7 +1507,8 @@ static void mmi_update_charger_status(struct mmi_charger_chip *chip,
 	if (chip->enable_charging_limit && chip->factory_version) {
 		charging_limit_modes = status->charging_limit_modes;
 		if ((charging_limit_modes != CHARGING_LIMIT_RUN)
-		    && (batt_info->batt_soc >= chip->upper_limit_capacity))
+		    && (batt_info->batt_soc >= chip->upper_limit_capacity)
+		    && (batt_info->batt_mv >= chip->upper_limit_en_mv))
 			charging_limit_modes = CHARGING_LIMIT_RUN;
 		else if ((charging_limit_modes != CHARGING_LIMIT_OFF)
 			   && (batt_info->batt_soc <= chip->lower_limit_capacity))
@@ -2811,6 +2813,11 @@ static int mmi_parse_dt(struct mmi_charger_chip *chip)
 				  &chip->factory_kill_debounce_ms);
 	if (rc)
 		chip->factory_kill_debounce_ms = 0;
+
+	rc = of_property_read_u32(node, "mmi,upper-limit-en-voltage",
+				  &chip->upper_limit_en_mv);
+	if (rc)
+		chip->upper_limit_en_mv = 4000;
 
 	rc = of_property_read_u32(node, "mmi,upper-limit-capacity",
 				  &chip->upper_limit_capacity);
