@@ -40,7 +40,7 @@
 #define BATT_PAIR_ID_MASK ((1 << BATT_PAIR_ID_BITS) - 1)
 
 #define HEARTBEAT_DELAY_MS 60000
-#define HEARTBEAT_FACTORY_MS 1000
+#define HEARTBEAT_FACTORY_MS 5000
 #define HEARTBEAT_DISCHARGE_MS 100000
 #define HEARTBEAT_WAKEUP_INTRVAL_NS 70000000000
 
@@ -249,6 +249,7 @@ struct mmi_charger_chip {
 	struct wakeup_source	*mmi_hb_wake_source;
 	struct alarm		heartbeat_alarm;
 	int			heartbeat_interval;
+	int			heartbeat_factory_interval;
 	struct notifier_block	mmi_reboot;
 	struct notifier_block	mmi_psy_notifier;
 	struct delayed_work	heartbeat_work;
@@ -2280,7 +2281,7 @@ static void mmi_charger_heartbeat_work(struct work_struct *work)
 	chip->suspended = 0;
 
 	if (chip->factory_mode)
-		hb_resch_time = HEARTBEAT_FACTORY_MS;
+		hb_resch_time = chip->heartbeat_factory_interval;
 	else if (chip->max_charger_rate != MMI_POWER_SUPPLY_CHARGE_RATE_NONE
 		 && chip->combo_status != POWER_SUPPLY_STATUS_FULL)
 		hb_resch_time = chip->heartbeat_interval;
@@ -2653,10 +2654,12 @@ static int mmi_charger_reboot(struct notifier_block *nb,
 	if (!chip->factory_mode)
 		return NOTIFY_DONE;
 
+	pr_info("Reboot notifier call mmi charger reboot!\n");
 	switch (event) {
 	case SYS_POWER_OFF:
 		factory_kill_disable = true;
 		chip->force_charger_disabled = true;
+		cancel_delayed_work(&chip->heartbeat_work);
 		schedule_delayed_work(&chip->heartbeat_work, msecs_to_jiffies(0));
 		while (chip->max_charger_rate != MMI_POWER_SUPPLY_CHARGE_RATE_NONE &&
 			(shutdown_triggered || chip->factory_syspoweroff_wait) && !chip->empty_vbat_shutdown_triggered) {
@@ -2833,6 +2836,11 @@ static int mmi_parse_dt(struct mmi_charger_chip *chip)
 				  &chip->heartbeat_interval);
 	if (rc)
 		chip->heartbeat_interval = HEARTBEAT_DELAY_MS;
+
+	rc = of_property_read_u32(node, "mmi,heartbeat-factory-interval",
+				  &chip->heartbeat_factory_interval);
+	if (rc)
+		chip->heartbeat_factory_interval = HEARTBEAT_FACTORY_MS;
 
 	rc = of_property_read_u32(node, "mmi,dcp-power-max",
 				  &chip->dcp_pmax);
@@ -3080,6 +3088,7 @@ static void mmi_charger_shutdown(struct platform_device *pdev)
 {
 	struct mmi_charger_chip *chip = platform_get_drvdata(pdev);
 
+	cancel_delayed_work(&chip->heartbeat_work);
 	mmi_info(chip, "MMI charger shutdown\n");
 
 	return;
