@@ -33,7 +33,7 @@
 #define CFG_CTS_SPI_SPEED_KHZ               6000
 #endif /* CONFIG_CTS_I2C_HOST */
 
-/* #define CFG_CTS_FORCE_UP */
+#define CFG_CTS_FORCE_UP
 /* #define CFG_CTS_HEARTBEAT_MECHANISM */
 
 /* #define CFG_CTS_PALM_DETECT */
