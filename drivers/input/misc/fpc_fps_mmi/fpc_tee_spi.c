@@ -390,7 +390,11 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 			fpc->vdd_gpio = 0;
 			//return -EINVAL;
 		} else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+			rc = gpio_request(fpc->vdd_gpio, "fpc_vdd");
+#else
 			rc = devm_gpio_request(dev, fpc->vdd_gpio, "fpc_vdd");
+#endif
 			if (rc) {
 				pr_err("failed to request vdd gpio, rc = %d\n", rc);
 				goto err_vdd;
@@ -445,7 +449,11 @@ static int fpc_hw_res_request(struct fpc_data *fpc)
 	return rc;
 err_vdd:
 	if (fpc->vdd_gpio != 0) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		gpio_free(fpc->vdd_gpio);
+#else
 		devm_gpio_free(dev,fpc->vdd_gpio);
+#endif
 		fpc->vdd_gpio = 0;
 		pr_info("fpc_spi: err_vdd:remove vdd_gpio success\n");
 	}
@@ -470,7 +478,11 @@ static int fpc_hw_res_release(struct fpc_data *fpc)
 		fpc->request_irq = false;
 	}
 	if (fpc->vdd_gpio) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		gpio_free(fpc->vdd_gpio);
+#else
 		devm_gpio_free(dev,fpc->vdd_gpio);
+#endif
 		fpc->vdd_gpio = 0;
 		pr_info("fpc_spi:remove vdd_gpio success\n");
 	}
@@ -681,7 +693,7 @@ static int fpc_tee_probe(struct spi_device *spidev)
 	struct device *dev = &spidev->dev;
 	struct fpc_data *fpc;
 	int rc = 0;
-
+	pr_info("%s \n", __func__);
 	spidev->dev.of_node = of_find_compatible_node(NULL,
 						NULL, FINGERPRINT_INT_COMPATIBLE);
 	if (!spidev->dev.of_node) {
@@ -733,8 +745,11 @@ static int fpc_tee_probe(struct spi_device *spidev)
 exit:
 	return rc;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void fpc_tee_remove(struct spi_device *spidev)
+#else
 static int fpc_tee_remove(struct spi_device *spidev)
+#endif
 {
 	struct  fpc_data *fpc = dev_get_drvdata(&spidev->dev);
 
@@ -757,7 +772,9 @@ static int fpc_tee_remove(struct spi_device *spidev)
 	devm_kfree( &spidev->dev,fpc);
 #endif
 	pr_info("%s end\n", __func__);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 	return 0;
+#endif
 }
 
 static struct of_device_id fpc_of_match[] = {
