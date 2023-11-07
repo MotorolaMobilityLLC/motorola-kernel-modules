@@ -559,6 +559,18 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 
 	return 0;
 }
+static void smart_battery_init_data(struct mmi_smart_battery *chip)
+{
+	smart_batt_get_voltage_now(chip);
+	smart_batt_get_current_now(chip);
+	smart_batt_get_temperature(chip);
+	smart_batt_get_soh(chip);
+	smart_batt_get_charge_full_design(chip);
+	smart_batt_get_charge_full(chip);
+	smart_batt_get_cycle_count(chip);
+	chip->uisoc = smart_batt_get_capacity(chip);
+	smart_batt_get_charge_counter(chip);
+}
 
 static int smart_battery_probe(struct platform_device *pdev)
 {
@@ -611,6 +623,8 @@ static int smart_battery_probe(struct platform_device *pdev)
 			goto cleanup;
 		}
 	}
+
+	smart_battery_init_data(chip);
 
 	chip->debug_enabled = &debug_enabled;
 
