@@ -112,6 +112,17 @@
 #define DRV_SEN_SELFCODE_REG_NOT			0x14152
 #define DIFF_CODE_DATA_REG_NOT				0x14734
 
+/* marseille */
+#define MAX_DRV_NUM_MAR					20
+#define MAX_SEN_NUM_MAR					34
+#define SHORT_TEST_TIME_REG_MAR			0x138AC
+#define SHORT_TEST_STATUS_REG_MAR			0x12400
+#define SHORT_TEST_RESULT_REG_MAR			0x12408
+#define DRV_DRV_SELFCODE_REG_MAR			0x12448
+#define SEN_SEN_SELFCODE_REG_MAR 			0x127E0
+#define DRV_SEN_SELFCODE_REG_MAR			0x137D0
+#define DIFF_CODE_DATA_REG_MAR				0x1383E
+
 
 #define ABS(val)			((val < 0)? -(val) : val)
 #define MAX(a, b)			((a > b)? a : b)
@@ -211,6 +222,19 @@ static u8 not_sen_map[] = {
 	10, 11, 12, 13, 14, 15, 16, 17, 18,
 	19, 20, 21, 22, 23, 24, 25, 26, 27,
 	28, 29, 30, 31, 32, 33, 34
+};
+
+/* marseille drv-sen map */
+static u8 mar_drv_map[] = {
+	34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+	44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
+};
+
+static u8 mar_sen_map[] = {
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+	10, 11, 12, 13, 14, 15, 16, 17, 18,
+	19, 20, 21, 22, 23, 24, 25, 26, 27,
+	28, 29, 30, 31, 32, 33
 };
 
 typedef struct __attribute__((packed)) {
@@ -323,6 +347,23 @@ struct params_info_t params_not = {
 	0,
 };
 
+struct params_info_t params_mar = {
+	MAX_DRV_NUM_MAR,
+	MAX_SEN_NUM_MAR,
+	mar_drv_map,
+	mar_sen_map,
+	SHORT_TEST_TIME_REG_MAR,
+	SHORT_TEST_STATUS_REG_MAR,
+	SHORT_TEST_RESULT_REG_MAR,
+	DRV_DRV_SELFCODE_REG_MAR,
+	SEN_SEN_SELFCODE_REG_MAR,
+	DRV_SEN_SELFCODE_REG_MAR,
+	DIFF_CODE_DATA_REG_MAR,
+	0,
+	0,
+	0,
+};
+
 struct ts_test_params {
 	bool test_items[MAX_TEST_ITEMS];
 
@@ -403,8 +444,10 @@ static int cal_cha_to_cha_res(struct goodix_ts_test *ts_test, int v1, int v2)
 		return (v1 - v2) * 74 / v2 + 20;
 	else if (ts_test->ts->bus->ic_type == IC_TYPE_BERLIN_D)
 		return (v1 / v2 - 1) * 70 + 59;
+	else if (ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE)
+		return (v1 / v2 - 1) * 14;
 	else
-		return (v1 / v2 - 1) * 55 + 45;
+		return (v1 / v2 - 1) * 55 + 45; // nottingham
 }
 
 static int cal_cha_to_avdd_res(struct goodix_ts_test *ts_test, int v1, int v2)
@@ -415,8 +458,10 @@ static int cal_cha_to_avdd_res(struct goodix_ts_test *ts_test, int v1, int v2)
 		return 64 * (2 * v2 - 25) * 99 / v1 - 60;
 	else if (ts_test->ts->bus->ic_type == IC_TYPE_BERLIN_D)
 		return 64 * (2 * v2 - 25) * 93 / v1 - 20;
+	else if (ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE)
+		return 64 * (2 * v2 - 25) * 72 / v1 - 13;
 	else
-		return 64 * (2 * v2 - 25) * 76 / v1 - 15;
+		return 64 * (2 * v2 - 25) * 76 / v1 - 15; // nottingham
 }
 
 static int cal_cha_to_gnd_res(struct goodix_ts_test *ts_test, int v)
@@ -427,8 +472,10 @@ static int cal_cha_to_gnd_res(struct goodix_ts_test *ts_test, int v)
 		return 150500 / v - 60;
 	else if (ts_test->ts->bus->ic_type == IC_TYPE_BERLIN_D)
 		return 145000 / v - 15;
+	else if (ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE)
+		return 28800 / v - 13;
 	else
-		return 120000 / v - 16;
+		return 120000 / v - 16; // nottingham
 }
 
 static int ts_test_reset(struct goodix_ts_test *ts_test,
@@ -660,6 +707,8 @@ static void goodix_init_params(struct goodix_ts_test *ts_test)
 		test_params->params_info = &params_brd;
 	else if (ts_test->ts->bus->ic_type == IC_TYPE_NOTTINGHAM)
 		test_params->params_info = &params_not;
+	else if (ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE)
+		test_params->params_info = &params_mar;
 }
 
 static int goodix_init_testlimits(struct goodix_ts_test *ts_test)
@@ -1415,6 +1464,27 @@ static void goodix_shortcircut_test(struct goodix_ts_test *ts_test)
 		return;
 	}
 
+	if (ts_test->ts->bus->ic_type == IC_TYPE_MARSEILLE) {
+		ts_test_read(ts_test, 0x10400, &status, 1);
+		if (status != 0xFD) {
+			ts_err("marseille short status[0x%02x] != 0xFD", status);
+			return;
+		}
+		status = 0;
+		ts_test_write(ts_test, 0x10400, &status, 1);
+		retry = 20;
+		while (retry--) {
+			msleep(20);
+			ts_test_read(ts_test, 0x10400, &status, 1);
+			if (status == 0xAA)
+				break;
+		}
+		if (retry < 0) {
+			ts_err("marseille short status[0x%02x] != 0xAA", status);
+			return;
+		}
+	}
+
 	msleep(500); //BerlinB quick check need to delay at least 500ms
 
 	/* get short test time */
@@ -2054,7 +2124,8 @@ static void goodix_check_key_info_test(struct goodix_ts_test *ts_test)
 	//read chip load info for berlin
 	if (cd->bus->ic_type == IC_TYPE_BERLIN_B ||
 			cd->bus->ic_type == IC_TYPE_BERLIN_D ||
-			cd->bus->ic_type == IC_TYPE_NOTTINGHAM) {
+			cd->bus->ic_type == IC_TYPE_NOTTINGHAM ||
+			cd->bus->ic_type == IC_TYPE_MARSEILLE) {
 		if (cd->bus->ic_type == IC_TYPE_BERLIN_B)
 			chip_info_addr = 0x3F300;
 		else

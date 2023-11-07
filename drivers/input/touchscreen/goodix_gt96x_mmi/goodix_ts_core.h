@@ -49,7 +49,7 @@
 
 #define GOODIX_CORE_DRIVER_NAME			"gdx_cli"
 #define GOODIX_PEN_DRIVER_NAME			"goodix_ts,pen"
-#define GOODIX_DRIVER_VERSION			"v1.3.14"
+#define GOODIX_DRIVER_VERSION			"v1.3.15"
 #define GOODIX_MAX_TOUCH				10
 #define GOODIX_MAX_KEY					10
 #define GOODIX_PEN_MAX_PRESSURE			4096
