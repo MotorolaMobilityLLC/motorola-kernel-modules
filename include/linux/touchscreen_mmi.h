@@ -22,6 +22,10 @@
 #include <linux/input.h>
 #include <linux/mmi_kernel_common.h>
 
+#if IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)
+#define CONFIG_MTK_PANEL_NOTIFICATIONS
+#endif
+
 #if defined(CONFIG_PANEL_NOTIFICATIONS)
 
 #include <linux/panel_notifier.h>
