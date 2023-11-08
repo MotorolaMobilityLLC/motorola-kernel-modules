@@ -384,10 +384,12 @@ bool is_factory_mode(void)
 static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 {
 	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
+
+//<MMI_STOPSHIP>: cw2217_fg: return 25degress for battery temperature
+/*
 	int ret;
 	unsigned char reg_val;
 	int temp;
-
 
 	ret = cw_read(cw_bat, REG_TEMP, &reg_val);
 	if (ret < 0)
@@ -398,8 +400,9 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 	if(cw_bat->factory_mode && !cw_bat->ntc_exist && (-400 == temp))
 		temp = 250;
 
-	cw_bat->temp = temp;
-	*temp_out = temp;
+*/
+	cw_bat->temp = 250;
+	*temp_out = 250;
 	cw_info(cw_bat, "temprature=%d\n", *temp_out);
 
 	return 0;
