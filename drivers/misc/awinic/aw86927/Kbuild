@@ -1,0 +1,6 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+
+aw86927-y += aw869x.o aw869xx.o aw8671x.o aw8692x.o aw8693x.o haptic_hv.o
+obj-m += aw86927.o
