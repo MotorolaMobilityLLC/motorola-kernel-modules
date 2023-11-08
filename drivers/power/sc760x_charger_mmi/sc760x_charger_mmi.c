@@ -1432,11 +1432,6 @@ static void charger_detect_work_func(struct work_struct *work)
 		goto err;
 	}
 
-	if (state_changed) {
-		sc760x_dump_reg(sc);
-		power_supply_changed(sc->charger_psy);
-	}
-	return;
 err:
 	//release wakelock
 	if (state_changed)
