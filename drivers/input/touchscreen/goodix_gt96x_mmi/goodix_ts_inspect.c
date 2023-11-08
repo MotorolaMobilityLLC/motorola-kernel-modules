@@ -31,7 +31,7 @@
 
 #define DISCARD_FRAMES						3
 
-#define GOODIX_TEST_FILE_NAME				"goodix_test_limits"
+#define GOODIX_TEST_FILE_NAME				"gdx_test_limits"
 #define MAX_PROC_OUTPUT_SIZE				2 * 1024 * 1024
 #define MAX_DATA_BUFFER						30000
 #define MAX_SHORT_NUM						15
@@ -144,6 +144,7 @@ enum GTP_MUTUAL_DATA_TYPE {
 
 static int output_offset;
 static char *output_buf;
+static bool auto_test_result;
 
 /* berlin A drv-sen map */
 static u8 brl_a_drv_map[] = {
@@ -2213,6 +2214,8 @@ static int goodix_save_header(struct goodix_ts_test *ts_test)
 	proc_append_string("<Result>%s</Result>\n", result ? "NG" : "OK");
 	proc_append_string("<DeviceType>GT%s</DeviceType>\n<SensorId>%d</SensorId>\n",
 			ts->fw_version.patch_pid, ts->fw_version.sensor_id);
+	auto_test_result = !result;
+	ts_info("GT%s TP test total result: %d", ts->fw_version.patch_pid, auto_test_result);
 
 	/* save test config */
 	goodix_save_test_config(ts_test);
@@ -2225,64 +2228,82 @@ static int goodix_save_header(struct goodix_ts_test *ts_test)
 	if (ts_test->test_params.test_items[GTP_VERSION_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_VERSION_TEST])
 			proc_append_string("<Item name=\"Version Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Version Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Version Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Version Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_CHIP_KEY_INFO_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_CHIP_KEY_INFO_TEST])
 			proc_append_string("<Item name=\"Check Chip Key Info\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Check Chip Key Info\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Check Chip Key Info\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Check Chip Key Info\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_CUSTOM_INFO_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_CUSTOM_INFO_TEST])
 			proc_append_string("<Item name=\"Custom Info Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Custom Info Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Custom Info Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Custom Info Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_CAP_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_CAP_TEST])
 			proc_append_string("<Item name=\"Rawdata MAX/MIN Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Rawdata MAX/MIN Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Rawdata MAX/MIN Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Rawdata MAX/MIN Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_DELTA_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_DELTA_TEST])
 			proc_append_string("<Item name=\"Rawdata Adjcent Deviation Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Rawdata Adjcent Deviation Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Rawdata Adjcent Deviation Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Rawdata Adjcent Deviation Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_NOISE_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_NOISE_TEST])
 			proc_append_string("<Item name=\"Diffdata Jitter Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Diffdata Jitter Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Diffdata Jitter Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Diffdata Jitter Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_SELFNOISE_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_SELFNOISE_TEST])
 			proc_append_string("<Item name=\"Self Diffdata Jitter Limit Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Self Diffdata Jitter Limit Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Self Diffdata Jitter Limit Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Self Diffdata Jitter Limit Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_SELFCAP_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_SELFCAP_TEST])
 			proc_append_string("<Item name=\"Self Rawdata Upper Limit Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Self Rawdata Upper Limit Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Self Rawdata Upper Limit Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Self Rawdata Upper Limit Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	if (ts_test->test_params.test_items[GTP_SHORT_TEST]) {
 		if (GTP_TEST_OK == ts_test->test_result[GTP_SHORT_TEST])
 			proc_append_string("<Item name=\"Short Test\" result=\"OK\"/>\n");
-		else
-			proc_append_string("<Item name=\"Short Test\" result=\"NG\"/>\n");
+		else {
+				proc_append_string("<Item name=\"Short Test\" result=\"NG\"/>\n");
+				ts_err("<Item name=\"Short Test\" result=\"NG\"/>\n");
+		}
 	}
 
 	proc_append_string("</ItemList>\n");
@@ -2753,14 +2774,58 @@ static const struct file_operations auto_test_ops = {
 };
 #endif
 
+static int auto_test_result_proc_show(struct seq_file *file, void *v)
+{
+	struct goodix_ts_core * core_data = (struct goodix_ts_core *)file->private;
+	if (!core_data) {
+	    ts_err("no goodix_ts_core set");
+	    return -EIO;
+	}
+
+	seq_printf(file, "result=%d\n", auto_test_result);
+
+	return 0;
+}
+
+static int auto_test_result_proc_open(struct inode *inode, struct file *file)
+{
+    return single_open_size(file, auto_test_result_proc_show, PDE_DATA(inode), PAGE_SIZE * 10);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
+static const struct file_operations auto_test_result_ops = {
+    .owner   = THIS_MODULE,
+    .open    = auto_test_result_proc_open,
+    .read    = seq_read,
+    .llseek  = seq_lseek,
+    .release = seq_release,
+};
+#else
+static const struct proc_ops auto_test_result_ops = {
+    .proc_open = auto_test_result_proc_open,
+    .proc_read = seq_read,
+    .proc_lseek = seq_lseek,
+    .proc_release = single_release,
+};
+#endif
+
+
 int inspect_module_init(struct goodix_ts_core *core_data)
 {
 	struct proc_dir_entry *proc_entry;
+	struct proc_dir_entry *result_proc_entry;
 
 	proc_entry = proc_create_data("auto_test",
 			0660, core_data->proc_dir_entry, &auto_test_ops, core_data);
 	if (!proc_entry) {
 		ts_err("failed to create proc entry");
+		return -ENODEV;
+	}
+
+	result_proc_entry = proc_create_data("auto_test_result",
+			0660, core_data->proc_dir_entry, &auto_test_result_ops, core_data);
+	if (!result_proc_entry) {
+		ts_err("failed to create auto_test_result proc entry");
 		return -ENODEV;
 	}
 
