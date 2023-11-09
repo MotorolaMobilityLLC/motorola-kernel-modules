@@ -414,7 +414,12 @@ int32_t CTP_SPI_READ(struct spi_device *client, uint8_t *buf, uint16_t len)
 
 	while (retries < 5) {
 		ret = spi_read_write(client, buf, len, NVTREAD);
-		if (ret == 0) break;
+		if (ret == 0)
+			break;
+		else if (ret == -ETIMEDOUT) {
+			NVT_ERR("read error, ret = %d\n", ret);
+			break;
+		}
 		retries++;
 	}
 
@@ -448,7 +453,13 @@ int32_t CTP_SPI_WRITE(struct spi_device *client, uint8_t *buf, uint16_t len)
 
 	while (retries < 5) {
 		ret = spi_read_write(client, buf, len, NVTWRITE);
-		if (ret == 0)	break;
+		if (ret == 0)
+			break;
+                else if (ret == -ETIMEDOUT) {
+                        NVT_ERR("write error, ret = %d\n", ret);
+                        break;
+                }
+
 		retries++;
 	}
 
