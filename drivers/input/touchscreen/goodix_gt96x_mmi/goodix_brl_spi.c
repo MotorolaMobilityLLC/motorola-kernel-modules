@@ -222,6 +222,8 @@ static int goodix_spi_probe(struct spi_device *spi)
 	dev_res->pdev.id = dev_res->id;
 	dev_res->pdev.num_resources = 0;
 
+	spi_set_drvdata(spi, &dev_res->pdev);
+
 	/* register platform device, then the goodix_ts_core
 	 * module will probe the touch deivce.
 	 */

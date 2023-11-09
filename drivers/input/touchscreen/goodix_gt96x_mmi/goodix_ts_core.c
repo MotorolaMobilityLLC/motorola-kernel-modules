@@ -23,12 +23,15 @@
 #include <linux/input/mt.h>
 #define INPUT_TYPE_B_PROTOCOL
 #endif
+#include "goodix_ts_mmi.h"
 
 /* goodix fb test */
 // #include "../../../video/fbdev/core/fb_firefly.h"
 
 #define GOODIX_DEFAULT_CFG_NAME		"goodix_cfg_group.cfg"
 struct goodix_device_manager goodix_devices;
+#define PINCTRL_STATE_ACTIVE    "cli_pmx_ts_active"
+#define PINCTRL_STATE_SUSPEND   "cli_pmx_ts_suspend"
 
 static void goodix_device_manager_init(void)
 {
@@ -886,6 +889,16 @@ static int goodix_parse_dt(struct device_node *node,
 	board_data->pen_enable = of_property_read_bool(node,
 			"goodix,pen-enable");
 
+	/* get ic compatible */
+	r = of_property_read_string(node, "compatible", &name_tmp);
+	if (r) {
+		ts_err("get compatible failed");
+		return r;
+	} else {
+	    ts_info("ic_name form dt: %s", name_tmp);
+	    strncpy(board_data->ic_name, name_tmp, sizeof(board_data->ic_name));
+	}
+
 	ts_info("[DT]x:%d, y:%d, w:%d, p:%d sleep_enable:%d pen_enable:%d",
 		board_data->panel_max_x, board_data->panel_max_y,
 		board_data->panel_max_w, board_data->panel_max_p,
@@ -1154,6 +1167,54 @@ int goodix_ts_power_off(struct goodix_ts_core *cd)
 		ts_err("failed power off, %d", ret);
 
 	return ret;
+}
+
+/**
+ * goodix_ts_pinctrl_init - Get pinctrl handler and pinctrl_state
+ * @core_data: pointer to touch core data
+ * return: 0 ok, <0 failed
+ */
+static int goodix_ts_pinctrl_init(struct goodix_ts_core *core_data)
+{
+	int r = 0;
+
+	/* get pinctrl handler from of node */
+	core_data->pinctrl = devm_pinctrl_get(core_data->bus->dev);
+	if (IS_ERR_OR_NULL(core_data->pinctrl)) {
+		ts_info("Failed to get pinctrl handler[need confirm]");
+		core_data->pinctrl = NULL;
+		return -EINVAL;
+	}
+	ts_debug("success get pinctrl");
+	/* active state */
+	core_data->pin_sta_active = pinctrl_lookup_state(core_data->pinctrl,
+				PINCTRL_STATE_ACTIVE);
+	if (IS_ERR_OR_NULL(core_data->pin_sta_active)) {
+		r = PTR_ERR(core_data->pin_sta_active);
+		ts_err("Failed to get pinctrl state:%s, r:%d",
+				PINCTRL_STATE_ACTIVE, r);
+		core_data->pin_sta_active = NULL;
+		goto exit_pinctrl_put;
+	}
+	ts_info("success get avtive pinctrl state");
+
+	/* suspend state */
+	core_data->pin_sta_suspend = pinctrl_lookup_state(core_data->pinctrl,
+				PINCTRL_STATE_SUSPEND);
+	if (IS_ERR_OR_NULL(core_data->pin_sta_suspend)) {
+		r = PTR_ERR(core_data->pin_sta_suspend);
+		ts_err("Failed to get pinctrl state:%s, r:%d",
+				PINCTRL_STATE_SUSPEND, r);
+		core_data->pin_sta_suspend = NULL;
+		goto exit_pinctrl_put;
+	}
+	ts_info("success get suspend pinctrl state");
+
+	return 0;
+exit_pinctrl_put:
+	devm_pinctrl_put(core_data->pinctrl);
+	core_data->pinctrl = NULL;
+	return r;
 }
 
 /**
@@ -1443,7 +1504,7 @@ int goodix_ts_esd_init(struct goodix_ts_core *cd)
 	return 0;
 }
 
-static void goodix_ts_release_connects(struct goodix_ts_core *core_data)
+void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 {
 	struct input_dev *input_dev = core_data->input_dev;
 	struct input_dev *pen_dev = core_data->pen_dev;
@@ -1473,6 +1534,7 @@ static void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 		core_data->hw_ops->after_event_handler(core_data);
 }
 
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
 /**
  * goodix_ts_suspend - Touchscreen suspend function
  * Called by PM/FB/EARLYSUSPEN module to put the device to sleep
@@ -1552,6 +1614,7 @@ static void goodix_ts_resume_work(struct work_struct *work)
 			container_of(work, struct goodix_ts_core, resume_work);
 	goodix_ts_resume(cd);
 }
+#endif
 
 #if IS_ENABLED(CONFIG_FB)
 /**
@@ -1580,7 +1643,7 @@ int goodix_ts_fb_notifier_callback(struct notifier_block *self,
 
 	return 0;
 }
-#elif IS_ENABLED(CONFIG_PM)
+#elif IS_ENABLED(CONFIG_PM) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 /**
  * goodix_ts_pm_suspend - PM suspend function
  * Called by kernel during system suspend phrase
@@ -1602,6 +1665,29 @@ static int goodix_ts_pm_resume(struct device *dev)
 		dev_get_drvdata(dev);
 
 	return goodix_ts_resume(core_data);
+}
+static const struct dev_pm_ops dev_pm_ops = {
+	.suspend = goodix_ts_pm_suspend,
+	.resume = goodix_ts_pm_resume,
+};
+#else
+/**
+ * goodix_ts_pm_suspend - PM suspend function
+ * Called by kernel during system suspend phrase
+ */
+static int goodix_ts_pm_suspend(struct device *dev)
+{
+	ts_info("system enters into pm_suspend");
+	return 0;
+}
+/**
+ * goodix_ts_pm_resume - PM resume function
+ * Called by kernel during system wakeup
+ */
+static int goodix_ts_pm_resume(struct device *dev)
+{
+	ts_info("system resumes from pm_suspend");
+	return 0;
 }
 static const struct dev_pm_ops dev_pm_ops = {
 	.suspend = goodix_ts_pm_suspend,
@@ -1679,7 +1765,9 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 	/* inspect init */
 	inspect_module_init(cd);
 
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
 	INIT_WORK(&cd->resume_work, goodix_ts_resume_work);
+#endif
 
 	/* Do self check on first boot */
 	INIT_WORK(&cd->self_check_work, goodix_self_check);
@@ -1867,6 +1955,24 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		goto err_out;
 	}
 
+	/* Pinctrl handle is optional. */
+	ret = goodix_ts_pinctrl_init(core_data);
+	if (!ret && core_data->pinctrl) {
+		ret = pinctrl_select_state(core_data->pinctrl,
+					 core_data->pin_sta_active);
+		if (ret < 0)
+			ts_err("Failed to select active pinstate, r:%d", ret);
+	}
+
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+	ts_info("%s:goodix_ts_mmi_dev_register",__func__);
+	ret = goodix_ts_mmi_dev_register(pdev);
+	if (ret) {
+		ts_info("Failed register touchscreen mmi.");
+		goto err_out;
+	}
+#endif
+
 	/* debug node init */
 	ret = goodix_tools_init(core_data);
 	if (ret) {
@@ -1899,6 +2005,11 @@ static int goodix_ts_remove(struct platform_device *pdev)
 	struct goodix_ts_core *core_data = platform_get_drvdata(pdev);
 	struct goodix_ts_hw_ops *hw_ops = core_data->hw_ops;
 	struct goodix_ts_esd *ts_esd = &core_data->ts_esd;
+
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+	ts_info("%s:goodix_ts_mmi_dev_unregister",__func__);
+	goodix_ts_mmi_dev_unregister(pdev);
+#endif
 
 	goodix_tools_exit(core_data);
 	goodix_fw_update_uninit(core_data);

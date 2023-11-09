@@ -440,6 +440,7 @@ struct goodix_module {
  * @fw_name: name of the firmware image
  */
 struct goodix_ts_board_data {
+	char ic_name[GOODIX_MAX_STR_LABLE_LEN];
 	char avdd_name[GOODIX_MAX_STR_LABLE_LEN];
 	char iovdd_name[GOODIX_MAX_STR_LABLE_LEN];
 	int reset_gpio;
@@ -736,6 +737,9 @@ struct goodix_ts_core {
 	struct goodix_ic_config ic_configs[GOODIX_MAX_CONFIG_GROUP];
 	struct regulator *avdd;
 	struct regulator *iovdd;
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *pin_sta_active;
+	struct pinctrl_state *pin_sta_suspend;
 	u32 gesture_type;
 
 	char input_name[32];
@@ -785,6 +789,17 @@ extern bool debug_log_flag;
 		{if (debug_log_flag) \
 		pr_info("[GDX-CLI-DBG][%s] "fmt"\n", __func__, ##arg);}
 
+/*
+ * get board data pointer
+ */
+static inline struct goodix_ts_board_data *board_data(
+        struct goodix_ts_core *core)
+{
+	if (!core)
+		return NULL;
+	return &(core->board_data);
+}
+
 struct goodix_ts_hw_ops *goodix_get_hw_ops(void);
 int goodix_get_config_proc(struct goodix_ts_core *cd);
 
@@ -814,5 +829,9 @@ void goodix_ts_esd_on(struct goodix_ts_core *cd);
 void goodix_ts_esd_off(struct goodix_ts_core *cd);
 
 int goodix_ts_report_gesture(struct goodix_ts_core *cd, struct goodix_ts_event *event);
+
+int goodix_ts_power_on(struct goodix_ts_core *cd);
+int goodix_ts_power_off(struct goodix_ts_core *cd);
+void goodix_ts_release_connects(struct goodix_ts_core *core_data);
 
 #endif

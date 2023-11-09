@@ -9,6 +9,9 @@ else
 endif
 endif
 
+ifeq ($(DRM_PANEL_EVENT_NOTIFICATIONS),true)
+    KBUILD_OPTIONS += CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS=y
+endif
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_gt96x_mmi.ko
