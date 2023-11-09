@@ -54,13 +54,9 @@
 
 MOTO_WLS_AUTH_T motoauth;
 
-int a = 10;
-#define CPS_REG_DEBUG 1 //only for dump reg log
+#define CPS_REG_DEBUG 0 //only for dump reg log
 
 #define CPS_CHIP_ID 0x4041
-
-//#define BOOTLOADER_FILE_NAME "/data/misc/cps/bootloader.hex"
-//#define FIRMWARE_FILE_NAME "/data/misc/cps/firmware.hex"
 
 #define CPS_WLS_CHRG_DRV_NAME "cps-wls-charger"
 
@@ -2044,7 +2040,7 @@ static int wireless_fw_update(bool force)
 	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
 			"Wireless fw update failed. Battery SOC should be at least 10%%\n");
-		//return CPS_WLS_FAIL;
+		return CPS_WLS_FAIL;
 	}
 	rc = 0;
 	CPS_TX_MODE = true;
@@ -2262,8 +2258,7 @@ update_fail:
 static void cps_firmware_update_work(struct work_struct *work)
 {
 	cps_wls_log(CPS_LOG_ERR, "[%s]\n", __func__);
-	//wireless_fw_update(false);
-	wireless_fw_update(true);
+	wireless_fw_update(false);
 }
 
 //-----------------------------reg addr----------------------------------
@@ -3173,12 +3168,6 @@ static void cps_wls_dump_info_work(struct work_struct *work)
 	cps_wls_log(CPS_LOG_DEBG, "cps_dump_info fop %dkHz,ept 0x%04X, ce %d, dietmp %d\n",
 		chip->rx_fop, chip->rx_ept, chip->rx_ce, chip->rx_dietmp);
 
-	cps_wls_log(CPS_LOG_DEBG, "neg_power=%d\n", cps_wls_get_rx_neg_power());
-	cps_wls_log(CPS_LOG_DEBG, "rx_vout=%dmV\n", cps_wls_get_rx_vout());
-	cps_wls_log(CPS_LOG_DEBG, "rx_vrect=%dmV\n", cps_wls_get_rx_vrect());
-	cps_wls_log(CPS_LOG_DEBG, "rx_irect=%dmA\n", cps_wls_get_rx_irect());
-	
-	
 	queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(3000));
 }
 
