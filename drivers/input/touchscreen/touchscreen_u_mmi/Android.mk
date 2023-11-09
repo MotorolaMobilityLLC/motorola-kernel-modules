@@ -46,7 +46,7 @@ ifeq ($(TOUCHCLASS_MMI_MTK_CHARGER),true)
 endif
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := touchscreen_mmi.ko
+LOCAL_MODULE := touchscreen_u_mmi.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/sensors_class.ko
