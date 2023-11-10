@@ -1,0 +1,20 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "wt6670f_qc3p_mmi",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+        "Makefile.include",
+    ]),
+
+    outs = ["wt6670f_qc3p_mmi.ko"],
+)
