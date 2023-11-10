@@ -1,0 +1,12 @@
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+filegroup(
+    name = "st21nfc_headers",
+    srcs = glob([
+        "st21nfc/*.h",
+    ]),
+)
