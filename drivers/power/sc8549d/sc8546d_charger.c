@@ -878,9 +878,11 @@ static int mtk_sc8546d_get_adc(struct charger_device *chg_dev, enum adc_channel 
 
     if(chan != ADC_CHANNEL_TEMP_JC)
         *max = *max * 1000;
+    else {
+        *max = 25;
+    }
 
-    if (min != max)
-        *min = *max;
+    *min = *max;
 
     return 0;
 
