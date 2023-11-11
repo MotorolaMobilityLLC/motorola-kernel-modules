@@ -176,7 +176,7 @@ struct hyb_entries_table {
 		(index) != (hindex); (index) = (tmp), (tmp) = prev_index((index), (tab)))
 
 static unsigned long warn_level[HYB_CLASS_BUTT] = {
-	0, 200, 500, 0
+	0, 500, 500, 0
 };
 
 const char *key_point_name[HYB_KYE_POINT_BUTT] = {
@@ -4965,7 +4965,7 @@ static int hybridswap_permcg_reclaim(struct mem_cgroup *memcg,
 	atomic64_inc(&hybs->hybridswap_outcnt);
 
 out:
-	hybp(HYB_INFO, "memcg %s %lu %lu out_to_eswap %lu KB eswap %lu zram %lu %d\n",
+	hybp(HYB_DEBUG, "memcg %s %lu %lu out_to_eswap %lu KB eswap %lu zram %lu %d\n",
 		hybs->name, (unsigned long)require_size_before, (unsigned long)require_size,
 		(unsigned long)((require_size_before - require_size) >> 10),
 		(unsigned long)atomic64_read(&hybs->hybridswap_stored_size),
@@ -5017,7 +5017,7 @@ static int hybridswap_permcg_reclaimin(struct mem_cgroup *memcg,
 	rq->reclaimined_sz += mcg_reclaimed_size;
 	mutex_unlock(&hybs->swap_lock);
 
-	hybp(HYB_INFO, "memcg %s mcg_reclaimed_size %lu rq->reclaimined_sz %lu rq->size %lu rq->out_size %lu ret %d\n",
+	hybp(HYB_DEBUG, "memcg %s mcg_reclaimed_size %lu rq->reclaimined_sz %lu rq->size %lu rq->out_size %lu ret %d\n",
 		hybs->name, mcg_reclaimed_size, rq->reclaimined_sz,
 		rq->size, rq->out_size, ret);
 
@@ -5322,6 +5322,12 @@ static int hybridswap_page_fault_fetch_eswap(struct zram *zram,
 					HYB_FIND_ESWAP);
 			if (likely(iowork->ioentry->eswapid != -EBUSY))
 				break;
+
+			// Moto: waited enough, exit with EIO.
+			if (wait_cycle > 100000) {
+				hybp(HYB_ERR, "waited 100000 cycles in page fault, exit with EIO!\n");
+				return -EIO;
+			}
 
 			if (wait_cycle < 100)
 				udelay(50);
