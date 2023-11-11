@@ -36,7 +36,7 @@
 #endif
 #include "hybridswap_internal.h"
 
-#define MOTO_SWAP_VERSION 1
+#define MOTO_SWAP_VERSION 2
 
 struct swapd_param {
 	unsigned int min_grade;
