@@ -986,67 +986,6 @@ static int use_gpio_init(struct anc_data *p_data) {
     return ret_val;
 }
 
-static int anc_gpio_init(struct anc_data *p_data) {
-    int ret_val = 0;
-
-    if (p_data == NULL) {
-        ANC_LOGE("p_data is NULL");
-        return -EINVAL;
-    }
-    ANC_LOGD("init gpio");
-    if (p_data->resource_requested) {
-        ANC_LOGW("warning: resource is already requested, return!");
-        return 0;
-    }
-
-    if (p_data->vdd_use_gpio) {
-        ret_val = anc_request_named_gpio(p_data, "anc,gpio_pwr", &p_data->pwr_gpio);
-        if (ret_val) {
-            ANC_LOGE("request power gpio failed, ret_val:%d", ret_val);
-            return ret_val;
-        }
-
-        ret_val = gpio_direction_output(p_data->pwr_gpio, 0);
-        if (ret_val) {
-            ANC_LOGE("power gpio direction output failed, ret_val:%d", ret_val);
-            return ret_val;
-        }
-    }
-
-    if (p_data->use_gpio_init == false) {
-        ret_val = use_pinctrl_init(p_data);
-        if (ret_val) {
-            ANC_LOGE("use pinctrl init failed, ret_val:%d", ret_val);
-            return ret_val;
-        }
-    }
-
-    ret_val = use_gpio_init(p_data);
-    if (ret_val) {
-        ANC_LOGE("use gpio init failed, ret_val:%d", ret_val);
-        return ret_val;
-    }
-
-#ifdef SAMSUNG_PLATFORM
-    /* Init spi clock */
-    ret_val = anc_spi_clk_init(p_data);
-    if (ret_val) {
-        ANC_LOGE("spi init failed, ret_val:%d", ret_val);
-        return ret_val;
-    }
-#endif
-
-    if (of_property_read_bool(p_data->dev->of_node, "anc,enable-on-boot")) {
-        ANC_LOGD("Enabling hardware");
-        device_power_up(p_data);
-    }
-
-    p_data->resource_requested = true;
-    ANC_LOGD("success");
-
-    return 0;
-}
-
 static int anc_gpio_deinit(struct anc_data *p_data) {
     if (p_data == NULL) {
         ANC_LOGE("p_data is NULL");
@@ -1054,10 +993,6 @@ static int anc_gpio_deinit(struct anc_data *p_data) {
     }
 
     ANC_LOGD("deinit gpio");
-    if (!p_data->resource_requested) {
-        ANC_LOGW("warning: resource is already released, return!");
-        return 0;
-    }
 
     if (p_data->vdd_use_gpio) {
         if (gpio_is_valid(p_data->pwr_gpio)) {
@@ -1085,10 +1020,69 @@ static int anc_gpio_deinit(struct anc_data *p_data) {
     anc_spi_clk_deinit(p_data);
 #endif
 
-    p_data->resource_requested = false;
     ANC_LOGD("success");
 
     return 0;
+}
+
+static int anc_gpio_init(struct anc_data *p_data) {
+    int ret_val = 0;
+
+    if (p_data == NULL) {
+        ANC_LOGE("p_data is NULL");
+        return -EINVAL;
+    }
+
+    ANC_LOGD("init gpio");
+    if (p_data->vdd_use_gpio) {
+        ret_val = anc_request_named_gpio(p_data, "anc,gpio_pwr", &p_data->pwr_gpio);
+        if (ret_val) {
+            ANC_LOGE("request power gpio failed, ret_val:%d", ret_val);
+            goto ANC_INIT_FAIL;
+        }
+
+        ret_val = gpio_direction_output(p_data->pwr_gpio, 0);
+        if (ret_val) {
+            ANC_LOGE("power gpio direction output failed, ret_val:%d", ret_val);
+            goto ANC_INIT_FAIL;
+        }
+    }
+
+    if (p_data->use_gpio_init == false) {
+        ret_val = use_pinctrl_init(p_data);
+        if (ret_val) {
+            ANC_LOGE("use pinctrl init failed, ret_val:%d", ret_val);
+            goto ANC_INIT_FAIL;
+        }
+    }
+
+    ret_val = use_gpio_init(p_data);
+    if (ret_val) {
+        ANC_LOGE("use gpio init failed, ret_val:%d", ret_val);
+        goto ANC_INIT_FAIL;
+    }
+
+#ifdef SAMSUNG_PLATFORM
+    /* Init spi clock */
+    ret_val = anc_spi_clk_init(p_data);
+    if (ret_val) {
+        ANC_LOGE("spi init failed, ret_val:%d", ret_val);
+        goto ANC_INIT_FAIL;
+    }
+#endif
+
+    if (of_property_read_bool(p_data->dev->of_node, "anc,enable-on-boot")) {
+        ANC_LOGD("Enabling hardware");
+        device_power_up(p_data);
+    }
+
+    ANC_LOGD("success");
+
+    return 0;
+
+ANC_INIT_FAIL:
+    anc_gpio_deinit(p_data);
+    return ret_val;
 }
 
 static int anc_open(struct inode *inode, struct file *filp) {
@@ -1110,10 +1104,18 @@ static int anc_platform_init(struct anc_data *p_data) {
         ANC_LOGE("p_data is NULL");
         return -EINVAL;
     }
+
+    if (p_data->resource_requested) {
+        ANC_LOGW("warning: resource is already requested, return!");
+        return 0;
+    }
+
     ret_val = anc_gpio_init(p_data);
     if (ret_val) {
         ANC_LOGE("Failed to init gpio, ret_val: %d", ret_val);
         return ret_val;
+    } else {
+        p_data->resource_requested = true;
     }
 
     return ret_val;
@@ -1126,10 +1128,18 @@ static int anc_platform_free(struct anc_data *p_data) {
         ANC_LOGE("p_data is NULL");
         return -EINVAL;
     }
+
+    if (!p_data->resource_requested) {
+        ANC_LOGW("warning: resource is already released, return!");
+        return 0;
+    }
+
     ret_val = anc_gpio_deinit(p_data);
     if (ret_val) {
         ANC_LOGE("Failed to deinit gpio");
         return ret_val;
+    } else {
+        p_data->resource_requested = false;
     }
 
     return ret_val;
