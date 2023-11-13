@@ -1956,8 +1956,9 @@ static void __move_to_zram(struct zram *zram, u32 index, unsigned long handle,
 	swap_maps_destroy(zram, index);
 	zram_set_handle(zram, index, handle);
 	zram_clear_flag(zram, index, ZRAM_WB);
+	// Moto: add to head to avoid be swapped out soon.
 	if (mcg)
-		swap_sorted_list_add_tail(zram, index, mcg);
+		swap_sorted_list_add(zram, index, mcg);
 	zram_set_flag(zram, index, ZRAM_FROM_HYBRIDSWAP);
 	atomic64_add(size, &zram->stats.compr_data_size);
 	atomic64_inc(&zram->stats.pages_stored);
