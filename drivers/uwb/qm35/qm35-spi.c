@@ -47,6 +47,7 @@
 #include <linux/ktime.h>
 #endif
 
+#include <linux/mmi_device.h>
 #include <linux/uwb/qmrom.h>
 #include <linux/uwb/qmrom_spi.h>
 #include <linux/uwb/qmrom_log.h>
@@ -1007,6 +1008,13 @@ static int qm35_probe(struct spi_device *spi)
         struct miscdevice *coredump_misc;
 	struct clk *uwb_clk;
 	int ret = 0;
+
+	if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+		pr_err("%s : mmi: device not supported\n", __func__);
+		return -ENODEV;
+	} else {
+		pr_err("%s : supported uwb device found\n", __func__);
+	}
 
 	if (fwname) {
 		qmrom_set_fwname(fwname);
