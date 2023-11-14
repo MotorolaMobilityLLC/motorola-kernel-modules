@@ -1277,8 +1277,8 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	}
 
 #ifdef GTP_PEN_NOTIFIER
-	if (core_data->gtp_pen_detect_flag) {
-		ret = goodix_ts_send_cmd(core_data, 0x32, 5, 0x1, 0x00);
+	if (core_data->gtp_pen_detect_flag == GTP_PEN_MODE) {
+		ret = goodix_ts_send_cmd(core_data, 0x32, 5, GTP_PEN_MODE, 0x00);
 		if (ret < 0)
 			ts_err("failed to send passive pen mode cmd");
 	}

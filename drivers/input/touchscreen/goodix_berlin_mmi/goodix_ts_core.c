@@ -2484,9 +2484,9 @@ static int pen_notifier_callback(struct notifier_block *self,
 	ts_info("Received event(%lu) for pen detection\n", event);
 
 	if (event == PEN_DETECTION_INSERT)
-		cd->gtp_pen_detect_flag = 0x0;
+		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
 	else if (event == PEN_DETECTION_PULL)
-		cd->gtp_pen_detect_flag = 0x1;
+		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
 
 	mutex_lock_interruptible(&cd->mode_lock);
 
@@ -2664,7 +2664,7 @@ static int goodix_ts_probe(struct platform_device *pdev)
 #endif
 
 #ifdef GTP_PEN_NOTIFIER
-	core_data->gtp_pen_detect_flag = PEN_DETECTION_INSERT;
+	core_data->gtp_pen_detect_flag = GTP_FINGER_MODE;
 	core_data->pen_notif.notifier_call = pen_notifier_callback;
 	ret = pen_detection_register_client(&core_data->pen_notif);
 	if (ret)

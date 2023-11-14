@@ -601,6 +601,11 @@ struct goodix_ts_core {
 #endif
 };
 
+#ifdef GTP_PEN_NOTIFIER
+#define GTP_FINGER_MODE	0
+#define GTP_PEN_MODE		1
+#endif
+
 /* external module structures */
 enum goodix_ext_priority {
 	EXTMOD_PRIO_RESERVED = 0,
