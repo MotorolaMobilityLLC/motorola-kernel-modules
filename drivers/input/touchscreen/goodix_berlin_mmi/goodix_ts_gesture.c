@@ -290,6 +290,8 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 				mmi_event.evcode =4;
 			}
 
+			mmi_event.evdata.x = le16_to_cpup((__le16 *)gs_event.gesture_data);
+			mmi_event.evdata.y = le16_to_cpup((__le16 *)(gs_event.gesture_data + 2));
 			/* call class method */
 			ret = cd->imports->report_gesture(&mmi_event);
 			if (!ret)

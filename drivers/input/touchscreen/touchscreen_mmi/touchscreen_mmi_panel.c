@@ -186,6 +186,9 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 			touch_cdev->clip.xBR, touch_cdev->clip.yBR);
 	}
 
+	if (!of_property_read_u32(of_node, "mmi,resolution_boost", &ppdata->resolution_boost))
+		dev_info(DEV_TS, "%s: resolution_boost = %d\n", __func__, ppdata->resolution_boost);
+
 	chosen = of_find_node_by_name(NULL, "chosen");
 	if (chosen) {
 		struct device_node *child;

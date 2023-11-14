@@ -453,6 +453,7 @@ struct ts_mmi_dev_pdata {
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 	int supported_gesture_type;
 #endif
+	int resolution_boost;
 };
 
 /**
