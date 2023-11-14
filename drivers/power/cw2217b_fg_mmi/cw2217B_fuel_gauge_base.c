@@ -16,6 +16,7 @@
 #include <linux/jiffies.h>
 #include <linux/version.h>
 #include <linux/debugfs.h>
+#include <linux/iio/consumer.h>
 #include <linux/mmi_gauge_class.h>
 
 #define REG_CHIP_ID             0x00
@@ -109,6 +110,11 @@ struct cw_battery {
 	struct regulator *vdd_i2c_vreg;
 	struct power_supply *cw_bat_psy;
 	unsigned char config_profile_info[SIZE_OF_PROFILE];
+	struct iio_channel *Batt_NTC_channel;
+	struct iio_channel *vref_channel;
+	struct fg_temp *ntc_temp_table;
+	bool has_ext_ntc;
+	int  rbat_pull_up_r;
 	int  chip_id;
 	int  voltage_now;
 	int  ic_soc_h;
@@ -122,7 +128,6 @@ struct cw_battery {
 	int  fw_version;
 	int  fcc_design;
 	int  fcc;
-	int  ntc_exist;
 	int  batt_status;
 	bool present;
 	bool factory_mode;
@@ -375,6 +380,77 @@ bool is_factory_mode(void)
 	return factory_mode;
 }
 
+struct fg_temp {
+	signed int BatteryTemp;
+	signed int TemperatureR;
+};
+
+struct fg_temp fg_temp_table[23] = {
+		{-40, 195652},
+		{-35, 148171},
+		{-30, 113347},
+		{-25, 87559},
+		{-20, 68237},
+		{-15, 53650},
+		{-10, 42506},
+		{-5, 33892},
+		{0, 27219},
+		{5, 22021},
+		{10, 17926},
+		{15, 14674},
+		{20, 12081},
+		{25, 10000},
+		{30, 8315},
+		{35, 6948},
+		{40, 5834},
+		{45, 4917},
+		{50, 4161},
+		{55, 3535},
+		{60, 3014},
+		{65, 2588},
+		{70, 2227}
+};
+/* ============================================================ */
+/* voltage to battery temperature */
+/* ============================================================ */
+int adc_battemp(struct cw_battery *cw_bat, int res)
+{
+	int i = 0;
+	int res1 = 0, res2 = 0;
+	int tbatt_value = -200, tmp1 = 0, tmp2 = 0;
+	struct fg_temp *ptable;
+
+	ptable = cw_bat->ntc_temp_table;
+	if (res >= ptable[0].TemperatureR) {
+		tbatt_value = -40;
+	} else if (res <= ptable[22].TemperatureR) {
+		tbatt_value = 70;
+	} else {
+		res1 = ptable[0].TemperatureR;
+		tmp1 = ptable[0].BatteryTemp;
+
+		for (i = 0; i <= 22; i++) {
+			if (res >= ptable[i].TemperatureR) {
+				res2 = ptable[i].TemperatureR;
+				tmp2 = ptable[i].BatteryTemp;
+				break;
+			}
+			{	/* hidden else */
+				res1 = ptable[i].TemperatureR;
+				tmp1 = ptable[i].BatteryTemp;
+			}
+		}
+
+		tbatt_value = (((res - res2) * tmp1) +
+			((res1 - res) * tmp2)) / (res1 - res2);
+	}
+	 cw_info(cw_bat,"[%s] %d %d %d %d %d %d\n",
+		__func__,
+		res1, res2, res, tmp1,
+		tmp2, tbatt_value);
+
+	return tbatt_value;
+}
 /*
  * The TEMP register is an UNSIGNED 8bit read only register.
  * It reports the real-time battery temperature
@@ -384,26 +460,36 @@ bool is_factory_mode(void)
 static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 {
 	struct cw_battery *cw_bat = dev_get_drvdata(&gauge_dev->dev);
-
-//<MMI_STOPSHIP>: cw2217_fg: return 25degress for battery temperature
-/*
 	int ret;
 	unsigned char reg_val;
-	int temp;
+	int batt_ntc_v = 0;
+	int bif_v = 0;
+	int tres_temp,delta_v, batt_temp;;
 
-	ret = cw_read(cw_bat, REG_TEMP, &reg_val);
-	if (ret < 0)
-		return ret;
+	if (cw_bat->has_ext_ntc) {
+		iio_read_channel_processed(cw_bat->Batt_NTC_channel, &batt_ntc_v);
+		iio_read_channel_processed(cw_bat->vref_channel, &bif_v);
 
-	temp = (int)reg_val * 10 / 2 - 400;
+		tres_temp = batt_ntc_v * (cw_bat->rbat_pull_up_r);
+		delta_v = bif_v - batt_ntc_v; //1.8v -batt_ntc_v
+		tres_temp = div_s64(tres_temp, delta_v);
 
-	if(cw_bat->factory_mode && !cw_bat->ntc_exist && (-400 == temp))
-		temp = 250;
+		batt_temp = adc_battemp(cw_bat, tres_temp) * 10;
+		cw_info(cw_bat,"read batt temperature from PMIC,temp = %d \n",batt_temp);
+	} else {
+		ret = cw_read(cw_bat, REG_TEMP, &reg_val);
+		if (ret < 0)
+			return ret;
 
-*/
-	cw_bat->temp = 250;
-	*temp_out = 250;
-	cw_info(cw_bat, "temprature=%d\n", *temp_out);
+		batt_temp = (int)reg_val * 10 / 2 - 400;
+
+		//if(cw_bat->factory_mode && (-400 == batt_temp))
+		//	batt_temp = 250;
+		cw_info(cw_bat, "battery pack NTC temprature=%d\n", batt_temp);
+	}
+
+	cw_bat->temp = batt_temp;
+	*temp_out = batt_temp;
 
 	return 0;
 }
@@ -840,8 +926,6 @@ static int cw_parse_dts(struct cw_battery *cw_bat)
 	rc = of_property_read_u8_array(batt_profile_node, "config_profile_info", cw_bat->config_profile_info, SIZE_OF_PROFILE);
 	if (rc < 0)
 		cw_info(cw_bat, "error,get profile_info fail from dts,exit \n");
-	else
-		cw_info(cw_bat, "get profile_info fail from dts \n");
 
 	rc = of_property_read_u32(batt_profile_node, "fcc_design", &cw_bat->fcc_design);
 	if (rc < 0)
@@ -849,14 +933,16 @@ static int cw_parse_dts(struct cw_battery *cw_bat)
 	else
 		cw_info(cw_bat, "get fcc_design=%d \n", cw_bat->fcc_design);
 
-	rc = of_property_read_u32(np, "factory_mode_ntc_exist", &cw_bat->ntc_exist);
-	if (rc < 0) {
-		cw_bat->ntc_exist = true;
-		cw_info(cw_bat, "dts get ntc_exist fail. use default ntc_exist=%d \n", cw_bat->ntc_exist);
-		rc = 0;
+	cw_bat->has_ext_ntc = of_property_read_bool(np, "has_ext_ntc");
+	if (cw_bat->has_ext_ntc) {
+		rc = of_property_read_u32(np , "rbat_pull_up_r", &cw_bat->rbat_pull_up_r);
+		if (rc < 0) {
+			cw_bat->rbat_pull_up_r = 24 * 1000;
+			cw_info(cw_bat,"Failed to get rbat_pull_up_r, err:%d, use default 24K pull_up_r\n", rc);
+		}
 	}
 
-	return rc;
+	return 0;
 }
 
 static int cw_battery_get_property(struct power_supply *psy,
@@ -973,6 +1059,20 @@ static int cw2217_probe(struct i2c_client *client, const struct i2c_device_id *i
 	if (cw_bat->chip_id != IC_VCHIP_ID){
 		cw_err(cw_bat,"not cw2217B\n");
 		goto error;
+	}
+
+	if (cw_bat->has_ext_ntc) {
+		cw_bat->Batt_NTC_channel = devm_iio_channel_get(cw_bat->dev, "bat_temp");
+		if (IS_ERR(cw_bat->Batt_NTC_channel)) {
+			cw_err(cw_bat, "failed to get batt_therm IIO channel\n");
+			ret = PTR_ERR(cw_bat->Batt_NTC_channel);
+		}
+		cw_bat->vref_channel = devm_iio_channel_get(cw_bat->dev, "vref");
+		if (IS_ERR(cw_bat->vref_channel)) {
+			cw_err(cw_bat, "failed to get vref_channel IIO channel\n");
+			ret = PTR_ERR(cw_bat->vref_channel);
+		}
+		cw_bat->ntc_temp_table = fg_temp_table;
 	}
 
 	cw_hw_init_work(cw_bat);
