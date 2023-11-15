@@ -40,7 +40,7 @@
 #define PDE_DATA(x) pde_data(x)
 #endif
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)
+#if (IS_ENABLED(CONFIG_DRM_MEDIATEK) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 #include "mtk_panel_ext.h"
 static struct goodix_ts_core *ts_core;
 #endif
@@ -975,6 +975,10 @@ static int goodix_parse_dt_resolution(struct device_node *node,
 	return 0;
 }
 
+#ifdef CONFIG_GTP_MULTI_CONFIG
+#define PRIM_PANEL_NAME	"mmi,panel_name"
+#endif
+
 /**
  * goodix_parse_dt - parse board data from dt
  * @dev: pointer to device
@@ -986,6 +990,11 @@ static int goodix_parse_dt(struct device_node *node,
 {
 	const char *name_tmp;
 	int r;
+#ifdef CONFIG_GTP_MULTI_CONFIG
+	struct device_node *chosen;
+	const char *supplier;
+	int num_of_panel_supplier;
+#endif
 
 	if (!board_data) {
 		ts_err("invalid board data");
@@ -1097,8 +1106,42 @@ static int goodix_parse_dt(struct device_node *node,
 		ts_info("config name from dt: %s", name_tmp);
 		strncpy(board_data->cfg_bin_name, name_tmp, sizeof(board_data->cfg_bin_name));
 	} else {
-		ts_info("can't find config name, use default: %s", TS_DEFAULT_CFG_BIN);
-		strncpy(board_data->cfg_bin_name, TS_DEFAULT_CFG_BIN, sizeof(board_data->cfg_bin_name));
+
+#ifdef CONFIG_GTP_MULTI_CONFIG
+		chosen = of_find_node_by_name(NULL, "chosen");
+		if (chosen) {
+			r = of_property_read_string(chosen, PRIM_PANEL_NAME,
+						(const char **)&supplier);
+			if (r) {
+				ts_info("%s: cannot read %s %d\n",
+						__func__, PRIM_PANEL_NAME, r);
+			}
+				ts_info("%s: %s %s",
+						__func__, PRIM_PANEL_NAME, supplier);
+			}
+
+		num_of_panel_supplier = of_property_count_strings(node, "goodix,panel-supplier");
+		ts_info("get goodix,panel-supplier count=%d", num_of_panel_supplier);
+		if (num_of_panel_supplier > 1) {
+			int j;
+			for (j = 0; j < num_of_panel_supplier; j++) {
+				r = of_property_read_string_index(node, "goodix,panel-supplier", j, &board_data->panel_supplier);
+				if (r < 0) {
+					ts_info("cannot parse panel-supplier: %d\n", r);
+					break;
+				} else if (board_data->panel_supplier && strstr(supplier, board_data->panel_supplier)) {
+					ts_info("matched panel_supplier: %s", board_data->panel_supplier);
+					snprintf(board_data->cfg_bin_name, GOODIX_MAX_STR_LABLE_LEN, "%s_%s",
+						board_data->panel_supplier, TS_DEFAULT_CFG_BIN);
+					break;
+				}
+			}
+		} else
+#endif
+		{
+			ts_info("can't find config name, use default: %s", TS_DEFAULT_CFG_BIN);
+			strncpy(board_data->cfg_bin_name, TS_DEFAULT_CFG_BIN, sizeof(board_data->cfg_bin_name));
+		}
 	}
 
 	/* get xyz resolutions */
@@ -2102,7 +2145,7 @@ void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 	mutex_unlock(&input_dev->mutex);
 }
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)
+#if (IS_ENABLED(CONFIG_DRM_MEDIATEK) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 static int goodix_ts_power_on_reinit(void)
 {
 	struct goodix_ts_hw_ops *hw_ops = ts_core->hw_ops;
@@ -2306,7 +2349,7 @@ int goodix_ts_fb_notifier_callback(struct notifier_block *self,
 }
 #endif
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)
+#if (IS_ENABLED(CONFIG_DRM_MEDIATEK) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 static int goodix_ts_disp_notifier_callback(struct notifier_block *nb,
 	unsigned long value, void *v)
 {
@@ -2469,7 +2512,7 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 	if (fb_register_client(&cd->fb_notifier))
 		ts_err("Failed to register fb notifier client:%d", ret);
 #endif
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)
+#if (IS_ENABLED(CONFIG_DRM_MEDIATEK) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 	cd->disp_notifier.notifier_call = goodix_ts_disp_notifier_callback;
 	if (mtk_disp_notifier_register("Touch", &cd->disp_notifier))
 		ts_err("Failed to register disp notifier client:%d", ret);
@@ -2645,7 +2688,7 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	struct goodix_ts_core *core_data = NULL;
 	struct goodix_bus_interface *bus_interface;
 	int ret;
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)
+#if (IS_ENABLED(CONFIG_DRM_MEDIATEK) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 	void **mtk_ret = NULL;
 #endif
 	ts_info("goodix_ts_probe IN");
@@ -2752,7 +2795,7 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	core_data->ts_notifier.notifier_call = goodix_generic_noti_callback;
 	goodix_ts_register_notifier(&core_data->ts_notifier);
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)
+#if (IS_ENABLED(CONFIG_DRM_MEDIATEK) || IS_ENABLED(CONFIG_DEVICE_MODULES_DRM_MEDIATEK)) && !defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 	ts_info("TP power_on reset!\n");
 	ts_core = core_data;
 	if (mtk_panel_tch_handle_init()) {

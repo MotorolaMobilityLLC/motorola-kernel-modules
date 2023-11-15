@@ -16,5 +16,9 @@ define_mgk_ko(
     ]) + [
         "//motorola/kernel/modules:public_headers",
     ],
+    deps = [
+        "//motorola/kernel/modules/drivers/input/touchscreen/touchscreen_u_mmi:touchscreen_u_mmi",
+        "//motorola/kernel/modules/drivers/mmi_info:mmi_info",
+    ],
     outs = ["goodix_brl_u_mmi.ko"],
 )

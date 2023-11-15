@@ -100,6 +100,10 @@ ifneq ($(filter m y, $(CONFIG_GTP_GHOST_LOG_CAPTURE)),)
 endif
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_MULTI_CONFIG)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_MULTI_CONFIG
+endif
+
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
 USE_TARGET_PRODUCT := $(strip $(subst _factory,, $(TARGET_PRODUCT)))
 else

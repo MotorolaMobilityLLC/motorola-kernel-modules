@@ -85,8 +85,6 @@
 #define fallthrough do {} while (0) /* fallthrough */
 #endif
 
-#define CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI
-
 enum GOODIX_GESTURE_TYP {
 	GESTURE_SINGLE_TAP = (1 << 0),
 	GESTURE_DOUBLE_TAP = (1 << 1),
@@ -331,6 +329,9 @@ struct goodix_ts_board_data {
 	bool edge_ctrl;
 	bool stowed_mode_ctrl;
 	bool gesture_wait_pm;
+#ifdef CONFIG_GTP_MULTI_CONFIG
+	const char *panel_supplier;
+#endif
 };
 
 enum goodix_fw_update_mode {
