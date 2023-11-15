@@ -25,13 +25,15 @@
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
-
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 
 #define DRIVER_VERSION "0.0.1"
 
 struct wlan_antenna_drvdata {
 	struct device	*dev;
 	struct pinctrl *pinctrl;
+	int wlan_antenna_gpio;
 	struct pinctrl_state *pstate_active;
 	struct pinctrl_state *pstate_suspend;
 };
@@ -47,7 +49,10 @@ static ssize_t wlan_antenna_en_read(struct device *dev,
 		return -EINVAL;
 	}
 
-	return snprintf(buf, PAGE_SIZE, "wlan_antenna: not support!\n");
+	if (gpio_get_value(data->wlan_antenna_gpio))
+		return snprintf(buf, PAGE_SIZE, "high\n");
+	else
+		return snprintf(buf, PAGE_SIZE, "low\n");
 }
 
 static ssize_t wlan_antenna_en_write(struct device *dev,
@@ -77,8 +82,6 @@ static ssize_t wlan_antenna_en_write(struct device *dev,
 
 	if(ret) {
 		pr_err("wlan_antenna failed to set pinctrl!\n");
-	} else {
-		pr_info("wlan_antenna success set pinctrl\n");
 	}
 
 	return count;
@@ -107,6 +110,13 @@ static int wlan_antenna_probe(struct platform_device *pdev)
 
 	drvdata->dev = &pdev->dev;
 	platform_set_drvdata(pdev, drvdata);
+
+	drvdata->wlan_antenna_gpio = of_get_named_gpio(dev->of_node, "qcom,wlan_antenna-gpio", 0);
+	ret = gpio_request(drvdata->wlan_antenna_gpio, "wlan_antenna_gpio");
+	if (ret) {
+		pr_err("%s, unable to request gpio %d (%d)\n", __func__, drvdata->wlan_antenna_gpio, ret);
+		return ret;
+	}
 
 	/* Get pinctrl if target uses pinctrl */
 	drvdata->pinctrl = devm_pinctrl_get(dev);
