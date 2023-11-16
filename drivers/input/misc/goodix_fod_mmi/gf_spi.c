@@ -54,6 +54,10 @@
 #endif
 #include <linux/version.h>
 
+#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
+#include <drm/drm_panel.h>
+#endif
+
 #define VER_MAJOR   1
 #define VER_MINOR   2
 #define PATCH_LEVEL 4
@@ -701,25 +705,55 @@ static const struct file_operations gf_fops = {
 #endif
 };
 
+#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
+static int drm_check_dt(struct gf_dev *gf_dev)
+{
+	int i = 0;
+	int count = 0;
+	struct device *dev = &gf_dev->spi->dev;
+	struct device_node *np = dev->of_node;
+	struct device_node *node = NULL;
+	struct drm_panel *panel = NULL;
+	count = of_count_phandle_with_args(np, "panel", NULL);
+	if (count <= 0) {
+		pr_err(" %s : find drm_panel fail count = %d ", __func__, count);
+		return -ENODEV;
+	}
+	for (i = 0; i < count; i++) {
+		node = of_parse_phandle(np, "panel", i);
+		panel = of_drm_find_panel(node);
+		of_node_put(node);
+		if (!IS_ERR(panel)) {
+			pr_info(" %s : find drm_panel successfully ", __func__);
+			gf_dev->active_panel = panel;
+			return 0;
+		}
+	}
+	pr_err(" %s : can not find drm_panel ", __func__);
+	return -ENODEV;
+}
+#endif
+
 static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 		unsigned long val, void *data)
 {
-#if 0
+#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
 	struct gf_dev *gf_dev;
-	struct fb_event *evdata = data;
+	struct drm_panel_notifier *evdata = data;
 	int blank;
 	char msg = 0;
 
-	if (val != FB_EARLY_EVENT_BLANK)
+	if (val != DRM_PANEL_EARLY_EVENT_BLANK)
 		return 0;
-	pr_info("[info] %s go to the goodix_fb_state_chg_callback value = %d\n",
+	pr_debug("[info] %s go to the goodix_fb_state_chg_callback value = %d\n",
 			__func__, (int)val);
 	gf_dev = container_of(nb, struct gf_dev, notifier);
-	if (evdata && evdata->data && val == FB_EARLY_EVENT_BLANK && gf_dev) {
+	if (evdata && evdata->data && val == DRM_PANEL_EARLY_EVENT_BLANK && gf_dev) {
 		blank = *(int *)(evdata->data);
 		switch (blank) {
-		case FB_BLANK_POWERDOWN:
+		case DRM_PANEL_BLANK_POWERDOWN:
 			gf_dev->fb_black = 1;
+			pr_debug("%s DRM_PANEL_BLANK_POWERDOWN\n", __func__);
 #if defined(GF_NETLINK_ENABLE)
 			msg = GF_NET_EVENT_FB_BLACK;
 			sendnlmsg(&msg);
@@ -729,7 +763,8 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 #endif
 			break;
 
-		case FB_BLANK_UNBLANK:
+		case DRM_PANEL_BLANK_UNBLANK:
+			pr_debug("%s DRM_PANEL_BLANK_UNBLANK\n", __func__);
 			gf_dev->fb_black = 0;
 #if defined(GF_NETLINK_ENABLE)
 			msg = GF_NET_EVENT_FB_UNBLACK;
@@ -741,7 +776,7 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 			break;
 
 		default:
-			pr_info("%s defalut\n", __func__);
+			pr_debug("%s defalut\n", __func__);
 			break;
 		}
 	}
@@ -842,8 +877,14 @@ static int gf_probe(struct platform_device *pdev)
 #endif
 
 	gf_dev->notifier = goodix_noti_block;
+#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
+	gf_dev->active_panel = NULL;
+	drm_check_dt(gf_dev);
+	status = drm_panel_notifier_register(gf_dev->active_panel, &gf_dev->notifier);
+	pr_info("gf_probe drm_panel_notifier_register: status = %d\n", status);
+#else
 	fb_register_client(&gf_dev->notifier);
-
+#endif
 	gf_dev->irq = gf_irq_num(gf_dev);
 
 	status = request_threaded_irq(gf_dev->irq, NULL, gf_irq,
@@ -928,8 +969,15 @@ static int gf_remove(struct platform_device *pdev)
 	clear_bit(MINOR(gf_dev->devt), minors);
 	if (gf_dev->users == 0)
 		gf_cleanup(gf_dev);
-
+#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
+	if (gf_dev->active_panel)
+	{
+		drm_panel_notifier_unregister(gf_dev->active_panel, &gf_dev->notifier);
+		gf_dev->active_panel = NULL;
+	}
+#else
 	fb_unregister_client(&gf_dev->notifier);
+#endif
 	mutex_unlock(&device_list_lock);
 
 	return 0;

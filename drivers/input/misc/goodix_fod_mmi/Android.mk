@@ -1,6 +1,10 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
+ifeq ($(GOODIX_FPS_DRM_PANEL_NOTIFICATIONS),true)
+    KERNEL_CFLAGS += CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_fod_mmi.ko
 LOCAL_MODULE_TAGS := optional

@@ -172,6 +172,9 @@ struct gf_dev {
 #endif
 	struct notifier_block notifier;
 	char fb_black;
+#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
+	struct drm_panel *active_panel;
+#endif
 };
 
 int gf_parse_dts(struct gf_dev *gf_dev);
