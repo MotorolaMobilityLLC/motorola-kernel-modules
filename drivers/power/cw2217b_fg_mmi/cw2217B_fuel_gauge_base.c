@@ -960,6 +960,7 @@ static int cw_battery_get_property(struct power_supply *psy,
 		val->intval = !!cw_bat->voltage_now;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
 		val->intval = cw_bat->voltage_now * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:

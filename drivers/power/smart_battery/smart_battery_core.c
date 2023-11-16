@@ -213,6 +213,7 @@ static enum power_supply_property batt_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
+	POWER_SUPPLY_PROP_VOLTAGE_OCV,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
@@ -237,6 +238,7 @@ static int batt_get_prop(struct power_supply *psy,
 		val->intval = mmi_charger_update_batt_status();
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
 		if (chip->combo_voltage_now == -EINVAL || (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING)) {
 			smart_batt_get_voltage_now(chip);
 		}
