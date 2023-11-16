@@ -621,7 +621,11 @@ static void usb_ether_setup(struct net_device *dev)
 
 	ether_setup(dev);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 25)
 	eth_random_addr((u8 *)dev->dev_addr);
+#else
+	eth_hw_addr_random(dev);
+#endif
 }
 
 /*-------------------------------------------------------------------------*/
