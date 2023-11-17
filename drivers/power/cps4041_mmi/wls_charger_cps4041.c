@@ -65,6 +65,8 @@ MOTO_WLS_AUTH_T motoauth;
 #define KERNEL_POWER_OFF_CHARGING_BOOT 8
 #define LOW_POWER_OFF_CHARGING_BOOT 9
 
+#define VBUS_VALID_MV 4600 //If vbus >= 4.6V,the vbus is valid.
+
 struct cps_wls_chrg_chip *chip = NULL;
 static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
@@ -372,7 +374,7 @@ static int cps_get_bat_info(enum power_supply_property property);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
-
+static int cps_get_vbus(void);
 
 int cps_wls_reg_check(void)
 {
@@ -1068,10 +1070,10 @@ static int mmi_mux_wls_chg_chan(enum mmi_mux_channel channel, bool on)
 
 	cps_wls_log(CPS_LOG_DEBG,"mmi_mux open wls chg chan = %d on = %d\n", channel, on);
 
-	//if (info->algo.do_mux)
-	//	info->algo.do_mux(info, channel, on);
-	//else
-	//	cps_wls_log(CPS_LOG_ERR,"mmi_mux get info->algo.do_mux fail\n");
+	if (info->algo.do_mux)
+		info->algo.do_mux(info, channel, on);
+	else
+		cps_wls_log(CPS_LOG_ERR,"mmi_mux get info->algo.do_mux fail\n");
 
 	return CPS_WLS_SUCCESS;
 }
@@ -1909,45 +1911,44 @@ static bool cps_wls_query_typec_attached_state(void)
 }
 #endif /* CONFIG_MOTO_CHANNEL_SWITCH */
 
-static void cps_wls_fw_set_boost(bool val)
+static bool cps_wls_fw_set_boost(bool val)
 {
-#ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	int ret = 0;
+	int vbus = 0;
 	struct charger_device *chg_psy = NULL;
-	static bool otg_status = false;
 
 	chg_psy = get_charger_by_name("primary_chg");
-	if(chg_psy) {
-			cps_wls_log(CPS_LOG_ERR,"%s get chg_psy\n", __func__);
+	if (chg_psy) {
+			cps_wls_log(CPS_LOG_ERR, "%s get chg_psy\n", __func__);
 	} else {
-		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n", __func__);
-		return ;
-	}
-	if((usb_online() == true || otg_status == val) && otg_status != true) {
-		cps_wls_log(CPS_LOG_ERR,"%s usb online or otg status same, no need switch\n", __func__);
-		return;
-	}
-		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG_OTG, !!val);
-	if( val == false && cps_wls_query_typec_attached_state()){
-		cps_wls_log(CPS_LOG_ERR,"%s do not disable vbus if otg attached \n", __func__);
-	}
-	else {
-		ret = charger_dev_enable_otg(chg_psy, val);
-		if(ret < 0){
-			cps_wls_log(CPS_LOG_ERR,"%s enable otg fail\n", __func__);
-		}
-		otg_status = val;
+		cps_wls_log(CPS_LOG_ERR, "%s Couldn't get chg_psy\n", __func__);
+		return false;
 	}
 
-#else
-	/* Assume if we turned the boost on we want to stay awake */
-	//mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, !!val);
-#endif /* CONFIG_MOTO_CHANNEL_SWITCH */
+	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FW_UPDATE, !!val);//MMI_MUX_CHANNEL_WLC_OTG
+
+	ret = charger_dev_enable_otg(chg_psy, !!val);
+	if(ret < 0){
+		cps_wls_log(CPS_LOG_ERR, "%s set otg fail\n", __func__);
+		return false;
+	}
+
+	msleep(50);
+	vbus = cps_get_vbus();
+	if (val && vbus < VBUS_VALID_MV) {
+		cps_wls_log(CPS_LOG_ERR, "%s enable otg fail\n", __func__);
+		return false;
+	} else if(!val && vbus >= VBUS_VALID_MV) {
+		cps_wls_log(CPS_LOG_ERR, "%s disable otg fail\n", __func__);
+	}
+
 	if(val) {
 		cps_wls_pm_set_awake(1);
 	} else {
 		cps_wls_pm_set_awake(0);
 	}
+
+	return true;
 }
 
 static int cps_get_bat_info(enum power_supply_property property)
@@ -2036,19 +2037,39 @@ static int wireless_fw_update(bool force)
 	const struct firmware *fw = NULL;
 	int cfg_buf_size = 0;
 	int addr,ret = CPS_WLS_SUCCESS;
+	bool boost_enable = false;
 
 	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
 			"Wireless fw update failed. Battery SOC should be at least 10%%\n");
 		return CPS_WLS_FAIL;
 	}
+
+	cps_wls_log(CPS_LOG_ERR,"%s cps_get_vbus = %d\n", __func__, cps_get_vbus());
+	if (cps_get_vbus() >= VBUS_VALID_MV) {
+		if (chip->rx_ldo_on)
+			boost_enable = true; //Wireless is on,need to turn off wireless charging at first.
+		else
+			boost_enable = false; //Wired charger plugin or OTG output.
+	} else {
+		boost_enable = true;
+	}
+
 	rc = 0;
 	CPS_TX_MODE = true;
 	chip->fw_uploading = true;
 	//cps_wls_fw_set_boost(false);
 	//msleep(20);//20mss
-	cps_wls_fw_set_boost(true);//need rework
+	if (boost_enable)
+		cps_wls_fw_set_boost(true);
 	msleep(100);//100ms
+	cps_wls_get_chip_id();
+
+	if (cps_get_vbus() < VBUS_VALID_MV) {
+		cps_wls_log(CPS_LOG_ERR,
+			"Wireless fw update failed. Can't boost for CHIP\n");
+		goto update_fail;
+	}
 
 	maj_ver = 0;
 	min_ver = 0;
@@ -2238,7 +2259,8 @@ free_bug:
 	
 	chip->chip_id = cps_wls_get_chip_id();
 
-	cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
+	if (boost_enable)
+		cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	if (fw != NULL)
@@ -2249,6 +2271,8 @@ free_bug:
 	return ret;
 
 update_fail:
+	if (boost_enable)
+		cps_wls_fw_set_boost(true);
 	CPS_TX_MODE = false;
 	chip->fw_uploading = false;
 	cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
