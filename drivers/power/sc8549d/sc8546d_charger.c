@@ -46,9 +46,9 @@ enum {
 };
 
 static const char* sc8546d_psy_name[] = {
-    [SC854X_STANDALONG] = "sc-cp-standalone",
-    [SC854X_MASTER] = "sc-cp-master",
-    [SC854X_SLAVE] = "sc-cp-slave",
+    [SC854X_STANDALONG] = "cp-standalone",
+    [SC854X_MASTER] = "cp-master",
+    [SC854X_SLAVE] = "cp-slave",
 };
 
 static const char* sc8546d_irq_name[] = {
