@@ -398,6 +398,9 @@ struct sc8546d {
     struct regmap_field *rmap_fields[F_MAX_FIELDS];
     const char *chg_dev_name;
 
+    int reg_addr;
+    int reg_data;
+
     int mode;
 
     int irq_gpio;
@@ -1006,8 +1009,131 @@ static ssize_t sc8546d_store_register(struct device *dev,
 
 static DEVICE_ATTR(registers, 0660, sc8546d_show_registers, sc8546d_store_register);
 
+static ssize_t show_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ret;
+	int state = 0;
+	bool enable;
+	struct sc8546d *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8546d: chip not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+
+	ret = sc8546d_check_charge_enabled(sc, &enable);
+	if (ret < 0) {
+		pr_err("sc8546d: sc8546d_is_chg_en not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+	state = enable;
+end:
+	return sprintf(buf, "%d\n", state);
+}
+
+static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int ret;
+	bool enable;
+	struct sc8546d *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8546d chip not valid\n");
+		return -ENODEV;
+	}
+
+	enable = simple_strtoul(buf, NULL, 0);
+	ret = sc8546d_enable_charge(sc, enable);
+	if (ret) {
+		pr_err("sc8546d Couldn't %s charging rc=%d\n",
+			   enable ? "enable" : "disable", (int)ret);
+		return ret;
+	}
+
+	pr_info("sc8546d  %s charging \n",
+			   enable ? "enable" : "disable");
+
+	return count;
+}
+static DEVICE_ATTR(force_chg_auto_enable, 0664, show_force_chg_auto_enable, store_force_chg_auto_enable);
+
+static ssize_t show_vbus(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int vbus;
+	struct sc8546d *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8546d chip not valid\n");
+		return -ENODEV;
+	}
+	sc8546d_get_adc_data(sc, to_sc8546d_adc(ADC_CHANNEL_VBUS), &vbus);
+	vbus *= 1000;
+
+	return sprintf(buf, "%d\n", vbus);
+}
+static DEVICE_ATTR(vbus, 0444, show_vbus, NULL);
+
+static ssize_t show_reg_addr(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct sc8546d *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8546d chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "reg addr 0x%08x\n", sc->reg_addr);
+}
+
+static ssize_t store_reg_addr(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int tmp;
+	struct sc8546d *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8546d chip not valid\n");
+		return -ENODEV;
+	}
+
+	tmp = simple_strtoul(buf, NULL, 0);
+	sc->reg_addr = tmp;
+
+	return count;
+}
+static DEVICE_ATTR(reg_addr, 0664, show_reg_addr, store_reg_addr);
+
+static ssize_t show_reg_data(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct sc8546d *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8546d chip not valid\n");
+		return -ENODEV;
+	}
+
+	regmap_read(sc->regmap, sc->reg_addr, &sc->reg_data);
+	return sprintf(buf, "reg addr 0x%08x -> 0x%08x\n", sc->reg_addr, sc->reg_data);
+}
+
+static ssize_t store_reg_data(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int tmp;
+	struct sc8546d *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8546d chip not valid\n");
+		return -ENODEV;
+	}
+
+	tmp = simple_strtoul(buf, NULL, 0);
+	sc->reg_data = tmp;
+	regmap_write(sc->regmap, sc->reg_addr, sc->reg_data);
+
+	return count;
+}
+static DEVICE_ATTR(reg_data, 0664, show_reg_data, store_reg_data);
+
 static void sc8546d_create_device_node(struct device *dev)
 {
+    device_create_file(dev, &dev_attr_force_chg_auto_enable);
+    device_create_file(dev, &dev_attr_vbus);
+    device_create_file(dev, &dev_attr_reg_addr);
+    device_create_file(dev, &dev_attr_reg_data);
     device_create_file(dev, &dev_attr_registers);
 }
 
