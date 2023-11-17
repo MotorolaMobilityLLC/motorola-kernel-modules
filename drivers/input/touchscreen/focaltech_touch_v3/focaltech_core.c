@@ -1972,6 +1972,11 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 	if (pdata->sample_ctrl)
 		FTS_INFO("support focaltech sample mode");
 
+	pdata->stowed_mode_ctrl = of_property_read_bool(np,
+					"focaltech,stowed-mode-ctrl");
+	if (pdata->stowed_mode_ctrl)
+		FTS_INFO("Support focaltech touch stowed mode");
+
 
     FTS_FUNC_EXIT();
     return 0;
