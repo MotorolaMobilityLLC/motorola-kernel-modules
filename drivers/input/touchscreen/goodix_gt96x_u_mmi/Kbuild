@@ -1,0 +1,44 @@
+# add -Wall to try to catch everything we can.
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+ifeq ($(DEVICE_MODULES_PATH),)
+DEVICE_MODULES_PATH = $(srctree)
+else
+LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+endif
+
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += \
+		-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
+
+obj-m := goodix_gt96x_u_mmi.o
+goodix_gt96x_u_mmi-objs := \
+					goodix_brl_i2c.o \
+					goodix_brl_spi.o \
+					goodix_ts_core.o \
+					goodix_brl_hw.o \
+					goodix_cfg_bin.o \
+					goodix_ts_utils.o \
+					goodix_brl_fwupdate.o \
+					goodix_ts_inspect.o \
+					goodix_ts_tools.o \
+					goodix_ts_gesture.o
+
+ifneq ($(filter m y,$(CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI)),)
+    EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_GOODIX_BRL_SPI
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_TOUCHSCREEN_MMI)),)
+    EXTRA_CFLAGS += -DCONFIG_INPUT_TOUCHSCREEN_MMI
+    goodix_gt96x_u_mmi-objs += goodix_ts_mmi.o
+endif
+
+ifneq ($(filter m y, $(CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS)),)
+    EXTRA_CFLAGS += -DCONFIG_DRM_PANEL_EVENT_NOTIFICATIONS
+endif
+
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_u_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers

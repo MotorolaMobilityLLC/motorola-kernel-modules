@@ -1,0 +1,24 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "goodix_gt96x_u_mmi",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+    ]) + [
+        "//motorola/kernel/modules:public_headers",
+    ],
+    deps = [
+        "//motorola/kernel/modules/drivers/input/touchscreen/touchscreen_u_mmi:touchscreen_u_mmi",
+        "//motorola/kernel/modules/drivers/mmi_info:mmi_info",
+    ],
+    outs = ["goodix_gt96x_u_mmi.ko"],
+)
