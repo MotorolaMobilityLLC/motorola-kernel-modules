@@ -375,6 +375,7 @@ static int cps_get_bat_info(enum power_supply_property property);
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
 static int cps_get_vbus(void);
+static int factory_test_wls_en(void *input, bool en);
 
 int cps_wls_reg_check(void)
 {
@@ -1686,8 +1687,6 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	int tx_detected = gpio_get_value(chip->wls_det_int);
 
 	if (tx_detected) {
-		if (chip->factory_wls_en == true)
-			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
 		if (chip->stop_epp_flag) {
 			chip->stop_epp_flag = false;
@@ -1709,10 +1708,10 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			chip->rx_offset_detect_count = 0;
 			chip->rx_offset = false;
 			chip->rx_vout_set = 0;
-			if (chip->factory_wls_en == true) {
-				chip->factory_wls_en = false;
-				mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
-			}
+			//if (chip->factory_wls_en == true) {
+			//	chip->factory_wls_en = false;
+			//	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
+			//}
 			motoauth_disconnect(&motoauth);
 			//mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
 			//power_supply_changed(chip->wl_psy);
@@ -2781,6 +2780,41 @@ static ssize_t store_offset_detect_enable(struct device *dev, struct device_attr
 }
 static DEVICE_ATTR(offset_detect_enable, 0664, show_offset_detect_enable, store_offset_detect_enable);
 
+static ssize_t factory_wireless_en_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long en;
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &en);
+	if (r) {
+		cps_wls_log(CPS_LOG_ERR,"Invalid factory_wls_en = %lu\n", en);
+		return -EINVAL;
+	}
+	factory_test_wls_en(NULL, !!en);
+
+	return r ? r : count;
+}
+
+static ssize_t factory_wireless_en_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"WLS: chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "%d\n", chip->factory_wls_en);
+}
+static DEVICE_ATTR(factory_wireless_en, S_IRUGO|S_IWUSR, factory_wireless_en_show, factory_wireless_en_store);
+
 static void cps_wls_create_device_node(struct device *dev)
 {
 	pr_info("%s\n", __func__);
@@ -2792,6 +2826,8 @@ static void cps_wls_create_device_node(struct device *dev)
 	device_create_file(dev, &dev_attr_wireless_fw_force_update);
 //-----------------------write password--------------
 	//device_create_file(dev, &dev_attr_write_password);
+
+	device_create_file(dev, &dev_attr_factory_wireless_en);
 
 //-----------------------RX--------------------------
 	device_create_file(dev, &dev_attr_get_rx_irect);
@@ -2984,19 +3020,31 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
 	return CPS_WLS_SUCCESS;
 }
 
-static int wireless_en(void *input, bool en)
+static int factory_test_wls_en(void *input, bool en)
 {
 	int ret = 0;
 	struct chg_alg_device *alg;
 
 	alg = get_chg_alg_by_name("wlc");
-	if (NULL != alg) {
-		//chg_alg_set_prop(alg, ALG_WLC_STATE, false);
-		msleep(1000);
-		//chg_alg_set_prop(alg, ALG_WLC_STATE, true);
+	if (!alg) {
+		cps_wls_log(CPS_LOG_ERR,"wls: not found wlc\n");
+		return -1;
 	}
-	chip->factory_wls_en = en;
-	cps_wls_log(CPS_LOG_ERR,"wls: wls_en %d\n",en);
+
+	if (en) {
+		if (chip->factory_wls_en == false) {
+			chip->factory_wls_en = true;
+			ret = mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
+		}
+	} else {
+		if (chip->factory_wls_en == true) {
+			cps_wls_mode_select("factory_test_stop_epp", false);
+			chip->factory_wls_en = false;
+			ret = mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
+		}
+	}
+
+	cps_wls_log(CPS_LOG_ERR,"wls: factory wls_en %d, ret=%d\n", en, ret);
 	return ret;
 }
 
@@ -3035,7 +3083,7 @@ static int wls_tcmd_register(struct cps_wls_chrg_chip *cm)
 	cm->wls_tcmd_client.client_id = MOTO_CHG_TCMD_CLIENT_WLS;
 
 	cm->wls_tcmd_client.get_chip_id = wireless_get_chip_id;
-	cm->wls_tcmd_client.wls_en = wireless_en;
+	cm->wls_tcmd_client.wls_en = factory_test_wls_en;
 
 	ret = moto_chg_tcmd_register(&cm->wls_tcmd_client);
 
