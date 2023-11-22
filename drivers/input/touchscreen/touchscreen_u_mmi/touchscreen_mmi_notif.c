@@ -212,7 +212,8 @@ static int ts_mmi_panel_cb(struct notifier_block *nb,
 		(EVENT_DISPLAY_ON ?       "EVENT_DISPLAY_ON" : "Unknown"))),
 		event, touch_cdev->pdata.ctrl_dsi, idx);
 
-	if (touch_cdev->pdata.ctrl_dsi != idx)
+	//idx is not needed here because different screens use different notifiers
+	if ((touch_cdev->pdata.ctrl_dsi != idx) && (!touch_cdev->pdata.ctrl_dsi))
 		return 0;
 
 	panel_event = EVENT_PRE_DISPLAY_OFF ? TS_MMI_EVENT_PRE_DISPLAY_OFF :

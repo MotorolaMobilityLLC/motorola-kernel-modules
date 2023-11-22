@@ -61,13 +61,23 @@
 #include "mtk_panel_ext.h"
 
 #define REGISTER_PANEL_NOTIFIER {\
+	struct ts_mmi_dev_pdata *ppdata = &touch_cdev->pdata; \
 	touch_cdev->panel_nb.notifier_call = ts_mmi_panel_cb; \
-	if (mtk_disp_notifier_register("Touch", &touch_cdev->panel_nb)) \
-		dev_err(DEV_MMI, "%s: Failed to register disp notifier client:%d", __func__, ret); \
+	if (!ppdata->ctrl_dsi) { \
+		if (mtk_disp_notifier_register("Touch", &touch_cdev->panel_nb)) \
+			dev_err(DEV_MMI, "%s: Failed to register disp notifier client:%d", __func__, ret); \
+	} else { \
+		if (mtk_disp_sub_notifier_register("Cli_touch", &touch_cdev->panel_nb)) \
+			dev_err(DEV_MMI, "%s: Failed to register disp sub notifier client:%d", __func__, ret); \
+	} \
 }
 
 #define UNREGISTER_PANEL_NOTIFIER {\
-	mtk_disp_notifier_unregister(&touch_cdev->panel_nb); \
+	struct ts_mmi_dev_pdata *ppdata = &touch_cdev->pdata; \
+	if (!ppdata->ctrl_dsi) \
+		mtk_disp_notifier_unregister(&touch_cdev->panel_nb); \
+	else \
+		mtk_disp_sub_notifier_unregister(&touch_cdev->panel_nb); \
 }
 
 #define GET_CONTROL_DSI_INDEX \
