@@ -22,4 +22,5 @@
 
 int pen_detection_register_client(struct notifier_block *nb);
 int pen_detection_unregister_client(struct notifier_block *nb);
+int pen_detection_status(void);
 #endif
