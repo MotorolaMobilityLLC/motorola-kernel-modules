@@ -2273,6 +2273,41 @@ static int goodix_generic_noti_callback(struct notifier_block *self,
 	return 0;
 }
 
+#ifdef GTP_PEN_NOTIFIER
+void set_pen_mode_boot(struct goodix_ts_core *cd)
+{
+	int ret, value;
+
+	/* get status from hall pen module */
+	value = pen_detection_status();
+
+	ts_info("Received pen status(%d) for pen detection\n", value);
+
+	if (value == PEN_DETECTION_INSERT)
+		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
+	else if (value == PEN_DETECTION_PULL)
+		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
+
+	mutex_lock_interruptible(&cd->mode_lock);
+	if (cd->power_on == 0) {
+		ts_err("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	if (cd->gtp_pen_detect_flag == GTP_PEN_MODE) {
+		ret = goodix_ts_send_cmd(cd, 0x32, 5, cd->gtp_pen_detect_flag, 0x00);
+		if (ret < 0) {
+			ts_err("failed to send passive pen mode cmd");
+			goto exit;
+		}
+	}
+
+exit:
+	mutex_unlock(&cd->mode_lock);
+	return;
+}
+#endif
+
 int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 {
 	int ret;
@@ -2320,6 +2355,10 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 
 	/* inspect init */
 	inspect_module_init();
+
+#ifdef GTP_PEN_NOTIFIER
+	set_pen_mode_boot(cd);
+#endif
 
 	return 0;
 exit:
@@ -2641,6 +2680,9 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	core_data->init_stage = CORE_INIT_STAGE1;
 	goodix_modules.core_data = core_data;
 	core_module_prob_sate = CORE_MODULE_PROB_SUCCESS;
+#ifdef GTP_PEN_NOTIFIER
+	core_data->gtp_pen_detect_flag = GTP_FINGER_MODE;
+#endif
 
 	/* Try start a thread to get config-bin info */
 	ret = goodix_start_later_init(core_data);
@@ -2664,7 +2706,6 @@ static int goodix_ts_probe(struct platform_device *pdev)
 #endif
 
 #ifdef GTP_PEN_NOTIFIER
-	core_data->gtp_pen_detect_flag = GTP_FINGER_MODE;
 	core_data->pen_notif.notifier_call = pen_notifier_callback;
 	ret = pen_detection_register_client(&core_data->pen_notif);
 	if (ret)
