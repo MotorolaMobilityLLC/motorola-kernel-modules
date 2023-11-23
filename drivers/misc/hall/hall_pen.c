@@ -124,6 +124,21 @@ static int pen_detection_notifier_call_chain(unsigned long val, void *v)
 					    v);
 }
 
+/**
+ * This function return the pen pull and insert status
+ */
+int pen_detection_status(void)
+{
+	int value = PEN_DETECTION_INSERT;
+
+	if(hall_sensor_dev->report_val)
+		value = PEN_DETECTION_INSERT;
+	else
+		value = PEN_DETECTION_PULL;
+	return value;
+}
+EXPORT_SYMBOL(pen_detection_status);
+
 static void pen_do_work_function(struct work_struct *dat)
 {
 	LOG_INFO("[%s] hall_sensor_interrupt = %d\n", DRIVER_NAME,hall_sensor_dev->pen_detect);
@@ -212,8 +227,8 @@ void hall_enable(bool enable)
 static int hallpen_enable(struct sensors_classdev *sensors_cdev,
 		unsigned int enable)
 {
-	hall_sensor_dev->report_val = -1;
 #ifndef CONFIG_HALL_PASSIVE_PEN
+	hall_sensor_dev->report_val = -1;
 	hall_sensor_dev->pen_detect = enable;
 	hall_enable(enable);
 	if (enable == 0)
@@ -331,6 +346,7 @@ static int hall_sensor_probe(struct platform_device *pdev)
 #ifdef CONFIG_HALL_PASSIVE_PEN
 	hall_sensor_dev->enable = 1;
 	hall_sensor_dev->pen_detect = 1;
+	hall_sensor_dev->report_val = -1;
 #else
 	hall_sensor_dev->enable = 0;
 	hall_sensor_dev->pen_detect = 0;
