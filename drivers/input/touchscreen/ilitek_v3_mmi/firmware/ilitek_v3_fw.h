@@ -75,7 +75,7 @@ static unsigned char CTPM_FW_DJ[] = {
 #define TXD_INI_NAME_PATH		"/sdcard/mp_txd.ini"
 #define TXD_FW_FILP_PATH		"/sdcard/ILITEK_FW_TXD"
 #define TXD_INI_REQUEST_PATH		"mp_txd.ini"
-#define TXD_FW_REQUEST_PATH		"ILITEK_FW_TXD"
+#define TXD_FW_REQUEST_PATH		"ILITEK_FW_TXD_9883C"
 static unsigned char CTPM_FW_TXD[] = {
 	0xFF,
 };

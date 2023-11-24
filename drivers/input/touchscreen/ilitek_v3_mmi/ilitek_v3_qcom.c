@@ -660,6 +660,13 @@ static int drm_notifier_callback(struct notifier_block *self, unsigned long even
 	return 0;
 }
 #else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long event, void *data)
+{
+	ILI_INFO("Notifier's event = %ld\n", event);
+	return NOTIFY_OK;
+}
+#else
 static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long event, void *data)
 {
 	int *blank;
@@ -730,6 +737,7 @@ static int ilitek_plat_notifier_fb(struct notifier_block *self, unsigned long ev
 	}
 	return NOTIFY_OK;
 }
+#endif
 #endif/*defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)*/
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 static void ilitek_plat_early_suspend(struct early_suspend *h)
@@ -1093,11 +1101,19 @@ static void __exit ilitek_plat_dev_exit(void)
 	ILI_INFO("remove plat dev\n");
 	ili_dev_remove(ENABLE);
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+MODULE_SOFTDEP("pre:msm_drm");
+#if defined(__DRM_PANEL_H__)
+late_initcall(ilitek_plat_dev_init);
+#else
+module_init(ilitek_plat_dev_init);
+#endif
+#else
 #if defined(__DRM_PANEL_H__) && defined(DRM_PANEL_EARLY_EVENT_BLANK)
 late_initcall(ilitek_plat_dev_init);
 #else
 module_init(ilitek_plat_dev_init);
+#endif
 #endif
 #if KERNEL_VERSION(5, 4, 0) <= LINUX_VERSION_CODE
 MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);

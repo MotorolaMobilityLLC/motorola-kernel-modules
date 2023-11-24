@@ -1482,6 +1482,9 @@ static void ili_update_tp_module_info(void)
 	int module;
 
 	module = ilits->tp_module;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+	module = MODEL_TXD;
+#endif
 
 	switch (module) {
 	case MODEL_CSOT:

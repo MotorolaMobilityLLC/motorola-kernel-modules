@@ -181,7 +181,11 @@
 #else
 #define GENERIC_KERNEL_IMAGE	DISABLE/*follow gki */
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+#define SUSPEND_RESUME_SUPPORT		DISABLE
+#else
 #define SUSPEND_RESUME_SUPPORT		ENABLE
+#endif
 
 #define BOOT_FW_UPDATE_MODE			BOOT_FW_VER_DIFF
 #define BOOT_FW_VER_DIFF			0
@@ -1340,6 +1344,23 @@ struct ilitek_ts_data {
 
 	int set_stowed;
 	int get_stowed;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+	bool wakeable;
+	bool should_enable_gesture;
+	bool gesture_enabled;
+	uint32_t report_gesture_key;
+	uint8_t supported_gesture_type;
+	uint8_t sys_gesture_type;
+	uint8_t rst_pull_flag;
+
+	struct mutex state_mutex;
+	struct ili_sensor_platform_data *sensor_pdata;
+#ifdef CONFIG_HAS_WAKELOCK
+	struct wake_lock gesture_wakelock;
+#else
+	struct wakeup_source *gesture_wakelock;
+#endif
+#else
 #ifdef ILI_SENSOR_EN
 	bool wakeable;
 	bool should_enable_gesture;
@@ -1358,6 +1379,7 @@ struct ilitek_ts_data {
 	struct wakeup_source *gesture_wakelock;
 #endif
 #endif //ILI_SENSOR_EN
+#endif
 
 	atomic_t ignore_report;
 	atomic_t sync_stat;

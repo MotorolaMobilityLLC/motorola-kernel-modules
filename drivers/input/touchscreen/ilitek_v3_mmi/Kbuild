@@ -14,7 +14,11 @@ ifneq ($(filter m y,$(CONFIG_INPUT_ILI_ENABLE_DOUBLE_TAP)),)
 endif
 
 ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
+ifeq ($(strip $(MODULE_KERNEL_VERSION)), 5.15)
+##	EXTRA_CFLAGS += -DILI_DOUBLE_TAP_CTRL
+else
 	EXTRA_CFLAGS += -DILI_DOUBLE_TAP_CTRL
+endif
 	EXTRA_CFLAGS += -DILI_PRIMARY_NODE
 endif
 

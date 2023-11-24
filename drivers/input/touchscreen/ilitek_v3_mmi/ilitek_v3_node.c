@@ -2530,10 +2530,13 @@ static ssize_t ilitek_node_ioctl_write(struct file *filp, const char *buff, size
 
 	}else if (strncmp(cmd, "disableicemode", strlen(cmd)) == 0) {
 		bool mcu;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+		mcu = data[1] & BIT(0);
+#else
 		u8 mode;
 		mcu = data[1] & BIT(0);
 		mode = data[2] & 0x0F;
-
+#endif
 		if (ilits->cascade_info_block.nNum != 0) {
 #if (TDDI_INTERFACE == BUS_I2C)
 		ili_ice_mode_ctrl_by_mode(DISABLE, mcu, mode);
