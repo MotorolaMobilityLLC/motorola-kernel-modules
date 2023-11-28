@@ -949,6 +949,9 @@ static int ram_config(struct aw_haptic *aw_haptic, int duration)
 		wavseq = 4;
 		wavloop = 15;
 		aw_haptic->activate_mode = AW_RAM_LOOP_MODE;
+	} else if ((duration == 0) && (0 < aw_haptic->seq[0])) {
+		wavseq = aw_haptic->seq[0];
+		aw_haptic->activate_mode = AW_RAM_MODE;
 	} else {
 		aw_err("duration time error, duration= %d", duration);
 		aw_haptic->activate_mode = AW_NULL;
@@ -1583,6 +1586,8 @@ static ssize_t activate_store(struct device *dev, struct device_attribute *attr,
 	hrtimer_cancel(&aw_haptic->timer);
 	aw_haptic->state = val;
 	aw_haptic->activate_mode = aw_haptic->info.mode;
+	if (0 == val)
+		aw_haptic->gain = AW_DEFAULT_GAIN;
 	mutex_unlock(&aw_haptic->lock);
 	queue_work(aw_haptic->work_queue, &aw_haptic->vibrator_work);
 
@@ -1711,8 +1716,9 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr, cons
 {
 	cdev_t *cdev = dev_get_drvdata(dev);
 	struct aw_haptic *aw_haptic = container_of(cdev, struct aw_haptic, vib_dev);
-	uint32_t databuf[2] = { 0, 0 };
-
+	unsigned int val = 0;
+	int rc = 0;
+#if 0
 	if (sscanf(buf, "%X %X", &databuf[0], &databuf[1]) == 2) {
 		if (databuf[0] >= AW_SEQUENCER_SIZE || databuf[1] > aw_haptic->ram.ram_num) {
 			aw_err("input value out of range!");
@@ -1726,6 +1732,29 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr, cons
 					     aw_haptic->seq[databuf[0]]);
 		mutex_unlock(&aw_haptic->lock);
 	}
+#endif
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	val = (val >> 24) & 0xFF;
+	aw_info("%s: seq=%d\n", __func__,val);
+
+	mutex_lock(&aw_haptic->lock);
+	aw_haptic->duration = 0;
+	if (val == 3) {
+		aw_haptic->seq[0] = 1;
+	} else if (val == 4) {
+		aw_haptic->seq[0] = 3;
+	} else if (val == 5) {
+		aw_haptic->seq[0] = 1;
+	} else if (val == 6) {
+		aw_haptic->seq[0] = 2;
+	} else {
+		aw_haptic->seq[0] = 1;
+	}
+	aw_haptic->func->set_wav_seq(aw_haptic, 0, aw_haptic->seq[0]);
+	mutex_unlock(&aw_haptic->lock);
 
 	return count;
 }
