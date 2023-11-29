@@ -22,6 +22,7 @@
 #include "wt6670f.h"
 #include "wt6670f_firmware.h"
 #include <asm/neon.h>
+#include <adapter_class.h>
 
 static DEFINE_MUTEX(wt6670f_i2c_access);
 //static DEFINE_MUTEX(wt6670f_access_lock);
@@ -39,12 +40,10 @@ struct pinctrl_state *i2c6_sda_high;
 struct wt6670f *_wt = NULL;
 int is_already_probe_ok = 0;
 int g_qc3p_id = 0;
-int m_chg_type = 0;
 bool qc3p_z350_init_ok = false;
 EXPORT_SYMBOL_GPL(is_already_probe_ok);
 EXPORT_SYMBOL_GPL(qc3p_z350_init_ok);
 EXPORT_SYMBOL_GPL(g_qc3p_id);
-EXPORT_SYMBOL_GPL(m_chg_type);
 
 
 // firme update
@@ -922,23 +921,23 @@ int wt6670f_get_protocol(void)
 	if((QC3P_Z350 == g_qc3p_id)&&(data1 <= 7))
 		data1--;
         pr_err("Get charger type, rowdata = 0X%04x, data1= 0X%02x, data2=0X%02x \n", data, data1, data2);
-        if((data2 == 0x03) && ((data1 > 0x9) || (data1 == 0x7)))
+        if((data2 == ERROR_MESSAGE) && ((data1 > USB_TYPE_QC3P_27) || (data1 == USB_TYPE_OCP)))
         {
                 pr_err("fail to get charger type, error happens!\n");
                 return -EINVAL;
         }
 
-        if(data2 == 0x04)
+        if(data2 == QC3P_DET_SUCCESS)
         {
                 pr_err("detected QC3+ charger:0X%02x!\n", data1);
         }
 
-	if((data1 > 0x00 && data1 < 0x07) ||
-           (data1 > 0x07 && data1 < 0x0a) ||(QC3P_Z350 == g_qc3p_id && data1 == 0x10)){
+	if((data1 > USB_TYPE_UNKNOWN && data1 < USB_TYPE_OCP) ||
+           (data1 > USB_TYPE_OCP && data1 < 0x0a) ||(QC3P_Z350 == g_qc3p_id && data1 == 0x10)){
 		ret = data1;
 	}
 	else {
-		ret = 0x00;
+		ret = USB_TYPE_UNKNOWN;
 	}
 
 	_wt->chg_type = ret;
@@ -1159,7 +1158,6 @@ void wt6670f_reset_chg_type(void)
 {
         _wt->chg_type = 0;
 	_wt->chg_ready = false;
-	m_chg_type = 0;
 }
 EXPORT_SYMBOL_GPL(wt6670f_reset_chg_type);
 
@@ -1180,8 +1178,7 @@ EXPORT_SYMBOL_GPL(moto_tcmd_wt6670f_get_firmware_version);
 
 static irqreturn_t wt6670f_intr_handler(int irq, void *data)
 {
-//	m_chg_type = 0xff;
-	pr_info("%s,chg_type 0x:%x\n", __func__,m_chg_type);
+	pr_info("%s,chg_type 0x:%x\n", __func__,_wt->chg_type);
 	_wt->chg_ready = true;
 
 	return IRQ_HANDLED;
@@ -1252,6 +1249,69 @@ static int wt6670f_suspend_notifier(struct notifier_block *nb,
         return NOTIFY_DONE;
     }
 }
+
+int mmi_reset_chg_type(struct adapter_device *dev)
+{
+	wt6670f_reset_chg_type();
+
+	return 0;
+}
+
+int mmi_start_detection(struct adapter_device *dev)
+{
+	wt6670f_start_detection();
+
+	return 0;
+}
+
+int mmi_is_charger_ready(struct adapter_device *dev, bool *val)
+{
+	*val = wt6670f_is_charger_ready();
+
+	return 0;
+}
+
+int mmi_get_protocol(struct adapter_device *dev, int *val)
+{
+	*val = wt6670f_get_protocol();
+
+	return 0;
+}
+
+int mmi_dp_dm(struct adapter_device *dev, int val)
+{
+	int ret = 0;
+	switch (val) {
+	case DP_DM_FORCE_QC2_5V:
+		ret = wt6670f_force_qc2_5V();
+		break;
+	case DP_DM_FORCE_QC3_5V:
+		ret = wt6670f_force_qc3_5V();
+		break;
+	case DP_DM_DP_PULSE:
+		ret = wt6670f_set_volt_count(1);
+		break;
+	case DP_DM_DM_PULSE:
+		ret = wt6670f_set_volt_count(-1);
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static const struct adapter_ops wt6670f_qc_ops = {
+	.reset_chg_type = mmi_reset_chg_type,
+	.start_detection = mmi_start_detection,
+	.is_charger_ready = mmi_is_charger_ready,
+	.get_protocol = mmi_get_protocol,
+	.dp_dm = mmi_dp_dm,
+};
+
+static const struct adapter_properties wt6670f_qc_props = {
+    .alias_name = "wt6670f_qc",
+};
 
 static int wt6670f_i2c_probe(struct i2c_client *client,
 					const struct i2c_device_id *id)
@@ -1345,38 +1405,51 @@ static int wt6670f_i2c_probe(struct i2c_client *client,
 		gpio_direction_output(_wt->reset_pin, 1);
 		pr_info("[%s] is z350\n", __func__);
 		is_already_probe_ok = 1;
-		goto probe_out;
-	}
-
-	firmware_version = wt6670f_get_firmware_version();
-	wt6670f_reset_chg_type();
-	pr_info("[%s] firmware_version = %d, chg_type = 0x%x\n", __func__,firmware_version, _wt->chg_type);
-	if(firmware_version != WT6670_FIRMWARE_VERSION){
-            pr_info("[%s]: firmware need upgrade, run wt6670_isp!", __func__);
-            wt6670f_isp_flow(wt);
-		wt6670f_do_reset();
+	} else {
 		firmware_version = wt6670f_get_firmware_version();
-		if(firmware_version != WT6670_FIRMWARE_VERSION){
-            	pr_info("[%s]: firmware upgrade fail, run wt6670_isp again!", __func__);
-            	wt6670f_isp_flow(wt);
-        	}
-        }
-	wt6670f_id = wt6670f_get_id(0xBC);
-	if(0x5457 == wt6670f_id){
-		g_qc3p_id = QC3P_WT6670F;
-		is_already_probe_ok = 1;
-		pr_info("[%s] is wt6670f,firmware_version = %x\n", __func__,firmware_version);
-	}else{
-		devm_pinctrl_put(i2c6_pinctrl);
-		pr_info("[%s] failed,release pinctrl\n", __func__);
-	}
-	wt->pm_nb.notifier_call = wt6670f_suspend_notifier;
-	ret = register_pm_notifier(&wt->pm_nb);
-	if (ret) {
-		pr_err("[%s] register pm failed\n", __func__);
+		wt6670f_reset_chg_type();
+		pr_info("[%s] firmware_version = %d, chg_type = 0x%x\n", __func__,firmware_version, _wt->chg_type);
+		if(firmware_version != WT6670_FIRMWARE_VERSION) {
+			pr_info("[%s]: firmware need upgrade, run wt6670_isp!", __func__);
+			wt6670f_isp_flow(wt);
+			wt6670f_do_reset();
+			firmware_version = wt6670f_get_firmware_version();
+			if(firmware_version != WT6670_FIRMWARE_VERSION){
+				pr_info("[%s]: firmware upgrade fail, run wt6670_isp again!", __func__);
+				wt6670f_isp_flow(wt);
+			}
+		}
+		wt6670f_id = wt6670f_get_id(0xBC);
+		if(0x5457 == wt6670f_id){
+			g_qc3p_id = QC3P_WT6670F;
+			is_already_probe_ok = 1;
+			pr_info("[%s] is wt6670f,firmware_version = %x\n", __func__,firmware_version);
+		}else{
+			devm_pinctrl_put(i2c6_pinctrl);
+			pr_info("[%s] failed,release pinctrl\n", __func__);
+			return ret;
+		}
+		wt->pm_nb.notifier_call = wt6670f_suspend_notifier;
+		ret = register_pm_notifier(&wt->pm_nb);
+		if (ret) {
+			pr_err("[%s] register pm failed\n", __func__);
+		}
 	}
 
-probe_out:
+	wt->qc_dev_name = "qc_protocol_ic";
+
+	wt->qc_dev = adapter_device_register(wt->qc_dev_name,
+	                    &client->dev, wt,
+	                    &wt6670f_qc_ops,
+	                    &wt6670f_qc_props);
+	if (IS_ERR_OR_NULL(wt->qc_dev)) {
+	    ret = PTR_ERR(wt->qc_dev);
+	    dev_err(wt->dev,"Fail to register wt6670f dev!\n");
+	}
+
+	adapter_dev_set_drvdata(wt->qc_dev, wt);
+
+	pr_info("[%s] wt6670f prob successfully\n", __func__);
 	return 0;
 }
 
