@@ -218,6 +218,7 @@ static int pca_pps_tcp_notifier_call(struct notifier_block *nb,
 		default:
 			break;
 		}
+		break;
 	default:
 		break;
 	}

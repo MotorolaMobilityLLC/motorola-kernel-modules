@@ -65,6 +65,10 @@ static const struct mmi_chrg_dev_ops dev_ops[] = {
 		.dev_name = "cp-master",
 		.ops = &mtk_pump_charger_ops,
 	},
+	{
+		.dev_name = "cp-slave",
+		.ops = &mtk_pump_charger_ops,
+	},
 };
 
 struct mmi_cp_policy_dev {

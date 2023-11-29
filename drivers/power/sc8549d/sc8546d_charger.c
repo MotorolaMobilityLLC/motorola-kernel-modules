@@ -251,7 +251,7 @@ enum sc8546d_fields {
     MODE, POR_FLAG, IBUS_UCP_RISE_FLAG, IBUS_UCP_RISE_MASK, WD_TIMEOUT_FLAG, WD_TIMEOUT,
     MANUAL_EN, OVPGATE_EN, REV_OVPGATE_EN, VBUS_UVLO_FALL_MASK, VBUS_UVLO_FALL_FLAG, FORVE_VAC_OK, REG_EN_IBATSNS,
     PMID2OUT_UVP, PMID2OUT_OVP, PMID2OUT_UVP_FLAG, PMID2OUT_OVP_FLAG, PMID2OUT_UVP_STAT, PMID2OUT_OVP_STAT,
-    ADC_EN, ADC_RATE, ADC_FREEZE, ADC_DONE_STAT, ADC_DONE_FLAG, ADC_DONE_MASK,
+    ADAPTER_INSERT_STATE, ADC_EN, ADC_RATE, ADC_FREEZE, ADC_DONE_STAT, ADC_DONE_FLAG, ADC_DONE_MASK,
     DM_ADC_EN, VBUS_ADC_DIS, VAC_ADC_DIS, VOUT_ADC_DIS, VBAT_ADC_DIS, IBAT_ADC_DIS, IBUS_ADC_DIS, TDIE_ADC_DIS,
     VERSION_ID2, DEVICE_ID2,
     PMID2OUT_OVP_BLK, PMID2OUT_UVP_BLK, I2C_VIL0P65_EN,
@@ -329,6 +329,8 @@ static const struct reg_field sc8546d_reg_fields[] = {
     [PMID2OUT_OVP_FLAG] = REG_FIELD(0x0D, 2, 2),
     [PMID2OUT_UVP_STAT] = REG_FIELD(0x0D, 1, 1),
     [PMID2OUT_OVP_STAT] = REG_FIELD(0x0D, 0, 0),
+    /*reg0E*/
+    [ADAPTER_INSERT_STATE] = REG_FIELD(0x0E, 1, 1),
     /*reg11*/
     [ADC_EN] = REG_FIELD(0x11, 7, 7),
     [ADC_RATE] = REG_FIELD(0x11, 6, 6),
@@ -588,6 +590,20 @@ __maybe_unused static int sc8546d_enable_charge(struct sc8546d *sc, bool enable)
 {
     dev_info(sc->dev,"%s:%d",__func__,enable);
     return sc8546d_field_write(sc, CHG_EN, !!enable);
+}
+
+__maybe_unused static int sc8546d_check_adapter_inserted(struct sc8546d *sc, int *result)
+{
+    int ret;
+    int val;
+
+    ret = sc8546d_field_read(sc, ADAPTER_INSERT_STATE, &val);
+
+    *result = !!val;
+
+    dev_info(sc->dev,"%s:%d",__func__,val);
+
+    return ret;
 }
 
 __maybe_unused static int sc8546d_check_charge_enabled(struct sc8546d *sc, bool *enabled)
@@ -1281,19 +1297,19 @@ static int sc8546d_charger_get_property(struct power_supply *psy,
 
     switch (psp) {
     case POWER_SUPPLY_PROP_ONLINE:
-        sc8546d_check_charge_enabled(sc, &sc->charge_enabled);
-        val->intval = sc->charge_enabled;
+        sc8546d_check_adapter_inserted(sc, &result);
+        val->intval = result;
         break;
     case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-        ret = sc8546d_get_adc_data(sc, ADC_VBUS, &result);
+        ret = sc8546d_get_adc_data(sc, ADC_VBAT, &result);
         if (!ret)
-            sc->vbus_volt = result;
+            sc->vbus_volt = result * 1000;
         val->intval = sc->vbus_volt;
         break;
     case POWER_SUPPLY_PROP_CURRENT_NOW:
-        ret = sc8546d_get_adc_data(sc, ADC_IBUS, &result);
+        ret = sc8546d_get_adc_data(sc, ADC_IBAT, &result);
         if (!ret)
-            sc->ibus_curr = result;
+            sc->ibus_curr = result * 1000;
         val->intval = sc->ibus_curr;
         break;
     case POWER_SUPPLY_PROP_TEMP:

@@ -1,0 +1,22 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "mmi_decrete_charger_cp_qc3p",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+        "Makefile.include",
+    ]),
+    deps = [
+        "//motorola/kernel/modules/drivers/power/wt6670f_qc3p_mmi:wt6670f_qc3p_mmi",
+    ],
+    outs = ["mmi_decrete_charger_cp_qc3p.ko"],
+)

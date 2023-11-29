@@ -1,12 +1,6 @@
-KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
+include $(wildcard $(KERNEL_SRC)/$(DEVICE_MODULES_REL_DIR)/Makefile.include)
 
-all:
-	$(MAKE) -C $(KERNEL_SRC) M=$(shell pwd) modules $(KBUILD_OPTIONS)
+EXTRA_SYMBOLS += $(OUT_DIR)/../motorola/kernel/modules/drivers/power/wt6670f_qc3p_mmi/Module.symvers
 
-modules_install:
-	$(MAKE) INSTALL_MOD_STRIP=1 -C $(KERNEL_SRC) M=$(shell pwd) modules_install
-
-clean:
-	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) clean
-
-$(warning M:$(M) GKI_OBJ_MODULE_DIR1:$(GKI_OBJ_MODULE_DIR))
+modules modules_install clean:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) KBUILD_EXTRA_SYMBOLS="$(EXTRA_SYMBOLS)" $(@)
