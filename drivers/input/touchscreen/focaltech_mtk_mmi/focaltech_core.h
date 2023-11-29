@@ -69,6 +69,7 @@
 #ifdef FOCALTECH_SENSOR_EN
 #include <linux/sensors.h>
 #endif
+#include <linux/mmi_wake_lock.h>
 
 /*****************************************************************************
 * Private constant and macro definitions using #define
