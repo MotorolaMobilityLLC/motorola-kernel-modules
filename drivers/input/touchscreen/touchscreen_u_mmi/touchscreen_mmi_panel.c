@@ -206,6 +206,8 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 		if (rc) {
 			dev_err(DEV_TS, "%s: cannot read %s %d\n",
 					__func__, panel_name_prop, rc);
+			strncpy(touch_cdev->panel_supplier, "dummy", sizeof(touch_cdev->panel_supplier));
+
 			goto done;
 		}
 		dev_info(DEV_TS, "%s: %s %s\n",
