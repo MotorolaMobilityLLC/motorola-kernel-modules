@@ -483,8 +483,8 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 
 		batt_temp = (int)reg_val * 10 / 2 - 400;
 
-		//if(cw_bat->factory_mode && (-400 == batt_temp))
-		//	batt_temp = 250;
+		if(cw_bat->factory_mode && (-400 == batt_temp))
+			batt_temp = 250;
 		cw_info(cw_bat, "battery pack NTC temprature=%d\n", batt_temp);
 	}
 
