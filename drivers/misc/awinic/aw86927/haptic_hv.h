@@ -89,7 +89,7 @@
 #define AW_INPUT_FRAMEWORK
 /* #define AW_TIKTAP */
 /* #define AW_DOUBLE */
-/* #define AW_DURATION_DECIDE_WAVEFORM */
+#define AW_DURATION_DECIDE_WAVEFORM
 /* #define AW_USE_MAXIMUM_F0_CALI_DATA */
 /* #define AW_OSC_MULTI_CALI */
 /* #define AW_BOOT_OSC_CALI */
