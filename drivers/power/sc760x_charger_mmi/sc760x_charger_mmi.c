@@ -60,7 +60,7 @@
 #include "sc760x_charger_mmi.h"
 
 
-static const char* sc760x_irq_name[] = {
+__maybe_unused static const char* sc760x_irq_name[] = {
     [SC760X_MASTER] = "sc760x_master_irq",
     [SC760X_SLAVE] = "sc760x_slave_irq",
 };
@@ -230,8 +230,8 @@ static int sc760x_enable_chip(struct sc760x_chip *sc, bool en)
 	if (sc->sc760x_enable) {
 
 		if (!sc->irq_enabled) {
-			enable_irq_wake(sc->irq);
-			enable_irq(sc->irq);
+			//enable_irq_wake(sc->irq);
+			//enable_irq(sc->irq);
 			sc->irq_enabled = true;
 		}
 		ret = sc760x_init_device(sc);
@@ -240,8 +240,8 @@ static int sc760x_enable_chip(struct sc760x_chip *sc, bool en)
 		}
 	} else {
 		if (sc->irq_enabled) {
-			disable_irq_wake(sc->irq);
-			disable_irq(sc->irq);
+			//disable_irq_wake(sc->irq);
+			//disable_irq(sc->irq);
 			sc->irq_enabled = false;
 		}
 	}
@@ -455,7 +455,7 @@ static int sc760x_dump_reg(struct sc760x_chip *sc)
     return ret;
 }
 
-static irqreturn_t sc760x_irq_handler(int irq, void *data)
+__maybe_unused static irqreturn_t sc760x_irq_handler(int irq, void *data)
 {
     struct sc760x_chip *sc = data;
 
@@ -1045,11 +1045,11 @@ static int sc760x_init_device(struct sc760x_chip *sc)
 static int sc760x_register_interrupt(struct sc760x_chip *sc, struct i2c_client *client)
 {
     int ret = 0;
-
-    ret = devm_request_threaded_irq(sc->dev, client->irq, NULL,
-                    sc760x_irq_handler,
-                    IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
-                    sc760x_irq_name[sc->role], sc);
+//<MMI_STOPSHIP>: PMIC: disable balance ic irq
+//    ret = devm_request_threaded_irq(sc->dev, client->irq, NULL,
+//                    sc760x_irq_handler,
+//                    IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+//                    sc760x_irq_name[sc->role], sc);
     if (ret < 0) {
         dev_err(sc->dev, "request thread irq failed:%d\n", ret);
         return ret;
@@ -1285,9 +1285,9 @@ static int sc760x_suspend(struct device *dev)
     struct sc760x_chip *sc = dev_get_drvdata(dev);
     int ret = 0;
     dev_info(sc->dev, "Suspend successfully!");
-    if (device_may_wakeup(dev))
-        enable_irq_wake(sc->irq);
-    disable_irq(sc->irq);
+//    if (device_may_wakeup(dev))
+//        enable_irq_wake(sc->irq);
+//    disable_irq(sc->irq);
     ret = sc760x_set_adc_enable(sc, false);
     if (ret < 0) {
         dev_err(sc->dev, "%s Failed to disable adc(%d)\n", __func__, ret);
@@ -1307,9 +1307,9 @@ static int sc760x_resume(struct device *dev)
     struct sc760x_chip *sc = dev_get_drvdata(dev);
     int ret = 0;
     dev_info(sc->dev, "Resume successfully!");
-    if (device_may_wakeup(dev))
-        disable_irq_wake(sc->irq);
-    enable_irq(sc->irq);
+//    if (device_may_wakeup(dev))
+//        disable_irq_wake(sc->irq);
+//    enable_irq(sc->irq);
 
     ret = sc760x_set_lowpower_mode(sc, false);
     if (ret < 0) {
