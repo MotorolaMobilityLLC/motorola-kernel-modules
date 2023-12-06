@@ -4400,6 +4400,15 @@ ssize_t hybridswap_loop_device_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	int len = 0;
+	struct zram *zram = dev_to_zram(dev);
+
+	down_read(&zram->init_lock);
+	if (!zram->backing_dev) {
+		memcpy(buf, "none\n", 5);
+		up_read(&zram->init_lock);
+		return 5;
+	}
+	up_read(&zram->init_lock);
 
 	len = sprintf(buf, "%s\n", loop_device);
 
