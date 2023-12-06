@@ -126,8 +126,12 @@ static int smart_batt_get_temperature(struct mmi_smart_battery *chip)
 	int temp = -40;
 
 	list_for_each_entry(battery, &chip->battery_list, list) {
-		gauge_dev_get_temperature(battery->gauge_dev, &battery->batt_temp);
-		temp = MAX(temp, battery->batt_temp);
+		if (strcmp(battery->gauge_dev->dev.kobj.name, "bms") == 0 ||
+			strcmp(battery->gauge_dev->dev.kobj.name, "main_battery") == 0) {
+			gauge_dev_get_temperature(battery->gauge_dev, &battery->batt_temp);
+			temp = battery->batt_temp;
+			break;
+		}
 	}
 	chip->combo_batt_temp= temp;
 
@@ -169,10 +173,14 @@ static int smart_batt_get_voltage_now(struct mmi_smart_battery *chip)
 	int voltage_total = 0;
 
 	list_for_each_entry(battery, &chip->battery_list, list) {
-		gauge_dev_get_voltage_now(battery->gauge_dev, &battery->voltage_now);
-		voltage_total +=  battery->voltage_now;
+		if (strcmp(battery->gauge_dev->dev.kobj.name, "bms") == 0 ||
+			strcmp(battery->gauge_dev->dev.kobj.name, "main_battery") == 0) {
+			gauge_dev_get_voltage_now(battery->gauge_dev, &battery->voltage_now);
+			voltage_total +=  battery->voltage_now;
+			break;
+		}
 	}
-	chip->combo_voltage_now = (voltage_total / chip->gauge_count) * 1000;
+	chip->combo_voltage_now = voltage_total * 1000;
 
 	return chip->combo_voltage_now;
 }
