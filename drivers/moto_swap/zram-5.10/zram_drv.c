@@ -791,7 +791,27 @@ static int read_from_bdev(struct zram *zram, struct bio_vec *bvec,
 		return read_from_bdev_async(zram, bvec, entry, parent);
 }
 #else
+#ifdef CONFIG_HYBRIDSWAP_CORE
+static void reset_bdev(struct zram *zram)
+{
+	struct block_device *bdev;
+
+	if (!zram->backing_dev)
+		return;
+
+	bdev = zram->bdev;
+	if (zram->old_block_size)
+		set_blocksize(bdev, zram->old_block_size);
+	blkdev_put(bdev, FMODE_READ|FMODE_WRITE|FMODE_EXCL);
+	/* hope filp_close flush all of IO */
+	filp_close(zram->backing_dev, NULL);
+	zram->backing_dev = NULL;
+	zram->old_block_size = 0;
+	zram->bdev = NULL;
+}
+#else
 static inline void reset_bdev(struct zram *zram) {};
+#endif
 static int read_from_bdev(struct zram *zram, struct bio_vec *bvec,
 			unsigned long entry, struct bio *parent, bool sync)
 {
