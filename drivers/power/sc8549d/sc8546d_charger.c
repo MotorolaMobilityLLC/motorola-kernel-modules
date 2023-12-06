@@ -1364,7 +1364,7 @@ static int sc8546d_psy_register(struct sc8546d *sc)
 
     sc->psy_desc.name = sc8546d_psy_name[sc->mode];
 
-    sc->psy_desc.type = POWER_SUPPLY_TYPE_MAINS;
+    sc->psy_desc.type = POWER_SUPPLY_TYPE_UNKNOWN;
     sc->psy_desc.properties = sc8546d_charger_props;
     sc->psy_desc.num_properties = ARRAY_SIZE(sc8546d_charger_props);
     sc->psy_desc.get_property = sc8546d_charger_get_property;
