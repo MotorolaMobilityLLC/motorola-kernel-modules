@@ -994,6 +994,8 @@ static int goodix_parse_dt(struct device_node *node,
 	struct device_node *chosen;
 	const char *supplier;
 	int num_of_panel_supplier;
+	struct goodix_ts_core *core_data = container_of(board_data,
+			struct goodix_ts_core, board_data);
 #endif
 
 	if (!board_data) {
@@ -1133,6 +1135,7 @@ static int goodix_parse_dt(struct device_node *node,
 					ts_info("matched panel_supplier: %s", board_data->panel_supplier);
 					snprintf(board_data->cfg_bin_name, GOODIX_MAX_STR_LABLE_LEN, "%s_%s",
 						board_data->panel_supplier, TS_DEFAULT_CFG_BIN);
+					core_data->supplier = board_data->panel_supplier;
 					break;
 				}
 			}
