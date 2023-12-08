@@ -200,7 +200,6 @@ struct mmi_charger_manager {
 	int pps_result_history_idx;
 	/*save the result of the return from PD request*/
 
-	int 	charger_rate;
 	bool vbus_present;
 	bool pd_pps_support;
 	bool pd_pps_balance;
