@@ -1597,7 +1597,7 @@ schedule:
 	chip->pd_target_volt = min(chip->pd_request_volt, chip->pd_volt_max);
 	chip->pd_target_curr = min(chip->pd_request_curr, chip->pd_curr_max);
 
-	if (chip->system_thermal_level == THERMAL_NOT_LIMIT) {
+	if (chip->system_thermal_level == THERMAL_NOT_LIMIT || sm_state == PM_STATE_PPS_TUNNING_CURR) {
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 		if(chip->sys_therm_force_pmic_chrg){
 		        mmi_chrg_info(chip, "sys_therm_force_pmic_chrg is reset!\n");
