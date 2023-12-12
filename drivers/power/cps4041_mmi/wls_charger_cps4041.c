@@ -1822,32 +1822,27 @@ static void cps_wls_charger_external_power_changed(struct power_supply *psy)
 
 static int cps_get_fw_revision(uint32_t* fw_revision)
 {
-	int status = CPS_WLS_SUCCESS;
-	cps_reg_s *cps_reg;
 	uint32_t fw_major_revision = 0;
 	uint32_t fw_minor_revision = 0;
-	uint32_t fw_version = 0;
+	int fw_version = 0;
 
-	cps_reg = (cps_reg_s*)(&cps_comm_reg[CPS_COMM_REG_FW_VER]);
-	fw_version = cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 	fw_version = cps_wls_get_sys_fw_version();
-	if(CPS_WLS_SUCCESS != status) {
-		cps_wls_log(CPS_LOG_ERR, "%s failed", __func__);
-	}
 
-	if(CPS_WLS_SUCCESS == status) {
+	if (CPS_WLS_FAIL != fw_version) {
 		fw_minor_revision = (fw_version) & 0xFF;
 		fw_major_revision = ((fw_version) >> 8) & 0xFF;
 		fw_version = (fw_major_revision << 16) | (fw_minor_revision);
-		chip->wls_fw_version = *fw_revision = fw_version;
-	} else
+		*fw_revision = fw_version;
+		chip->wls_fw_version = fw_version;
+		cps_wls_log(CPS_LOG_ERR, "%s 0x%x, minor 0x%x, major 0x%x", __func__,
+				*fw_revision, fw_minor_revision, fw_major_revision);
+		return CPS_WLS_SUCCESS;
+	} else {
 		*fw_revision = 0;
+		cps_wls_log(CPS_LOG_ERR, "%s failed, fw_version=0x%X", __func__, fw_version);
+	}
 
-
-	cps_wls_log(CPS_LOG_ERR, "%s 0x%x, minor 0x%x, major 0x%x", __func__,
-		*fw_revision, fw_minor_revision, fw_major_revision);
-
-	return status;
+	return CPS_WLS_FAIL;
 }
 
 static void cps_wls_pm_set_awake(int awake)
@@ -2037,6 +2032,7 @@ static int wireless_fw_update(bool force)
 	int cfg_buf_size = 0;
 	int addr,ret = CPS_WLS_SUCCESS;
 	bool boost_enable = false;
+	int sys_mode = 0x00;
 
 	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
@@ -2044,30 +2040,10 @@ static int wireless_fw_update(bool force)
 		return CPS_WLS_FAIL;
 	}
 
-	cps_wls_log(CPS_LOG_ERR,"%s cps_get_vbus = %d\n", __func__, cps_get_vbus());
-	if (cps_get_vbus() >= VBUS_VALID_MV) {
-		if (chip->rx_ldo_on)
-			boost_enable = true; //Wireless is on,need to turn off wireless charging at first.
-		else
-			boost_enable = false; //Wired charger plugin or OTG output.
-	} else {
-		boost_enable = true;
-	}
-
-	rc = 0;
-	CPS_TX_MODE = true;
-	chip->fw_uploading = true;
-	//cps_wls_fw_set_boost(false);
-	//msleep(20);//20mss
-	if (boost_enable)
-		cps_wls_fw_set_boost(true);
-	msleep(100);//100ms
-	cps_wls_get_chip_id();
-
-	if (cps_get_vbus() < VBUS_VALID_MV) {
-		cps_wls_log(CPS_LOG_ERR,
-			"Wireless fw update failed. Can't boost for CHIP\n");
-		goto update_fail;
+	sys_mode = cps_wls_get_sys_mode();
+	if (chip->rx_ldo_on || sys_mode == SYS_MODE_RX) {
+		cps_wls_log(CPS_LOG_ERR,"%s skip fw update when in wireles charging\n", __func__);
+		return CPS_WLS_FAIL;
 	}
 
 	maj_ver = 0;
@@ -2075,12 +2051,16 @@ static int wireless_fw_update(bool force)
 	fw = NULL;
 
 	firmware_buf = kzalloc(FIRMWARE_SIZE_MAX, GFP_KERNEL); // 24K buffer
+	if (firmware_buf == NULL) {
+		cps_wls_log(CPS_LOG_ERR,"%s kzalloc firmware_buf failed\n", __func__);
+		return CPS_WLS_FAIL;
+	}
 
 	rc = firmware_request_nowarn(&fw, chip->wls_fw_name, chip->dev);
 	if (rc) {
 		cps_wls_log(CPS_LOG_ERR,"Couldn't get firmware rc=%d\n", rc);
 		ret = CPS_WLS_FAIL;
-		goto update_fail;
+		goto update_exit;
 	}
 
 	maj_ver = be16_to_cpu(*(__le16 *)(fw->data + CPS_FW_MAJOR_VER_OFFSET));
@@ -2092,45 +2072,72 @@ static int wireless_fw_update(bool force)
 
 	cps_wls_log(CPS_LOG_DEBG,"FW size: %zu version: %#x force update: %d\n", fw->size, version, force);
 
+	cps_wls_log(CPS_LOG_ERR,"%s cps_get_vbus = %d\n", __func__, cps_get_vbus());
+
+	chip->chip_id = cps_wls_get_chip_id();
+	if (chip->chip_id != CPS_WLS_FAIL) {
+		boost_enable = false; //Wired charger plugin or OTG output.
+	} else {
+		boost_enable = true;
+	}
+
+	CPS_TX_MODE = true;
+	chip->fw_uploading = true;
+
+	if (boost_enable) {
+		cps_wls_fw_set_boost(true);
+		msleep(100);//100ms
+	}
+
+	chip->chip_id = cps_wls_get_chip_id();
+
+	if (cps_get_vbus() < VBUS_VALID_MV || chip->chip_id == CPS_WLS_FAIL) {
+		cps_wls_log(CPS_LOG_ERR,
+			"Wireless fw update failed. Can't boost for CHIP,chip_id=0x%X\n", chip->chip_id);
+		ret = CPS_WLS_FAIL;
+		goto update_exit;
+	}
+
+	//recheck fw version
 	result = cps_get_fw_revision(&fw_revision);
 	if (!force && version == fw_revision) {
 		cps_wls_log(CPS_LOG_DEBG,"%s bin version %x same as fw version %x,not need update fw\n", __func__,version,fw_revision);
 		ret = CPS_WLS_SUCCESS;
-		goto free_bug;
+		goto update_exit;
 	}
 
 	//CPS4041_BL
 	//bootloader_buf = CPS4041_BOOTLOADER;
 	if(CPS_WLS_FAIL == cps_wls_write_word(0xFFFFFF00, 0x0000000E)) {
 		ret = CPS_WLS_FAIL;
-		goto free_bug;/*enable 32bit i2c*/
+		goto update_exit;/*enable 32bit i2c*/
 	}
 	if(CPS_WLS_FAIL == cps_wls_write_word(0x4000E75C, 0x00001250)) {
 		ret = CPS_WLS_FAIL;
-		goto free_bug;//*write password*/
+		goto update_exit;//*write password*/
 	}
 	if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00000006)) {
 		ret = CPS_WLS_FAIL;
-		goto free_bug;/*reset and halt mcu*/
+		goto update_exit;/*reset and halt mcu*/
 	}
 	cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM HEX!\n", __func__);
 	if(CPS_WLS_FAIL == cps_wls_program_sram(0x20000000, CPS4041_BOOTLOADER, BOOTLOADER_SIZE_MAX)) {
 		ret = CPS_WLS_FAIL;
-		goto free_bug;//program sram
+		goto update_exit;//program sram
 	}
 	if(CPS_WLS_FAIL == cps_wls_write_word(0x400400A0, 0x000000FF)) {
 		ret = CPS_WLS_FAIL;
-		goto free_bug;//remap enable
+		goto update_exit;//remap enable
 	}
 	if(CPS_WLS_FAIL == cps_wls_write_word(0x40040010, 0x00008003)) {
 		ret = CPS_WLS_FAIL;
-		goto free_bug;/*triming load function is disabled and run mcu*/
+		goto update_exit;/*triming load function is disabled and run mcu*/
 	}
 	msleep(10);
 
 	if(CPS_WLS_FAIL == cps_wls_write_word(0xFFFFFF00, 0x0000000E)) {
 		ret = CPS_WLS_FAIL;
-		goto free_bug; /*enable 32bit i2c*/
+		goto update_exit; /*enable 32bit i2c*/
 	}
 	msleep(10);
 
@@ -2141,7 +2148,7 @@ static int wireless_fw_update(bool force)
 	if(result != PASS) {
 		cps_wls_log(CPS_LOG_ERR, "[%s] ---- bootloader crc fail\n", __func__);
 		ret = CPS_WLS_FAIL;
-		goto free_bug;
+		goto update_exit;
 	}
 	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- load bootloader successful\n", __func__);
 
@@ -2153,12 +2160,13 @@ static int wireless_fw_update(bool force)
 	buf1_flag = 0;
 	cfg_buf_size = 256;
 	addr = 0;
+	ret = CPS_WLS_FAIL;
 	cps_wls_write_word(ADDR_BUF_SIZE, cfg_buf_size);
 
 	result = cps_wls_program_wait_cmd_done();
 	if(result != PASS) {
 		cps_wls_log(CPS_LOG_ERR, "[%s]	---> ERASE FAIL\n", __func__);
-		goto free_bug;
+		goto update_exit;
 	}
 	cps_wls_log(CPS_LOG_ERR, "[%s]	---> ERASE SUCCESS\n", __func__);
 
@@ -2173,7 +2181,7 @@ static int wireless_fw_update(bool force)
 				result = cps_wls_program_wait_cmd_done();
 				if(result != PASS) {
 					pr_err("%s: ---> WRITE BUFFER1 DATA TO MTP FAIL\n", __func__);
-					goto update_fail;
+					goto update_exit;
 				}
 				buf1_flag = 0;
 			}
@@ -2190,7 +2198,7 @@ static int wireless_fw_update(bool force)
 				result = cps_wls_program_wait_cmd_done();
 				if(result != PASS) {
 					pr_err("%s: ---> WRITE BUFFER0 DATA TO MTP FAIL\n", __func__);
-					goto update_fail;
+					goto update_exit;
 				}
 				buf0_flag = 0;
 			}
@@ -2204,7 +2212,7 @@ static int wireless_fw_update(bool force)
 		result = cps_wls_program_wait_cmd_done();
 		if (result != PASS) {
 			pr_err("%s: ---> WRITE BUFFER0 DATA TO MTP FAIL\n", __func__);
-			goto free_bug;
+			goto update_exit;
 		}
 		buf0_flag = 0;
 	}
@@ -2213,7 +2221,7 @@ static int wireless_fw_update(bool force)
 		result = cps_wls_program_wait_cmd_done();
 		if (result != PASS) {
 			pr_err("%s: ---> WRITE BUFFER1 DATA TO MTP FAIL\n", __func__);
-			goto free_bug;
+			goto update_exit;
 		}
 		buf1_flag = 0;
 	}
@@ -2225,7 +2233,7 @@ static int wireless_fw_update(bool force)
 
 	if (result != PASS) {
 		pr_err("%s: ---> APP CRC FAIL\n", __func__);
-		goto free_bug;
+		goto update_exit;
 	}
 	pr_info("%s: ---> CHERK APP CRC SUCCESSFUL\n", __func__);
 
@@ -2254,27 +2262,22 @@ static int wireless_fw_update(bool force)
 		ret = CPS_WLS_FAIL;
 	}
 
-free_bug:
-	
-	chip->chip_id = cps_wls_get_chip_id();
-
+update_exit:
+	//release resources
 	if (boost_enable)
 		cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
 	msleep(20);//20ms
-	kfree(firmware_buf);
+	if (firmware_buf != NULL)
+		kfree(firmware_buf);
 	if (fw != NULL)
 		release_firmware(fw);
-	CPS_TX_MODE = false;
-	chip->fw_uploading = false;
-	//wireless_chip_reset();
-	return ret;
 
-update_fail:
-	if (boost_enable)
-		cps_wls_fw_set_boost(true);
 	CPS_TX_MODE = false;
 	chip->fw_uploading = false;
-	cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
+
+	if (ret == CPS_WLS_FAIL)
+		cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
+
 	return ret;
 }
 
