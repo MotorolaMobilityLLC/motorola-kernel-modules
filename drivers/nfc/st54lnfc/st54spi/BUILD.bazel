@@ -14,7 +14,7 @@ define_mgk_ko(
         "Kbuild",
         "Makefile",
     ]) + [
-        "//motorola/kernel/modules/drivers/nfc/st54lnfc:st21nfc_headers",
+        "//motorola/kernel/modules/drivers/nfc/st54lnfc/st21nfc:st21nfc_headers",
     ],
     outs = ["st54lspi.ko"],
 )

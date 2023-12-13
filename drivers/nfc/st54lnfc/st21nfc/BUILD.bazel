@@ -16,3 +16,10 @@ define_mgk_ko(
     ]),
     outs = ["st54lnfc.ko"],
 )
+
+filegroup(
+    name = "st21nfc_headers",
+    srcs = glob([
+        "*.h",
+    ]),
+)

@@ -48,7 +48,7 @@
 // This is the only way to avoid SPI_NSS high from host when VCC_SE is low
 // AND avoid SPI_NSS low when VCC_SE is high but SPI not used.
 
-#include "st21nfc.h"
+#include <st21nfc.h>
 
 /*
  * This supports access to SPI devices using normal userspace I/O calls.
