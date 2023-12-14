@@ -31,6 +31,7 @@ EXPORT_SYMBOL(moto_sched_scene);
 
 pid_t global_task_pid_to_read = -1;
 pid_t global_systemserver_tgid = -1;
+pid_t global_surfaceflinger_tgid = -1;
 
 struct proc_dir_entry *d_moto_sched;
 
@@ -185,9 +186,13 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 			get_task_struct(ux_task);
 		rcu_read_unlock();
 
-		if (ux_task && (ux_type & UX_TYPE_PERF_DAEMON)) {
-			// perf daemon is in systemserver, so use its tgid.
-			global_systemserver_tgid = ux_task->tgid;
+		if (ux_task) {
+			if (ux_type & UX_TYPE_PERF_DAEMON) {
+				// perf daemon is in systemserver, so use its tgid.
+				global_systemserver_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_SF) {
+				global_surfaceflinger_tgid = ux_task->tgid;
+			}
 		}
 
 		if (ux_task) {
@@ -196,6 +201,8 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 			wts->ux_type |= ux_type;
 			if (ux_type & UX_TYPE_PERF_DAEMON) {
 				set_systemserver_tgid(global_systemserver_tgid);
+			} else if (ux_type & UX_TYPE_SF) {
+				set_surfaceflinger_tgid(global_surfaceflinger_tgid);
 			}
 #endif
 			put_task_struct(ux_task);

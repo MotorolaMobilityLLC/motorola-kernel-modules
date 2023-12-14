@@ -43,7 +43,10 @@
 #define UX_TYPE_LAUNCHER			(1 << 6)
 #define UX_TYPE_KSWAPD				(1 << 7)
 #define UX_TYPE_ONCE				(1 << 8) /* clear ux type when dequeue */
-#define UX_TYPE_INHERIT				(1 << 9)
+#define UX_TYPE_INHERIT_HIGH		(1 << 9)
+#define UX_TYPE_INHERIT_LOW			(1 << 10)
+#define UX_TYPE_GESTURE_MONITOR		(1 << 11)
+#define UX_TYPE_SF					(1 << 12)
 
 
 /* define for UX scene type, keep same as the define in java file */
