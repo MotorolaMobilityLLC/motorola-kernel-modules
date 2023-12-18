@@ -25,13 +25,12 @@
 #define MAX_SET (128)
 
 int moto_sched_enabled;
-EXPORT_SYMBOL(moto_sched_enabled);
 int moto_sched_scene;
-EXPORT_SYMBOL(moto_sched_scene);
 
 pid_t global_task_pid_to_read = -1;
 pid_t global_systemserver_tgid = -1;
 pid_t global_surfaceflinger_tgid = -1;
+pid_t global_boost_uid = -1;
 
 struct proc_dir_entry *d_moto_sched;
 
@@ -41,6 +40,15 @@ enum {
 	OPT_STR_VAL,
 	OPT_STR_MAX = 3,
 };
+
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+static struct msched_ops sched_ops = {
+	.task_get_mvp_prio	= task_get_mvp_prio,
+	.task_get_mvp_limit	= task_get_mvp_limit,
+	.binder_inherit_ux_type = binder_inherit_ux_type,
+	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type
+};
+#endif
 
 static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
@@ -65,6 +73,7 @@ static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
 
 #if IS_ENABLED(CONFIG_SCHED_WALT)
 	set_moto_sched_enabled(moto_sched_enabled);
+	set_moto_sched_ops(moto_sched_enabled? &sched_ops : NULL);
 #endif
 
 	return count;
@@ -103,9 +112,6 @@ static ssize_t proc_ux_scene_write(struct file *file, const char __user *buf,
 
 	mutex_lock(&ux_scene_mutex);
 	moto_sched_scene = val;
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-	set_ux_scene(moto_sched_scene);
-#endif
 	mutex_unlock(&ux_scene_mutex);
 	return count;
 }
@@ -199,11 +205,6 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 #if IS_ENABLED(CONFIG_SCHED_WALT)
 			struct walt_task_struct *wts = (struct walt_task_struct *) ux_task->android_vendor_data1;
 			wts->ux_type |= ux_type;
-			if (ux_type & UX_TYPE_PERF_DAEMON) {
-				set_systemserver_tgid(global_systemserver_tgid);
-			} else if (ux_type & UX_TYPE_SF) {
-				set_surfaceflinger_tgid(global_surfaceflinger_tgid);
-			}
 #endif
 			put_task_struct(ux_task);
 		}
@@ -267,6 +268,43 @@ static ssize_t proc_ux_task_read(struct file *file, char __user *buf,
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
 
+static ssize_t proc_boost_uid_write(struct file *file, const char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[13];
+	int err, val;
+	static DEFINE_MUTEX(ux_boostuid_mutex);
+
+	memset(buffer, 0, sizeof(buffer));
+
+	if (count > sizeof(buffer) - 1)
+		count = sizeof(buffer) - 1;
+
+	if (copy_from_user(buffer, buf, count))
+		return -EFAULT;
+
+	buffer[count] = '\0';
+	err = kstrtoint(strstrip(buffer), 10, &val);
+	if (err)
+		return err;
+
+	mutex_lock(&ux_boostuid_mutex);
+	global_boost_uid = val;
+	mutex_unlock(&ux_boostuid_mutex);
+	return count;
+}
+
+static ssize_t proc_boost_uid_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[13];
+	size_t len = 0;
+
+	len = snprintf(buffer, sizeof(buffer), "%d\n", global_boost_uid);
+
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+
 static const struct proc_ops proc_enabled_fops = {
 	.proc_write		= proc_enabled_write,
 	.proc_read		= proc_enabled_read,
@@ -280,6 +318,11 @@ static const struct proc_ops proc_ux_scene_fops = {
 static const struct proc_ops proc_ux_task_fops = {
 	.proc_write		= proc_ux_task_write,
 	.proc_read		= proc_ux_task_read,
+};
+
+static const struct proc_ops proc_boost_uid_fops = {
+	.proc_write		= proc_boost_uid_write,
+	.proc_read		= proc_boost_uid_read,
 };
 
 int moto_sched_proc_init(void)
@@ -310,7 +353,16 @@ int moto_sched_proc_init(void)
 		goto err_creat_ux_task;
 	}
 
+	proc_node = proc_create("boost_uid", 0666, d_moto_sched, &proc_boost_uid_fops);
+	if (!proc_node) {
+		sched_err("failed to create proc node boost_uid\n");
+		goto err_creat_boost_uid;
+	}
+
 	return 0;
+
+err_creat_boost_uid:
+	remove_proc_entry("ux_task", d_moto_sched);
 
 err_creat_ux_task:
 	remove_proc_entry("ux_scene", d_moto_sched);
