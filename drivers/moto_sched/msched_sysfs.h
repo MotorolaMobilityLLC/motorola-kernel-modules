@@ -14,11 +14,9 @@
 #ifndef _MOTO_SCHED_SYSFS_H_
 #define _MOTO_SCHED_SYSFS_H_
 
-extern int moto_sched_enabled;
-extern int moto_sched_scene;
-
 int moto_sched_proc_init(void);
 void moto_sched_proc_deinit(void);
+
 
 extern struct task_struct *find_task_by_vpid(pid_t vnr);
 

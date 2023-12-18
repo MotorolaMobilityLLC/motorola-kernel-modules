@@ -48,13 +48,41 @@
 #define UX_TYPE_GESTURE_MONITOR		(1 << 11)
 #define UX_TYPE_SF					(1 << 12)
 
-
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
 #define UX_SCENE_SCROLL				(1 << 1)
 
+/* define for MVP priority, the higher the better, should be in the range (11~100) */
+#define UX_PRIO_HIGHEST		100
 
+#define UX_PRIO_URGENT_AUDIO	30
+#define UX_PRIO_INPUT		29
+#define UX_PRIO_ANIMATOR	28
+#define UX_PRIO_AUDIO		27
+#define UX_PRIO_KSWAPD		26
+
+#define UX_PRIO_TOPAPP		20 // fixed value 20, aligned with walt.h, must not be changed!
+#define UX_PRIO_TOPUI		19
+#define UX_PRIO_LAUNCHER	18
+#define UX_PRIO_TOPAPP_HIGH	17
+#define UX_PRIO_SYSTEM_HIGH	16
+#define UX_PRIO_TOPAPP_LOW	15
+#define UX_PRIO_SYSTEM_LOW	14
+
+#define UX_PRIO_LOWEST		11
+#define UX_PRIO_INVALID		-1
+
+/* global vars and functions */
 extern int moto_sched_enabled;
 extern int moto_sched_scene;
+extern pid_t global_systemserver_tgid;
+extern pid_t global_surfaceflinger_tgid;
+extern pid_t global_boost_uid;
+
+extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
+extern unsigned int task_get_mvp_limit(int mvp_prio);
+extern void binder_inherit_ux_type(struct task_struct *task);
+extern void binder_clear_inherited_ux_type(struct task_struct *task);
+
 
 #endif /* _MOTO_SCHED_COMMON_H_ */
