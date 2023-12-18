@@ -26,6 +26,13 @@
 #include "../zram-5.15/zram_drv_internal.h"
 #define BIO_MAX_PAGES BIO_MAX_VECS
 #define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
+#elif defined CONFIG_ZRAM_6_1
+#include <linux/blkdev.h>
+#include <linux/sched/debug.h>
+#include "../zram-6.1/zram_drv.h"
+#include "../zram-6.1/zram_drv_internal.h"
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
 #else
 #include "../zram-5.10/zram_drv.h"
 #include "../zram-5.10/zram_drv_internal.h"
@@ -567,7 +574,11 @@ ssize_t hybridswap_report_show(struct device *dev,
 	return hybridswap_fail_record_show(buf);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static inline ssize_t meminfo_show(struct hybstatus *stat, char *buf, ssize_t len)
+#else
 static inline meminfo_show(struct hybstatus *stat, char *buf, ssize_t len)
+#endif
 {
 	unsigned long eswap_total_pages = 0, eswap_compressed_pages = 0;
 	unsigned long eswap_used_pages = 0;
@@ -1011,13 +1022,27 @@ static bool hybridswap_eswap_merge(struct hybridswap_io_req *req,
 	return false;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static struct bio *hybridswap_bio_alloc(enum hybridswap_class class, struct block_device *bdev, int op)
+#else
 static struct bio *hybridswap_bio_alloc(enum hybridswap_class class)
+#endif
 {
 	gfp_t gfp = (class != HYB_RECLAIM_IN) ? GFP_ATOMIC : GFP_NOIO;
-	struct bio *bio = bio_alloc(gfp, BIO_MAX_PAGES);
+	struct bio *bio;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	bio = bio_alloc(bdev, BIO_MAX_PAGES, op, gfp);
+#else
+	bio = bio_alloc(gfp, BIO_MAX_PAGES);
+#endif
 
-	if (!bio && (class == HYB_FAULT_OUT))
+	if (!bio && (class == HYB_FAULT_OUT)) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		bio = bio_alloc(bdev, BIO_MAX_PAGES, op, GFP_NOIO);
+#else
 		bio = bio_alloc(GFP_NOIO, BIO_MAX_PAGES);
+#endif
+	}
 
 	return bio;
 }
@@ -1069,7 +1094,11 @@ int hybridswap_submit_bio(struct hyb_sgm *segment)
 	struct bio *bio = NULL;
 
 	hybperfiowrkstart(record, HYB_BIO_ALLOC);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	bio = hybridswap_bio_alloc(segment->req->io_para.class, segment->req->io_para.bdev, op);
+#else
 	bio = hybridswap_bio_alloc(segment->req->io_para.class);
+#endif
 	hybperfiowrkend(record, HYB_BIO_ALLOC);
 	if (unlikely(!bio)) {
 		hybp(HYB_ERR, "bio is null.\n");
@@ -1080,9 +1109,11 @@ int hybridswap_submit_bio(struct hyb_sgm *segment)
 	}
 
 	bio->bi_iter.bi_sector = segment->segment_sector;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	bio_set_dev(bio, segment->req->io_para.bdev);
-	bio->bi_private = segment;
 	bio_set_op_attrs(bio, op, 0);
+#endif
+	bio->bi_private = segment;
 	bio->bi_end_io = hybridswap_end_io;
 	hybridswap_set_bio_opf(bio, segment);
 
