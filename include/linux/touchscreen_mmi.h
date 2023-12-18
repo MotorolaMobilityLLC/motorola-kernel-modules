@@ -572,6 +572,10 @@ struct ts_mmi_dev {
 
 	atomic_t		resume_should_stop;
 	struct delayed_work	work;
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+	struct power_supply *psy;
+	struct delayed_work	usb_detect_work;
+#endif
 	struct kfifo		cmd_pipe;
 
 	struct notifier_block	freq_nb;

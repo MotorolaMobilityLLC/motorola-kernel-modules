@@ -458,6 +458,39 @@ static inline int ts_mmi_ps_get_state(struct power_supply *psy, bool *present)
 	return 0;
 }
 
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+static void usb_detect_worker_func(struct work_struct *w)
+{
+	struct delayed_work *dw =
+		container_of(w, struct delayed_work, work);
+	struct ts_mmi_dev *touch_cdev =
+		container_of(dw, struct ts_mmi_dev, usb_detect_work);
+
+	union power_supply_propval pval = {0};
+	int ret;
+	bool present;
+
+	ret = power_supply_get_property(touch_cdev->psy, POWER_SUPPLY_PROP_PRESENT, &pval);
+	if (ret) {
+		ret = power_supply_get_property(touch_cdev->psy, POWER_SUPPLY_PROP_ONLINE, &pval);
+		if (ret)
+			return;
+	}
+
+	present = !pval.intval ? false : true;
+	dev_info(DEV_MMI, "%s: usb status: cur=%d, prev=%d\n",
+				__func__, present, touch_cdev->ps_is_present);
+
+	if (touch_cdev->ps_is_present != present) {
+		touch_cdev->ps_is_present = present;
+		if (is_touch_active) {
+			kfifo_put(&touch_cdev->cmd_pipe, TS_MMI_DO_PS);
+			schedule_delayed_work(&touch_cdev->work, 0);
+		}
+	}
+}
+#endif
+
 static int ts_mmi_charger_cb(struct notifier_block *self,
 				unsigned long event, void *ptr)
 {
@@ -471,6 +504,11 @@ static int ts_mmi_charger_cb(struct notifier_block *self,
 			psy->desc->get_property && psy->desc->name &&
 			!strncmp(psy->desc->name, touch_cdev->pdata.psy_name, sizeof(&touch_cdev->pdata.psy_name))))
 			return 0;
+
+	touch_cdev->psy = ptr;
+	dev_info(DEV_MMI, "%s: event=%lu\n",__func__, event);
+	schedule_delayed_work(&touch_cdev->usb_detect_work, 0);
+	return 0;
 #else
 	if (touch_cdev->pdata.psy_name && !strcmp(touch_cdev->pdata.psy_name, "battery")) {
 		if (!((event == PSY_EVENT_PROP_CHANGED) && psy &&
@@ -561,6 +599,9 @@ int ts_mmi_notifiers_register(struct ts_mmi_dev *touch_cdev)
 
 	dev_info(DEV_TS, "%s: Start notifiers init.\n", __func__);
 
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+	INIT_DELAYED_WORK(&touch_cdev->usb_detect_work, usb_detect_worker_func);
+#endif
 	INIT_DELAYED_WORK(&touch_cdev->work, ts_mmi_worker_func);
 	ret = kfifo_alloc(&touch_cdev->cmd_pipe,
 				sizeof(unsigned int)* 10, GFP_KERNEL);
@@ -633,6 +674,9 @@ int ts_mmi_notifiers_register(struct ts_mmi_dev *touch_cdev)
 
 FREQ_NOTIF_REGISTER_FAILED:
 	cancel_delayed_work(&touch_cdev->work);
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+	cancel_delayed_work(&touch_cdev->usb_detect_work);
+#endif
 PS_NOTIF_REGISTER_FAILED:
 	kfifo_free(&touch_cdev->cmd_pipe);
 FIFO_ALLOC_FAILED:
@@ -659,6 +703,9 @@ void ts_mmi_notifiers_unregister(struct ts_mmi_dev *touch_cdev)
 		UNREGISTER_PANEL_NOTIFIER;
 
 	cancel_delayed_work(&touch_cdev->work);
+#ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
+	cancel_delayed_work(&touch_cdev->usb_detect_work);
+#endif
 	kfifo_free(&touch_cdev->cmd_pipe);
 	dev_info(DEV_MMI, "%s:notifiers_unregister finish", __func__);
 }
