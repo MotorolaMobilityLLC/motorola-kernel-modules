@@ -344,7 +344,7 @@ typedef struct mem_cgroup_hybridswap {
 #endif
 }memcg_hybs_t;
 
-#ifdef CONFIG_ZRAM_5_15
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 #define MEMCGRP_ITEM_DATA(memcg) ((memcg_hybs_t *)(memcg)->android_oem_data1[0])
 #else
 #define MEMCGRP_ITEM_DATA(memcg) ((memcg_hybs_t *)(memcg)->android_oem_data1)
