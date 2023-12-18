@@ -29,6 +29,11 @@
 #include "../zram-5.15/zram_drv_internal.h"
 #define BIO_MAX_PAGES BIO_MAX_VECS
 #define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
+#elif defined CONFIG_ZRAM_6_1
+#include "../zram-6.1/zram_drv.h"
+#include "../zram-6.1/zram_drv_internal.h"
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
 #else
 #include "../zram-5.10/zram_drv.h"
 #include "../zram-5.10/zram_drv_internal.h"
@@ -118,10 +123,17 @@ static atomic_t swapd_pause = ATOMIC_INIT(0);
 static atomic_t swapd_enabled = ATOMIC_INIT(0);
 static unsigned long swapd_nap_jiffies = 1;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
+		unsigned long nr_pages,
+		gfp_t gfp_mask,
+		unsigned int reclaim_options);
+#else
 extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 		unsigned long nr_pages,
 		gfp_t gfp_mask,
 		bool may_swap);
+#endif
 #ifdef CONFIG_OPLUS_JANK
 extern u32 fetch_cpu_load(u32 win_cnt, struct cpumask *mask);
 #endif
@@ -1518,8 +1530,13 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 
 			memcg_to_reclaim = reclaim_pages_this_cycle * hybs->can_reclaimed / total_can_reclaimed;
 			if (memcg_to_reclaim > 0) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+				memcg_nr_reclaimed = try_to_free_mem_cgroup_pages(memcg,
+						memcg_to_reclaim, GFP_KERNEL, MEMCG_RECLAIM_MAY_SWAP);
+#else
 				memcg_nr_reclaimed = try_to_free_mem_cgroup_pages(memcg,
 						memcg_to_reclaim, GFP_KERNEL, true);
+#endif
 				reclaim_memcg_cnt++;
 				hybs->can_reclaimed -= memcg_nr_reclaimed;
 				hybp(HYB_DEBUG, "SHRINK MEMCG %s: to_reclaim %lu reclaimed %lu\n", hybs->name,

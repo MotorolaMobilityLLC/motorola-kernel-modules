@@ -10,16 +10,17 @@
 #include <linux/pagemap.h>
 #include <trace/hooks/mm.h>
 #include <trace/hooks/vmscan.h>
-#include <linux/genhd.h>
 #include <linux/proc_fs.h>
 #include <linux/swap.h>
 #include <linux/version.h>
 
 #ifdef CONFIG_ZRAM_5_4
+#include <linux/genhd.h>
 #include "../zram-5.4/zram_drv.h"
 #include "../zram-5.4/zram_drv_internal.h"
 #define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
 #elif defined CONFIG_ZRAM_5_15
+#include <linux/genhd.h>
 #include "../zram-5.15/zram_drv.h"
 #include "../zram-5.15/zram_drv_internal.h"
 #define BIO_MAX_PAGES BIO_MAX_VECS
@@ -37,7 +38,15 @@ static unsigned long memcg_page_state_local(struct mem_cgroup *memcg, int idx)
 #endif
 	return x;
 }
+#elif defined CONFIG_ZRAM_6_1
+#include <linux/blkdev.h>
+#include <linux/memcontrol.h>
+#include "../zram-6.1/zram_drv.h"
+#include "../zram-6.1/zram_drv_internal.h"
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
 #else
+#include <linux/genhd.h>
 #include "../zram-5.10/zram_drv.h"
 #include "../zram-5.10/zram_drv_internal.h"
 #define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
@@ -89,10 +98,17 @@ static bool hybridswap_enabled = false;
 DEFINE_MUTEX(reclaim_para_lock);
 DEFINE_PER_CPU(struct swapd_event_state, swapd_event_states);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
+		unsigned long nr_pages,
+		gfp_t gfp_mask,
+		unsigned int reclaim_options);
+#else
 extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 		unsigned long nr_pages,
 		gfp_t gfp_mask,
 		bool may_swap);
+#endif
 
 void hybridswap_loglevel_set(int level)
 {
@@ -274,7 +290,11 @@ memcg_hybs_t *hybridswap_cache_alloc(struct mem_cgroup *memcg, bool atomic)
 }
 
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void tune_scan_type_hook(void *data, enum scan_balance *scan_balance)
+#else
 static void tune_scan_type_hook(void *data, char *scan_balance)
+#endif
 {
 	/*hybrid swapd,scan anon only*/
 	if (current_is_mswapd()) {
@@ -405,8 +425,14 @@ static int register_all_hooks(void)
 	/* mem_cgroup_css_offline_hook */
 	REGISTER_HOOK(mem_cgroup_css_offline);
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
+	/* For GKI reason we use alloc_pages_slowpath_hook rather than rmqueue_hook. Both are fine. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	/* alloc_pages_slowpath_hook */
+	REGISTER_HOOK(alloc_pages_slowpath);
+#else
 	/* rmqueue_hook */
 	REGISTER_HOOK(rmqueue);
+#endif
 	/* tune_scan_type_hook */
 	REGISTER_HOOK(tune_scan_type);
 #endif
@@ -427,8 +453,13 @@ ERROR_OUT(tune_swappiness):
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
 	UNREGISTER_HOOK(tune_scan_type);
 ERROR_OUT(tune_scan_type):
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	UNREGISTER_HOOK(alloc_pages_slowpath);
+ERROR_OUT(alloc_pages_slowpath):
+#else
 	UNREGISTER_HOOK(rmqueue);
 ERROR_OUT(rmqueue):
+#endif
 #endif
 	UNREGISTER_HOOK(mem_cgroup_css_offline);
 ERROR_OUT(mem_cgroup_css_offline):
@@ -451,7 +482,11 @@ static void unregister_all_hook(void)
 	UNREGISTER_HOOK(mem_cgroup_id_remove);
 #endif
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	UNREGISTER_HOOK(alloc_pages_slowpath);
+#else
 	UNREGISTER_HOOK(rmqueue);
+#endif
 	UNREGISTER_HOOK(tune_scan_type);
 #endif
 	UNREGISTER_HOOK(tune_swappiness);
@@ -459,14 +494,27 @@ static void unregister_all_hook(void)
 
 unsigned long memcg_anon_pages(struct mem_cgroup *memcg)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0) || LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	struct lruvec *lruvec = NULL;
 	struct mem_cgroup_per_node *mz = NULL;
 #endif
 	if (!memcg)
 		return 0;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	mz = memcg->nodeinfo[0];
+	if (!mz)
+		return 0;
+	lruvec = &mz->lruvec;
+	if (!lruvec)
+		return 0;
+
+	return (lruvec_page_state(lruvec, NR_ACTIVE_ANON) +
+			lruvec_page_state(lruvec, NR_INACTIVE_ANON));
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	return (memcg_page_state_local(memcg, NR_ACTIVE_ANON) +
+			memcg_page_state_local(memcg, NR_INACTIVE_ANON));
+#elif  LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 	mz = mem_cgroup_nodeinfo(memcg, 0);
 	if (!mz) {
 		fetch_next_memcg_break(memcg);
@@ -478,32 +526,32 @@ unsigned long memcg_anon_pages(struct mem_cgroup *memcg)
 		fetch_next_memcg_break(memcg);
 		return 0;
 	}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
-	return (mem_cgroup_fetch_lru_size(lruvec, LRU_ACTIVE_ANON) +
-			mem_cgroup_fetch_lru_size(lruvec, LRU_INACTIVE_ANON));
-#else
 	return (lruvec_page_state(lruvec, NR_ACTIVE_ANON) +
 			lruvec_page_state(lruvec, NR_INACTIVE_ANON));
-#endif
-
-#else
-	return (memcg_page_state_local(memcg, NR_ACTIVE_ANON) +
-			memcg_page_state_local(memcg, NR_INACTIVE_ANON));
 #endif
 }
 
 static unsigned long memcg_inactive_anon_pages(struct mem_cgroup *memcg)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0) || LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	struct lruvec *lruvec = NULL;
 	struct mem_cgroup_per_node *mz = NULL;
 #endif
-
 	if (!memcg)
 		return 0;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	mz = memcg->nodeinfo[0];
+	if (!mz)
+		return 0;
+	lruvec = &mz->lruvec;
+	if (!lruvec)
+		return 0;
+
+	return lruvec_page_state(lruvec, NR_INACTIVE_ANON);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+	return memcg_page_state_local(memcg, NR_INACTIVE_ANON);
+#elif  LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 	mz = mem_cgroup_nodeinfo(memcg, 0);
 	if (!mz) {
 		fetch_next_memcg_break(memcg);
@@ -515,14 +563,7 @@ static unsigned long memcg_inactive_anon_pages(struct mem_cgroup *memcg)
 		fetch_next_memcg_break(memcg);
 		return 0;
 	}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
-	return mem_cgroup_fetch_lru_size(lruvec, LRU_INACTIVE_ANON);
-#else
 	return lruvec_page_state(lruvec, NR_INACTIVE_ANON);
-#endif
-#else
-	return memcg_page_state_local(memcg, NR_INACTIVE_ANON);
 #endif
 }
 
@@ -548,8 +589,13 @@ static ssize_t mem_cgroup_force_shrink_anon(struct kernfs_open_file *of,
 		nr_need_reclaim = memcg_inactive_anon_pages(memcg);
 
 	hybp(HYB_INFO, "FORCE SHRINK +\n");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	nr_reclaimed = try_to_free_mem_cgroup_pages(memcg, nr_need_reclaim,
+			GFP_KERNEL, MEMCG_RECLAIM_MAY_SWAP);
+#else
 	nr_reclaimed = try_to_free_mem_cgroup_pages(memcg, nr_need_reclaim,
 			GFP_KERNEL, true);
+#endif
 	hybp(HYB_INFO, "FORCE SHRINK - to_reclaim %lu reclaimed %lu\n", nr_need_reclaim, nr_reclaimed);
 	return nbytes;
 }

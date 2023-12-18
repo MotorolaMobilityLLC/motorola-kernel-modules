@@ -20,6 +20,11 @@
 #include "../zram-5.15/zram_drv_internal.h"
 #define BIO_MAX_PAGES BIO_MAX_VECS
 #define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
+#elif defined CONFIG_ZRAM_6_1
+#include "../zram-6.1/zram_drv.h"
+#include "../zram-6.1/zram_drv_internal.h"
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
 #else
 #include "../zram-5.10/zram_drv.h"
 #include "../zram-5.10/zram_drv_internal.h"

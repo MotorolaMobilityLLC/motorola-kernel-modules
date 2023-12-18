@@ -50,6 +50,12 @@ enum zram_pageflags {
 	ZRAM_HUGE,	/* Incompressible page */
 	ZRAM_IDLE,	/* not accessed page since last idle marking */
 
+#ifdef CONFIG_HYBRIDSWAP_CORE
+	ZRAM_BATCHING_OUT,
+	ZRAM_FROM_HYBRIDSWAP,
+	ZRAM_MCGID_CLEAR,
+	ZRAM_IN_BD, /* zram stored in back device */
+#endif
 	__NR_ZRAM_PAGEFLAGS,
 };
 
@@ -62,7 +68,7 @@ struct zram_table_entry {
 		unsigned long element;
 	};
 	unsigned long flags;
-#ifdef CONFIG_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
 	ktime_t ac_time;
 #endif
 };
@@ -82,7 +88,7 @@ struct zram_stats {
 	atomic_long_t max_used_pages;	/* no. of maximum pages stored */
 	atomic64_t writestall;		/* no. of write slow paths */
 	atomic64_t miss_free;		/* no. of missed free */
-#ifdef	CONFIG_ZRAM_WRITEBACK
+#ifdef	CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
 	atomic64_t bd_count;		/* no. of pages in backing device */
 	atomic64_t bd_reads;		/* no. of reads from backing device */
 	atomic64_t bd_writes;		/* no. of writes from backing device */
@@ -112,8 +118,8 @@ struct zram {
 	 * zram is claimed so open request will be failed
 	 */
 	bool claim; /* Protected by disk->open_mutex */
-#ifdef CONFIG_ZRAM_WRITEBACK
 	struct file *backing_dev;
+#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
 	spinlock_t wb_limit_lock;
 	bool wb_limit_enable;
 	u64 bd_wb_limit;
@@ -121,8 +127,17 @@ struct zram {
 	unsigned long *bitmap;
 	unsigned long nr_pages;
 #endif
-#ifdef CONFIG_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
 	struct dentry *debugfs_dir;
+#endif
+#if (defined CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK) || (defined CONFIG_HYBRIDSWAP_CORE)
+	struct block_device *bdev;
+	unsigned int old_block_size;
+	unsigned long nr_pages;
+	unsigned long increase_nr_pages;
+#endif
+#ifdef CONFIG_HYBRIDSWAP_CORE
+	struct hyb_info *infos;
 #endif
 };
 #endif

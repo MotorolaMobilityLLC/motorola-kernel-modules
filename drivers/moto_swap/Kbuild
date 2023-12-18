@@ -1,5 +1,6 @@
 HAVE_KERNEL_5_4 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel/msm-5.4 && echo 1)
 HAVE_KERNEL_5_15 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel_platform/gki/kernel/5.15 && echo 1)
+HAVE_KERNEL_6_1 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel_platform/gki/kernel/6.1 && echo 1)
 
 ifeq ($(HAVE_KERNEL_5_4),1)
 ZRAM_SRC = zram-5.4
@@ -7,6 +8,10 @@ EXTRA_CFLAGS += -DCONFIG_ZRAM_5_4
 else ifeq ($(HAVE_KERNEL_5_15),1)
 ZRAM_SRC = zram-5.15
 EXTRA_CFLAGS += -DCONFIG_ZRAM_5_15
+else ifeq ($(HAVE_KERNEL_6_1),1)
+ZRAM_SRC = zram-6.1
+EXTRA_CFLAGS += -DCONFIG_ZRAM_6_1
+EXTRA_CFLAGS += -Wframe-larger-than=4096
 else
 ZRAM_SRC = zram-5.10
 EXTRA_CFLAGS += -DCONFIG_ZRAM_5_10
