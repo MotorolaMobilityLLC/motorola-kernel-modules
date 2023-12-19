@@ -252,26 +252,26 @@ static struct nf_hook_ops con_dfpar_hook_ops[] __read_mostly = {
 		.hook		= con_dfpar_ip4_in_hook,
 		.pf		= NFPROTO_IPV4,
 		.hooknum	= NF_INET_LOCAL_IN,
-		.priority	= NF_IP_PRI_LAST - 1,
+		.priority	= NF_IP_PRI_RAW_BEFORE_DEFRAG + 1,
 	},
 	{
 		.hook		= con_dfpar_ip6_in_hook,
 		.pf		= NFPROTO_IPV6,
 		.hooknum	= NF_INET_LOCAL_IN,
-		.priority	= NF_IP6_PRI_LAST - 1,
+		.priority	= NF_IP6_PRI_RAW_BEFORE_DEFRAG + 1,
 	},
 #ifdef TRACK_OUT_PACKET
 	{
 		.hook		= con_dfpar_ip4_out_hook,
 		.pf		= NFPROTO_IPV4,
 		.hooknum	= NF_INET_LOCAL_OUT,
-		.priority	= NF_IP_PRI_LAST - 1,
+		.priority	= NF_IP_PRI_RAW_BEFORE_DEFRAG + 1,
 	},
 	{
 		.hook		= con_dfpar_ip6_out_hook,
 		.pf		= NFPROTO_IPV6,
 		.hooknum	= NF_INET_LOCAL_OUT,
-		.priority	= NF_IP6_PRI_LAST - 1,
+		.priority	= NF_IP6_PRI_RAW_BEFORE_DEFRAG + 1,
 	},
 #endif
 };
