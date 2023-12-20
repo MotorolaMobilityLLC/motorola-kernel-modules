@@ -352,30 +352,53 @@ static int cw_get_capacity(struct gauge_device *gauge_dev, int *soc)
 	return 0;
 }
 
-bool is_factory_mode(void)
+static bool is_atm_mode(void)
 {
-	struct device_node *np = of_find_node_by_path("/chosen");
+	const char *bootargs_ptr = NULL;
+	char *bootargs_str = NULL;
+	char *idx = NULL;
+	char *kvpair = NULL;
+	struct device_node *n = of_find_node_by_path("/chosen");
+	size_t bootargs_ptr_len = 0;
+	char *value = NULL;
 	bool factory_mode = false;
-	const char *bootargs = NULL;
-	char *bootmode = NULL;
-	char *end = NULL;
 
-	if (!np)
-		return factory_mode;
+	if (n == NULL)
+		goto err_putnode;
 
-	if (!of_property_read_string(np, "bootargs", &bootargs)) {
-		bootmode = strstr(bootargs, "androidboot.mode=");
-		if (bootmode) {
-			end = strpbrk(bootmode, " ");
-			bootmode = strpbrk(bootmode, "=");
-		}
-		if (bootmode &&
-		    end > bootmode &&
-		    strnstr(bootmode, "mot-factory", end - bootmode)) {
-				factory_mode = true;
+	bootargs_ptr = (char *)of_get_property(n, "mmi,bootconfig", NULL);
+
+	if (!bootargs_ptr) {
+		goto err_putnode;
+	}
+
+	bootargs_ptr_len = strlen(bootargs_ptr);
+	if (!bootargs_str) {
+		/* Following operations need a non-const version of bootargs */
+		bootargs_str = kzalloc(bootargs_ptr_len + 1, GFP_KERNEL);
+		if (!bootargs_str)
+			goto err_putnode;
+	}
+	strlcpy(bootargs_str, bootargs_ptr, bootargs_ptr_len + 1);
+
+	idx = strnstr(bootargs_str, "androidboot.atm=", strlen(bootargs_str));
+	if (idx) {
+		kvpair = strsep(&idx, " ");
+		if (kvpair)
+			if (strsep(&kvpair, "=")) {
+				value = strsep(&kvpair, "\n");
+			}
+	}
+	if (value) {
+		if (!strncmp(value, "enable", strlen("enable"))) {
+			factory_mode = true;
 		}
 	}
-	of_node_put(np);
+	kfree(bootargs_str);
+
+err_putnode:
+	if (n)
+		of_node_put(n);
 
 	return factory_mode;
 }
@@ -973,6 +996,8 @@ static int cw_battery_get_property(struct power_supply *psy,
 		val->intval = cw_bat->fcc_design * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
+		if (cw_bat->factory_mode)
+			cw_get_current(cw_bat->gauge_dev, &cw_bat->current_now);
 		val->intval = cw_bat->current_now* 1000;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
@@ -1078,7 +1103,7 @@ static int cw2217_probe(struct i2c_client *client, const struct i2c_device_id *i
 
 	cw_hw_init_work(cw_bat);
 
-	if(is_factory_mode())
+	if(is_atm_mode())
 		cw_bat->factory_mode = true;
 
 	cw_bat->gauge_dev= gauge_device_register(cw_bat->battName,
