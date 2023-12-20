@@ -174,6 +174,16 @@ struct goodix_flash_cmd {
 };
 #pragma pack()
 
+static int goodix_set_fwname(struct goodix_ts_core *cd, char* fw_name) {
+	if (fw_name != NULL) {
+		strlcpy(cd->update_ctrl.fw_name, fw_name,
+			sizeof(cd->update_ctrl.fw_name));
+		return 0;
+	}
+	else
+		return -EINVAL;
+}
+
 /**
  * goodix_parse_firmware - parse firmware header information
  *	and subsystem information from firmware data buffer
@@ -1203,6 +1213,8 @@ int goodix_fw_update_init(struct goodix_ts_core *core_data)
 
 	if (core_data->update_ctrl.initialized)
 		return 0;
+
+	core_data->set_fw_name = goodix_set_fwname;
 
 	ret = goodix_fw_sysfs_init(core_data, &core_data->update_ctrl);
 	if (ret) {

@@ -15,6 +15,8 @@
 #include <linux/delay.h>
 #include <linux/input/mt.h>
 
+#define MAX_ATTRS_ENTRIES 10
+
 #define GET_GOODIX_DATA(dev) { \
 	pdev = dev_get_drvdata(dev); \
 	if (!pdev) { \
@@ -28,8 +30,29 @@
 	} \
 }
 
+#define ADD_ATTR(name) { \
+	if (idx < MAX_ATTRS_ENTRIES)  { \
+		dev_info(dev, "%s: [%d] adding %p\n", __func__, idx, &dev_attr_##name.attr); \
+		ext_attributes[idx] = &dev_attr_##name.attr; \
+		idx++; \
+	} else { \
+		dev_err(dev, "%s: cannot add attribute '%s'\n", __func__, #name); \
+	} \
+}
+
+static struct attribute *ext_attributes[MAX_ATTRS_ENTRIES];
+static struct attribute_group ext_attr_group = {
+	.attrs = ext_attributes,
+};
+
+#ifdef CONFIG_GTP_LAST_TIME
+static ssize_t goodix_ts_timestamp_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+	static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
+#endif
+
 static int goodix_ts_mmi_methods_get_vendor(struct device *dev, void *cdata) {
-	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "goodix");
+	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "gdx");
 }
 
 static int goodix_ts_mmi_methods_get_productinfo(struct device *dev, void *cdata) {
@@ -213,20 +236,73 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev) {
 	return 0;
 }
 
+static unsigned int clear_bit_in_pos(unsigned int val, int bit_pos)
+{
+	return val &= ~(1 << bit_pos);
+}
+
+static int goodix_berlin_gesture_setup(struct goodix_ts_core *core_data)
+{
+	const struct goodix_ts_hw_ops *hw_ops = core_data->hw_ops;
+	unsigned int gesture_cmd = 0xFFFF;
+	int ret = 0;
+	unsigned char gesture_type = 0;
+	unsigned int (*mod_func)(unsigned int, int) = clear_bit_in_pos;
+
+	if (core_data->imports && core_data->imports->get_gesture_type) {
+		ret = core_data->imports->get_gesture_type(core_data->bus->dev, &gesture_type);
+		ts_info("Provisioned gestures 0x%02x; rc = %d\n", gesture_type, ret);
+	}
+	core_data->gesture_type = gesture_type;
+
+	if (gesture_type & TS_MMI_GESTURE_ZERO) {
+		gesture_cmd = mod_func(gesture_cmd, 13);
+		ts_info("enable zero gesture mode cmd 0x%04x\n", gesture_cmd);
+	}
+	if (gesture_type & TS_MMI_GESTURE_SINGLE) {
+		gesture_cmd = mod_func(gesture_cmd, 12);
+		ts_info("enable single gesture mode cmd 0x%04x\n", gesture_cmd);
+	}
+	if (gesture_type & TS_MMI_GESTURE_DOUBLE) {
+		gesture_cmd = mod_func(gesture_cmd, 7);
+		ts_info("enable double gesture mode cmd 0x%04x\n", gesture_cmd);
+	}
+
+	hw_ops->gesture(core_data, gesture_cmd);
+	ts_info("Send enable gesture mode 0x%x\n", gesture_cmd);
+
+	return 0;
+}
+
 static int goodix_ts_mmi_panel_state(struct device *dev,
 	enum ts_mmi_pm_mode from, enum ts_mmi_pm_mode to)
 {
 	struct platform_device *pdev;
 	struct goodix_ts_core *core_data;
+	const struct goodix_ts_hw_ops *hw_ops;
 
 	GET_GOODIX_DATA(dev);
+	hw_ops = core_data->hw_ops;
 
 	switch (to) {
 	case TS_MMI_PM_GESTURE:
+		hw_ops->irq_enable(core_data, false);
+		goodix_berlin_gesture_setup(core_data);
+		msleep(16);
+		hw_ops->irq_enable(core_data, true);
+		enable_irq_wake(core_data->irq);
+		core_data->gesture_enabled = true;
 		break;
 	case TS_MMI_PM_DEEPSLEEP:
+		core_data->gesture_enabled = false;
 		break;
 	case TS_MMI_PM_ACTIVE:
+		if (hw_ops->resume)
+			hw_ops->resume(core_data);
+		if (core_data->gesture_enabled) {
+			core_data->gesture_enabled = false;
+			hw_ops->irq_enable(core_data, true);
+		}
 		break;
 	default:
 		ts_err("Invalid power state parameter %d.\n", to);
@@ -256,6 +332,11 @@ static int goodix_ts_mmi_pre_resume(struct device *dev) {
 	GET_GOODIX_DATA(dev);
 
 	atomic_set(&core_data->suspended, 0);
+	if (core_data->gesture_enabled) {
+		core_data->hw_ops->irq_enable(core_data, false);
+		disable_irq_wake(core_data->irq);
+	}
+
 	return 0;
 }
 
@@ -270,6 +351,124 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	ts_info("Resume end");
 	return 0;
 }
+
+static int goodix_ts_firmware_update(struct device *dev, char *fwname) {
+	int ret = -ENODEV;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	int update_flag = UPDATE_MODE_BLOCK | UPDATE_MODE_SRC_REQUEST | UPDATE_MODE_FORCE;
+
+	GET_GOODIX_DATA(dev);
+
+	ts_info("HW request update fw, %s", fwname);
+	/* set firmware image name */
+	if (core_data->set_fw_name)
+		core_data->set_fw_name(core_data, fwname);
+
+	/* do upgrade */
+	ret = goodix_do_fw_update(core_data, update_flag);
+	if (ret)
+		ts_err("failed do fw update");
+
+	/* read ic info */
+	ret = core_data->hw_ops->get_ic_info(core_data, &core_data->ic_info);
+	if (ret < 0) {
+		ts_err("failed to get ic info");
+	}
+	print_ic_info(&core_data->ic_info);
+
+	/* the recomend way to update ic config is throuth ISP,
+	 * if not we will send config with interactive mode
+	 */
+	goodix_send_ic_config(core_data, CONFIG_TYPE_NORMAL);
+	return 0;
+}
+
+int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
+		u8 cmd, u8 len, u8 subCmd, u8 subCmd2)
+{
+	int ret = 0;
+	struct goodix_ts_cmd ts_cmd;
+
+	ts_cmd.cmd = cmd;
+	ts_cmd.len = len;
+	ts_cmd.data[0] = subCmd;
+	ts_cmd.data[1] = subCmd2;
+
+	ret = core_data->hw_ops->send_cmd(core_data, &ts_cmd);
+	return ret;
+}
+
+#define CHARGER_MODE_CMD    0xAF
+static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
+{
+	int ret = 0;
+	int timeout = 50;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	GET_GOODIX_DATA(dev);
+
+	/* 5000ms timeout */
+	while (core_data->init_stage < CORE_INIT_STAGE2 && timeout--)
+		msleep(100);
+
+	mutex_lock(&core_data->mode_lock);
+	ret = goodix_ts_send_cmd(core_data, CHARGER_MODE_CMD, 5, mode, 0x00);
+	if (ret < 0) {
+		ts_err("Failed to set charger mode\n");
+	}
+	msleep(20);
+	ts_info("Success to %s charger mode\n", mode ? "Enable" : "Disable");
+	mutex_unlock(&core_data->mode_lock);
+
+	return 0;
+}
+
+#ifdef CONFIG_GTP_LAST_TIME
+static ssize_t goodix_ts_timestamp_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	last_ktime = core_data->last_event_time;
+	core_data->last_event_time = 0;
+	mutex_unlock(&core_data->mode_lock);
+
+	last_ts = ktime_to_timespec64(last_ktime);
+
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
+}
+#endif
+
+static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
+{
+	int idx = 0;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	GET_GOODIX_DATA(dev);
+
+#ifdef CONFIG_GTP_LAST_TIME
+	ADD_ATTR(timestamp);
+#endif
+
+	if (idx) {
+		ext_attributes[idx] = NULL;
+		*group = &ext_attr_group;
+	} else
+		*group = NULL;
+
+	return 0;
+}
+
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
@@ -284,6 +483,11 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.reset =  goodix_ts_mmi_methods_reset,
 	.drv_irq = goodix_ts_mmi_methods_drv_irq,
 	.power = goodix_ts_mmi_methods_power,
+	.charger_mode = goodix_ts_mmi_charger_mode,
+	/* Firmware */
+	.firmware_update = goodix_ts_firmware_update,
+	/* vendor specific attribute group */
+	.extend_attribute_group = goodix_ts_mmi_extend_attribute_group,
 	/* PM callback */
 	.pre_suspend = goodix_ts_mmi_pre_suspend,
 	.panel_state = goodix_ts_mmi_panel_state,
@@ -301,11 +505,21 @@ int goodix_ts_mmi_dev_register(struct platform_device *pdev) {
 		ts_err("Failed to get driver data");
 		return -ENODEV;
 	}
+	mutex_init(&core_data->mode_lock);
 	ret = ts_mmi_dev_register(core_data->bus->dev, &goodix_ts_mmi_methods);
 	if (ret) {
 		dev_err(&pdev->dev, "Failed to register ts mmi\n");
+		mutex_destroy(&core_data->mode_lock);
 		return ret;
 	}
+
+	core_data->imports = &goodix_ts_mmi_methods.exports;
+
+#if defined(CONFIG_GTP_LIMIT_USE_SUPPLIER)
+	if (core_data->imports && core_data->imports->get_supplier) {
+		ret = core_data->imports->get_supplier(core_data->bus->dev, &core_data->supplier);
+	}
+#endif
 
 	return 0;
 }
@@ -316,5 +530,6 @@ void goodix_ts_mmi_dev_unregister(struct platform_device *pdev) {
 	core_data = platform_get_drvdata(pdev);
 	if (!core_data)
 		ts_err("Failed to get driver data");
+	mutex_destroy(&core_data->mode_lock);
 	ts_mmi_dev_unregister(core_data->bus->dev);
 }

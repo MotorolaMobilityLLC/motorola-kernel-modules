@@ -14,7 +14,7 @@
 #define __GOODIX_TS_MMI_H__
 
 #include <linux/platform_device.h>
-#include <linux/touchscreen_mmi.h>
+#include <linux/touchscreen_u_mmi.h>
 #include <linux/mmi_wake_lock.h>
 
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI

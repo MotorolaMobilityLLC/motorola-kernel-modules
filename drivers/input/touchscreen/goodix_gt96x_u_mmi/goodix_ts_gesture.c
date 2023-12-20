@@ -27,6 +27,9 @@
 #include <linux/atomic.h>
 #include <linux/input/mt.h>
 #include "goodix_ts_core.h"
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+#include "goodix_ts_mmi.h"
+#endif
 
 
 #define GOODIX_GESTURE_DOUBLE_TAP		0xCC
@@ -130,6 +133,49 @@ static ssize_t gsx_fod_type_store(struct device *dev,
 	return count;
 }
 
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+int goodix_ts_report_gesture(struct goodix_ts_core *cd, struct goodix_ts_event *event)
+{
+	struct gesture_event_data mmi_event;
+	int ret;
+
+	switch (event->gesture_type) {
+	case GOODIX_GESTURE_SINGLE_TAP:
+		if (cd->gesture_type & TS_MMI_GESTURE_SINGLE) {
+			ts_info("get SINGLE-TAP gesture");
+			mmi_event.evcode = 1;
+			mmi_event.evdata.x = le16_to_cpup((__le16 *)event->gesture_data);
+			mmi_event.evdata.y = le16_to_cpup((__le16 *)(event->gesture_data + 2));
+			/* call class method */
+			ret = cd->imports->report_gesture(&mmi_event);
+			if (!ret)
+				PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+		} else {
+			ts_info("not enable SINGLE-TAP");
+		}
+		break;
+	case GOODIX_GESTURE_DOUBLE_TAP:
+		if (cd->gesture_type & TS_MMI_GESTURE_DOUBLE) {
+			ts_info("get DOUBLE-TAP gesture");
+			mmi_event.evcode = 4;
+			mmi_event.evdata.x = le16_to_cpup((__le16 *)event->gesture_data);
+			mmi_event.evdata.y = le16_to_cpup((__le16 *)(event->gesture_data + 2));
+			/* call class method */
+			ret = cd->imports->report_gesture(&mmi_event);
+			if (!ret)
+				PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+		} else {
+			ts_info("not enable DOUBLE-TAP");
+		}
+		break;
+	default:
+		ts_err("not support gesture type[%02X]", event->gesture_type);
+		break;
+	}
+
+	return 0;
+}
+#else
 int goodix_ts_report_gesture(struct goodix_ts_core *cd, struct goodix_ts_event *event)
 {
 	int fodx, fody, overlay_area;
@@ -199,6 +245,7 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd, struct goodix_ts_event *
 
 	return 0;
 }
+#endif
 
 static DEVICE_ATTR(double_type, 0664, gsx_double_type_show, gsx_double_type_store);
 static DEVICE_ATTR(single_type, 0664, gsx_single_type_show, gsx_single_type_store);

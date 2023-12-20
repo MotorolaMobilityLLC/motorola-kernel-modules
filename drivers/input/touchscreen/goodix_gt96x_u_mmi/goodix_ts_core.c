@@ -68,8 +68,6 @@ int goodix_device_register(struct goodix_device_resource *device)
 	return 0;
 }
 
-static int goodix_send_ic_config(struct goodix_ts_core *cd, int type);
-
 /* show driver infomation */
 static ssize_t driver_info_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -901,6 +899,13 @@ static int goodix_parse_dt(struct device_node *node,
 	    strncpy(board_data->ic_name, name_tmp, sizeof(board_data->ic_name));
 	}
 
+	if (of_property_read_bool(node, "goodix,gesture-wait-pm")) {
+	    ts_info("gesture-wait-pm set");
+	    board_data->gesture_wait_pm = true;
+	} else {
+	    board_data->gesture_wait_pm = false;
+	}
+
 	ts_info("[DT]x:%d, y:%d, w:%d, p:%d sleep_enable:%d pen_enable:%d",
 		board_data->panel_max_x, board_data->panel_max_y,
 		board_data->panel_max_w, board_data->panel_max_p,
@@ -955,6 +960,10 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 {
 	unsigned int touch_num = touch_data->touch_num;
 	int i;
+#ifdef CONFIG_GTP_LAST_TIME
+	struct goodix_ts_core *core_data = input_get_drvdata(dev);
+	static uint8_t touchdown[GOODIX_MAX_TOUCH];
+#endif
 
 	mutex_lock(&dev->mutex);
 
@@ -964,6 +973,17 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 				touch_data->coords[i].x,
 				touch_data->coords[i].y,
 				touch_data->coords[i].w);
+
+#ifdef CONFIG_GTP_LAST_TIME
+			/* need add touch down control to ensure one ID and one session(down-up) just acquire
+			 * time once or touch performance will be affected
+			*/
+			if (touchdown[i] == 0) {
+				core_data->last_event_time = ktime_get_boottime();
+				ts_debug("TOUCH: [%d] logged timestamp\n", i);
+				touchdown[i] = 1;
+			}
+#endif
 			input_mt_slot(dev, i);
 			input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
 			input_report_abs(dev, ABS_MT_POSITION_X,
@@ -973,6 +993,12 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 			input_report_abs(dev, ABS_MT_TOUCH_MAJOR,
 					touch_data->coords[i].w);
 		} else {
+#ifdef CONFIG_GTP_LAST_TIME
+			if (touchdown[i] == 1) {
+				ts_debug("TOUCH: [%d] release\n", i);
+				touchdown[i] = 0;
+			}
+#endif
 			input_mt_slot(dev, i);
 			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
 		}
@@ -1032,6 +1058,18 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 	disable_irq_nosync(core_data->irq);
 	ts_esd->irq_status = true;
 	core_data->irq_trig_cnt++;
+
+	if (atomic_read(&core_data->suspended) && core_data->board_data.gesture_wait_pm &&
+		core_data->gesture_enabled) {
+		PM_WAKEUP_EVENT(core_data->gesture_wakelock, 3000);
+		/* Waiting for pm resume completed */
+		ret = wait_event_interruptible_timeout(core_data->pm_wq,
+			atomic_read(&core_data->pm_resume), msecs_to_jiffies(700));
+		if (!ret) {
+			ts_err("system can't finish resuming procedure.");
+			return IRQ_HANDLED;
+		}
+	}
 
 	/* read touch data from touch device */
 	ret = hw_ops->event_handler(core_data, ts_event);
@@ -1542,7 +1580,7 @@ void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 		mutex_unlock(&pen_dev->mutex);
 	}
 
-	if (core_data->gesture_type)
+	if (core_data->gesture_enabled)
 		core_data->hw_ops->after_event_handler(core_data);
 }
 
@@ -1689,7 +1727,13 @@ static const struct dev_pm_ops dev_pm_ops = {
  */
 static int goodix_ts_pm_suspend(struct device *dev)
 {
+	struct goodix_ts_core *core_data =
+		dev_get_drvdata(dev);
+
 	ts_info("system enters into pm_suspend");
+
+	atomic_set(&core_data->pm_resume, 0);
+
 	return 0;
 }
 /**
@@ -1698,7 +1742,16 @@ static int goodix_ts_pm_suspend(struct device *dev)
  */
 static int goodix_ts_pm_resume(struct device *dev)
 {
+	struct goodix_ts_core *core_data =
+		dev_get_drvdata(dev);
+
 	ts_info("system resumes from pm_suspend");
+
+	atomic_set(&core_data->pm_resume, 1);
+
+	if (core_data->board_data.gesture_wait_pm)
+		wake_up_interruptible(&core_data->pm_wq);
+
 	return 0;
 }
 static const struct dev_pm_ops dev_pm_ops = {
@@ -1794,7 +1847,7 @@ err_finger:
 }
 
 /* try send the config specified with type */
-static int goodix_send_ic_config(struct goodix_ts_core *cd, int type)
+int goodix_send_ic_config(struct goodix_ts_core *cd, int type)
 {
 	u32 config_id;
 	struct goodix_ic_config *cfg;
@@ -1858,6 +1911,7 @@ static int goodix_later_init_thread(void *data)
 	 * if not we will send config with interactive mode
 	 */
 	goodix_send_ic_config(cd, CONFIG_TYPE_NORMAL);
+	print_ic_info(&cd->ic_info);
 
 	/* init other resources */
 	ret = goodix_ts_stage2_init(cd);
@@ -1985,6 +2039,16 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	}
 #endif
 
+	PM_WAKEUP_REGISTER(bus_interface->dev, core_data->gesture_wakelock,
+		"gdx_gesture_wakelock");
+	if (!core_data->gesture_wakelock) {
+		ts_info("allocate gesture wakeup source err!\n");
+		goto err_out;
+	}
+	if (core_data->board_data.gesture_wait_pm)
+			init_waitqueue_head(&core_data->pm_wq);
+	atomic_set(&core_data->pm_resume, 1);
+
 	/* debug node init */
 	ret = goodix_tools_init(core_data);
 	if (ret) {
@@ -2005,6 +2069,7 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	return 0;
 
 err_out:
+	PM_WAKEUP_UNREGISTER(core_data->gesture_wakelock);
 	goodix_fw_update_uninit(core_data);
 	goodix_ts_power_off(core_data);
 	core_data->init_stage = CORE_INIT_FAIL;

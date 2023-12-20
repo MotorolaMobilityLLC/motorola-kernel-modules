@@ -342,6 +342,13 @@ err_out:
 
 int goodix_get_config_proc(struct goodix_ts_core *cd)
 {
+#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI) && defined(CONFIG_GTP_LIMIT_USE_SUPPLIER)
+	if (cd->supplier) {
+		snprintf(cd->board_data.cfg_bin_name, GOODIX_MAX_STR_LABLE_LEN, "%s_%s",
+			cd->supplier, TS_DEFAULT_CFG_BIN);
+	}
+#endif
+
 	return goodix_get_config_data(cd, cd->fw_version.sensor_id);
 }
 

@@ -14,7 +14,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
-#include <linux/touchscreen_mmi.h>
+#include <linux/touchscreen_u_mmi.h>
 #include <linux/of.h>
 #include <linux/slab.h>
 

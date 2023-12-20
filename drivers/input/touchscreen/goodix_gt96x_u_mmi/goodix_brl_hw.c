@@ -815,10 +815,9 @@ static int brl_read_version(struct goodix_ts_core *cd,
 
 #define LE16_TO_CPU(x)  (x = le16_to_cpu(x))
 #define LE32_TO_CPU(x)  (x = le32_to_cpu(x))
-static int convert_ic_info(struct goodix_ts_core *cd, const u8 *data)
+static int convert_ic_info(struct goodix_ic_info *info, const u8 *data)
 {
 	int i;
-	struct goodix_ic_info *info = &cd->ic_info;
 	struct goodix_ic_info_version *version = &info->version;
 	struct goodix_ic_info_feature *feature = &info->feature;
 	struct goodix_ic_info_param *parm = &info->parm;
@@ -948,10 +947,9 @@ static int convert_ic_info(struct goodix_ts_core *cd, const u8 *data)
 	return 0;
 }
 
-static void goodix_compatible_ic_info(struct goodix_ts_core *cd)
+static void goodix_compatible_ic_info(struct goodix_ic_info *info,
+		struct goodix_ic_info_v2 *info_v2)
 {
-	struct goodix_ic_info_v2 *info_v2 = &cd->ic_info_v2;
-	struct goodix_ic_info *info = &cd->ic_info;
 	int i;
 
 	info->length = info_v2->length;
@@ -1043,9 +1041,9 @@ static void goodix_compatible_ic_info(struct goodix_ts_core *cd)
 	info->other.screen_max_y = info_v2->sample.screen_max_y;
 }
 
-static int convert_ic_info_v2(struct goodix_ts_core *cd, const u8 *data)
+static int convert_ic_info_v2(struct goodix_ic_info *info,
+		struct goodix_ic_info_v2 *info_v2, const u8 *data)
 {
-	struct goodix_ic_info_v2 *info_v2 = &cd->ic_info_v2;
 	int i;
 
 	info_v2->length = le16_to_cpup((__le16 *)data);
@@ -1128,7 +1126,7 @@ static int convert_ic_info_v2(struct goodix_ts_core *cd, const u8 *data)
 	data += sizeof(info_v2->address);
 	memcpy((u8 *)&info_v2->customer, data, sizeof(info_v2->customer));
 
-	goodix_compatible_ic_info(cd);
+	goodix_compatible_ic_info(info, info_v2);
 	return 0;
 }
 
@@ -1141,6 +1139,7 @@ static int brl_get_ic_info(struct goodix_ts_core *cd,
 	u8 info_ver;
 	u8 afe_data[GOODIX_IC_INFO_MAX_LEN] = {0};
 	struct goodix_ts_hw_ops *hw_ops = cd->hw_ops;
+	struct goodix_ic_info_v2 *info_v2 = &cd->ic_info_v2;
 
 	if (cd->bus->ic_type == IC_TYPE_BERLIN_A)
 		ic_addr = GOODIX_IC_INFO_ADDR_BRA;
@@ -1189,9 +1188,9 @@ static int brl_get_ic_info(struct goodix_ts_core *cd,
 
 	info_ver = afe_data[3];
 	if (info_ver < 0x80)
-		ret = convert_ic_info(cd, afe_data);
+		ret = convert_ic_info(ic_info, afe_data);
 	else
-		ret = convert_ic_info_v2(cd, afe_data);
+		ret = convert_ic_info_v2(ic_info, info_v2, afe_data);
 	if (ret) {
 		ts_err("convert ic info encounter error");
 		return ret;

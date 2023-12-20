@@ -16,7 +16,7 @@
 #include <linux/device.h>
 #include <linux/input.h>
 #include <linux/input/mt.h>
-#include <linux/touchscreen_mmi.h>
+#include <linux/touchscreen_u_mmi.h>
 #include <linux/sensors.h>
 
 #ifdef TS_MMI_TOUCH_GESTURE_POISON_EVENT
@@ -214,14 +214,21 @@ static int ts_mmi_gesture_handler(struct gesture_event_data *gev)
 	int key_code;
 	bool need2report = true;
 	struct ts_mmi_dev *touch_cdev = sensor_pdata->touch_cdev;
+	struct ts_mmi_dev_pdata *ppdata = &touch_cdev->pdata;
 
+	if (ppdata->resolution_boost) {
+		gev->evdata.x /= ppdata->resolution_boost;
+		gev->evdata.y /= ppdata->resolution_boost;
+	}
 	switch (gev->evcode) {
 	case 1:
-		key_code = KEY_F1;
-		pr_info("%s: single tap\n", __func__);
+		key_code = BTN_TRIGGER_HAPPY3;
+		input_report_abs(sensor_pdata->input_sensor_dev, ABS_X, gev->evdata.x);
+		input_report_abs(sensor_pdata->input_sensor_dev, ABS_Y, gev->evdata.y);
+		pr_info("%s: single tap; x=%d, y=%d\n", __func__, gev->evdata.x, gev->evdata.y);
 			break;
 	case 2:
-		key_code = KEY_F2;
+		key_code = BTN_TRIGGER_HAPPY4;
 		if(gev->evdata.x == 0)
 			gev->evdata.x = touch_cdev->pdata.fod_x ;
 		if(gev->evdata.y== 0)
@@ -231,12 +238,14 @@ static int ts_mmi_gesture_handler(struct gesture_event_data *gev)
 		pr_info("%s: zero tap; x=%x, y=%x\n", __func__, gev->evdata.x, gev->evdata.y);
 		break;
 	case 3:
-		key_code = KEY_F3;
+		key_code = BTN_TRIGGER_HAPPY5;
 		pr_info("%s: zero tap up\n", __func__);
 		break;
 	case 4:
-		key_code = KEY_F4;
-		pr_info("%s: double tap\n", __func__);
+		key_code = BTN_TRIGGER_HAPPY6;
+		input_report_abs(sensor_pdata->input_sensor_dev, ABS_X, gev->evdata.x);
+		input_report_abs(sensor_pdata->input_sensor_dev, ABS_Y, gev->evdata.y);
+		pr_info("%s: double tap; x=%d, y=%d\n", __func__, gev->evdata.x, gev->evdata.y);
 		break;
 	default:
 		need2report = false;
@@ -259,14 +268,22 @@ static int ts_mmi_cli_gesture_handler(struct gesture_event_data *gev)
 	int key_code;
 	bool need2report = true;
 	struct ts_mmi_dev *touch_cdev = cli_sensor_pdata->touch_cdev;
+	struct ts_mmi_dev_pdata *ppdata = &touch_cdev->pdata;
+
+	if (ppdata->resolution_boost) {
+		gev->evdata.x /= ppdata->resolution_boost;
+		gev->evdata.y /= ppdata->resolution_boost;
+	}
 
 	switch (gev->evcode) {
 	case 1:
-		key_code = KEY_F1;
-		pr_info("%s: single tap\n", __func__);
+		key_code = BTN_TRIGGER_HAPPY3;
+		input_report_abs(cli_sensor_pdata->input_sensor_dev, ABS_X, gev->evdata.x);
+		input_report_abs(cli_sensor_pdata->input_sensor_dev, ABS_Y, gev->evdata.y);
+		pr_info("%s: single tap; x=%d, y=%d\n", __func__, gev->evdata.x, gev->evdata.y);
 			break;
 	case 2:
-		key_code = KEY_F2;
+		key_code = BTN_TRIGGER_HAPPY4;
 		if(gev->evdata.x == 0)
 			gev->evdata.x = touch_cdev->pdata.fod_x ;
 		if(gev->evdata.y== 0)
@@ -276,12 +293,14 @@ static int ts_mmi_cli_gesture_handler(struct gesture_event_data *gev)
 		pr_info("%s: zero tap; x=%x, y=%x\n", __func__, gev->evdata.x, gev->evdata.y);
 		break;
 	case 3:
-		key_code = KEY_F3;
+		key_code = BTN_TRIGGER_HAPPY5;
 		pr_info("%s: zero tap up\n", __func__);
 		break;
 	case 4:
-		key_code = KEY_F4;
-		pr_info("%s: double tap\n", __func__);
+		key_code = BTN_TRIGGER_HAPPY6;
+		input_report_abs(cli_sensor_pdata->input_sensor_dev, ABS_X, gev->evdata.x);
+		input_report_abs(cli_sensor_pdata->input_sensor_dev, ABS_Y, gev->evdata.y);
+		pr_info("%s: double tap; x=%d, y=%d\n", __func__, gev->evdata.x, gev->evdata.y);
 		break;
 	default:
 		need2report = false;
@@ -452,14 +471,19 @@ static int ts_mmi_palm_set_enable(struct sensors_classdev *sensors_cdev,
 	struct ts_mmi_dev *touch_cdev = sensor_pdata->touch_cdev;
 	int ret = 0;
 
+	mutex_lock(&touch_cdev->extif_mutex);
 	TRY_TO_CALL(palm_set_enable, enable);
 	if (enable == 1) {
+		touch_cdev->gesture_mode_type |= 0x08;
 		dev_info(DEV_TS, "%s: sensor ENABLE\n", __func__);
 	} else if (enable == 0) {
+		touch_cdev->gesture_mode_type &= 0xF7;
 		dev_info(DEV_TS, "%s: sensor DISABLE\n", __func__);
 	} else {
 		dev_err(DEV_TS, "%s: unknown enable symbol\n", __func__);
 	}
+	mutex_unlock(&touch_cdev->extif_mutex);
+
 	return 0;
 }
 
@@ -560,10 +584,10 @@ int ts_mmi_gesture_init(struct ts_mmi_dev *touch_cdev)
 	events_data->touch_cdev = touch_cdev;
 
 	__set_bit(EV_KEY, sensor_input_dev->evbit);
-	__set_bit(KEY_F1, sensor_input_dev->keybit);
-	__set_bit(KEY_F2, sensor_input_dev->keybit);
-	__set_bit(KEY_F3, sensor_input_dev->keybit);
-	__set_bit(KEY_F4, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY3, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY4, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY5, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY6, sensor_input_dev->keybit);
 	__set_bit(EV_ABS, sensor_input_dev->evbit);
 	__set_bit(EV_SYN, sensor_input_dev->evbit);
 	/* TODO: fill in real screen resolution */
@@ -642,10 +666,10 @@ int ts_mmi_cli_gesture_init(struct ts_mmi_dev *touch_cdev)
 	}
 
 	__set_bit(EV_KEY, sensor_input_dev->evbit);
-	__set_bit(KEY_F1, sensor_input_dev->keybit);
-	__set_bit(KEY_F2, sensor_input_dev->keybit);
-	__set_bit(KEY_F3, sensor_input_dev->keybit);
-	__set_bit(KEY_F4, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY3, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY4, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY5, sensor_input_dev->keybit);
+	__set_bit(BTN_TRIGGER_HAPPY6, sensor_input_dev->keybit);
 	__set_bit(EV_ABS, sensor_input_dev->evbit);
 	__set_bit(EV_SYN, sensor_input_dev->evbit);
 	/* TODO: fill in real screen resolution */
