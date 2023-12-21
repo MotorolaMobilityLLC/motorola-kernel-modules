@@ -58,6 +58,13 @@ static inline bool task_in_boost_uid(struct task_struct *p)
 
 static inline bool task_in_audio_uid(struct task_struct *p)
 {
+	if (moto_sched_scene & UX_SCENE_RINGTONE) {
+		int uid = task_uid(p).val;
+		return (uid == MEDIA_CODEC_UID)
+			|| (uid == MEDIA_UID)
+			|| (uid == MEDIA_EX_UID)
+			|| (uid == AUDIOSERVER_UID);
+	}
 	return false;
 }
 
