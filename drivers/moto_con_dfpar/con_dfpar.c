@@ -71,7 +71,6 @@ static void detect_packet_owner(struct sk_buff *skb)
 	struct task_struct *task = &init_task;
 
 	struct sock *sk = NULL;
-	struct net_device *dev = NULL;
 	struct file *filp = NULL;
 	u32 uid = 0;
 
@@ -79,13 +78,8 @@ static void detect_packet_owner(struct sk_buff *skb)
 		return;
 	}
 
-	dev = skb_dst(skb)->dev;
-	if (NULL == dev) {
-		return;
-	}
-
 	sk = skb_to_full_sk(skb);
-	if (NULL == sk || NULL == sk->sk_socket) {
+	if (NULL == sk || sock_flag(sk, SOCK_DEAD) || NULL == sk->sk_socket) {
 		pr_info("socket is null\n");
 		return;
 	}
@@ -138,7 +132,7 @@ static void dump_v6packet(struct sk_buff *skb) {
 	}
 }
 
-static unsigned int con_dfpar_enable = 1; //default on
+static unsigned int con_dfpar_enable = 0; //default off
 
 static ssize_t con_dfpar_enable_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
@@ -279,12 +273,14 @@ static struct nf_hook_ops con_dfpar_hook_ops[] __read_mostly = {
 #ifdef CONFIG_PM
 static void con_dfpar_suspend_resume_hook(void *data, const char *action, int val, bool start)
 {
-	if (!strcmp(action, "suspend_enter") && !start) {
-		pr_info("suspend exit, will dump the first received TCP/UDP packet");
-		dump_packet_rx = 1;
+	if (con_dfpar_enable != 0) {
+		if (!strcmp(action, "suspend_enter") && !start) {
+			pr_info("suspend exit, will dump the first received TCP/UDP packet");
+			dump_packet_rx = 1;
 #ifdef TRACK_OUT_PACKET
-		dump_packet_tx = 1;
+			dump_packet_tx = 1;
 #endif
+		}
 	}
 }
 #endif
