@@ -51,6 +51,7 @@
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
 #define UX_SCENE_SCROLL				(1 << 1)
+#define UX_SCENE_RINGTONE			(1 << 2)
 
 /* define for MVP priority, the higher the better, should be in the range (11~100) */
 #define UX_PRIO_HIGHEST		100
@@ -71,6 +72,14 @@
 
 #define UX_PRIO_LOWEST		11
 #define UX_PRIO_INVALID		-1
+
+#define SYSTEM_UID 1000
+#define PHONE_UID 1001
+#define MEDIA_UID 1013
+#define MEDIA_EX_UID 1040
+#define AUDIOSERVER_UID 1041
+#define MEDIA_CODEC_UID 1046
+#define CAMERASERVER_UID 1047
 
 /* global vars and functions */
 extern int moto_sched_enabled;
