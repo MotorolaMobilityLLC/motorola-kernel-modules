@@ -1246,6 +1246,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	cps_wls_log(CPS_LOG_DEBG, "CPS_REG_Sys_Op_Mode = 0x%02x, 0x%02x", temp, sys_mode_type);
 #endif
 	if (int_flag & RX_INT_HS_OK) {
+		chip->hs_st = HS_OK;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_HS_OK");
 		cps_get_sys_op_mode(&mode_type);
 		if (mode_type == Sys_Op_Mode_MOTO_WLC) {
@@ -1262,6 +1263,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	}
 	if (int_flag & RX_INT_HS_FAIL) {
 		chip->moto_stand = false;
+		chip->hs_st = HS_FAIL;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_HS_FAIL");
 		if (chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
 			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT)
@@ -1697,7 +1699,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		chip->rx_int_ready = false;
 		chip->bpp_icl_done = false;
 
-		if (!chip->stop_epp_flag && !chip->mode_select_force)
+		if (!chip->stop_epp_flag && !chip->mode_select_force && !chip->factory_wls_en)
 			cps_wls_mode_select("wls_det_irq_handler", true);
 
 		if (chip->rx_ldo_on) {
@@ -1708,6 +1710,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			chip->rx_offset_detect_count = 0;
 			chip->rx_offset = false;
 			chip->rx_vout_set = 0;
+			chip->hs_st = HS_UNKONWN;
 			//if (chip->factory_wls_en == true) {
 			//	chip->factory_wls_en = false;
 			//	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
@@ -3026,6 +3029,7 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
 static int factory_test_wls_en(void *input, bool en)
 {
 	int ret = 0;
+	int wait = 0;
 	struct chg_alg_device *alg;
 
 	alg = get_chg_alg_by_name("wlc");
@@ -3041,9 +3045,20 @@ static int factory_test_wls_en(void *input, bool en)
 		}
 	} else {
 		if (chip->factory_wls_en == true) {
+			wait = 50;
+			while (wait > 0 && chip->hs_st == HS_UNKONWN) {
+				msleep(100);
+				wait --;
+			}
 			cps_wls_mode_select("factory_test_stop_epp", false);
-			chip->factory_wls_en = false;
+			wait = 50;
+			while (wait > 0 && (cps_get_vbus() > 6000)) {
+				msleep(10);
+				wait --;
+			}
 			ret = mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
+			chip->factory_wls_en = false;
+			cps_wls_mode_select("factory_test_start_epp", true);
 		}
 	}
 

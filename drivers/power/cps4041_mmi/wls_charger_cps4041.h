@@ -257,6 +257,12 @@ static uint32_t epp_fod_array_w_folio[RX_FOD_GAIN_LEN] =
 			pr_err(fmt, ##args); \
 	} while	(0)
 
+typedef enum cps_hs_st
+{
+	HS_UNKONWN = 0,
+	HS_FAIL,
+	HS_OK,
+} cps_hs_st_e;
 /*-------------------------------------------------------------------*/
 struct cps_wls_chrg_chip {
 	struct i2c_client *client;
@@ -370,6 +376,7 @@ struct cps_wls_chrg_chip {
 	bool stop_epp_flag;
 	ktime_t stop_epp_ktime;
 	bool mode_select_force;
+	cps_hs_st_e hs_st;
 };
 
 typedef enum ept_reason
