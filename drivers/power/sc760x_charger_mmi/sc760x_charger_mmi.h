@@ -115,6 +115,7 @@ struct sc760x_chg_platform_data {
     int pow_lim_disable;
     int ilim_disable;
     int load_switch_disable;
+    int auto_bsm_disable;
     int lp_mode_enable;
     int itrichg;
     int iprechg;
