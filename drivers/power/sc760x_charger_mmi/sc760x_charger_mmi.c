@@ -76,6 +76,7 @@ static struct sc760x_chg_platform_data default_cfg = {
     .pow_lim_disable = 0,
     .ilim_disable = 0,
     .load_switch_disable = 0,
+    .auto_bsm_disable = 0,
     .lp_mode_enable = 0,
     .itrichg = 3,
     .iprechg = 2,
@@ -329,8 +330,13 @@ static int sc760x_set_ibat_limit(struct sc760x_chip *sc, int curr)
 
     dev_info(sc->dev, "%s : %dmA\n", __func__, curr);
 
+    if ((curr - IBAT_CHG_LIM_BASE) >= 0)
+        curr = curr - IBAT_CHG_LIM_BASE;
+    else
+        curr = 0;
+
     return sc760x_field_write(sc, IBAT_CHG_LIM,
-            (curr - IBAT_CHG_LIM_BASE) / IBAT_CHG_LIM_LSB);
+            curr / IBAT_CHG_LIM_LSB);
 }
 
 static int sc760x_set_ibat_dis(struct sc760x_chip *sc, bool en)
@@ -927,6 +933,7 @@ static int sc760x_parse_dt(struct sc760x_chip *sc, struct device *dev)
         {"sc,sc760x,pow-lim-disable", &(sc->pdata->pow_lim_disable)},
         {"sc,sc760x,ilim-disable", &(sc->pdata->ilim_disable)},
         {"sc,sc760x,load-switch-disable", &(sc->pdata->load_switch_disable)},
+        {"sc,sc760x,auto-bsm-disable", &(sc->pdata->auto_bsm_disable)},
         {"sc,sc760x,low-power-mode-enable", &(sc->pdata->lp_mode_enable)},
         {"sc,sc760x,itrichg", &(sc->pdata->itrichg)},
         {"sc,sc760x,iprechg", &(sc->pdata->iprechg)},
@@ -1003,6 +1010,7 @@ static int sc760x_init_device(struct sc760x_chip *sc)
         {POW_LIM_DIS, sc->pdata->pow_lim_disable},
         {ILIM_DIS, sc->pdata->ilim_disable},
         {LS_OFF, sc->pdata->load_switch_disable},
+        {AUTO_BSM_DIS, sc->pdata->auto_bsm_disable},
         {EN_LOWPOWER, sc->pdata->lp_mode_enable},
         {ITRICHG, sc->pdata->itrichg},
         {IPRECHG, sc->pdata->iprechg},
@@ -1096,7 +1104,6 @@ static int sc760x_plug_in(struct charger_device *chgdev)
 {
 	struct sc760x_chip *sc = charger_get_data(chgdev);
 
-	sc760x_set_auto_bsm_dis(sc, true);
 	cancel_delayed_work(&sc->charge_monitor_work);
 	schedule_delayed_work(&sc->charge_monitor_work,
 					msecs_to_jiffies(200));
@@ -1114,10 +1121,50 @@ static int sc760x_plug_out(struct charger_device *chgdev)
 	return 0;
 }
 
+static int mmi_enable_charger(struct charger_device *chgdev, bool en)
+{
+	struct sc760x_chip *sc = charger_get_data(chgdev);
+	int ret = 0;
+
+	if (en) {
+		sc760x_enable_charger(sc);
+		sc760x_set_auto_bsm_dis(sc, true);
+	} else {
+		sc760x_disable_charger(sc);
+		sc760x_set_auto_bsm_dis(sc, false);
+	}
+
+	return ret;
+}
+
+static int mmi_set_charging_current(struct charger_device *chgdev, u32 uA)
+{
+	struct sc760x_chip *sc = charger_get_data(chgdev);
+	int ret = 0;
+
+	ret = sc760x_set_ibat_limit(sc, uA/1000);
+
+	return ret;
+}
+
+int mmi_get_charging_current(struct charger_device *chgdev, u32 *uA)
+{
+	struct sc760x_chip *sc = charger_get_data(chgdev);
+	int ret = 0, mA = 0;
+
+	ret = sc760x_get_ibat_limit(sc, &mA);
+	*uA = mA * 1000;
+
+	return ret;
+}
+
 static const struct charger_ops sc760x_chg_ops = {
 	/* cable plug in/out */
 	.plug_in = sc760x_plug_in,
 	.plug_out = sc760x_plug_out,
+	.enable = mmi_enable_charger,
+	.set_charging_current = mmi_set_charging_current,
+	.get_charging_current = mmi_get_charging_current,
 };
 
 static const struct charger_properties sc760x_chg_props = {
