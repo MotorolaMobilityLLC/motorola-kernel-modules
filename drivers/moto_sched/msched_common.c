@@ -122,7 +122,7 @@ unsigned int task_get_mvp_limit(int mvp_prio) {
 	if (mvp_prio == UX_PRIO_KSWAPD)
 		return 100000000U;
 
-	return -1;
+	return 0;
 }
 EXPORT_SYMBOL(task_get_mvp_limit);
 
