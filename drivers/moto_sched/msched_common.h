@@ -47,19 +47,20 @@
 #define UX_TYPE_INHERIT_LOW			(1 << 10)
 #define UX_TYPE_GESTURE_MONITOR		(1 << 11)
 #define UX_TYPE_SF					(1 << 12)
+#define UX_TYPE_AUDIOSERVICE		(1 << 13)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
 #define UX_SCENE_SCROLL				(1 << 1)
-#define UX_SCENE_RINGTONE			(1 << 2)
+#define UX_SCENE_AUDIO				(1 << 2)
 
 /* define for MVP priority, the higher the better, should be in the range (11~100) */
 #define UX_PRIO_HIGHEST		100
 
 #define UX_PRIO_URGENT_AUDIO	30
-#define UX_PRIO_INPUT		29
-#define UX_PRIO_ANIMATOR	28
-#define UX_PRIO_AUDIO		27
+#define UX_PRIO_AUDIO		29
+#define UX_PRIO_INPUT		28
+#define UX_PRIO_ANIMATOR	27
 #define UX_PRIO_KSWAPD		26
 
 #define UX_PRIO_TOPAPP		20 // fixed value 20, aligned with walt.h, must not be changed!
@@ -81,12 +82,20 @@
 #define MEDIA_CODEC_UID 1046
 #define CAMERASERVER_UID 1047
 
+#define AUDIO_PID_INDEX 		0
+#define AUDIO_HAL_PID_INDEX 	1
+#define MEDIA_PID_INDEX 		2
+#define MEDIA_SWCODEC_PID_INDEX 3
+#define AUDIO_APP_PID_INDEX 	4
+#define MAX_AUDIO_SIZE 			5
+
 /* global vars and functions */
 extern int moto_sched_enabled;
 extern int moto_sched_scene;
 extern pid_t global_systemserver_tgid;
 extern pid_t global_surfaceflinger_tgid;
 extern pid_t global_boost_uid;
+extern int global_audio_pids[MAX_AUDIO_SIZE];
 
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
 extern unsigned int task_get_mvp_limit(int mvp_prio);

@@ -32,6 +32,8 @@ pid_t global_systemserver_tgid = -1;
 pid_t global_surfaceflinger_tgid = -1;
 pid_t global_boost_uid = -1;
 
+int global_audio_pids[MAX_AUDIO_SIZE] = {0};
+
 struct proc_dir_entry *d_moto_sched;
 
 enum {
@@ -198,6 +200,18 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_systemserver_tgid = ux_task->tgid;
 			} else if (ux_type & UX_TYPE_SF) {
 				global_surfaceflinger_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_AUDIOSERVICE) {
+				if (strcmp(ux_task->comm, "audioserver") == 0) {
+					global_audio_pids[AUDIO_PID_INDEX] = ux_task->tgid;
+				} else if (strcmp(ux_task->comm, "mediaserver") == 0) {
+					global_audio_pids[MEDIA_PID_INDEX] = ux_task->tgid;
+				} else if (strcmp(ux_task->comm, "mediaswcodec") == 0) {
+					global_audio_pids[MEDIA_SWCODEC_PID_INDEX] = ux_task->tgid;
+				} else if (task_uid(ux_task).val == AUDIOSERVER_UID) {
+					global_audio_pids[AUDIO_HAL_PID_INDEX] = ux_task->tgid;
+				} else {
+					global_audio_pids[AUDIO_APP_PID_INDEX] = ux_task->tgid;
+				}
 			}
 		}
 
