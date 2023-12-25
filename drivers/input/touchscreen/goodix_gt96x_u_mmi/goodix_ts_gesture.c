@@ -143,13 +143,15 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd, struct goodix_ts_event *
 	case GOODIX_GESTURE_SINGLE_TAP:
 		if (cd->gesture_type & TS_MMI_GESTURE_SINGLE) {
 			ts_info("get SINGLE-TAP gesture");
-			mmi_event.evcode = 1;
-			mmi_event.evdata.x = le16_to_cpup((__le16 *)event->gesture_data);
-			mmi_event.evdata.y = le16_to_cpup((__le16 *)(event->gesture_data + 2));
-			/* call class method */
-			ret = cd->imports->report_gesture(&mmi_event);
-			if (!ret)
-				PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+			if (cd->imports && cd->imports->report_gesture) {
+				mmi_event.evcode = 1;
+				mmi_event.evdata.x = le16_to_cpup((__le16 *)event->gesture_data);
+				mmi_event.evdata.y = le16_to_cpup((__le16 *)(event->gesture_data + 2));
+				/* call class method */
+				ret = cd->imports->report_gesture(&mmi_event);
+				if (!ret)
+					PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+			}
 		} else {
 			ts_info("not enable SINGLE-TAP");
 		}
@@ -157,13 +159,15 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd, struct goodix_ts_event *
 	case GOODIX_GESTURE_DOUBLE_TAP:
 		if (cd->gesture_type & TS_MMI_GESTURE_DOUBLE) {
 			ts_info("get DOUBLE-TAP gesture");
-			mmi_event.evcode = 4;
-			mmi_event.evdata.x = le16_to_cpup((__le16 *)event->gesture_data);
-			mmi_event.evdata.y = le16_to_cpup((__le16 *)(event->gesture_data + 2));
-			/* call class method */
-			ret = cd->imports->report_gesture(&mmi_event);
-			if (!ret)
-				PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+			if (cd->imports && cd->imports->report_gesture) {
+				mmi_event.evcode = 4;
+				mmi_event.evdata.x = le16_to_cpup((__le16 *)event->gesture_data);
+				mmi_event.evdata.y = le16_to_cpup((__le16 *)(event->gesture_data + 2));
+				/* call class method */
+				ret = cd->imports->report_gesture(&mmi_event);
+				if (!ret)
+					PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+			}
 		} else {
 			ts_info("not enable DOUBLE-TAP");
 		}
