@@ -19,7 +19,6 @@
 
 #include "msched_common.h"
 
-
 static inline int task_get_ux_type(struct task_struct *p)
 {
 #if IS_ENABLED(CONFIG_SCHED_WALT)
@@ -56,14 +55,15 @@ static inline bool task_in_boost_uid(struct task_struct *p)
 			&& global_boost_uid > 0 && task_uid(p).val == global_boost_uid;
 }
 
-static inline bool task_in_audio_uid(struct task_struct *p)
+static inline bool task_in_audio_pid(struct task_struct *p)
 {
-	if (moto_sched_scene & UX_SCENE_RINGTONE) {
-		int uid = task_uid(p).val;
-		return (uid == MEDIA_CODEC_UID)
-			|| (uid == MEDIA_UID)
-			|| (uid == MEDIA_EX_UID)
-			|| (uid == AUDIOSERVER_UID);
+	if (moto_sched_scene & UX_SCENE_AUDIO) {
+		int i = 0;
+		for (i = 0; i < MAX_AUDIO_SIZE; i++) {
+			if (global_audio_pids[i] == p->tgid) {
+				return true;
+			}
+		}
 	}
 	return false;
 }
@@ -84,8 +84,16 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 
 	if (ux_type & UX_TYPE_PERF_DAEMON)
 		return UX_PRIO_HIGHEST;
-	else if (ux_type & UX_TYPE_AUDIO || task_in_audio_uid(p))
+	else if (ux_type & UX_TYPE_AUDIO)
 		return p->prio <= 101 ? UX_PRIO_URGENT_AUDIO : UX_PRIO_AUDIO;
+	else if (task_in_audio_pid(p)) {
+		if (p->prio <= 101)
+			return UX_PRIO_URGENT_AUDIO;
+		else if (p->prio <= 110)
+			return UX_PRIO_AUDIO;
+		else
+			return UX_PRIO_SYSTEM_LOW;
+	}
 	else if (ux_type & UX_TYPE_INPUT)
 		return UX_PRIO_INPUT;
 	else if (ux_type & UX_TYPE_ANIMATOR)
@@ -113,14 +121,22 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 }
 EXPORT_SYMBOL(task_get_mvp_prio);
 
+#define AUDIO_MVP_LIMIT  20000000U
+#define TOPAPP_MVP_LIMIT 100000000U
+#define KSWAPD_MVP_LIMIT 100000000U
 unsigned int task_get_mvp_limit(int mvp_prio) {
+
+	// 20ms for audio threads
+	if (mvp_prio == UX_PRIO_URGENT_AUDIO || mvp_prio == UX_PRIO_AUDIO)
+		return AUDIO_MVP_LIMIT;
+
 	// 100ms for top app
 	if (mvp_prio == UX_PRIO_TOPAPP || mvp_prio == UX_PRIO_TOPAPP_HIGH || mvp_prio == UX_PRIO_TOPAPP_LOW)
-		return 100000000U;
+		return TOPAPP_MVP_LIMIT;
 
 	// 100ms for kswapd
 	if (mvp_prio == UX_PRIO_KSWAPD)
-		return 100000000U;
+		return KSWAPD_MVP_LIMIT;
 
 	return 0;
 }
