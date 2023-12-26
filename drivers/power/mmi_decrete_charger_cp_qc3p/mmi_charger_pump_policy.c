@@ -928,9 +928,11 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		} else if (chip->pd_request_curr + chip->pps_curr_steps
 				<= chip->pd_curr_max
 				&& vbatt_volt < chrg_step->chrg_step_cv_volt
-				&& ibatt_curr < chrg_step->chrg_step_cc_curr) {
+				&& ibatt_curr < ((chip->system_thermal_level != THERMAL_NOT_LIMIT)?
+				min(chrg_step->chrg_step_cc_curr, chip->system_thermal_level):
+				chrg_step->chrg_step_cc_curr)){
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
-                                mmi_chrg_dbg(chip, PR_MOTO, "pd_request_curr: %dua, pd_curr_max: %dua, chrg_step_cc_curr: %d, pps_curr_steps: %d \n", chip->pd_request_curr, chip->pd_curr_max, chrg_step->chrg_step_cc_curr, chip->pps_curr_steps);
+                                mmi_chrg_dbg(chip, PR_MOTO, "pd_request_curr: %dua, pd_curr_max: %dua, chrg_step_cc_curr: %d, pps_curr_steps: %d, system_thermal_level: %d\n", chip->pd_request_curr, chip->pd_curr_max, chrg_step->chrg_step_cc_curr, chip->pps_curr_steps, chip->system_thermal_level);
 
 //				if(chip->pd_request_curr + 2 * chip->pps_curr_steps <= chrg_step->chrg_step_cc_curr){
 //				volt_change = chip->pps_curr_steps * 2;
@@ -1617,7 +1619,9 @@ schedule:
 
 	} else if (chip->system_thermal_level > chip->thermal_min_level &&
 		(sm_state == PM_STATE_CP_CC_LOOP ||
-		sm_state == PM_STATE_CP_CV_LOOP
+		sm_state == PM_STATE_CP_CV_LOOP ||
+		sm_state == PM_STATE_PPS_TUNNING_VOLT||
+		sm_state == PM_STATE_PPS_TUNNING_CURR
 #ifdef CONFIG_MOTO_CHG_WT6670F_SUPPORT
 		|| sm_state == PM_STATE_POWER_LIMIT_LOOP
 #endif
