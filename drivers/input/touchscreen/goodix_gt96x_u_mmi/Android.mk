@@ -21,6 +21,10 @@ ifeq ($(TOUCHSCREEN_LAST_TIME),true)
     KBUILD_OPTIONS += CONFIG_GTP_LAST_TIME=y
 endif
 
+ifeq ($(ENABLE_GTP_PALM_CANCEL),true)
+    KBUILD_OPTIONS += CONFIG_ENABLE_GTP_PALM_CANCEL=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_gt96x_u_mmi.ko
 LOCAL_MODULE_TAGS := optional

@@ -554,6 +554,7 @@ struct goodix_ts_key {
 /* touch event data */
 struct goodix_touch_data {
 	int touch_num;
+	bool palm_on;
 	struct goodix_ts_key keys[GOODIX_MAX_KEY];
 	struct goodix_ts_coords coords[GOODIX_MAX_TOUCH];
 };

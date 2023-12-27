@@ -1080,6 +1080,7 @@ static int brl_esd_check(struct goodix_ts_core *cd)
 #define GOODIX_GESTURE_EVENT		0x20
 #define POINT_TYPE_STYLUS_HOVER		0x01
 #define POINT_TYPE_STYLUS			0x03
+#define GOODIX_PALM_FLAG			0x10
 
 static void goodix_parse_finger(struct goodix_touch_data *touch_data,
 				u8 *buf, int touch_num)
@@ -1167,6 +1168,14 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 	memset(ts_event, 0, sizeof(*ts_event));
 	/* copy pre-data to buffer */
 	memcpy(buffer, pre_buf, pre_buf_len);
+
+#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
+	if (buffer[2] & GOODIX_PALM_FLAG) {
+		ts_event->touch_data.palm_on = true;
+		ts_debug("goodix palm on, touch num %d", pre_buf[2] & 0x0F);
+	} else
+		ts_event->touch_data.palm_on = false;
+#endif
 
 	touch_num = buffer[2] & 0x0F;
 
