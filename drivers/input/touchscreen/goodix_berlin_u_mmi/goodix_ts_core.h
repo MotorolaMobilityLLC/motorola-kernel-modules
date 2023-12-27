@@ -438,9 +438,7 @@ struct goodix_ts_event {
 	u8 gesture_type;
 	struct goodix_touch_data touch_data;
 	struct goodix_pen_data pen_data;
-#ifdef CONFIG_GTP_FOD
 	u8 gesture_data[GOODIX_GESTURE_DATA_LEN];
-#endif
 };
 
 enum goodix_ic_bus_type {

@@ -233,6 +233,16 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 	if (atomic_read(&cd->suspended) == 0)
 		return EVT_CONTINUE;
 
+	if (cd->board_data.gesture_wait_pm) {
+		PM_WAKEUP_EVENT(cd->gesture_wakelock, 3000);
+		/* Waiting for pm resume completed */
+		ret = wait_event_interruptible_timeout(cd->pm_wq, atomic_read(&cd->pm_resume), msecs_to_jiffies(700));
+		if (!ret) {
+			ts_err("system(spi) can't finished resuming procedure.");
+			return IRQ_HANDLED;
+		}
+	}
+
 	ret = hw_ops->event_handler(cd, &gs_event);
 	if (ret) {
 		ts_err("failed get gesture data");
@@ -260,6 +270,8 @@ static int gsx_gesture_ist(struct goodix_ts_core *cd,
 				mmi_event.evcode =4;
 			}
 
+			mmi_event.evdata.x = le16_to_cpup((__le16 *)gs_event.gesture_data);
+			mmi_event.evdata.y = le16_to_cpup((__le16 *)(gs_event.gesture_data + 2));
 			/* call class method */
 			ret = cd->imports->report_gesture(&mmi_event);
 			if (!ret)
