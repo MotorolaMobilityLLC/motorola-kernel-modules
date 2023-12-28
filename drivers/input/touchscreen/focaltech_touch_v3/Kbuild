@@ -72,6 +72,10 @@ ifneq ($(filter m y,$(CONFIG_FTS_LAST_TIME)),)
     EXTRA_CFLAGS += -DCONFIG_FTS_LAST_TIME
 endif
 
+ifneq ($(filter m y,$(CONFIG_FTS_INPUT_ID)),)
+    EXTRA_CFLAGS += -DCONFIG_FTS_INPUT_ID
+endif
+
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
 USE_TARGET_PRODUCT := $(strip $(subst _factory,, $(TARGET_PRODUCT)))
 else
