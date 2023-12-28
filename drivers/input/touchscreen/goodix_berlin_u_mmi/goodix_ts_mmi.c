@@ -1063,6 +1063,13 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 			gesture_cmd &= ~(1 << 15);
 			ts_info("enable double gesture mode cmd 0x%04x\n", gesture_cmd);
 		}
+#ifdef GOODIX_PALM_SENSOR_EN
+		if (gesture_type & TS_MMI_GESTURE_PALM) {
+			/* override previous setting */
+			gesture_cmd = 0xFFFF;
+			ts_info("enable palm gesture mode cmd 0x%04x\n", gesture_cmd);
+		}
+#endif
 
 		ret = goodix_ts_send_cmd(core_data, ENTER_GESTURE_MODE_CMD, 6, 0xFF, 0xFF);
 		if (ret < 0) {
@@ -1212,6 +1219,18 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 		}
 	}
 
+#ifdef GOODIX_PALM_SENSOR_EN
+	if (core_data->get_mode.palm_detection) {
+		ret = goodix_ts_send_cmd(core_data, PALM_DETECTION_SWITCH_CMD, 5,
+						core_data->get_mode.palm_detection, 0x00);
+		if (!ret) {
+			core_data->set_mode.palm_detection = core_data->get_mode.palm_detection;
+			msleep(20);
+			ts_info("Success to %d palm detection mode\n", core_data->get_mode.palm_detection);
+		}
+	}
+#endif
+
 	if (core_data->board_data.stowed_mode_ctrl) {
 		core_data->set_mode.stowed = 0;
 	}
@@ -1253,6 +1272,12 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev) {
 		frame_log_capture_stop(core_data);
 	}
 	mutex_unlock(&core_data->frame_log_lock);
+#endif
+
+#ifdef GOODIX_PALM_SENSOR_EN
+	if (core_data->set_mode.palm_detection) {
+		del_timer(&core_data->palm_release_timer);
+	}
 #endif
 
 	if (core_data->board_data.stylus_mode_ctrl && core_data->set_mode.stylus_mode) {
@@ -1369,6 +1394,55 @@ static int goodix_ts_mmi_methods_get_active_region(struct device *dev, void *uid
 	return 0;
 }
 
+#ifdef GOODIX_PALM_SENSOR_EN
+int goodix_ts_mmi_palm_set_enable(struct device *dev, unsigned int enable)
+{
+	int ret = 0;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	core_data->get_mode.palm_detection= enable;
+	if (core_data->set_mode.palm_detection == enable) {
+		ts_info("The value = %d is same, so not to write", enable);
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	//clear palm status before enable detection
+	if (enable)
+		atomic_set(&core_data->palm_status, 0);
+	else {
+		if (core_data->imports && core_data->imports->report_palm) {
+			core_data->imports->report_palm(0);
+			ts_info("Disable palm detection, report far\n");
+		}
+		del_timer(&core_data->palm_release_timer);
+	}
+
+	ret = goodix_ts_send_cmd(core_data, PALM_DETECTION_SWITCH_CMD, 5,
+						core_data->get_mode.palm_detection, 0x00);
+	if (ret < 0) {
+		ts_err("failed to set palm detection, enable = %d", enable);
+		goto exit;
+	}
+
+	core_data->set_mode.palm_detection = enable;
+	msleep(20);
+	ts_info("Success set palm detection to %d\n", enable);
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+#endif
+
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
@@ -1387,6 +1461,9 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.charger_mode = goodix_ts_mmi_charger_mode,
 	.refresh_rate = goodix_ts_mmi_refresh_rate,
 	.active_region = goodix_ts_mmi_active_region,
+#ifdef GOODIX_PALM_SENSOR_EN
+	.palm_set_enable = goodix_ts_mmi_palm_set_enable,
+#endif
 	/* Firmware */
 	.firmware_update = goodix_ts_firmware_update,
 	/* vendor specific attribute group */
