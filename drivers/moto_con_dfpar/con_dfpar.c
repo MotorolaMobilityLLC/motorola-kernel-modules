@@ -69,9 +69,7 @@ static int dump_packet_tx = 0;
 static void detect_packet_owner(struct sk_buff *skb)
 {
 	struct task_struct *task = &init_task;
-
 	struct sock *sk = NULL;
-	struct file *filp = NULL;
 	u32 uid = 0;
 
 	if (NULL == skb) {
@@ -79,17 +77,11 @@ static void detect_packet_owner(struct sk_buff *skb)
 	}
 
 	sk = skb_to_full_sk(skb);
-	if (NULL == sk || sock_flag(sk, SOCK_DEAD) || NULL == sk->sk_socket) {
-		pr_info("socket is null\n");
+	if (NULL == sk) {
+		pr_info("sock is null\n");
 		return;
 	}
-
-	filp = sk->sk_socket->file;
-	if (NULL == filp) {
-		return;
-	}
-
-	uid = filp->f_cred->fsuid.val;
+	uid = sk->sk_uid.val;
 	if (!uid) {
 		pr_info("uid is null\n");
 		return;
