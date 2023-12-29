@@ -947,7 +947,7 @@ static int aw8692x_get_f0(struct aw_haptic *aw_haptic)
 	haptic_hv_i2c_writes(aw_haptic, AW8692X_REG_CONTCFG3, &cont_config[0], AW_I2C_BYTE_ONE);
 	/* play go */
 	aw8692x_play_go(aw_haptic, true);
-	usleep_range(20000, 20500);
+	usleep_range(120000, 120500);
 	aw8692x_wait_enter_standby(aw_haptic);
 	ret = aw8692x_read_f0(aw_haptic);
 	/* restore default config */
