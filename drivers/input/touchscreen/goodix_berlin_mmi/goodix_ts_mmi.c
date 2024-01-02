@@ -129,7 +129,7 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 	if (core_data->board_data.sample_ctrl)
 		ADD_ATTR(sample);
 
-	if (core_data->board_data.stylus_mode_ctrl)
+	if (core_data->board_data.stylus_mode_ctrl || core_data->board_data.passive_stylus_mode_ctrl)
 		ADD_ATTR(stylus_mode);
 
 	if (core_data->board_data.sensitivity_ctrl)
@@ -348,23 +348,31 @@ static int goodix_clock_enable(struct goodix_ts_core *core_data, bool mode) {
 static int goodix_stylus_mode(struct goodix_ts_core *core_data, int mode) {
 	int ret = 0;
 
-	if (mode) {
-		goodix_clock_enable(core_data, mode);
-		msleep(50);
-		ret = goodix_ts_send_cmd(core_data, STYLUS_MODE_SWITCH_CMD, 5, mode, 0x00);
+	if (core_data->board_data.passive_stylus_mode_ctrl) {
+		ret = goodix_ts_send_cmd(core_data, 0x32, 5, mode, 0x00);
 		if (ret < 0) {
-			ts_err("Failed to Disable stylus mode\n");
+			ts_err("Failed to set stylus mode %d\n", mode);
 			return ret;
 		}
-		msleep(20);
 	} else {
-		ret = goodix_ts_send_cmd(core_data, STYLUS_MODE_SWITCH_CMD, 5, mode, 0x00);
-		if (ret < 0) {
-			ts_err("Failed to Disable stylus mode\n");
-			return ret;
+		if (mode) {
+			goodix_clock_enable(core_data, mode);
+			msleep(50);
+			ret = goodix_ts_send_cmd(core_data, STYLUS_MODE_SWITCH_CMD, 5, mode, 0x00);
+			if (ret < 0) {
+				ts_err("Failed to Disable stylus mode\n");
+				return ret;
+			}
+			msleep(20);
+		} else {
+			ret = goodix_ts_send_cmd(core_data, STYLUS_MODE_SWITCH_CMD, 5, mode, 0x00);
+			if (ret < 0) {
+				ts_err("Failed to Disable stylus mode\n");
+				return ret;
+			}
+			msleep(50);
+			goodix_clock_enable(core_data, mode);
 		}
-		msleep(50);
-		goodix_clock_enable(core_data, mode);
 	}
 
 	ts_info("Success to %s stylus mode", mode ? "Enable" : "Disable");
@@ -381,6 +389,12 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 
 	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
+
+	/* if pen in, don't set stylus mode from app */
+#ifdef GTP_PEN_NOTIFIER
+	if (!core_data->gtp_pen_detect_flag)
+		return -EINVAL;
+#endif
 
 	ret = kstrtoul(buf, 0, &mode);
 	if (ret < 0) {
@@ -1183,7 +1197,8 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	/* All IC status are cleared after reset */
 	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
 	/* restore data */
-	if (core_data->board_data.stylus_mode_ctrl && core_data->get_mode.stylus_mode) {
+	if ((core_data->board_data.stylus_mode_ctrl || core_data->board_data.passive_stylus_mode_ctrl)
+		&& core_data->get_mode.stylus_mode) {
 		ret = goodix_stylus_mode(core_data, core_data->get_mode.stylus_mode);
 		if (!ret) {
 			core_data->set_mode.stylus_mode = core_data->get_mode.stylus_mode;

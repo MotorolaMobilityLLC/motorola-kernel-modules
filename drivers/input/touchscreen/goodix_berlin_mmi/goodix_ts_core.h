@@ -310,6 +310,7 @@ struct goodix_ts_board_data {
 
 	bool sensitivity_ctrl;
 	bool stylus_mode_ctrl;
+	bool passive_stylus_mode_ctrl;
 	bool film_mode_ctrl;
 	bool leather_mode_ctrl;
 	bool interpolation_ctrl;

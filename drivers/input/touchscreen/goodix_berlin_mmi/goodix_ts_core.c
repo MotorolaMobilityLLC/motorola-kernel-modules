@@ -1100,6 +1100,11 @@ static int goodix_parse_dt(struct device_node *node,
 		}
 	}
 
+	board_data->passive_stylus_mode_ctrl = of_property_read_bool(node,
+					"goodix,passive-stylus-mode-ctrl");
+	if (board_data->passive_stylus_mode_ctrl)
+		ts_info("support goodix passive stylus mode");
+
 	board_data->sensitivity_ctrl = of_property_read_bool(node,
 					"goodix,sensitivity-ctrl");
 	if (board_data->sensitivity_ctrl)
@@ -2522,10 +2527,15 @@ static int pen_notifier_callback(struct notifier_block *self,
 
 	ts_info("Received event(%lu) for pen detection\n", event);
 
-	if (event == PEN_DETECTION_INSERT)
+	if (event == PEN_DETECTION_INSERT) {
 		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
-	else if (event == PEN_DETECTION_PULL)
+		cd->set_mode.stylus_mode = GTP_FINGER_MODE;
+		cd->get_mode.stylus_mode = GTP_FINGER_MODE;
+	} else if (event == PEN_DETECTION_PULL) {
 		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
+		cd->set_mode.stylus_mode = GTP_PEN_MODE;
+		cd->get_mode.stylus_mode = GTP_PEN_MODE;
+	}
 
 	mutex_lock_interruptible(&cd->mode_lock);
 
