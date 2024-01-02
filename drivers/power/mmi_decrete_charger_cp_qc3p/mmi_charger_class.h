@@ -94,6 +94,7 @@ struct mmi_charger_device {
 };
 
 struct mmi_charger_ops {
+	int (*init_chip)(struct mmi_charger_device *chrg);
 	int (*enable)(struct mmi_charger_device *chrg, bool en);
 	int (*is_enabled)(struct mmi_charger_device *chrg, bool *en);
 	int (*get_charging_current)(struct mmi_charger_device *chrg, u32 *uA);
@@ -116,6 +117,7 @@ extern struct mmi_charger_device *mmi_get_charger_by_name(const char *name);
 extern int is_charger_exist(const char *name);
 extern int mmi_charger_class_init(void);
 extern void mmi_charger_class_exit(void);
+extern int mmi_init_chip(struct mmi_charger_device *chrg);
 extern int mmi_enable_charging(struct mmi_charger_device *chrg, bool en);
 extern int mmi_is_charging_enabled(struct mmi_charger_device *chrg, bool *en);
 extern int mmi_get_charing_current(struct mmi_charger_device *chrg, u32 *uA);

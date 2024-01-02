@@ -177,6 +177,22 @@ static void chrg_dev_init(struct mmi_charger_manager *chip, struct mmi_cp_policy
 	return;
 }
 
+static void mmi_chrg_dev_init_protect(struct mmi_charger_manager *chip)
+{
+	struct mmi_cp_policy_dev *chrg_list = &g_chrg_list;
+	mmi_chrg_err(chip,"runing in chrg dev init protect!\n");
+
+	if (chrg_list->cp_master) {
+		mmi_init_chip(chrg_list->chrg_dev[CP_MASTER]);
+	}
+
+	if (chrg_list->cp_slave) {
+		mmi_init_chip(chrg_list->chrg_dev[CP_SLAVE]);
+	}
+
+	return;
+}
+
 static void clear_chrg_dev_error_cnt(struct mmi_charger_manager *chip, struct mmi_cp_policy_dev *chrg_list)
 {
 	int chrg_num, i;
@@ -799,6 +815,9 @@ static void mmi_chrg_sm_work_func(struct work_struct *work)
 		mmi_chrg_info(chip,"CP master exist %d, CP slave exist %d !\n",
 							chrg_list->cp_master,
 							chrg_list->cp_slave);
+
+		mmi_chrg_dev_init_protect(chip);
+
 		if (chrg_list->cp_slave) {
 			mmi_chrg_info(chip,"CP slave is exist !\n");
 			mmi_chrg_info(chip,"chrg step cc curr %d uA, "

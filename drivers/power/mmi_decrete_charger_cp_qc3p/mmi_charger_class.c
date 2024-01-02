@@ -37,6 +37,14 @@
 
 static struct class *mmi_charger_class;
 
+int mmi_init_chip(struct mmi_charger_device *chrg)
+{
+	if(chrg != NULL && chrg->ops != NULL && chrg->ops->init_chip)
+		return chrg->ops->init_chip(chrg);
+
+	return -ENOTSUPP;
+}
+
 int mmi_enable_charging(struct mmi_charger_device *chrg, bool en)
 {
 	if(chrg != NULL && chrg->ops != NULL && chrg->ops->enable)

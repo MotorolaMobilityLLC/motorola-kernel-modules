@@ -93,6 +93,25 @@ static u32 cp_precise_div(u64 dividend, u64 divisor)
 }
 #endif
 
+static int cp_init_chip(struct mmi_charger_device *chrg)
+{
+	int rc;
+
+	if (!chrg->chg_dev) {
+		chrg_dev_info(chrg, "MMI CP chrg: chg_dev is null! \n");
+		return -ENODEV;
+	}
+
+	rc = charger_dev_init_chip(chrg->chg_dev);
+	if (rc<0) {
+		chrg_dev_info(chrg, "MMI chrg: init chip failed\n");
+	} else {
+		chrg_dev_info(chrg, "MMI chrg: init chip success\n");
+	}
+
+	return rc;
+}
+
 static int cp_enable_charging(struct mmi_charger_device *chrg, bool en)
 {
 	int rc;
@@ -364,6 +383,7 @@ static int cp_clear_charger_error(struct mmi_charger_device *chrg)
 }
 
 struct mmi_charger_ops mtk_pump_charger_ops = {
+	.init_chip = cp_init_chip,
 	.enable = cp_enable_charging,
 	.is_enabled = cp_is_charging_enabled,
 	.get_charging_current = cp_get_charging_current,

@@ -801,6 +801,39 @@ __maybe_unused static int sc8546d_init_device(struct sc8546d *sc)
     return ret;
 }
 
+__maybe_unused static int sc8546d_init_device_protect(struct sc8546d *sc)
+{
+    int ret = 0;
+    int i;
+    struct {
+        enum sc8546d_fields field_id;
+        int conv_data;
+    } props[] = {
+        {VBAT_OVP_DIS, sc->cfg.bat_ovp_disable},
+        {IBAT_OCP_DIS, sc->cfg.bat_ocp_disable},
+        {IBUS_UCP_DIS, sc->cfg.bus_ucp_disable},
+        {IBUS_OCP_DIS, sc->cfg.bus_ocp_disable},
+        {VBUS_OVP_DIS, sc->cfg.bus_ovp_disable},
+
+        {IBAT_OCP, sc->cfg.bat_ocp_th},
+        {VBAT_OVP, sc->cfg.bat_ovp_th},
+        {IBUS_OCP, sc->cfg.bus_ocp_th},
+        {VBUS_OVP, sc->cfg.bus_ovp_th},
+        {VAC_OVP, sc->cfg.ac_ovp_th},
+        {SET_IBAT_SNS_RES, sc->cfg.sense_r_mohm},
+    };
+
+    for (i = 0; i < ARRAY_SIZE(props); i++) {
+        dev_info(sc->dev,"%s (%d)\n", __func__, props[i].conv_data);
+        ret = sc8546d_field_write(sc, props[i].field_id, props[i].conv_data);
+    }
+
+    if (sc->mode == SLAVE) {
+        sc8546d_disable_vbus_range(sc);
+    }
+
+    return ret;
+}
 
 /*********************mtk charger interface start**********************************/
 static inline int to_sc8546d_adc(enum adc_channel chan)
@@ -950,9 +983,9 @@ static int mtk_sc8546d_reset_vbusovp_alarm(struct charger_device *chg_dev)
 
 static int mtk_sc8546d_init_chip(struct charger_device *chg_dev)
 {
-    struct sc8546d *sc = charger_get_data(chg_dev);
+	struct sc8546d *sc = charger_get_data(chg_dev);
 
-    return sc8546d_init_device(sc);
+    return sc8546d_init_device_protect(sc);
 }
 
 static int mtk_sc8546d_enable_adc(struct charger_device *chg_dev, bool en)
