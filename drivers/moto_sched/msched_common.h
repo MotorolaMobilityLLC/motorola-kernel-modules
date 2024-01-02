@@ -42,65 +42,79 @@
 #define UX_TYPE_TOPUI				(1 << 5)
 #define UX_TYPE_LAUNCHER			(1 << 6)
 #define UX_TYPE_KSWAPD				(1 << 7)
-#define UX_TYPE_ONCE				(1 << 8) /* clear ux type when dequeue */
+#define UX_TYPE_SYSTEM				(1 << 8)
 #define UX_TYPE_INHERIT_HIGH		(1 << 9)
 #define UX_TYPE_INHERIT_LOW			(1 << 10)
 #define UX_TYPE_GESTURE_MONITOR		(1 << 11)
 #define UX_TYPE_SF					(1 << 12)
 #define UX_TYPE_AUDIOSERVICE		(1 << 13)
+#define UX_TYPE_AUDIOAPP			(1 << 14)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
-#define UX_SCENE_SCROLL				(1 << 1)
+#define UX_SCENE_TOUCH				(1 << 1)
 #define UX_SCENE_AUDIO				(1 << 2)
 
 /* define for MVP priority, the higher the better, should be in the range (11~100) */
 #define UX_PRIO_HIGHEST		100
 
-#define UX_PRIO_URGENT_AUDIO	30
-#define UX_PRIO_AUDIO		29
-#define UX_PRIO_INPUT		28
-#define UX_PRIO_ANIMATOR	27
-#define UX_PRIO_KSWAPD		26
+#define UX_PRIO_URGENT_AUDIO 80
+#define UX_PRIO_AUDIO		79
+#define UX_PRIO_INPUT		78
 
-#define UX_PRIO_TOPAPP		20 // fixed value 20, aligned with walt.h, must not be changed!
-#define UX_PRIO_TOPUI		19
-#define UX_PRIO_LAUNCHER	18
-#define UX_PRIO_TOPAPP_HIGH	17
-#define UX_PRIO_SYSTEM_HIGH	16
-#define UX_PRIO_TOPAPP_LOW	15
-#define UX_PRIO_SYSTEM_LOW	14
+#define UX_PRIO_TOPAPP		70 // must be aligned with walt.h!
+#define UX_PRIO_ANIMATOR	69
+#define UX_PRIO_ANIMATOR_LOW 68
+#define UX_PRIO_TOPUI		67
+#define UX_PRIO_LAUNCHER	66
+#define UX_PRIO_GESTURE_MONITOR	65
+
+#define UX_PRIO_OTHER_HIGH	60 // mvp 60~41 = cfs 100~119
+#define UX_PRIO_KSWAPD		35
+#define UX_PRIO_OTHER_LOW	30 // mvp 30~11 = cfs 120~139
 
 #define UX_PRIO_LOWEST		11
 #define UX_PRIO_INVALID		-1
 
-#define SYSTEM_UID 1000
-#define PHONE_UID 1001
-#define MEDIA_UID 1013
-#define MEDIA_EX_UID 1040
-#define AUDIOSERVER_UID 1041
-#define MEDIA_CODEC_UID 1046
-#define CAMERASERVER_UID 1047
-
-#define AUDIO_PID_INDEX 		0
-#define AUDIO_HAL_PID_INDEX 	1
-#define MEDIA_PID_INDEX 		2
-#define MEDIA_SWCODEC_PID_INDEX 3
-#define AUDIO_APP_PID_INDEX 	4
-#define MAX_AUDIO_SIZE 			5
-
 /* global vars and functions */
-extern int moto_sched_enabled;
-extern int moto_sched_scene;
-extern pid_t global_systemserver_tgid;
-extern pid_t global_surfaceflinger_tgid;
-extern pid_t global_boost_uid;
-extern int global_audio_pids[MAX_AUDIO_SIZE];
+extern int __read_mostly moto_sched_enabled;
+extern int __read_mostly moto_sched_scene;
+extern int __read_mostly moto_boost_prio;
 
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
 extern unsigned int task_get_mvp_limit(int mvp_prio);
 extern void binder_inherit_ux_type(struct task_struct *task);
 extern void binder_clear_inherited_ux_type(struct task_struct *task);
+extern void binder_ux_type_set(struct task_struct *task, bool has_clear, bool clear);
 
+static inline int task_get_ux_type(struct task_struct *p)
+{
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	return wts->ux_type;
+#else
+	return 0; // todo: implement it on mtk platform.
+#endif
+}
+
+static inline void task_add_ux_type(struct task_struct *p, int type)
+{
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	wts->ux_type |= type;
+#else
+	// todo: implement it on mtk platform.
+#endif
+}
+
+static inline void task_clr_ux_type(struct task_struct *p, int type)
+{
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	wts->ux_type &= ~type;
+#else
+	// todo: implement it on mtk platform.
+#endif
+}
 
 #endif /* _MOTO_SCHED_COMMON_H_ */
