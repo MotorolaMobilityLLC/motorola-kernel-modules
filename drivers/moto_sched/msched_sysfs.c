@@ -24,15 +24,11 @@
 
 #define MAX_SET (128)
 
-int moto_sched_enabled;
-int moto_sched_scene;
+int __read_mostly moto_sched_enabled;
+int __read_mostly moto_sched_scene;
+int __read_mostly moto_boost_prio = 130;
 
 pid_t global_task_pid_to_read = -1;
-pid_t global_systemserver_tgid = -1;
-pid_t global_surfaceflinger_tgid = -1;
-pid_t global_boost_uid = -1;
-
-int global_audio_pids[MAX_AUDIO_SIZE] = {0};
 
 struct proc_dir_entry *d_moto_sched;
 
@@ -48,7 +44,8 @@ static struct msched_ops sched_ops = {
 	.task_get_mvp_prio	= task_get_mvp_prio,
 	.task_get_mvp_limit	= task_get_mvp_limit,
 	.binder_inherit_ux_type = binder_inherit_ux_type,
-	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type
+	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type,
+	.binder_ux_type_set = binder_ux_type_set
 };
 #endif
 
@@ -195,31 +192,7 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 		rcu_read_unlock();
 
 		if (ux_task) {
-			if (ux_type & UX_TYPE_PERF_DAEMON) {
-				// perf daemon is in systemserver, so use its tgid.
-				global_systemserver_tgid = ux_task->tgid;
-			} else if (ux_type & UX_TYPE_SF) {
-				global_surfaceflinger_tgid = ux_task->tgid;
-			} else if (ux_type & UX_TYPE_AUDIOSERVICE) {
-				if (strcmp(ux_task->comm, "audioserver") == 0) {
-					global_audio_pids[AUDIO_PID_INDEX] = ux_task->tgid;
-				} else if (strcmp(ux_task->comm, "mediaserver") == 0) {
-					global_audio_pids[MEDIA_PID_INDEX] = ux_task->tgid;
-				} else if (strcmp(ux_task->comm, "mediaswcodec") == 0) {
-					global_audio_pids[MEDIA_SWCODEC_PID_INDEX] = ux_task->tgid;
-				} else if (task_uid(ux_task).val == AUDIOSERVER_UID) {
-					global_audio_pids[AUDIO_HAL_PID_INDEX] = ux_task->tgid;
-				} else {
-					global_audio_pids[AUDIO_APP_PID_INDEX] = ux_task->tgid;
-				}
-			}
-		}
-
-		if (ux_task) {
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-			struct walt_task_struct *wts = (struct walt_task_struct *) ux_task->android_vendor_data1;
-			wts->ux_type |= ux_type;
-#endif
+			task_add_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
 		}
 		mutex_unlock(&ux_mutex);
@@ -238,13 +211,7 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 		rcu_read_unlock();
 
 		if (ux_task) {
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-			struct walt_task_struct *wts = (struct walt_task_struct *) ux_task->android_vendor_data1;
-			if (ux_type == 0) // clear all if pass 0.
-				wts->ux_type = 0;
-			else
-				wts->ux_type &= ~ux_type;
-#endif
+			task_clr_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
 		}
 		mutex_unlock(&ux_mutex);
@@ -268,10 +235,7 @@ static ssize_t proc_ux_task_read(struct file *file, char __user *buf,
 		get_task_struct(task);
 
 	if (task) {
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-		struct walt_task_struct *wts = (struct walt_task_struct *) task->android_vendor_data1;
-		ux_type = wts->ux_type;
-#endif
+		ux_type = task_get_ux_type(task);
 		len = snprintf(buffer, sizeof(buffer), "comm=%s pid=%d tgid=%d ux_type=%d\n",
 			task->comm, task->pid, task->tgid, ux_type);
 		put_task_struct(task);
@@ -282,12 +246,12 @@ static ssize_t proc_ux_task_read(struct file *file, char __user *buf,
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
 
-static ssize_t proc_boost_uid_write(struct file *file, const char __user *buf,
+static ssize_t proc_boost_prio_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	char buffer[13];
 	int err, val;
-	static DEFINE_MUTEX(ux_boostuid_mutex);
+	static DEFINE_MUTEX(boost_prio_mutex);
 
 	memset(buffer, 0, sizeof(buffer));
 
@@ -302,19 +266,19 @@ static ssize_t proc_boost_uid_write(struct file *file, const char __user *buf,
 	if (err)
 		return err;
 
-	mutex_lock(&ux_boostuid_mutex);
-	global_boost_uid = val;
-	mutex_unlock(&ux_boostuid_mutex);
+	mutex_lock(&boost_prio_mutex);
+	moto_boost_prio = val;
+	mutex_unlock(&boost_prio_mutex);
 	return count;
 }
 
-static ssize_t proc_boost_uid_read(struct file *file, char __user *buf,
+static ssize_t proc_boost_prio_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	char buffer[13];
 	size_t len = 0;
 
-	len = snprintf(buffer, sizeof(buffer), "%d\n", global_boost_uid);
+	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_boost_prio);
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
@@ -334,9 +298,9 @@ static const struct proc_ops proc_ux_task_fops = {
 	.proc_read		= proc_ux_task_read,
 };
 
-static const struct proc_ops proc_boost_uid_fops = {
-	.proc_write		= proc_boost_uid_write,
-	.proc_read		= proc_boost_uid_read,
+static const struct proc_ops proc_boost_prio_fops = {
+	.proc_write		= proc_boost_prio_write,
+	.proc_read		= proc_boost_prio_read,
 };
 
 int moto_sched_proc_init(void)
@@ -367,15 +331,15 @@ int moto_sched_proc_init(void)
 		goto err_creat_ux_task;
 	}
 
-	proc_node = proc_create("boost_uid", 0666, d_moto_sched, &proc_boost_uid_fops);
+	proc_node = proc_create("boost_prio", 0666, d_moto_sched, &proc_boost_prio_fops);
 	if (!proc_node) {
-		sched_err("failed to create proc node boost_uid\n");
-		goto err_creat_boost_uid;
+		sched_err("failed to create proc node boost_prio\n");
+		goto err_creat_boost_prio;
 	}
 
 	return 0;
 
-err_creat_boost_uid:
+err_creat_boost_prio:
 	remove_proc_entry("ux_task", d_moto_sched);
 
 err_creat_ux_task:
@@ -393,6 +357,7 @@ err_creat_d_moto_sched:
 
 void moto_sched_proc_deinit(void)
 {
+	remove_proc_entry("boost_prio", d_moto_sched);
 	remove_proc_entry("ux_task", d_moto_sched);
 	remove_proc_entry("ux_scene", d_moto_sched);
 	remove_proc_entry("enabled", d_moto_sched);

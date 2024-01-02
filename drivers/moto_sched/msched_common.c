@@ -19,51 +19,14 @@
 
 #include "msched_common.h"
 
-static inline int task_get_ux_type(struct task_struct *p)
+static inline bool task_in_audio_group(struct task_struct *p)
 {
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
-	return wts->ux_type;
-#else
-	return 0; // todo: implement it on mtk platform.
-#endif
-}
-
-static inline void task_add_ux_type(struct task_struct *p, int type)
-{
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
-	wts->ux_type |= type;
-#else
-	// todo: implement it on mtk platform.
-#endif
-}
-
-static inline void task_clr_ux_type(struct task_struct *p, int type)
-{
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
-	wts->ux_type &= ~type;
-#else
-	// todo: implement it on mtk platform.
-#endif
-}
-
-static inline bool task_in_boost_uid(struct task_struct *p)
-{
-	return (moto_sched_scene & UX_SCENE_LAUNCH)
-			&& global_boost_uid > 0 && task_uid(p).val == global_boost_uid;
-}
-
-static inline bool task_in_audio_pid(struct task_struct *p)
-{
-	if (moto_sched_scene & UX_SCENE_AUDIO) {
-		int i = 0;
-		for (i = 0; i < MAX_AUDIO_SIZE; i++) {
-			if (global_audio_pids[i] == p->tgid) {
-				return true;
-			}
-		}
+	int gl_ux_type = task_get_ux_type(p->group_leader);
+	if (gl_ux_type & UX_TYPE_AUDIOSERVICE) {
+		return p->prio <= 110;
+	} else if ((moto_sched_scene & UX_SCENE_AUDIO) && (gl_ux_type & UX_TYPE_AUDIOAPP)
+		&& (p->prio == 104 || p->prio == 101)) {
+		return true;
 	}
 	return false;
 }
@@ -84,59 +47,46 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 
 	if (ux_type & UX_TYPE_PERF_DAEMON)
 		return UX_PRIO_HIGHEST;
-	else if (ux_type & UX_TYPE_AUDIO)
+	else if (ux_type & UX_TYPE_AUDIO || task_in_audio_group(p))
 		return p->prio <= 101 ? UX_PRIO_URGENT_AUDIO : UX_PRIO_AUDIO;
-	else if (task_in_audio_pid(p)) {
-		if (p->prio <= 101)
-			return UX_PRIO_URGENT_AUDIO;
-		else if (p->prio <= 110)
-			return UX_PRIO_AUDIO;
-		else
-			return UX_PRIO_SYSTEM_LOW;
-	}
 	else if (ux_type & UX_TYPE_INPUT)
 		return UX_PRIO_INPUT;
 	else if (ux_type & UX_TYPE_ANIMATOR)
-		return UX_PRIO_ANIMATOR;
+		return p->prio <= 116 ? UX_PRIO_ANIMATOR : UX_PRIO_ANIMATOR_LOW;
 	else if (ux_type & UX_TYPE_TOPAPP)
-		return UX_PRIO_TOPAPP;
-	else if (with_inherit && (ux_type & UX_TYPE_INHERIT_HIGH))
 		return UX_PRIO_TOPAPP;
 	else if (ux_type & UX_TYPE_TOPUI)
 		return UX_PRIO_TOPUI;
-	else if (ux_type & (UX_TYPE_LAUNCHER|UX_TYPE_GESTURE_MONITOR))
+	else if ((moto_sched_scene & UX_SCENE_TOUCH) && (ux_type & UX_TYPE_LAUNCHER))
 		return UX_PRIO_LAUNCHER;
+	else if ((moto_sched_scene & UX_SCENE_TOUCH) && (ux_type & UX_TYPE_GESTURE_MONITOR))
+		return UX_PRIO_GESTURE_MONITOR;
+	else if (with_inherit && (ux_type & UX_TYPE_INHERIT_HIGH))
+		return UX_PRIO_OTHER_HIGH;
+	else if ((ux_type & UX_TYPE_SYSTEM || task_in_top_app_group(p)) && p->prio <= moto_boost_prio)
+		return p->prio < 120 ? (UX_PRIO_OTHER_HIGH - (p->prio - 100)) : (UX_PRIO_OTHER_LOW - (p->prio - 120));
 	else if (ux_type & UX_TYPE_KSWAPD)
 		return UX_PRIO_KSWAPD;
-	else if (task_in_top_app_group(p) || task_in_boost_uid(p))
-		return p->prio < 120 ? UX_PRIO_TOPAPP_HIGH : UX_PRIO_TOPAPP_LOW;
-	else if (p->tgid == global_systemserver_tgid || p->tgid == global_surfaceflinger_tgid)
-		return p->prio < 120 ? UX_PRIO_SYSTEM_HIGH : UX_PRIO_SYSTEM_LOW;
 	else if (with_inherit && (ux_type & UX_TYPE_INHERIT_LOW))
-		return UX_PRIO_SYSTEM_LOW;
-	else if (ux_type > 0) // in case we have some ux_type not handled, use UX_PRIO_SYSTEM_LOW.
-		return UX_PRIO_SYSTEM_LOW;
+		return UX_PRIO_OTHER_LOW;
 
 	return UX_PRIO_INVALID;
 }
 EXPORT_SYMBOL(task_get_mvp_prio);
 
-#define AUDIO_MVP_LIMIT  20000000U
-#define TOPAPP_MVP_LIMIT 100000000U
-#define KSWAPD_MVP_LIMIT 100000000U
+#define AUDIO_MVP_LIMIT		12000000U	// 12ms
+#define TOPAPP_MVP_LIMIT	120000000U	// 120ms
+#define KSWAPD_MVP_LIMIT	120000000U	// 120ms
+#define DEF_MVP_LIMIT		12000000U	// 12ms
 unsigned int task_get_mvp_limit(int mvp_prio) {
-
-	// 20ms for audio threads
 	if (mvp_prio == UX_PRIO_URGENT_AUDIO || mvp_prio == UX_PRIO_AUDIO)
 		return AUDIO_MVP_LIMIT;
-
-	// 100ms for top app
-	if (mvp_prio == UX_PRIO_TOPAPP || mvp_prio == UX_PRIO_TOPAPP_HIGH || mvp_prio == UX_PRIO_TOPAPP_LOW)
+	else if (mvp_prio == UX_PRIO_TOPAPP || mvp_prio == UX_PRIO_LAUNCHER || mvp_prio == UX_PRIO_TOPUI)
 		return TOPAPP_MVP_LIMIT;
-
-	// 100ms for kswapd
-	if (mvp_prio == UX_PRIO_KSWAPD)
+	else if (mvp_prio == UX_PRIO_KSWAPD)
 		return KSWAPD_MVP_LIMIT;
+	else if (mvp_prio > UX_PRIO_INVALID)
+		return DEF_MVP_LIMIT;
 
 	return 0;
 }
@@ -144,10 +94,8 @@ EXPORT_SYMBOL(task_get_mvp_limit);
 
 void binder_inherit_ux_type(struct task_struct *task) {
 	int mvp_prio = task_get_mvp_prio(current, false);
-	if (mvp_prio >= UX_PRIO_TOPUI) {
+	if (mvp_prio >= UX_PRIO_GESTURE_MONITOR) {
 		task_add_ux_type(task, UX_TYPE_INHERIT_HIGH);
-	} else {
-		task_add_ux_type(task, UX_TYPE_INHERIT_LOW);
 	}
 }
 EXPORT_SYMBOL(binder_inherit_ux_type);
@@ -156,3 +104,8 @@ void binder_clear_inherited_ux_type(struct task_struct *task) {
 	task_clr_ux_type(task, UX_TYPE_INHERIT_HIGH|UX_TYPE_INHERIT_LOW);
 }
 EXPORT_SYMBOL(binder_clear_inherited_ux_type);
+
+void binder_ux_type_set(struct task_struct *task, bool has_clear, bool clear) {
+
+}
+EXPORT_SYMBOL(binder_ux_type_set);
