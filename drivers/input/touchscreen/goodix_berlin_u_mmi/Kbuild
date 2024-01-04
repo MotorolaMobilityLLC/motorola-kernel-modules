@@ -118,6 +118,11 @@ else
 USE_TARGET_PRODUCT := $(TARGET_PRODUCT)
 endif
 
+ifeq ($(TARGET_PRODUCT),)
+USE_TARGET_PRODUCT := $(CONFIG_MTK_PROJECT_NAME)
+$(warning "USE_TARGET_PRODUCT = $(USE_TARGET_PRODUCT)")
+endif
+
 ifneq ($(filter oneli, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_ONELI
 else ifneq ($(filter hiphi, $(USE_TARGET_PRODUCT)), )
@@ -144,6 +149,8 @@ else ifneq ($(filter aion%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_AION
 else ifneq ($(filter manaus%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_MANAUS
+else ifneq ($(filter aito, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_AITO
 endif
 $(warning "goodix berlin EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
 
