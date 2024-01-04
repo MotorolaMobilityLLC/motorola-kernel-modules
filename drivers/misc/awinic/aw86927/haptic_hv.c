@@ -12,7 +12,7 @@
 #include <linux/firmware.h>
 #include <linux/proc_fs.h>
 #include <linux/mman.h>
-
+#include <linux/miscdevice.h>
 #include "haptic_hv.h"
 #include "haptic_hv_reg.h"
 
@@ -29,6 +29,8 @@ char aw_rtp_name[][AW_RTP_NAME_MAX] = {
 
 #ifdef AW_TIKTAP
 static struct aw_haptic *g_aw_haptic;
+#elif defined(CONFIG_AAC_RICHTAP_SUPPORT)
+struct aw_haptic *g_aw_haptic = NULL;
 #endif
 #ifdef AW_DOUBLE
 struct aw_haptic *left;
@@ -1232,10 +1234,349 @@ static void rtp_work_routine(struct work_struct *work)
 	mutex_unlock(&aw_haptic->rtp_lock);
 }
 
+#ifdef CONFIG_AAC_RICHTAP_SUPPORT
+static void richtap_clean_buf(struct aw_haptic *aw_haptic, int status)
+{
+	struct mmap_buf_format *opbuf = aw_haptic->start_buf;
+	int i = 0;
+
+	for(i = 0; i < RICHTAP_MMAP_BUF_SUM; i++)
+	{
+		memset(opbuf->data, 0, RICHTAP_MMAP_BUF_SIZE);
+		opbuf->status = status;
+		opbuf = opbuf->kernel_next;
+	}
+}
+
+static void richtap_update_fifo_data(struct aw_haptic *aw_haptic, uint32_t fifo_len)
+{
+	int32_t samples_left = 0, pos = 0, retry = 3;
+	aw_dbg("%s: entry\n", __func__);
+	do
+	{
+		if (aw_haptic->curr_buf->status == MMAP_BUF_DATA_VALID) {
+			samples_left = aw_haptic->curr_buf->length - aw_haptic->pos;
+			if (samples_left < fifo_len) {
+				memcpy(&aw_haptic->rtp_ptr[pos], &aw_haptic->curr_buf->data[aw_haptic->pos], samples_left);
+				pos += samples_left;
+				fifo_len -= samples_left;
+				aw_haptic->curr_buf->status = MMAP_BUF_DATA_INVALID;
+				aw_haptic->curr_buf->length = 0;
+				aw_haptic->curr_buf = aw_haptic->curr_buf->kernel_next;
+				aw_haptic->pos = 0;
+			}  else {
+				memcpy(&aw_haptic->rtp_ptr[pos], &aw_haptic->curr_buf->data[aw_haptic->pos], fifo_len);
+				aw_haptic->pos += fifo_len;
+				pos += fifo_len;
+				fifo_len = 0;
+			}
+		} else if (aw_haptic->curr_buf->status == MMAP_BUF_DATA_FINISHED)
+			break;
+		else {
+			if (retry-- <= 0) {
+				pr_info("invalid data\n");
+				break;
+			} else  {
+		                    usleep_range(1000,1000);
+			}
+		}
+	} while(fifo_len > 0 && atomic_read(&aw_haptic->richtap_rtp_mode));
+	aw_haptic->func->set_rtp_data(aw_haptic, aw_haptic->rtp_ptr, pos);
+}
+
+static bool richtap_rtp_start(struct aw_haptic *aw_haptic)
+{
+	int cnt = 200;
+	bool rtp_work_flag = false;
+	uint8_t reg_val = 0;
+
+	mutex_lock(&aw_haptic->lock);
+	aw_haptic->func->play_mode(aw_haptic, AW_RTP_MODE);
+	aw_haptic->func->play_go(aw_haptic, true);
+	usleep_range(2000, 2000);
+
+	while (cnt) {
+		reg_val = aw_haptic->func->get_glb_state(aw_haptic);
+		if  ((reg_val & AW_GLBRD_STATE_MASK) == AW_STATE_RTP) {
+			cnt = 0;
+			rtp_work_flag = true;
+			aw_info("%s: RTP_GO! glb_state=0x08\n", __func__);
+		} else {
+			cnt--;
+			aw_info("%s: wait for RTP_GO, glb_state=0x%02X\n", __func__, reg_val);
+		}
+		usleep_range(2000, 2500);
+	}
+
+	if (rtp_work_flag == false) {
+		aw_haptic->func->play_stop(aw_haptic);
+	}
+	mutex_unlock(&aw_haptic->lock);
+	return rtp_work_flag;
+}
+
+static void richtap_rtp_work(struct work_struct *work)
+{
+	struct aw_haptic *aw_haptic = container_of(work, struct aw_haptic, richtap_rtp_work);
+	uint32_t retry = 0, tmp_len = 0;
+	uint8_t glb_state_val = 0;
+
+	aw_haptic->curr_buf = aw_haptic->start_buf;
+
+	do {
+		if (aw_haptic->curr_buf->status == MMAP_BUF_DATA_VALID) {
+			if ((tmp_len + aw_haptic->curr_buf->length) > aw_haptic->ram.base_addr) {
+				memcpy(&aw_haptic->rtp_ptr[tmp_len], aw_haptic->curr_buf->data, (aw_haptic->ram.base_addr - tmp_len));
+				aw_haptic->pos = aw_haptic->ram.base_addr - tmp_len;
+				tmp_len = aw_haptic->ram.base_addr;
+			} else {
+				memcpy(&aw_haptic->rtp_ptr[tmp_len], aw_haptic->curr_buf->data, aw_haptic->curr_buf->length);
+				tmp_len += aw_haptic->curr_buf->length;
+				aw_haptic->curr_buf->status = MMAP_BUF_DATA_INVALID;
+				aw_haptic->curr_buf->length = 0;
+				aw_haptic->pos = 0;
+				aw_haptic->curr_buf = aw_haptic->curr_buf->kernel_next;
+			}
+		} else if (aw_haptic->curr_buf->status == MMAP_BUF_DATA_FINISHED)
+			break;
+		else
+			msleep(1);
+	} while(tmp_len < aw_haptic->ram.base_addr && retry++ < 30);
+	aw_info("rtp tmp_len = %d, retry = %d, aw_haptic->ram.base_addr = %d\n", tmp_len, retry, aw_haptic->ram.base_addr);
+
+	if (richtap_rtp_start(aw_haptic)) {
+		atomic_set(&aw_haptic->richtap_rtp_mode, true);
+		aw_haptic->func->set_rtp_data(aw_haptic, aw_haptic->rtp_ptr, tmp_len);
+		while(!aw_haptic->func->rtp_get_fifo_afs(aw_haptic) && atomic_read(&aw_haptic->richtap_rtp_mode) && (aw_haptic->curr_buf->status == MMAP_BUF_DATA_VALID)) {
+			richtap_update_fifo_data(aw_haptic, (aw_haptic->ram.base_addr >> 2));
+			glb_state_val = aw_haptic->func->get_glb_state(aw_haptic);
+			if ((glb_state_val & AW_GLBRD_STATE_MASK) == AW_STATE_STANDBY)
+				break;
+		}
+		aw_haptic->func->set_rtp_aei(aw_haptic, true);
+		aw_haptic->func->irq_clear(aw_haptic);
+	}
+}
+
+#ifdef AW_DOUBLE
+static int haptic_left_flag(int unuse)
+{
+	(void)unuse;
+	return LEFT_FOPS;
+}
+static int haptic_right_flag(int unuse)
+{
+	(void)unuse;
+	return RIGHT_FOPS;
+}
+#endif
+
+static int richtap_file_open(struct inode *inode, struct file *file)
+{
+	if (!try_module_get(THIS_MODULE))
+		return -ENODEV;
+#ifdef AW_DOUBLE
+	if (file->f_op->check_flags(1) == LEFT_FOPS) {
+		file->private_data = (void *)left;
+	} else if (file->f_op->check_flags(1) == RIGHT_FOPS) {
+		file->private_data = (void *)right;
+	} else {
+		file->private_data = (void *)NULL;
+		pr_err("%s: file private_data err!", __func__);
+	}
+#else
+	file->private_data = (void *)g_aw_haptic;
+#endif
+	return 0;
+}
+
+static int richtap_file_release(struct inode *inode, struct file *file)
+{
+	module_put(THIS_MODULE);
+	return 0;
+}
+
+static long richtap_file_unlocked_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	struct aw_haptic *aw_haptic = (struct aw_haptic *)filp->private_data;
+	int ret = 0, tmp;
+
+	aw_info("%s: cmd=0x%x, arg=0x%lx\n", __func__, cmd, arg);
+
+	switch(cmd) {
+	case RICHTAP_GET_HWINFO:
+		tmp = RICHTAP_AW_86927;
+		if(copy_to_user((void __user *)arg, &tmp, sizeof(int)))
+			ret = -EFAULT;
+		break;
+	case RICHTAP_RTP_MODE:
+		mutex_lock(&aw_haptic->lock);
+		aw_haptic->func->play_stop(aw_haptic);
+		mutex_unlock(&aw_haptic->lock);
+		if (copy_from_user(aw_haptic->rtp_ptr, (void __user *)arg, RICHTAP_MMAP_BUF_SIZE * RICHTAP_MMAP_BUF_SUM)) {
+			ret = -EFAULT;
+			break;
+		}
+		tmp = *((int*)aw_haptic->rtp_ptr);
+		if (tmp > (RICHTAP_MMAP_BUF_SIZE * RICHTAP_MMAP_BUF_SUM - 4)) {
+			dev_err(aw_haptic->dev, "rtp mode date len error %d\n", tmp);
+			ret = -EINVAL;
+			break;
+		}
+		aw_haptic->func->upload_lra(aw_haptic, AW_OSC_CALI_LRA);
+		aw_haptic->func->set_bst_vol(aw_haptic, aw_haptic->vmax);
+		if (richtap_rtp_start(aw_haptic)) {
+			aw_haptic->func->set_rtp_data(aw_haptic, &aw_haptic->rtp_ptr[4], tmp);
+		}
+		break;
+	case RICHTAP_OFF_MODE:
+		break;
+	case RICHTAP_GET_F0:
+		tmp = aw_haptic->f0;
+		if (copy_to_user((void __user *)arg, &tmp, sizeof(uint32_t)))
+			ret = -EFAULT;
+		break;
+	case RICHTAP_SETTING_GAIN:
+		if (arg > 0x80)
+			arg = 0x80;
+		aw_haptic->func->set_gain(aw_haptic, (uint8_t)arg);
+		break;
+	case RICHTAP_STREAM_MODE:
+		richtap_clean_buf(aw_haptic, MMAP_BUF_DATA_INVALID);
+		mutex_lock(&aw_haptic->lock);
+		aw_haptic->func->irq_clear(aw_haptic);
+		aw_haptic->func->play_stop(aw_haptic);
+		mutex_unlock(&aw_haptic->lock);
+		aw_haptic->func->set_rtp_aei(aw_haptic, false);
+		atomic_set(&aw_haptic->richtap_rtp_mode, false);
+		aw_haptic->func->upload_lra(aw_haptic, AW_OSC_CALI_LRA);
+		aw_haptic->func->set_bst_vol(aw_haptic, aw_haptic->vmax);
+		schedule_work(&aw_haptic->richtap_rtp_work);
+		break;
+        case RICHTAP_STOP_MODE:
+		richtap_clean_buf(aw_haptic, MMAP_BUF_DATA_FINISHED);
+		mutex_lock(&aw_haptic->lock);
+		aw_haptic->func->irq_clear(aw_haptic);
+		aw_haptic->func->play_stop(aw_haptic);
+		mutex_unlock(&aw_haptic->lock);
+		aw_haptic->func->set_rtp_aei(aw_haptic, false);
+		atomic_set(&aw_haptic->richtap_rtp_mode, false);
+		break;
+	default:
+		dev_err(aw_haptic->dev, "%s, unknown cmd\n", __func__);
+		break;
+	}
+
+	return ret;
+}
+
+static int richtap_file_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	unsigned long phys;
+	struct aw_haptic *aw_haptic = (struct aw_haptic *)filp->private_data;
+	int ret = 0;
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
+	/*only accept PROT_READ, PROT_WRITE and MAP_SHARED from the API of mmap */
+	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) | calc_vm_flag_bits(MAP_SHARED);
+	vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC| VM_SHARED | VM_MAYSHARE;
+	if (vma && (pgprot_val(vma->vm_page_prot) != pgprot_val(vm_get_page_prot(vm_flags))))
+		return -EPERM;
+
+	if (vma && ((vma->vm_end - vma->vm_start) != (PAGE_SIZE << RICHTAP_MMAP_PAGE_ORDER)))
+		return -ENOMEM;
+#endif
+	phys = virt_to_phys(aw_haptic->start_buf);
+
+	ret = remap_pfn_range(vma, vma->vm_start, (phys >> PAGE_SHIFT), (vma->vm_end - vma->vm_start), vma->vm_page_prot);
+	if (ret) {
+		dev_err(aw_haptic->dev, "Error mmap failed\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+static ssize_t richtap_read(struct file *file,
+		char __user *user_buf, size_t count, loff_t *ppos)
+{
+	return 0;
+}
+
+static ssize_t richtap_write(struct file *file,
+		const char __user *user_buf, size_t count, loff_t *ppos)
+{
+	return count;
+}
+
+static struct file_operations left_fops = {
+	.owner = THIS_MODULE,
+	.read = richtap_read,
+	.write = richtap_write,
+	.mmap = richtap_file_mmap,
+	.unlocked_ioctl = richtap_file_unlocked_ioctl,
+	.open = richtap_file_open,
+	.release = richtap_file_release,
+#ifdef AW_DOUBLE
+	.check_flags = haptic_left_flag,
+#endif
+};
+
+#ifdef AW_DOUBLE
+static struct file_operations right_fops = {
+	.owner = THIS_MODULE,
+	.read = richtap_read,
+	.write = richtap_write,
+	.mmap = richtap_file_mmap,
+	.unlocked_ioctl = richtap_file_unlocked_ioctl,
+	.open = richtap_file_open,
+	.release = richtap_file_release,
+	.check_flags = haptic_right_flag,
+};
+#endif
+
+static struct miscdevice richtap_misc = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "aw_haptic",
+	.fops = &left_fops,
+};
+
+#ifdef AW_DOUBLE
+static struct miscdevice richtap_misc_x = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "aw_haptic",
+	.fops = &right_fops,
+};
+#endif
+#endif
+
+
 static irqreturn_t irq_handle(int irq, void *data)
 {
 	int irq_state = 0;
 	struct aw_haptic *aw_haptic = data;
+	aw_dbg("irq_handle enter: richtap_rtp_mode %d\n",atomic_read(&aw_haptic->richtap_rtp_mode));
+
+#ifdef CONFIG_AAC_RICHTAP_SUPPORT
+	if (atomic_read(&aw_haptic->richtap_rtp_mode) == true) {
+		irq_state = aw_haptic->func->get_irq_state(aw_haptic);
+		if (irq_state == AW_IRQ_ALMOST_EMPTY) {
+			/* modify next line second parameter according to ram.base_addr */
+			richtap_update_fifo_data(aw_haptic, (aw_haptic->ram.base_addr - (aw_haptic->ram.base_addr >> 2)));
+			while (!aw_haptic->func->rtp_get_fifo_afs(aw_haptic) && atomic_read(&aw_haptic->richtap_rtp_mode) && (aw_haptic->curr_buf->status == MMAP_BUF_DATA_VALID))
+			{
+				richtap_update_fifo_data(aw_haptic, (aw_haptic->ram.base_addr >> 2));
+			}
+		}
+
+		if (aw_haptic->curr_buf->status == MMAP_BUF_DATA_INVALID) {
+			aw_haptic->func->set_rtp_aei(aw_haptic, false);
+			atomic_set(&aw_haptic->richtap_rtp_mode, false);
+		}
+
+		return IRQ_HANDLED;
+	}
+#endif
 
 	do {
 		irq_state = aw_haptic->func->get_irq_state(aw_haptic);
@@ -3492,6 +3833,43 @@ static int aw_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	}
 	aw_haptic->func->creat_node(aw_haptic);
 	ram_work_init(aw_haptic);
+
+#ifdef CONFIG_AAC_RICHTAP_SUPPORT
+	aw_haptic->rtp_ptr = kmalloc(RICHTAP_MMAP_BUF_SIZE * RICHTAP_MMAP_BUF_SUM, GFP_KERNEL);
+	if (aw_haptic->rtp_ptr == NULL) {
+		dev_err(&i2c->dev, "malloc rtp memory failed\n");
+	}
+
+	aw_haptic->start_buf = (struct mmap_buf_format *)__get_free_pages(GFP_KERNEL, RICHTAP_MMAP_PAGE_ORDER);
+	if (aw_haptic->start_buf == NULL) {
+		dev_err(&i2c->dev, "Error __get_free_pages failed\n");
+	}
+	SetPageReserved(virt_to_page(aw_haptic->start_buf));
+	{
+		struct mmap_buf_format *temp;
+		uint32_t i = 0;
+		temp = aw_haptic->start_buf;
+		for ( i = 1; i < RICHTAP_MMAP_BUF_SUM; i++) {
+			temp->kernel_next = (aw_haptic->start_buf + i);
+			temp = temp->kernel_next;
+		}
+		temp->kernel_next = aw_haptic->start_buf;
+	}
+	INIT_WORK(&aw_haptic->richtap_rtp_work, richtap_rtp_work);
+	atomic_set(&aw_haptic->richtap_rtp_mode, false);
+#ifdef AW_DOUBLE
+	if (of_device_is_compatible(np, "awinic,haptic_hv_l"))
+		misc_register(&richtap_misc);
+
+	if (of_device_is_compatible(np, "awinic,haptic_hv_r"))
+		misc_register(&richtap_misc_x);
+#else
+	misc_register(&richtap_misc);
+	//dev_set_drvdata(richtap_misc.this_device, aw_haptic);
+	g_aw_haptic = aw_haptic;
+#endif
+#endif
+
 	aw_info("probe completed successfully!");
 
 	return 0;
@@ -3527,6 +3905,7 @@ static int aw_remove(struct i2c_client *i2c)
 	mutex_destroy(&aw_haptic->rtp_lock);
 	mutex_destroy(&aw_haptic->haptic_audio.lock);
 	destroy_workqueue(aw_haptic->work_queue);
+
 #ifdef AW_SND_SOC_CODEC
 #ifdef KERNEL_OVER_4_19
 	snd_soc_unregister_component(&i2c->dev);
@@ -3534,6 +3913,22 @@ static int aw_remove(struct i2c_client *i2c)
 	snd_soc_unregister_codec(&i2c->dev);
 #endif
 #endif
+
+#ifdef CONFIG_AAC_RICHTAP_SUPPORT
+	cancel_work_sync(&aw_haptic->richtap_rtp_work);
+	kfree(aw_haptic->rtp_ptr);
+	ClearPageReserved(virt_to_page(aw_haptic->start_buf));
+	free_pages((unsigned long)aw_haptic->start_buf, RICHTAP_MMAP_PAGE_ORDER);
+#ifdef AW_DOUBLE
+	if (of_device_is_compatible(i2c->dev.of_node, "awinic,haptic_hv_l"))
+		misc_deregister(&richtap_misc);
+	if(of_device_is_compatible(i2c->dev.of_node, "awinic,haptic_hv_r"))
+		misc_deregister(&richtap_misc_x);
+#else
+	misc_deregister(&richtap_misc);
+#endif
+#endif
+
 #ifdef AW_TIKTAP
 	cancel_work_sync(&aw_haptic->tiktap_work);
 	ClearPageReserved(virt_to_page(aw_haptic->start_buf));

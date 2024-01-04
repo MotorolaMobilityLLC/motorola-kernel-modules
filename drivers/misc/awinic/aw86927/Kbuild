@@ -2,5 +2,9 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
+ifneq ($(filter m y,$(CONFIG_AAC_RICHTAP_SUPPORT)),)
+	EXTRA_CFLAGS += -DCONFIG_AAC_RICHTAP_SUPPORT
+endif
+
 aw86927-y += aw869x.o aw869xx.o aw8671x.o aw8692x.o aw8693x.o haptic_hv.o
 obj-m += aw86927.o
