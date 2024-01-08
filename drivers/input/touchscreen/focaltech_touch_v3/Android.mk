@@ -99,6 +99,10 @@ ifeq ($(TOUCHSCREEN_LAST_TIME),true)
 	KERNEL_CFLAGS += CONFIG_FTS_LAST_TIME=y
 endif
 
+ifeq ($(FTS_INPUT_ID),true)
+	KERNEL_CFLAGS += CONFIG_FTS_INPUT_ID=y
+endif
+
 endif
 
 include $(CLEAR_VARS)
