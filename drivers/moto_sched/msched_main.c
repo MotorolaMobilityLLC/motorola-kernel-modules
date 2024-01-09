@@ -22,14 +22,25 @@
 #include "msched_sysfs.h"
 #include "msched_common.h"
 
+#define MOTO_OEM_DATA_SIZE_TEST(wstruct, kstruct)		\
+	BUILD_BUG_ON(sizeof(wstruct) > (sizeof(u64) *		\
+		ARRAY_SIZE(((kstruct *)0)->android_oem_data1)))
+
+
+extern int locking_opt_init(void);
+
 static int __init moto_sched_init(void)
 {
 	int ret = 0;
+
+	/* compile time checks for oem data size */
+	MOTO_OEM_DATA_SIZE_TEST(struct moto_task_struct, struct task_struct);
 
 	ret = moto_sched_proc_init();
 	if (ret != 0)
 		return ret;
 
+	locking_opt_init();
 
 	pr_info("moto_sched_init succeed!\n");
 	return 0;
