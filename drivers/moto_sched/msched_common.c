@@ -31,6 +31,14 @@ static inline bool task_in_audio_group(struct task_struct *p)
 	return false;
 }
 
+static inline bool task_in_native_service_group(struct task_struct *p)
+{
+	int gl_ux_type = task_get_ux_type(p->group_leader);
+	if (gl_ux_type & UX_TYPE_NATIVESERVICE && p->prio < 120 && p->prio >= 100) {
+		return true;
+	}
+	return false;
+}
 static inline bool task_in_top_app_group(struct task_struct *p)
 {
 #if IS_ENABLED(CONFIG_SCHED_WALT)
@@ -65,6 +73,8 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		return UX_PRIO_OTHER_HIGH;
 	else if ((ux_type & UX_TYPE_SYSTEM || task_in_top_app_group(p)) && p->prio <= moto_boost_prio)
 		return p->prio < 120 ? (UX_PRIO_OTHER_HIGH - (p->prio - 100)) : (UX_PRIO_OTHER_LOW - (p->prio - 120));
+	else if (task_in_native_service_group(p))
+		return UX_PRIO_OTHER_HIGH - (p->prio - 100);
 	else if (ux_type & UX_TYPE_KSWAPD)
 		return UX_PRIO_KSWAPD;
 	else if (with_inherit && (ux_type & UX_TYPE_INHERIT_LOW))

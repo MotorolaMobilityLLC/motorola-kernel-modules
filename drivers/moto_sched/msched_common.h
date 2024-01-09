@@ -49,6 +49,7 @@
 #define UX_TYPE_SF					(1 << 12)
 #define UX_TYPE_AUDIOSERVICE		(1 << 13)
 #define UX_TYPE_AUDIOAPP			(1 << 14)
+#define UX_TYPE_NATIVESERVICE		(1 << 15)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
