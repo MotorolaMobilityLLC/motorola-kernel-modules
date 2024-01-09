@@ -1,1 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
+
+config MOTO_FUTEX_INHERIT
+	tristate "futex inherit"
+	default n
+	help
+	  boost futex owner for the blocked ux thread.
