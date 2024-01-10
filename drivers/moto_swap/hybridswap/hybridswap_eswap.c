@@ -4645,6 +4645,14 @@ void hybridswap_record(struct zram *zram, u32 index,
 		return;
 	}
 
+	/* app memcg id start from 4
+	 * 1: apps, 2: system, 3: uid_0
+	 */
+	if (memcg->id.id < 4) {
+		hybp(HYB_DEBUG, "Skip non app memcg id=%d, comm=%s\n", memcg->id.id, current->comm);
+		return;
+	}
+
 	hybs = MEMCGRP_ITEM_DATA(memcg);
 	if (!hybs) {
 		hybs = hybridswap_cache_alloc(memcg, false);
