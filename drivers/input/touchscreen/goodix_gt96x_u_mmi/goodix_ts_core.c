@@ -895,16 +895,21 @@ static int goodix_parse_dt(struct device_node *node,
 		ts_err("get compatible failed");
 		return r;
 	} else {
-	    ts_info("ic_name form dt: %s", name_tmp);
-	    strncpy(board_data->ic_name, name_tmp, sizeof(board_data->ic_name));
+		ts_info("ic_name form dt: %s", name_tmp);
+		strncpy(board_data->ic_name, name_tmp, sizeof(board_data->ic_name));
 	}
 
 	if (of_property_read_bool(node, "goodix,gesture-wait-pm")) {
-	    ts_info("gesture-wait-pm set");
-	    board_data->gesture_wait_pm = true;
+		ts_info("gesture-wait-pm set");
+		board_data->gesture_wait_pm = true;
 	} else {
-	    board_data->gesture_wait_pm = false;
+		board_data->gesture_wait_pm = false;
 	}
+
+	board_data->stowed_mode_ctrl = of_property_read_bool(node,
+		"goodix,stowed-mode-ctrl");
+	if (board_data->stowed_mode_ctrl)
+		ts_info("Support goodix touch stowed mode");
 
 	ts_info("[DT]x:%d, y:%d, w:%d, p:%d sleep_enable:%d pen_enable:%d",
 		board_data->panel_max_x, board_data->panel_max_y,

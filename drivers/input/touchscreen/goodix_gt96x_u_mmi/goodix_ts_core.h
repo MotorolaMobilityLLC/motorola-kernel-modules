@@ -461,6 +461,7 @@ struct goodix_ts_board_data {
 	char cfg_bin_name[GOODIX_MAX_STR_LABLE_LEN];
 
 	bool gesture_wait_pm;
+	bool stowed_mode_ctrl;
 };
 
 enum goodix_fw_update_mode {
@@ -714,6 +715,11 @@ struct goodix_tools_dev {
 	char name[32];
 };
 
+struct goodix_mode_info {
+	int pocket_mode;
+	int stowed;
+};
+
 struct goodix_ts_core {
 	int init_stage;
 	struct goodix_tools_dev tools_dev;
@@ -774,7 +780,9 @@ struct goodix_ts_core {
 #ifdef CONFIG_GTP_LAST_TIME
 	ktime_t last_event_time;
 #endif
-
+	struct goodix_mode_info set_mode;
+	struct goodix_mode_info get_mode;
+	atomic_t post_suspended;
 };
 
 struct goodix_device_resource {

@@ -30,4 +30,7 @@ static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device
 }
 #endif
 
+#define ENTER_STOWED_MODE_CMD   0x97
+#define CHARGER_MODE_CMD    0xAF
+
 #endif

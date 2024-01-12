@@ -51,6 +51,16 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 	static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
 #endif
 
+static ssize_t goodix_ts_stowed_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_stowed_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
+		goodix_ts_stowed_show, goodix_ts_stowed_store);
+
+static int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
+		u8 cmd, u8 len, u8 subCmd, u8 subCmd2);
+
 static int goodix_ts_mmi_methods_get_vendor(struct device *dev, void *cdata) {
 	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "gdx");
 }
@@ -315,10 +325,24 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 static int goodix_ts_mmi_post_suspend(struct device *dev) {
 	struct goodix_ts_core *core_data;
 	struct platform_device *pdev;
+	int ret = 0;
 
 	GET_GOODIX_DATA(dev);
 
 	goodix_ts_release_connects(core_data);
+
+	atomic_set(&core_data->post_suspended, 1);
+	mutex_lock(&core_data->mode_lock);
+	if (core_data->board_data.stowed_mode_ctrl && core_data->get_mode.stowed) {
+		ret = goodix_ts_send_cmd(core_data, ENTER_STOWED_MODE_CMD, 5, core_data->get_mode.stowed, 0x00);
+		if (ret < 0) {
+			ts_err("Failed to set stowed mode %d\n", core_data->get_mode.stowed);
+		} else {
+			core_data->set_mode.stowed = core_data->get_mode.stowed;
+			ts_info("Enable stowed mode %d success.\n", core_data->set_mode.stowed);
+		}
+	}
+	mutex_unlock(&core_data->mode_lock);
 
 	ts_info("Suspend end");
 	return 0;
@@ -332,6 +356,7 @@ static int goodix_ts_mmi_pre_resume(struct device *dev) {
 	GET_GOODIX_DATA(dev);
 
 	atomic_set(&core_data->suspended, 0);
+	atomic_set(&core_data->post_suspended, 0);
 	if (core_data->gesture_enabled) {
 		core_data->hw_ops->irq_enable(core_data, false);
 		disable_irq_wake(core_data->irq);
@@ -348,6 +373,13 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 
 	/* open esd */
 	goodix_ts_esd_on(core_data);
+
+	mutex_lock(&core_data->mode_lock);
+	/* All IC status are cleared after reset */
+	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
+	/* TODO: restore data */
+	mutex_unlock(&core_data->mode_lock);
+
 	ts_info("Resume end");
 	return 0;
 }
@@ -384,7 +416,7 @@ static int goodix_ts_firmware_update(struct device *dev, char *fwname) {
 	return 0;
 }
 
-int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
+static int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
 		u8 cmd, u8 len, u8 subCmd, u8 subCmd2)
 {
 	int ret = 0;
@@ -399,7 +431,6 @@ int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
 	return ret;
 }
 
-#define CHARGER_MODE_CMD    0xAF
 static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 {
 	int ret = 0;
@@ -448,6 +479,67 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 }
 #endif
 
+static ssize_t goodix_ts_stowed_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ts_err("Failed to convert value.");
+		return -EINVAL;
+	}
+
+	mutex_lock(&core_data->mode_lock);
+	core_data->get_mode.stowed = mode;
+	if (core_data->set_mode.stowed == mode) {
+		ts_debug("The value = %lu is same, so not to write", mode);
+		ret = size;
+		goto exit;
+	}
+
+	if ((atomic_read(&core_data->post_suspended) == 1) && (core_data->power_on == 1)) {
+		ret = goodix_ts_send_cmd(core_data, ENTER_STOWED_MODE_CMD, 5,
+			core_data->get_mode.stowed, 0x00);
+		if (ret < 0) {
+			ts_err("Failed to set stowed mode %lu\n", mode);
+			goto exit;
+		}
+	} else {
+		ts_info("Skip stowed mode setting post_suspended:%d, power_on:%d.\n",
+			atomic_read(&core_data->post_suspended), core_data->power_on);
+		ret = size;
+		goto exit;
+	}
+
+	core_data->set_mode.stowed = mode;
+	ts_info("Success to set stowed mode %lu\n", mode);
+
+	ret = size;
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
+static ssize_t goodix_ts_stowed_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info("Stowed state = %d.\n", core_data->set_mode.stowed);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.stowed);
+}
+
 static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
 {
 	int idx = 0;
@@ -459,6 +551,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 #ifdef CONFIG_GTP_LAST_TIME
 	ADD_ATTR(timestamp);
 #endif
+
+	if (core_data->board_data.stowed_mode_ctrl)
+		ADD_ATTR(stowed);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
