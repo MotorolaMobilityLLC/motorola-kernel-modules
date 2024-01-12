@@ -506,8 +506,9 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 
 		batt_temp = (int)reg_val * 10 / 2 - 400;
 
-		if(cw_bat->factory_mode && (-400 == batt_temp))
-			batt_temp = 250;
+		if (CW_BPD_TEMP == batt_temp)
+			cw_bat->present = false;
+
 		cw_info(cw_bat, "battery pack NTC temprature=%d\n", batt_temp);
 	}
 
@@ -980,7 +981,7 @@ static int cw_battery_get_property(struct power_supply *psy,
 		val->intval = cw_bat->raw_soc;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-		val->intval = !!cw_bat->voltage_now;
+		val->intval = cw_bat->present;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
@@ -1086,6 +1087,8 @@ static int cw2217_probe(struct i2c_client *client, const struct i2c_device_id *i
 		cw_err(cw_bat,"not cw2217B\n");
 		goto error;
 	}
+
+	cw_bat->present = true;
 
 	if (cw_bat->has_ext_ntc) {
 		cw_bat->Batt_NTC_channel = devm_iio_channel_get(cw_bat->dev, "bat_temp");
