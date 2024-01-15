@@ -50,7 +50,7 @@ struct mmi_battery_pack {
 	int	voltage_now;
 	int	current_now;
 	int	soc;
-	int	batt_temp;
+	int	curr_batt_temp;
 	int	batt_tte;
 	int	charge_full;
 	int	charge_full_design;
@@ -104,6 +104,7 @@ struct mmi_smart_battery {
 
 #define QUEUS_DELAYED_WORK_TIME  8000
 #define QUEUE_START_WORK_TIME    1
+#define INVALID_TEMP (-2730)
 
 extern int mmi_batt_health_check(void);
 
