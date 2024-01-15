@@ -123,12 +123,22 @@ static int smart_batt_get_cycle_count(struct mmi_smart_battery *chip)
 static int smart_batt_get_temperature(struct mmi_smart_battery *chip)
 {
 	struct mmi_battery_pack *battery = NULL;
+	int  avg_bat_temp;
 
 	list_for_each_entry(battery, &chip->battery_list, list) {
-		gauge_dev_get_temperature(battery->gauge_dev, &battery->batt_temp);
+		gauge_dev_get_temperature(battery->gauge_dev, &battery->curr_batt_temp);
 		if (strcmp(battery->gauge_dev->dev.kobj.name, "bms") == 0 ||
 			strcmp(battery->gauge_dev->dev.kobj.name, "main_battery") == 0) {
-			chip->combo_batt_temp = battery->batt_temp;
+
+			if (chip->combo_batt_temp == INVALID_TEMP)
+				chip->combo_batt_temp = battery->curr_batt_temp;
+
+			avg_bat_temp = (chip->combo_batt_temp + battery->curr_batt_temp) / 2;
+
+			mmi_info(chip, "%s: curr_bat_temp = %d, pre_bat_temp = %d, avg_bat_temp=%d\n", __func__,
+				battery->curr_batt_temp, chip->combo_batt_temp, avg_bat_temp);
+
+			chip->combo_batt_temp = avg_bat_temp;
 		}
 	}
 
@@ -275,7 +285,7 @@ static int batt_get_prop(struct power_supply *psy,
 			val->intval = chip->fake_temp;
 			break;
 		}
-		if (chip->combo_batt_temp == -EINVAL) {
+		if (chip->combo_batt_temp == INVALID_TEMP) {
 			smart_batt_get_temperature(chip);
 		}
 		val->intval = chip->combo_batt_temp;
@@ -613,7 +623,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->combo_soh= 100;
 	chip->combo_voltage_now = -EINVAL;
 	chip->combo_current_now = -EINVAL;
-	chip->combo_batt_temp = -EINVAL;
+	chip->combo_batt_temp = INVALID_TEMP;
 	chip->shutdown_threshold = -EINVAL;
 	chip->soc100_curr_threshod = 0;
 	chip->taper_count = 0;
