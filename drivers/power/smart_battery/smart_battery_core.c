@@ -597,6 +597,105 @@ static void smart_battery_init_data(struct mmi_smart_battery *chip)
 	smart_batt_get_charge_counter(chip);
 }
 
+static ssize_t state_of_health_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	if (!this_chip) {
+		pr_err("mmi_charger: chip is invalid\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, SMART_BATT_SHOW_MAX_SIZE, "%d\n", this_chip->combo_soh);
+}
+
+static DEVICE_ATTR(state_of_health, S_IRUGO, state_of_health_show, NULL);
+
+static ssize_t first_usage_date_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	if (!this_chip) {
+		pr_err("mmi_charger: chip is invalid\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, SMART_BATT_SHOW_MAX_SIZE, "%lu\n", this_chip->first_usage_date);
+}
+
+static ssize_t first_usage_date_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long first_usage_date;
+
+	if (!this_chip) {
+		pr_err("mmi_charger: chip is invalid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &first_usage_date);
+	if (r) {
+		mmi_err(this_chip, "Invalid first_usage_date value = %lu\n", first_usage_date);
+		return -EINVAL;
+	}
+
+	this_chip->first_usage_date = first_usage_date;
+
+	return r ? r : count;
+}
+
+static DEVICE_ATTR(first_usage_date, 0644, first_usage_date_show, first_usage_date_store);
+
+static ssize_t manufacturing_date_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	if (!this_chip) {
+		pr_err("mmi_charger: chip is invalid\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, SMART_BATT_SHOW_MAX_SIZE, "%lu\n", this_chip->manufacturing_date);
+}
+
+static ssize_t manufacturing_date_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long manufacturing_date;
+
+	if (!this_chip) {
+		pr_err("mmi_charger: chip is invalid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &manufacturing_date);
+	if (r) {
+		mmi_err(this_chip, "Invalid manufacturing_date value = %lu\n", manufacturing_date);
+		return -EINVAL;
+	}
+
+	this_chip->manufacturing_date = manufacturing_date;
+
+	return r ? r : count;
+}
+
+static DEVICE_ATTR(manufacturing_date, 0644, manufacturing_date_show, manufacturing_date_store);
+
+static struct attribute *  smart_batt_att[] = {
+	&dev_attr_state_of_health.attr,
+	&dev_attr_manufacturing_date.attr,
+	&dev_attr_first_usage_date.attr,
+	NULL,
+};
+
+static const struct attribute_group smart_batt_attr_group = {
+	.attrs =  smart_batt_att,
+};
+
 static int smart_battery_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -677,6 +776,10 @@ static int smart_battery_probe(struct platform_device *pdev)
 	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work , msecs_to_jiffies(QUEUE_START_WORK_TIME));
 
 	battery_tcmd_register(chip);
+	rc = sysfs_create_group(&chip->batt_psy->dev.kobj,
+				&smart_batt_attr_group);
+	if (rc)
+		mmi_err(chip, "failed: attr create\n");
 
 	return rc;
 

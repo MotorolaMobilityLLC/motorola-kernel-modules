@@ -75,7 +75,8 @@ struct mmi_smart_battery {
 	struct delayed_work		battery_delay_work;
 
 	bool				*debug_enabled;
-
+	unsigned long			manufacturing_date;
+	unsigned long			first_usage_date;
 	bool				resume_completed;
 
 	bool				sync_boardtemp_to_fg;
@@ -105,6 +106,7 @@ struct mmi_smart_battery {
 #define QUEUS_DELAYED_WORK_TIME  8000
 #define QUEUE_START_WORK_TIME    1
 #define INVALID_TEMP (-2730)
+#define SMART_BATT_SHOW_MAX_SIZE 64
 
 extern int mmi_batt_health_check(void);
 
