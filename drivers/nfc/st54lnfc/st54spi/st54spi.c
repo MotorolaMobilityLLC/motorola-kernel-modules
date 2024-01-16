@@ -89,6 +89,14 @@ static DECLARE_BITMAP(minors, N_SPI_MINORS);
 	 SPI_LOOP | SPI_NO_CS | SPI_READY | SPI_TX_DUAL | SPI_TX_QUAD |        \
 	 SPI_RX_DUAL | SPI_RX_QUAD)
 
+struct st54spi_bootmode {
+	u32 size;
+	u32 tag;
+	u32 boot_mode;
+	u32 boot_type;
+};
+static bool poweroff_charging_mode = false;
+
 struct st54spi_data {
 	dev_t devt;
 	spinlock_t spi_lock;
@@ -1145,6 +1153,26 @@ static int st54spi_probe(struct spi_device *spi)
 	struct st54spi_data *st54spi;
 	int status, ret;
 	unsigned long minor;
+	struct st54spi_bootmode  *tag = NULL;
+	struct device_node *boot_node = NULL;
+
+	boot_node = of_parse_phandle(spi->dev.of_node, "bootmode", 0);
+	if (!boot_node)
+		pr_info("%s: failed to get boot mode phandle\n", __func__);
+	else {
+		tag = (struct st54spi_bootmode *)of_get_property(boot_node,
+							"atag,boot", NULL);
+		if (!tag)
+			pr_info("%s: failed to get atag,boot\n", __func__);
+		else {
+			pr_info("%s: bootmode:0x%x \n", __func__, tag->boot_mode);
+		}
+		if (tag->boot_mode == 8 || tag->boot_mode == 9) {
+			poweroff_charging_mode = true;
+			pr_info("%s: bootmode is poweroff_charging_mode, return\n", __func__);
+			return 0;
+		}
+	}
 
 	/*
 	 * st54spi should never be referenced in DT without a specific
@@ -1253,6 +1281,11 @@ void
 st54spi_remove(struct spi_device *spi)
 {
 	struct st54spi_data *st54spi = spi_get_drvdata(spi);
+
+	if (poweroff_charging_mode) {
+		pr_info("%s : bootmode is poweroff_charging_mode, return\n", __func__);
+		return;
+	}
 
 	if (st54spi->power_or_nreset_gpio_mode == POWER_MODE_ST54H) {
 #ifndef MODULE

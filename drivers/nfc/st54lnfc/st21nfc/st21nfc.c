@@ -62,6 +62,7 @@
 
 
 static bool enable_debug_log;
+static bool poweroff_charging_mode = false;
 
 /*The enum is used to index a pw_states array, the values matter here*/
 enum st21nfc_power_state {
@@ -76,6 +77,13 @@ static const char *const st21nfc_power_state_name[] = {
 };
 
 enum st21nfc_read_state { ST21NFC_HEADER, ST21NFC_PAYLOAD };
+
+struct st21nfc_bootmode {
+	u32 size;
+	u32 tag;
+	u32 boot_mode;
+	u32 boot_type;
+};
 
 struct nfc_sub_power_stats {
 	uint64_t count;
@@ -1159,6 +1167,9 @@ static int st21nfc_probe(struct i2c_client *client,
 	int ret;
 	struct st21nfc_device *st21nfc_dev;
 	struct device *dev = &client->dev;
+	struct st21nfc_bootmode  *tag = NULL;
+	struct device_node *boot_node = NULL;
+
 #ifdef RECOVERY_SUPPORT_IN_PING
 	int t;
 #endif
@@ -1177,6 +1188,21 @@ static int st21nfc_probe(struct i2c_client *client,
 	st21nfc_dev->client = client;
 	st21nfc_dev->r_state_current = ST21NFC_HEADER;
 
+	boot_node = of_parse_phandle(dev->of_node, "bootmode", 0);
+	if (!boot_node)
+		pr_info("%s: failed to get boot mode phandle\n", __func__);
+	else {
+		tag = (struct st21nfc_bootmode *)of_get_property(boot_node,
+							"atag,boot", NULL);
+		if (!tag)
+			pr_info("%s: failed to get atag,boot\n", __func__);
+		else {
+			pr_info("%s: bootmode:0x%x \n", __func__, tag->boot_mode);
+		}
+		if (tag->boot_mode == 8 || tag->boot_mode == 9)
+			poweroff_charging_mode = true;
+	}
+
 // QCOM and MTK54 use standard GPIO definition
 	ret = acpi_dev_add_driver_gpios(ACPI_COMPANION(dev),
 					acpi_st21nfc_gpios);
@@ -1192,6 +1218,11 @@ static int st21nfc_probe(struct i2c_client *client,
 
 // QCOM and MTK54 use standard GPIO definition
 	st21nfc_dev->gpiod_reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
+
+	if (poweroff_charging_mode) {
+		pr_info("%s: bootmode is poweroff_charging_mode, return\n", __func__);
+		return 0;
+	}
 	if (IS_ERR_OR_NULL(st21nfc_dev->gpiod_reset)) {
 		pr_warn("%s : Unable to request reset-gpios\n", __func__);
 		devm_gpiod_put(dev,st21nfc_dev->gpiod_irq);
@@ -1361,7 +1392,10 @@ st21nfc_remove(struct i2c_client *client)
 {
 	struct st21nfc_device *st21nfc_dev = i2c_get_clientdata(client);
 
-
+	if (poweroff_charging_mode) {
+		pr_info("%s: bootmode is poweroff_charging_mode, return\n", __func__);
+		return ;
+	}
 	st21nfc_clock_deselect(st21nfc_dev);
 	misc_deregister(&st21nfc_dev->st21nfc_device);
 	if (!IS_ERR_OR_NULL(st21nfc_dev->gpiod_pidle)) {
@@ -1395,6 +1429,15 @@ static int st21nfc_suspend(struct device *device)
 	struct i2c_client *client = to_i2c_client(device);
 	struct st21nfc_device *st21nfc_dev = i2c_get_clientdata(client);
 
+	if (!st21nfc_dev) {
+		pr_info("%s: drvdata is null\n", __func__);
+		return 0;
+	}
+
+	if (poweroff_charging_mode) {
+		pr_info("%s: off charging suspend\n", __func__);
+		return 0;
+	}
 	if (st21nfc_dev->irq_enabled) {
 		if (!enable_irq_wake(client->irq))
 			st21nfc_dev->irq_wake_up = true;
@@ -1413,6 +1456,15 @@ static int st21nfc_resume(struct device *device)
 	struct st21nfc_device *st21nfc_dev = i2c_get_clientdata(client);
 	int pidle;
 
+	if (!st21nfc_dev) {
+		pr_info("%s: drvdata is null\n", __func__);
+		return 0;
+	}
+
+	if (poweroff_charging_mode) {
+		pr_info("%s: off charging suspend\n", __func__);
+		return 0;
+	}
 	if (st21nfc_dev->irq_wake_up) {
 		if (!disable_irq_wake(client->irq))
 			st21nfc_dev->irq_wake_up = false;
