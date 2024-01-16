@@ -911,6 +911,11 @@ static int goodix_parse_dt(struct device_node *node,
 	if (board_data->stowed_mode_ctrl)
 		ts_info("Support goodix touch stowed mode");
 
+	board_data->pocket_mode_ctrl = of_property_read_bool(node,
+		"goodix,pocket-mode-ctrl");
+	if (board_data->pocket_mode_ctrl)
+		ts_info("Support goodix touch pocket mode");
+
 	ts_info("[DT]x:%d, y:%d, w:%d, p:%d sleep_enable:%d pen_enable:%d",
 		board_data->panel_max_x, board_data->panel_max_y,
 		board_data->panel_max_w, board_data->panel_max_p,
