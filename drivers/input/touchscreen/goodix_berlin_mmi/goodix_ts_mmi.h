@@ -60,4 +60,5 @@ int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
 #define LIQUID_DETECTION_SWITCH_CMD   0x33
 #define PALM_DETECTION_SWITCH_CMD   0x93
 #define ENTER_STOWED_MODE_CMD   0x97
+#define ENTER_POCKET_MODE_CMD   0x63
 #endif

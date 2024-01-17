@@ -319,6 +319,7 @@ struct goodix_ts_board_data {
 	bool edge_ctrl;
 	bool stowed_mode_ctrl;
 	bool gesture_wait_pm;
+	bool pocket_mode_ctrl;
 };
 
 enum goodix_fw_update_mode {
@@ -511,6 +512,7 @@ struct goodix_mode_info {
 	int palm_detection;
 #endif
 	int stowed;
+	int pocket_mode;
 };
 
 struct goodix_ts_core {

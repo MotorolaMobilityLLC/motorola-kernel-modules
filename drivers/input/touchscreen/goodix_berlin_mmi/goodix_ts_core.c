@@ -1145,6 +1145,11 @@ static int goodix_parse_dt(struct device_node *node,
 	if (board_data->stowed_mode_ctrl)
 		ts_info("Support goodix touch stowed mode");
 
+	board_data->pocket_mode_ctrl = of_property_read_bool(node,
+		"goodix,pocket-mode-ctrl");
+	if (board_data->pocket_mode_ctrl)
+		ts_info("Support goodix touch pocket mode");
+
 	if (of_property_read_bool(node, "goodix,gesture-wait-pm")) {
 		ts_info("gesture-wait-pm set");
 		board_data->gesture_wait_pm = true;
