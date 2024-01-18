@@ -40,6 +40,7 @@ static int __init moto_sched_init(void)
 	if (ret != 0)
 		return ret;
 
+	register_vendor_comm_hooks();
 	locking_opt_init();
 
 	pr_info("moto_sched_init succeed!\n");

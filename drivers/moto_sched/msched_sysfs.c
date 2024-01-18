@@ -28,6 +28,7 @@ int __read_mostly moto_sched_enabled;
 int __read_mostly moto_sched_scene;
 int __read_mostly moto_boost_prio = 130;
 pid_t __read_mostly global_systemserver_tgid = -1;
+pid_t __read_mostly global_launcher_tgid = -1;
 
 pid_t global_task_pid_to_read = -1;
 
@@ -196,6 +197,8 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 			if (ux_type & UX_TYPE_PERF_DAEMON) {
 				// perf daemon is in systemserver, so use its tgid.
 				global_systemserver_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_LAUNCHER) {
+				global_launcher_tgid = ux_task->tgid;
 			}
 			task_add_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
