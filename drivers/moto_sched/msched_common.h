@@ -51,11 +51,13 @@
 #define UX_TYPE_AUDIOSERVICE		(1 << 13)
 #define UX_TYPE_AUDIOAPP			(1 << 14)
 #define UX_TYPE_NATIVESERVICE		(1 << 15)
+#define UX_TYPE_CAMERASERVICE		(1 << 16)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
 #define UX_SCENE_TOUCH				(1 << 1)
 #define UX_SCENE_AUDIO				(1 << 2)
+#define UX_SCENE_CAMERA				(1 << 3)
 #define UX_SCENE_INVALID			-1
 
 /* define for MVP priority, the higher the better, should be in the range (11~100) */
@@ -119,6 +121,7 @@ extern int __read_mostly moto_sched_enabled;
 extern int __read_mostly moto_sched_scene;
 extern int __read_mostly moto_boost_prio;
 extern pid_t __read_mostly global_systemserver_tgid;
+extern pid_t __read_mostly global_launcher_tgid;
 
 extern int task_get_origin_mvp_prio(struct task_struct *p, bool with_inherit);
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
@@ -128,6 +131,7 @@ extern void binder_clear_inherited_ux_type(struct task_struct *task);
 extern void binder_ux_type_set(struct task_struct *task, bool has_clear, bool clear);
 extern bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name);
 extern bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name);
+extern void register_vendor_comm_hooks(void);
 
 static inline struct moto_task_struct *get_moto_task_struct(struct task_struct *p)
 {

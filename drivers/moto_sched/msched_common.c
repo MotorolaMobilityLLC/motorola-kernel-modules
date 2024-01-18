@@ -16,30 +16,25 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 #include <linux/seq_file.h>
+#include <trace/hooks/sched.h>
 
 #include "msched_common.h"
 #include "locking/locking_main.h"
 
 static inline bool task_in_audio_server_group(struct task_struct *p)
 {
-	int gl_ux_type = task_get_ux_type(p->group_leader);
-	if (gl_ux_type & UX_TYPE_AUDIOSERVICE) {
+	int ux_type = task_get_ux_type(p);
+	if (ux_type & UX_TYPE_AUDIOSERVICE) {
 		return p->prio == 101 || p->prio == 104;
 	}
 	return false;
 }
 
-static inline bool task_in_launcher(struct task_struct *p)
-{
-	int gl_ux_type = task_get_ux_type(p->group_leader);
-	return (gl_ux_type & UX_TYPE_LAUNCHER) != 0;
-}
-
 static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id)
 {
-	int gl_ux_type = task_get_ux_type(p->group_leader);
+	int ux_type = task_get_ux_type(p);
 
-	if (gl_ux_type & UX_TYPE_NATIVESERVICE) {
+	if (ux_type & UX_TYPE_NATIVESERVICE) {
 		return p->prio < 120 && p->prio >= 100;
 	}
 
@@ -56,7 +51,7 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 	}
 
 	if (moto_sched_scene & UX_SCENE_AUDIO) {
-		if (gl_ux_type & UX_TYPE_AUDIOSERVICE) {
+		if (ux_type & UX_TYPE_AUDIOSERVICE) {
 			return p->prio < 120 && p->prio >= 100;
 		} else if (cgroup_id == CGROUP_FOREGROUND) {
 			return p->prio == 104 || p->prio == 101;
@@ -64,10 +59,11 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 	}
 
 	if (moto_sched_scene & UX_SCENE_LAUNCH) {
-		if (gl_ux_type & UX_TYPE_LAUNCHER || p->tgid == global_systemserver_tgid) {
+		if (p->tgid == global_launcher_tgid || p->tgid == global_systemserver_tgid) {
 			return p->prio <= moto_boost_prio;
 		}
 	}
+
 	return false;
 }
 
@@ -143,19 +139,19 @@ EXPORT_SYMBOL(binder_clear_inherited_ux_type);
 void binder_ux_type_set(struct task_struct *task, bool has_clear, bool clear) {
 	if (has_clear) {
 		if (!clear) {
-			if (task && ((task_in_launcher(current) &&
+			if (task && ((current->tgid == global_launcher_tgid &&
 					task->group_leader->prio < MAX_RT_PRIO) ||
 					(current->group_leader->prio < MAX_RT_PRIO &&
-					task_in_launcher(task))))
+					task->tgid == global_launcher_tgid)))
 				task_add_ux_type(task, UX_TYPE_ANIMATOR);
 		} else {
 			task_clr_ux_type(task, UX_TYPE_ANIMATOR);
 		}
 	} else {
-		if (task && ((task_in_launcher(current) &&
+		if (task && ((current->tgid == global_launcher_tgid &&
 				task->group_leader->prio < MAX_RT_PRIO) ||
 				(current->group_leader->prio < MAX_RT_PRIO &&
-				task_in_launcher(task))))
+				task->tgid == global_launcher_tgid)))
 			task_add_ux_type(task, UX_TYPE_ANIMATOR);
 		else
 			task_clr_ux_type(task, UX_TYPE_ANIMATOR);
@@ -195,7 +191,6 @@ bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name) {
 
 	if (!waiter)
 		return false;
-
 	
 	waiter_wts = (struct moto_task_struct *) waiter->android_oem_data1;
 	if (!waiter_wts || !waiter_wts->inherit_task) {
@@ -215,4 +210,17 @@ bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name) {
 	owner_wts->inherit_depth = 0;
 	waiter_wts->inherit_task = NULL;
 	return true;
+}
+
+static void android_vh_dup_task_struct(void *unused, struct task_struct *tsk, struct task_struct *orig)
+{
+	int ux_type = task_get_ux_type(orig);
+	if (ux_type & (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE)) {
+		task_add_ux_type(tsk, ux_type);
+	}
+}
+
+void register_vendor_comm_hooks(void)
+{
+	register_trace_android_vh_dup_task_struct(android_vh_dup_task_struct, NULL);
 }
