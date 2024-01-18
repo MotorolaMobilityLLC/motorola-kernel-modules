@@ -64,6 +64,11 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 		}
 	}
 
+	if (moto_sched_scene & UX_SCENE_CAMERA) {
+		if (ux_type & UX_TYPE_CAMERASERVICE) {
+			return p->prio < 120 && p->prio >= 100;
+		}
+	}
 	return false;
 }
 
