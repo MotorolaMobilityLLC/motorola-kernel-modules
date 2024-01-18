@@ -3068,20 +3068,32 @@ static int factory_test_wls_en(void *input, bool en)
 
 static int wireless_get_chip_id(void *input)
 {
-	int value = chip->chip_id;
+	int value = CPS_WLS_FAIL - 1;
+	int retry = 0;
 
-	if(0 != value)
-		return value;
-	if (chip->rx_ldo_on) {
-		value = cps_wls_get_chip_id();
-		if (value == CPS_CHIP_ID)
-			chip->chip_id = value;
-	} else {
-		cps_wls_tx_enable(true);
-		value = cps_wls_get_chip_id();
-		chip->chip_id = value;
-		cps_wls_tx_enable(false);
+	if (chip->chip_id == CPS_CHIP_ID) {
+		return chip->chip_id;
 	}
+
+	chip->chip_id = cps_wls_get_chip_id();
+
+	if (chip->chip_id != CPS_WLS_FAIL) {
+		return chip->chip_id;
+	}
+
+	if (cps_get_vbus() < VBUS_VALID_MV / 2) {
+		cps_wls_fw_set_boost(true);
+		while (retry < 3 && value != CPS_CHIP_ID) {
+			msleep(50);
+			value = cps_wls_get_chip_id();
+			retry ++;
+		}
+		chip->chip_id = value;
+		cps_wls_fw_set_boost(false);
+	}
+
+	cps_wls_log(CPS_LOG_ERR,"%s chip_id=0x%X, retry=%d\n", __func__, chip->chip_id, retry);
+
 	return value;
 }
 
