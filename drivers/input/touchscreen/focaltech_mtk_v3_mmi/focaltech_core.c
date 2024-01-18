@@ -1778,6 +1778,50 @@ static int drm_notifier_callback(struct notifier_block *self,
 
     return 0;
 }
+
+static int focal_notifier_callback(struct notifier_block *self,
+                                 unsigned long event, void *data)
+{
+    int *blank = data;
+    struct fts_ts_data *ts_data = container_of(self, struct fts_ts_data,
+                                  fb_notif);
+
+    if (!((event == MTK_DISP_EARLY_EVENT_BLANK )
+          || (event == MTK_DISP_EVENT_BLANK))) {
+        FTS_INFO("event(%lu) do not need process\n", event);
+        return 0;
+    }
+
+    if(!blank) {
+        FTS_INFO("Null pointer received\n");
+        return -1;
+    }
+
+    FTS_INFO("DRM event:%lu,blank:%d", event, *blank);
+    switch (*blank) {
+    case MTK_DISP_BLANK_UNBLANK:
+        if (MTK_DISP_EARLY_EVENT_BLANK == event) {
+            FTS_INFO("resume: event = %lu, not care\n", event);
+        } else if (MTK_DISP_EVENT_BLANK == event) {
+            queue_work(fts_data->ts_workqueue, &fts_data->resume_work);
+        }
+        break;
+    case MTK_DISP_BLANK_POWERDOWN:
+        if (MTK_DISP_EARLY_EVENT_BLANK == event) {
+            cancel_work_sync(&fts_data->resume_work);
+            fts_ts_suspend(ts_data->dev);
+        } else if (MTK_DISP_EVENT_BLANK == event) {
+            FTS_INFO("suspend: event = %lu, not care\n", event);
+        }
+        break;
+    default:
+        FTS_INFO("DRM BLANK(%d) do not need process\n", *blank);
+        break;
+    }
+
+    return 0;
+}
+
 #else
 static int drm_notifier_callback(struct notifier_block *self,
                                  unsigned long event, void *data)
@@ -2006,16 +2050,21 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     }
 #elif defined(CONFIG_DRM)
     ts_data->fb_notif.notifier_call = drm_notifier_callback;
+    ts_data->disp_notifier.notifier_call = focal_notifier_callback;
 #if defined(CONFIG_DRM_PANEL)
-    if (active_panel) {
+
 #if defined(CFG_MTK_PANEL_NOTIFIER)
         ret = mtk_disp_notifier_register("Touch", &ts_data->disp_notifier);
+
 #else
+    if (active_panel) {
+
         ret = drm_panel_notifier_register(active_panel, &ts_data->fb_notif);
-#endif
+
         if (ret)
             FTS_ERROR("[DRM]drm_panel_notifier_register fail: %d\n", ret);
     }
+#endif
 #else
     ret = msm_drm_register_client(&ts_data->fb_notif);
     if (ret) {
