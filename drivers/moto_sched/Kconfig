@@ -5,3 +5,9 @@ config MOTO_FUTEX_INHERIT
 	default n
 	help
 	  boost futex owner for the blocked ux thread.
+
+config MOTO_RWSEM_INHERIT
+	tristate "rwsem inherit"
+	default n
+	help
+	  boost rwsem owner for the blocked ux thread.

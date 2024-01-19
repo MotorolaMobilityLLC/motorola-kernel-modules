@@ -25,6 +25,8 @@
 #include <linux/sched/walt.h>
 #endif
 
+#define VERION 1001
+
 
 #define sched_err(fmt, ...) \
 		pr_err("[moto_sched][%s]"fmt, __func__, ##__VA_ARGS__)
@@ -110,7 +112,6 @@ struct moto_task_struct {
 	struct locking_info lkinfo;
 #endif
 
-	struct task_struct *inherit_task;
 	int				inherit_depth;
 	int             inherit_mvp_prio;
 	u64				inherit_start;

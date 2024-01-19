@@ -291,6 +291,17 @@ static ssize_t proc_boost_prio_read(struct file *file, char __user *buf,
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
 
+static ssize_t proc_version_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[13];
+	size_t len = 0;
+
+	len = snprintf(buffer, sizeof(buffer), "%d\n", VERION);
+
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+
 static const struct proc_ops proc_enabled_fops = {
 	.proc_write		= proc_enabled_write,
 	.proc_read		= proc_enabled_read,
@@ -309,6 +320,10 @@ static const struct proc_ops proc_ux_task_fops = {
 static const struct proc_ops proc_boost_prio_fops = {
 	.proc_write		= proc_boost_prio_write,
 	.proc_read		= proc_boost_prio_read,
+};
+
+static const struct proc_ops proc_version_fops = {
+	.proc_read		= proc_version_read,
 };
 
 int moto_sched_proc_init(void)
@@ -345,7 +360,16 @@ int moto_sched_proc_init(void)
 		goto err_creat_boost_prio;
 	}
 
+	proc_node = proc_create("version", 0444, d_moto_sched, &proc_version_fops);
+	if (!proc_node) {
+		sched_err("failed to create proc node version\n");
+		goto err_create_version;
+	}
+
 	return 0;
+
+err_create_version:
+    remove_proc_entry("boost_prio", d_moto_sched);
 
 err_creat_boost_prio:
 	remove_proc_entry("ux_task", d_moto_sched);

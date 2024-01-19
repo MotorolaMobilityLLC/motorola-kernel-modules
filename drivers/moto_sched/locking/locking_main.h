@@ -73,8 +73,10 @@ void register_futex_vendor_hooks(void);
 void unregister_futex_vendor_hooks(void);
 #endif
 
+#if IS_ENABLED(CONFIG_MOTO_RWSEM_INHERIT)
 void register_rwsem_vendor_hooks(void);
 void unregister_rwsem_vendor_hooks(void);
+#endif
 
 void register_mutex_vendor_hooks(void);
 void unregister_mutex_vendor_hooks(void);
