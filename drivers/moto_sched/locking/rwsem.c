@@ -89,7 +89,7 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 		return;
 	}
 
-	if (!current_is_important_ux()) {
+	if (!current_is_important_ux() || (atomic_long_read(&sem->owner) & RWSEM_READER_OWNED)) {
 		return;
 	}
 
@@ -113,19 +113,15 @@ static void android_vh_rwsem_wake_finish_handler(void *unused, struct rw_semapho
 void register_rwsem_vendor_hooks(void)
 {
 	register_trace_android_vh_alter_rwsem_list_add(android_vh_alter_rwsem_list_add_handler, NULL);
-	register_trace_android_vh_rwsem_read_wait_start(android_vh_rwsem_wake_handler, NULL);
-	register_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wake_finish_handler, NULL);
-	register_trace_android_vh_rwsem_write_wait_start(android_vh_rwsem_wake_handler, NULL);
-	register_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wake_finish_handler, NULL);
+	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake_handler, NULL);
+	register_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
 
 }
 
 void unregister_rwsem_vendor_hooks(void)
 {
 	unregister_trace_android_vh_alter_rwsem_list_add(android_vh_alter_rwsem_list_add_handler, NULL);
-	unregister_trace_android_vh_rwsem_read_wait_start(android_vh_rwsem_wake_handler, NULL);
-	unregister_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wake_finish_handler, NULL);
-	unregister_trace_android_vh_rwsem_write_wait_start(android_vh_rwsem_wake_handler, NULL);
-	unregister_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wake_finish_handler, NULL);
+	unregister_trace_android_vh_rwsem_wake(android_vh_rwsem_wake_handler, NULL);
+	unregister_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
 }
 

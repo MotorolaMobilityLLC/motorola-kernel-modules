@@ -94,7 +94,11 @@ static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock
 	lock_inherit_ux_type(owner_ts, current, "mutex_wait");
 }
 
-void android_vh_mutex_wait_finish_handler(void *unused, struct mutex *lock)
+// void android_vh_mutex_wait_finish_handler(void *unused, struct mutex *lock)
+// {
+// }
+
+void android_vh_mutex_unlock_slowpath_handler(void *unused, struct mutex *lock)
 {
 	if (unlikely(!locking_opt_enable(LK_MUTEX_ENABLE)))
 		return;
@@ -102,18 +106,18 @@ void android_vh_mutex_wait_finish_handler(void *unused, struct mutex *lock)
 	lock_clear_inherited_ux_type(current, "mutex_wait_finish");
 }
 
-
-
 void register_mutex_vendor_hooks(void)
 {
 	register_trace_android_vh_alter_mutex_list_add(android_vh_alter_mutex_list_add_handler, NULL);
 	register_trace_android_vh_mutex_wait_start(android_vh_mutex_wait_start_handler, NULL);
-	register_trace_android_vh_mutex_wait_finish(android_vh_mutex_wait_finish_handler, NULL);
+	// register_trace_android_vh_mutex_wait_finish(android_vh_mutex_wait_finish_handler, NULL);
+	register_trace_android_vh_mutex_unlock_slowpath(android_vh_mutex_unlock_slowpath_handler, NULL);
 }
 
 void unregister_mutex_vendor_hooks(void)
 {
 	unregister_trace_android_vh_alter_mutex_list_add(android_vh_alter_mutex_list_add_handler, NULL);
 	unregister_trace_android_vh_mutex_wait_start(android_vh_mutex_wait_start_handler, NULL);
-	unregister_trace_android_vh_mutex_wait_finish(android_vh_mutex_wait_finish_handler, NULL);
+	// unregister_trace_android_vh_mutex_wait_finish(android_vh_mutex_wait_finish_handler, NULL);
+	unregister_trace_android_vh_mutex_unlock_slowpath(android_vh_mutex_unlock_slowpath_handler, NULL);
 }
