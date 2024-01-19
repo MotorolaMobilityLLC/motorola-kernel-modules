@@ -424,12 +424,22 @@ static int smart_batt_soc100_forward(struct mmi_smart_battery *chip, int rsoc)
 	return logic_soc;
 }
 
+static void smart_batt_pm_set_awake(int awake)
+{
+	if(!this_chip->smart_batt_wakelock->active && awake) {
+		__pm_stay_awake(this_chip->smart_batt_wakelock);
+	} else if(this_chip->smart_batt_wakelock->active && !awake) {
+		__pm_relax(this_chip->smart_batt_wakelock);
+	}
+}
+
 static void smart_batt_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
 	struct mmi_smart_battery *chip;
 	int rsoc;
 
+	smart_batt_pm_set_awake(1);
 	delay_work = container_of(work, struct delayed_work, work);
 	chip = container_of(delay_work, struct mmi_smart_battery, battery_delay_work);
 
@@ -457,7 +467,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 		chip->uisoc, chip->combo_voltage_now, chip->combo_current_now, chip->combo_batt_temp);
 
 	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(QUEUS_DELAYED_WORK_TIME));
-
+	smart_batt_pm_set_awake(0);
 }
 
 static int  tcmd_get_bat_temp(void *input, int* val)
@@ -633,6 +643,8 @@ static int smart_battery_probe(struct platform_device *pdev)
 		}
 	}
 
+	chip->smart_batt_wakelock = wakeup_source_register(NULL,
+		devm_kasprintf(chip->dev, GFP_KERNEL, "%s", "smart_batt_wakelock"));
 	smart_battery_init_data(chip);
 
 	chip->debug_enabled = &debug_enabled;
