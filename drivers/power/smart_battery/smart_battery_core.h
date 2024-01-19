@@ -15,7 +15,6 @@
 
 #include <linux/mmi_gauge_class.h>
 #include <linux/power/moto_chg_tcmd.h>
-#include <linux/pm_wakeup.h>
 
 #define mmi_err(chg, fmt, ...)			\
 	do {						\
@@ -69,7 +68,6 @@ struct mmi_smart_battery {
 	struct power_supply	*batt_psy;
 	struct list_head		battery_list;
 	struct moto_chg_tcmd_client batt_tcmd_client;
-	struct wakeup_source *smart_batt_wakelock;
 
 	struct workqueue_struct	*fg_workqueue;
 	struct delayed_work		battery_delay_work;
