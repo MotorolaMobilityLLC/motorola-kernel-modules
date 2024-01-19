@@ -493,6 +493,11 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 		iio_read_channel_processed(cw_bat->Batt_NTC_channel, &batt_ntc_v);
 		iio_read_channel_processed(cw_bat->vref_channel, &bif_v);
 
+		if (batt_ntc_v == 0 || bif_v == 0) {
+			cw_err(cw_bat, "read battery ntc ADC failed,vref =%d, batt_ntc_v=%d\n", bif_v, batt_ntc_v);
+			*temp_out = cw_bat->temp;
+			return -1;
+		}
 		tres_temp = batt_ntc_v * (cw_bat->rbat_pull_up_r);
 		delta_v = bif_v - batt_ntc_v; //1.8v -batt_ntc_v
 		tres_temp = div_s64(tres_temp, delta_v);
