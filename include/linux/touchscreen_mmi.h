@@ -500,6 +500,7 @@ struct ts_mmi_dev {
 
 	atomic_t		resume_should_stop;
 	struct delayed_work	work;
+	struct delayed_work	ps_work;
 	struct kfifo		cmd_pipe;
 
 	struct notifier_block	freq_nb;
@@ -508,6 +509,8 @@ struct ts_mmi_dev {
 	struct work_struct	ps_notify_work;
 	struct notifier_block	ps_notif;
 	bool			ps_is_present;
+	bool			present;
+	struct			power_supply *psy;
 
 	struct notifier_block	fps_notif;
 	bool is_fps_registered;	/* FPS notif registration might be delayed */
