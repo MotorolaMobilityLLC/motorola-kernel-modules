@@ -19,15 +19,17 @@ int locking_opt_init(void)
 
 	// g_opt_debug |= LK_DEBUG_FTRACE;
 
+#ifdef CONFIG_MOTO_MUTEX_INHERIT
 	g_opt_enable |= LK_MUTEX_ENABLE;
 	register_mutex_vendor_hooks();
+#endif
 
-#if IS_ENABLED(CONFIG_MOTO_RWSEM_INHERIT)
+#ifdef CONFIG_MOTO_RWSEM_INHERIT
 	g_opt_enable |= LK_RWSEM_ENABLE;
 	register_rwsem_vendor_hooks();
 #endif
 
-#if IS_ENABLED(CONFIG_MOTO_FUTEX_INHERIT)
+#ifdef CONFIG_MOTO_FUTEX_INHERIT
 	g_opt_enable |= LK_FUTEX_ENABLE;
 	register_futex_vendor_hooks();
 #endif
@@ -39,13 +41,16 @@ void locking_opt_exit(void)
 {
 	g_opt_enable = 0;
 
-#if IS_ENABLED(CONFIG_MOTO_FUTEX_INHERIT)
+#ifdef CONFIG_MOTO_FUTEX_INHERIT
 	unregister_futex_vendor_hooks();
 #endif
 
-#if IS_ENABLED(CONFIG_MOTO_RWSEM_INHERIT)
+#ifdef CONFIG_MOTO_RWSEM_INHERIT
 	unregister_rwsem_vendor_hooks();
 #endif
 
+#ifdef CONFIG_MOTO_MUTEX_INHERIT
 	unregister_mutex_vendor_hooks();
+#endif
+
 }

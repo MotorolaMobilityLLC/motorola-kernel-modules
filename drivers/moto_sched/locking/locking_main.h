@@ -68,17 +68,19 @@ static inline bool locking_opt_debug(int debug)
 	return g_opt_debug & debug;
 }
 
-#if IS_ENABLED(CONFIG_MOTO_FUTEX_INHERIT)
+#ifdef CONFIG_MOTO_FUTEX_INHERIT
 void register_futex_vendor_hooks(void);
 void unregister_futex_vendor_hooks(void);
 #endif
 
-#if IS_ENABLED(CONFIG_MOTO_RWSEM_INHERIT)
+#ifdef CONFIG_MOTO_RWSEM_INHERIT
 void register_rwsem_vendor_hooks(void);
 void unregister_rwsem_vendor_hooks(void);
 #endif
 
+#ifdef CONFIG_MOTO_MUTEX_INHERIT
 void register_mutex_vendor_hooks(void);
 void unregister_mutex_vendor_hooks(void);
+#endif
 
 #endif /* _MOTO_LOCKING_MAIN_H_ */
