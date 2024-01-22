@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 1001
+#define VERION 1002
 
 
 #define sched_err(fmt, ...) \
@@ -97,7 +97,7 @@ enum {
 	CGROUP_NRS,
 };
 
-#if IS_ENABLED(CONFIG_MOTO_FUTEX_INHERIT)
+#ifdef CONFIG_MOTO_FUTEX_INHERIT
 struct locking_info {
 	struct task_struct *holder;
 	bool ux_contrib;
@@ -108,7 +108,7 @@ struct locking_info {
 struct moto_task_struct {
 	int				ux_type;
 
-#if IS_ENABLED(CONFIG_MOTO_FUTEX_INHERIT)
+#ifdef CONFIG_MOTO_FUTEX_INHERIT
 	struct locking_info lkinfo;
 #endif
 
@@ -130,6 +130,7 @@ extern unsigned int task_get_mvp_limit(int mvp_prio);
 extern void binder_inherit_ux_type(struct task_struct *task);
 extern void binder_clear_inherited_ux_type(struct task_struct *task);
 extern void binder_ux_type_set(struct task_struct *task, bool has_clear, bool clear);
+extern void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue);
 extern bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name);
 extern bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name);
 extern void register_vendor_comm_hooks(void);
@@ -173,6 +174,14 @@ static inline bool current_is_important_ux(void)
 	return task_get_mvp_prio(current, true) > UX_PRIO_OTHER_HIGH;
 }
 
+static inline void task_set_ux_inherit_prio(struct task_struct *p, int prio, int depth)
+{
+	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
+	wts->inherit_mvp_prio = prio;
+	wts->inherit_start = jiffies_to_nsecs(jiffies);
+	wts->inherit_depth = depth;
+}
+
 static inline int task_get_ux_inherit_prio(struct task_struct *p)
 {
 	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
@@ -184,6 +193,13 @@ static inline int task_get_ux_depth(struct task_struct *t)
 	struct moto_task_struct *wts = (struct moto_task_struct *) t->android_oem_data1;
 
 	return wts->inherit_depth;
+}
+
+static inline void task_clr_inherit_type(struct task_struct *p)
+{
+	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
+	wts->inherit_mvp_prio = UX_PRIO_INVALID;
+	wts->inherit_depth = 0;
 }
 
 #endif /* _MOTO_SCHED_COMMON_H_ */
