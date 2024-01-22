@@ -1,13 +1,19 @@
 # SPDX-License-Identifier: GPL-2.0
 
 config MOTO_FUTEX_INHERIT
-	tristate "futex inherit"
-	default n
-	help
-	  boost futex owner for the blocked ux thread.
+    tristate "futex inherit"
+    default n
+    help
+      boost futex owner for the blocked ux thread.
 
 config MOTO_RWSEM_INHERIT
-	tristate "rwsem inherit"
-	default n
-	help
-	  boost rwsem owner for the blocked ux thread.
+    tristate "rwsem inherit"
+    default n
+    help
+      boost rwsem owner for the blocked ux thread.
+
+config MOTO_MUTEX_INHERIT
+    tristate "mutex inherit"
+    default n
+    help
+      boost mutex owner for the blocked ux thread.
