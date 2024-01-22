@@ -47,7 +47,8 @@ static struct msched_ops sched_ops = {
 	.task_get_mvp_limit	= task_get_mvp_limit,
 	.binder_inherit_ux_type = binder_inherit_ux_type,
 	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type,
-	.binder_ux_type_set = binder_ux_type_set
+	.binder_ux_type_set = binder_ux_type_set,
+	.queue_ux_task = queue_ux_task
 };
 #endif
 
