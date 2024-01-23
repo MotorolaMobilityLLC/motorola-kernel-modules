@@ -2286,6 +2286,33 @@ static ssize_t cid_status_show(struct device *dev,
 }
 static DEVICE_ATTR(cid_status, S_IRUGO, cid_status_show, NULL);
 
+static ssize_t fg_operation_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long fg_operation_cmd;
+	struct qti_charger *chg = this_chip;
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &fg_operation_cmd);
+	if (r) {
+		pr_err("Invalid fg_operation_cmd = %lu\n", fg_operation_cmd);
+		return -EINVAL;
+	}
+
+    r = qti_charger_write(chg, OEM_PROP_FG_OPERATION,
+			&fg_operation_cmd,
+			sizeof(fg_operation_cmd));
+
+	return r ? r : count;
+}
+static DEVICE_ATTR(fg_operation, S_IRUGO, NULL, fg_operation_store);
+
 //ATTRIBUTE_GROUPS(qti_charger);
 #define TX_INT_FOD      (0x01<<12)
 #if defined(WIRELESS_CPS4035B) || defined(WIRELESS_CPS4019)
@@ -3365,6 +3392,13 @@ static int qti_charger_init(struct qti_charger *chg)
 	if (rc) {
 		mmi_err(chg,
 			   "Couldn't create cid_status\n");
+	}
+
+	rc = device_create_file(chg->dev,
+				&dev_attr_fg_operation);
+	if (rc) {
+		mmi_err(chg,
+			   "Couldn't create fg_operation\n");
 	}
 
 	bm_ulog_print_mask_log(BM_ALL, BM_LOG_LEVEL_INFO, OEM_BM_ULOG_SIZE);
