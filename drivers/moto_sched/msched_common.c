@@ -17,6 +17,9 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 #include <linux/seq_file.h>
+#if defined CONFIG_KERNEL_6_1
+#include <linux/sched/cputime.h>
+#endif
 #include <trace/hooks/sched.h>
 #include <trace/hooks/signal.h>
 #include <kernel/sched/sched.h>
