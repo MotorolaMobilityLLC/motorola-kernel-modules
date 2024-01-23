@@ -6,6 +6,9 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <linux/rwsem.h>
+#if defined CONFIG_KERNEL_6_1
+#include <linux/sched/cputime.h>
+#endif
 #include <linux/sched/task.h>
 #include <../kernel/sched/sched.h>
 #include <trace/hooks/rwsem.h>
