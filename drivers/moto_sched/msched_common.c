@@ -46,41 +46,47 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 {
 	int ux_type = task_get_ux_type(p);
 
-	if (ux_type & UX_TYPE_NATIVESERVICE) {
-		return p->prio < 120 && p->prio >= 100;
+	if (cgroup_id == CGROUP_DEFAULT && p->prio == 100) {
+		return true;
 	}
 
-	if (cgroup_id == CGROUP_DEFAULT) {
-		return p->prio == 100;
-	}
-
-	if (cgroup_id == CGROUP_TOP_APP) {
-		if (moto_sched_scene & UX_SCENE_LAUNCH) {
-			return true;
-		} else if (p->prio <= moto_boost_prio) {
-			return true;
-		}
+	if (ux_type & UX_TYPE_NATIVESERVICE && p->prio < 120 && p->prio >= 100) {
+		return true;
 	}
 
 	if (moto_sched_scene & UX_SCENE_AUDIO) {
-		if (ux_type & UX_TYPE_AUDIOSERVICE) {
-			return p->prio < 120 && p->prio >= 100;
-		} else if (cgroup_id == CGROUP_FOREGROUND) {
-			return p->prio == 104 || p->prio == 101;
-		}
-	}
-
-	if (moto_sched_scene & UX_SCENE_LAUNCH) {
-		if (p->tgid == global_launcher_tgid || p->tgid == global_systemserver_tgid) {
-			return p->prio <= moto_boost_prio;
-		}
+		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio < 120 && p->prio >= 100)
+			return true;
+		else if (cgroup_id == CGROUP_FOREGROUND && (p->prio == 104 || p->prio == 101))
+			return true;
 	}
 
 	if (moto_sched_scene & UX_SCENE_CAMERA) {
-		if (ux_type & UX_TYPE_CAMERASERVICE) {
-			return p->prio < 120 && p->prio >= 100;
-		}
+		if (ux_type & UX_TYPE_CAMERASERVICE && p->prio < 120 && p->prio >= 100)
+			return true;
 	}
+
+	if ((moto_sched_scene & UX_SCENE_TOUCH) && (ux_type & UX_TYPE_GESTURE_MONITOR)) {
+		return true;
+	}
+
+	if (cgroup_id == CGROUP_TOP_APP) {
+		if (moto_sched_scene & UX_SCENE_LAUNCH)
+			return true;
+		else if (p->prio <= moto_boost_prio)
+			return true;
+	}
+
+	if (p->tgid == global_launcher_tgid
+			|| p->tgid == global_systemserver_tgid
+			|| p->tgid == global_sysui_tgid
+			|| p->tgid == global_sf_tgid) {
+		if (moto_sched_scene & UX_SCENE_LAUNCH)
+			return true;
+		else if (p->prio < 120)
+			return true;
+	}
+
 	return false;
 }
 
@@ -94,46 +100,58 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	if (ux_type & UX_TYPE_PERF_DAEMON)
 		prio = UX_PRIO_HIGHEST;
 	else if (ux_type & UX_TYPE_AUDIO || task_in_audio_server_group(p))
-		prio = p->prio <= 101 ? UX_PRIO_URGENT_AUDIO : UX_PRIO_AUDIO;
-	else if (ux_type & UX_TYPE_INPUT)
-		prio = UX_PRIO_INPUT;
-	else if (ux_type & UX_TYPE_ANIMATOR)
-		prio = p->prio <= 116 ? UX_PRIO_ANIMATOR : UX_PRIO_ANIMATOR_LOW;
-	else if (ux_type & UX_TYPE_TOPAPP)
-		prio = UX_PRIO_TOPAPP;
-	else if (ux_type & UX_TYPE_TOPUI)
-		prio = UX_PRIO_TOPUI;
-	else if ((moto_sched_scene & UX_SCENE_LAUNCH) && (ux_type & UX_TYPE_LAUNCHER))
-		prio = UX_PRIO_LAUNCHER;
-	else if ((moto_sched_scene & UX_SCENE_TOUCH) && (ux_type & UX_TYPE_GESTURE_MONITOR))
-		prio = UX_PRIO_GESTURE_MONITOR;
-	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER)))
-		prio = UX_PRIO_INHERIT;
+		prio = UX_PRIO_AUDIO;
+	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER))
+		prio = UX_PRIO_ANIMATOR;
 	else if (ux_type & UX_TYPE_SYSTEM_LOCK)
-		prio = UX_PRIO_SYS_LOCK;
+		prio = UX_PRIO_SYSTEM;
+	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI))
+		prio = UX_PRIO_TOPAPP;
+	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER)))
+		prio = UX_PRIO_OTHER;
 	else if (task_in_ux_related_group(p, cgroup_id))
-		prio = p->prio < 120 ? (UX_PRIO_OTHER_HIGH - (p->prio - 100)) : (UX_PRIO_OTHER_LOW - (p->prio - 120));
+		prio = UX_PRIO_OTHER;
 	else if (ux_type & UX_TYPE_KSWAPD)
 		prio = UX_PRIO_KSWAPD;
 
 	if (with_inherit && inherit_prio > 0) {
-		return prio > inherit_prio ? prio : inherit_prio;
+		prio = prio > inherit_prio ? prio : inherit_prio;
 	}
+
+	cond_trace_printk(moto_sched_debug,
+		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d cgroup_id=%d inherit_prio=%d mvp_prio=%d\n",
+		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, cgroup_id, inherit_prio, prio);
+
 	return prio;
 }
 EXPORT_SYMBOL(task_get_mvp_prio);
 
-#define AUDIO_MVP_LIMIT		12000000U	// 12ms
-#define TOPAPP_MVP_LIMIT	120000000U	// 120ms
-#define KSWAPD_MVP_LIMIT	120000000U	// 120ms
-#define DEF_MVP_LIMIT		12000000U	// 12ms
-unsigned int task_get_mvp_limit(int mvp_prio) {
-	if (mvp_prio == UX_PRIO_URGENT_AUDIO || mvp_prio == UX_PRIO_AUDIO)
-		return AUDIO_MVP_LIMIT;
-	else if (mvp_prio == UX_PRIO_TOPAPP || mvp_prio == UX_PRIO_LAUNCHER || mvp_prio == UX_PRIO_TOPUI)
-		return TOPAPP_MVP_LIMIT;
+#define TOPAPP_MVP_LIMIT		120000000U	// 120ms
+#define TOPAPP_MVP_LIMIT_BOOST	120000000U	// 120ms
+#define SYSTEM_MVP_LIMIT		36000000U	// 36ms
+#define SYSTEM_MVP_LIMIT_BOOST	36000000U	// 36ms
+#define RTG_MVP_LIMIT			24000000U	// 24ms
+#define RTG_MVP_LIMIT_BOOST		24000000U	// 24ms
+#define KSWAPD_LIMIT			3000000000U	// 3000ms
+#define DEF_MVP_LIMIT			12000000U	// 12ms
+
+static inline bool task_in_top_related_group(struct task_struct *p) {
+	return p->tgid == global_launcher_tgid
+			|| p->tgid == global_sysui_tgid
+			|| get_task_cgroup_id(p) == CGROUP_TOP_APP;
+}
+
+unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
+	bool boost = moto_sched_scene & UX_SCENE_LAUNCH;
+
+	if (mvp_prio == UX_PRIO_TOPAPP)
+		return boost ? TOPAPP_MVP_LIMIT_BOOST : TOPAPP_MVP_LIMIT;
+	else if (mvp_prio == UX_PRIO_SYSTEM || (p->tgid == global_systemserver_tgid && p->prio <= 120))
+		return boost ? SYSTEM_MVP_LIMIT_BOOST : SYSTEM_MVP_LIMIT;
+	else if (task_in_top_related_group(p) && p->prio <= 120)
+		return boost ? RTG_MVP_LIMIT_BOOST : RTG_MVP_LIMIT;
 	else if (mvp_prio == UX_PRIO_KSWAPD)
-		return KSWAPD_MVP_LIMIT;
+		return KSWAPD_LIMIT;
 	else if (mvp_prio > UX_PRIO_INVALID)
 		return DEF_MVP_LIMIT;
 
@@ -162,7 +180,7 @@ void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue) {
 			if (jiffies_to_nsecs(jiffies) - wts->inherit_start > MAX_INHERIT_GRAN) {
 	#ifdef LOCK_DEBUG
 				atomic_dec(&g_lock_count);
-				cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+				cond_trace_printk(moto_sched_debug,
 						"lock_clear_inherited_ux_type %s  %d  ux_type %d -> %d  cost=%llu total=%d\n", "dequeue task",
 						task->pid, wts->ux_type, wts->inherit_mvp_prio,
 						(jiffies_to_nsecs(jiffies) - wts->inherit_start) / 1000000U, atomic_read(&g_lock_count));
@@ -174,26 +192,16 @@ void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue) {
 }
 EXPORT_SYMBOL(queue_ux_task);
 
-void binder_ux_type_set(struct task_struct *task, bool has_clear, bool clear) {
-	if (has_clear) {
-		if (!clear) {
-			if (task && ((current->tgid == global_launcher_tgid &&
-					task->group_leader->prio < MAX_RT_PRIO) ||
-					(current->group_leader->prio < MAX_RT_PRIO &&
-					task->tgid == global_launcher_tgid)))
-				task_add_ux_type(task, UX_TYPE_ANIMATOR);
-		} else {
-			task_clr_ux_type(task, UX_TYPE_ANIMATOR);
-		}
-	} else {
-		if (task && ((current->tgid == global_launcher_tgid &&
-				task->group_leader->prio < MAX_RT_PRIO) ||
-				(current->group_leader->prio < MAX_RT_PRIO &&
-				task->tgid == global_launcher_tgid)))
-			task_add_ux_type(task, UX_TYPE_ANIMATOR);
-		else
-			task_clr_ux_type(task, UX_TYPE_ANIMATOR);
-	}
+void binder_ux_type_set(struct task_struct *task) {
+	if (task && ((task_in_top_related_group(current) && task->group_leader->prio < MAX_RT_PRIO)
+					|| (current->group_leader->prio < MAX_RT_PRIO && task_in_top_related_group(task))))
+		task_add_ux_type(task, UX_TYPE_LOW_LATENCY_BINDER);
+	else
+		task_clr_ux_type(task, UX_TYPE_LOW_LATENCY_BINDER);
+
+	cond_trace_printk(moto_sched_debug,
+			"current (tgid=%d leader_prio=%d) task (tgid=%d leader_prio=%d) ux_type=%d\n",
+			current->tgid, current->group_leader->prio, task->tgid, task->group_leader->prio, task_get_ux_type(task));
 }
 EXPORT_SYMBOL(binder_ux_type_set);
 
@@ -216,7 +224,7 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 	owner_wts = (struct moto_task_struct *) owner->android_oem_data1;
 	waiter_wts = (struct moto_task_struct *) waiter->android_oem_data1;
 	atomic_inc(&g_lock_count);
-	cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+	cond_trace_printk(moto_sched_debug,
 			"lock_inherit_ux_type %s %d -> %d   ux_type %d -> %d  depth=%d total=%d\n",
 			lock_name, waiter->pid, owner->pid, waiter_wts->ux_type, owner_wts->ux_type,
 			waiter_wts->inherit_depth, atomic_read(&g_lock_count));
@@ -247,7 +255,7 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 #ifdef LOCK_DEBUG
 	owner_wts = get_moto_task_struct(owner);
 	atomic_dec(&g_lock_count);
-	cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+	cond_trace_printk(moto_sched_debug,
 			"lock_clear_inherited_ux_type %s  %d  ux_type %d -> %d  cost=%llu total=%d\n", lock_name,
 			owner->pid, owner_wts->ux_type, owner_wts->inherit_mvp_prio,
 			(jiffies_to_nsecs(jiffies) - owner_wts->inherit_start) / 1000000U, atomic_read(&g_lock_count));
