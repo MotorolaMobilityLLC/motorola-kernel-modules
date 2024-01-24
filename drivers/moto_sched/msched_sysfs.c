@@ -25,10 +25,13 @@
 #define MAX_SET (128)
 
 int __read_mostly moto_sched_enabled;
+int __read_mostly moto_sched_debug;
 int __read_mostly moto_sched_scene;
 int __read_mostly moto_boost_prio = 130;
 pid_t __read_mostly global_systemserver_tgid = -1;
 pid_t __read_mostly global_launcher_tgid = -1;
+pid_t __read_mostly global_sysui_tgid = -1;
+pid_t __read_mostly global_sf_tgid = -1;
 
 pid_t global_task_pid_to_read = -1;
 
@@ -88,6 +91,42 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 	size_t len = 0;
 
 	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_sched_enabled);
+
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+
+
+static ssize_t proc_debug_write(struct file *file, const char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[13];
+	int err, val;
+
+	memset(buffer, 0, sizeof(buffer));
+
+	if (count > sizeof(buffer) - 1)
+		count = sizeof(buffer) - 1;
+
+	if (copy_from_user(buffer, buf, count))
+		return -EFAULT;
+
+	buffer[count] = '\0';
+	err = kstrtoint(strstrip(buffer), 10, &val);
+	if (err)
+		return err;
+
+	moto_sched_debug = val;
+
+	return count;
+}
+
+static ssize_t proc_debug_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[13];
+	size_t len = 0;
+
+	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_sched_debug);
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
@@ -200,6 +239,10 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_systemserver_tgid = ux_task->tgid;
 			} else if (ux_type & UX_TYPE_LAUNCHER) {
 				global_launcher_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_SYSUI) {
+				global_sysui_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_SF) {
+				global_sf_tgid = ux_task->tgid;
 			}
 			task_add_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
@@ -308,6 +351,11 @@ static const struct proc_ops proc_enabled_fops = {
 	.proc_read		= proc_enabled_read,
 };
 
+static const struct proc_ops proc_debug_fops = {
+	.proc_write		= proc_debug_write,
+	.proc_read		= proc_debug_read,
+};
+
 static const struct proc_ops proc_ux_scene_fops = {
 	.proc_write		= proc_ux_scene_write,
 	.proc_read		= proc_ux_scene_read,
@@ -367,10 +415,19 @@ int moto_sched_proc_init(void)
 		goto err_create_version;
 	}
 
+	proc_node = proc_create("debug", 0666, d_moto_sched, &proc_debug_fops);
+	if (!proc_node) {
+		sched_err("failed to create proc node debug\n");
+		goto err_creat_debug;
+	}
+
 	return 0;
 
+err_creat_debug:
+	remove_proc_entry("version", d_moto_sched);
+
 err_create_version:
-    remove_proc_entry("boost_prio", d_moto_sched);
+	remove_proc_entry("boost_prio", d_moto_sched);
 
 err_creat_boost_prio:
 	remove_proc_entry("ux_task", d_moto_sched);
@@ -390,6 +447,8 @@ err_creat_d_moto_sched:
 
 void moto_sched_proc_deinit(void)
 {
+	remove_proc_entry("debug", d_moto_sched);
+	remove_proc_entry("version", d_moto_sched);
 	remove_proc_entry("boost_prio", d_moto_sched);
 	remove_proc_entry("ux_task", d_moto_sched);
 	remove_proc_entry("ux_scene", d_moto_sched);
