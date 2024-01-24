@@ -11,13 +11,10 @@
 #include "locking_main.h"
 
 unsigned int g_opt_enable;
-unsigned int g_opt_debug;
 
 int locking_opt_init(void)
 {
 	int ret = 0;
-
-	// g_opt_debug |= LK_DEBUG_FTRACE;
 
 #ifdef CONFIG_MOTO_MUTEX_INHERIT
 	g_opt_enable |= LK_MUTEX_ENABLE;

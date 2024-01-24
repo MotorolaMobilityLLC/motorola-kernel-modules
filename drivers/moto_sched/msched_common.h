@@ -27,6 +27,11 @@
 
 #define VERION 1002
 
+#define cond_trace_printk(cond, fmt, ...)	\
+do {										\
+	if (cond)								\
+		trace_printk(fmt, ##__VA_ARGS__);	\
+} while (0)
 
 #define sched_err(fmt, ...) \
 		pr_err("[moto_sched][%s]"fmt, __func__, ##__VA_ARGS__)
@@ -47,13 +52,14 @@
 #define UX_TYPE_KSWAPD				(1 << 7)
 #define UX_TYPE_SYSTEM_LOCK			(1 << 8)
 #define UX_TYPE_INHERIT_BINDER		(1 << 9)
-#define UX_TYPE_INHERIT_LOCK		(1 << 10)
+#define UX_TYPE_LOW_LATENCY_BINDER	(1 << 10)
 #define UX_TYPE_GESTURE_MONITOR		(1 << 11)
 #define UX_TYPE_SF					(1 << 12)
 #define UX_TYPE_AUDIOSERVICE		(1 << 13)
 #define UX_TYPE_AUDIOAPP			(1 << 14)
 #define UX_TYPE_NATIVESERVICE		(1 << 15)
 #define UX_TYPE_CAMERASERVICE		(1 << 16)
+#define UX_TYPE_SYSUI				(1 << 17)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
@@ -65,22 +71,12 @@
 /* define for MVP priority, the higher the better, should be in the range (11~100) */
 #define UX_PRIO_HIGHEST		100
 
-#define UX_PRIO_URGENT_AUDIO 80
-#define UX_PRIO_AUDIO		79
-#define UX_PRIO_INPUT		78
-#define UX_PRIO_ANIMATOR	77
-#define UX_PRIO_ANIMATOR_LOW 76
-#define UX_PRIO_LAUNCHER	75
-
+#define UX_PRIO_AUDIO		80
+#define UX_PRIO_ANIMATOR	79
+#define UX_PRIO_SYSTEM		78
 #define UX_PRIO_TOPAPP		70 // must be aligned with walt.h!
-#define UX_PRIO_TOPUI		69
-#define UX_PRIO_GESTURE_MONITOR	68
-#define UX_PRIO_INHERIT		67
-#define UX_PRIO_SYS_LOCK	66
-
-#define UX_PRIO_OTHER_HIGH	60 // mvp 60~41 = cfs 100~119
-#define UX_PRIO_KSWAPD		35
-#define UX_PRIO_OTHER_LOW	30 // mvp 30~11 = cfs 120~139
+#define UX_PRIO_KSWAPD		65 // must be aligned with walt.h!
+#define UX_PRIO_OTHER		60
 
 #define UX_PRIO_LOWEST		11
 #define UX_PRIO_INVALID		-1
@@ -119,17 +115,20 @@ struct moto_task_struct {
 
 /* global vars and functions */
 extern int __read_mostly moto_sched_enabled;
+extern int __read_mostly moto_sched_debug;
 extern int __read_mostly moto_sched_scene;
 extern int __read_mostly moto_boost_prio;
 extern pid_t __read_mostly global_systemserver_tgid;
 extern pid_t __read_mostly global_launcher_tgid;
+extern pid_t __read_mostly global_sysui_tgid;
+extern pid_t __read_mostly global_sf_tgid;
 
 extern int task_get_origin_mvp_prio(struct task_struct *p, bool with_inherit);
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
-extern unsigned int task_get_mvp_limit(int mvp_prio);
+extern unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio);
 extern void binder_inherit_ux_type(struct task_struct *task);
 extern void binder_clear_inherited_ux_type(struct task_struct *task);
-extern void binder_ux_type_set(struct task_struct *task, bool has_clear, bool clear);
+extern void binder_ux_type_set(struct task_struct *task);
 extern void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue);
 extern bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name);
 extern bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name);
@@ -166,12 +165,12 @@ static inline int get_task_cgroup_id(struct task_struct *task)
 
 static inline bool task_is_important_ux(struct task_struct *p)
 {
-	return task_get_mvp_prio(p, true) > UX_PRIO_OTHER_HIGH;
+	return task_get_mvp_prio(p, true) >= UX_PRIO_OTHER;
 }
 
 static inline bool current_is_important_ux(void)
 {
-	return task_get_mvp_prio(current, true) > UX_PRIO_OTHER_HIGH;
+	return task_get_mvp_prio(current, true) >= UX_PRIO_OTHER;
 }
 
 static inline void task_set_ux_inherit_prio(struct task_struct *p, int prio, int depth)

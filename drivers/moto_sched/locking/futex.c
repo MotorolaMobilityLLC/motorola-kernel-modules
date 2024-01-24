@@ -62,7 +62,7 @@ static int futex_set_inherit_ux_refs(struct task_struct *holder, struct task_str
 		return 0;
 
 	if (task_is_important_ux(p)) {
-		cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+		cond_trace_printk(moto_sched_debug,
 			"futex_set_inherit_ux %d -> %d\n", p->pid, holder->pid);
 		task_add_ux_type(holder, UX_TYPE_INHERIT_FUTEX);
 		return INHERIT_SET;
@@ -73,7 +73,7 @@ static int futex_set_inherit_ux_refs(struct task_struct *holder, struct task_str
 
 static void futex_unset_inherit_ux_refs(struct task_struct *p, int value, int path)
 {
-	cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+	cond_trace_printk(moto_sched_debug,
 		"futex_unset_inherit_ux %d\n", p->pid);
 	task_clr_ux_type(p, UX_TYPE_INHERIT_FUTEX);
 }
@@ -214,7 +214,7 @@ static void android_vh_do_futex_handler(void *unused, int cmd,
 	case FUTEX_WAIT_BITSET:
 		if (NULL != uaddr2) {
 			if (copy_from_user(&info, uaddr2, sizeof(info))) {
-				cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+				cond_trace_printk(moto_sched_debug,
 						"copy from user failed, uaddr2 = 0x%lx \n",
 						(unsigned long)uaddr2);
 				return;
@@ -249,7 +249,7 @@ static void android_vh_futex_wait_start_handler(void *unused, unsigned int flags
 {
 	struct task_struct *holder;
 
-	cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+	cond_trace_printk(moto_sched_debug,
 			"current_is_important_ux %d, set_holder %d -> %d\n", current_is_important_ux(), current->pid, (flags & ~(0x3 << LOCK_TYPE_SHIFT)) >> FLAGS_OWNER_SHIFT);
 
 	if (!current_is_important_ux())
@@ -387,7 +387,7 @@ static void android_vh_futex_wake_traverse_plist_handler(void *unused, struct pl
 				*target_nr += 1;
 				mts->lkinfo.ux_contrib = false;
 			}
-			cond_trace_printk(locking_opt_debug(LK_DEBUG_FTRACE),
+			cond_trace_printk(moto_sched_debug,
 				"idx=%d this=%-12s pid=%d tgid=%d nr=%d\n",
 				++idx, p->comm, p->pid, p->tgid, *target_nr);
 		}
