@@ -6,13 +6,6 @@
 #ifndef _MOTO_LOCKING_MAIN_H_
 #define _MOTO_LOCKING_MAIN_H_
 
-#define cond_trace_printk(cond, fmt, ...)	\
-do {										\
-	if (cond)								\
-		trace_printk(fmt, ##__VA_ARGS__);	\
-} while (0)
-
-
 
 #define MAGIC_NUM       (0xdead0000)
 #define MAGIC_MASK      (0xffff0000)
@@ -46,11 +39,7 @@ struct futex_uinfo {
 #define LK_RWSEM_ENABLE (1 << 1)
 #define LK_FUTEX_ENABLE (1 << 2)
 
-#define LK_DEBUG_PRINTK (1 << 0)
-#define LK_DEBUG_FTRACE (1 << 1)
-
 extern unsigned int g_opt_enable;
-extern unsigned int g_opt_debug;
 
 extern atomic64_t futex_inherit_set_times;
 extern atomic64_t futex_inherit_unset_times;
@@ -61,11 +50,6 @@ extern atomic64_t futex_high_count;
 static inline bool locking_opt_enable(unsigned int enable)
 {
 	return g_opt_enable & enable;
-}
-
-static inline bool locking_opt_debug(int debug)
-{
-	return g_opt_debug & debug;
 }
 
 #ifdef CONFIG_MOTO_FUTEX_INHERIT
