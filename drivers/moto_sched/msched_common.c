@@ -55,7 +55,7 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 	}
 
 	if (moto_sched_scene & UX_SCENE_AUDIO) {
-		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio < 120 && p->prio >= 100)
+		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio <= 120 && p->prio >= 100)
 			return true;
 		else if (cgroup_id == CGROUP_FOREGROUND && (p->prio == 104 || p->prio == 101))
 			return true;
