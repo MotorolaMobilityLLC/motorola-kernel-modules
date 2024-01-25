@@ -2697,6 +2697,8 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	core_module_prob_sate = CORE_MODULE_PROB_SUCCESS;
 #ifdef GTP_PEN_NOTIFIER
 	core_data->gtp_pen_detect_flag = GTP_FINGER_MODE;
+	core_data->get_mode.stylus_mode = GTP_PEN_MODE; //app default mode is pen
+	core_data->set_mode.stylus_mode = GTP_PEN_MODE;
 #endif
 
 	/* Try start a thread to get config-bin info */

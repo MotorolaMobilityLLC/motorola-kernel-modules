@@ -1282,8 +1282,7 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	/* All IC status are cleared after reset */
 	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
 	/* restore data */
-	if ((core_data->board_data.stylus_mode_ctrl || core_data->board_data.passive_stylus_mode_ctrl)
-		&& core_data->get_mode.stylus_mode) {
+	if (core_data->board_data.stylus_mode_ctrl && core_data->get_mode.stylus_mode) {
 		ret = goodix_stylus_mode(core_data, core_data->get_mode.stylus_mode);
 		if (!ret) {
 			core_data->set_mode.stylus_mode = core_data->get_mode.stylus_mode;
@@ -1388,7 +1387,8 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	}
 
 #ifdef GTP_PEN_NOTIFIER
-	if (core_data->gtp_pen_detect_flag == GTP_PEN_MODE) {
+	if ((core_data->gtp_pen_detect_flag == GTP_PEN_MODE) &&
+		(core_data->set_mode.stylus_mode == GTP_PEN_MODE)) {
 		ret = goodix_ts_send_cmd(core_data, 0x32, 5, GTP_PEN_MODE, 0x00);
 		if (ret < 0)
 			ts_err("failed to send passive pen mode cmd");
