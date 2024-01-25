@@ -8,6 +8,7 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/gpio/consumer.h>
 #include <linux/power_supply.h>
 #include <linux/regmap.h>
@@ -1482,14 +1483,13 @@ static DEVICE_ATTR(reg_addr, 0664, show_reg_addr, store_reg_addr);
 
 static ssize_t show_reg_data(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	int ret;
 	struct bq25980_device *bq = dev_get_drvdata(dev);
 	if (!bq) {
 		pr_err("bq25980 chip not valid\n");
 		return -ENODEV;
 	}
 
-	ret = regmap_read(bq->regmap, bq->reg_addr, &bq->reg_data);;
+	regmap_read(bq->regmap, bq->reg_addr, &bq->reg_data);
 	return sprintf(buf, "reg addr 0x%08x -> 0x%08x\n", bq->reg_addr, bq->reg_data);
 }
 
@@ -2303,6 +2303,22 @@ free_mem:
 	devm_kfree(bq->dev, bq);
 	return ret;
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void bq25980_charger_remove(struct i2c_client *client)
+{
+	struct bq25980_device *bq = i2c_get_clientdata(client);
+
+	bq25980_set_adc_enable(bq, false);
+
+	power_supply_unregister(bq->charger);
+
+	mutex_destroy(&bq->lock);
+	mutex_destroy(&bq->irq_complete);
+	dev_err(bq->dev,"remove Successfully\n");
+}
+
+#else
 static int bq25980_charger_remove(struct i2c_client *client)
 {
 	struct bq25980_device *bq = i2c_get_clientdata(client);
@@ -2316,7 +2332,7 @@ static int bq25980_charger_remove(struct i2c_client *client)
 	dev_err(bq->dev,"remove Successfully\n");
 	return 0;
 }
-
+#endif
 
 static void bq25980_charger_shutdown(struct i2c_client *client)
 {
