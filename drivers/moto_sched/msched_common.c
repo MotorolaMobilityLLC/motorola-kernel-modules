@@ -46,7 +46,8 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 {
 	int ux_type = task_get_ux_type(p);
 
-	if (cgroup_id == CGROUP_DEFAULT && p->prio == 100) {
+	// Boost all kernel threads with prio <= 120
+	if (cgroup_id == CGROUP_DEFAULT && p->prio <= 120 && p->mm == NULL) {
 		return true;
 	}
 
@@ -127,13 +128,14 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 EXPORT_SYMBOL(task_get_mvp_prio);
 
 #define TOPAPP_MVP_LIMIT		120000000U	// 120ms
-#define TOPAPP_MVP_LIMIT_BOOST	120000000U	// 120ms
+#define TOPAPP_MVP_LIMIT_BOOST	240000000U	// 240ms
 #define SYSTEM_MVP_LIMIT		36000000U	// 36ms
-#define SYSTEM_MVP_LIMIT_BOOST	36000000U	// 36ms
+#define SYSTEM_MVP_LIMIT_BOOST	72000000U	// 72ms
 #define RTG_MVP_LIMIT			24000000U	// 24ms
-#define RTG_MVP_LIMIT_BOOST		24000000U	// 24ms
+#define RTG_MVP_LIMIT_BOOST		48000000U	// 48ms
 #define KSWAPD_LIMIT			3000000000U	// 3000ms
 #define DEF_MVP_LIMIT			12000000U	// 12ms
+#define DEF_MVP_LIMIT_BOOST		24000000U	// 24ms
 
 static inline bool task_in_top_related_group(struct task_struct *p) {
 	return p->tgid == global_launcher_tgid
@@ -153,7 +155,7 @@ unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
 	else if (mvp_prio == UX_PRIO_KSWAPD)
 		return KSWAPD_LIMIT;
 	else if (mvp_prio > UX_PRIO_INVALID)
-		return DEF_MVP_LIMIT;
+		return boost ? DEF_MVP_LIMIT_BOOST : DEF_MVP_LIMIT;
 
 	return 0;
 }
