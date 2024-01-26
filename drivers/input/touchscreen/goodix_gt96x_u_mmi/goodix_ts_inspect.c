@@ -749,8 +749,13 @@ static int goodix_init_testlimits(struct goodix_ts_test *ts_test)
 	memcpy(temp_buf, firmware->data, firmware->size);
 
 	test_params->test_items[GTP_VERSION_TEST] = true;
-	test_params->test_items[GTP_CHIP_KEY_INFO_TEST] = true;
-	test_params->test_items[GTP_CUSTOM_INFO_TEST] = true;
+	if (cd->bus->ic_type == IC_TYPE_MARSEILLE) {
+		test_params->test_items[GTP_CHIP_KEY_INFO_TEST] = false;
+		test_params->test_items[GTP_CUSTOM_INFO_TEST] = false;
+	} else {
+		test_params->test_items[GTP_CHIP_KEY_INFO_TEST] = true;
+		test_params->test_items[GTP_CUSTOM_INFO_TEST] = true;
+	}
 	test_params->test_items[GTP_CAP_TEST] = true;
 	test_params->test_items[GTP_DELTA_TEST] = true;
 
@@ -2735,8 +2740,10 @@ static int goodix_do_inspect(struct goodix_ts_core *cd)
 	ts_info("TP test prepare OK");
 
 	goodix_version_test(ts_test);
-	goodix_check_key_info_test(ts_test);
-	goodix_custom_info_test(ts_test);
+	if (ts_test->test_params.test_items[GTP_CHIP_KEY_INFO_TEST])
+		goodix_check_key_info_test(ts_test);
+	if (ts_test->test_params.test_items[GTP_CUSTOM_INFO_TEST])
+		goodix_custom_info_test(ts_test);
 	goodix_capacitance_test(ts_test);
 	if (ts_test->test_params.test_items[GTP_SHORT_TEST])
 		goodix_shortcircut_test(ts_test);
