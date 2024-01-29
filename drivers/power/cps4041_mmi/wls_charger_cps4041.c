@@ -2037,28 +2037,9 @@ static int wireless_fw_update(bool force)
 	bool boost_enable = false;
 	int sys_mode = 0x00;
 
-	struct mtk_charger *info = NULL;
-	struct power_supply *chg_psy = NULL;
-
-	if (force)
-		goto force_fw_update;
-
-	chg_psy = power_supply_get_by_name("mtk-master-charger");
-	if (IS_ERR_OR_NULL(chg_psy)) {
-		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n", __func__);
-		return CPS_WLS_FAIL;
-	}
-
-	info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
-	if (IS_ERR_OR_NULL(info)) {
-		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get mtk_charger\n", __func__);
-		return CPS_WLS_FAIL;
-	}
-
-	if (info->usb_type == POWER_SUPPLY_USB_TYPE_UNKNOWN &&
-			cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 50) {
+	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
-			"Wireless fw update failed. Battery SOC should be at least 50%%\n");
+			"Wireless fw update failed. Battery SOC should be at least 10%%\n");
 		return CPS_WLS_FAIL;
 	}
 
@@ -2068,7 +2049,6 @@ static int wireless_fw_update(bool force)
 		return CPS_WLS_FAIL;
 	}
 
-force_fw_update:
 	maj_ver = 0;
 	min_ver = 0;
 	fw = NULL;
