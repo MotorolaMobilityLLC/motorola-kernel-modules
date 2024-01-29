@@ -1,0 +1,19 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "moto_sched",
+    srcs = glob([
+        "**/*.c",
+        "**/*.h",
+        "Kbuild",
+        "Makefile",
+    ]) + [
+        "//kernel_device_modules-6.1:mtk_public_headers",
+    ],
+)

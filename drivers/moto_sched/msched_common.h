@@ -25,7 +25,14 @@
 #include <linux/sched/walt.h>
 #endif
 
+#if IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
+#include <linux/sched/cputime.h>
+#include <kernel/sched/sched.h>
+#include <drivers/misc/mediatek/sched/common.h>
+#endif
+
 #define VERION 1008
+
 // #define DEBUG_LOCK 1
 
 #define cond_trace_printk(cond, fmt, ...)	\
