@@ -1388,10 +1388,12 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 
 #ifdef GTP_PEN_NOTIFIER
 	if ((core_data->gtp_pen_detect_flag == GTP_PEN_MODE) &&
-		(core_data->set_mode.stylus_mode == GTP_PEN_MODE)) {
+		(core_data->get_mode.stylus_mode == GTP_PEN_MODE)) {
 		ret = goodix_ts_send_cmd(core_data, 0x32, 5, GTP_PEN_MODE, 0x00);
-		if (ret < 0)
-			ts_err("failed to send passive pen mode cmd");
+		if (!ret) {
+			core_data->set_mode.stylus_mode = core_data->get_mode.stylus_mode;
+			ts_info("Success to %s stylus mode", core_data->get_mode.stylus_mode ? "Enable" : "Disable");
+		}
 	}
 #endif
 	mutex_unlock(&core_data->mode_lock);
