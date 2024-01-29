@@ -55,6 +55,15 @@ static struct msched_ops sched_ops = {
 	.binder_ux_type_set = binder_ux_type_set,
 	.queue_ux_task = queue_ux_task
 };
+#elif IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
+static struct msched_ops sched_ops = {
+	.task_get_mvp_prio	= task_get_mvp_prio,
+	.task_get_mvp_limit	= task_get_mvp_limit,
+	.binder_inherit_ux_type = binder_inherit_ux_type,
+	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type,
+	.binder_ux_type_set = binder_ux_type_set,
+	.queue_ux_task = queue_ux_task
+};
 #endif
 
 static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
@@ -79,6 +88,9 @@ static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
 	moto_sched_enabled = val;
 
 #if IS_ENABLED(CONFIG_SCHED_WALT)
+	set_moto_sched_enabled(moto_sched_enabled);
+	set_moto_sched_ops(moto_sched_enabled? &sched_ops : NULL);
+#elif IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
 	set_moto_sched_enabled(moto_sched_enabled);
 	set_moto_sched_ops(moto_sched_enabled? &sched_ops : NULL);
 #endif
