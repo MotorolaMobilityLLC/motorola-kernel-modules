@@ -27,7 +27,7 @@
 int __read_mostly moto_sched_enabled;
 int __read_mostly moto_sched_debug;
 int __read_mostly moto_sched_scene;
-int __read_mostly moto_boost_prio = 130;
+int __read_mostly moto_boost_prio = 119;
 pid_t __read_mostly global_systemserver_tgid = -1;
 pid_t __read_mostly global_launcher_tgid = -1;
 pid_t __read_mostly global_sysui_tgid = -1;
