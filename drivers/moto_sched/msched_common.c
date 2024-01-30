@@ -36,21 +36,22 @@
 atomic_t g_lock_count = ATOMIC_INIT(0);
 #endif
 
-static inline bool task_in_audio_server_group(struct task_struct *p)
+static inline bool task_in_top_app_group(struct task_struct *p)
 {
-	int ux_type = task_get_ux_type(p);
-	if (ux_type & UX_TYPE_AUDIOSERVICE) {
-		return p->prio == 101 || p->prio == 104;
-	}
-	return false;
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	return (rcu_access_pointer(wts->grp) != NULL);
+#else
+	return get_task_cgroup_id(p) == CGROUP_TOP_APP;
+#endif
 }
 
-static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id)
+static inline bool task_in_ux_related_group(struct task_struct *p)
 {
 	int ux_type = task_get_ux_type(p);
 
 	// Boost all kernel threads with prio <= 120
-	if (cgroup_id == CGROUP_DEFAULT && p->prio <= 120 && p->mm == NULL) {
+	if (p->mm == NULL && p->prio <= 120) {
 		return true;
 	}
 
@@ -61,7 +62,7 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 	if (moto_sched_scene & UX_SCENE_AUDIO) {
 		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio <= 120 && p->prio >= 100)
 			return true;
-		else if (cgroup_id == CGROUP_FOREGROUND && (p->prio == 104 || p->prio == 101))
+		else if (p->prio == 104 || p->prio == 101)
 			return true;
 	}
 
@@ -70,14 +71,13 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 			return true;
 	}
 
-	if ((moto_sched_scene & UX_SCENE_TOUCH) && (ux_type & UX_TYPE_GESTURE_MONITOR)) {
-		return true;
+	if (moto_sched_scene & UX_SCENE_TOUCH) {
+		if (ux_type & UX_TYPE_GESTURE_MONITOR)
+			return true;
 	}
 
-	if (cgroup_id == CGROUP_TOP_APP) {
-		if (moto_sched_scene & UX_SCENE_LAUNCH)
-			return true;
-		else if (p->prio <= moto_boost_prio)
+	if ((moto_sched_scene & (UX_SCENE_LAUNCH|UX_SCENE_TOUCH) || p->prio <= moto_boost_prio)
+		&& task_in_top_app_group(p)) {
 			return true;
 	}
 
@@ -85,9 +85,9 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 			|| p->tgid == global_systemserver_tgid
 			|| p->tgid == global_sysui_tgid
 			|| p->tgid == global_sf_tgid) {
-		if (moto_sched_scene & UX_SCENE_LAUNCH)
+		if (moto_sched_scene & (UX_SCENE_LAUNCH|UX_SCENE_TOUCH))
 			return true;
-		else if (p->prio < 120)
+		else if (p->prio <= moto_boost_prio)
 			return true;
 	}
 
@@ -97,13 +97,12 @@ static inline bool task_in_ux_related_group(struct task_struct *p, int cgroup_id
 int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 {
 	int ux_type = task_get_ux_type(p);
-	int cgroup_id = get_task_cgroup_id(p);
 	int prio = UX_PRIO_INVALID;
 	int inherit_prio = task_get_ux_inherit_prio(p);
 
 	if (ux_type & UX_TYPE_PERF_DAEMON)
 		prio = UX_PRIO_HIGHEST;
-	else if (ux_type & UX_TYPE_AUDIO || task_in_audio_server_group(p))
+	else if (ux_type & UX_TYPE_AUDIO || ((ux_type & UX_TYPE_AUDIOSERVICE) && (p->prio == 101 || p->prio == 104)))
 		prio = UX_PRIO_AUDIO;
 	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER))
 		prio = UX_PRIO_ANIMATOR;
@@ -113,7 +112,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_TOPAPP;
 	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER)))
 		prio = UX_PRIO_OTHER;
-	else if (task_in_ux_related_group(p, cgroup_id))
+	else if (task_in_ux_related_group(p))
 		prio = UX_PRIO_OTHER;
 	else if (ux_type & UX_TYPE_KSWAPD)
 		prio = UX_PRIO_KSWAPD;
@@ -123,8 +122,8 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	}
 
 	cond_trace_printk(moto_sched_debug,
-		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d cgroup_id=%d inherit_prio=%d mvp_prio=%d\n",
-		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, cgroup_id, inherit_prio, prio);
+		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d inherit_prio=%d mvp_prio=%d\n",
+		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, inherit_prio, prio);
 
 	return prio;
 }
@@ -143,11 +142,11 @@ EXPORT_SYMBOL(task_get_mvp_prio);
 static inline bool task_in_top_related_group(struct task_struct *p) {
 	return p->tgid == global_launcher_tgid
 			|| p->tgid == global_sysui_tgid
-			|| get_task_cgroup_id(p) == CGROUP_TOP_APP;
+			|| task_in_top_app_group(p);
 }
 
 unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
-	bool boost = moto_sched_scene & UX_SCENE_LAUNCH;
+	bool boost = moto_sched_scene & (UX_SCENE_LAUNCH|UX_SCENE_TOUCH);
 
 	if (mvp_prio == UX_PRIO_TOPAPP)
 		return boost ? TOPAPP_MVP_LIMIT_BOOST : TOPAPP_MVP_LIMIT;
