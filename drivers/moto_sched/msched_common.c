@@ -112,10 +112,10 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_TOPAPP;
 	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER)))
 		prio = UX_PRIO_OTHER;
-	else if (task_in_ux_related_group(p))
-		prio = UX_PRIO_OTHER;
 	else if (ux_type & UX_TYPE_KSWAPD)
 		prio = UX_PRIO_KSWAPD;
+	else if (task_in_ux_related_group(p))
+		prio = UX_PRIO_OTHER;
 
 	if (with_inherit && inherit_prio > 0) {
 		prio = prio > inherit_prio ? prio : inherit_prio;
