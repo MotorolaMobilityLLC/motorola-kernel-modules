@@ -25,7 +25,8 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 1003
+#define VERION 1004
+// #define DEBUG_LOCK 1
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -61,6 +62,7 @@ do {										\
 #define UX_TYPE_CAMERASERVICE		(1 << 16)
 #define UX_TYPE_SYSUI				(1 << 17)
 #define UX_TYPE_SERVICEMANAGER		(1 << 18)
+#define UX_TYPE_INHERIT_LOCK		(1 << 19)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
@@ -110,8 +112,12 @@ struct moto_task_struct {
 #endif
 
 	int				inherit_depth;
-	int             inherit_mvp_prio;
 	u64				inherit_start;
+
+#ifdef DEBUG_LOCK
+	u64				wait_start;
+	int             wait_prio;
+#endif
 };
 
 /* global vars and functions */
@@ -152,6 +158,12 @@ static inline void task_add_ux_type(struct task_struct *p, int type)
 	wts->ux_type |= type;
 }
 
+static inline bool task_has_ux_type(struct task_struct *p, int type)
+{
+	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
+	return (wts->ux_type & type) != 0;
+}
+
 static inline void task_clr_ux_type(struct task_struct *p, int type)
 {
 	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
@@ -174,18 +186,12 @@ static inline bool current_is_important_ux(void)
 	return task_get_mvp_prio(current, true) >= UX_PRIO_OTHER;
 }
 
-static inline void task_set_ux_inherit_prio(struct task_struct *p, int prio, int depth)
+static inline void task_set_ux_inherit_prio(struct task_struct *p, int depth)
 {
 	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
-	wts->inherit_mvp_prio = prio;
+	wts->ux_type |= UX_TYPE_INHERIT_LOCK;
 	wts->inherit_start = jiffies_to_nsecs(jiffies);
 	wts->inherit_depth = depth;
-}
-
-static inline int task_get_ux_inherit_prio(struct task_struct *p)
-{
-	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
-	return wts->inherit_mvp_prio;
 }
 
 static inline int task_get_ux_depth(struct task_struct *t)
@@ -198,8 +204,9 @@ static inline int task_get_ux_depth(struct task_struct *t)
 static inline void task_clr_inherit_type(struct task_struct *p)
 {
 	struct moto_task_struct *wts = (struct moto_task_struct *) p->android_oem_data1;
-	wts->inherit_mvp_prio = UX_PRIO_INVALID;
 	wts->inherit_depth = 0;
+	wts->inherit_start = 0;
+	wts->ux_type &= ~UX_TYPE_INHERIT_LOCK;
 }
 
 #endif /* _MOTO_SCHED_COMMON_H_ */
