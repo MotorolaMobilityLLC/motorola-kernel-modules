@@ -30,12 +30,6 @@
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
 
-// #define LOCK_DEBUG 1
-
-#ifdef LOCK_DEBUG
-atomic_t g_lock_count = ATOMIC_INIT(0);
-#endif
-
 static inline bool task_in_top_app_group(struct task_struct *p)
 {
 #if IS_ENABLED(CONFIG_SCHED_WALT)
@@ -102,7 +96,6 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 {
 	int ux_type = task_get_ux_type(p);
 	int prio = UX_PRIO_INVALID;
-	int inherit_prio = task_get_ux_inherit_prio(p);
 
 	if (ux_type & UX_TYPE_PERF_DAEMON)
 		prio = UX_PRIO_HIGHEST;
@@ -114,20 +107,16 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_SYSTEM;
 	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI))
 		prio = UX_PRIO_TOPAPP;
-	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER)))
+	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER|UX_TYPE_INHERIT_LOCK)))
 		prio = UX_PRIO_OTHER;
 	else if (ux_type & UX_TYPE_KSWAPD)
 		prio = UX_PRIO_KSWAPD;
 	else if (task_in_ux_related_group(p))
 		prio = UX_PRIO_OTHER;
 
-	if (with_inherit && inherit_prio > 0) {
-		prio = prio > inherit_prio ? prio : inherit_prio;
-	}
-
 	cond_trace_printk(moto_sched_debug,
-		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d inherit_prio=%d mvp_prio=%d\n",
-		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, inherit_prio, prio);
+		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d mvp_prio=%d\n",
+		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, prio);
 
 	return prio;
 }
@@ -136,9 +125,9 @@ EXPORT_SYMBOL(task_get_mvp_prio);
 #define TOPAPP_MVP_LIMIT		120000000U	// 120ms
 #define TOPAPP_MVP_LIMIT_BOOST	240000000U	// 240ms
 #define SYSTEM_MVP_LIMIT		36000000U	// 36ms
-#define SYSTEM_MVP_LIMIT_BOOST	72000000U	// 72ms
+#define SYSTEM_MVP_LIMIT_BOOST	120000000U	// 120ms
 #define RTG_MVP_LIMIT			24000000U	// 24ms
-#define RTG_MVP_LIMIT_BOOST		48000000U	// 48ms
+#define RTG_MVP_LIMIT_BOOST		120000000U	// 120ms
 #define KSWAPD_LIMIT			3000000000U	// 3000ms
 #define DEF_MVP_LIMIT			12000000U	// 12ms
 #define DEF_MVP_LIMIT_BOOST		24000000U	// 24ms
@@ -154,9 +143,9 @@ unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
 
 	if (mvp_prio == UX_PRIO_TOPAPP)
 		return boost ? TOPAPP_MVP_LIMIT_BOOST : TOPAPP_MVP_LIMIT;
-	else if (mvp_prio == UX_PRIO_SYSTEM || (p->tgid == global_systemserver_tgid && p->prio <= 120))
+	else if (mvp_prio == UX_PRIO_SYSTEM || (p->tgid == global_systemserver_tgid))
 		return boost ? SYSTEM_MVP_LIMIT_BOOST : SYSTEM_MVP_LIMIT;
-	else if (task_in_top_related_group(p) && p->prio <= 120)
+	else if (task_in_top_related_group(p))
 		return boost ? RTG_MVP_LIMIT_BOOST : RTG_MVP_LIMIT;
 	else if (mvp_prio == UX_PRIO_KSWAPD)
 		return KSWAPD_LIMIT;
@@ -184,15 +173,11 @@ void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue) {
 
 	} else {
 		struct moto_task_struct *wts = get_moto_task_struct(task);
-		if (wts->inherit_mvp_prio > 0) {
+		if (task_has_ux_type(task, UX_TYPE_INHERIT_LOCK)) {
 			if (jiffies_to_nsecs(jiffies) - wts->inherit_start > MAX_INHERIT_GRAN) {
-	#ifdef LOCK_DEBUG
-				atomic_dec(&g_lock_count);
 				cond_trace_printk(moto_sched_debug,
-						"lock_clear_inherited_ux_type %s  %d  ux_type %d -> %d  cost=%llu total=%d\n", "dequeue task",
-						task->pid, wts->ux_type, wts->inherit_mvp_prio,
-						(jiffies_to_nsecs(jiffies) - wts->inherit_start) / 1000000U, atomic_read(&g_lock_count));
-	#endif
+						"lock_clear_inherited_ux_type %s  %d  ux_type %d  cost=%llu\n", "dequeue task",
+						task->pid, wts->ux_type, (jiffies_to_nsecs(jiffies) - wts->inherit_start) / 1000000U);
 				task_clr_inherit_type(task);
 			}
 		}
@@ -214,60 +199,59 @@ void binder_ux_type_set(struct task_struct *task) {
 EXPORT_SYMBOL(binder_ux_type_set);
 
 bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name) {
-#ifdef LOCK_DEBUG
 	struct moto_task_struct *owner_wts;
 	struct moto_task_struct *waiter_wts;
-#endif
 	struct rq *rq = NULL;
 	struct rq_flags flags;
 
-	if (!owner || !waiter || owner->prio <= 100 ||
-		task_get_ux_depth(waiter) >= UX_DEPTH_MAX || task_is_important_ux(owner)) {
+	if (!owner || !waiter) {
+		cond_trace_printk(moto_sched_debug,
+			"lock_inherit_ux_type empty!! %d \n", 0);
+		return false;
+	}
+
+	if (task_get_ux_depth(waiter) >= UX_DEPTH_MAX) {
+		cond_trace_printk(moto_sched_debug,
+			"lock_inherit_ux_type max depth reached %d->%d\n",
+			waiter->pid, owner->pid);
 		return false;
 	}
 
 	rq = task_rq_lock(owner, &flags);
 
-#ifdef LOCK_DEBUG
 	owner_wts = (struct moto_task_struct *) owner->android_oem_data1;
 	waiter_wts = (struct moto_task_struct *) waiter->android_oem_data1;
-	atomic_inc(&g_lock_count);
+
+	task_set_ux_inherit_prio(owner, task_get_ux_depth(waiter) + 1);
+
 	cond_trace_printk(moto_sched_debug,
-			"lock_inherit_ux_type %s %d -> %d   ux_type %d -> %d  depth=%d total=%d\n",
+			"lock_inherit_ux_type %s %d -> %d   ux_type %d -> %d  depth=%d\n",
 			lock_name, waiter->pid, owner->pid, waiter_wts->ux_type, owner_wts->ux_type,
-			waiter_wts->inherit_depth, atomic_read(&g_lock_count));
-#endif
-	task_set_ux_inherit_prio(owner, task_get_mvp_prio(waiter, true),
-		task_get_ux_depth(waiter) + 1);
+			waiter_wts->inherit_depth);
 
 	task_rq_unlock(rq, owner, &flags);
 	return true;
 }
 
 bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
-#ifdef LOCK_DEBUG
 	struct moto_task_struct *owner_wts;
-#endif
 	struct rq *rq = NULL;
 	struct rq_flags flags;
 
 	if (!owner) {
 		return false;
 	}
-	if (task_get_ux_inherit_prio(owner) <= 0) {
+	if (!task_has_ux_type(owner, UX_TYPE_INHERIT_LOCK)) {
 		return false;
 	}
 
 	rq = task_rq_lock(owner, &flags);
 
-#ifdef LOCK_DEBUG
 	owner_wts = get_moto_task_struct(owner);
-	atomic_dec(&g_lock_count);
 	cond_trace_printk(moto_sched_debug,
-			"lock_clear_inherited_ux_type %s  %d  ux_type %d -> %d  cost=%llu total=%d\n", lock_name,
-			owner->pid, owner_wts->ux_type, owner_wts->inherit_mvp_prio,
-			(jiffies_to_nsecs(jiffies) - owner_wts->inherit_start) / 1000000U, atomic_read(&g_lock_count));
-#endif
+			"lock_clear_inherited_ux_type %s  %d  ux_type %d cost=%llu\n", lock_name,
+			owner->pid, owner_wts->ux_type,
+			(jiffies_to_nsecs(jiffies) - owner_wts->inherit_start) / 1000000U);
 	task_clr_inherit_type(owner);
 
 	task_rq_unlock(rq, owner, &flags);

@@ -13,11 +13,12 @@
 #include <../kernel/sched/sched.h>
 #include <trace/hooks/rwsem.h>
 #include <trace/hooks/dtask.h>
+#include <linux/stacktrace.h>
 
 #include "../msched_common.h"
 #include "locking_main.h"
 
-// #define ENABLE_REORDER_LIST 1
+#define ENABLE_REORDER_LIST 1
 
 #define RWSEM_READER_OWNED	(1UL << 0)
 #define RWSEM_RD_NONSPINNABLE	(1UL << 1)
@@ -170,24 +171,43 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 {
 	struct task_struct *owner_ts = NULL;
 	long owner = atomic_long_read(&sem->owner);
+	bool boost = false;
+#ifdef DEBUG_LOCK
+	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
+#endif
 
 	if (unlikely(!locking_opt_enable(LK_RWSEM_ENABLE) || !sem)) {
 		return;
 	}
 
-	if (!current_is_important_ux() || is_rwsem_reader_owned(sem)) {
+	if (!current_is_important_ux() && (current->prio > 100)) {
+		return;
+	}
+
+#ifdef DEBUG_LOCK
+	waiter_wts->wait_start = jiffies_to_nsecs(jiffies);
+	waiter_wts->wait_prio = task_get_mvp_prio(current, true);
+#endif
+
+	if (is_rwsem_reader_owned(sem)) {
+		cond_trace_printk(moto_sched_debug,
+			"is_rwsem_reader_owned, ignore! owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
+			atomic_long_read(&sem->count));
 		return;
 	}
 
 	owner_ts = rwsem_owner(sem);
 	if (!owner_ts) {
+		cond_trace_printk(moto_sched_debug,
+			"rwsem can't find owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
+			atomic_long_read(&sem->count));
 		return;
 	}
 
 	get_task_struct(owner_ts);
-	lock_inherit_ux_type(owner_ts, current, "rwsem_wake");
+	boost = lock_inherit_ux_type(owner_ts, current, "rwsem_wake");
 
-	if (atomic_long_read(&sem->owner) != owner || is_rwsem_reader_owned(sem)) {
+	if (boost && (atomic_long_read(&sem->owner) != owner || is_rwsem_reader_owned(sem))) {
 		cond_trace_printk(moto_sched_debug,
 			"rwsem owner status has been changed owner=%lx(%lx)\n",
 			atomic_long_read(&sem->owner), owner);
@@ -195,6 +215,25 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 	}
 	put_task_struct(owner_ts);
 }
+
+#ifdef DEBUG_LOCK
+static void android_vh_rwsem_wait_finish_handler(void *unused, struct rw_semaphore *sem)
+{
+	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
+	if (unlikely(!locking_opt_enable(LK_MUTEX_ENABLE)))
+		return;
+
+	if (waiter_wts->wait_start > 0) {
+		u64 sleep = (jiffies_to_nsecs(jiffies) - waiter_wts->wait_start) / 1000000U;
+		if (sleep > 50) {
+			cond_trace_printk(moto_sched_debug,
+					"rwsem wait too long prio=%d wait=%llu\n", waiter_wts->wait_prio, sleep);
+			dump_stack();
+		}
+		waiter_wts->wait_start = 0;
+	}
+}
+#endif
 
 static void android_vh_rwsem_wake_finish_handler(void *unused, struct rw_semaphore *sem)
 {
@@ -211,6 +250,11 @@ void register_rwsem_vendor_hooks(void)
 #endif
 	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake_handler, NULL);
 	register_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
+
+#ifdef DEBUG_LOCK
+	register_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wait_finish_handler, NULL);
+	register_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish_handler, NULL);
+#endif
 }
 
 void unregister_rwsem_vendor_hooks(void)
