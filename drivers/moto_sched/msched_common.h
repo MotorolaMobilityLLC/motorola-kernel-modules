@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 1002
+#define VERION 1003
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -60,6 +60,7 @@ do {										\
 #define UX_TYPE_NATIVESERVICE		(1 << 15)
 #define UX_TYPE_CAMERASERVICE		(1 << 16)
 #define UX_TYPE_SYSUI				(1 << 17)
+#define UX_TYPE_SERVICEMANAGER		(1 << 18)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)

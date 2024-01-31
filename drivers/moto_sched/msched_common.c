@@ -55,6 +55,10 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		return true;
 	}
 
+	if (ux_type & UX_TYPE_SERVICEMANAGER && p->prio <= 120 && p->prio >= 100) {
+		return true;
+	}
+
 	if (ux_type & UX_TYPE_NATIVESERVICE && p->prio < 120 && p->prio >= 100) {
 		return true;
 	}
@@ -273,7 +277,7 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
 {
 	int ux_type = task_get_ux_type(orig);
-	if (ux_type & (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE)) {
+	if (ux_type & (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_SERVICEMANAGER)) {
 		task_add_ux_type(task, ux_type);
 	}
 }
