@@ -2360,6 +2360,13 @@ int mmi_chrg_policy_init(struct mmi_charger_manager *chip,
 	for (i = 0; i < chrg_cnt; i++) {
 		if (!strcmp(chrg_dts[i].chrg_name, dev_ops[i].dev_name)) {
 			mtk_chgdev = get_charger_by_name(mtk_chgdev_desc_tbl[i].name);
+			if (IS_ERR_OR_NULL(mtk_chgdev)) {
+				mmi_chrg_err(chip,
+					"get charger dev %s failed\n",
+					chrg_dts[i].chrg_name);
+				goto check_chrg;
+			}
+
 			chrg_dev = mmi_charger_device_register(chrg_dts[i].chrg_name,
 				chrg_dts[i].psy_name, chip->dev, chip,
 				dev_ops[i].ops, mtk_chgdev);
@@ -2368,7 +2375,7 @@ int mmi_chrg_policy_init(struct mmi_charger_manager *chip,
 				mmi_chrg_err(chip,
 					"register mmi charger %s failed\n",
 					chrg_dts[i].chrg_name);
-				return -EINVAL;
+				goto check_chrg;
 			} else {
 				mmi_chrg_info(chip,
 				"register mmi charger %s successfully, i %d, chrg_idx %d\n",
@@ -2391,9 +2398,9 @@ int mmi_chrg_policy_init(struct mmi_charger_manager *chip,
 	mmi_chrg_info(chip,"chrg_cnt %d, ops_cnt %d, mmi_chrg_dev_num %d, "
 				"chrg_idx %d\n",
 				chrg_cnt, ops_cnt, chip->mmi_chrg_dev_num, chrg_idx);
+check_chrg:
 
-	if (chrg_idx != chip->mmi_chrg_dev_num
-		&& chrg_idx > 0) {
+	if (chrg_idx != chip->mmi_chrg_dev_num) {
 
 		mmi_chrg_err(chip, "chrg_id %d != charger num %d\n",
 						chrg_idx, chip->mmi_chrg_dev_num);
