@@ -377,6 +377,10 @@ struct cps_wls_chrg_chip {
 	ktime_t stop_epp_ktime;
 	bool mode_select_force;
 	cps_hs_st_e hs_st;
+	bool wls_tx_support;
+	bool config_otg_support;
+	uint32_t config_otg_vout; //uV
+	uint32_t config_otg_iout; //uA
 };
 
 typedef enum ept_reason

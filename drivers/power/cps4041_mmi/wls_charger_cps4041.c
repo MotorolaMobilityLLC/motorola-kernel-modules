@@ -80,6 +80,14 @@ enum {
 	TX_MODE_POWER_SHARE = 2,
 };
 
+enum {
+	TX_FUNC_EN_PING = 0x01,
+	TX_FUNC_EN_FOD = 0x02,
+	TX_FUNC_EN_RP_24BIT_TYPE = 0x04,
+	TX_FUNC_EN_Q_FACTOR = 0x08,
+	TX_FUNC_EN_LP = 0x10,
+};
+
 struct tags_bootmode {
 	uint32_t size;
 	uint32_t tag;
@@ -426,6 +434,9 @@ static int cps_wls_l_write_reg(int reg, int value)
 		cps_wls_log(CPS_LOG_ERR, "[%s] i2c write error!\n", __func__);
 		return CPS_WLS_FAIL;
 	}
+#if CPS_REG_DEBUG
+	cps_wls_log(CPS_LOG_ERR, "[%s] reg[0x%04X]=0x%X\n", __func__, reg, value);
+#endif
 
 	return CPS_WLS_SUCCESS;
 }
@@ -897,9 +908,34 @@ static int cps_wls_set_tx_fod0_thresh(int value)
 	return cps_wls_write_reg((int)cps_reg->reg_addr, value, (int)cps_reg->reg_bytes_len);
 }
 
+static int cps_wls_enable_func_en(int en)
+{
+	int value = 0;
+	cps_reg_s *cps_reg;
+	cps_reg = (cps_reg_s*)(&cps_tx_reg[CPS_TX_REG_FUNC_EN]);
+
+	value = cps_wls_tx_get(CPS_TX_REG_FUNC_EN);
+	value |= en;
+
+	return cps_wls_write_reg((int)cps_reg->reg_addr, value & 0xFF, (int)cps_reg->reg_bytes_len);
+}
+
+static int cps_wls_disable_func_en(int dis)
+{
+	int value = 0;
+	cps_reg_s *cps_reg;
+	cps_reg = (cps_reg_s*)(&cps_tx_reg[CPS_TX_REG_FUNC_EN]);
+
+	value = cps_wls_tx_get(CPS_TX_REG_FUNC_EN);
+	value = value & (~dis);
+
+	return cps_wls_write_reg((int)cps_reg->reg_addr, value & 0xFF, (int)cps_reg->reg_bytes_len);
+}
+
 static int cps_wls_enable_tx_mode(void)
 {
 	uint16_t cmd;
+	cps_wls_enable_func_en(TX_FUNC_EN_PING);
 	cmd = cps_wls_get_cmd();
 	cmd |= TX_CMD_ENTER_TX_MODE;
 	return cps_wls_set_cmd(cmd);
@@ -908,6 +944,7 @@ static int cps_wls_enable_tx_mode(void)
 static int cps_wls_disable_tx_mode(void)
 {
 	uint16_t cmd;
+	cps_wls_disable_func_en(TX_FUNC_EN_PING);
 	cmd = cps_wls_get_cmd();
 	//cmd |= TX_CMD_EXIT_TX_MODE;
 	return cps_wls_set_cmd(cmd);
@@ -2440,6 +2477,13 @@ static DEVICE_ATTR(tx_mode_vout, 0444, show_tx_mode_vout, NULL);
 static void cps_wls_tx_mode(bool en)
 {
 	int retry = 0;
+	int ret = -1;
+
+	if (!chip->wls_tx_support) {
+		cps_wls_log(CPS_LOG_ERR, "Error:not spupport tx mode.\n");
+		return;
+	}
+
 	CPS_TX_IRQ = false;
 	cps_wls_set_boost(en);
 	if ((true == en) && (false == CPS_TX_MODE)) {
@@ -2449,6 +2493,12 @@ static void cps_wls_tx_mode(bool en)
 			return;
 		}
 		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, true);
+		if (chip->config_otg_support && !IS_ERR_OR_NULL(chip->chg1_dev)) {
+			if (charger_dev_config_otg(chip->chg1_dev,
+					chip->config_otg_vout, chip->config_otg_iout) == 0) {
+				ret = charger_dev_enable_otg(chip->chg1_dev, true);
+			}
+		}
 		/* bootst voltage need 10ms to stable and cps need 30ms to stable*/
 		msleep(100);
 		cps_wls_enable_tx_mode();
@@ -2475,6 +2525,9 @@ static void cps_wls_tx_mode(bool en)
 		cps_wls_log(CPS_LOG_ERR,"cps mmi_mux wls tx end\n");
 		cps_wls_disable_tx_mode();
 		//cps_wls_dump_FW_info();
+		if (chip->config_otg_support && !IS_ERR_OR_NULL(chip->chg1_dev)) {
+			charger_dev_enable_otg(chip->chg1_dev, false);
+		}
 		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
 		 CPS_TX_MODE = false;
 		chip->rx_connected = false;
@@ -2932,6 +2985,18 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 	chip->rod_stop_battery_soc = WLS_ROD_STOP_BATERY_SOC;
 	of_property_read_u32(node, "rod_stop_battery_soc", &chip->rod_stop_battery_soc);
 	cps_wls_log(CPS_LOG_DEBG,"[%s] rod_stop_battery_soc %d\n", __func__, chip->rod_stop_battery_soc);
+
+	chip->config_otg_support = of_property_read_bool(node, "config-otg-support");
+	chip->wls_tx_support = of_property_read_bool(node, "wireless-tx-support");
+
+	if (chip->config_otg_support) {
+		chip->config_otg_vout = 5000000; //default 5V
+		chip->config_otg_iout = 1000000; //default 1A
+		of_property_read_u32(node, "config-otg-vout", &chip->config_otg_vout);
+		cps_wls_log(CPS_LOG_ERR, "[%s] config-otg-vout %d\n", __func__, chip->config_otg_vout);
+		of_property_read_u32(node, "config-otg-iout", &chip->config_otg_iout);
+		cps_wls_log(CPS_LOG_ERR, "[%s] config-otg-iout %d\n", __func__, chip->config_otg_iout);
+	}
 
 	return 0;
 }
