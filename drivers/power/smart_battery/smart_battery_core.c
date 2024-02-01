@@ -705,57 +705,6 @@ static const struct attribute_group smart_batt_attr_group = {
 	.attrs =  smart_batt_att,
 };
 
-static bool is_atm_mode(void)
-{
-	const char *bootargs_ptr = NULL;
-	char *bootargs_str = NULL;
-	char *idx = NULL;
-	char *kvpair = NULL;
-	struct device_node *n = of_find_node_by_path("/chosen");
-	size_t bootargs_ptr_len = 0;
-	char *value = NULL;
-	bool factory_mode = false;
-
-	if (n == NULL)
-		goto err_putnode;
-
-	bootargs_ptr = (char *)of_get_property(n, "mmi,bootconfig", NULL);
-
-	if (!bootargs_ptr) {
-		goto err_putnode;
-	}
-
-	bootargs_ptr_len = strlen(bootargs_ptr);
-	if (!bootargs_str) {
-		/* Following operations need a non-const version of bootargs */
-		bootargs_str = kzalloc(bootargs_ptr_len + 1, GFP_KERNEL);
-		if (!bootargs_str)
-			goto err_putnode;
-	}
-	strlcpy(bootargs_str, bootargs_ptr, bootargs_ptr_len + 1);
-
-	idx = strnstr(bootargs_str, "androidboot.atm=", strlen(bootargs_str));
-	if (idx) {
-		kvpair = strsep(&idx, " ");
-		if (kvpair)
-			if (strsep(&kvpair, "=")) {
-				value = strsep(&kvpair, "\n");
-			}
-	}
-	if (value) {
-		if (!strncmp(value, "enable", strlen("enable"))) {
-			factory_mode = true;
-		}
-	}
-	kfree(bootargs_str);
-
-err_putnode:
-	if (n)
-		of_node_put(n);
-
-	return factory_mode;
-}
-
 static int smart_battery_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -813,9 +762,6 @@ static int smart_battery_probe(struct platform_device *pdev)
 				goto cleanup;
 		}
 	}
-
-	if(is_atm_mode())
-		chip->factory_mode = true;
 
 	chip->smart_batt_wakelock = wakeup_source_register(NULL,
 		devm_kasprintf(chip->dev, GFP_KERNEL, "%s", "smart_batt_wakelock"));
