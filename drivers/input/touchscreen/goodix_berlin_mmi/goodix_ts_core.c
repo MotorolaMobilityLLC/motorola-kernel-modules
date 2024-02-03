@@ -2368,6 +2368,7 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 
 #ifdef GTP_PEN_NOTIFIER
 	set_pen_mode_boot(cd);
+	cd->initialized = true;
 #endif
 
 	return 0;
@@ -2529,6 +2530,8 @@ static int pen_notifier_callback(struct notifier_block *self,
 	int ret = 0;
 	struct goodix_ts_core *cd = container_of(self,
 		struct goodix_ts_core, pen_notif);
+
+	if (!cd->initialized) return ret;
 
 	ts_info("Received event(%lu) for pen detection\n", event);
 

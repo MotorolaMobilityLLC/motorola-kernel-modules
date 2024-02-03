@@ -599,6 +599,7 @@ struct goodix_ts_core {
 #endif
 
 #ifdef GTP_PEN_NOTIFIER
+	int initialized;
 	int gtp_pen_detect_flag;
 	struct notifier_block pen_notif;
 #endif
