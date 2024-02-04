@@ -1,0 +1,20 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "qpnp_adaptive_charge",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+        "Makefile.include",
+    ]),
+
+    outs = ["qpnp_adaptive_charge.ko"],
+)
