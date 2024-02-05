@@ -17,7 +17,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/version.h>
-#if defined CONFIG_KERNEL_6_1
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 #include <linux/sched/cputime.h>
 #endif
 #include <kernel/sched/sched.h>

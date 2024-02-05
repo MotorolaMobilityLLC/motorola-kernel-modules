@@ -6,7 +6,8 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <linux/rwsem.h>
-#if defined CONFIG_KERNEL_6_1
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 #include <linux/sched/cputime.h>
 #endif
 #include <linux/sched/task.h>
@@ -36,7 +37,7 @@
 #define RWSEM_FLAG_WAITERS	(1UL << 1)
 #define RWSEM_FLAG_HANDOFF	(1UL << 2)
 
-#if defined CONFIG_KERNEL_6_1
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 enum rwsem_waiter_type {
 	RWSEM_WAITING_FOR_WRITE,
 	RWSEM_WAITING_FOR_READ

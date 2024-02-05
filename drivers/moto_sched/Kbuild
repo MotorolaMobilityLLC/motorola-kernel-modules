@@ -1,14 +1,8 @@
 # add -Wall to try to catch everything we can.
-HAVE_KERNEL_6_1 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel_platform/gki/kernel/6.1 && echo 1)
-
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/moto_sched
-
-ifeq ($(HAVE_KERNEL_6_1),1)
-EXTRA_CFLAGS += -DCONFIG_KERNEL_6_1
-endif
 
 obj-m += moto_sched.o
 
