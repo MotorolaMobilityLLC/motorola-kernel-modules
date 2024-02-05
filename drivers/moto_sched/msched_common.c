@@ -17,7 +17,8 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 #include <linux/seq_file.h>
-#if defined CONFIG_KERNEL_6_1
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 #include <linux/sched/cputime.h>
 #endif
 #include <trace/hooks/sched.h>
