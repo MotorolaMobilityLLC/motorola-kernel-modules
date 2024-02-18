@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 1004
+#define VERION 1005
 // #define DEBUG_LOCK 1
 
 #define cond_trace_printk(cond, fmt, ...)	\
