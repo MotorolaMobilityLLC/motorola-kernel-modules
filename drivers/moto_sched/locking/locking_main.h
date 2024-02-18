@@ -40,6 +40,7 @@ struct futex_uinfo {
 #define LK_FUTEX_ENABLE (1 << 2)
 
 extern unsigned int g_opt_enable;
+extern int __read_mostly moto_sched_enabled;
 
 extern atomic64_t futex_inherit_set_times;
 extern atomic64_t futex_inherit_unset_times;
@@ -49,7 +50,7 @@ extern atomic64_t futex_high_count;
 
 static inline bool locking_opt_enable(unsigned int enable)
 {
-	return g_opt_enable & enable;
+	return moto_sched_enabled && (g_opt_enable & enable);
 }
 
 #ifdef CONFIG_MOTO_FUTEX_INHERIT
