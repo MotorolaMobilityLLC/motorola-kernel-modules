@@ -78,7 +78,7 @@ struct mmi_smart_battery {
 	unsigned long			manufacturing_date;
 	unsigned long			first_usage_date;
 	bool				resume_completed;
-
+	bool				factory_mode;
 	bool				sync_boardtemp_to_fg;
 	int				ui_full_soc;
 	int				uisoc;
