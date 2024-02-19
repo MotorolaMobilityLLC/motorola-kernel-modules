@@ -75,7 +75,7 @@ static bool mutex_list_add(struct task_struct *task, struct list_head *entry, st
 static void android_vh_alter_mutex_list_add_handler(void *unused, struct mutex *lock,
 			struct mutex_waiter *waiter, struct list_head *list, bool *already_on_list)
 {
-	if (unlikely(!locking_opt_enable(LK_MUTEX_ENABLE)))
+	if (unlikely(!locking_opt_enable()))
 		return;
 
 	*already_on_list = mutex_list_add(current, &waiter->list, list, lock);
@@ -89,7 +89,7 @@ static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock
 	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
 #endif
 
-	if (unlikely(!locking_opt_enable(LK_MUTEX_ENABLE) || !lock)) {
+	if (unlikely(!locking_opt_enable() || !lock)) {
 		return;
 	}
 
@@ -124,7 +124,7 @@ static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock
 void android_vh_mutex_wait_finish_handler(void *unused, struct mutex *lock)
 {
 	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
-	if (unlikely(!locking_opt_enable(LK_MUTEX_ENABLE)))
+	if (unlikely(!locking_opt_enable()))
 		return;
 
 	if (waiter_wts->wait_start > 0) {
@@ -141,7 +141,7 @@ void android_vh_mutex_wait_finish_handler(void *unused, struct mutex *lock)
 
 void android_vh_mutex_unlock_slowpath_handler(void *unused, struct mutex *lock)
 {
-	if (unlikely(!locking_opt_enable(LK_MUTEX_ENABLE)))
+	if (unlikely(!locking_opt_enable()))
 		return;
 
 	lock_clear_inherited_ux_type(current, "mutex_wait_finish");

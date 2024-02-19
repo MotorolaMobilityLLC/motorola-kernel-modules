@@ -10,24 +10,19 @@
 
 #include "locking_main.h"
 
-unsigned int g_opt_enable;
-
 int locking_opt_init(void)
 {
 	int ret = 0;
 
 #ifdef CONFIG_MOTO_MUTEX_INHERIT
-	g_opt_enable |= LK_MUTEX_ENABLE;
 	register_mutex_vendor_hooks();
 #endif
 
 #ifdef CONFIG_MOTO_RWSEM_INHERIT
-	g_opt_enable |= LK_RWSEM_ENABLE;
 	register_rwsem_vendor_hooks();
 #endif
 
 #ifdef CONFIG_MOTO_FUTEX_INHERIT
-	g_opt_enable |= LK_FUTEX_ENABLE;
 	register_futex_vendor_hooks();
 #endif
 
@@ -36,8 +31,6 @@ int locking_opt_init(void)
 
 void locking_opt_exit(void)
 {
-	g_opt_enable = 0;
-
 #ifdef CONFIG_MOTO_FUTEX_INHERIT
 	unregister_futex_vendor_hooks();
 #endif

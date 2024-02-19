@@ -164,7 +164,7 @@ static void android_vh_alter_rwsem_list_add_handler(void *unused, struct rwsem_w
 	if (!waiter || !sem)
 		return;
 
-	if (unlikely(!locking_opt_enable(LK_RWSEM_ENABLE)))
+	if (unlikely(!locking_opt_enable()))
 		return;
 
 	ts = rwsem_owner(sem);
@@ -191,7 +191,7 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
 #endif
 
-	if (unlikely(!locking_opt_enable(LK_RWSEM_ENABLE) || !sem)) {
+	if (unlikely(!locking_opt_enable() || !sem)) {
 		return;
 	}
 
@@ -235,7 +235,7 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 static void android_vh_rwsem_wait_finish_handler(void *unused, struct rw_semaphore *sem)
 {
 	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
-	if (unlikely(!locking_opt_enable(LK_MUTEX_ENABLE)))
+	if (unlikely(!locking_opt_enable()))
 		return;
 
 	if (waiter_wts->wait_start > 0) {
@@ -252,7 +252,7 @@ static void android_vh_rwsem_wait_finish_handler(void *unused, struct rw_semapho
 
 static void android_vh_rwsem_wake_finish_handler(void *unused, struct rw_semaphore *sem)
 {
-	if (unlikely(!locking_opt_enable(LK_RWSEM_ENABLE))) {
+	if (unlikely(!locking_opt_enable())) {
 		return;
 	}
 	lock_clear_inherited_ux_type(current, "rwsem_wake_finish");

@@ -70,7 +70,7 @@ static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
 		return -EFAULT;
 
 	buffer[count] = '\0';
-	err = kstrtoint(strstrip(buffer), 10, &val);
+	err = kstrtoint(strstrip(buffer), 16, &val);
 	if (err)
 		return err;
 
@@ -87,14 +87,21 @@ static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
 static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	char buffer[13];
+	char buffer[128];
 	size_t len = 0;
 
-	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_sched_enabled);
+	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d\n",
+			moto_sched_enabled,
+			is_enabled(UX_ENABLE_BASE),
+			is_enabled(UX_ENABLE_INTERACTION),
+			is_enabled(UX_ENABLE_LOCK),
+			is_enabled(UX_ENABLE_BINDER),
+			is_enabled(UX_ENABLE_AUDIO),
+			is_enabled(UX_ENABLE_CAMERA),
+			is_enabled(UX_ENABLE_KSWAPD));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
-
 
 static ssize_t proc_debug_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
