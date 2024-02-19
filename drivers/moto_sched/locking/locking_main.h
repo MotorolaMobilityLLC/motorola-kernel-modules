@@ -6,6 +6,7 @@
 #ifndef _MOTO_LOCKING_MAIN_H_
 #define _MOTO_LOCKING_MAIN_H_
 
+#include "msched_common.h"
 
 #define MAGIC_NUM       (0xdead0000)
 #define MAGIC_MASK      (0xffff0000)
@@ -39,7 +40,6 @@ struct futex_uinfo {
 #define LK_RWSEM_ENABLE (1 << 1)
 #define LK_FUTEX_ENABLE (1 << 2)
 
-extern unsigned int g_opt_enable;
 extern int __read_mostly moto_sched_enabled;
 
 extern atomic64_t futex_inherit_set_times;
@@ -48,9 +48,9 @@ extern atomic64_t futex_inherit_useless_times;
 extern atomic64_t futex_low_count;
 extern atomic64_t futex_high_count;
 
-static inline bool locking_opt_enable(unsigned int enable)
+static inline bool locking_opt_enable(void)
 {
-	return moto_sched_enabled && (g_opt_enable & enable);
+	return is_enabled(UX_ENABLE_LOCK);
 }
 
 #ifdef CONFIG_MOTO_FUTEX_INHERIT

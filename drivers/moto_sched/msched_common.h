@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 1005
+#define VERION 1006
 // #define DEBUG_LOCK 1
 
 #define cond_trace_printk(cond, fmt, ...)	\
@@ -41,6 +41,13 @@ do {										\
 #define sched_debug(fmt, ...) \
 		pr_info("[moto_sched][%s]"fmt, __func__, ##__VA_ARGS__)
 
+#define UX_ENABLE_BASE				(1 << 0)
+#define UX_ENABLE_INTERACTION		(1 << 1)
+#define UX_ENABLE_LOCK				(1 << 2)
+#define UX_ENABLE_BINDER			(1 << 3)
+#define UX_ENABLE_AUDIO				(1 << 4)
+#define UX_ENABLE_CAMERA			(1 << 5)
+#define UX_ENABLE_KSWAPD			(1 << 6)
 
 /* define for UX thread type, keep same as the define in java file */
 #define UX_TYPE_PERF_DAEMON			(1 << 0)
@@ -140,6 +147,14 @@ extern void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue);
 extern bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name);
 extern bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name);
 extern void register_vendor_comm_hooks(void);
+
+static inline bool is_enabled(int type) {
+	return (moto_sched_enabled & type) != 0;
+}
+
+static inline bool is_scene(int scene) {
+	return (moto_sched_scene & scene) != 0;
+}
 
 static inline struct moto_task_struct *get_moto_task_struct(struct task_struct *p)
 {
