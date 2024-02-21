@@ -155,8 +155,10 @@ static int smart_batt_get_soh(struct mmi_smart_battery *chip)
 		gauge_dev_get_soh(battery->gauge_dev, &battery->soh);
 		batt_soh = MIN(batt_soh, battery->soh);
 	}
-	chip->combo_soh = batt_soh;
-	//chip->combo_soh = chip->combo_charge_full * 100 / chip->combo_charge_full_design;
+	if (chip->combo_cycle_count < 50)
+		batt_soh = 100;
+	if (batt_soh < chip->combo_soh)
+		chip->combo_soh = batt_soh;
 
 	return chip->combo_soh;
 }
@@ -487,8 +489,8 @@ static void smart_batt_update_thread(struct work_struct *work)
 	if (chip->sync_boardtemp_to_fg)
 		smart_batt_set_temperature(chip, chip->combo_batt_temp);
 
-	mmi_info(chip, "UISOC:%d, Volt:%d, Current:%d, Temperature:%d\n",
-		chip->uisoc, chip->combo_voltage_now, chip->combo_current_now, chip->combo_batt_temp);
+	mmi_info(chip, "UISOC:%d, Volt:%d, Current:%d, Temperature:%d, Cycle_count:%d, Soh:%d\n",
+		chip->uisoc, chip->combo_voltage_now, chip->combo_current_now, chip->combo_batt_temp, chip->combo_cycle_count, chip->combo_soh);
 
 	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(QUEUS_DELAYED_WORK_TIME));
 	smart_batt_pm_set_awake(0);
