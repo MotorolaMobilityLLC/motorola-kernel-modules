@@ -3410,31 +3410,11 @@ static int qti_charger_init(struct qti_charger *chg)
 	return 0;
 }
 
-bool qti_charger_reset_chargepump(struct qti_charger *chg)
-{
-	unsigned long reset = 0x1;
-	int rc ;
-
-	if(!chg) {
-		pr_err("QTI: chip not valid");
-		return false;
-	}
-
-	rc = qti_charger_write(chg, OEM_PROP_MASTER_SWITCHEDCAP_RESET, &reset, sizeof(reset));
-	if(rc) {
-		mmi_err(chg, "qit charger reset charger pump register fail:%d\n", rc);
-	}
-
-	return true;
-}
-
 static void qti_charger_shutdown(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct qti_charger *chg= dev_get_drvdata(dev);
 
-	//reset charger pump register before shutdown.
-	qti_charger_reset_chargepump(chg);
 	mmi_info(chg, "qti_charger_shutdown\n");
 
 	return;
