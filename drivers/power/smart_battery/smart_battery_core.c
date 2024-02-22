@@ -344,6 +344,9 @@ static int batt_set_prop(struct power_supply *psy,
 	struct mmi_smart_battery *chip = power_supply_get_drvdata(psy);
 
 	switch (prop) {
+	case POWER_SUPPLY_PROP_CAPACITY:
+		chip->fake_soc = val->intval % 101;
+		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		chip->fake_temp = val->intval;
 		smart_batt_set_temperature(chip, val->intval);
