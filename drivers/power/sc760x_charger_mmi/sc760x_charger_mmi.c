@@ -1053,7 +1053,7 @@ static int sc760x_init_device(struct sc760x_chip *sc)
 static int sc760x_register_interrupt(struct sc760x_chip *sc, struct i2c_client *client)
 {
     int ret = 0;
-//<MMI_STOPSHIP>: PMIC: disable balance ic irq
+
 //    ret = devm_request_threaded_irq(sc->dev, client->irq, NULL,
 //                    sc760x_irq_handler,
 //                    IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
