@@ -27,6 +27,7 @@
 #include <linux/pagewalk.h>
 #include <linux/types.h>
 #include <asm/pgalloc.h>
+#include <asm/pgtable-hwdef.h>
 #include <mm/pgalloc-track.h>
 #include <trace/hooks/fault.h>
 #include <trace/hooks/vendor_hooks.h>
@@ -94,7 +95,7 @@ static uint64_t register_contiguous_region(uint64_t *size)
  * Return: virtual address of jump entry table on success, 0 on failure
  */
 uint64_t jel_init(uint64_t start_jump_table, uint64_t stop_jump_table,
-	       uint64_t *jel_end, uint64_t c_base_ptr, uint64_t c_sz)
+		  uint64_t *jel_end, uint64_t c_base_ptr, uint64_t c_sz)
 {
 	uint64_t jel_start = 0;
 	uint64_t jel_sz = 0;
@@ -131,16 +132,15 @@ static int __init mod_init(void)
 {
 	uint64_t jel_vaddr, jel_end, jel_sz; /* jump_entry_lookup */
 	kallsyms_lookup_name_t kallsyms_lookup_name_ind;
-	uint64_t start_jump_table, stop_jump_table, stext, etext,
-             start_rodata, end_rodata;
-	struct mm_struct *mm = NULL;
-	uint64_t c_region_size = 0;
+        uint64_t start_jump_table, stop_jump_table, stext, etext, stext_vaddr,
+                etext_vaddr, start_rodata, end_rodata;
+        uint64_t c_region_size = 0;
 	uint64_t c_region_paddr = 0;
 
 	/*
-	 * Ensure that this module is never accidentally insmodded before
-	 * kernel memory is mapped in
-	 */
+         * Ensure that this module is never accidentally insmodded before
+         * kernel memory is mapped in
+         */
 	if (!mem_ready) {
 		pr_err("MotoRKP waiting to insmod until kernel memory mapped\n");
 		return -EACCES;
@@ -155,50 +155,54 @@ static int __init mod_init(void)
 	}
 	kallsyms_lookup_name_ind =
 		(kallsyms_lookup_name_t)kp_kallsyms_lookup_name.addr;
+
+	/* Get the addresses of everything we need to protect */
+
+	/* 3.0 version will need the vaddrs */
+	stext_vaddr = kallsyms_lookup_name_ind("_stext");
+	etext_vaddr = kallsyms_lookup_name_ind("_etext");
+
+	/* Initialization of paddrs for direct immutability */
 	start_jump_table = kallsyms_lookup_name_ind("__start___jump_table");
 	stop_jump_table = kallsyms_lookup_name_ind("__stop___jump_table");
-	stext = __virt_to_phys(kallsyms_lookup_name_ind("_stext"));
-	etext = __virt_to_phys(kallsyms_lookup_name_ind("_etext"));
+	stext = __virt_to_phys(stext_vaddr);
+	etext = __virt_to_phys(etext_vaddr);
 	start_rodata =
 		__virt_to_phys(kallsyms_lookup_name_ind("__start_rodata"));
 	end_rodata =
 		__virt_to_phys(kallsyms_lookup_name_ind("__hyp_rodata_end"));
-	mm = (struct mm_struct *)kallsyms_lookup_name_ind("init_mm");
 
-	/* If we unregister it later, our own protections will create an exception. */
+	/* If we unregister it later, our own protections will create an exception */
 	unregister_kprobe(&kp_kallsyms_lookup_name);
 
-	/* Register our contiguous memory area(CMA) with the hypervisor */
+	/* Register our contiguous memory area with the hypervisor */
 	c_region_paddr = register_contiguous_region(&c_region_size);
 	if (!c_region_paddr) {
 		pr_err("MotoRKP failed to register contiguous vmap!\n");
 		return -EINVAL;
 	}
 
-	/* Sync jump label table entry info onto the CMA and lock it down */
-	jel_vaddr = jel_init(start_jump_table, stop_jump_table,
-				       &jel_end, c_region_paddr,
-				       c_region_size);
+	jel_vaddr = jel_init(start_jump_table, stop_jump_table, &jel_end,
+			     c_region_paddr, c_region_size);
 	if (!jel_vaddr) {
 		pr_err("MotoRKP failed to init the jel!\n");
 		return -EACCES;
-    }
+	}
 
 	jel_sz = ((jel_end - jel_vaddr) + PAGE_SIZE) & 0xFFFFFFFFFFFFF000;
 	add_jump_entry_lookup(c_region_paddr, jel_sz);
 	amem_register(c_region_paddr + jel_sz, c_region_size - jel_sz);
-	mark_range_ro_smc(c_region_paddr, c_region_paddr + c_region_size, KERN_PROT_GENERIC);
 
-	/* TODO: Lock down EL1 page tables */
-	if (PTRS_PER_P4D != 1 || PTRS_PER_PUD != 1) {
+	mark_range_ro_smc(c_region_paddr, c_region_paddr + c_region_size,
+			  KERN_PROT_GENERIC);
+
+	if (CONFIG_PGTABLE_LEVELS != 3) {
 		pr_err("MotoRKP does not support EL1 P4D, PUD page table configurations!\n");
 		return -EINVAL;
 	}
- 	comm_el1_pt((uint64_t) mm->pgd);
 
-	/* Lock kernel ro regions through hypervisor. These are guaranteed to be OK
-	 * at page granularity by bootloader-level hugepage splitting.
-	 */
+	/* These are guaranteed to be OK at page granularity by bootloader-level
+         * hugepage splitting */
 	mark_range_ro_smc(stext, etext, KERN_PROT_GENERIC);
 	mark_range_ro_smc(start_rodata, end_rodata, KERN_PROT_GENERIC);
 

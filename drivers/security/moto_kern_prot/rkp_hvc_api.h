@@ -28,10 +28,7 @@ enum SMC_FUNC_IDS {
 	KERN_LOCK_RKP_SMC_ID = 0x2,
 	KERN_ADD_JUMP_ENTRY_LOOKUP_SMC_ID = 0x3,
 	KERN_SPLIT_BLOCK_SMC_ID = 0x6,
-	KERN_COMMIT_BLOCK_SMC_ID = 0x7,
 	KERN_REGISTER_AMEM_SMC_ID = 0x8,
-	// KERN_MARK_PT_RO_SMC_ID = 0x9,
-	KERN_COMM_EL1_PT_SMC_ID = 0xA
 };
 
 enum MEM_PROT_TYPE {
@@ -77,22 +74,5 @@ void lock_rkp(void);
  * not be writable by the kernel.
  */
 void amem_register(uint64_t paddr_start, uint64_t size);
-
-/**
- * communicate_el1_pt - saves the EL1 page table information for this VM at EL2
- * @pgd: physical address of the page table
- * @pgd_ind: index of the pgd entry
- * @pmd_ind: index of the pmd entry
- * @pte_ind: index of the pte entry
- * @virt_offset: offset of virtual addresses from physical ones
- *
- * Of course, assumes p4d and pud are unused. This is used to communicate
- * the EL1 page table information to the hypervisor. Then, once RO protections
- * are appplied to the page table, the hypervisor will be able to enforce
- * immutability on the page table entries, i.e. writes to the page table may
- * consist of _existing_ entries only (remappings or double mappings of
- * virtual memory) but not _new_ or mutated entries.
- */
-void comm_el1_pt(uint64_t pgd);
 
 #endif /* _RKP_HVC_API_H_ */
