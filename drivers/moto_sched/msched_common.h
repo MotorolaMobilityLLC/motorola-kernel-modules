@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 1006
+#define VERION 1007
 // #define DEBUG_LOCK 1
 
 #define cond_trace_printk(cond, fmt, ...)	\
@@ -48,6 +48,7 @@ do {										\
 #define UX_ENABLE_AUDIO				(1 << 4)
 #define UX_ENABLE_CAMERA			(1 << 5)
 #define UX_ENABLE_KSWAPD			(1 << 6)
+#define UX_ENABLE_BOOST				(1 << 7)
 
 /* define for UX thread type, keep same as the define in java file */
 #define UX_TYPE_PERF_DAEMON			(1 << 0)
@@ -76,6 +77,7 @@ do {										\
 #define UX_SCENE_TOUCH				(1 << 1)
 #define UX_SCENE_AUDIO				(1 << 2)
 #define UX_SCENE_CAMERA				(1 << 3)
+#define UX_SCENE_BOOST				(1 << 4)
 #define UX_SCENE_INVALID			-1
 
 /* define for MVP priority, the higher the better, should be in the range (11~100) */

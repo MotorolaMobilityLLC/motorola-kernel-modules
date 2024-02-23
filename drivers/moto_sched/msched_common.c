@@ -56,7 +56,8 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 			return true;
 	}
 
-	if (is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH)) {
+	if ((is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH))
+			|| (is_enabled(UX_ENABLE_BOOST) && is_scene(UX_SCENE_BOOST))) {
 		// Boost all kernel threads with prio <= 120
 		if (p->mm == NULL && p->prio <= 120)
 			return true;
@@ -92,9 +93,9 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if (is_enabled(UX_ENABLE_AUDIO)
 	    && (ux_type & UX_TYPE_AUDIO || ((ux_type & UX_TYPE_AUDIOSERVICE) && (p->prio == 101 || p->prio == 104))))
 		prio = UX_PRIO_AUDIO;
-	else if ((ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER))) // Base feature: input & animation & low latency binder
+	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER)) // Base feature: input & animation & low latency binder
 		prio = UX_PRIO_ANIMATOR;
-	else if (is_enabled(UX_ENABLE_INTERACTION) && (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI)))
+	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI)) // Base feature: main & render thread of top app, launcher and top UI.
 		prio = UX_PRIO_TOPAPP;
 	else if (ux_type & UX_TYPE_SYSTEM_LOCK) // Base feature: systemserver important lock
 		prio = UX_PRIO_SYSTEM;
@@ -130,7 +131,8 @@ static inline bool task_in_top_related_group(struct task_struct *p) {
 }
 
 unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
-	bool boost = is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH);
+	bool boost = (is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH))
+			|| (is_enabled(UX_ENABLE_BOOST) && is_scene(UX_SCENE_BOOST));
 
 	if (mvp_prio == UX_PRIO_TOPAPP)
 		return boost ? TOPAPP_MVP_LIMIT_BOOST : TOPAPP_MVP_LIMIT;
