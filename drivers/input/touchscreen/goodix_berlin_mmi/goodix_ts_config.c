@@ -17,7 +17,8 @@ struct goodix_ic_report_rate_config report_rate_config_info = {
 	||defined(PRODUCT_EQS) || defined(PRODUCT_RTWO) || defined(PRODUCT_BRONCO) \
 	|| defined(PRODUCT_ZEEKR) || defined(PRODUCT_LYNKCO) || defined(PRODUCT_BANGKK) \
 	|| defined(PRODUCT_EQE) || defined(PRODUCT_CTWO) || defined(PRODUCT_BOSTON) \
-	|| defined(PRODUCT_AVATRN) || defined(PRODUCT_CUSCO) || defined(PRODUCT_ARCFOX)
+	|| defined(PRODUCT_AVATRN) || defined(PRODUCT_CUSCO) || defined(PRODUCT_ARCFOX) \
+	|| defined(PRODUCT_MALMO)
 	.rate_config_count = 3,
 	.refresh_rate_ctrl = 0,
 	.interpolation_ctrl = 1,
