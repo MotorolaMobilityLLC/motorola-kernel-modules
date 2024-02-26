@@ -49,6 +49,8 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 			return true;
 		else if (p->prio == 104 || p->prio == 101)
 			return true;
+		else if (p->tgid == global_audioapp_tgid)
+			return true;
 	}
 
 	if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)) {
