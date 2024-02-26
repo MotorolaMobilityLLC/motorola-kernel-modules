@@ -32,6 +32,7 @@ pid_t __read_mostly global_systemserver_tgid = -1;
 pid_t __read_mostly global_launcher_tgid = -1;
 pid_t __read_mostly global_sysui_tgid = -1;
 pid_t __read_mostly global_sf_tgid = -1;
+pid_t __read_mostly global_audioapp_tgid = -1;
 
 pid_t global_task_pid_to_read = -1;
 
@@ -251,6 +252,8 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_sysui_tgid = ux_task->tgid;
 			} else if (ux_type & UX_TYPE_SF) {
 				global_sf_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_AUDIOAPP) {
+				global_audioapp_tgid = ux_task->tgid;
 			}
 			task_add_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
@@ -271,6 +274,9 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 		rcu_read_unlock();
 
 		if (ux_task) {
+			if (ux_type & UX_TYPE_AUDIOAPP && global_audioapp_tgid == ux_task->tgid) {
+				global_audioapp_tgid = -1;
+			}
 			task_clr_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
 		}
