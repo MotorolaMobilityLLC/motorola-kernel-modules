@@ -138,6 +138,7 @@ extern pid_t __read_mostly global_systemserver_tgid;
 extern pid_t __read_mostly global_launcher_tgid;
 extern pid_t __read_mostly global_sysui_tgid;
 extern pid_t __read_mostly global_sf_tgid;
+extern pid_t __read_mostly global_audioapp_tgid;
 
 extern int task_get_origin_mvp_prio(struct task_struct *p, bool with_inherit);
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
