@@ -110,6 +110,7 @@ static void gf_enable_irq(struct gf_dev *gf_dev)
 	if (gf_dev->irq_enabled) {
 		pr_warn("IRQ has been enabled.\n");
 	} else {
+		enable_irq_wake(gf_dev->irq);
 		enable_irq(gf_dev->irq);
 		gf_dev->irq_enabled = 1;
 	}
@@ -120,6 +121,7 @@ static void gf_disable_irq(struct gf_dev *gf_dev)
 	if (gf_dev->irq_enabled) {
 		gf_dev->irq_enabled = 0;
 		disable_irq(gf_dev->irq);
+		disable_irq_wake(gf_dev->irq);
 	} else {
 		pr_warn("IRQ has been disabled.\n");
 	}
@@ -895,8 +897,8 @@ static int gf_probe(struct platform_device *pdev)
 		pr_err("failed to request IRQ:%d\n", gf_dev->irq);
 		goto err_irq;
 	}
-	enable_irq_wake(gf_dev->irq);
-	gf_dev->irq_enabled = 1;
+
+	//gf_dev->irq_enabled = 1;
 	gf_disable_irq(gf_dev);
 	device_init_wakeup(dev, true);
 #ifdef MMI_RELAY_MODULE
