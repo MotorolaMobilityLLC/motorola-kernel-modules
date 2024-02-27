@@ -1135,7 +1135,10 @@ static int goodix_parse_dt(struct device_node *node,
 					ts_info("matched panel_supplier: %s", board_data->panel_supplier);
 					snprintf(board_data->cfg_bin_name, GOODIX_MAX_STR_LABLE_LEN, "%s_%s",
 						board_data->panel_supplier, TS_DEFAULT_CFG_BIN);
+					snprintf(board_data->fw_name, GOODIX_MAX_STR_LABLE_LEN, "%s_%s",
+						board_data->panel_supplier,TS_DEFAULT_FIRMWARE);
 					core_data->supplier = board_data->panel_supplier;
+					ts_info("Use firmware: %s, config: %s", board_data->fw_name, board_data->cfg_bin_name);
 					break;
 				}
 			}
