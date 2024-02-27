@@ -2591,6 +2591,27 @@ static void cps_wls_tx_enable(bool en)
 	cps_wls_tx_mode(en);
 }
 
+int cps_wls_force_set_tx_mode(bool en)
+{
+	int ret = 0;
+
+	if (true == CPS_TX_MODE && !en) {
+		cps_wls_log(CPS_LOG_ERR,"%s en=%d\n", __func__, en);
+		cps_wls_disable_tx_mode();
+		if (chip->config_otg_support && !IS_ERR_OR_NULL(chip->chg1_dev)) {
+			ret = charger_dev_enable_otg(chip->chg1_dev, false);
+		}
+		CPS_TX_MODE = false;
+		chip->rx_connected = false;
+		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
+		chip->tx_mode = false;
+		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
+	}
+
+	return ret;
+}
+
+
 static ssize_t tx_mode_store(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
@@ -3580,6 +3601,10 @@ static int wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 	cm->wls_chg_ops.wls_stop_epp = cps_wls_stop_epp;
 	cm->wls_chg_ops.wls_notify_thermal_icl = cps_wls_notify_thermal_input_current_limit;
 	cm->wls_chg_ops.wls_notify_cur_state = cps_wls_notify_cur_state;
+
+	if (cm->wls_tx_support && cm->config_otg_support) {
+		cm->wls_chg_ops.wls_set_tx_mode = cps_wls_force_set_tx_mode;
+	}
 
 	ret = moto_wireless_chg_ops_register(&cm->wls_chg_ops);
 
