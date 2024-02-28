@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 1007
+#define VERION 1008
 // #define DEBUG_LOCK 1
 
 #define cond_trace_printk(cond, fmt, ...)	\
@@ -71,6 +71,7 @@ do {										\
 #define UX_TYPE_SYSUI				(1 << 17)
 #define UX_TYPE_SERVICEMANAGER		(1 << 18)
 #define UX_TYPE_INHERIT_LOCK		(1 << 19)
+#define UX_TYPE_CAMERAAPP			(1 << 20)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
@@ -87,6 +88,7 @@ do {										\
 #define UX_PRIO_ANIMATOR	79
 #define UX_PRIO_SYSTEM		78
 #define UX_PRIO_TOPAPP		70 // must be aligned with walt.h!
+#define UX_PRIO_CAMERA		69
 #define UX_PRIO_KSWAPD		65 // must be aligned with walt.h!
 #define UX_PRIO_OTHER		60
 
@@ -139,6 +141,7 @@ extern pid_t __read_mostly global_launcher_tgid;
 extern pid_t __read_mostly global_sysui_tgid;
 extern pid_t __read_mostly global_sf_tgid;
 extern pid_t __read_mostly global_audioapp_tgid;
+extern pid_t __read_mostly global_camera_tgid;
 
 extern int task_get_origin_mvp_prio(struct task_struct *p, bool with_inherit);
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
