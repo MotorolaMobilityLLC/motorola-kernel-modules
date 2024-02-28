@@ -53,9 +53,9 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 			return true;
 	}
 
-	if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)) {
-		if (ux_type & UX_TYPE_CAMERASERVICE && p->prio < 120 && p->prio >= 100)
-			return true;
+	if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
+		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)) {
+		return true;
 	}
 
 	if ((is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH))
@@ -101,6 +101,10 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_TOPAPP;
 	else if (ux_type & UX_TYPE_SYSTEM_LOCK) // Base feature: systemserver important lock
 		prio = UX_PRIO_SYSTEM;
+	else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
+		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)
+		&& (p->prio <= 120 && p->prio >= 100))
+		prio = UX_PRIO_CAMERA;
 	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 		prio = UX_PRIO_KSWAPD;
 	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER|UX_TYPE_INHERIT_LOCK)))
@@ -123,6 +127,7 @@ EXPORT_SYMBOL(task_get_mvp_prio);
 #define RTG_MVP_LIMIT			24000000U	// 24ms
 #define RTG_MVP_LIMIT_BOOST		120000000U	// 120ms
 #define KSWAPD_LIMIT			3000000000U	// 3000ms
+#define CAMERA_LIMIT			3000000000U	// 3000ms
 #define DEF_MVP_LIMIT			12000000U	// 12ms
 #define DEF_MVP_LIMIT_BOOST		24000000U	// 24ms
 
@@ -138,6 +143,8 @@ unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
 
 	if (mvp_prio == UX_PRIO_TOPAPP)
 		return boost ? TOPAPP_MVP_LIMIT_BOOST : TOPAPP_MVP_LIMIT;
+	else if (mvp_prio == UX_PRIO_CAMERA)
+		return CAMERA_LIMIT;
 	else if (mvp_prio == UX_PRIO_SYSTEM || (p->tgid == global_systemserver_tgid))
 		return boost ? SYSTEM_MVP_LIMIT_BOOST : SYSTEM_MVP_LIMIT;
 	else if (task_in_top_related_group(p))

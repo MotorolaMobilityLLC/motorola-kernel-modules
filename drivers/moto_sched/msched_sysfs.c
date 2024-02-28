@@ -33,6 +33,7 @@ pid_t __read_mostly global_launcher_tgid = -1;
 pid_t __read_mostly global_sysui_tgid = -1;
 pid_t __read_mostly global_sf_tgid = -1;
 pid_t __read_mostly global_audioapp_tgid = -1;
+pid_t __read_mostly global_camera_tgid = -1; 	// Moto Camera only!
 
 pid_t global_task_pid_to_read = -1;
 
@@ -254,6 +255,8 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_sf_tgid = ux_task->tgid;
 			} else if (ux_type & UX_TYPE_AUDIOAPP) {
 				global_audioapp_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_CAMERAAPP) {
+				global_camera_tgid = ux_task->tgid;
 			}
 			task_add_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
@@ -276,6 +279,8 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 		if (ux_task) {
 			if (ux_type & UX_TYPE_AUDIOAPP && global_audioapp_tgid == ux_task->tgid) {
 				global_audioapp_tgid = -1;
+			} else if (ux_type & UX_TYPE_CAMERAAPP) {
+				global_camera_tgid = -1;
 			}
 			task_clr_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
@@ -302,7 +307,7 @@ static ssize_t proc_ux_task_read(struct file *file, char __user *buf,
 
 	if (task) {
 		ux_type = task_get_ux_type(task);
-		len = snprintf(buffer, sizeof(buffer), "comm=%s pid=%d tgid=%d ux_type=%d\n",
+		len = snprintf(buffer, sizeof(buffer), "comm=%s pid=%d tgid=%d ux_type=0x%x\n",
 			task->comm, task->pid, task->tgid, ux_type);
 		put_task_struct(task);
 	} else {
