@@ -153,7 +153,10 @@ static int smart_batt_get_soh(struct mmi_smart_battery *chip)
 
 	list_for_each_entry(battery, &chip->battery_list, list) {
 		gauge_dev_get_soh(battery->gauge_dev, &battery->soh);
-		batt_soh = MIN(batt_soh, battery->soh);
+		if (strcmp(battery->gauge_dev->dev.kobj.name, "main_battery") == 0 ||
+		     strcmp(battery->gauge_dev->dev.kobj.name,"bms") == 0) {
+			batt_soh = battery->soh;
+		}
 	}
 	if (chip->combo_cycle_count < 50)
 		batt_soh = 100;
