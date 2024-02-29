@@ -3505,9 +3505,7 @@ static void cps_wls_stop_epp(void)
 	cps_wls_log(CPS_LOG_DEBG, "%s mode_type:%d stop_epp_flag:%d\n",
 					__func__, chg->mode_type, chg->stop_epp_flag);
 
-	if (chip->enable_stop_epp &&
-		(chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
-		chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT)) {
+	if (chip->enable_stop_epp) {
 		if (chip->moto_stand) {
 			chip->light_level = 0;
 			cps_wls_log(CPS_LOG_DEBG, "%s moto stand set light level 0\n", __func__);
