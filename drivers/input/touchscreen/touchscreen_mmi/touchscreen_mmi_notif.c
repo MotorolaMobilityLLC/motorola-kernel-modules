@@ -447,11 +447,20 @@ static void ts_mmi_ps_worker_func(struct work_struct *w)
 			dev_err(DEV_MMI, "%s: failed to get power supply status: %d\n",
 				__func__, ret);
 		} else {
+			if (!(touch_cdev->psy && touch_cdev->psy->desc->name &&
+				(!strncmp(touch_cdev->psy->desc->name, "usb", sizeof("usb")) ||
+				!strncmp(touch_cdev->psy->desc->name, "wireless", sizeof("wireless")))))
+			{
+				dev_dbg(DEV_MMI, "%s: WARN: psy=%s skip\n", __func__, touch_cdev->psy->desc->name);
+				return;
+			}
+
 			dev_dbg(DEV_MMI, "%s: psy name =%s,  psy status: cur=%d, prev=%d\n",
 				__func__, touch_cdev->psy->desc->name, touch_cdev->present, touch_cdev->ps_is_present);
 			if (touch_cdev->ps_is_present != touch_cdev->present) {
 				touch_cdev->ps_is_present = touch_cdev->present;
 				if (is_touch_active) {
+					dev_dbg(DEV_MMI, "%s: call charger_mode ps_is_present=%d\n", __func__, touch_cdev->ps_is_present);
 					TRY_TO_CALL(charger_mode, (int)touch_cdev->ps_is_present);
 				}
 			}
