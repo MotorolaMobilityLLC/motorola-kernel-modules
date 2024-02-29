@@ -2032,8 +2032,11 @@ if (p_sar->dts_info.use_regulator_flag == true) {
 err_malloc:
 	return ret;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void aw_sar_i2c_remove(struct i2c_client *i2c)
+#else
 static int32_t aw_sar_i2c_remove(struct i2c_client *i2c)
+#endif
 {
 	struct aw_sar *p_sar  = i2c_get_clientdata(i2c);
 
@@ -2060,7 +2063,10 @@ static int32_t aw_sar_i2c_remove(struct i2c_client *i2c)
 
 	AWLOGI(p_sar->dev, "aw_sar_i2c_remove ok!");
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#else
 	return 0;
+#endif
 }
 
 static int aw_sar_suspend(struct device *dev)

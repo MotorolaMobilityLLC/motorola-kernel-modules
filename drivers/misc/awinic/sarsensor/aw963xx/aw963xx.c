@@ -4,6 +4,7 @@
 #define AW963XX_I2C_NAME "aw963xx_sar"
 #define AW963XX_DRIVER_VERSION "V0.1.1.15"
 
+static uint8_t packbuf[AW963XX_SRAM_UPDATE_ONE_PACK_SIZE + 2] = { 0 };
 static void aw963xx_set_cs_as_irq(struct aw_sar *p_sar, int flag);
 static void aw963xx_get_ref_ch_enable(struct aw_sar *p_sar);
 
@@ -67,7 +68,7 @@ static void aw963xx_convert_little_endian_2_big_endian(struct aw_bin *aw_bin)
  */
 static int32_t aw963xx_sram_fill_not_wrote_area(void *load_bin_para, uint32_t offset)
 {
-	uint8_t buf[AW963XX_SRAM_UPDATE_ONE_PACK_SIZE + 2] = { 0 };
+	uint8_t *buf = (uint8_t *)packbuf;
 	uint8_t *r_buf = NULL;
 	int32_t ret = 0;
 	uint32_t i = 0;
@@ -88,7 +89,7 @@ static int32_t aw963xx_sram_fill_not_wrote_area(void *load_bin_para, uint32_t of
 	AWLOGI(p_sar->dev, "pack_cnt = %d", pack_cnt);
 	AWLOGI(p_sar->dev, "offset = 0x%x", offset);
 
-	memset(buf, 0xff, sizeof(buf));
+	memset(buf, 0xff, sizeof(packbuf));
 
 	for (i = 0; i < pack_cnt; i++) {
 		memset(r_buf, 0, AW963XX_SRAM_UPDATE_ONE_PACK_SIZE);
@@ -141,7 +142,7 @@ static int32_t aw963xx_sram_fill_not_wrote_area(void *load_bin_para, uint32_t of
 
 static int32_t aw963xx_sram_data_write(struct aw_bin *aw_bin, void *load_bin_para)
 {
-	uint8_t buf[AW963XX_SRAM_UPDATE_ONE_PACK_SIZE + 2] = { 0 };
+	uint8_t *buf = (uint8_t *)packbuf;
 	uint8_t *r_buf = NULL;
 	int32_t ret = 0;
 	uint32_t i = 0;
@@ -310,7 +311,7 @@ static void aw963xx_irq_handle_func(uint32_t irq_status, void *data)
 {
 	int8_t i = 0;
 	int8_t j = 0;
-	int32_t ret = 0;
+	//int32_t ret = 0;
 	uint32_t curr_status_val[4] = { 0 };
 
 	struct aw_sar *p_sar = (struct aw_sar *)data;
@@ -319,7 +320,7 @@ static void aw963xx_irq_handle_func(uint32_t irq_status, void *data)
 	AWLOGD(p_sar->dev, "IRQSRC = 0x%x", irq_status);
 
 	for (i = 0; i < AW963XX_VALID_TH; i++)
-		ret = aw_sar_i2c_read(p_sar->i2c, REG_STAT0 + i * (REG_STAT1 - REG_STAT0), &curr_status_val[i]);
+		aw_sar_i2c_read(p_sar->i2c, REG_STAT0 + i * (REG_STAT1 - REG_STAT0), &curr_status_val[i]);
 
 	for (j = 0; j < AW963XX_CHANNEL_NUM_MAX; j++) {
 		if (p_sar->channels_arr[j].input == NULL) {
@@ -1132,7 +1133,7 @@ static ssize_t int_state_show(struct class *class,
 {
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
 	struct aw_sar *p_sar = NULL;
-	
+
 	if (aw963xx == NULL) {
 		return 0;
 	}
@@ -1153,7 +1154,7 @@ static ssize_t offset_show(struct class *class,
 {
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
 	struct aw_sar *p_sar = NULL;
-	
+
 	if (aw963xx == NULL) {
 		return 0;
 	}

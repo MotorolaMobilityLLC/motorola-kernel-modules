@@ -1,3 +1,7 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
 ifeq (,$(KERNEL_DIR_PATH))
     KERNEL_DIR_PATH = $(shell find $(ANDROID_BUILD_TOP)/kernel/ -name "msm-*" -type d | head -1 | grep -i "kernel/msm-*")
 
