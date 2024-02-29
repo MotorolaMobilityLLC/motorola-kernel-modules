@@ -509,19 +509,22 @@ static int bm_ulog_kthread(void *param)
 
 	bm_info(bmdev, "bm ulog kthread start\n");
 	do {
-		bm_ulog_request_log(bmdev, MAX_ULOG_READ_BUFFER_SIZE);
-		read_count = bm_ulog_print_buffer(bmdev, MAX_ULOG_READ_BUFFER_SIZE);
+		if (bmdev->debug_enabled && *bmdev->debug_enabled) {
+			bm_ulog_request_log(bmdev, MAX_ULOG_READ_BUFFER_SIZE);
+			read_count = bm_ulog_print_buffer(bmdev, MAX_ULOG_READ_BUFFER_SIZE);
 
-		if (read_count > 1024) {
-			sleep_ms = 1;
-		} else if (read_count > 128) {
-			sleep_ms = 50;
-		} else if (read_count == 0) {
-			sleep_ms = sleep_ms + 50;
+			if (read_count > 1024) {
+				sleep_ms = 1;
+			} else if (read_count > 128) {
+				sleep_ms = 50;
+			} else if (read_count == 0) {
+				sleep_ms = sleep_ms + 50;
+			}
+			if (sleep_ms > 200)
+				sleep_ms = 200;
+		} else {
+			sleep_ms = 1000;
 		}
-		if (sleep_ms > 200)
-			sleep_ms = 200;
-
 		msleep(sleep_ms);
 	} while(!kthread_should_stop());
 
@@ -617,14 +620,12 @@ static int bm_ulog_probe(struct platform_device *pdev)
 
 	debug_enabled = bm_ulog_is_bm_ulog_enabled(bmdev);
 	bm_info(bmdev, "bm_ulog_check_debug_enabled debug_enabled=%d\n", debug_enabled);
-	if (bmdev->debug_enabled && *bmdev->debug_enabled) {
-		bmdev->bm_ulog_task = kthread_create(bm_ulog_kthread, bmdev, "bm_ulog_kthread");
-		if (IS_ERR(bmdev->bm_ulog_task)) {
-			bm_info(bmdev, "Failed to create bm_ulog_task ret = %ld\n", PTR_ERR(bmdev->bm_ulog_task));
-		}else {
-			wake_up_process(bmdev->bm_ulog_task);
-			bm_info(bmdev, "Successed to create bm_ulog_task\n");
-		}
+	bmdev->bm_ulog_task = kthread_create(bm_ulog_kthread, bmdev, "bm_ulog_kthread");
+	if (IS_ERR(bmdev->bm_ulog_task)) {
+		bm_info(bmdev, "Failed to create bm_ulog_task ret = %ld\n", PTR_ERR(bmdev->bm_ulog_task));
+	} else {
+		wake_up_process(bmdev->bm_ulog_task);
+		bm_info(bmdev, "Successed to create bm_ulog_task\n");
 	}
 
 	bm_ulog_add_debugfs(bmdev);
