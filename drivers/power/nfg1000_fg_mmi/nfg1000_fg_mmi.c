@@ -14,6 +14,7 @@
 
 #define pr_fmt(fmt)	"[nfg1000] %s: " fmt, __func__
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/param.h>
 #include <linux/jiffies.h>
 #include <linux/workqueue.h>
@@ -851,14 +852,31 @@ static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
 	//reset nfg1000
 	mmi_info("reset nfg1000");
 	ret = fg_write_block(di, di->regs[BQ_FG_REG_ALT_MAC], u8Data, 2);
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+	if(ret < 0) {
+		mmi_err("%s: write reg: %x error!!\n", __func__, di->regs[BQ_FG_REG_ALT_MAC]);
+		return -ERROR_CODE_I2C_WRITE;
+	}
+#endif
 	mdelay(NFG1000_RESET_WAIT_TIME);
 
 	u8Data[0] = 0x3f;
 	for(retry_cnt = 0; retry_cnt < 3; retry_cnt++)
 	{
 		ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data,1);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		if(ret < 0) {
+			mmi_err("%s: write reg: %x error!!\n", __func__, I2C_NO_REG_DATA);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+#endif
 		ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode,1);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		if(ret < 0) {
+			mmi_err("%s:read reg: %x error!!\n", __func__, I2C_NO_REG_DATA);
+			return -ERROR_CODE_I2C_READ;
+		}
+#endif
 		if(uReCode[0] == NFG1000_SUCESS_CODE)
 			break;
 	}
@@ -868,7 +886,19 @@ static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
 		for(retry_cnt = 0; retry_cnt < 3; retry_cnt++)
 		{
 			ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 1);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+			if(ret < 0) {
+				mmi_err("%s: write reg: %x error!!\n", __func__, I2C_NO_REG_DATA);
+				return -ERROR_CODE_I2C_WRITE;
+			}
+#endif
 			ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode, 1);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+			if(ret < 0) {
+				mmi_err("%s:read reg: %x error!!\n", __func__, I2C_NO_REG_DATA);
+				return -ERROR_CODE_I2C_READ;
+			}
+#endif
 			if(uReCode[0] == NFG1000_SUCESS_CODE)
 				break;
 		}
@@ -1699,7 +1729,11 @@ static ssize_t nfg1000_upgrade_APP(struct mmi_fg_chip *di)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static bool is_atm_mode(void)
+#else
 static bool is_atm_mode()
+#endif
 {
 	const char *bootargs_ptr = NULL;
 	char *bootargs_str = NULL;
@@ -1925,7 +1959,33 @@ struct fg_temp {
 	signed int BatteryTemp;
 	signed int TemperatureR;
 };
-
+#ifdef CONFIG_MOTO_CHG_BATT_TEMP_NTC_100K
+struct fg_temp fg_temp_table[23] = {
+	{-40, 4397119},
+	{-35, 3088598},
+	{-30, 2197225},
+	{-25, 1581880},
+	{-20, 1151036},
+	{-15, 846578},
+	{-10, 628988},
+	{-5, 471632},
+	{0, 357011},
+	{5, 272499},
+	{10, 209709},
+	{15, 162650},
+	{20, 127080},
+	{25, 100000},
+	{30, 79221},
+	{35, 63167},
+	{40, 50676},
+	{45, 40903},
+	{50, 33194},
+	{55, 27090},
+	{60, 22224},
+	{65, 18322},
+	{70, 15184}
+};
+#else
 struct fg_temp fg_temp_table[23] = {
 		{-40, 195652},
 		{-35, 148171},
@@ -1951,6 +2011,7 @@ struct fg_temp fg_temp_table[23] = {
 		{65, 2588},
 		{70, 2227}
 };
+#endif
 /* ============================================================ */
 /* voltage to battery temperature */
 /* ============================================================ */
@@ -2220,6 +2281,12 @@ int fg_get_current_now(struct gauge_device *gauge_dev, int *mA)
 		*mA = 0;
 	else {
 		ret = fg_read_current(mmi, mA);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+		if (ret < 0) {
+			mmi_err("read current error, ret = %d\n", ret);
+			return ret;
+		}
+#endif
 	}
 
 	return 0;
@@ -2792,6 +2859,21 @@ static int mmi_fg_resume(struct device *dev)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+static void mmi_fg_remove(struct i2c_client *client)
+{
+	struct mmi_fg_chip *mmi = i2c_get_clientdata(client);
+
+	mutex_destroy(&mmi->data_lock);
+	mutex_destroy(&mmi->i2c_rw_lock);
+	mutex_destroy(&mmi->update_lock);
+
+	sysfs_remove_group(&mmi->dev->kobj, &fg_attr_group);
+
+	return;
+
+}
+#else
 static int mmi_fg_remove(struct i2c_client *client)
 {
 	struct mmi_fg_chip *mmi = i2c_get_clientdata(client);
@@ -2805,6 +2887,7 @@ static int mmi_fg_remove(struct i2c_client *client)
 	return 0;
 
 }
+#endif
 
 static void mmi_fg_shutdown(struct i2c_client *client)
 {
