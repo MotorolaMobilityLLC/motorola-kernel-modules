@@ -67,6 +67,8 @@ MOTO_WLS_AUTH_T motoauth;
 
 #define VBUS_VALID_MV 4600 //If vbus >= 4.6V,the vbus is valid.
 
+#define RX_BC_DATA_SIZE 30
+
 struct cps_wls_chrg_chip *chip = NULL;
 static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
@@ -1015,7 +1017,7 @@ uint8_t cps_wls_get_message_size(uint8_t header)
 	return size;
 }
 
-static int cps_wls_get_fsk_packet(uint8_t *data)
+static int cps_wls_get_fsk_packet(uint8_t *data, uint8_t data_size)
 {
 	int temp;
 	uint8_t i;
@@ -1034,6 +1036,11 @@ static int cps_wls_get_fsk_packet(uint8_t *data)
 
 	cps_wls_log(CPS_LOG_ERR,"%s reg_addr=0x%04X data_len=%d\n",
 			__func__, cps_reg->reg_addr, data_len);
+	if (data_len > data_size) {
+		cps_wls_log(CPS_LOG_ERR,"%s data_len=%d is greater than data size %d\n",
+			__func__, data_len, data_size);
+		return CPS_WLS_FAIL;
+	}
 	for (i = 0; i < data_len; i++) {
 		temp = cps_wls_read_reg((int)(cps_reg->reg_addr + 1 + i), (int)cps_reg->reg_bytes_len);
 		if(temp != CPS_WLS_FAIL) {
@@ -1195,7 +1202,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 {
 	int rc = 0;
 	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
-	uint8_t data[8] = {0};
+	uint8_t data[RX_BC_DATA_SIZE] = {0};
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	Sys_Op_Mode sys_mode_type;
 	uint32_t temp = 0;
@@ -1239,7 +1246,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	if(int_flag & RX_INT_FSK_TIMEOUT){}
 	if(int_flag & RX_INT_FSK_PKT){
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_FSK_PKT");
-		cps_wls_get_fsk_packet(data);
+		cps_wls_get_fsk_packet(data, sizeof(data));
 	}
 	//if (int_flag & RX_INT_OVP)
 	//{
