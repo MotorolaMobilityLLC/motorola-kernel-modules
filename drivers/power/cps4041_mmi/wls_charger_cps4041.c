@@ -50,6 +50,7 @@
 #include <linux/alarmtimer.h>
 #include <mtk_charger_algorithm_class.h>
 #include <linux/power/moto_chg_tcmd.h>
+#include <linux/version.h>
 
 
 MOTO_WLS_AUTH_T motoauth;
@@ -1911,8 +1912,8 @@ static void cps_wls_set_boost(bool val)
 	}
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
-
 static bool usb_online(void)
 {
 	union power_supply_propval prop;
@@ -1951,6 +1952,7 @@ static bool cps_wls_query_typec_attached_state(void)
 		return false;
 }
 #endif /* CONFIG_MOTO_CHANNEL_SWITCH */
+#endif
 
 static bool cps_wls_fw_set_boost(bool val)
 {

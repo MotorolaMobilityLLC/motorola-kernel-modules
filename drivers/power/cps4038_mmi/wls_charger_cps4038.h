@@ -11,8 +11,14 @@
 #define __WLS_CHARGER_CPS4038__
 #include <linux/workqueue.h>
 #include <linux/thermal.h>
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#include <moto_wlc.h>
+#include <mtk_charger.h>
+#else
 #include "mtk_charger.h"
 #include "moto_wlc.h"
+#endif
 #include "moto_wls_auth2.0.h"
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 #include <linux/../../drivers/misc/mediatek/typec/tcpc/inc/tcpci_core.h>

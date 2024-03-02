@@ -1,10 +1,16 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+	ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
 # add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-5.10/include
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-5.10/include/uapi/
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/power/supply \
-		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/cps4038_mmi
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/cps4038_mmi \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply
 
 obj-m += cps4038_mmi.o
 cps4038_mmi-objs += moto_wls_auth2.0.o

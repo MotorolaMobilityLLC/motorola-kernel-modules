@@ -43,11 +43,18 @@
 #else
 #include <linux/wakelock.h>
 #endif
+#include <linux/version.h>
 //#include "mtk_charger.h"
 #include "wls_charger_cps4038.h"
 #include <linux/alarmtimer.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#include <mtk_charger.h>
+#include <moto_wlc.h>
+#include <mtk_charger_algorithm_class.h>
+#include <linux/power/moto_chg_tcmd.h>
+#else
 #include "mtk_charger_algorithm_class.h"
-
+#endif
 MOTO_WLS_AUTH_T motoauth;
 
 #define BOOTLOADER_FILE_NAME "/data/misc/cps/bootloader.hex"
@@ -1173,8 +1180,11 @@ update_fail:
 //-------------------I2C APT end--------------------
 
 //-------------------CPS4038 system interface-------------------
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static void cps_wls_write_password(void)
+#else
 static void cps_wls_write_password()
+#endif
 {
 //    cps_wls_log(CPS_LOG_DEBG, "[%s] -------write password\n", __func__);
 //no need at cps4038
@@ -2071,7 +2081,11 @@ set_int_fail:
     return CPS_WLS_FAIL;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static void cps_bpp_icl_on(void)
+#else
 static void cps_bpp_icl_on()
+#endif
 {
 	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
 
@@ -2086,7 +2100,11 @@ static void cps_bpp_icl_on()
 	}
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static void cps_epp_icl_on(void)
+#else
 static void cps_epp_icl_on()
+#endif
 {
 	int icl, vbus;
 	int wls_icl = 0;
@@ -2654,6 +2672,9 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
     }
     
     int_clr = int_flag;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+    cps_wls_log(CPS_LOG_ERR, "[%s] int_clr = %d\n", __func__,int_clr);
+#endif
     cps_wls_set_int_clr(int_flag);
     mutex_unlock(&chip->irq_lock);
     if(cps_wls_get_sys_mode() == SYS_MODE_RX)
@@ -2873,9 +2894,8 @@ static void cps_wls_set_boost(bool val)
 		cps_wls_pm_set_awake(0);
 	}
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
-
 static bool usb_online()
 {
 	union power_supply_propval prop;
@@ -2914,9 +2934,10 @@ static bool cps_wls_query_typec_attached_state(void)
 		return false;
 }
 #endif /* CONFIG_MOTO_CHANNEL_SWITCH */
-
+#endif
 static void cps_wls_fw_set_boost(bool val)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	int ret = 0;
 	struct charger_device *chg_psy = NULL;
@@ -2949,6 +2970,10 @@ static void cps_wls_fw_set_boost(bool val)
 	/* Assume if we turned the boost on we want to stay awake */
 	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, !!val);
 #endif /* CONFIG_MOTO_CHANNEL_SWITCH */
+#else
+	/* Assume if we turned the boost on we want to stay awake */
+	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, !!val);
+#endif
 	if(val) {
 		cps_wls_pm_set_awake(1);
 	} else {
@@ -3252,8 +3277,10 @@ static int wireless_fw_update(bool force)
 	}
 
 free_bug:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
         chip->chip_id = cps_wls_get_chip_id();
+#endif
 #endif
 	cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
 	msleep(20);//20ms
@@ -4228,8 +4255,8 @@ static int cps_wls_wlc_update_light_fan(void)
 	{
 		//status = cps_wls_send_fsk_packet(data, 4);
 		status = cps_wls_send_ask_packet(data, 4);
-		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI set fan/light, WLS_WLC_FAN_SPEED %d, CPS_RX_CHRG_FULL %d, WLS_WLC_LIGHT %d",
-					chip->fan_speed, CPS_RX_CHRG_FULL, chip->light_level);
+		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI set fan/light, WLS_WLC_FAN_SPEED %d, CPS_RX_CHRG_FULL %d, WLS_WLC_LIGHT %d, status %d",
+					chip->fan_speed, CPS_RX_CHRG_FULL, chip->light_level,status);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS: QI set fan/light, ight 0x%x, fan 0x%x", data[2], data[3]);
 		msleep(200);
 		retry--;
@@ -4381,7 +4408,11 @@ static int  wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static int cps_wls_rx_power_on(void)
+#else
 static int cps_wls_rx_power_on()
+#endif
 {
 	struct cps_wls_chrg_chip *info = chip;
 	uint32_t chip_id = 0, sys_mode = 0;
@@ -4439,12 +4470,42 @@ static int cps_wls_rx_power_on()
 	}
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static int get_pmic_vbus(struct mtk_charger *info, int *vchr)
+{
+	union power_supply_propval prop;
+	static struct power_supply *chg_psy;
+	int ret;
+
+	if (chg_psy == NULL)
+		chg_psy = power_supply_get_by_name("mtk_charger_type");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		chr_err("%s Couldn't get chg_psy\n", __func__);
+		ret = -1;
+	} else {
+		ret = power_supply_get_property(chg_psy,
+			POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
+	}
+	*vchr = prop.intval;
+
+	chr_debug("%s vbus:%d\n", __func__,
+		prop.intval);
+	return ret;
+}
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static int cps_get_vbus(void)
+#else
 static int cps_get_vbus()
+#endif
 {
 	struct mtk_charger *info = NULL;
 	struct power_supply *chg_psy = NULL;
 	int vbus = 0;
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+    int ret = -1;
+#endif
 	chg_psy = power_supply_get_by_name("mtk-master-charger");
 	if (chg_psy == NULL || IS_ERR(chg_psy)) {
 		cps_wls_log(CPS_LOG_ERR,"%s mmi_mux Couldn't get chg_psy\n",__func__);
@@ -4452,7 +4513,19 @@ static int cps_get_vbus()
 	} else {
 		info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+	if (info == NULL)
+		return 0;
+	ret = charger_dev_get_vbus(info->chg1_dev, &vbus);
+	if (ret < 0) {
+		ret = get_pmic_vbus(info, &vbus);
+		if (ret < 0)
+			chr_err("%s: get vbus failed: %d\n", __func__, ret);
+	} else
+		vbus /= 1000;
+#else
 	vbus = get_vbus(info);
+#endif
 	cps_wls_log(CPS_LOG_ERR, "%s: vbus:%d\n", __func__,vbus);
 	return vbus;
 }
@@ -4577,7 +4650,11 @@ static const struct thermal_cooling_device_ops cps_tcd_ops = {
 	.set_cur_state = cps_tcd_set_cur_state,
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static void cps_init_charge_hardware(void)
+#else
 static void cps_init_charge_hardware()
+#endif
 {
 	struct cps_wls_chrg_chip *chg = chip;
 	chg->chg1_dev = get_charger_by_name("primary_chg");
@@ -4767,15 +4844,26 @@ static void not_called_api(void)
     rc = cps_wls_disable_tx_mode();
     rc = cps_wls_send_fsk_packet(data, 2);
     rc = cps_wls_set_fod_para();
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+    cps_wls_log(CPS_LOG_ERR, "[%s] rc = %d\n", __func__,rc);
+#endif
     return;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+static void cps_wls_chrg_remove(struct i2c_client *client)
+#else
 static int cps_wls_chrg_remove(struct i2c_client *client)
+#endif
 {
     not_called_api();
     //cps_wls_lock_destroy(chip);
     kfree(chip);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+    return;
+#else
     return 0;
+#endif
 }
 
 static const struct i2c_device_id cps_wls_charger_id[] = {
@@ -4819,4 +4907,3 @@ MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("jian.deng@convenientpower.com");
 MODULE_DESCRIPTION("cps_wls_charger driver");
 MODULE_ALIAS("i2c:cps_wls_charger");
-
