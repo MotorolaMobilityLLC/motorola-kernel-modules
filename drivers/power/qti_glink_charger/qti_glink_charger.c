@@ -883,8 +883,11 @@ static int qti_charger_get_partner_icl(struct qti_charger *chg, u32 *icl)
 					"mmi,partner_psy_name", &partner_psy_name);
 		if (rc) {
 			mmi_err(chg, "Failed get the partner psy name");
+			partner_psy_name = "";
 			return rc;
 		}
+	} else if (!strlen(partner_psy_name)) {
+		return 0;
 	}
 
 	if (!chg->partner_charger) {
@@ -2288,6 +2291,38 @@ static ssize_t cid_status_show(struct device *dev,
 }
 static DEVICE_ATTR(cid_status, S_IRUGO, cid_status_show, NULL);
 
+static ssize_t typec_reset_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	int r;
+	unsigned int reset = 0;
+	struct qti_charger *chg = this_chip;
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtou32(buf, 0, &reset);
+	if (r) {
+		pr_err("Invalid typec_reset = %d\n", reset);
+		return -EINVAL;
+	}
+
+	if (reset)
+		mmi_warn(chg, "typec_reset triggered\n");
+	else
+		return count;
+
+	r = qti_charger_write(chg, OEM_PROP_TYPEC_RESET,
+			&reset,
+			sizeof(reset));
+
+	return r ? r : count;
+}
+static DEVICE_ATTR(typec_reset, S_IWUSR|S_IWGRP, NULL, typec_reset_store);
+
 static ssize_t fg_operation_store(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
@@ -2307,13 +2342,13 @@ static ssize_t fg_operation_store(struct device *dev,
 		return -EINVAL;
 	}
 
-    r = qti_charger_write(chg, OEM_PROP_FG_OPERATION,
+	r = qti_charger_write(chg, OEM_PROP_FG_OPERATION,
 			&fg_operation_cmd,
 			sizeof(fg_operation_cmd));
 
 	return r ? r : count;
 }
-static DEVICE_ATTR(fg_operation, S_IRUGO, NULL, fg_operation_store);
+static DEVICE_ATTR(fg_operation, S_IWUSR|S_IWGRP, NULL, fg_operation_store);
 
 //ATTRIBUTE_GROUPS(qti_charger);
 #define TX_INT_FOD      (0x01<<12)
@@ -3397,6 +3432,13 @@ static int qti_charger_init(struct qti_charger *chg)
 	}
 
 	rc = device_create_file(chg->dev,
+				&dev_attr_typec_reset);
+	if (rc) {
+		mmi_err(chg,
+			   "Couldn't create typec_reset\n");
+	}
+
+	rc = device_create_file(chg->dev,
 				&dev_attr_fg_operation);
 	if (rc) {
 		mmi_err(chg,
@@ -3431,6 +3473,8 @@ static void qti_charger_deinit(struct qti_charger *chg)
 		return;
 	}
 
+	device_remove_file(chg->dev, &dev_attr_fg_operation);
+	device_remove_file(chg->dev, &dev_attr_typec_reset);
 	device_remove_file(chg->dev, &dev_attr_cid_status);
 	device_remove_file(chg->dev, &dev_attr_tcmd);
 	device_remove_file(chg->dev, &dev_attr_force_pmic_icl);
