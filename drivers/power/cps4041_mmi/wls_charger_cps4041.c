@@ -953,6 +953,27 @@ static int cps_wls_disable_tx_mode(void)
 	return cps_wls_set_cmd(cmd);
 }
 
+static int cps_wls_low_power_mode(bool en)
+{
+	uint16_t cmd;
+	int ret = CPS_WLS_SUCCESS;
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
+		return -ENODEV;
+	}
+
+	if (en) {
+		cmd = cps_wls_get_cmd();
+		cps_wls_log(CPS_LOG_ERR,"get_cmd:0x%04X TX_MODE:0x%04X\n", cmd, TX_CMD_ENTER_TX_MODE);
+		cmd |= TX_CMD_ENTER_TX_MODE;
+		ret = cps_wls_set_cmd(cmd);
+		cps_wls_enable_func_en(TX_FUNC_EN_LP);
+	}
+
+	return ret;
+}
+
 static int cps_wls_send_fsk_packet(uint8_t *data, uint8_t data_len)
 {
 	uint16_t cmd;
@@ -1687,6 +1708,7 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 {
 	int int_flag = 0;
 	int int_clr = 0;
+	int sys_mode = 0x00;
 	cps_wls_log(CPS_LOG_DEBG, "[%s] IRQ triggered\n", __func__);
 	mutex_lock(&chip->irq_lock);
 	cps_wls_set_int_enable();
@@ -1704,10 +1726,24 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 	int_clr = int_flag;
 	cps_wls_set_int_clr(int_flag);
 	mutex_unlock(&chip->irq_lock);
-	if (cps_wls_get_sys_mode() == SYS_MODE_RX) {
-		cps_wls_rx_irq_handler(int_flag);
-	} else {
-		cps_wls_tx_irq_handler(int_flag);
+
+	sys_mode = cps_wls_get_sys_mode();
+	cps_wls_log(CPS_LOG_ERR, "[%s] CPS_TX_MODE:%d sys_mode=%d\n", __func__, CPS_TX_MODE, sys_mode);
+
+	switch(sys_mode){
+		case SYS_MODE_RX:
+			cps_wls_rx_irq_handler(int_flag);
+			break;
+		case SYS_MODE_TX:
+			cps_wls_tx_irq_handler(int_flag);
+			break;
+		case SYS_MODE_BACK_POWER:
+			if (CPS_TX_MODE == 0) {
+				cps_wls_low_power_mode(true);
+			}
+			break;
+		default:
+			break;
 	}
 
 	return IRQ_HANDLED;
@@ -2508,6 +2544,7 @@ static void cps_wls_tx_mode(bool en)
 				ret = charger_dev_enable_otg(chip->chg1_dev, true);
 			}
 		}
+		CPS_TX_MODE = true;
 		/* bootst voltage need 10ms to stable and cps need 30ms to stable*/
 		msleep(100);
 		cps_wls_enable_tx_mode();
@@ -2527,7 +2564,6 @@ static void cps_wls_tx_mode(bool en)
 		}
 		cps_wls_log(CPS_LOG_DEBG,"cps wait tx_mode %dms\n", retry);
 
-		CPS_TX_MODE = true;
 		chip->tx_mode = true;
 		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
 	} else if((false == en) && (true == CPS_TX_MODE)){
