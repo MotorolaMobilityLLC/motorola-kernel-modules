@@ -203,6 +203,11 @@ static int brl_power_on(struct goodix_ts_core *cd, bool on)
 		if (iovdd_gpio > 0) {
 			gpio_direction_output(iovdd_gpio, 1);
 		} else if (cd->iovdd) {
+			ret = regulator_set_voltage(cd->iovdd, 1800000, 1800000);
+			if (ret) {
+				ts_err("set iovdd voltage fail");
+				goto power_off;
+			}
 			ret = regulator_enable(cd->iovdd);
 			if (ret < 0) {
 				ts_err("Failed to enable iovdd:%d", ret);

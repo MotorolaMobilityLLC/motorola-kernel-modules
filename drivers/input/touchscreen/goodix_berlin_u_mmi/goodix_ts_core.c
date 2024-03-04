@@ -1614,6 +1614,13 @@ static int goodix_ts_power_init(struct goodix_ts_core *core_data)
 			ts_err("Failed to get regulator iovdd:%d", ret);
 			core_data->iovdd = NULL;
 		}
+
+		ret = regulator_set_voltage(core_data->iovdd, 1800000, 1800000);
+		if (ret) {
+			ts_err("set iovdd voltage fail");
+			return ret;
+		}
+		ret = regulator_enable(core_data->iovdd);
 	} else {
 		ts_info("iovdd name is NULL");
 	}
