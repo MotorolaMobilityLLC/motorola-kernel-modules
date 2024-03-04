@@ -1875,7 +1875,6 @@ static int sc8541_config_mux(struct bq25980_device *bq,
                 dev_err(bq->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
                 return ret;
             }
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
         } else if (typec_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
             ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
@@ -1899,7 +1898,6 @@ static int sc8541_config_mux(struct bq25980_device *bq,
                 dev_err(bq->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
                 return ret;
             }
-#endif
 #endif
         }
 
@@ -2061,7 +2059,6 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 				return ret;
 			}
 		}
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	} else if (typec_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
 		ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_2, &val);
@@ -2098,7 +2095,6 @@ static int bq25980_config_mux(struct charger_device *chg_dev,
 				return ret;
 			}
 		}
-#endif
 #endif
 	}
 
