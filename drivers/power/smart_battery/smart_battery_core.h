@@ -95,7 +95,7 @@ struct mmi_smart_battery {
 	int				soc100_curr_threshod;
 	int				taper_count;
 	int				is_ffc_charge;
-
+	int				vbat0_flag;
 	int				fake_soc;
 	int				fake_temp;
 	int				gauge_count;

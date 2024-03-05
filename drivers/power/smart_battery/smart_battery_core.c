@@ -254,6 +254,7 @@ static enum power_supply_property batt_props[] = {
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
 	POWER_SUPPLY_PROP_SCOPE,
+	POWER_SUPPLY_PROP_ENERGY_EMPTY,
 };
 
 static int batt_get_prop(struct power_supply *psy,
@@ -291,6 +292,11 @@ static int batt_get_prop(struct power_supply *psy,
 			val->intval = chip->fake_soc;
 			break;
 		}
+		if (chip->vbat0_flag) {
+			chip->uisoc = 0;
+			mmi_info(chip,"Force UISOC energy to empty(0)\n");
+		}
+
 		if(chip->uisoc == -EINVAL)
 			val->intval = smart_batt_get_capacity(chip);
 		else
@@ -333,6 +339,9 @@ static int batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_SCOPE:
 		val->intval = chip->combo_soh;
 		break;
+	case POWER_SUPPLY_PROP_ENERGY_EMPTY:
+		val->intval = chip->vbat0_flag;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -347,6 +356,12 @@ static int batt_set_prop(struct power_supply *psy,
 	struct mmi_smart_battery *chip = power_supply_get_drvdata(psy);
 
 	switch (prop) {
+	case POWER_SUPPLY_PROP_ENERGY_EMPTY:
+		if(chip->uisoc == 1 && val->intval == 1) {
+			chip->vbat0_flag = val->intval;
+			power_supply_changed(chip->batt_psy);
+		}
+		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		chip->fake_soc = val->intval % 101;
 		break;
@@ -369,6 +384,7 @@ static int batt_prop_is_writeable(struct power_supply *psy,
 				       enum power_supply_property prop)
 {
 	switch (prop) {
+	case POWER_SUPPLY_PROP_ENERGY_EMPTY:
 	case POWER_SUPPLY_PROP_TEMP:
 	case POWER_SUPPLY_PROP_CAPACITY:
 	case POWER_SUPPLY_PROP_TYPE:
@@ -777,6 +793,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	this_chip = chip;
 	device_init_wakeup(chip->dev, true);
 
+	chip->vbat0_flag   = 0;
 	chip->fake_soc	= -EINVAL;
 	chip->fake_temp	= -EINVAL;
 	chip->resume_completed = true;
