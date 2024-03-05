@@ -517,7 +517,7 @@ static int  tcmd_get_bat_voltage(void *input, int* val)
 	int ret = 0;
 	struct mmi_smart_battery *chip = (struct mmi_smart_battery *)input;
 
-	*val = chip->combo_voltage_now * 1000;
+	*val = chip->combo_voltage_now;
 
 	return ret;
 }
