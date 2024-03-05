@@ -541,7 +541,7 @@ static int smart_battery_suspend(struct device *dev)
 {
 	struct mmi_smart_battery *chip = this_chip;
 
-	cancel_delayed_work(&chip->battery_delay_work);
+	cancel_delayed_work_sync(&chip->battery_delay_work);
 	chip->resume_completed = false;
 
 	return 0;
