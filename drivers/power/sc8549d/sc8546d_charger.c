@@ -758,6 +758,20 @@ __maybe_unused static int sc8546d_is_vbuslowerr(struct sc8546d *sc, bool *err)
     return ret;
 }
 
+__maybe_unused static int sc8546d_is_vbushigherr(struct sc8546d *sc, bool *err)
+{
+    int ret;
+    int val;
+
+    ret = sc8546d_field_read(sc, VBUS_ERRORHI_STAT, &val);
+
+    dev_info(sc->dev,"%s:%d",__func__,val);
+
+    *err = (bool)val;
+
+    return ret;
+}
+
 __maybe_unused static int sc8546d_init_device(struct sc8546d *sc)
 {
     int ret = 0;
@@ -953,6 +967,14 @@ static int mtk_sc8546d_is_vbuslowerr(struct charger_device *chg_dev, bool *err)
 
     return sc8546d_is_vbuslowerr(sc,err);
 }
+
+static int mtk_sc8546d_is_vbushigherr(struct charger_device *chg_dev, bool *err)
+{
+    struct sc8546d *sc = charger_get_data(chg_dev);
+
+    return sc8546d_is_vbushigherr(sc,err);
+}
+
 static int mtk_sc8546d_set_vbatovp_alarm(struct charger_device *chg_dev, u32 uV)
 {
     struct sc8546d *sc = charger_get_data(chg_dev);
@@ -1009,6 +1031,7 @@ static const struct charger_ops sc8546d_chg_ops = {
     .set_ibatocp = mtk_sc8546d_set_ibatocp,
     .init_chip = mtk_sc8546d_init_chip,
     .is_vbuslowerr = mtk_sc8546d_is_vbuslowerr,
+    .is_vbushigherr = mtk_sc8546d_is_vbushigherr,
     .set_vbatovp_alarm = mtk_sc8546d_set_vbatovp_alarm,
     .reset_vbatovp_alarm = mtk_sc8546d_reset_vbatovp_alarm,
     .set_vbusovp_alarm = mtk_sc8546d_set_vbusovp_alarm,

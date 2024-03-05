@@ -1726,6 +1726,26 @@ static int bq25980_is_vbuslowerr(struct charger_device *chg_dev, bool *err)
 	} else {
 		*err = 0;
 	}
+
+	return 0;
+}
+
+static int bq25980_is_vbushigherr(struct charger_device *chg_dev, bool *err)
+{
+	unsigned int val;
+	int tmp;
+	struct bq25980_device *bq  = charger_get_data(chg_dev);
+
+	if (bq->part_no == SC8541_PART_NO) {
+		tmp = regmap_read(bq->regmap, BQ25980_STAT5, &val);
+		if (tmp)
+			return tmp;
+
+		*err = !!(val & SC8541_VBUS_ERRPRHI_STAT);
+	} else {
+		*err = 0;
+	}
+
 	return 0;
 }
 
@@ -2148,6 +2168,7 @@ static const struct charger_ops bq25980_chg_ops = {
 	.set_vbusovp_alarm = bq25980_set_vbusovp_alarm,
 	.reset_vbusovp_alarm = bq25980_reset_vbusovp_alarm,
 	.is_vbuslowerr = bq25980_is_vbuslowerr,
+	.is_vbushigherr = bq25980_is_vbushigherr,
 	.get_adc_accuracy = bq25980_get_adc_accuracy,
 	.config_mux = bq25980_config_mux,
 	.enable_adc = bq25980_enable_adc,
