@@ -37,7 +37,7 @@ int pehv_get_log_level(void)
 #define PEHV_VTA_VAR_MIN	103	/* % */
 #define PEHV_ITA_TRACKING_GAP	150	/* mA */
 #define PEHV_DVCHG_VBUSALM_GAP	100	/* mV */
-#define PEHV_DVCHG_STARTUP_CONVERT_RATIO	220	/* % */
+#define PEHV_DVCHG_STARTUP_CONVERT_RATIO	210	/* % */
 #define PEHV_DVCHG_CHARGING_CONVERT_RATIO	202	/* % */
 #define PEHV_VBUSOVP_RATIO	110
 #define PEHV_IBUSOCP_RATIO	110
@@ -868,27 +868,40 @@ static inline int pehv_start(struct pehv_algo_info *info)
 static int pehv_adjust_vta_with_ta_cv(struct pehv_algo_info *info)
 {
 	int ret, cnt = PEHV_WHILE_LOOP_ITERATION_MAX;
-	bool err;
+	bool vbuslow = false, vbushigh = false;
 	u32 idvchg_lmt, vta, ita, ita_gap_per_vstep;
 	struct pehv_algo_data *data = info->data;
 	struct pehv_algo_desc *desc = info->desc;
 
 	while (cnt-- > 0) {
-		ret = pehv_hal_is_vbuslowerr(info->alg, DVCHG1, &err);
+		ret = pehv_hal_is_vbuslowerr(info->alg, DVCHG1, &vbuslow);
 		if (ret < 0) {
 			PEHV_ERR("get vbuslowerr fail(%d)\n", ret);
 			return ret;
 		}
-		if (!err)
+
+		ret = pehv_hal_is_vbushigherr(info->alg, DVCHG1, &vbushigh);
+		if (ret < 0) {
+			PEHV_ERR("get vbushigherr fail(%d)\n", ret);
+			return ret;
+		}
+
+		if (!vbuslow && !vbushigh)
 			break;
 
 		ita_gap_per_vstep = data->ita_gap_per_vstep > 0 ?
 				    data->ita_gap_per_vstep : 200;
 		idvchg_lmt = pehv_get_idvchg_lmt(info);
 
-		vta = data->vta_setting + desc->vta_step;
+		if (vbuslow) {
+			vta = data->vta_setting + desc->vta_step;
+			ita = data->ita_setting + ita_gap_per_vstep;
+		} else if (vbushigh) {
+			vta = data->vta_setting - desc->vta_step;
+			ita = data->ita_setting - ita_gap_per_vstep;
+		}
+
 		vta = min_t(u32, vta, desc->vta_cap_max);
-		ita = data->ita_setting + ita_gap_per_vstep;
 		ita = min(ita, idvchg_lmt);
 		ret = pehv_set_ta_cap_cv(info, vta, ita);
 		if (ret < 0) {

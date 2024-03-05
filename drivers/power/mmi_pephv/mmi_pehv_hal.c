@@ -507,6 +507,17 @@ int pehv_hal_is_vbuslowerr(struct chg_alg_device *alg, enum chg_idx chgidx,
 	return charger_dev_is_vbuslowerr(hal->chgdevs[chgtyp], err);
 }
 
+int pehv_hal_is_vbushigherr(struct chg_alg_device *alg, enum chg_idx chgidx,
+			   bool *err)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pehv_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+
+	if (chgtyp < 0)
+		return chgtyp;
+	return charger_dev_is_vbushigherr(hal->chgdevs[chgtyp], err);
+}
+
 int pehv_hal_get_adc_accuracy(struct chg_alg_device *alg, enum chg_idx chgidx,
 			      enum pehv_adc_channel chan, int *val)
 {
