@@ -547,12 +547,14 @@ static void st54spi_power_set(struct st54spi_data *st54spi, int val)
 
 	if (val) {
 		st54spi->sehal_needs_poweron = 1;
+		usleep_range(4000, 5000);
 		if (st54spi->se_is_poweron == 0)
 			st54spi_power_on(st54spi);
 		if (st54spi->se_is_poweron_for_comm == 0)
 			st54spi_power_on_for_comm(st54spi);
 	} else {
 		st54spi->sehal_needs_poweron = 0;
+		usleep_range(4000, 5000);
 		if (st54spi->se_is_poweron_for_comm == 1)
 			st54spi_power_off_for_comm(st54spi);
 		if ((st54spi->se_is_poweron == 1) &&
@@ -883,6 +885,8 @@ static int st54spi_open(struct inode *inode, struct file *filp)
 
 	if (debug_enabled)
 		dev_info(DEV, "st54spi: open - force power on\n");
+
+	usleep_range(4000, 5000);
 	st54spi_power_on(st54spi);
 	st54spi_power_on_for_comm(st54spi);
 	return 0;
@@ -916,6 +920,7 @@ static int st54spi_release(struct inode *inode, struct file *filp)
 			dev_info(DEV,
 				 "st54spi: release - may allow power off\n");
 
+		usleep_range(4000, 5000);
 		st54spi_power_off_for_comm(st54spi);
 		if (!st54spi->sehal_needs_poweron)
 			st54spi_power_off(st54spi);
