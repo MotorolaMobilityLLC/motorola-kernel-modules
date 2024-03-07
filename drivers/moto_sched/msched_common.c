@@ -46,7 +46,7 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 	int ux_type = task_get_ux_type(p);
 
 	if (is_enabled(UX_ENABLE_AUDIO) && is_scene(UX_SCENE_AUDIO)) {
-		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio <= 120 && p->prio >= 100)
+		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio <= 120)
 			return true;
 		else if (p->prio == 104 || p->prio == 101)
 			return true;
@@ -61,14 +61,14 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 
 	if ((is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH))
 			|| (is_enabled(UX_ENABLE_BOOST) && is_scene(UX_SCENE_BOOST))) {
-		// Boost all kernel threads with prio <= 120
-		if (p->mm == NULL && p->prio <= 120)
+		// Boost all kernel threads with prio == 100
+		if (p->mm == NULL && p->prio == 100)
 			return true;
 
-		if (ux_type & UX_TYPE_SERVICEMANAGER && p->prio <= 120 && p->prio >= 100)
+		if (ux_type & UX_TYPE_SERVICEMANAGER && p->prio <= 120)
 			return true;
 
-		if (ux_type & UX_TYPE_NATIVESERVICE && p->prio < 120 && p->prio >= 100)
+		if (ux_type & UX_TYPE_NATIVESERVICE && p->prio < 120)
 			return true;
 
 		if (p->tgid == global_launcher_tgid
@@ -91,6 +91,9 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	int ux_type = task_get_ux_type(p);
 	int prio = UX_PRIO_INVALID;
 
+	if (p->prio < 100)
+		return UX_PRIO_INVALID;
+
 	if (ux_type & UX_TYPE_PERF_DAEMON) // Base feature: perf daemon
 		prio = UX_PRIO_HIGHEST;
 	else if (is_enabled(UX_ENABLE_AUDIO)
@@ -104,7 +107,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_SYSTEM;
 	else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
 		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)
-		&& (p->prio <= 120 && p->prio >= 100))
+		&& p->prio <= 120)
 		prio = UX_PRIO_CAMERA;
 	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 		prio = UX_PRIO_KSWAPD;
