@@ -81,7 +81,7 @@ static inline bool is_rwsem_reader_owned(struct rw_semaphore *sem)
 }
 
 #ifdef ENABLE_REORDER_LIST
-bool rwsem_list_add(struct task_struct *tsk, struct list_head *entry, struct list_head *head, int owner_pid)
+bool rwsem_list_add(struct task_struct *tsk, struct list_head *entry, struct list_head *head)
 {
 	struct list_head *pos = NULL;
 	struct list_head *n = NULL;
@@ -100,7 +100,7 @@ bool rwsem_list_add(struct task_struct *tsk, struct list_head *entry, struct lis
 			waiter = list_entry(pos, struct rwsem_waiter, list);
 			if (waiter && waiter->task->prio > MAX_RT_PRIO && prio > task_get_mvp_prio(waiter->task, true)) {
 				cond_trace_printk(moto_sched_debug,
-					"rwsem_list_add %d -> %d prio=%d(%d)index=%d\n", tsk->pid, owner_pid, prio, task_get_mvp_prio(waiter->task, true), index);
+					"rwsem_list_add %d prio=%d(%d)index=%d\n", tsk->pid, prio, task_get_mvp_prio(waiter->task, true), index);
 				list_add(entry, waiter->list.prev);
 				return true;
 			}
@@ -160,7 +160,6 @@ inline bool test_wait_timeout(struct rw_semaphore *sem)
 static void android_vh_alter_rwsem_list_add_handler(void *unused, struct rwsem_waiter *waiter,
 			struct rw_semaphore *sem, bool *already_on_list)
 {
-	struct task_struct *ts;
 	bool ret = false;
 	if (!waiter || !sem)
 		return;
@@ -168,15 +167,13 @@ static void android_vh_alter_rwsem_list_add_handler(void *unused, struct rwsem_w
 	if (unlikely(!locking_opt_enable()))
 		return;
 
-	ts = rwsem_owner(sem);
-
-	if (!ts || waiter->type == RWSEM_WAITING_FOR_READ)
+	if (waiter->type == RWSEM_WAITING_FOR_READ)
 		return;
 
 	if (test_wait_timeout(sem))
 		return;
 
-	ret = rwsem_list_add(waiter->task, &waiter->list, &sem->wait_list, ts->pid);
+	ret = rwsem_list_add(waiter->task, &waiter->list, &sem->wait_list);
 
 	if (ret)
 		*already_on_list = true;
