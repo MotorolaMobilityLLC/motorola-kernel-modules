@@ -1037,7 +1037,7 @@ static int brl_esd_check(struct goodix_ts_core *cd)
 #define GOODIX_GESTURE_EVENT		0x20
 #define POINT_TYPE_STYLUS_HOVER		0x01
 #define POINT_TYPE_STYLUS			0x03
-#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+#if defined(CONFIG_MOTO_DDA_PASSIVESTYLUS) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
 #define POINT_TYPE_PALM			0x04
 #endif
 #define GOODIX_PALM_FLAG			0x10
@@ -1057,7 +1057,7 @@ static void goodix_parse_finger(struct goodix_touch_data *touch_data,
 			touch_data->touch_num = 0;
 			return;
 		}
-#ifdef CONFIG_MOTO_DDA_PASSIVESTYLUS
+#if defined(CONFIG_MOTO_DDA_PASSIVESTYLUS) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
 		if ((coor_data[0] & 0x0F) == POINT_TYPE_PALM)
 			touch_data->coords[id].plam_status = true;
 		else
