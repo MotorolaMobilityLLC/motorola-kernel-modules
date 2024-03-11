@@ -2637,6 +2637,11 @@ static int mmi_psy_notifier_call(struct notifier_block *nb, unsigned long val,
 	if (val != PSY_EVENT_PROP_CHANGED)
 		return NOTIFY_OK;
 
+	if (psy && !chip->batt_psy &&
+	    (strcmp(psy->desc->name, "battery") == 0)) {
+		mmi_battery_supply_init(chip);
+	}
+
 	if (psy &&
 	    ((strcmp(psy->desc->name, "battery") == 0) ||
 	    (strcmp(psy->desc->name, "usb") == 0) ||
