@@ -694,7 +694,7 @@ static ssize_t sx937x_fac_enable_store(struct device *dev,
 	if ( !strncmp(buf, "1", 1)) {
 		LOG_INFO("enable cap sensor\n");
 		sx937x_i2c_read_16bit(this->bus, SX937X_GENERAL_SETUP, &temp);
-		temp = temp | 0x0000007F;
+		temp = temp | 0x000000FF;
 		LOG_INFO("set reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
 		sx937x_i2c_write_16bit(this->bus, SX937X_GENERAL_SETUP, temp);
 		if(ret <0){
@@ -705,7 +705,7 @@ static ssize_t sx937x_fac_enable_store(struct device *dev,
 	if ( !strncmp(buf, "0", 1)) {
 		LOG_INFO("disnable cap sensor\n");
 		sx937x_i2c_read_16bit(this->bus, SX937X_GENERAL_SETUP, &temp);
-		temp = temp | 0xFFFFFF00;
+		temp = temp & 0xFFFFFF00;
 		LOG_INFO("set reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
 		sx937x_i2c_write_16bit(this->bus, SX937X_GENERAL_SETUP, temp);
 		if(ret <0){
@@ -1266,7 +1266,7 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 			if (enable == 1) {
 				LOG_INFO("enable cap sensor : %s\n", sensors_cdev->name);
 				sx937x_i2c_read_16bit(this->bus, SX937X_GENERAL_SETUP, &temp);
-				temp = temp | 0x0000007F;
+				temp = temp | 0x000000FF;
 				LOG_DBG("set reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
 				sx937x_i2c_write_16bit(this->bus, SX937X_GENERAL_SETUP, temp);
 				buttons[i].enabled = true;
@@ -1773,7 +1773,7 @@ static void sx937x_reinitialize(psx93XX_t this)
 		for (i=0; i < pdata->buttonSize; i++) {
 			pCurrentbutton = &(pdata->buttons[i]);
 			if (pCurrentbutton->enabled) {
-				sx937x_i2c_write_16bit(this->bus, SX937X_GENERAL_SETUP, temp | 0x0000007F);
+				sx937x_i2c_write_16bit(this->bus, SX937X_GENERAL_SETUP, temp | 0x000000FF);
 				break;
 			}
 		}
