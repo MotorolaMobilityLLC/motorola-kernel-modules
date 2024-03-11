@@ -215,7 +215,11 @@
  * Report Pressure in multitouch
  * 1:enable(default),0:disable
 */
-#define FTS_REPORT_PRESSURE_EN                  1
+#ifdef CONFIG_FOCALTECH_REPORT_PRESSURE_DISABLE
+#define FTS_REPORT_PRESSURE_EN			0
+#else
+#define FTS_REPORT_PRESSURE_EN			1
+#endif
 
 /*
  * Stylus PEN enable

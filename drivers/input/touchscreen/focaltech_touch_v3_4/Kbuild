@@ -92,6 +92,10 @@ ifneq ($(filter m y,$(CONFIG_FTS_INPUT_ID)),)
     EXTRA_CFLAGS += -DCONFIG_FTS_INPUT_ID
 endif
 
+ifneq ($(filter m y,$(CONFIG_FOCALTECH_REPORT_PRESSURE_DISABLE)),)
+    EXTRA_CFLAGS += -DCONFIG_FOCALTECH_REPORT_PRESSURE_DISABLE
+endif
+
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
 USE_TARGET_PRODUCT := $(strip $(subst _factory,, $(TARGET_PRODUCT)))
 else
