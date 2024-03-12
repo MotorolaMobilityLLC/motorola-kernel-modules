@@ -855,6 +855,7 @@ static int sc760x_charger_get_property(struct power_supply *psy,
 				union power_supply_propval *val)
 {
 	struct sc760x_chip *sc = power_supply_get_drvdata(psy);
+	struct sc760x_mmi_charger *chg = sc->mmi_charger;
 	struct sc760x_state state;
 	int chrg_status = 0;
 	int ret = 0;
@@ -958,6 +959,9 @@ static int sc760x_charger_get_property(struct power_supply *psy,
 		if (ret < 0)
 			return ret;
 		ret = 0;
+		break;
+	case POWER_SUPPLY_PROP_CAPACITY:
+		val->intval = chg->batt_info.batt_soc;
 		break;
 	default:
 		return -EINVAL;

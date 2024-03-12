@@ -242,6 +242,7 @@ struct qti_charger {
 	struct power_supply		*partner_charger;
 	struct thermal_cooling_device	*cdev;
 	u32				partner_charger_icl;
+	u32				partner_charger_soc;
 	u32				*profile_data;
 	struct charger_profile_info	profile_info;
 	struct lpd_info			lpd_info;
@@ -870,7 +871,7 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	return rc;
 }
 
-static int qti_charger_get_partner_icl(struct qti_charger *chg, u32 *icl)
+static int qti_charger_get_partner_prop(struct qti_charger *chg, enum power_supply_property prop, u32 *data)
 {
 	int rc;
 	union power_supply_propval propval;
@@ -894,12 +895,12 @@ static int qti_charger_get_partner_icl(struct qti_charger *chg, u32 *icl)
 			return -ENODEV;
 	}
 
-	rc = power_supply_get_property(chg->partner_charger, POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT, &propval);
+	rc = power_supply_get_property(chg->partner_charger, prop, &propval);
 	if (rc < 0) {
-		mmi_err(chg, "get property failed, rc=%d\n", rc);
+		mmi_err(chg, "get property %d failed, rc=%d\n", prop, rc);
 		return rc;
 	}
-	*icl = propval.intval;
+	*data = propval.intval;
 	return rc;
 }
 
@@ -984,13 +985,22 @@ static int qti_charger_config_charge(void *data, struct mmi_charger_cfg *config)
 		chg->chg_cfg.charging_reset = config->charging_reset;
 	}
 
-	rc = qti_charger_get_partner_icl(chg, &value);
+	rc = qti_charger_get_partner_prop(chg, POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT, &value);
 	if (!rc && chg->partner_charger_icl != value) {
 		rc = qti_charger_write(chg, OEM_PROP_CHG_PARTNER_ICL,
 					&value,
 					sizeof(value));
 		if (!rc)
 			chg->partner_charger_icl = value;
+	}
+
+	rc = qti_charger_get_partner_prop(chg, POWER_SUPPLY_PROP_CAPACITY, &value);
+	if (!rc && chg->partner_charger_soc != value) {
+		rc = qti_charger_write(chg, OEM_PROP_CHG_PARTNER_SOC,
+					&value,
+					sizeof(value));
+		if (!rc)
+			chg->partner_charger_soc = value;
 	}
 
 	return 0;
@@ -2161,7 +2171,8 @@ static ssize_t thermal_primary_charge_control_limit_store(struct device *dev,
 
 	chg->thermal_primary_fcc_ua = chg->thermal_primary_levels[charge_primary_limit_level];
 	chg->curr_thermal_primary_level = charge_primary_limit_level;
-
+	pr_info("charge_primary_limit_level = %lu\n, thermal_primary_fcc_ma = %d",
+			charge_primary_limit_level, chg->thermal_primary_fcc_ua);
 
 	r = qti_charger_write(chg, OEM_PROP_THERM_PRIMARY_CHG_CONTROL,
 				&chg->thermal_primary_fcc_ua,
@@ -2235,7 +2246,8 @@ static ssize_t thermal_secondary_charge_control_limit_store(struct device *dev,
 
 	chg->thermal_secondary_fcc_ua = chg->thermal_secondary_levels[charge_secondary_limit_level];
 	chg->curr_thermal_secondary_level = charge_secondary_limit_level;
-
+	pr_info("charge_secondary_limit_level = %lu\n, thermal_secondary_fcc_ma = %d",
+			charge_secondary_limit_level, chg->thermal_secondary_fcc_ua);
 
 	r = qti_charger_write(chg, OEM_PROP_THERM_SECONDARY_CHG_CONTROL,
 				&chg->thermal_secondary_fcc_ua,
