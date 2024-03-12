@@ -3984,10 +3984,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 		cps_wls_log(CPS_LOG_ERR, "[%s] moto_wls_auth_init failed!\n", __func__);
 	}
 
-	cps_wls_log(CPS_LOG_DEBG, "cps_wls_get_sys_mode %d\n", cps_wls_get_sys_mode());
-	cps_wls_log(CPS_LOG_DEBG, "cps_wls_get_chip_id 0x%X\n", cps_wls_get_chip_id());
-	cps_wls_log(CPS_LOG_DEBG, "cps_wls_get_sys_fw_version 0x%X\n", cps_wls_get_sys_fw_version());
-
 	//queue_delayed_work(chip->wls_wq,&chip->fw_update_work, msecs_to_jiffies(5000));
 	cps_wls_reg_check();
 	return ret;
