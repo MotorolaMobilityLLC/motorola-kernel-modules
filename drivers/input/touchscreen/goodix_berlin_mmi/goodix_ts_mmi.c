@@ -68,6 +68,11 @@ static ssize_t goodix_ts_pocket_mode_show(struct device *dev,
 static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size);
 
+static ssize_t goodix_ts_pitch_show(struct device *dev,
+	struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_pitch_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size);
+
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
 static DEVICE_ATTR(interpolation, (S_IRUGO | S_IWUSR | S_IWGRP),
@@ -90,6 +95,9 @@ static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 
 static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
+
+static DEVICE_ATTR(pitch, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_pitch_show, goodix_ts_pitch_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -148,6 +156,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->board_data.pocket_mode_ctrl)
 		ADD_ATTR(pocket_mode);
+
+	if (core_data->board_data.pitch_ctrl)
+		ADD_ATTR(pitch);
 
 #ifdef CONFIG_GTP_LAST_TIME
 	ADD_ATTR(timestamp);
@@ -738,6 +749,90 @@ static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
 	msleep(20);
 
 	ts_info("Success to %s pocket mode", core_data->get_mode.pocket_mode ? "Enable" : "Disable");
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return size;
+}
+
+static ssize_t goodix_ts_pitch_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info("Pitch mode state = 0x%02x.\n", core_data->set_mode.pitch_mode);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x\n", core_data->set_mode.pitch_mode);
+}
+
+static ssize_t goodix_ts_pitch_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long value = 0;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		ts_err("pitch mode: Failed to convert value\n");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+	switch (value) {
+		case 20:
+			ts_info("touch default cfg value\n");
+			core_data->get_mode.pitch_mode = 0x00;
+			break;
+		case 21:
+			ts_info("touch 1 pitch config\n");
+			core_data->get_mode.pitch_mode = 0x20;
+			break;
+		case 22:
+			ts_info("touch 2 pitch config\n");
+			core_data->get_mode.pitch_mode = 0x40;
+			break;
+		case 23:
+			ts_info("touch 3 pitch config\n");
+			core_data->get_mode.pitch_mode = 0x60;
+			break;
+		case 24:
+			ts_info("touch 4 pitch config\n");
+			core_data->get_mode.pitch_mode = 0x80;
+			break;
+		default:
+			ts_info("unsupport pitch mode type, value = %lu\n", value);
+			mutex_unlock(&core_data->mode_lock);
+			return -EINVAL;
+	}
+
+	if (core_data->set_mode.pitch_mode == core_data->get_mode.pitch_mode) {
+		ts_info("The value = 0x%02x is same, so not to write", core_data->get_mode.pitch_mode);
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	ret = goodix_ts_send_cmd(core_data, PITCH_SWITCH_CMD, 5,
+		core_data->get_mode.pitch_mode , 0x00);
+	if (ret < 0) {
+		ts_err("failed to send pitch mode cmd");
+		goto exit;
+	}
+
+	core_data->set_mode.pitch_mode = core_data->get_mode.pitch_mode;
+	msleep(20);
+
+	ts_info("Success to set pitch mode = 0x%02x", core_data->get_mode.pitch_mode);
 exit:
 	mutex_unlock(&core_data->mode_lock);
 	return size;
@@ -1351,6 +1446,16 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 				core_data->get_mode.edge_mode[1], core_data->get_mode.edge_mode[0]);
 		}
 	}
+
+	if (core_data->board_data.pitch_ctrl && core_data->get_mode.pitch_mode) {
+		ret = goodix_ts_send_cmd(core_data, PITCH_SWITCH_CMD, 5, core_data->get_mode.pitch_mode, 0);
+		if (!ret) {
+			core_data->set_mode.pitch_mode = core_data->get_mode.pitch_mode;
+			msleep(20);
+			ts_info("Success to set pitch mode = 0x%02x", core_data->get_mode.pitch_mode);
+		}
+	}
+
 	if (core_data->get_mode.liquid_detection) {
 		ret = goodix_ts_send_cmd(core_data, LIQUID_DETECTION_SWITCH_CMD, 5,
 						core_data->get_mode.liquid_detection, 0x00);
