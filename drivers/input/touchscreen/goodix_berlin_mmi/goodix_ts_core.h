@@ -317,6 +317,7 @@ struct goodix_ts_board_data {
 	bool sample_ctrl;
 	bool report_rate_ctrl;
 	bool edge_ctrl;
+	bool pitch_ctrl;
 	bool stowed_mode_ctrl;
 	bool gesture_wait_pm;
 	bool pocket_mode_ctrl;
@@ -507,6 +508,7 @@ struct goodix_mode_info {
 	int sample;
 	int report_rate_mode;
 	int edge_mode[2];
+	int pitch_mode;
 	int liquid_detection;
 #ifdef GOODIX_PALM_SENSOR_EN
 	int palm_detection;

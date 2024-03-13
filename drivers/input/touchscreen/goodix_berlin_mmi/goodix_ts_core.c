@@ -1140,6 +1140,11 @@ static int goodix_parse_dt(struct device_node *node,
 	if (board_data->edge_ctrl)
 		ts_info("support goodix edge mode");
 
+	board_data->pitch_ctrl = of_property_read_bool(node,
+					"goodix,pitch-ctrl");
+	if (board_data->pitch_ctrl)
+		ts_info("support goodix pitch mode");
+
 	board_data->stowed_mode_ctrl = of_property_read_bool(node,
 					"goodix,stowed-mode-ctrl");
 	if (board_data->stowed_mode_ctrl)
