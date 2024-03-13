@@ -15,7 +15,7 @@
 
 #define WLS_RX_CAP_15W 15
 #define WLS_RX_CAP_10W 10
-#define WLS_RX_CAP_8W 8
+#define WLS_RX_CAP_7W 7
 #define WLS_RX_CAP_5W 5
 
 #ifndef WLS_WLC_POWER_MAX

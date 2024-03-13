@@ -1442,10 +1442,10 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 }
 
 #define WLS_ICL_INCREASE_STEP_mA 100 /*100mA*/
-#define WLS_ICL_INCREASE_DELAY 200 /*200ms*/
+#define WLS_ICL_INCREASE_DELAY 100 /*100ms*/
 #define WLS_BPP_ICL_MAX_mA 1000
-#define WLS_BPP_ROD_THRESHOLD_CURRENT_MAX 800 /*mA*/
-#define WLS_BPP_ROD_THRESHOLD_CURRENT_MIN 700 /*mA*/
+#define WLS_BPP_ROD_THRESHOLD_CURRENT_MAX 850 /*mA*/
+#define WLS_BPP_ROD_THRESHOLD_CURRENT_MIN 750 /*mA*/
 #define WLS_BPP_ROD_DETECT_COUNT_MAX 3
 #define WLS_ROD_STOP_BATERY_SOC 90
 #define WLS_ROD_STOP_TIME (60*1000*1000*1000uL) /*60s*/
@@ -1453,6 +1453,7 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 #define WLS_EPP_ROD_DETECT_COUNT_MAX 3
 #define WLS_EPP_ROD_THRESHOLD_12V 10500 /*mV*/
 #define WLS_EPP_ROD_THRESHOLD_10V 9000 /*mV*/
+#define WLS_EPP_ROD_THRESHOLD_9V 8000 /*mV*/
 
 static void cps_bpp_mode_icl_work(struct work_struct *work)
 {
@@ -1488,7 +1489,7 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 				cps_init_charge_hardware();
 			if (chip->chg1_dev)
 				charger_dev_set_input_current(chip->chg1_dev, wls_icl * 1000);
-			msleep(WLS_ICL_INCREASE_DELAY);
+			msleep(WLS_ICL_INCREASE_DELAY + i * 200);
 			wls_current_now = cps_wls_get_rx_iout();
 			wls_voltage_now = cps_wls_get_rx_vout();
 
@@ -1568,6 +1569,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 	static int work_timedelay = 1000;
 	static int wls_current = 0;
 	int current_now = 0;
+	int wls_power = 0;
 
 	if (!chip)
 		return;
@@ -1596,7 +1598,9 @@ static void cps_offset_detect_work(struct work_struct *work)
 	}
 
 	current_now = cps_wls_get_rx_iout();
-	if (wls_mode == Sys_Op_Mode_BPP) {
+	wls_power = cps_wls_get_rx_neg_power() / 2;
+	if (wls_mode == Sys_Op_Mode_BPP ||
+		(wls_mode == Sys_Op_Mode_EPP && wls_power == WLS_RX_CAP_5W)) {
 		if (!chip->rx_offset) {
 			if (chip->thermal_state != 0 &&
 				chip->thermal_wls_ccl < chip->MaxI) {
@@ -1658,6 +1662,8 @@ static void cps_offset_detect_work(struct work_struct *work)
 			chip->rx_vout_threshold = WLS_EPP_ROD_THRESHOLD_12V;
 		else if (chip->rx_vout_set == 10000)
 			chip->rx_vout_threshold = WLS_EPP_ROD_THRESHOLD_10V;
+		else if (chip->rx_vout_set == 9000)
+			chip->rx_vout_threshold = WLS_EPP_ROD_THRESHOLD_9V;
 		else
 			chip->rx_vout_threshold = chip->MaxV * 80 / 100;
 
@@ -3297,26 +3303,21 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 		else if (wls_power >= WLS_RX_CAP_10W)
 		{
 			chg->MaxV = 12000;
-			chg->MaxI = 800;
-			*icl = 800000;
+			chg->MaxI = 850;
+			*icl = 850000;
 			*vbus = 12000;
 		}
-		else if (wls_power >= WLS_RX_CAP_8W)
+		else if (wls_power >= WLS_RX_CAP_7W)
 		{
-			chg->MaxV = 12000;
-			chg->MaxI = 650;
-			*icl = 650000;
-			*vbus = 12000;
+			chg->MaxV = 9000;
+			chg->MaxI = 850;
+			*icl = 850000;
+			*vbus = 9000;
 		}
 		else if (wls_power >= WLS_RX_CAP_5W)
 		{
-			if (wls_voltage < 5500) {
-				chg->MaxV = 5000;
-				chg->MaxI = 1000;
-			} else {
-				chg->MaxV = 12000;
-				chg->MaxI = 400;
-			}
+			chg->MaxV = 5000;
+			chg->MaxI = 1000;
 			*icl = chg->MaxI * 1000;
 			*vbus = chg->MaxV;
 		}
@@ -3354,24 +3355,19 @@ static void cps_epp_current_select(int *icl, int *vbus)
 		}
 		else if (wls_power >= WLS_RX_CAP_10W) {
 			chg->MaxV = 12000;
-			chg->MaxI = 800;
-			*icl = 800000;
+			chg->MaxI = 850;
+			*icl = 850000;
 			*vbus = 12000;
 		}
-		else if (wls_power >= WLS_RX_CAP_8W) {
-			chg->MaxV = 12000;
-			chg->MaxI = 650;
-			*icl = 650000;
-			*vbus = 12000;
+		else if (wls_power >= WLS_RX_CAP_7W) {
+			chg->MaxV = 9000;
+			chg->MaxI = 850;
+			*icl = 850000;
+			*vbus = 9000;
 		}
 		else if (wls_power >= WLS_RX_CAP_5W) {
-			if (wls_voltage < 5500) {
-				chg->MaxV = 5000;
-				chg->MaxI = 1000;
-			} else {
-				chg->MaxV = 12000;
-				chg->MaxI = 400;
-			}
+			chg->MaxV = 5000;
+			chg->MaxI = 1000;
 			*icl = chg->MaxI * 1000;
 			*vbus = chg->MaxV;
 		} else {
