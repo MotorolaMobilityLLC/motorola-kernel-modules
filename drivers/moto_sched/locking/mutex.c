@@ -45,7 +45,7 @@ static void mutex_list_add_ux(struct list_head *entry, struct list_head *head)
 	list_for_each_safe(pos, n, head) {
 		waiter = list_entry(pos, struct mutex_waiter, list);
 		if (waiter && waiter->task && (waiter->task->prio > MAX_RT_PRIO) && prio > task_get_mvp_prio(waiter->task, true)) {
-			cond_trace_printk(moto_sched_debug,
+			cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
 					"mutex_list_add_ux %d  prio=%d(%d)index=%d\n", current->pid, prio, task_get_mvp_prio(waiter->task, true), index);
 			list_add(entry, waiter->list.prev);
 			return;
@@ -85,26 +85,18 @@ static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock
 {
 	struct task_struct *owner_ts = NULL;
 	bool boost = false;
-#ifdef DEBUG_LOCK
-	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
-#endif
 
 	if (unlikely(!locking_opt_enable() || !lock)) {
 		return;
 	}
 
-	if (!current_is_important_ux() && (current->prio > 100)) {
+	if ((current->prio >= 100) && (!current_is_important_ux())) {
 		return;
 	}
 
-#ifdef DEBUG_LOCK
-	waiter_wts->wait_start = jiffies_to_nsecs(jiffies);
-	waiter_wts->wait_prio = task_get_mvp_prio(current, true);
-#endif
-
 	owner_ts = __mutex_owner(lock);
 	if (!owner_ts) {
-		cond_trace_printk(moto_sched_debug,
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
 				"mutex owner not found!!! =%d\n", current->pid);
 		return;
 	}
@@ -113,31 +105,12 @@ static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock
 	boost = lock_inherit_ux_type(owner_ts, current, "mutex_wait");
 
 	if (boost && (__mutex_owner(lock) != owner_ts)) {
-		cond_trace_printk(moto_sched_debug,
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
 			"mutex owner has been changed owner=%p(%p)\n", __mutex_owner(lock), owner_ts);
 		lock_clear_inherited_ux_type(owner_ts, "mutex_wait");
 	}
 	put_task_struct(owner_ts);
 }
-
-#ifdef DEBUG_LOCK
-void android_vh_mutex_wait_finish_handler(void *unused, struct mutex *lock)
-{
-	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) current->android_oem_data1;
-	if (unlikely(!locking_opt_enable()))
-		return;
-
-	if (waiter_wts->wait_start > 0) {
-		u64 sleep = (jiffies_to_nsecs(jiffies) - waiter_wts->wait_start) / 1000000U;
-		if (sleep > 50) {
-			cond_trace_printk(moto_sched_debug,
-					"mutex wait too long type=%d wait=%llu\n", waiter_wts->wait_prio, sleep);
-			dump_stack();
-		}
-		waiter_wts->wait_start = 0;
-	}
-}
-#endif
 
 void android_vh_mutex_unlock_slowpath_handler(void *unused, struct mutex *lock)
 {
@@ -152,10 +125,6 @@ void register_mutex_vendor_hooks(void)
 	register_trace_android_vh_alter_mutex_list_add(android_vh_alter_mutex_list_add_handler, NULL);
 	register_trace_android_vh_mutex_wait_start(android_vh_mutex_wait_start_handler, NULL);
 	register_trace_android_vh_mutex_unlock_slowpath(android_vh_mutex_unlock_slowpath_handler, NULL);
-
-#ifdef DEBUG_LOCK
-	register_trace_android_vh_mutex_wait_finish(android_vh_mutex_wait_finish_handler, NULL);
-#endif
 }
 
 void unregister_mutex_vendor_hooks(void)
