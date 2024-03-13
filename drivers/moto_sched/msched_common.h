@@ -31,9 +31,7 @@
 #include <drivers/misc/mediatek/sched/common.h>
 #endif
 
-#define VERION 1008
-
-// #define DEBUG_LOCK 1
+#define VERION 1009
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -48,6 +46,10 @@ do {										\
 #define sched_debug(fmt, ...) \
 		pr_info("[moto_sched][%s]"fmt, __func__, ##__VA_ARGS__)
 
+#define DEBUG_TYPE_BASE				(1 << 0)
+#define DEBUG_TYPE_LOCK				(1 << 1)
+#define DEBUG_TYPE_BINDER			(1 << 2)
+
 #define UX_ENABLE_BASE				(1 << 0)
 #define UX_ENABLE_INTERACTION		(1 << 1)
 #define UX_ENABLE_LOCK				(1 << 2)
@@ -56,6 +58,7 @@ do {										\
 #define UX_ENABLE_CAMERA			(1 << 5)
 #define UX_ENABLE_KSWAPD			(1 << 6)
 #define UX_ENABLE_BOOST				(1 << 7)
+#define UX_ENABLE_KERNEL			(1 << 8)
 
 /* define for UX thread type, keep same as the define in java file */
 #define UX_TYPE_PERF_DAEMON			(1 << 0)
@@ -79,6 +82,7 @@ do {										\
 #define UX_TYPE_SERVICEMANAGER		(1 << 18)
 #define UX_TYPE_INHERIT_LOCK		(1 << 19)
 #define UX_TYPE_CAMERAAPP			(1 << 20)
+#define UX_TYPE_KERNEL				(1 << 21)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
@@ -114,28 +118,15 @@ enum {
 	CGROUP_NRS,
 };
 
-#ifdef CONFIG_MOTO_FUTEX_INHERIT
-struct locking_info {
-	struct task_struct *holder;
-	bool ux_contrib;
-};
-#endif
-
 /* Moto task struct */
 struct moto_task_struct {
 	int				ux_type;
 
-#ifdef CONFIG_MOTO_FUTEX_INHERIT
-	struct locking_info lkinfo;
-#endif
-
 	int				inherit_depth;
 	u64				inherit_start;
 
-#ifdef DEBUG_LOCK
-	u64				wait_start;
-	int             wait_prio;
-#endif
+	u64				boost_kernel_start;
+	int				boost_kernel_lock_depth;
 };
 
 /* global vars and functions */
@@ -159,7 +150,12 @@ extern void binder_ux_type_set(struct task_struct *task);
 extern void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue);
 extern bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name);
 extern bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name);
+extern void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settime_jiffies, char* lock_name, void* pointer);
 extern void register_vendor_comm_hooks(void);
+
+static inline bool is_debuggable(int type) {
+	return (moto_sched_debug & type) != 0;
+}
 
 static inline bool is_enabled(int type) {
 	return (moto_sched_enabled & type) != 0;
@@ -167,6 +163,11 @@ static inline bool is_enabled(int type) {
 
 static inline bool is_scene(int scene) {
 	return (moto_sched_scene & scene) != 0;
+}
+
+static inline bool is_heavy_scene(void) {
+	return (is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH))
+			|| (is_enabled(UX_ENABLE_BOOST) && is_scene(UX_SCENE_BOOST));
 }
 
 static inline struct moto_task_struct *get_moto_task_struct(struct task_struct *p)
