@@ -1191,6 +1191,22 @@ static struct of_device_id sc760x_charger_match_table[] = {
 };
 MODULE_DEVICE_TABLE(of, sc760x_charger_match_table);
 
+static void chip_enable_work_func(struct work_struct *work)
+{
+	struct sc760x_chip *sc = container_of(work,
+					struct sc760x_chip, chip_enable_work);
+	int ret = 0;
+
+	ret = sc760x_enable_chip(sc, true);
+	if (ret) {
+	    dev_err(sc->dev, "Failed to enable sc760x chip, ret=%d\n", ret);
+	    return;
+	}
+
+	schedule_delayed_work(&sc->charge_monitor_work,
+						msecs_to_jiffies(0));
+}
+
 static int sc760x_charger_probe(struct i2c_client *client,
                     const struct i2c_device_id *id)
 {
@@ -1285,16 +1301,10 @@ static int sc760x_charger_probe(struct i2c_client *client,
         goto err_init_device;
     }
 
-    ret = sc760x_enable_chip(sc, true);
-    if (ret) {
-        dev_err(dev, "Failed to enable sc760x chip, ret=%d\n", ret);
-        goto err_init_device;
-    }
-
     INIT_DELAYED_WORK(&sc->charge_monitor_work, charger_monitor_work_func);
+    INIT_WORK(&sc->chip_enable_work, chip_enable_work_func);
 
-    schedule_delayed_work(&sc->charge_monitor_work,
-						msecs_to_jiffies(0));
+    schedule_work(&sc->chip_enable_work);
 
     dev_err(sc->dev, "sc760x[%s] probe successfully!!!\n",
             sc->role == SC760X_MASTER ? "master" : "slave");

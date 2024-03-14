@@ -180,6 +180,7 @@ struct sc760x_chip {
     int sc760x_enable;
 
     struct delayed_work charge_monitor_work;
+    struct work_struct chip_enable_work;
 };
 
 #endif /* _SC760X_CHARGER_H */
