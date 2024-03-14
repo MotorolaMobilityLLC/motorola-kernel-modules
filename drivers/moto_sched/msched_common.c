@@ -65,9 +65,6 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		if (p->mm == NULL && p->prio == 100)
 			return true;
 
-		if (ux_type & UX_TYPE_SERVICEMANAGER && p->prio <= 120)
-			return true;
-
 		if (ux_type & UX_TYPE_NATIVESERVICE && p->prio < 120)
 			return true;
 
@@ -103,7 +100,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_ANIMATOR;
 	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI)) // Base feature: main & render thread of top app, launcher and top UI.
 		prio = UX_PRIO_TOPAPP;
-	else if (ux_type & UX_TYPE_SYSTEM_LOCK) // Base feature: systemserver important lock
+	else if (ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER)) // Base feature: systemserver important lock
 		prio = UX_PRIO_SYSTEM;
 	else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
 		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)
