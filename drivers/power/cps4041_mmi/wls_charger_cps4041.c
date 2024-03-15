@@ -1298,6 +1298,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	{
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_NEGO_POWER_READY");
 		cps_epp_icl_on();
+		cps_wls_set_status(WLC_TX_POWER_CHANGED);
 	}
 
 	//if (int_flag & RX_INT_PT) {
