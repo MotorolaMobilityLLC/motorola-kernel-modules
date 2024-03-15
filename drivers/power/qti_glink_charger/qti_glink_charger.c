@@ -793,6 +793,8 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 #if defined(FUELGUAGE_DUMP)
 	struct fg_dump fg_info;
 #endif
+	int prev_cid = -1;
+	int prev_lpd = 0;
 
 	rc = qti_charger_read(chg, OEM_PROP_CHG_INFO,
 				&info,
@@ -800,6 +802,8 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	if (rc)
 		return rc;
 
+	prev_cid = chg->lpd_info.lpd_cid;
+	prev_lpd = chg->lpd_info.lpd_present;
 	chg->lpd_info.lpd_cid = -1;
 	rc = qti_charger_read(chg, OEM_PROP_LPD_INFO,
 				&chg->lpd_info,
@@ -809,11 +813,30 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 		memset(&chg->lpd_info, 0, sizeof(struct lpd_info));
 		chg->lpd_info.lpd_cid = -1;
 	}
-	mmi_info(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
+
+	if ((prev_cid != -1 && chg->lpd_info.lpd_cid == -1) ||
+            (!prev_lpd && chg->lpd_info.lpd_present)) {
+		bm_ulog_enable_log(true);
+		mmi_err(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
 			chg->lpd_info.lpd_present,
 			chg->lpd_info.lpd_rsbu1,
 			chg->lpd_info.lpd_rsbu2,
 			chg->lpd_info.lpd_cid);
+	} else if ((chg->lpd_info.lpd_cid != -1 && prev_cid == -1) ||
+		   (!chg->lpd_info.lpd_present && prev_lpd)) {
+		bm_ulog_enable_log(false);
+		mmi_warn(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
+			chg->lpd_info.lpd_present,
+			chg->lpd_info.lpd_rsbu1,
+			chg->lpd_info.lpd_rsbu2,
+			chg->lpd_info.lpd_cid);
+	} else {
+		mmi_info(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
+			chg->lpd_info.lpd_present,
+			chg->lpd_info.lpd_rsbu1,
+			chg->lpd_info.lpd_rsbu2,
+			chg->lpd_info.lpd_cid);
+	}
 
 	chg->chg_info.chrg_mv = info.chrg_uv / 1000;
 	chg->chg_info.chrg_ma = info.chrg_ua / 1000;
@@ -3348,6 +3371,7 @@ static int qti_charger_init(struct qti_charger *chg)
 	driver->is_charge_halt = qti_charger_is_charge_halt;
 	driver->set_constraint = qti_charger_set_constraint;
 	chg->driver = driver;
+	chg->lpd_info.lpd_cid = -1;
 
 	/* register driver to mmi charger */
 	rc = mmi_register_charger_driver(driver);
