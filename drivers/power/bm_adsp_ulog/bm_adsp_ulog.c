@@ -81,6 +81,7 @@ struct bm_ulog_dev {
 	void				*ipc_log;
 	struct task_struct		*bm_ulog_task;
 	char				ulog_buffer[MAX_ULOG_READ_BUFFER_SIZE];
+	bool				ulog_enabled;
 };
 
 static struct bm_ulog_dev *g_bmdev = NULL;
@@ -306,22 +307,33 @@ static int bm_ulog_print_buffer(struct bm_ulog_dev *bmdev, u32 size)
 {
 	int i;
 	int header = 0;
+	int lines = 0;
+	int line_len = 0;
 
-	for (i = 0; i < size; i++) {
+	for (i = 0; i < size && header < size; i++) {
+		line_len = 0;
 		if (bmdev->ulog_buffer[i] == '\x0a') {
 			bmdev->ulog_buffer[i] = '\0';
-			bm_dbg(bmdev, "%s\n", &bmdev->ulog_buffer[header]);
-			header = i + 1;
+			if (header < i)
+				line_len = i - header;
 		} else if (bmdev->ulog_buffer[i] == '\0') {
-			if (header < i) {
+			if (header < i)
+				line_len = i - header;
+			size = i;
+		}
+
+		if (line_len > 0) {
+			if (bmdev->ulog_enabled)
+				bm_info(bmdev, "%s\n", &bmdev->ulog_buffer[header]);
+			else
 				bm_dbg(bmdev, "%s\n", &bmdev->ulog_buffer[header]);
-			}
-			break;
+			header = i + 1;
+			lines++;
 		}
 	}
-	if (i > 0)
-		pr_info("recv len=%d\n", i);
-	return i;
+	if (lines > 0)
+		pr_info("recv len=%d, lines=%d\n", i, lines);
+	return lines > 0? i : 0;
 }
 
 static int bm_ulog_print_init_log(u32 size)
@@ -436,6 +448,24 @@ int bm_ulog_print_mask_log(enum bm_ulog_category_bitmap categories,
 }
 EXPORT_SYMBOL(bm_ulog_print_mask_log);
 
+int bm_ulog_enable_log(bool enable)
+{
+	struct bm_ulog_dev *bmdev = g_bmdev;
+
+	if (!bmdev) {
+		pr_err("BM ulog has not initialized yet\n");
+		return -ENODEV;
+	}
+
+	if (bmdev->ulog_enabled != enable) {
+		bmdev->ulog_enabled = enable;
+		pr_info("BM ulog is %s\n", enable? "enabled":"disabled");
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(bm_ulog_enable_log);
+
 #ifdef CONFIG_DEBUG_FS
 static int bm_ulog_dump_show(struct seq_file *s, void *unused)
 {
@@ -509,7 +539,8 @@ static int bm_ulog_kthread(void *param)
 
 	bm_info(bmdev, "bm ulog kthread start\n");
 	do {
-		if (bmdev->debug_enabled && *bmdev->debug_enabled) {
+		if (bmdev->ulog_enabled ||
+		    (bmdev->debug_enabled && *bmdev->debug_enabled)) {
 			bm_ulog_request_log(bmdev, MAX_ULOG_READ_BUFFER_SIZE);
 			read_count = bm_ulog_print_buffer(bmdev, MAX_ULOG_READ_BUFFER_SIZE);
 
