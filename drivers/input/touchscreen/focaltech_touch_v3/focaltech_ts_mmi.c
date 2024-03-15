@@ -75,6 +75,10 @@ static ssize_t fts_stowed_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t fts_pitch_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t fts_pitch_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
@@ -85,6 +89,8 @@ static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_sample_show, fts_sample_store);
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	fts_stowed_show, fts_stowed_store);
+static DEVICE_ATTR(pitch, (S_IWUSR | S_IWGRP | S_IRUGO),
+	fts_pitch_show, fts_pitch_store);
 
 #define ADD_ATTR(name) { \
 	if (idx < MAX_ATTRS_ENTRIES)  { \
@@ -843,6 +849,14 @@ exit:
 		}
 	}
 
+	if (pdata->pitch_ctrl && ts_data->get_mode.pitch_mode) {
+		ret = fts_write_reg(FTS_REG_LIC_VER, ts_data->get_mode.pitch_mode);
+		if (ret >= 0) {
+			ts_data->set_mode.pitch_mode = ts_data->get_mode.pitch_mode;
+			FTS_INFO("Success to set pitch mode = %d\n", ts_data->get_mode.pitch_mode);
+		}
+	}
+
 	if (pdata->interpolation_ctrl && ts_data->get_mode.interpolation) {
 		ret = fts_write_reg(FTS_CMD_REPORT_RATE_ADDR, ts_data->get_mode.report_rate_mode);
 		if (ret >= 0) {
@@ -1065,6 +1079,91 @@ exit:
 	return size;
 }
 
+static ssize_t fts_pitch_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data;
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	FTS_INFO("Pitch mode state = %d\n", ts_data->set_mode.pitch_mode);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", ts_data->set_mode.pitch_mode);
+}
+
+static ssize_t fts_pitch_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned long value = 0;
+	int ret = 0;
+	struct fts_ts_data *ts_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	FTS_FUNC_ENTER();
+
+	mutex_lock(&ts_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		dev_err(dev, "pitch mode: Failed to convert value\n");
+		mutex_unlock(&ts_data->mode_lock);
+		FTS_FUNC_EXIT();
+		return -EINVAL;
+	}
+	switch (value) {
+		case 20:
+			dev_info(dev, "%s: touch default pitch config\n", __func__);
+			ts_data->get_mode.pitch_mode = 0;
+			break;
+		case 21:
+			dev_info(dev, "%s: touch 1 pitch config\n", __func__);
+			ts_data->get_mode.pitch_mode = 1;
+			break;
+		case 22:
+			dev_info(dev, "%s: touch 2 pitch config\n", __func__);
+			ts_data->get_mode.pitch_mode = 2;
+			break;
+		case 23:
+			dev_info(dev, "%s: touch 3 pitch config\n", __func__);
+			ts_data->get_mode.pitch_mode = 3;
+			break;
+		case 24:
+			dev_info(dev, "%s: touch 4 pitch config\n", __func__);
+			ts_data->get_mode.pitch_mode = 4;
+			break;
+		default:
+			dev_info(dev, "%s: unsupport pitch mode type, value = %lu\n", __func__, value);
+			mutex_unlock(&ts_data->mode_lock);
+			FTS_FUNC_EXIT();
+			return -EINVAL;
+	}
+
+	if (ts_data->set_mode.pitch_mode == ts_data->get_mode.pitch_mode) {
+		FTS_INFO("The value = %d is same, so not to write", ts_data->get_mode.pitch_mode);
+		goto exit;
+	}
+
+	if (ts_data->power_disabled == 1) {
+		FTS_INFO("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	ret = fts_write_reg(FTS_REG_LIC_VER, ts_data->get_mode.pitch_mode);
+	if(ret < 0){
+		FTS_ERROR("Failed to set pitch mode\n");
+		goto exit;
+	}
+
+	ts_data->set_mode.pitch_mode = ts_data->get_mode.pitch_mode;
+	msleep(20);
+
+	FTS_INFO("Success to set pitch mode = %d\n", ts_data->get_mode.pitch_mode);
+exit:
+	mutex_unlock(&ts_data->mode_lock);
+	FTS_FUNC_EXIT();
+	return size;
+}
+
 static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_mmi_pocket_mode_show, fts_mmi_pocket_mode_store);
 
@@ -1095,6 +1194,9 @@ static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_g
 
 	if (pdata->stowed_mode_ctrl)
 		ADD_ATTR(stowed);
+
+	if (pdata->pitch_ctrl)
+		ADD_ATTR(pitch);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;

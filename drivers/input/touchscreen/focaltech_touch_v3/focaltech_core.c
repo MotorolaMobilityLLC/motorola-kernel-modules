@@ -2014,6 +2014,10 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 	if (pdata->stowed_mode_ctrl)
 		FTS_INFO("Support focaltech touch stowed mode");
 
+	pdata->pitch_ctrl = of_property_read_bool(np,
+					"focaltech,pitch-ctrl");
+	if (pdata->pitch_ctrl)
+		FTS_INFO("Support focaltech pitch mode");
 
     FTS_FUNC_EXIT();
     return 0;

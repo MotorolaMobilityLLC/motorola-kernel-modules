@@ -162,6 +162,7 @@ struct fts_ts_platform_data {
     bool report_rate_ctrl;
     bool sample_ctrl;
     bool stowed_mode_ctrl;
+    bool pitch_ctrl;
 };
 
 struct ts_event {
@@ -203,6 +204,7 @@ struct fts_mode_info {
     int report_rate_mode;
     int edge_mode[2];
     int stowed;
+    int pitch_mode;
 };
 struct fts_ts_data {
     struct i2c_client *client;
