@@ -771,7 +771,7 @@ static ssize_t goodix_ts_pitch_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size)
 {
 	int ret = 0;
-	unsigned long value = 0;
+	unsigned int args[2] = { 0 };
 	struct platform_device *pdev;
 	struct goodix_ts_core *core_data;
 
@@ -779,13 +779,13 @@ static ssize_t goodix_ts_pitch_store(struct device *dev,
 	GET_GOODIX_DATA(dev);
 
 	mutex_lock(&core_data->mode_lock);
-	ret = kstrtoul(buf, 0, &value);
+	ret = sscanf(buf, "%d %d", &args[0], &args[1]);
 	if (ret < 0) {
 		ts_err("pitch mode: Failed to convert value\n");
 		mutex_unlock(&core_data->mode_lock);
 		return -EINVAL;
 	}
-	switch (value) {
+	switch (args[0]) {
 		case 20:
 			ts_info("touch default cfg value\n");
 			core_data->get_mode.pitch_mode = 0x00;
@@ -807,7 +807,7 @@ static ssize_t goodix_ts_pitch_store(struct device *dev,
 			core_data->get_mode.pitch_mode = 0x80;
 			break;
 		default:
-			ts_info("unsupport pitch mode type, value = %lu\n", value);
+			ts_info("unsupport pitch mode type, value = %u\n", args[0]);
 			mutex_unlock(&core_data->mode_lock);
 			return -EINVAL;
 	}
