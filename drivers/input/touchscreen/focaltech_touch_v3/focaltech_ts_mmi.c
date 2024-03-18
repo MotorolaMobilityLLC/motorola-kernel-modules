@@ -1093,7 +1093,7 @@ static ssize_t fts_pitch_show(struct device *dev,
 static ssize_t fts_pitch_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size)
 {
-	unsigned long value = 0;
+	unsigned int args[2] = { 0 };
 	int ret = 0;
 	struct fts_ts_data *ts_data;
 
@@ -1103,14 +1103,14 @@ static ssize_t fts_pitch_store(struct device *dev,
 	FTS_FUNC_ENTER();
 
 	mutex_lock(&ts_data->mode_lock);
-	ret = kstrtoul(buf, 0, &value);
+	ret = sscanf(buf, "%d %d", &args[0], &args[1]);
 	if (ret < 0) {
 		dev_err(dev, "pitch mode: Failed to convert value\n");
 		mutex_unlock(&ts_data->mode_lock);
 		FTS_FUNC_EXIT();
 		return -EINVAL;
 	}
-	switch (value) {
+	switch (args[0]) {
 		case 20:
 			dev_info(dev, "%s: touch default pitch config\n", __func__);
 			ts_data->get_mode.pitch_mode = 0;
@@ -1132,7 +1132,7 @@ static ssize_t fts_pitch_store(struct device *dev,
 			ts_data->get_mode.pitch_mode = 4;
 			break;
 		default:
-			dev_info(dev, "%s: unsupport pitch mode type, value = %lu\n", __func__, value);
+			dev_info(dev, "%s: unsupport pitch mode type, value = %u\n", __func__, args[0]);
 			mutex_unlock(&ts_data->mode_lock);
 			FTS_FUNC_EXIT();
 			return -EINVAL;
