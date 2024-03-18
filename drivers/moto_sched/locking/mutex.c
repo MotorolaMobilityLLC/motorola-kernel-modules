@@ -45,7 +45,7 @@ static void mutex_list_add_ux(struct list_head *entry, struct list_head *head)
 	list_for_each_safe(pos, n, head) {
 		waiter = list_entry(pos, struct mutex_waiter, list);
 		if (waiter && waiter->task && (waiter->task->prio > MAX_RT_PRIO) && prio > task_get_mvp_prio(waiter->task, true)) {
-			cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 					"mutex_list_add_ux %d  prio=%d(%d)index=%d\n", current->pid, prio, task_get_mvp_prio(waiter->task, true), index);
 			list_add(entry, waiter->list.prev);
 			return;
@@ -96,7 +96,7 @@ static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock
 
 	owner_ts = __mutex_owner(lock);
 	if (!owner_ts) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 				"mutex owner not found!!! =%d\n", current->pid);
 		return;
 	}
@@ -105,7 +105,7 @@ static void android_vh_mutex_wait_start_handler(void *unused, struct mutex *lock
 	boost = lock_inherit_ux_type(owner_ts, current, "mutex_wait");
 
 	if (boost && (__mutex_owner(lock) != owner_ts)) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"mutex owner has been changed owner=%p(%p)\n", __mutex_owner(lock), owner_ts);
 		lock_clear_inherited_ux_type(owner_ts, "mutex_wait");
 	}
