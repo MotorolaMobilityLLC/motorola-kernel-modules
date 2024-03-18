@@ -152,9 +152,9 @@ static ssize_t proc_debug_read(struct file *file, char __user *buf,
 	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_sched_debug);
 	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d lock=%d binder=%d \n",
 			moto_sched_debug,
-			is_debuggable(DEBUG_TYPE_BASE),
-			is_debuggable(DEBUG_TYPE_LOCK),
-			is_debuggable(DEBUG_TYPE_BINDER));
+			is_debuggable(DEBUG_BASE),
+			is_debuggable(DEBUG_LOCK),
+			is_debuggable(DEBUG_BINDER));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }

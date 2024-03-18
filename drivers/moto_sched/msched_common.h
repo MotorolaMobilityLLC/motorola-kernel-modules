@@ -46,9 +46,9 @@ do {										\
 #define sched_debug(fmt, ...) \
 		pr_info("[moto_sched][%s]"fmt, __func__, ##__VA_ARGS__)
 
-#define DEBUG_TYPE_BASE				(1 << 0)
-#define DEBUG_TYPE_LOCK				(1 << 1)
-#define DEBUG_TYPE_BINDER			(1 << 2)
+#define DEBUG_BASE					(1 << 0)
+#define DEBUG_LOCK					(1 << 1)
+#define DEBUG_BINDER				(1 << 2)
 
 #define UX_ENABLE_BASE				(1 << 0)
 #define UX_ENABLE_INTERACTION		(1 << 1)
