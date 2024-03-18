@@ -104,7 +104,7 @@ bool rwsem_list_add(struct task_struct *tsk, struct list_head *entry, struct lis
 		list_for_each_safe(pos, n, head) {
 			waiter = list_entry(pos, struct rwsem_waiter, list);
 			if (waiter && waiter->task->prio > MAX_RT_PRIO && prio > task_get_mvp_prio(waiter->task, true)) {
-				cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+				cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 					"rwsem_list_add %d prio=%d(%d)index=%d\n", tsk->pid, prio, task_get_mvp_prio(waiter->task, true), index);
 				list_add(entry, waiter->list.prev);
 				return true;
@@ -150,7 +150,7 @@ inline bool test_wait_timeout(struct rw_semaphore *sem)
 
 	ret = time_is_before_jiffies(timeout + msecs_to_jiffies(WAIT_TIMEOUT));
 	if (ret) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"rwsem wait timeout [%s$%d]: task=%s, pid=%d, tgid=%d, prio=%d, ux=%d, timeout=%lu(0x%lx), t_m=%lu(0x%lx), jiffies=%lu(0x%lx)\n",
 			__func__, __LINE__,
 			task->comm, task->pid, task->tgid, task->prio, task_get_ux_type(task),
@@ -201,7 +201,7 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 	}
 
 	if (is_rwsem_reader_owned(sem)) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"is_rwsem_reader_owned, ignore! owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
 			atomic_long_read(&sem->count));
 		return;
@@ -209,7 +209,7 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 
 	owner_ts = rwsem_owner(sem);
 	if (!owner_ts) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"rwsem can't find owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
 			atomic_long_read(&sem->count));
 		return;
@@ -219,7 +219,7 @@ static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem
 	boost = lock_inherit_ux_type(owner_ts, current, "rwsem_wake");
 
 	if (boost && (atomic_long_read(&sem->owner) != owner || is_rwsem_reader_owned(sem))) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"rwsem owner status has been changed owner=%lx(%lx)\n",
 			atomic_long_read(&sem->owner), owner);
 		lock_clear_inherited_ux_type(owner_ts, "rwsem_wake_finish");

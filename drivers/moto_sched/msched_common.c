@@ -59,15 +59,11 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		return true;
 	}
 
+	if (is_enabled(UX_ENABLE_KERNEL) && (ux_type & UX_TYPE_KERNEL))
+		return true;
+
 	if (is_heavy_scene()) {
-		// Boost all kernel threads with prio == 100
-		if (p->mm == NULL && p->prio == 100)
-			return true;
-
-		if ((ux_type & UX_TYPE_KERNEL) && is_enabled(UX_ENABLE_KERNEL))
-			return true;
-
-		if (ux_type & UX_TYPE_NATIVESERVICE && p->prio < 120)
+		if (ux_type & UX_TYPE_NATIVESERVICE && p->prio <= 120)
 			return true;
 
 		if (p->tgid == global_launcher_tgid
@@ -115,7 +111,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if (task_in_ux_related_group(p))
 		prio = UX_PRIO_OTHER;
 
-	cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d mvp_prio=%d\n",
 		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, prio);
 
@@ -124,15 +120,15 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 EXPORT_SYMBOL(task_get_mvp_prio);
 
 #define TOPAPP_MVP_LIMIT		120000000U	// 120ms
-#define TOPAPP_MVP_LIMIT_BOOST	240000000U	// 240ms
+#define TOPAPP_MVP_LIMIT_BOOST	3000000000U	// 3000ms
 #define SYSTEM_MVP_LIMIT		36000000U	// 36ms
-#define SYSTEM_MVP_LIMIT_BOOST	120000000U	// 120ms
+#define SYSTEM_MVP_LIMIT_BOOST	3000000000U	// 3000ms
 #define RTG_MVP_LIMIT			24000000U	// 24ms
-#define RTG_MVP_LIMIT_BOOST		120000000U	// 120ms
+#define RTG_MVP_LIMIT_BOOST		3000000000U	// 3000ms
 #define KSWAPD_LIMIT			3000000000U	// 3000ms
 #define CAMERA_LIMIT			3000000000U	// 3000ms
 #define DEF_MVP_LIMIT			12000000U	// 12ms
-#define DEF_MVP_LIMIT_BOOST		24000000U	// 24ms
+#define DEF_MVP_LIMIT_BOOST		3000000000U	// 3000ms
 
 static inline bool task_in_top_related_group(struct task_struct *p) {
 	return p->tgid == global_launcher_tgid
@@ -141,7 +137,8 @@ static inline bool task_in_top_related_group(struct task_struct *p) {
 }
 
 unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
-	bool boost = is_heavy_scene();
+	bool boost = is_scene(UX_SCENE_LAUNCH)
+			|| (is_enabled(UX_ENABLE_BOOST) && is_scene(UX_SCENE_BOOST));
 
 	if (mvp_prio == UX_PRIO_TOPAPP)
 		return boost ? TOPAPP_MVP_LIMIT_BOOST : TOPAPP_MVP_LIMIT;
@@ -179,7 +176,7 @@ void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue) {
 		struct moto_task_struct *wts = get_moto_task_struct(task);
 		if (task_has_ux_type(task, UX_TYPE_INHERIT_LOCK)) {
 			if (jiffies_to_nsecs(jiffies) - wts->inherit_start > MAX_INHERIT_GRAN) {
-				cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+				cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 						"lock_clear_inherited_ux_type %s  %d  ux_type %d  cost=%llu\n", "dequeue task",
 						task->pid, wts->ux_type, (jiffies_to_nsecs(jiffies) - wts->inherit_start) / 1000000U);
 				task_clr_inherit_type(task);
@@ -187,7 +184,7 @@ void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue) {
 		}
 		if (task_has_ux_type(task, UX_TYPE_KERNEL)) {
 			if (jiffies_to_nsecs(jiffies) - wts->boost_kernel_start > MAX_INHERIT_GRAN) {
-				cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+				cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 						"lock_clear kernel boost %s  %d  ux_type %d  cost=%llu\n", "dequeue task",
 						task->pid, wts->ux_type, (jiffies_to_nsecs(jiffies) - wts->inherit_start) / 1000000U);
 				wts->boost_kernel_lock_depth = 0;
@@ -207,7 +204,7 @@ void binder_ux_type_set(struct task_struct *task) {
 	else
 		task_clr_ux_type(task, UX_TYPE_LOW_LATENCY_BINDER);
 
-	cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"current (tgid=%d leader_prio=%d) task (tgid=%d leader_prio=%d) ux_type=%d\n",
 			current->tgid, current->group_leader->prio, task->tgid, task->group_leader->prio, task_get_ux_type(task));
 }
@@ -220,13 +217,13 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 	struct rq_flags flags;
 
 	if (!owner || !waiter) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"lock_inherit_ux_type empty!! %d \n", 0);
 		return false;
 	}
 
 	if (task_get_ux_depth(waiter) >= UX_DEPTH_MAX) {
-		cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"lock_inherit_ux_type max depth reached %d->%d\n",
 			waiter->pid, owner->pid);
 		return false;
@@ -239,7 +236,7 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 
 	task_set_ux_inherit_prio(owner, task_get_ux_depth(waiter) + 1);
 
-	cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"lock_inherit_ux_type %s %d -> %d   ux_type %d -> %d  depth=%d\n",
 			lock_name, waiter->pid, owner->pid, waiter_wts->ux_type, owner_wts->ux_type,
 			waiter_wts->inherit_depth);
@@ -263,7 +260,7 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 	rq = task_rq_lock(owner, &flags);
 
 	owner_wts = get_moto_task_struct(owner);
-	cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"lock_clear_inherited_ux_type %s  %d  ux_type %d cost=%llu\n", lock_name,
 			owner->pid, owner_wts->ux_type,
 			(jiffies_to_nsecs(jiffies) - owner_wts->inherit_start) / 1000000U);
@@ -278,7 +275,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 	if (unlikely(!locking_opt_enable()))
 		return;
 
-	if (unlikely(is_debuggable(DEBUG_TYPE_LOCK))) {
+	if (unlikely(is_debuggable(DEBUG_LOCK))) {
 		if (settime_jiffies == 0) {
 			if (waiter_wts->boost_kernel_lock_depth == 0) {
 				printk(KERN_ERR "LOCK_PERF(%s)kernel boost mismatch(%d)!!", lock_name, waiter_wts->boost_kernel_lock_depth);
@@ -315,7 +312,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 	} else {
 		waiter_wts->boost_kernel_lock_depth--;
 		if (waiter_wts->boost_kernel_lock_depth < 0) {
-			cond_trace_printk(unlikely(is_debuggable(DEBUG_TYPE_BASE)),
+			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 					"(%s)kernel boost mismatch(%d)!!", lock_name, waiter_wts->boost_kernel_lock_depth);
 			waiter_wts->boost_kernel_lock_depth = 0;
 		}
