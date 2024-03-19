@@ -1,0 +1,12 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+	ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/nu2115_mmi \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply
+
+obj-m += nu2115_mmi.o
