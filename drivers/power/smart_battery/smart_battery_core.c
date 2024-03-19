@@ -24,6 +24,7 @@ module_param(debug_enabled, bool, 0600);
 MODULE_PARM_DESC(debug_enabled, "Enable debug for MMI DISCRETE CHARGER driver");
 
 static struct mmi_smart_battery *this_chip = NULL;
+static int smart_batt_soc100_forward(struct mmi_smart_battery *chip, int rsoc);
 
 #ifndef MAX
 #define MAX(X, Y) ((X) > (Y) ? (X) : (Y))
@@ -297,10 +298,11 @@ static int batt_get_prop(struct power_supply *psy,
 			mmi_info(chip,"Force UISOC energy to empty(0)\n");
 		}
 
-		if(chip->uisoc == -EINVAL)
+		if(chip->uisoc == -EINVAL) {
 			val->intval = smart_batt_get_capacity(chip);
-		else
-			val->intval = chip->uisoc;
+			chip->uisoc = smart_batt_soc100_forward(chip, val->intval);
+		}
+		val->intval = chip->uisoc;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		val->intval = mmi_get_batt_capacity_level(chip);
@@ -613,6 +615,8 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 }
 static void smart_battery_init_data(struct mmi_smart_battery *chip)
 {
+	int rsoc;
+
 	smart_batt_get_voltage_now(chip);
 	smart_batt_get_current_now(chip);
 	smart_batt_get_temperature(chip);
@@ -620,8 +624,11 @@ static void smart_battery_init_data(struct mmi_smart_battery *chip)
 	smart_batt_get_charge_full_design(chip);
 	smart_batt_get_charge_full(chip);
 	smart_batt_get_cycle_count(chip);
-	chip->uisoc = smart_batt_get_capacity(chip);
+	rsoc = smart_batt_get_capacity(chip);
+	chip->uisoc = smart_batt_soc100_forward(chip, rsoc);
 	smart_batt_get_charge_counter(chip);
+
+	mmi_info(chip, "%s end\n", __func__);
 }
 
 static ssize_t state_of_health_show(struct device *dev,
