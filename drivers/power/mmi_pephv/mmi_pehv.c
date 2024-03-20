@@ -37,7 +37,7 @@ int pehv_get_log_level(void)
 #define PEHV_VTA_VAR_MIN	103	/* % */
 #define PEHV_ITA_TRACKING_GAP	150	/* mA */
 #define PEHV_DVCHG_VBUSALM_GAP	100	/* mV */
-#define PEHV_DVCHG_STARTUP_CONVERT_RATIO	210	/* % */
+#define PEHV_DVCHG_STARTUP_CONVERT_RATIO	220	/* % */
 #define PEHV_DVCHG_CHARGING_CONVERT_RATIO	202	/* % */
 #define PEHV_VBUSOVP_RATIO	110
 #define PEHV_IBUSOCP_RATIO	110
