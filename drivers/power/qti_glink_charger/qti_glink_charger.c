@@ -3734,7 +3734,6 @@ static int qti_charger_parse_dt(struct qti_charger *chg)
 	if (!chg->thermal_primary_levels)
 		return -ENOMEM;
 
-	chg->thermal_primary_levels[0] = chg->profile_info.max_fcc_ua;
 	rc = of_property_read_u32_array(node, "mmi,thermal-primary-mitigation",
 						&chg->thermal_primary_levels[1], len);
 	if (rc < 0) {
@@ -3743,6 +3742,7 @@ static int qti_charger_parse_dt(struct qti_charger *chg)
 	}
 	chg->num_thermal_primary_levels = len;
 	chg->thermal_primary_fcc_ua = chg->profile_info.max_fcc_ua;
+	chg->thermal_primary_levels[0] = chg->thermal_primary_levels[1];
 
 	pr_info("Parse mmi,thermal-primary-mitigation successfully, num_primary_levels %d\n", chg->num_thermal_primary_levels);
 
@@ -3778,7 +3778,6 @@ static int qti_charger_parse_dt(struct qti_charger *chg)
 	if (!chg->thermal_secondary_levels)
 		return -ENOMEM;
 
-	chg->thermal_secondary_levels[0] = chg->profile_info.max_fcc_ua;
 	rc = of_property_read_u32_array(node, "mmi,thermal-secondary-mitigation",
 						&chg->thermal_secondary_levels[1], len);
 	if (rc < 0) {
@@ -3787,6 +3786,7 @@ static int qti_charger_parse_dt(struct qti_charger *chg)
 	}
 	chg->num_thermal_secondary_levels = len;
 	chg->thermal_secondary_fcc_ua = chg->profile_info.max_fcc_ua;
+	chg->thermal_secondary_levels[0] = chg->thermal_secondary_levels[1];
 
 	pr_info("Parse mmi,thermal-secondary-mitigation successfully, num_secondary_levels %d\n", chg->num_thermal_secondary_levels);
 	return 0;
