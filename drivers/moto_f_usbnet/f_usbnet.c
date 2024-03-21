@@ -262,6 +262,16 @@ static int ether_queue_out(struct usb_request *req ,
 struct usb_request *usb_get_recv_request(struct usbnet_context *context);
 static void defer_kevent(struct usbnet_context *context, int flag);
 static void eth_work(struct work_struct *work);
+
+#ifdef CONFIG_MOTO_USBNET_DEBUG
+static void dump_hex(char *buf, unsigned len) {
+	unsigned i;
+	printk(KERN_CONT"usbnet %s,%d: ", current->comm, len);
+	for (i = 0; i < len; i++)
+		printk(KERN_CONT"%02x", *(buf+i));
+}
+#endif
+
 static void rx_fill(struct usbnet_context *context)
 {
 	struct usb_request	*req;
@@ -494,7 +504,9 @@ static netdev_tx_t usb_ether_xmit(struct sk_buff *skb, struct net_device *dev)
 	req->context = skb;
 	req->buf = skb->data;
 	req->length = len;
-
+#ifdef CONFIG_MOTO_USBNET_DEBUG
+	dump_hex((char *)req->buf, len);
+#endif
 	rc = usb_ep_queue(context->bulk_in, req, GFP_KERNEL);
 	if (rc != 0) {
 		spin_lock_irqsave(&context->lock, flags);
@@ -507,7 +519,9 @@ static netdev_tx_t usb_ether_xmit(struct sk_buff *skb, struct net_device *dev)
 		USBNETDBG(context,
 			  "%s: could not queue tx request\n", __func__);
 	}
-
+#ifdef CONFIG_MOTO_USBNET_DEBUG
+	pr_warn("usb_ep_queue done\n");
+#endif
 	return NETDEV_TX_OK;
 }
 
