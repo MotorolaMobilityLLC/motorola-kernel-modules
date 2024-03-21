@@ -67,6 +67,9 @@ MOTO_WLS_AUTH_T motoauth;
 #define KERNEL_POWER_OFF_CHARGING_BOOT 8
 #define LOW_POWER_OFF_CHARGING_BOOT 9
 
+#define VBUS_VALID_MV 4100 //If vbus >= 4.1V,the vbus is valid.
+#define CPS_CHIP_ID 0x4038
+
 struct cps_wls_chrg_chip *chip = NULL;
 static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
@@ -651,6 +654,7 @@ static int cps_get_bat_info(enum power_supply_property property);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
+static int cps_get_vbus(void);
 
 static int cps_wls_l_write_reg(int reg, int value)
 {
@@ -2935,7 +2939,12 @@ static bool cps_wls_query_typec_attached_state(void)
 }
 #endif /* CONFIG_MOTO_CHANNEL_SWITCH */
 #endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 static void cps_wls_fw_set_boost(bool val)
+#else
+static bool cps_wls_fw_set_boost(bool val)
+#endif
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
@@ -2965,20 +2974,48 @@ static void cps_wls_fw_set_boost(bool val)
 		}
 		otg_status = val;
 	}
-
 #else
 	/* Assume if we turned the boost on we want to stay awake */
 	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, !!val);
 #endif /* CONFIG_MOTO_CHANNEL_SWITCH */
 #else
-	/* Assume if we turned the boost on we want to stay awake */
-	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, !!val);
+	int ret = 0;
+	int vbus = 0;
+	struct charger_device *chg_psy = NULL;
+
+	chg_psy = get_charger_by_name("primary_chg");
+	if (chg_psy) {
+			cps_wls_log(CPS_LOG_ERR, "%s get chg_psy\n", __func__);
+	} else {
+		cps_wls_log(CPS_LOG_ERR, "%s Couldn't get chg_psy\n", __func__);
+		return false;
+	}
+
+	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FW_UPDATE, !!val);//Open OTG for wireless updata
+
+	ret = charger_dev_enable_otg(chg_psy, !!val);
+	if(ret < 0){
+		cps_wls_log(CPS_LOG_ERR, "%s set otg fail\n", __func__);
+		return false;
+	}
+
+	msleep(50);
+	vbus = cps_get_vbus();
+	if (val && vbus < VBUS_VALID_MV) {
+		cps_wls_log(CPS_LOG_ERR, "%s enable otg fail\n", __func__);
+		return false;
+	} else if(!val && vbus >= VBUS_VALID_MV) {
+		cps_wls_log(CPS_LOG_ERR, "%s disable otg fail\n", __func__);
+	}
 #endif
 	if(val) {
 		cps_wls_pm_set_awake(1);
 	} else {
 		cps_wls_pm_set_awake(0);
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+    return true;
+#endif
 }
 
 static int cps_get_bat_info(enum power_supply_property property)
@@ -3066,6 +3103,10 @@ static int wireless_fw_update(bool force)
 	const struct firmware *fw;
 	int cfg_buf_size;
 	int addr,ret = CPS_WLS_SUCCESS;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+	bool boost_enable = false;
+	int sys_mode = 0x00;
+#endif
 
 	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
@@ -3073,12 +3114,35 @@ static int wireless_fw_update(bool force)
 		return CPS_WLS_FAIL;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+	sys_mode = cps_wls_get_sys_mode();
+	if (chip->rx_ldo_on || sys_mode == SYS_MODE_RX) {
+		cps_wls_log(CPS_LOG_ERR,"%s skip fw update when in wireles charging\n", __func__);
+		return CPS_WLS_FAIL;
+	}
+	cps_wls_log(CPS_LOG_ERR,"%s cps_get_vbus = %d\n", __func__, cps_get_vbus());
+
+	chip->chip_id = cps_wls_get_chip_id();
+	if (chip->chip_id != CPS_WLS_FAIL) {
+		boost_enable = false; //Wired charger plugin or OTG output.
+	} else {
+		boost_enable = true;
+	}
+#endif
+
 	CPS_TX_MODE = true;
 	chip->fw_uploading = true;
 	//cps_wls_fw_set_boost(false);
 	//msleep(20);//20mss
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+	if (boost_enable) {
+		cps_wls_fw_set_boost(true);
+		msleep(100);//100ms
+	}
+#else
 	cps_wls_fw_set_boost(true);
 	msleep(100);//100ms
+#endif
 
 	firmware_buf = kzalloc(0x6000, GFP_KERNEL);  // 24K buffer
 	rc = firmware_request_nowarn(&fw, chip->wls_fw_name, chip->dev);
@@ -3096,6 +3160,17 @@ static int wireless_fw_update(bool force)
 	version = maj_ver << 16 | min_ver;
 
 	cps_wls_log(CPS_LOG_DEBG,"FW size: %zu version: %#x force update: %d\n", fw->size, version, force);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+    chip->chip_id = cps_wls_get_chip_id();
+	if (cps_get_vbus() < VBUS_VALID_MV || chip->chip_id == CPS_WLS_FAIL) {
+		cps_wls_log(CPS_LOG_ERR,
+			"Wireless fw update failed. Can't boost for CHIP,chip_id=0x%X\n", chip->chip_id);
+		ret = CPS_WLS_FAIL;
+		goto update_fail;
+	}
+    cps_wls_log(CPS_LOG_DEBG,"Wireless fw update chip_id=0x%X\n", chip->chip_id);
+#endif
 
 	result = cps_get_fw_revision(&fw_revision);
 	if (!force && version == fw_revision) {
@@ -3282,7 +3357,12 @@ free_bug:
         chip->chip_id = cps_wls_get_chip_id();
 #endif
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+	if (boost_enable)
+		cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
+#else
 	cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
+#endif
 	msleep(20);//20ms
 	kfree(firmware_buf);
 	release_firmware(fw);
@@ -3292,6 +3372,11 @@ free_bug:
 	return ret;
 
 update_fail:
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+	if (boost_enable)
+		cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
+	msleep(20);//20ms
+#endif
 	CPS_TX_MODE = false;
 	chip->fw_uploading = false;
     cps_wls_log(CPS_LOG_ERR, "[%s] ---- update fail\n", __func__);
@@ -4004,6 +4089,7 @@ static int wireless_en(void *input, bool en)
 
 static int wireless_get_chip_id(void *input)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 	int value = chip->chip_id;
 
 	if(0 != value)
@@ -4018,6 +4104,34 @@ static int wireless_get_chip_id(void *input)
 		chip->chip_id = value;
 		cps_wls_tx_enable(false);
 	}
+#else
+	int value = CPS_WLS_FAIL - 1;
+	int retry = 0;
+
+	if (chip->chip_id == CPS_CHIP_ID) {
+		return chip->chip_id;
+	}
+
+	chip->chip_id = cps_wls_get_chip_id();
+
+	if (chip->chip_id != CPS_WLS_FAIL) {
+		return chip->chip_id;
+	}
+
+	if (cps_get_vbus() < VBUS_VALID_MV / 2) {
+		cps_wls_fw_set_boost(true);
+		while (retry < 3 && value != CPS_CHIP_ID) {
+			msleep(50);
+			value = cps_wls_get_chip_id();
+			retry ++;
+		}
+		chip->chip_id = value;
+		cps_wls_fw_set_boost(false);
+	}
+
+	cps_wls_log(CPS_LOG_ERR,"%s chip_id=0x%X, retry=%d\n", __func__, chip->chip_id, retry);
+
+#endif
 	return value;
 }
 
