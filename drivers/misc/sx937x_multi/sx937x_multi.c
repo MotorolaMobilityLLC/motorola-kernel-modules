@@ -334,7 +334,28 @@ static int sx937x_global_variable_init(psx93XX_t this)
 static int manual_offset_calibration(psx937x_platform_data_t data)
 {
 	int ret = 0;
-	ret = sx937x_i2c_write_16bit(data->bus, SX937X_COMMAND, 0xE);
+	int temp = 0;
+	LOG_INFO("manual_offset_calibration\n");
+	sx937x_i2c_read_16bit(data->bus, SX937X_GENERAL_SETUP, &temp);
+	temp = temp & 0x000000FF;
+	if(data->default_reg_num >0)
+	{
+		LOG_INFO(" manual_offset_calibration default_reg_num >0\n");
+		for (int i = 0; i < data->default_reg_num; i++)
+		{
+			if (data->default_setup_reg[i].reg == SX937X_GENERAL_SETUP)
+			{
+				data->default_setup_reg[i].val = data->default_setup_reg[i].val & 0xFFFFFF00;
+				data->default_setup_reg[i].val = data->default_setup_reg[i].val | temp;
+			}
+			sx937x_i2c_write_16bit(data->bus, data->default_setup_reg[i].reg,data->default_setup_reg[i].val);
+			LOG_INFO("sx937 load default 0x8024 reg config download %s params set Reg 0x%x Value: 0x%x\n",
+				data->dbg_name,data->default_setup_reg[i].reg,data->default_setup_reg[i].val);
+		}
+	}
+	else {
+		ret = sx937x_i2c_write_16bit(data->bus, SX937X_COMMAND, 0xE);
+	}
 	return ret;
 
 }
@@ -1104,6 +1125,21 @@ static int sx937x_parse_dts(struct sx937x_platform_data *pdata, struct device *d
 			return -ENOMEM;
 	}
 
+	//load default reg 0X8024 config
+	of_property_read_u32(dNode,"Semtech,default_operation_num",&pdata->default_reg_num);
+	LOG_INFO("size of default operation num elements %d \n", pdata->default_reg_num);
+	if(pdata->default_reg_num >0)
+	{
+		pdata->default_setup_reg = devm_kzalloc(dev,sizeof(struct smtc_reg_data)*pdata->default_reg_num, GFP_KERNEL);
+		if (unlikely(pdata->default_setup_reg == NULL))
+		{
+			LOG_ERR("size of elements %d alloc error\n", pdata->default_reg_num);
+			return -ENOMEM;
+		}
+		// initialize the array
+		if (of_property_read_u32_array(dNode,"Semtech,flip_default_reg_init",(u32*)&(pdata->default_setup_reg[0]),sizeof(struct smtc_reg_data)*pdata->default_reg_num/sizeof(u32)))
+			return -ENOMEM;
+	}
 	//load param when flip near
 	of_property_read_u32(dNode,"Semtech,flip_operation_num",&pdata->flip_reg_num);
 	LOG_INFO("size of flip state elements %d \n", pdata->flip_reg_num);
