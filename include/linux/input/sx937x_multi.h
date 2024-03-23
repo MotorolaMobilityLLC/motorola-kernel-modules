@@ -420,10 +420,12 @@ typedef struct sx937x_platform_data
 	int i2c_reg_num;
         int flip_reg_num;
         int flip_far_reg_num;
+        int default_reg_num;
         int dev_id;
 	struct smtc_reg_data *pi2c_reg;
         struct smtc_reg_data *flip_near_reg;
 	struct smtc_reg_data *flip_far_reg;
+	struct smtc_reg_data *default_setup_reg;
 	int irq_gpio;
 	int ref_phase_a;
 	int ref_phase_b;
