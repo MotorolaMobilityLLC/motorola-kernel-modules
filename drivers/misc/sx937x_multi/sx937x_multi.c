@@ -335,13 +335,14 @@ static int manual_offset_calibration(psx937x_platform_data_t data)
 {
 	int ret = 0;
 	int temp = 0;
+	int i = 0;
 	LOG_INFO("manual_offset_calibration\n");
 	sx937x_i2c_read_16bit(data->bus, SX937X_GENERAL_SETUP, &temp);
 	temp = temp & 0x000000FF;
 	if(data->default_reg_num >0)
 	{
 		LOG_INFO(" manual_offset_calibration default_reg_num >0\n");
-		for (int i = 0; i < data->default_reg_num; i++)
+		for (i = 0; i < data->default_reg_num; i++)
 		{
 			if (data->default_setup_reg[i].reg == SX937X_GENERAL_SETUP)
 			{
