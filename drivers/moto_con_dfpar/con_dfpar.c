@@ -61,6 +61,10 @@
 
 #define NIP6_FMT "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x"
 
+static bool enable_track = false;
+module_param(enable_track, bool, 0644);
+MODULE_PARM_DESC(enable_track, "Enable DFPAR");
+
 static int dump_packet_rx = 0;
 #ifdef TRACK_OUT_PACKET
 static int dump_packet_tx = 0;
@@ -265,7 +269,7 @@ static struct nf_hook_ops con_dfpar_hook_ops[] __read_mostly = {
 #ifdef CONFIG_PM
 static void con_dfpar_suspend_resume_hook(void *data, const char *action, int val, bool start)
 {
-	if (con_dfpar_enable != 0) {
+	if (con_dfpar_enable != 0 || enable_track) {
 		if (!strcmp(action, "suspend_enter") && !start) {
 			pr_info("suspend exit, will dump the first received TCP/UDP packet");
 			dump_packet_rx = 1;
