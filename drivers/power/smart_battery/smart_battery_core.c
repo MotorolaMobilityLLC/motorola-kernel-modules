@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 #include <linux/device.h>
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
@@ -420,8 +421,10 @@ static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
 	if (chip->uisoc == -EINVAL)
 		return uisoc;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	if (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_FULL)
 		return 100;
+#endif
 
 	if (rsoc > chip->uisoc) {
 		/* SOC increased */
