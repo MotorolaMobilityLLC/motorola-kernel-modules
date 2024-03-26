@@ -749,7 +749,6 @@ static int cw_config_start_ic(struct cw_battery *cw_bat)
 	}
 
 	while (CW_TRUE) {
-		msleep(CW_SLEEP_100MS);
 		cw_read(cw_bat, REG_IC_STATE, &reg_val);
 		if (IC_READY_MARK == (reg_val & IC_READY_MARK))
 			break;
@@ -758,6 +757,7 @@ static int cw_config_start_ic(struct cw_battery *cw_bat)
 			cw2217_sleep(cw_bat);
 			return -1;
 		}
+		msleep(CW_SLEEP_100MS);
 	}
 
 	return 0;
