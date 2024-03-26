@@ -53,6 +53,7 @@ enum nu_work_mode {
 };
 
 #define NU2115_PART_NO 0x90
+#define NU2115A_PART_NO 0x40
 
 enum nu_device_id {
 	NU2115 = 0,
@@ -298,7 +299,7 @@ static int nu2115_get_part_no(struct nu2115_device *bq)
 	client.addr =  bq->nu2115_addr;
 	ret = i2c_smbus_read_byte_data(&client, NU2115_DEV_INFO);
 
-	if(ret == NU2115_PART_NO) {
+	if(ret == NU2115_PART_NO || ret == NU2115A_PART_NO) {
 		memset((void*)bq->model_name, 0x00, sizeof(bq->model_name));
 		if(!device_property_read_string(bq->dev, "nu2115-name", &nu2115_name)){
 			len = strlen(nu2115_name);
