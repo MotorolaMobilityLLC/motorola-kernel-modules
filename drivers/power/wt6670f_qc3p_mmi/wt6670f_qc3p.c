@@ -855,8 +855,11 @@ EXPORT_SYMBOL_GPL(wt6670f_en_hvdcp);
 
 int wt6670f_force_qc2_5V(void)
 {
-	int ret;
+	int ret = -1;
 	u16 data = 0x01;
+
+	if (_wt->chg_ready == false)
+		return ret;
 
 	if(1 == g_qc3p_id)
 		ret = mmi_wt6670f_write_word(_wt, 0x02, data);
@@ -874,8 +877,11 @@ EXPORT_SYMBOL_GPL(wt6670f_force_qc2_5V);
 
 int wt6670f_force_qc3_5V(void)
 {
-	int ret;
+	int ret = -1;
 	u16 data = 0x04;
+
+	if (_wt->chg_ready == false)
+		return ret;
 
 	if(1 == g_qc3p_id)
 		ret = mmi_wt6670f_write_word(_wt, 0x02, data);
@@ -1029,8 +1035,11 @@ EXPORT_SYMBOL_GPL(wt6670f_set_voltage);
 
 int wt6670f_set_volt_count(int count)
 {
-        int ret=0;
+        int ret = -1;
         u16 step = abs(count);
+
+	if (_wt->chg_ready == false)
+		return ret;
 
         pr_err("Set vbus with %d pulse!\n!", count);
 
