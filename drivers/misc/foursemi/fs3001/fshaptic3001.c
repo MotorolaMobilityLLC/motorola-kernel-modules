@@ -2096,7 +2096,7 @@ static int fs3001_haptic_f0_calibration(struct fs3001 *fs3001)
 		fs3001->f0_cali_data = ui_0x7B;
 		//set new osc
 		fs3001_haptic_upload_lra(fs3001, FS3001_F0_CALI);
-		fs3001_haptic_cont_get_f0(fs3001);//get new f0
+		//fs3001_haptic_cont_get_f0(fs3001);//get new f0
 		fs3001_haptic_play_mode(fs3001, FS3001_HAPTIC_STANDBY_MODE);
 		
 	}
