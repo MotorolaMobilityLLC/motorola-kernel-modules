@@ -183,6 +183,8 @@ __attribute__((unused)) static int sc760x_set_vfcchg(struct sc760x_chip *sc, int
 __attribute__((unused)) static int sc760x_set_batovp(struct sc760x_chip *sc, int volt);
 __attribute__((unused)) static int sc760x_set_adc_enable(struct sc760x_chip *sc, bool en);
 __attribute__((unused)) static int sc760x_set_power_limit_dis(struct sc760x_chip *sc, bool en);
+__attribute__((unused)) static int sc760x_set_adc_done_mask(struct sc760x_chip *sc, bool en);
+__attribute__((unused)) static int sc760x_reg_reset(struct sc760x_chip *sc);
 
 static int sc760x_get_state(struct sc760x_chip *sc,
 			     struct sc760x_state *state);
@@ -225,10 +227,9 @@ static int sc760x_enable_chip(struct sc760x_chip *sc, bool en)
 	}
 
 	if (en)
-	    msleep(2000);
-	sc->sc760x_enable = en;
+		msleep(2000);
 
-	if (sc->sc760x_enable) {
+	if (en) {
 
 		if (!sc->irq_enabled) {
 			//enable_irq_wake(sc->irq);
@@ -238,6 +239,7 @@ static int sc760x_enable_chip(struct sc760x_chip *sc, bool en)
 		ret = sc760x_init_device(sc);
 		if (ret < 0) {
 		    pr_info("init device failed(%d)\n", ret);
+		    goto put_pinctrl;
 		}
 	} else {
 		if (sc->irq_enabled) {
@@ -246,6 +248,9 @@ static int sc760x_enable_chip(struct sc760x_chip *sc, bool en)
 			sc->irq_enabled = false;
 		}
 	}
+
+	sc->sc760x_enable = en;
+
 	dev_err(sc->dev, "success to set %s state, sleep 2s\n", pinctrl_name);
 
 	ret = 0;
@@ -619,16 +624,19 @@ int sc760x_enable_charger(struct sc760x_chip *sc)
 
 	if (sc->user_chg_en == 0) {
 		pr_info("Skip enable charging for user request override\n");
-		return 0;
+		return -1;
 	}
 
 	if (sc->user_chg_susp > 0) {
 		pr_info("Skip enable charging for user chg suspend\n");
-		return 0;
+		return -1;
 	}
 
 	ret = sc760x_set_load_switch(sc, false);
-	pr_info("sc760x_enable_charger\n");
+	if (ret < 0)
+		pr_info("sc760x_enable_charger failed\n");
+	else
+		pr_info("sc760x_enable_charger success\n");
 	return ret;
 }
 
@@ -638,12 +646,14 @@ int sc760x_disable_charger(struct sc760x_chip *sc)
 
 	if (sc->user_chg_en > 0) {
 		pr_info("Skip disable charging for user request override\n");
-		return 0;
+		return -1;
 	}
 
 	ret = sc760x_set_load_switch(sc, true);
-
-	pr_info("sc760x_disable_charger\n");
+	if (ret < 0)
+		pr_info("sc760x_disable_charger failed\n");
+	else
+		pr_info("sc760x_disable_charger success\n");
 	return ret;
 }
 
@@ -1001,6 +1011,8 @@ static int sc760x_init_device(struct sc760x_chip *sc)
 {
     int ret = 0;
     int i;
+    int val = 0, desc = 0;
+    char buf[1024];
     struct {
         enum sc760x_fields field_id;
         int conv_data;
@@ -1028,26 +1040,35 @@ static int sc760x_init_device(struct sc760x_chip *sc)
         {TDIE_ALRM, sc->pdata->tdie_alm},
     };
 
-    ret = sc760x_reg_reset(sc);
+    ret = regmap_field_write(sc->rmap_fields[REG_RST], 1);
     if (ret < 0) {
         dev_err(sc->dev, "%s Failed to reset registers(%d)\n", __func__, ret);
     }
 
     for (i = 0; i < ARRAY_SIZE(props); i++) {
-        ret = sc760x_field_write(sc, props[i].field_id, props[i].conv_data);
+	ret = regmap_field_write(sc->rmap_fields[props[i].field_id], props[i].conv_data);
     }
 
-    ret = sc760x_set_adc_enable(sc, true);
+    ret = regmap_field_write(sc->rmap_fields[ADC_EN], 1);
     if (ret < 0) {
         dev_err(sc->dev, "%s Failed to enable adc(%d)\n", __func__, ret);
     }
 
-    ret = sc760x_set_adc_done_mask(sc, true);
+    ret = regmap_field_write(sc->rmap_fields[ADC_DONE_MASK], 1);
     if (ret < 0) {
         dev_err(sc->dev, "%s Failed to set adc mask (%d)\n", __func__, ret);
     }
 
-    return sc760x_dump_reg(sc);
+    for (i = 0; i <= 0x15; i++) {
+        ret = regmap_read(sc->regmap, i, &val);
+        if (!ret) {
+            desc +=
+                sprintf(buf + desc, "[0x%02x]:0x%02x, ", i, val);
+        }
+    }
+
+    dev_err(sc->dev, "Reg %s\n ", buf);
+    return ret;
 }
 
 static int sc760x_register_interrupt(struct sc760x_chip *sc, struct i2c_client *client)
@@ -1127,11 +1148,11 @@ static int mmi_enable_charger(struct charger_device *chgdev, bool en)
 	int ret = 0;
 
 	if (en) {
-		sc760x_enable_charger(sc);
-		sc760x_set_auto_bsm_dis(sc, true);
+		ret = sc760x_enable_charger(sc);
+		ret |= sc760x_set_auto_bsm_dis(sc, true);
 	} else {
-		sc760x_disable_charger(sc);
-		sc760x_set_auto_bsm_dis(sc, false);
+		ret = sc760x_disable_charger(sc);
+		ret |= sc760x_set_auto_bsm_dis(sc, false);
 	}
 
 	return ret;
