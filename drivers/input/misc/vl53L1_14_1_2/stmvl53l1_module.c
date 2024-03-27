@@ -3082,7 +3082,10 @@ done:
 static int ctrl_perform_calibration_ref_spad_lock(struct stmvl53l1_data *data,
 	struct stmvl53l1_ioctl_perform_calibration_t *calib)
 {
-	int rc = VL53L1_PerformRefSpadManagement(&data->stdev);
+	int rc = 0;
+	data->is_delay_allowed = 1;
+	rc = VL53L1_PerformRefSpadManagement(&data->stdev);
+	data->is_delay_allowed = 0;
 
 	if (rc) {
 		vl53l1_errmsg("VL53L1_PerformRefSpadManagement fail => %d", rc);
