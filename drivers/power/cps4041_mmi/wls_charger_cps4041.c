@@ -3303,10 +3303,10 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 		}
 		else if (wls_power >= WLS_RX_CAP_10W)
 		{
-			chg->MaxV = 12000;
-			chg->MaxI = 850;
-			*icl = 850000;
-			*vbus = 12000;
+			chg->MaxV = 9000;
+			chg->MaxI = 1000;
+			*icl = 1000000;
+			*vbus = 9000;
 		}
 		else if (wls_power >= WLS_RX_CAP_7W)
 		{
@@ -3355,10 +3355,10 @@ static void cps_epp_current_select(int *icl, int *vbus)
 			*vbus = 12000;
 		}
 		else if (wls_power >= WLS_RX_CAP_10W) {
-			chg->MaxV = 12000;
-			chg->MaxI = 850;
-			*icl = 850000;
-			*vbus = 12000;
+			chg->MaxV = 9000;
+			chg->MaxI = 1000;
+			*icl = 1000000;
+			*vbus = 9000;
 		}
 		else if (wls_power >= WLS_RX_CAP_7W) {
 			chg->MaxV = 9000;
