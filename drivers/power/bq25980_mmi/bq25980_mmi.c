@@ -165,6 +165,8 @@ struct bq25980_device {
 	bool irq_disabled;
 	bool resume_completed;
 	struct mutex irq_complete;
+
+	bool mmi_disable_mux;
 };
 
 static struct reg_default bq25980_reg_init_val[] = {
@@ -1391,6 +1393,9 @@ static int bq25980_parse_dt(struct bq25980_device *bq)
 
 	bq->state.bypass = device_property_read_bool(bq->dev,
 						      "ti,bypass-enable");
+
+	bq->mmi_disable_mux = device_property_read_bool(bq->dev,
+						      "mmi,disable_mux");
 	return 0;
 }
 
@@ -1807,6 +1812,9 @@ static int sc8541_config_mux(struct bq25980_device *bq,
 {
 	int ret;
 	unsigned int val;
+
+	if (bq->mmi_disable_mux)
+		return 0;
 
 	 if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN) {
             ret = regmap_update_bits(bq->regmap, BQ25980_CHRGR_CTRL_2,
