@@ -54,6 +54,8 @@ enum nu_work_mode {
 
 #define NU2115_PART_NO 0x90
 #define NU2115A_PART_NO 0x40
+#define VAC1_STAT_MASK  0x80
+#define VAC1_STAT_SHIFT  7
 
 enum nu_device_id {
 	NU2115 = 0,
@@ -159,15 +161,15 @@ struct nu2115_device {
 
 
 static struct reg_default nu2115_reg_init_val[] = {
-	{NU2115_BATOVP,	    0x45},//0x47:4550mV 0x45:4580mv
-	{NU2115_BATOVP_ALM,	0x42},//0x3f:4470mV 0x42:4500mv
-	//{NU2115_BATOCP,	    0xDA},//0xDA:disable for dual  11A//0x46:7000mA for standalone
-	{NU2115_BATOCP_ALM,	0x6B},//0x6B:12700mA
-	//{NU2115_BATUCP_ALM,	0x80},//0x28:default 2a
+	{NU2115_BATOVP,	    0x80},//0x47:4550mV 0x45:4580mv, 0x80:disable
+	{NU2115_BATOVP_ALM,	0x80},//0x3f:4470mV 0x42:4500mv, 0x80:disable
+	{NU2115_BATOCP,	    0x80},//0xDA:disable for dual  11A, 0x46:7000mA for standalone, 0x80:disable
+	{NU2115_BATOCP_ALM,	0x80},//0x6B:12700mA, 0x80:disable
+	{NU2115_BATUCP_ALM,	0x80},//0x28:default 2a, 0x80:disable
 	{NU2115_AC1PROT,	0x06},//default
 	{NU2115_AC2PROT,	0x07},//default
-	{NU2115_BUSOVP,	    0x3C},//0x3C:12000mv
-	{NU2115_BUSOVP_ALM,	0x32},//0X32:11000mV
+	{NU2115_BUSOVP,	    0x2D},//0x3C:12000mv,0x2D:10500mv
+	{NU2115_BUSOVP_ALM,	0x80},//0X32:11000mV, 0x80:disable
 	{NU2115_BUSOCP,	    0x06},//0X06:4000mA
 	{NU2115_BUSOCP_ALM,	0x8C},//0X8C:4000mA disable
 	//{NU2115_CON_STAT,	0x00},
@@ -177,18 +179,18 @@ static struct reg_default nu2115_reg_init_val[] = {
 	{NU2115_INT_FLAG,	0x00},//default
 	{NU2115_INT_MASK,	0x00},//default
 	{NU2115_FLT_MASK,	0x00},//default
-	{NU2115_ADC_CTRL,	0x80},//default mean {NU2115_ADC_CONTROL1,	0x00} //wt-debug-nu2115 enable adc
+	{NU2115_ADC_CTRL,	0x80},//default mean {NU2115_ADC_CONTROL1,	0x00}, 0x80:enable adc
 	//{NU2115_ADC_FN_DIS,	0x07},//0x06:TSBUS TSBAT mean {NU2115_ADC_CONTROL2,	0x06}
 	//{NU2115_TSBUS_FLT,	0x15},
 	//{NU2115_TSBAT_FLG,	0x15},
 	//{NU2115_TDIE_ALM,	0x48},//0x48:60C
-	//{NU2115_IBUS_UCP,	0x48},
+	{NU2115_IBUS_UCP,	0xE8},
 	//{NU2115_VAC12PRET,	0x01},
 	//{NU2115_ACDRV12_CTRL,   0x80},
-	//{NU2115_P2VOUT_UOVP,    0x50},
-	//{NU2115_DEGLITC_REG,    0x09},
-	//{NU2115_CP_OPTION,      0x08},
-	//{NU2115_CP_OPTION1,     0x09},
+	{NU2115_P2VOUT_UOVP,    0x70},
+	{NU2115_DEGLITC_REG,    0x0D},
+	{NU2115_CP_OPTION,      0x00},
+	{NU2115_CP_OPTION1,     0x00},
 	//{NU2115_CP_OPTION2,     0x27},
 };
 
@@ -244,7 +246,7 @@ static struct reg_default nu2115_reg_defs[] = {
 	{NU2115_ACDRV12_CTRL,  0x80},
 	{NU2115_DEV_INFO,      0x90},
 	{NU2115_P2VOUT_UOVP,   0x50},
-	{NU2115_DEGLITC_REG,   0x09},
+	{NU2115_DEGLITC_REG,   0x0D},
 	{NU2115_CP_OPTION,     0x08},
 	{NU2115_CP_OPTION1,    0x00},
 	{NU2115_CP_OPTION2,    0x27},
@@ -280,7 +282,7 @@ static int nu2115_set_adc_enable(struct nu2115_device *bq, bool enable)
 
 	return ret;
 }
-//wt-debug-nu2115
+
 static int nu2115_get_part_no(struct nu2115_device *bq)
 {
 	struct i2c_client client;
@@ -324,7 +326,7 @@ static int nu2115_get_const_charge_curr(struct nu2115_device *bq)
 		return ret;
 
 	curr_value = (batocp_reg_code & NU2115_BATOCP_MASK) *
-							NU2115_BATOCP_STEP_uA;
+							NU2115_BATOCP_STEP_uA + NU2115_BATOCP_OFFSET_uA;
 
 	return curr_value;
 }
@@ -345,14 +347,43 @@ static int nu2115_get_const_charge_volt(struct nu2115_device *bq)
 	return volt_value;
 }
 
+/*(PMID/n-VOUT)/VOUT
+is used to protect output short during switching :
+n = 2 at 2:1 mode;
+n = 1 at 1:1 mode;
+00: 5%
+01: 7.5% (default)
+10: 10%
+11: 12.5%*/
+static int nu2115_set_pmid2vout_ovp(struct nu2115_device *bq, int val)
+{
+	int ret;
+
+	ret = regmap_update_bits(bq->regmap, NU2115_P2VOUT_UOVP,
+				0x30, val << 4);
+	if (ret) {
+		dev_err(bq->dev, "%s write NU2115_P2VOUT_UOVP fail, ret = %d\n", __func__, ret);
+		return ret;
+	}
+	return 0;
+}
+
 static int nu2115_set_chg_en(struct nu2115_device *bq, bool en_chg)
 {
 	int ret;
 
-	if (en_chg)
+	if (en_chg) {
+		ret = nu2115_set_pmid2vout_ovp(bq, 3);
+		if (ret)
+			return ret;
+
 		ret = regmap_update_bits(bq->regmap, NU2115_CHGCTRL,
 					NU2115_CHG_EN, NU2115_CHG_EN);
-	else
+		if (ret)
+			return ret;
+		mdelay(30);
+		ret = nu2115_set_pmid2vout_ovp(bq, 1);
+	} else
 		ret = regmap_update_bits(bq->regmap, NU2115_CHGCTRL,
 				NU2115_CHG_EN, en_chg);
 	if (ret)
@@ -405,7 +436,7 @@ static int nu2115_get_adc_ibus(struct nu2115_device *bq)
 
 	if (ibus_adc_msb & NU2115_ADC_POLARITY_BIT)
 		ibus_adc = ((ibus_adc ^ 0xffff) + 1);//mA
-	return ibus_adc;
+	return ibus_adc * 1000;
 }
 
 static int nu2115_get_adc_vbus(struct nu2115_device *bq)
@@ -427,7 +458,7 @@ static int nu2115_get_adc_vbus(struct nu2115_device *bq)
 
 	if (vbus_adc_msb & NU2115_ADC_POLARITY_BIT)
 		vbus_adc = ((vbus_adc ^ 0xffff) + 1);//mA
-	return vbus_adc;
+	return vbus_adc * 1000;
 }
 
 static int nu2115_get_adc_vout(struct nu2115_device *bq)
@@ -450,7 +481,7 @@ static int nu2115_get_adc_vout(struct nu2115_device *bq)
 
 	vout_adc = (vout_adc_msb << 8) | vout_adc_lsb;
 
-	return bq->chip_info->adc_vout_volt_offset + vout_adc * bq->chip_info->adc_vout_volt_step /10;
+	return vout_adc * 1000;
 }
 
 static int nu2115_get_adc_vbat(struct nu2115_device *bq)
@@ -473,37 +504,27 @@ static int nu2115_get_adc_vbat(struct nu2115_device *bq)
 	if (vsys_adc_msb & NU2115_ADC_POLARITY_BIT)
 		vsys_adc = ((vsys_adc ^ 0xffff) + 1);//mA
 
-	return vsys_adc;
+	return vsys_adc * 1000;
 }
 
-//wt-debug-nu2115
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 static int nu2115_get_adc_vac1(struct nu2115_device *bq)
 {
-	int vac1_adc_lsb, vac1_adc_msb;
-	u16 vac1_adc;
-	int ret;
+	int vac1_stat;
+	int ret = 0;
 
-	ret = regmap_read(bq->regmap, NU2115_VAC1_ADC_MSB, &vac1_adc_msb);
+	ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &vac1_stat);
+	dev_err(bq->dev,"the vac1 stat = :%x",vac1_stat);
 	if (ret) {
-		dev_err(bq->dev, "read NU2115_VAC1_ADC_MSB fail ret = %d\n", ret);
-		return ret;
+		return 0;
 	}
 
-	ret = regmap_read(bq->regmap, NU2115_VAC1_ADC_LSB, &vac1_adc_lsb);
-	if (ret) {
-		dev_err(bq->dev, "read NU2115_VAC1_ADC_LSB fail ret = %d\n", ret);
-		return ret;
-	}
-
-	vac1_adc = (vac1_adc_msb << 8) | vac1_adc_lsb;
-
-	if(vac1_adc > 3000){
+	if((vac1_stat& VAC1_STAT_MASK) >> VAC1_STAT_SHIFT){
 		ret = 1;//VAC_ONLINE
         } else {
 		ret = 0;//VAC_NOT_ONLINE
         }
-	pr_err("[wt-debug-nu2115][%s,%d] vac1_adc = %d, online = %d", __func__, __LINE__, vac1_adc, ret);
+	pr_err("[%s,%d] vac1_stat = %d, online = %d", __func__, __LINE__, vac1_stat, ret);
 
 	return ret;
 }
@@ -528,7 +549,7 @@ static int nu2115_get_adc_vac2(struct nu2115_device *bq)
 
 	vac2_adc = (vac2_adc_msb << 8) | vac2_adc_lsb;
 
-	pr_err("[wt-debug-nu2115][%s,%d] vac2_adc = %d", __func__, __LINE__, vac2_adc);
+	pr_err("[%s,%d] vac2_adc = %d", __func__, __LINE__, vac2_adc);
 
 	return vac2_adc;
 }
@@ -618,16 +639,16 @@ static int nu2115_get_state(struct nu2115_device *bq,
 	state->dischg = ibat_adc_msb & NU2115_ADC_POLARITY_BIT;
 	state->vac_ovp = (ac1_ovp & NU2115_AC_OVP_MASK) | (ac2_ovp & NU2115_AC_OVP_MASK);
 	state->bat_ovp = flt_stat & NU2115_BAT_OVP_MASK;
-	state->vout_ovp = vout_ovp & NU2115_OUT_OVP_MASK; //wt-debug-nu2115
+	state->vout_ovp = vout_ovp & NU2115_OUT_OVP_MASK;
 	state->vbus_ovp = flt_stat & NU2115_BUS_OVP_MASK;
 	state->bus_ocp = flt_stat & NU2115_BUS_OCP_MASK;
 	state->bat_ocp = flt_stat & NU2115_BAT_OCP_MASK;
-	state->bus_ucp = bus_ucp & NU2115_BUS_UCP_MASK; //wt-debug-nu2115
+	state->bus_ucp = bus_ucp & NU2115_BUS_UCP_MASK;
 	state->tflt = flt_stat & NU2115_TFLT_MASK;
-	state->wdt = wdt_flag & NU2115_WDT_FLAG_MASK; //wt-debug-nu2115
+	state->wdt = wdt_flag & NU2115_WDT_FLAG_MASK;
 	state->online = (ac_online & NU2115_AC_PRESENT_MASK) | (bus_online & NU2115_BUS_PRESENT_MASK);
 	state->ce = chg_ctrl & NU2115_CHG_EN;
-	//state->hiz = chg_ctrl_2 & BQ25980_EN_HIZ; //wt-debug-nu2115
+	//state->hiz = chg_ctrl_2 & BQ25980_EN_HIZ;
 	state->bypass = chg_ctrl & NU2115_EN_BYPASS;
 
 	dev_info(bq->dev, "dc=%d,ovp=%d,%d,%d,%d,ocp=%d,%d,ucp=%d,t=%d,wdt=%d,online=%d,ce=%d,bypass=%d\n",
@@ -711,7 +732,7 @@ static int nu2115_get_charger_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		ret = nu2115_get_adc_ibus(bq);//wt-debug-nu2115, why used ibus?
+		ret = nu2115_get_adc_ibus(bq);
 		if (ret < 0)
 			return ret;
 
@@ -823,7 +844,7 @@ static void nu2115_dump_register_work(struct work_struct *work)
 
 	dump_all_reg(bq);
 
-	schedule_delayed_work(&bq->dump_register_work, 5 * HZ);
+	//schedule_delayed_work(&bq->dump_register_work, 5 * HZ);
 }
 
 static enum power_supply_property nu2115_power_supply_props[] = {
@@ -976,8 +997,8 @@ static int nu2115_reg_init(struct nu2115_device *bq)
 	}
 	return 0;
 }
-#if 0 //wt-debug-nu2115
-static int bq25980_parse_dt(struct nu2115_device *bq)
+#if 0
+static int nu2115_parse_dt(struct nu2115_device *bq)
 {
 	int ret;
 
@@ -1260,6 +1281,9 @@ static int nu2115_enable_chg(struct charger_device *chg_dev, bool en)
 		return ret;
 	}
 
+	pr_err("[%s,%d]enable chg dump register -----start-----", __func__, __LINE__);
+	dump_all_reg(bq);
+	pr_err("[%s,%d]enable chg dump register -----end-----", __func__, __LINE__);
 	return 0;
 }
 
@@ -1670,8 +1694,8 @@ static int nu2115_probe(struct i2c_client *client,
 	ret = nu2115_check_work_mode(bq);
 	if (ret)
 		goto free_mem;
-#if 0 //wt-debug-nu2115
-	ret = bq25980_parse_dt(bq);
+#if 0
+	ret = nu2115_parse_dt(bq);
 	if (ret) {
 		dev_err(dev, "Failed to read device tree properties%d\n", ret);
 		goto free_mem;
@@ -1731,7 +1755,7 @@ static int nu2115_probe(struct i2c_client *client,
 	nu2115_create_device_node(bq->dev);
 	dump_all_reg(bq);
 
-    INIT_DELAYED_WORK(&bq->dump_register_work, nu2115_dump_register_work);
+	INIT_DELAYED_WORK(&bq->dump_register_work, nu2115_dump_register_work);
 	schedule_delayed_work(&bq->dump_register_work, 0);
 	printk("-------nu2115 driver probe success--------%s\n",dev_name(&client->dev));
 	return 0;
