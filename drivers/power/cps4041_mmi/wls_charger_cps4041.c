@@ -59,6 +59,9 @@ MOTO_WLS_AUTH_T motoauth;
 
 #define CPS_CHIP_ID 0x4041
 
+#define MOTO_15W_TX_ID (353)
+#define MOTO_50W_TX_ID (337)
+
 #define CPS_WLS_CHRG_DRV_NAME "cps-wls-charger"
 
 #define CPS_WLS_CHRG_PSY_NAME "wireless"
@@ -774,6 +777,13 @@ static int cps_wls_get_rx_vout(void)
 	return cps_wls_rx_get(CPS_RX_REG_ADC_VOUT);
 }
 
+static int cps_wls_set_rx_vout_target(int value)
+{
+	cps_reg_s *cps_reg;
+	cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_VOUT_SET]);
+	return cps_wls_write_reg(cps_reg->reg_addr, value, (int)cps_reg->reg_bytes_len);
+}
+
 static int cps_wls_set_rx_fod_array_gain(uint32_t *fod_array, uint32_t fod_array_len)
 {
 	int status = CPS_WLS_SUCCESS;
@@ -1321,9 +1331,10 @@ static int cps_wls_rx_irq_handler(int int_flag)
 			cps_wls_set_status(WLC_TX_TYPE_CHANGED);
 		}
 		//check_factory_mode(&factory_mode);
-		if (chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
-			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT) {
-			queue_delayed_work(chip->wls_wq, &chip->light_fan_work, msecs_to_jiffies(0));
+		if ((chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
+			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT) &&
+			cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) == 100) {
+				queue_delayed_work(chip->wls_wq, &chip->light_fan_work, msecs_to_jiffies(0));
 		}
 		else
 			motoauth_hs_ok_handler(mode_type);
@@ -3300,6 +3311,14 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 			chg->MaxI = 1150;
 			*icl = 1150000;
 			*vbus = 12000;
+			if (chip->moto_stand == true &&
+				motoauth.WLS_WLC_ID == MOTO_15W_TX_ID &&
+				wls_voltage < 10500) {
+				chg->MaxV = 10000;
+				chg->MaxI = 1400;
+				*icl = 1400000;
+				*vbus = 10000;
+			}
 		}
 		else if (wls_power >= WLS_RX_CAP_10W)
 		{
@@ -3353,6 +3372,14 @@ static void cps_epp_current_select(int *icl, int *vbus)
 			chg->MaxI = 1150;
 			*icl = 1150000;
 			*vbus = 12000;
+			if (chip->moto_stand == true &&
+				motoauth.WLS_WLC_ID == MOTO_15W_TX_ID &&
+				wls_voltage < 10500) {
+				chg->MaxV = 10000;
+				chg->MaxI = 1400;
+				*icl = 1400000;
+				*vbus = 10000;
+			}
 		}
 		else if (wls_power >= WLS_RX_CAP_10W) {
 			chg->MaxV = 9000;
@@ -3510,6 +3537,13 @@ static int cps_wls_set_status(int status)
 	if (status == WLC_DISCONNECTED)
 		chip->moto_stand = false;
 	cps_wls_notify_st_changed();
+
+	if (status == WLC_TX_ID_CHANGED &&
+		chip->wlc_tx_power >= WLS_RX_CAP_15W &&
+		motoauth.WLS_WLC_ID == MOTO_15W_TX_ID) {
+		cps_wls_log(CPS_LOG_DEBG,"%s Reset moto 15w tx output 10V\n", __func__);
+		cps_wls_set_rx_vout_target(10000);
+	}
 
 	return 0;
 }
