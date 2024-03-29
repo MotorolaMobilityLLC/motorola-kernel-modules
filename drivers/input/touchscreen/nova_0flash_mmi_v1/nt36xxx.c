@@ -107,6 +107,7 @@ static int nvt_disp_esd_notifier_callback(struct notifier_block *nb,
 
 #ifdef NVT_MTK_CHECK_PANEL
 const char *active_panel_name;
+static int nvt_check_panel(void);
 #endif
 
 static int32_t nvt_ts_resume(struct device *dev);
@@ -1171,42 +1172,26 @@ static int nvt_get_dt_def_coords(struct device *dev, char *name)
 
 #ifdef NVT_CONFIG_MULTI_SUPPLIER
 static nvt_get_panel_supplier() {
-	//parse panel supplier from cmdline
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
-		saved_command_line = get_cmd();
-#endif
-	if (saved_command_line) {
-		char *sub;
-		char key_prefix[] = "panel_supplier=";
+	static int ret = 0;
 
-		sub = strstr(saved_command_line, key_prefix);
-		if (sub) {
-			char *split;
-			int len, len_prefix = strlen(key_prefix);
-
-			split = strstr(sub, " ");
-			if (split) {
-				len = strlen(sub) - strlen(split) - len_prefix;
-			} else {
-				len = strlen(sub) - len_prefix;
-			}
-
-			if (len <=0)
-				goto end;
-
-			strncpy(lcm_panel_supplier, (sub + len_prefix), min(len, NVT_MAX_SUPPLIER_LEN));
+	//check panel
+	ret = nvt_check_panel();
+	if (!ret) {
+		if (strstr(active_panel_name,"nt36672c")) {
+			NVT_LOG("panel supplier is nt36672c");
+			strncpy(lcm_panel_supplier,"csot_nt36672c", 13);
 			ts->panel_supplier = lcm_panel_supplier;
-			NVT_LOG("panel_supplier=%s\n", ts->panel_supplier);
 			return 0;
-		} else {
-			NVT_LOG("panel_supplier not found!");
+		} else if (strstr(active_panel_name,"nt36672n")){
+			NVT_LOG("panel supplier is nt36672n");
+			strncpy(lcm_panel_supplier,"csot_nt36672n", 13);
+			ts->panel_supplier = lcm_panel_supplier;
+			return 0;
 		}
 	} else {
-		NVT_LOG("saved_command_line null!");
+		NVT_LOG("can find active panel!");
+		return -1;
 	}
-
-	end:
-	NVT_LOG("end ret -1\n");
 	return -1;
 }
 #endif
