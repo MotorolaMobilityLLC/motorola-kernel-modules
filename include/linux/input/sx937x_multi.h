@@ -444,6 +444,7 @@ typedef struct sx937x_platform_data
 	pbuttonInformation_t pbuttonInformation;
 	bool reinit_on_cali;
 	bool reinit_on_i2c_failure;
+	bool state_flip_open;
 
 	int (*get_is_nirq_low)(void);
 
