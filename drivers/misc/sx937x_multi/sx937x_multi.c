@@ -1764,7 +1764,7 @@ static void vdd_power_off_on(psx93XX_t this, bool on)
 
 static void sx937x_register_err(psx93XX_t this)
 {
-	int ph = 0, idx = 0, num_same_val;
+	int ph = 0, idx = 0, num_same_val,i = 0;
 	u32 reg_val, phen =0;
 	static int check_round = 0;
 	static u32 ph_useful[MAX_CHANNEL_NUMBER][CHECK_TIMES] ={0};
@@ -1772,7 +1772,7 @@ static void sx937x_register_err(psx93XX_t this)
 	struct _buttonInfo *buttons = this->hw->buttons;
 	int buttonSize = this->hw->buttonSize;
 	bool freeze = false;
-	for (int i = 0; i < buttonSize; i++)
+	for (i = 0; i < buttonSize; i++)
 	{
 		if (buttons[i].enabled){
 			phen |= 1 << i;
