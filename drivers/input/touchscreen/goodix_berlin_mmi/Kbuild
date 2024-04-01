@@ -138,6 +138,8 @@ else ifneq ($(filter avatrn%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_AVATRN
 else ifneq ($(filter malmo%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_MALMO
+else ifneq ($(filter tank%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_TANK
 endif
 $(warning "william EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
 
