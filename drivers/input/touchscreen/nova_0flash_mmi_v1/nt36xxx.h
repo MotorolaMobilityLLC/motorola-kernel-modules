@@ -282,6 +282,9 @@ struct nvt_ts_data {
 	struct mutex state_mutex;
 	struct nvt_sensor_platform_data *sensor_pdata;
 #endif
+#ifdef NVT_TOUCH_STYLUS_TIME
+	bool stylustime_enable;
+#endif
 #ifdef PALM_GESTURE
 	bool palm_enabled;
 #endif
