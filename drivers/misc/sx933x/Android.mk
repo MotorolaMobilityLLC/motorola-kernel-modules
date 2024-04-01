@@ -20,5 +20,8 @@ endif
 include $(CLEAR_VARS)
 LOCAL_MODULE := sx933x_sar.ko
 LOCAL_MODULE_TAGS := optional
+LOCAL_ADDITIONAL_DEPENDENCIES := $(KERNEL_MODULES_OUT)/sensors_class.ko
+LOCAL_REQUIRED_MODULES := sensors_class.ko
+KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
