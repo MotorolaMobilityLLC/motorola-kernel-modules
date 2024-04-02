@@ -25,7 +25,7 @@
 
 
 //normal macro
-#define FOURSEMI_DRIVER_VERSION		("v1.0.39")
+#define FOURSEMI_DRIVER_VERSION		("v1.0.70")
 #define FOURSEMI_DEV_NAME			("foursemi_vibrator")
 #define HAP_BRAKE_PATTERN_MAX       4
 #define HAP_WAVEFORM_BUFFER_MAX     8
@@ -35,7 +35,7 @@
 
 
 //macro control
-//#define ENABLE_PIN_CONTROL					//remove it in mediatek platform     zzzz
+//#define ENABLE_PIN_CONTROL					//xxxx
 #define INPUT_DEV
 //#define FS_CHECK_RAM_DATA						//xxxx debug_too much output message
 #define FS_READ_BIN_FLEXBALLY

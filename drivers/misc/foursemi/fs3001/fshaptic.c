@@ -139,6 +139,12 @@ static int foursemi_hw_reset(struct foursemi *foursemi)
 	int rc  = 0;
 #endif
 	pr_info("enter\n");
+
+	if(foursemi == NULL)
+	{
+		pr_err("%s:foursemi is NULL\n",FSERROR);
+		return 0;
+	}
 #ifdef ENABLE_PIN_CONTROL
 	rc = select_pin_ctl(foursemi, "foursemi_reset_active");
 	msleep(5);
@@ -158,6 +164,7 @@ static int foursemi_hw_reset(struct foursemi *foursemi)
 	{
 		pr_err("%s:hw_reset fail\n",FSERROR);
 	}
+
 	return 0;
 }
 
@@ -436,7 +443,7 @@ foursemi_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	//pull it down and set INT as input
 	if (!foursemi->enable_pin_control) 
 	{
-		pr_info("foursemi->enable_pin_control==1\n");
+		pr_info("foursemi->enable_pin_control==0\n");
 		if (gpio_is_valid(foursemi->reset_gpio)) 
 		{
 			pr_info("gpio_is_valid(foursemi->reset_gpio)==1\n");
@@ -504,7 +511,7 @@ foursemi_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 		if (!fs3001_check_qualify(foursemi->fs3001)) 
 		{
 			pr_err("%s:unqualified chip!\n",FSERROR);
-			goto err_fs3001_check_qualify;  //zzzz: remove it for fpga test
+			goto err_fs3001_check_qualify;  //xxxx: remove it for fpga test
 		}
 
 		//load fs3001 dts setting to foursemi->fs3001
@@ -697,7 +704,6 @@ static void foursemi_i2c_remove(struct i2c_client *i2c)
 	pr_info("exit\n");
 	return;
 }
-
 
 static const struct i2c_device_id foursemi_i2c_id[] = 
 {

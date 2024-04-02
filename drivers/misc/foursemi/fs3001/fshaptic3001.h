@@ -43,7 +43,6 @@ typedef struct led_classdev cdev_t;
 #define FS3001_SEQUENCER_SIZE		(8)
 #define FS3001_SEQUENCER_LOOP_SIZE	(4)
 #define FS3001_OSC_CALI_MAX_LENGTH	(11000000)
-#define FS3001_PM_QOS_VALUE_VB		(400)
 #define FS3001_VBAT_REFER		(4200)
 #define FS3001_VBAT_MIN		(3000)
 #define FS3001_VBAT_MAX		(5500)
@@ -64,7 +63,6 @@ typedef struct led_classdev cdev_t;
 #define FS3001_BRK_TIMES_DEFAULT			(0x0A)
 #define FS3001_BRK_NOISE_GATE_DEFAULT		(0x10)
 #define FS3001_BRK_1_PERIOD_DEFAULT			(0x300)
-#define FS3001_GAIN_ADJUST_DEFAULT			(0x00)
 #define FS3001_BRK_PGAGAIN_DEFAULT			(0x05)
 #define FS3001_BRK_MARGIN_DEFAULT			(0x10)
 #define FS3001_PLAY_RAM_SRATE_DEFAULT		(0x00)
@@ -81,7 +79,7 @@ typedef struct led_classdev cdev_t;
 #define FS3001_DURATION_TIME_DEFAULT		(30)
 
 #define FS3001_RTP_ID_BOUNDARY_DEFAULT		(0x00)
-#define FS3001_RTP_MAX_DEFAULT				(0x03)
+#define FS3001_RTP_MAX_DEFAULT				(194)
 #define FS3001_RTP_TIME_DEFAULT				(20)
 
 
@@ -249,8 +247,10 @@ struct fs3001_dts_info
 
 
 	unsigned int trig_config[24];
-    //20231117
-	unsigned int fs3001_gain_adjust;
+	
+	
+    
+	bool is_enabled_powerup_f0_cali;
 	
 	
 };
@@ -285,11 +285,10 @@ struct fs3001
 	struct work_struct rtp_irq_hapstream;
 	struct fs3001_container *hapstream_rtp;
 	struct proc_dir_entry *fs_config_proc;
-	bool hapstream_stop_flag;
-
 	struct mmap_buf_format *start_buf;
-	bool vib_stop_flag;
 #endif
+	bool hapstream_stop_flag;
+	bool vib_stop_flag;
 
 	unsigned char seq[FS3001_SEQUENCER_SIZE];
 	unsigned char loop[FS3001_SEQUENCER_SIZE];
@@ -384,6 +383,9 @@ struct fs3001
 	int test_val;
 #endif
 	unsigned char fs3001_debug_enable;
+	unsigned int buf_size;
+	unsigned int Qos_time;
+	unsigned char moto_mode_ctl[4];
 
 };
 

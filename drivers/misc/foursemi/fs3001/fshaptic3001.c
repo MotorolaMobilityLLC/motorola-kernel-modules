@@ -36,16 +36,186 @@ static unsigned char fs3001_haptic_osc_read_status(struct fs3001 *fs3001);
 static void fs3001_haptic_diagnostic_sequence(struct fs3001 *fs3001);
 static void fs3001_haptic_set_diagnostic_reg_to_default_value(struct fs3001 *fs3001);
 static int fs3001_haptic_offset_calibration(struct fs3001 *fs3001);
-static void fs3001_haptic_duration_ram_play_config(struct fs3001 *fs3001,int duration);
+//xxxx static void fs3001_haptic_duration_ram_play_config(struct fs3001 *fs3001,int duration);
 
 
 
 
 static char *fs3001_ram_name = "fs3001_haptic.bin";
 static char fs3001_rtp_name[][FS3001_RTP_NAME_MAX] = {
-	{"fs3001_osc_rtp_12K_10s.bin"},
-	{"fs3001_1.bin"},
-	{"fs3001_2.bin"},
+	{"aw8622x_osc_rtp_24K_5s.bin"},
+	{"AcousticGuitar_RTP.bin"},	//21
+	{"Blues_RTP.bin"},
+	{"Candy_RTP.bin"},
+	{"Carousel_RTP.bin"},
+	{"Celesta_RTP.bin"},
+	{"Childhood_RTP.bin"},
+	{"Country_RTP.bin"},
+	{"Cowboy_RTP.bin"},
+	{"Echo_RTP.bin"},
+	{"Fairyland_RTP.bin"},
+	{"Fantasy_RTP.bin"},	//31
+	{"Field_Trip_RTP.bin"},
+	{"Glee_RTP.bin"},
+	{"Glockenspiel_RTP.bin"},
+	{"Ice_Latte_RTP.bin"},
+	{"Kung_Fu_RTP.bin"},
+	{"Leisure_RTP.bin"},
+	{"Lollipop_RTP.bin"},
+	{"MiMix2_RTP.bin"},
+	{"Mi_RTP.bin"},
+	{"MiHouse_RTP.bin"},	//41
+	{"MiJazz_RTP.bin"},
+	{"MiRemix_RTP.bin"},
+	{"Mountain_Spring_RTP.bin"},
+	{"Orange_RTP.bin"},
+	{"WindChime_RTP.bin"},	//46
+	{"Space_Age_RTP.bin"},
+	{"ToyRobot_RTP.bin"},
+	{"Vigor_RTP.bin"},
+	{"Bottle_RTP.bin"},
+	{"Bubble_RTP.bin"},	//51
+	{"Bullfrog_RTP.bin"},
+	{"Burst_RTP.bin"},
+	{"Chirp_RTP.bin"},
+	{"Clank_RTP.bin"},
+	{"Crystal_RTP.bin"},
+	{"FadeIn_RTP.bin"},
+	{"FadeOut_RTP.bin"},
+	{"Flute_RTP.bin"},
+	{"Fresh_RTP.bin"},
+	{"Frog_RTP.bin"},	//61
+	{"Guitar_RTP.bin"},
+	{"Harp_RTP.bin"},
+	{"IncomingMessage_RTP.bin"},
+	{"MessageSent_RTP.bin"},
+	{"Moment_RTP.bin"},
+	{"NotificationXylophone_RTP.bin"},
+	{"Potion_RTP.bin"},
+	{"Radar_RTP.bin"},
+	{"Spring_RTP.bin"},
+	{"Swoosh_RTP.bin"},	//71
+	{"Gesture_UpSlide_RTP.bin"},
+	{"Gesture_UpHold_RTP.bin"},
+	{"Charge_Wire_RTP.bin"},
+	{"Charge_Wireless_RTP.bin"},
+	{"Unlock_Failed_RTP.bin"},
+	{"FOD_Motion1_RTP.bin"},
+	{"FOD_Motion2_RTP.bin"},
+	{"FOD_Motion3_RTP.bin"},
+	{"FOD_Motion4_RTP.bin"},
+	{"FaceID_Wrong1_RTP.bin"},
+	{"FaceID_Wrong2_RTP.bin"},	//82
+	{"uninstall_animation_rtp.bin"},
+	{"uninstall_dialog_rtp.bin"},
+	{"screenshot_rtp.bin"},
+	{"lockscreen_camera_entry_rtp.bin"},
+	{"launcher_edit_rtp.bin"},
+	{"launcher_icon_selection_rtp.bin"},
+	{"taskcard_remove_rtp.bin"},
+	{"task_cleanall_rtp.bin"},
+	{"new_iconfolder_rtp.bin"},
+	{"notification_remove_rtp.bin"},
+	{"notification_cleanall_rtp.bin"},
+	{"notification_setting_rtp.bin"},
+	{"game_turbo_rtp.bin"},
+	{"NFC_card_rtp.bin"},
+	{"wakeup_voice_assistant_rtp.bin"},
+	{"NFC_card_slow_rtp.bin"},
+	{"POCO_RTP.bin"},	//99
+	{"aw8622x_rtp.bin"},	//100
+	{"offline_countdown_RTP.bin"},
+	{"scene_bomb_injury_RTP.bin"},
+	{"scene_bomb_RTP.bin"},	//103
+	{"door_open_RTP.bin"},
+	{"aw8622x_rtp.bin"},
+	{"scene_step_RTP.bin"},	//106
+	{"crawl_RTP.bin"},
+	{"scope_on_RTP.bin"},
+	{"scope_off_RTP.bin"},
+	{"magazine_quick_RTP.bin"},
+	{"grenade_RTP.bin"},
+	{"scene_getshot_RTP.bin"},	//112
+	{"grenade_explosion_RTP.bin"},
+	{"punch_RTP.bin"},
+	{"pan_RTP.bin"},
+	{"bandage_RTP.bin"},
+	{"aw8622x_rtp.bin"},
+	{"scene_jump_RTP.bin"},
+	{"vehicle_plane_RTP.bin"},	//119
+	{"scene_openparachute_RTP.bin"},	//120
+	{"scene_closeparachute_RTP.bin"},	//121
+	{"vehicle_collision_RTP.bin"},
+	{"vehicle_buggy_RTP.bin"},	//123
+	{"vehicle_dacia_RTP.bin"},	//124
+	{"vehicle_moto_RTP.bin"},	//125
+	{"firearms_akm_RTP.bin"},	//126
+	{"firearms_m16a4_RTP.bin"},	//127
+	{"aw8622x_rtp.bin"},
+	{"firearms_awm_RTP.bin"},	//129
+	{"firearms_mini14_RTP.bin"},	//130
+	{"firearms_vss_RTP.bin"},	//131
+	{"firearms_qbz_RTP.bin"},	//132
+	{"firearms_ump9_RTP.bin"},	//133
+	{"firearms_dp28_RTP.bin"},	//134
+	{"firearms_s1897_RTP.bin"},	//135
+	{"aw8622x_rtp.bin"},
+	{"firearms_p18c_RTP.bin"},	//137
+	{"aw8622x_rtp.bin"},
+	{"aw8622x_rtp.bin"},
+	{"CFM_KillOne_RTP.bin"},
+	{"CFM_Headshot_RTP.bin"},	//141
+	{"CFM_MultiKill_RTP.bin"},
+	{"CFM_KillOne_Strong_RTP.bin"},
+	{"CFM_Headshot_Strong_RTP.bin"},
+	{"CFM_MultiKill_Strong_RTP.bin"},
+	{"CFM_Weapon_Grenade_Explode_RTP.bin"},
+	{"CFM_Weapon_Grenade_KillOne_RTP.bin"},
+	{"CFM_ImpactFlesh_Normal_RTP.bin"},
+	{"CFM_Weapon_C4_Installed_RTP.bin"},
+	{"CFM_Hero_Appear_RTP.bin"},
+	{"CFM_UI_Reward_OpenBox_RTP.bin"},
+	{"CFM_UI_Reward_Task_RTP.bin"},
+	{"CFM_Weapon_BLT_Shoot_RTP.bin"},	//153
+	{"Atlantis_RTP.bin"},
+	{"DigitalUniverse_RTP.bin"},
+	{"Reveries_RTP.bin"},
+	{"FOD_Motion_Triang_RTP.bin"},
+	{"FOD_Motion_Flare_RTP.bin"},
+	{"FOD_Motion_Ripple_RTP.bin"},
+	{"FOD_Motion_Spiral_RTP.bin"},
+	{"gamebox_launch_rtp.bin"}, // 161
+	{"Gesture_Back_Pull_RTP.bin"},// 162
+	{"Gesture_Back_Release_RTP.bin"},// 163
+	{"alert_rtp.bin"},// 164
+	{"feedback_negative_light_rtp.bin"},// 165
+	{"feedback_neutral_rtp.bin"},// 166
+	{"feedback_positive_rtp.bin"},// 167
+	{"fingerprint_record_rtp.bin"},// 168
+	{"lockdown_rtp.bin"},// 169
+	{"sliding_damping_rtp.bin"},// 170
+	{"todo_alldone_rtp.bin"},// 171
+	{"uninstall_animation_icon_rtp.bin"},// 172
+	{"signal_button_highlight_rtp.bin"},//173
+	{"signal_button_negative_rtp.bin"},
+	{"signal_button_rtp.bin"},
+	{"signal_clock_high_rtp.bin"},//176
+	{"signal_clock_rtp.bin"},
+	{"signal_clock_unit_rtp.bin"},
+	{"signal_inputbox_rtp.bin"},
+	{"signal_key_high_rtp.bin"},
+	{"signal_key_unit_rtp.bin"},//181
+	{"signal_list_highlight_rtp.bin"},
+	{"signal_list_rtp.bin"},
+	{"signal_picker_rtp.bin"},
+	{"signal_popup_rtp.bin"},
+	{"signal_seekbar_rtp.bin"},//186
+	{"signal_switch_rtp.bin"},
+	{"signal_tab_rtp.bin"},
+	{"signal_text_rtp.bin"},
+	{"signal_transition_light_rtp.bin"},
+	{"signal_transition_rtp.bin"},//191
+	{"haptics_video_rtp.bin"},//192
 };
 
 struct pm_qos_request fs3001_pm_qos_req_vb;
@@ -54,38 +224,41 @@ static int wf_repeat[8] = { 1, 2, 4, 8, 16, 32, 64, 128 };
 
 struct foursemi *g_foursemi = NULL;
 
-static void pm_qos_enable(bool b_enable)
-{
+char str[300];
 
+void fs3001_debug_message(struct fs3001 *fs3001, const char* p_char)
+{
+	if(fs3001->fs3001_debug_enable)
+	{
+		pr_err("%s",p_char);
+	}
+}
+
+
+
+static void pm_qos_enable(struct fs3001 *fs3001,bool b_enable)
+{
 #ifdef FS_KERNEL_VER_OVER_5_10
+	sprintf(str,"%s,OVER_5_10 enable=%d, Qos_time=%d\n",__func__,b_enable,fs3001->Qos_time);
+	fs3001_debug_message(fs3001, str);
 	if(b_enable)
 	{
-		if(!cpu_latency_qos_request_active(&fs3001_pm_qos_req_vb))
-		{
-			cpu_latency_qos_add_request(&fs3001_pm_qos_req_vb, 0);
-		}
+		cpu_latency_qos_add_request(&fs3001_pm_qos_req_vb, fs3001->Qos_time);
 	}		
 	else
 	{
-		if (cpu_latency_qos_request_active(&fs3001_pm_qos_req_vb))
-		{
-			cpu_latency_qos_remove_request(&fs3001_pm_qos_req_vb);
-		}		
+		cpu_latency_qos_remove_request(&fs3001_pm_qos_req_vb);		
 	}
 #else
+	sprintf(str,"%s,NOT OVER_5_10 enable=%d, Qos_time=%d\n",__func__,b_enable,fs3001->Qos_time);
+	fs3001_debug_message(fs3001, str);
 	if(b_enable)
 	{
-		if(!pm_qos_request_active(&fs3001_pm_qos_req_vb))
-		{
-			pm_qos_add_request(&fs3001_pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY,FS3001_PM_QOS_VALUE_VB);
-		}
+		pm_qos_add_request(&fs3001_pm_qos_req_vb, PM_QOS_CPU_DMA_LATENCY,fs3001->Qos_time);
 	}
 	else
 	{
-		if (pm_qos_request_active(&fs3001_pm_qos_req_vb))
-		{
-			pm_qos_remove_request(&fs3001_pm_qos_req_vb);
-		}		
+		pm_qos_remove_request(&fs3001_pm_qos_req_vb);	
 	}
 #endif
 }
@@ -186,7 +359,10 @@ static int fs3001_i2c_writes(struct fs3001 *fs3001,unsigned char reg_addr, unsig
 	if (ret < 0)
 		pr_err("%s:i2c master send error\n",FSERROR);
 	else
-		pr_info("%s,addr=0x%02X, data=[%d]\n",FSWRITEBULK,reg_addr, len);
+	{
+		sprintf(str,"%s,%s,addr=0x%02X, data=[%d]\n",__func__,FSWRITEBULK,reg_addr, len);
+		fs3001_debug_message(fs3001, str);
+	}
 	kfree(data);
 	return ret;
 }
@@ -240,23 +416,26 @@ static unsigned char fs3001_i2c_read_bits(struct fs3001 *fs3001,unsigned char re
 	return util_get_bits(reg_val,i_start,i_stop);
 }
 
+/*
 unsigned char fs3001_haptic_rtp_get_fifo_afs(struct fs3001 *fs3001)
 {
 	unsigned char ret = 0;
 	unsigned char reg_val = 0;
-	
-	pr_info("enter\n");
+
+	sprintf(str,"%s,enter\n",__func__);
+	fs3001_debug_message(fs3001,str);
 	fs3001_i2c_read(fs3001, FS3001_INTSTAT2, &reg_val);
 	reg_val &= FS3001_INTSTAT2_MASK_B1_AF;
 	ret = (reg_val >> 1) & 0x1;
 	return ret;
-}
+}*/
 
 unsigned char fs3001_haptic_rtp_get_fifo_afs_0xAF(struct fs3001 *fs3001)
 {
 	unsigned char reg_val = 0;
 	
-	pr_info("enter\n");
+	sprintf(str,"%s,enter\n",__func__);
+	fs3001_debug_message(fs3001,str);
 	reg_val = fs3001_i2c_read_bits(fs3001, FS3001_INTSTATR2, 1,1);
 	return reg_val;
 }
@@ -299,7 +478,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_f0_ref = FS3001_F0_REF_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_f0_ref=%d\n",fs3001->dts_info.fs3001_f0_ref);
+	}
 
     //fs3001_auto_brake
 	val = of_property_read_u32(np,"fs3001_auto_brake",&fs3001->dts_info.fs3001_auto_brake);
@@ -321,7 +502,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_f0_cali_mode = FS3001_F0_CALI_MODE_AUTO;
 	}		
 	else
+	{
 		pr_info("fs3001_f0_cali_mode=%d\n",fs3001->dts_info.fs3001_f0_cali_mode);
+	}		
 
 	//fs3001_cont_drv1_lvl
 	val = of_property_read_u32(np, "fs3001_cont_drv1_lvl", &fs3001->dts_info.fs3001_cont_drv1_lvl);
@@ -331,7 +514,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_cont_drv1_lvl = FS3001_CONT_DRV1_LVL_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_cont_drv1_lvl=%d\n",fs3001->dts_info.fs3001_cont_drv1_lvl);
+	}			
 
 	//fs3001_cont_drv2_lvl
 	val = of_property_read_u32(np, "fs3001_cont_drv2_lvl",&fs3001->dts_info.fs3001_cont_drv2_lvl);
@@ -341,7 +526,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_cont_drv2_lvl = FS3001_CONT_DRV2_LVL_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_cont_drv2_lvl=%d\n",fs3001->dts_info.fs3001_cont_drv2_lvl);
+	}			
 
 	//fs3001_cont_drv1_time
 	val = of_property_read_u32(np, "fs3001_cont_drv1_time",&fs3001->dts_info.fs3001_cont_drv1_time);
@@ -351,7 +538,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_cont_drv1_time = FS3001_CONT_DRV1_TIME_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_cont_drv1_time = %d\n",fs3001->dts_info.fs3001_cont_drv1_time);
+	}			
 
 	//fs3001_cont_drv2_time
 	val = of_property_read_u32(np, "fs3001_cont_drv2_time",&fs3001->dts_info.fs3001_cont_drv2_time);
@@ -361,7 +550,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_cont_drv2_time = FS3001_CONT_DRV2_TIME_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_cont_drv2_time = %d\n",fs3001->dts_info.fs3001_cont_drv2_time);
+	}		
 
 	//fs3001_cont_1_period
 	val = of_property_read_u32(np,"fs3001_cont_1_period",&fs3001->dts_info.fs3001_cont_1_period);
@@ -371,7 +562,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_cont_1_period = FS3001_CONT_1_PERIOD_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_cont_1_period=%d\n",fs3001->dts_info.fs3001_cont_1_period);
+	}		
 
 	//fs3001_brk_slopeth
 	val = of_property_read_u32(np,"fs3001_brk_slopeth",&fs3001->dts_info.fs3001_brk_slopeth);
@@ -381,7 +574,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_brk_slopeth = FS3001_BRK_SLOPETH_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_brk_slopeth=%d\n",fs3001->dts_info.fs3001_brk_slopeth);
+	}			
 
 	//fs3001_brk_gain
 	val = of_property_read_u32(np, "fs3001_brk_gain", &fs3001->dts_info.fs3001_brk_gain);
@@ -391,7 +586,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_brk_gain = FS3001_BRK_GAIN_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_brk_gain = %d\n",fs3001->dts_info.fs3001_brk_gain);
+	}			
 
 	//fs3001_brk_times
 	val = of_property_read_u32(np, "fs3001_brk_times",&fs3001->dts_info.fs3001_brk_times);
@@ -401,7 +598,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_brk_times = FS3001_BRK_TIMES_DEFAULT;
 	}		
 	else
+	{
 		pr_info("fs3001_brk_times = %d\n",fs3001->dts_info.fs3001_brk_times);
+	}		
 
 	//fs3001_brk_noise_gate
 	val = of_property_read_u32(np, "fs3001_brk_noise_gate",&fs3001->dts_info.fs3001_brk_noise_gate);
@@ -411,7 +610,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_brk_noise_gate = FS3001_BRK_NOISE_GATE_DEFAULT;
 	}		
 	else
+	{
 		pr_info("fs3001_brk_noise_gate = %d\n",fs3001->dts_info.fs3001_brk_noise_gate);
+	}		
 
 	//fs3001_brk_1_period
 	val = of_property_read_u32(np, "fs3001_brk_1_period",&fs3001->dts_info.fs3001_brk_1_period);
@@ -421,17 +622,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_brk_1_period = FS3001_BRK_1_PERIOD_DEFAULT;
 	}		
 	else
-		pr_info("fs3001_brk_1_period = %d\n",fs3001->dts_info.fs3001_brk_1_period);
-
-	//fs3001_gain_adjust
-	val =of_property_read_u32(np, "fs3001_gain_adjust",&fs3001->dts_info.fs3001_gain_adjust);
-	if (val != 0)
 	{
-		pr_err("%s:fs3001_gain_adjust not found\n", FSERROR);
-		fs3001->dts_info.fs3001_gain_adjust = FS3001_GAIN_ADJUST_DEFAULT;
-	}	
-	else
-		pr_info("fs3001_gain_adjust = %d\n",fs3001->dts_info.fs3001_gain_adjust);		
+		pr_info("fs3001_brk_1_period = %d\n",fs3001->dts_info.fs3001_brk_1_period);
+	}			
 
 	//fs3001_brk_pgagain
 	val =of_property_read_u32(np, "fs3001_brk_pgagain",&fs3001->dts_info.fs3001_brk_pgagain);
@@ -441,7 +634,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_brk_pgagain = FS3001_BRK_PGAGAIN_DEFAULT;
 	}	
 	else
+	{
 		pr_info("fs3001_brk_pgagain = %d\n",fs3001->dts_info.fs3001_brk_pgagain);
+	}			
 
 	//fs3001_brk_margin
 	val =of_property_read_u32(np, "fs3001_brk_margin",&fs3001->dts_info.fs3001_brk_margin);
@@ -451,8 +646,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_brk_margin = FS3001_BRK_MARGIN_DEFAULT;
 	}	
 	else
+	{
 		pr_info("fs3001_brk_margin = %d\n",fs3001->dts_info.fs3001_brk_margin);
-
+	}		
 
 	//fs3001_play_ram_srate
 	val =of_property_read_u32(np, "fs3001_play_ram_srate",&fs3001->dts_info.fs3001_play_ram_srate);
@@ -462,7 +658,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_play_ram_srate = FS3001_PLAY_RAM_SRATE_DEFAULT;
 	}	
 	else
+	{
 		pr_info("fs3001_play_ram_srate = %d\n",fs3001->dts_info.fs3001_play_ram_srate);
+	}		
 
 	
 	//fs3001_play_rtp_srate
@@ -473,10 +671,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_play_rtp_srate = FS3001_PLAY_RTP_SRATE_DEFAULT;
 	}	
 	else
+	{
 		pr_info("fs3001_play_rtp_srate = %d\n",fs3001->dts_info.fs3001_play_rtp_srate);
-
-
-
+	}		
 
 	//	fs3001_default_vib_mode
 	val = of_property_read_u32(np,"fs3001_default_vib_mode",&fs3001->dts_info.fs3001_default_vib_mode);
@@ -486,7 +683,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_default_vib_mode = FS3001_DEFAULT_VIB_MODE;
 	}
 	else
+	{
 		pr_info("fs3001_default_vib_mode=%d\n",fs3001->dts_info.fs3001_default_vib_mode);
+	}		
 
 	//	fs3001_vbat_mode
 	val = of_property_read_u32(np, "fs3001_vbat_mode",&fs3001->dts_info.fs3001_vbat_mode);
@@ -496,7 +695,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_vbat_mode = FS3001_VBAT_MODE_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_vbat_mode = %d\n",fs3001->dts_info.fs3001_vbat_mode);
+	}		
 
 	// fs3001_lk_f0_cali
 	val = of_property_read_u32(np, "fs3001_lk_f0_cali", &fs3001->dts_info.fs3001_lk_f0_cali);
@@ -506,7 +707,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_lk_f0_cali = FS3001_LK_F0_CALI_DEFAULT;
 	}		
 	else
+	{
 		pr_info("fs3001_lk_f0_cali = 0x%02x\n", fs3001->dts_info.fs3001_lk_f0_cali);
+	}		
 
 	//	fs3001_bypass_system_gain
 	val = of_property_read_u32(np,"fs3001_bypass_system_gain",&fs3001->dts_info.fs3001_bypass_system_gain);
@@ -516,7 +719,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_bypass_system_gain = FS3001_BYPASS_SYSTEM_GAIN_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_bypass_system_gain=%d\n",fs3001->dts_info.fs3001_bypass_system_gain);
+	}		
 
 	//	fs3001_f0_cali_data_mode
 	val = of_property_read_u32(np,"fs3001_f0_cali_data_mode",&fs3001->dts_info.fs3001_f0_cali_data_mode);
@@ -526,7 +731,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_f0_cali_data_mode = FS3001_F0_CALI_DATA_MODE_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_f0_cali_data_mode=%d\n",fs3001->dts_info.fs3001_f0_cali_data_mode);	
+	}			
 	
 	//	fs3001_lr_pgagain
 	val = of_property_read_u32(np,"fs3001_lr_pgagain",&fs3001->dts_info.fs3001_lr_pgagain);
@@ -536,10 +743,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_lr_pgagain = FS3001_LR_PGAGAIN_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_lr_pgagain=%d\n",fs3001->dts_info.fs3001_lr_pgagain);	
-
-
-
+	}		
 
 	//fs3001_duration_time = < 30 60 90>;
 	val = of_property_read_u32_array(np, "fs3001_duration_time",duration_time,ARRAY_SIZE(duration_time));
@@ -548,7 +754,7 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		pr_err("%s:fs3001_duration_time not found\n", FSERROR);
 		for (i = 0;i < ARRAY_SIZE(duration_time);i++)
 		{
-			fs3001->dts_info.fs3001_duration_time[i] = FS3001_DURATION_TIME_DEFAULT *i + FS3001_DURATION_TIME_DEFAULT;
+			duration_time[i] = FS3001_DURATION_TIME_DEFAULT *i + FS3001_DURATION_TIME_DEFAULT;
 		}
 	}
 	else
@@ -590,17 +796,21 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		fs3001->dts_info.fs3001_rtp_id_boundary = FS3001_RTP_ID_BOUNDARY_DEFAULT;
 	}
 	else
+	{
 		pr_info("fs3001_rtp_id_boundary = %d\n",fs3001->dts_info.fs3001_rtp_id_boundary);
+	}			
 
 	//	fs3001_rtp_max
 	val = of_property_read_u32(np, "fs3001_rtp_max",&fs3001->dts_info.fs3001_rtp_max);
 	if (val != 0)
 	{
 		pr_err("%s:fs3001_rtp_max not found\n", FSERROR);
-		fs3001->dts_info.fs3001_rtp_max = FS3001_RTP_MAX_DEFAULT;
+		fs3001->dts_info.fs3001_rtp_max = FS3001_RTP_MAX_DEFAULT -1;
 	}		
 	else
+	{
 		pr_info("fs3001_rtp_max = %d\n",fs3001->dts_info.fs3001_rtp_max);
+	}		
 
 	//fs3001_rtp_time
 	val = of_property_read_u32_array(np, "fs3001_rtp_time", rtp_time,ARRAY_SIZE(rtp_time));
@@ -609,16 +819,14 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		pr_err("%s:fs3001_rtp_time not found\n", FSERROR);
 		for (i = 0;i < ARRAY_SIZE(rtp_time);i++)
 		{
-			fs3001->dts_info.fs3001_rtp_time[i] = FS3001_RTP_TIME_DEFAULT;
+			rtp_time[i] = FS3001_RTP_TIME_DEFAULT;
 		}
 	}		
 	else
+	{
 		pr_info("fs3001_rtp_time number = %d\n",(int)ARRAY_SIZE(rtp_time));
+	}
 	memcpy(fs3001->dts_info.fs3001_rtp_time, rtp_time, sizeof(rtp_time));
-
-	
-
-
 
 	//xxxx_play_rate_us(not find it in dts)
 	config->play_rate_us = HAP_PLAY_RATE_US_DEFAULT;
@@ -629,8 +837,9 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 		pr_err("%s:qcom,play-rate-us not found,use default value=%d\n", FSERROR,config->play_rate_us);
 	}
 	else
+	{
 		pr_info("qcom,play-rate-us = %d\n",tmp);
-	
+	}		
 
 	//4 related struct��3 need to alloc space(predefined,constant�� and pattern��alloc in next code����and pattern in predefined[alloc space in for_each_available_child_of_node])
 	//struct qti_hap_config config;
@@ -783,19 +992,23 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 //set osc
 static void fs3001_haptic_upload_lra(struct fs3001 *fs3001, unsigned int flag)
 {
-	pr_info("enter flag=%d\n",flag);
+	sprintf(str,"%s,enter flag=%d\n",__func__,flag);
+	fs3001_debug_message(fs3001,str);
 	switch (flag) 
 	{
 		case FS3001_WRITE_ZERO:
-			pr_info("write zero to trim_lra!\n");
+			sprintf(str,"%s,write zero to trim_lra!\n",__func__);
+			fs3001_debug_message(fs3001, str);
 			fs3001_i2c_write(fs3001, FS3001_FTUNECFG,0x90);
 			break;
 		case FS3001_F0_CALI:
-			pr_info("write f0_cali_data to trim_lra = 0x%02X\n", fs3001->f0_cali_data);
+			sprintf(str,"%s,write f0_cali_data to trim_lra = 0x%02X\n",__func__,fs3001->f0_cali_data);
+			fs3001_debug_message(fs3001, str);
 			fs3001_i2c_write(fs3001, FS3001_FTUNECFG,(char)fs3001->f0_cali_data);
 			break;
 		case FS3001_OSC_CALI:
-			pr_info("write osc_cali_data to trim_lra = 0x%02X\n", fs3001->osc_cali_data);
+			sprintf(str, "%s,write osc_cali_data to trim_lra = 0x%02X\n",__func__, fs3001->osc_cali_data);
+			fs3001_debug_message(fs3001, str);
 			fs3001_i2c_write(fs3001, FS3001_FTUNECFG,(char)fs3001->osc_cali_data);
 			break;
 		default:
@@ -809,7 +1022,8 @@ static int fs3001_haptic_stop(struct fs3001 *fs3001)
 	int i_count = 40;
 	unsigned char reg_val_00 = 0;
 	
-	pr_info("enter\n");
+	sprintf(str, "%s, enter, vib_stop_flag = %d\n", __func__, fs3001->vib_stop_flag);
+	fs3001_debug_message(fs3001, str);
 
 	if (fs3001->vib_stop_flag == true)
 	{
@@ -828,11 +1042,13 @@ static int fs3001_haptic_stop(struct fs3001 *fs3001)
 		if((reg_val_00 & 0x01) == 0)
 		{
 			force_flag = false;
-			pr_info("standby state, FS3001_STATUS = %d\n",reg_val_00);
+			sprintf(str, "%s, standby state, FS3001_STATUS = %d\n", __func__,reg_val_00);
+			fs3001_debug_message(fs3001, str);
 			break;
 		}
 		i_count = i_count - 1;
-		pr_info("not in standby state, FS3001_STATUS = %d\n",reg_val_00);
+		sprintf(str, "%s, not in standby state, FS3001_STATUS = %d\n", __func__,reg_val_00);
+		fs3001_debug_message(fs3001, str);
 		usleep_range(2000,2500);
 	}
 	if(force_flag)
@@ -860,7 +1076,8 @@ static void fs3001_haptic_raminit(struct fs3001 *fs3001, bool flag)
 
 static void fs3001_haptic_enable_key(struct fs3001 *fs3001, bool flag)
 {
-	pr_info("enter flag = %d\n",flag);
+	sprintf(str, "%s,enter flag = %d\n",__func__,flag);
+	fs3001_debug_message(fs3001, str);
 
 	if (flag) 
 	{
@@ -877,7 +1094,8 @@ static int fs3001_haptic_get_vbat(struct fs3001 *fs3001)
 	unsigned char reg_val = 0;
 	unsigned int vbat_code = 0;
 	
-	pr_info("enter\n");
+	sprintf(str, "%s,enter\n", __func__);
+	fs3001_debug_message(fs3001, str);
 
 	fs3001_haptic_stop(fs3001);
 
@@ -906,11 +1124,14 @@ static void fs3001_interrupt_clear(struct fs3001 *fs3001)
 {
 	unsigned char reg_val = 0;
 
-	pr_info("enter\n");
+	sprintf(str, "%s, enter\n", __func__);
+	fs3001_debug_message(fs3001, str);
 	fs3001_i2c_read(fs3001, FS3001_INTSTAT1, &reg_val);
-	pr_info("reg SYSINT=0x%02X\n", reg_val);
+	sprintf(str,"%s,reg SYSINT=0x%02X\n",__func__, reg_val);
+	fs3001_debug_message(fs3001, str);
 	fs3001_i2c_read(fs3001, FS3001_INTSTAT2, &reg_val);
-	pr_info("reg SYSINT=0x%02X\n", reg_val);
+	sprintf(str,"%s,reg SYSINT=0x%02X\n",__func__, reg_val);
+	fs3001_debug_message(fs3001, str);
 }
 
 static int fs3001_haptic_set_gain(struct fs3001 *fs3001, unsigned char gain)
@@ -918,7 +1139,8 @@ static int fs3001_haptic_set_gain(struct fs3001 *fs3001, unsigned char gain)
 	unsigned char comp_gain = 0;
 	unsigned char uc_VBD = 0;
 
-	pr_info("enter gain = 0x%x\n",gain);
+	sprintf(str, "%s, enter gain = 0x%x\n", __func__,gain);
+	fs3001_debug_message(fs3001, str);
 
 	switch (fs3001->dts_info.fs3001_vbat_mode) 
 	{
@@ -926,20 +1148,24 @@ static int fs3001_haptic_set_gain(struct fs3001 *fs3001, unsigned char gain)
 		case FS3001_HAPTIC_VBAT_COMP_DISABLE:
 		case FS3001_HAPTIC_VBAT_COMP_PLAY_AUTO_BRK_DISABLE:
 		case FS3001_HAPTIC_VBAT_COMP_PLAY_AUTO_BRK_ENABLE:
-			pr_info("vbat mode = %d, gain=0x%x", fs3001->dts_info.fs3001_vbat_mode,gain);
+			sprintf(str, "%s, vbat mode = %d, gain=0x%x", __func__, fs3001->dts_info.fs3001_vbat_mode,gain);
+			fs3001_debug_message(fs3001, str);
 			fs3001_i2c_write(fs3001, FS3001_GAINCFG, gain);
 			break;
 		//by adjust the gain
 		case FS3001_HAPTIC_VBAT_COMP_PLAY_GAIN_BRK_DISABLE:
 			fs3001_haptic_get_vbat(fs3001);
-			pr_info("vbat mode = %d, vbat=%d, vbat_min=%d, vbat_ref=%d", fs3001->dts_info.fs3001_vbat_mode,fs3001->vbat, FS3001_VBAT_MIN, FS3001_VBAT_REFER);
+			sprintf(str, "%s, vbat mode = %d, vbat=%d, vbat_min=%d, vbat_ref=%d", __func__, fs3001->dts_info.fs3001_vbat_mode,fs3001->vbat, FS3001_VBAT_MIN, FS3001_VBAT_REFER);
+			fs3001_debug_message(fs3001, str);
+			
 			comp_gain = fs3001->gain * FS3001_VBAT_REFER / fs3001->vbat;
 			if (comp_gain > (128 * FS3001_VBAT_REFER / FS3001_VBAT_MIN)) 
 			{
 				comp_gain = 128 * FS3001_VBAT_REFER / FS3001_VBAT_MIN;
 				pr_info("gain limit=%d\n",comp_gain);
 			}
-			pr_info("enable vbat comp, level = %x comp level = %x",gain, comp_gain);
+			sprintf(str, "%s, enable vbat comp, level = %x comp level = %x\n", __func__,gain, comp_gain);
+			fs3001_debug_message(fs3001, str);
 			fs3001_i2c_write(fs3001, FS3001_GAINCFG, comp_gain);
 			break;
 		//manu vbat
@@ -949,7 +1175,8 @@ static int fs3001_haptic_set_gain(struct fs3001 *fs3001, unsigned char gain)
 			
 			fs3001_haptic_get_vbat(fs3001);
 			uc_VBD = 64*fs3001->vbat/6;
-			pr_info("vbat mode = %d, vbat=%d, VBD=%d", fs3001->dts_info.fs3001_vbat_mode,fs3001->vbat, uc_VBD);
+			sprintf(str, "%s, vbat mode = %d, vbat=%d, VBD=%d\n", __func__, fs3001->dts_info.fs3001_vbat_mode,fs3001->vbat, uc_VBD);
+			fs3001_debug_message(fs3001, str);
 			if(uc_VBD>0)
 			{
 				fs3001_i2c_write_bits_1(fs3001, FS3001_VCOMPCFG,uc_VBD,5,0);
@@ -966,7 +1193,8 @@ static int fs3001_haptic_set_gain(struct fs3001 *fs3001, unsigned char gain)
 //vbat mode
 static int fs3001_haptic_vbat_mode_config(struct fs3001 *fs3001,unsigned int mode)
 {
-	pr_info("enter mode = %d\n",mode);
+	sprintf(str, "%s, enter mode = %d\n", __func__,mode);
+	fs3001_debug_message(fs3001, str);
 
 	switch (mode) 
 	{
@@ -999,7 +1227,8 @@ static int fs3001_haptic_vbat_mode_config(struct fs3001 *fs3001,unsigned int mod
 //vbat compensate
 static int fs3001_haptic_ram_vbat_compensate(struct fs3001 *fs3001,bool flag)
 {
-	pr_info("enter flag = %d\n",flag);
+	sprintf(str, "%s, enter flag = %d\n", __func__,flag);
+	fs3001_debug_message(fs3001, str);
 
 	if (flag)
 		fs3001_haptic_vbat_mode_config(fs3001,fs3001->dts_info.fs3001_vbat_mode);
@@ -1011,12 +1240,15 @@ static int fs3001_haptic_ram_vbat_compensate(struct fs3001 *fs3001,bool flag)
 
 static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode)
 {
-	pr_info("enter\n");
+	sprintf(str, "%s, enter: mode=%d\n", __func__,play_mode);
+	fs3001_debug_message(fs3001, str);
 
 	switch (play_mode) 
 	{
 		case FS3001_HAPTIC_STANDBY_MODE:
-			pr_info("enter standby mode\n");
+			sprintf(str, "%s, enter standby mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_STANDBY_MODE;
 			fs3001_haptic_stop(fs3001);
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,0,1,0);
@@ -1026,7 +1258,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
 			break;
 		case FS3001_HAPTIC_RAM_MODE:
-			pr_info("enter ram mode\n");
+			sprintf(str, "%s, enter ram mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_RAM_MODE;
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,0,1,0);
 			// disable f0 detect
@@ -1035,7 +1269,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
 			break;
 		case FS3001_HAPTIC_RAM_LOOP_MODE:
-			pr_info("enter ram loop mode\n");
+			sprintf(str, "%s, enter ram loop mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_RAM_LOOP_MODE;
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,0,1,0);
 			// disable f0 detect
@@ -1044,7 +1280,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
 			break;
 		case FS3001_HAPTIC_RTP_MODE:
-			pr_info("enter rtp mode\n");
+			sprintf(str, "%s, enter rtp mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_RTP_MODE;
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,1,1,0);
 			// disable f0 detect
@@ -1053,7 +1291,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
 			break;
 		case FS3001_HAPTIC_TRIG_MODE:
-			pr_info("enter trig mode\n");
+			sprintf(str, "%s, enter trig mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_TRIG_MODE;
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,0,1,0);
 			// disable f0 detect
@@ -1062,7 +1302,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
 			break;
 		case FS3001_HAPTIC_CONT_MODE:
-			pr_info("enter cont mode\n");
+			sprintf(str, "%s, enter cont mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_CONT_MODE;
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,2,1,0);
 			// disable f0 detect
@@ -1071,7 +1313,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
 	        break;
 		case FS3001_HAPTIC_F0_DETECT_MODE:
-			pr_info("enter F0 detect mode\n");
+			sprintf(str, "%s, enter F0 detect mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_F0_DETECT_MODE;
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,2,1,0);
 			// enable f0 detect
@@ -1080,7 +1324,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
 			break;
 		case FS3001_HAPTIC_F0_CALI_MODE:
-			pr_info("enter F0 cali mode\n");
+			sprintf(str, "%s, enter F0 cali mode\n", __func__);
+			fs3001_debug_message(fs3001, str);
+			
 			fs3001->play_mode = FS3001_HAPTIC_F0_CALI_MODE;
 			fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,3,1,0);
 			// enable f0 detect
@@ -1099,7 +1345,8 @@ static int fs3001_haptic_play_go(struct fs3001 *fs3001)
 {
 	unsigned char reg_val = 0;
 
-	pr_info("enter\n");
+	sprintf(str, "%s, enter\n", __func__);
+	fs3001_debug_message(fs3001, str);
 
 	fs3001_i2c_write(fs3001, FS3001_OPCTRL, 0x00);//Do a stop action regardless of whether the flag is false
 			
@@ -1111,7 +1358,7 @@ static int fs3001_haptic_play_go(struct fs3001 *fs3001)
 	fs3001_i2c_write_bits_1(fs3001, FS3001_ANACTRL,0,6,6);
 	fs3001_haptic_enable_key(fs3001,false);
 
-	mdelay(2);
+	//mdelay(2);
 	fs3001->vib_stop_flag = false;
 
 	return 0;
@@ -1119,14 +1366,20 @@ static int fs3001_haptic_play_go(struct fs3001 *fs3001)
 
 static int fs3001_haptic_set_wav_seq(struct fs3001 *fs3001,unsigned char wav, unsigned char seq)
 {
-	pr_info("enter wav=%d  seq=%d\n",wav,seq);
+	sprintf(str, "%s, enter wav=%d  seq=%d\n", __func__,wav,seq);
+	fs3001_debug_message(fs3001, str);
+	
 	fs3001_i2c_write_bits_1(fs3001, FS3001_WFSCFG1 + wav, seq, 6, 0);
 	return 0;
 }
 
 static int fs3001_haptic_set_wav_loop(struct fs3001 *fs3001,unsigned char wav, unsigned char loop)
 {
-	pr_info("enter  wav=%d   loop=%d\n",wav,loop);
+
+	sprintf(str, "%s, enter  wav=%d   loop=%d\n", __func__,wav,loop);
+	fs3001_debug_message(fs3001, str);
+
+	
 	if (wav % 2 == 0) 
 	{
 		fs3001_i2c_write_bits_1(fs3001, FS3001_WFSLOOP1 + (wav / 2),loop,3,0);
@@ -1146,7 +1399,7 @@ static int fs3001_haptic_read_lra_f0(struct fs3001 *fs3001)
 	unsigned int f0_reg = 0;
 	unsigned long f0_tmp = 0;
 
-	pr_info("enter = %d\n",ret);
+	pr_info("enter %d\n",ret);
 	//F_LRA_F0_L
 	ret = fs3001_i2c_read(fs3001, FS3001_F0CALB_L, &reg_val);
 	ret = fs3001_i2c_read(fs3001, FS3001_F0CALB_L, &reg_val);
@@ -1157,7 +1410,7 @@ static int fs3001_haptic_read_lra_f0(struct fs3001 *fs3001)
 	if (!f0_reg) 
 	{
 		pr_err("%s:didn't get lra f0 because f0_reg value is 0!\n", FSERROR);
-		fs3001->f0 = fs3001->dts_info.fs3001_f0_ref;
+		fs3001->f0 = 0;
 		return -1;
 	} 
 	else 
@@ -1178,7 +1431,7 @@ static int fs3001_haptic_read_cont_f0(struct fs3001 *fs3001)
 	unsigned int f0_reg = 0;
 	unsigned long f0_tmp = 0;
 
-	pr_info("enter = %d\n",ret);
+	pr_info("enter %d\n",ret);
 	ret = fs3001_i2c_read(fs3001, FS3001_F0TRK_L, &reg_val);
 	ret = fs3001_i2c_read(fs3001, FS3001_F0TRK_L, &reg_val);
 	f0_reg = reg_val;
@@ -1209,7 +1462,7 @@ static int fs3001_haptic_cont_get_f0(struct fs3001 *fs3001)
 	unsigned int cnt = 200;
 	bool get_f0_flag = false;
 
-	pr_info("enter\n");
+	pr_info("enter %d\n",ret);
 	fs3001->f0 = fs3001->dts_info.fs3001_f0_ref;
 	// enter standby mode
 	fs3001_haptic_stop(fs3001);
@@ -1252,12 +1505,14 @@ static int fs3001_haptic_rtp_init(struct fs3001 *fs3001)
 	unsigned char DIGSTAT_OPS = 0;
 
 	pr_info("enter fs3001->play_mode=%d\n",fs3001->play_mode);
-	pm_qos_enable(true);
+	pm_qos_enable(fs3001, true);
 	fs3001->rtp_cnt = 0;
 	mutex_lock(&fs3001->rtp_lock);
-	while ((!fs3001_haptic_rtp_get_fifo_afs(fs3001)) && (fs3001->play_mode == FS3001_HAPTIC_RTP_MODE) &&  !atomic_read(&fs3001->exit_in_rtp_loop)) 
+	while ((!fs3001_haptic_rtp_get_fifo_afs_0xAF(fs3001)) && (fs3001->play_mode == FS3001_HAPTIC_RTP_MODE) &&  !atomic_read(&fs3001->exit_in_rtp_loop)) 
 	{
-		pr_info("rtp cnt = %d\n",fs3001->rtp_cnt);
+		sprintf(str,"%s,rtp cnt = %d\n",__func__,fs3001->rtp_cnt);
+		fs3001_debug_message(fs3001, str);
+		
 		if (!fs3001->rtp_container) 
 		{
 			pr_err("%s,fs3001->rtp_container is null, break!\n",FSERROR);
@@ -1282,7 +1537,10 @@ static int fs3001_haptic_rtp_init(struct fs3001 *fs3001)
 		{
 			buf_len = fs3001->ram.base_addr >> 2;
 		}
-		pr_info("buf_len = %d\n",buf_len);
+
+		sprintf(str,"%s,buf_len = %d\n",__func__,buf_len);
+		fs3001_debug_message(fs3001, str);
+		
 		fs3001_i2c_writes(fs3001,FS3001_RTPWDATA,&fs3001->rtp_container->data[fs3001->rtp_cnt],buf_len);
 		fs3001->rtp_cnt += buf_len;
 		fs3001_i2c_read(fs3001, FS3001_DIGSTAT, &DIGSTAT_OPS);//DIGSTAT_OPS == 0x00  inactive
@@ -1294,7 +1552,7 @@ static int fs3001_haptic_rtp_init(struct fs3001 *fs3001)
 			else
 				pr_err("%s:rtp load failed!! DIGSTAT_OPS=0x%02x fs3001->rtp_cnt=%d\n", FSERROR, DIGSTAT_OPS,fs3001->rtp_cnt);
 			fs3001->rtp_cnt = 0;
-			pm_qos_enable(false);
+			pm_qos_enable(fs3001, false);
 			fs3001_haptic_raminit(fs3001,false);
 			mutex_unlock(&fs3001->rtp_lock);
 			return 0;
@@ -1305,8 +1563,9 @@ static int fs3001_haptic_rtp_init(struct fs3001 *fs3001)
 	if (fs3001->play_mode == FS3001_HAPTIC_RTP_MODE && !atomic_read(&fs3001->exit_in_rtp_loop))
 		fs3001_haptic_set_rtp_aei(fs3001, true);
 
-	pr_info("exit\n");
-	pm_qos_enable(false);
+	sprintf(str,"%s,exit\n",__func__);
+	fs3001_debug_message(fs3001,str);
+	pm_qos_enable(fs3001, false);
 	return 0;
 }
 
@@ -1337,7 +1596,8 @@ static int fs3001_haptic_set_pgagain(struct fs3001 *fs3001,unsigned char pgagain
 
 static int fs3001_haptic_set_pwm(struct fs3001 *fs3001, unsigned char mode)
 {
-	pr_info("enter mode=%d\n",mode);
+	sprintf(str, "%s, enter mode=%d\n", __func__,mode);
+	fs3001_debug_message(fs3001, str);
 
 	fs3001_i2c_write_bits_1(fs3001, FS3001_SYSCTRL,mode,5,4);
 	return 0;
@@ -1345,8 +1605,8 @@ static int fs3001_haptic_set_pwm(struct fs3001 *fs3001, unsigned char mode)
 
 static int16_t fs3001_haptic_effect_strength(struct fs3001 *fs3001)
 {
-	pr_info("enter\n");
-	pr_info("fs3001->play.vmax_mv =0x%x\n",fs3001->play.vmax_mv);
+	sprintf(str, "%s, enter fs3001->play.vmax_mv =0x%x\n", __func__,fs3001->play.vmax_mv);
+	fs3001_debug_message(fs3001, str);
 #if 0
 	switch (fs3001->play.vmax_mv) 
 	{
@@ -1373,7 +1633,9 @@ static int16_t fs3001_haptic_effect_strength(struct fs3001 *fs3001)
 		fs3001->level = 0x1E;	//30
 #endif
 
-	pr_info("fs3001->level =0x%x\n", fs3001->level);
+	sprintf(str, "%s,fs3001->level =0x%x\n", __func__, fs3001->level);
+	fs3001_debug_message(fs3001, str);
+
 	return 0;
 }
 
@@ -1386,14 +1648,17 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 	bool rtp_work_flag = false;
 	struct fs3001 *fs3001 = container_of(work, struct fs3001, rtp_work);
 
-	pr_info("enter fs3001->effect_id=%d,fs3001->dts_info.fs3001_rtp_id_boundary=%d, fs3001->dts_info.fs3001_rtp_max=%d,fs3001->dts_info.fs3001_bypass_system_gain=%d\n",fs3001->effect_id,fs3001->dts_info.fs3001_rtp_id_boundary,fs3001->dts_info.fs3001_rtp_max,fs3001->dts_info.fs3001_bypass_system_gain);
+	sprintf(str,"%s,enter fs3001->effect_id=%d,fs3001->dts_info.fs3001_rtp_id_boundary=%d, fs3001->dts_info.fs3001_rtp_max=%d,fs3001->dts_info.fs3001_bypass_system_gain=%d\n",__func__, fs3001->effect_id,fs3001->dts_info.fs3001_rtp_id_boundary,fs3001->dts_info.fs3001_rtp_max,fs3001->dts_info.fs3001_bypass_system_gain);
+	fs3001_debug_message(fs3001, str);
 
-	if ((fs3001->effect_id < fs3001->dts_info.fs3001_rtp_id_boundary) && (fs3001->effect_id > fs3001->dts_info.fs3001_rtp_max))
+	if ((fs3001->effect_id < fs3001->dts_info.fs3001_rtp_id_boundary) || (fs3001->effect_id > fs3001->dts_info.fs3001_rtp_max))
 	{
 		return;
 	}
-		
-	pr_info("effect_id =%d state = %d\n", fs3001->effect_id,fs3001->state);
+
+	sprintf(str,"%s,effect_id =%d state = %d\n", __func__,fs3001->effect_id,fs3001->state);
+	fs3001_debug_message(fs3001, str);
+	
 	mutex_lock(&fs3001->lock);
 	fs3001_haptic_upload_lra(fs3001, FS3001_OSC_CALI);
 	fs3001_haptic_set_rtp_aei(fs3001, false);
@@ -1402,7 +1667,8 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 	atomic_set(&fs3001->exit_in_rtp_loop, 1);
 	while (atomic_read(&fs3001->is_in_rtp_loop)) 
 	{
-		pr_info("goint to waiting irq exit\n");
+		sprintf(str,"%s,goint to waiting irq exit\n",__func__);
+		fs3001_debug_message(fs3001, str);
 		ret = wait_event_interruptible(fs3001->wait_q,atomic_read(&fs3001->is_in_rtp_loop) == 0);
 		pr_info("wakeup \n");
 		if (ret == -ERESTARTSYS) 
@@ -1423,14 +1689,15 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 		pm_stay_awake(fs3001->dev);
 		fs3001->wk_lock_flag = 1;
 		
-		//xxxx  ??
-		//fs3001->rtp_file_num = fs3001->effect_id - 20;
+		fs3001->rtp_file_num = fs3001->effect_id - 20;
 		
 		if (fs3001->rtp_file_num < 0)
 			fs3001->rtp_file_num = 0;
 		if (fs3001->rtp_file_num > ((sizeof(fs3001_rtp_name) / FS3001_RTP_NAME_MAX) - 1))
 			fs3001->rtp_file_num = (sizeof(fs3001_rtp_name) / FS3001_RTP_NAME_MAX) - 1;
-		pr_info("fs3001->rtp_file_num =%d\n",fs3001->rtp_file_num);
+		
+		sprintf(str,"%s,fs3001->rtp_file_num =%d\n",__func__,fs3001->rtp_file_num);
+		fs3001_debug_message(fs3001, str);
 
 
 		//fw loaded
@@ -1462,7 +1729,10 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 			return;
 		}
 		fs3001->rtp_container->len = rtp_file->size;
-		pr_info("rtp file:[%s] size = %dbytes\n",fs3001_rtp_name[fs3001->rtp_file_num],fs3001->rtp_container->len);
+		
+		sprintf(str,"%s,rtp file:[%s] size = %dbytes\n",__func__,fs3001_rtp_name[fs3001->rtp_file_num],fs3001->rtp_container->len);
+		fs3001_debug_message(fs3001, str);
+		
 		memcpy(fs3001->rtp_container->data, rtp_file->data, rtp_file->size);
 		release_firmware(rtp_file);
 		fs3001->rtp_init = 1;//memcpy(fs3001->rtp_container->data, rtp_file->data, rtp_file->size);
@@ -1482,9 +1752,8 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 		fs3001_haptic_raminit(fs3001,true);
 		//haptic go
 		fs3001_haptic_play_go(fs3001);
-		//The AE and E interrupts of FS3001 need to be clear again: here, although all masks of INT are closed and will not enter FS3001_irq, we will open the mask of almost empty when almost full occurs
-		//It does not matter if the FS3001_interrupt_clear operation is not performed here. After all, the mask is turned off and will not cause an actual interrupt
-		//fs3001_interrupt_clear(fs3001);
+
+		fs3001_i2c_read(fs3001, FS3001_INTSTAT2, &reg_val);//clear int
 		mutex_unlock(&fs3001->lock);
 		usleep_range(2000, 2500);
 		while (cnt) 
@@ -1494,15 +1763,18 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 			{
 				cnt = 0;
 				rtp_work_flag = true;
-				pr_info("RTP_GO! OPS = 2\n");
+				sprintf(str,"%s,RTP_GO! OPS = 2\n",__func__);
+				fs3001_debug_message(fs3001,str);
 			} 
 			else 
 			{
 				cnt--;
-				pr_info("wait for RTP_GO, OPS=%d\n",(reg_val>>4));
+				sprintf(str,"%s,wait for RTP_GO, OPS=%d\n",__func__,(reg_val>>4));
+				fs3001_debug_message(fs3001, str);
 			}
 			usleep_range(2000, 2500);
 		}
+		
 		if (rtp_work_flag) 
 		{
 			fs3001_haptic_rtp_init(fs3001);
@@ -1516,7 +1788,8 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 	}
 	else 
 	{
-		pr_info("fs3001->state=%d, fs3001->wk_lock_flag=%d\n",fs3001->state,fs3001->wk_lock_flag);
+		sprintf(str,"%s,fs3001->state=%d, fs3001->wk_lock_flag=%d\n",__func__,fs3001->state,fs3001->wk_lock_flag);
+		fs3001_debug_message(fs3001, str);
 		if (fs3001->wk_lock_flag == 1) 
 		{
 			pm_relax(fs3001->dev);
@@ -1581,7 +1854,7 @@ static int fs3001_rtp_osc_calibration(struct fs3001 *fs3001)
 	fs3001_haptic_play_go(fs3001);
 	fs3001_interrupt_clear(fs3001);//need to do it immediately, otherwise fs3001_haptic_rtp_get_fifo_afs will get wrong result
 	//require latency of CPU & DMA not more then PM_QOS_VALUE_VB us
-	pm_qos_enable(true);
+	pm_qos_enable(fs3001, true);
 	while (1) 
 	{
 		//!almost full
@@ -1622,7 +1895,7 @@ static int fs3001_rtp_osc_calibration(struct fs3001 *fs3001)
 			break;
 		}
 	}
-	pm_qos_enable(false);
+	pm_qos_enable(fs3001, false);
 	enable_irq(gpio_to_irq(fs3001->irq_gpio));
 
 	//burst mode disable
@@ -1730,6 +2003,7 @@ static int fs3001_haptic_get_lra_resistance(struct fs3001 *fs3001)
 	uc_0x2A = fs3001_i2c_read_bits(fs3001, FS3001_PGACTRL, 3,0);
 
 	fs3001->lra = (fs3001->offset - ui_BCBD) * 428600 / (1024 * get_d2sgain(uc_0x2A));
+	fs3001->lra = fs3001->lra *100;//need to * 100 (In get_d2sgain function, gain has been amplified by 100 times )
 	pr_info("fs3001->offset=%d,ui_BCBD=%d,uc_0x2A=%d,fs3001->lra=%d\n",fs3001->offset,ui_BCBD,uc_0x2A,fs3001->lra);
 	fs3001_haptic_set_diagnostic_reg_to_default_value(fs3001);
 	mutex_unlock(&fs3001->lock);
@@ -2096,7 +2370,7 @@ static int fs3001_haptic_f0_calibration(struct fs3001 *fs3001)
 		fs3001->f0_cali_data = ui_0x7B;
 		//set new osc
 		fs3001_haptic_upload_lra(fs3001, FS3001_F0_CALI);
-		//fs3001_haptic_cont_get_f0(fs3001);//get new f0
+		//xxxx fs3001_haptic_cont_get_f0(fs3001);//get new f0
 		fs3001_haptic_play_mode(fs3001, FS3001_HAPTIC_STANDBY_MODE);
 		
 	}
@@ -2256,7 +2530,9 @@ static int fs3001_haptic_audio_init(struct fs3001 *fs3001)
 
 static int fs3001_haptic_activate(struct fs3001 *fs3001)
 {
-	pr_info("enter\n");
+	sprintf(str, "%s, enter\n", __func__);
+	fs3001_debug_message(fs3001, str);
+	
 	fs3001_interrupt_clear(fs3001);
 	//xxxx_?? open UV INT
 	fs3001_i2c_write_bits_1(fs3001, FS3001_INTMASK1,0,6,6);
@@ -2265,7 +2541,9 @@ static int fs3001_haptic_activate(struct fs3001 *fs3001)
 
 static int fs3001_haptic_start(struct fs3001 *fs3001)
 {
-	pr_info("enter\n");
+	sprintf(str, "%s, enter\n", __func__);
+	fs3001_debug_message(fs3001, str);
+	
 	fs3001_haptic_activate(fs3001);
 	fs3001_haptic_play_go(fs3001);
 	return 0;
@@ -2857,15 +3135,15 @@ static ssize_t fs3001_rtp_store(struct device *dev,struct device_attribute *attr
 	// Set the INT of almost emtpy. This is set in the fs3001_rtp_work_routine function, so it is not needed here
 	//fs3001_haptic_set_rtp_aei(fs3001, false);
 	//fs3001_interrupt_clear(fs3001);
-	if (val < (sizeof(fs3001_rtp_name) / FS3001_RTP_NAME_MAX)) 
+	if (val < (sizeof(fs3001_rtp_name) / FS3001_RTP_NAME_MAX)) //xxxx_please refer to basic-51
 	{
-		fs3001->rtp_file_num = val;
-		pr_info("fs3001_rtp_name[%d]: %s\n",val, fs3001_rtp_name[val]);
+		fs3001->effect_id = val;
+		pr_info("fs3001_rtp_name[%d]: %s\n",(val - 20), fs3001_rtp_name[val - 20]);
 		schedule_work(&fs3001->rtp_work);
 	}
 	else
 	{
-		pr_err("%s:rtp_file_num 0x%02X over max value\n", FSERROR, fs3001->rtp_file_num);
+		pr_err("%s:rtp_file_num 0x%02X over max value\n", FSERROR, val);
 	}
 	mutex_unlock(&fs3001->lock);
 	return count;
@@ -3023,8 +3301,11 @@ static ssize_t fs3001_duration_store(struct device *dev,struct device_attribute 
 	//setting 0 on duration is NOP for now
 	if (val <= 0)
 		return count;
-	fs3001_haptic_duration_ram_play_config(fs3001,val);
+
+	//xxxx need to add this function in some platforms[fs3001_haptic_play_effect_seq-->fs3001_haptic_set_repeat_wav_seq]
+	//fs3001_haptic_duration_ram_play_config(fs3001,val);
 	fs3001->duration = val;
+	pr_info("duration=%d\n",fs3001->duration);
 	return count;
 }
 
@@ -3080,10 +3361,17 @@ static ssize_t fs3001_seq_show(struct device *dev,struct device_attribute *attr,
 
 static ssize_t fs3001_seq_store(struct device *dev, struct device_attribute *attr, const char *buf,size_t count)
 {
+	int rc = 0, i = 0;
+	unsigned int val = 0;
+
 	struct fs3001 *fs3001 = g_foursemi->fs3001;
+#if 0	
 	unsigned int databuf[2] = { 0, 0 };
+#endif
+
 	pr_info("enter\n");
 
+#if 0	
 	if (sscanf(buf, "%x %x", &databuf[0], &databuf[1]) == 2) 
 	{
 		if (databuf[0] >= FS3001_SEQUENCER_SIZE) 
@@ -3097,6 +3385,25 @@ static ssize_t fs3001_seq_store(struct device *dev, struct device_attribute *att
 		fs3001_haptic_set_wav_seq(fs3001, (unsigned char)databuf[0],fs3001->seq[databuf[0]]);
 		mutex_unlock(&fs3001->lock);
 	}
+#endif
+	/* custom for moto */
+	rc = kstrtouint(buf,0, &val); 
+	if (rc < 0)
+		return rc;
+	
+	//val = val << 24;
+	pr_info("%s: value=%d\n",__func__,val); 
+	
+	mutex_lock(&fs3001->lock); 
+	for(i=0; i<4; i++) {
+		/* moto_mode_ctl[0] get databuf[0] byte4 */
+		fs3001->moto_mode_ctl[i]= (val>>((3-i)*8)) & 0xFF; 
+		fs3001_haptic_set_wav_seq(fs3001,i,fs3001->moto_mode_ctl[i]);
+		sprintf(str,"%s: moto_mode_ctl[%d]=%d\n",__func__, i, fs3001->moto_mode_ctl[i]);
+		fs3001_debug_message(fs3001,str);
+	}
+	mutex_unlock(&fs3001->lock);
+
 	return count;
 }
 
@@ -3270,7 +3577,7 @@ static ssize_t fs3001_gain_store(struct device *dev,struct device_attribute *att
 	if (val >= 0x80)
 		val = 0x80;
 	mutex_lock(&fs3001->lock);
-	fs3001->gain = val + fs3001->dts_info.fs3001_gain_adjust;
+	fs3001->gain = val;
 	fs3001_haptic_set_gain(fs3001, fs3001->gain);
 	mutex_unlock(&fs3001->lock);
 	return count;
@@ -3526,7 +3833,7 @@ static ssize_t fs3001_lra_resistance_show(struct device *dev,struct device_attri
 	}
 	
 	fs3001_haptic_get_lra_resistance(fs3001);
-	len += snprintf(buf + len, PAGE_SIZE - len, "lra_resistance = %d\n",fs3001->lra);
+	len += snprintf(buf + len, PAGE_SIZE - len, "%d\n",fs3001->lra);
 
 	if(fs3001->dts_info.fs3001_lr_pgagain != fs3001->dts_info.fs3001_brk_pgagain)
 	{
@@ -3780,7 +4087,7 @@ static ssize_t fs3001_debug_enable_store(struct device *dev, struct device_attri
 		pr_info("debug_enable = %d\n",databuf[0]);
 		if (databuf[0] != 0 && databuf[0] != 1)
 		{
-			pr_info("1:input value_0=%d out of range\n",databuf[0]);
+			pr_info("1:input value=%d out of range\n",databuf[0]);
 			return count;
 		}
 		
@@ -3791,17 +4098,17 @@ static ssize_t fs3001_debug_enable_store(struct device *dev, struct device_attri
 	return count;
 }
 
-static ssize_t fs3001_gain_adjust_show(struct device *dev,struct device_attribute *attr, char *buf)
+static ssize_t fs3001_effect_id_show(struct device *dev,struct device_attribute *attr, char *buf)
 {
 	struct fs3001 *fs3001 = g_foursemi->fs3001;
 	ssize_t len = 0;
 	pr_info("enter\n");
 
-	len += snprintf(buf + len, PAGE_SIZE - len,"gain_adjust = 0x%02X\n",fs3001->dts_info.fs3001_gain_adjust);
+	len += snprintf(buf + len, PAGE_SIZE - len,"effect_id = 0x%02X\n",fs3001->effect_id);
 	return len;
 }
 
-static ssize_t fs3001_gain_adjust_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t fs3001_effect_id_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct fs3001 *fs3001 = g_foursemi->fs3001;
 	unsigned int databuf[1] = { 0 };
@@ -3809,16 +4116,78 @@ static ssize_t fs3001_gain_adjust_store(struct device *dev, struct device_attrib
 
 	if (sscanf(buf, "%x", &databuf[0]) == 1) 
 	{
-		pr_info("debug_enable = %d\n",databuf[0]);
-		if (databuf[0] < 0 || databuf[0] >= 128)
+		if (databuf[0] < 0)
 		{
-			pr_info("1:input value_0=%d out of range\n",databuf[0]);
+			pr_info("1:input value=%d out of range\n",databuf[0]);
 			return count;
 		}
 		
-		fs3001->dts_info.fs3001_gain_adjust = databuf[0];
-		pr_info("2:gain_adjust = %d\n",fs3001->dts_info.fs3001_gain_adjust);
+		fs3001->effect_id = databuf[0];
+		pr_info("2:effect_id = %d\n",fs3001->effect_id);
 	}
+
+
+	return count;
+}
+
+static ssize_t fs3001_buf_size_show(struct device *dev,struct device_attribute *attr, char *buf)
+{
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+	ssize_t len = 0;
+	pr_info("enter\n");
+
+	len += snprintf(buf + len, PAGE_SIZE - len,"buf_size = %d\n",fs3001->buf_size);
+	return len;
+}
+
+static ssize_t fs3001_buf_size_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+	unsigned int val = 0;
+	int rc = 0;
+
+	pr_info("enter\n");
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+	{
+		pr_err("%s:input value out of range\n", FSERROR);
+		return rc;
+	}
+
+    fs3001->buf_size = val;
+    pr_info("buf_size = %d\n",fs3001->buf_size);
+
+	return count;
+}
+
+static ssize_t fs3001_Qos_time_show(struct device *dev,struct device_attribute *attr, char *buf)
+{
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+	ssize_t len = 0;
+	pr_info("enter\n");
+
+	len += snprintf(buf + len, PAGE_SIZE - len,"Qos_time = %d\n",fs3001->Qos_time);
+	return len;
+}
+
+static ssize_t fs3001_Qos_time_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+	unsigned int val = 0;
+	int rc = 0;
+
+	pr_info("enter\n");
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+	{
+		pr_err("%s:input value out of range\n", FSERROR);
+		return rc;
+	}
+
+    fs3001->Qos_time = val;
+    pr_info("Qos_time = %d\n",fs3001->Qos_time);
 
 	return count;
 }
@@ -3892,7 +4261,9 @@ static DEVICE_ATTR(version, 0644, fs3001_version_show, NULL);
 static DEVICE_ATTR(reg_inits, 0644, fs3001_reg_inits_show,NULL);
 static DEVICE_ATTR(reset, 0644, NULL,fs3001_reset_store);
 static DEVICE_ATTR(debug_enable, 0644, fs3001_debug_enable_show, fs3001_debug_enable_store);
-static DEVICE_ATTR(gain_adjust, 0644, fs3001_gain_adjust_show, fs3001_gain_adjust_store);
+static DEVICE_ATTR(effect_id, 0644, fs3001_effect_id_show, fs3001_effect_id_store);
+static DEVICE_ATTR(buf_size, 0644, fs3001_buf_size_show, fs3001_buf_size_store);
+static DEVICE_ATTR(Qos_time, 0644, fs3001_Qos_time_show, fs3001_Qos_time_store);
 static DEVICE_ATTR(auto_brake, 0644, fs3001_auto_brake_show, fs3001_auto_brake_store);
 
 
@@ -3934,8 +4305,10 @@ static struct attribute *fs3001_vibrator_attributes[] =
 	&dev_attr_reg_inits.attr,
 	&dev_attr_reset.attr,
 	&dev_attr_debug_enable.attr,
-	&dev_attr_gain_adjust.attr,
-    &dev_attr_auto_brake.attr,
+	&dev_attr_effect_id.attr,
+	&dev_attr_buf_size.attr,
+	&dev_attr_Qos_time.attr,
+	&dev_attr_auto_brake.attr,
 	NULL
 };
 
@@ -3947,7 +4320,8 @@ struct attribute_group fs3001_vibrator_attribute_group =
 
 static int fs3001_haptic_play_effect_seq(struct fs3001 *fs3001, unsigned char flag)
 {
-	pr_info("enter flag = %d,fs3001->effect_id =%d,fs3001->dts_info.fs3001_rtp_id_boundary = %d,fs3001->activate_mode =%d,fs3001->dts_info.fs3001_bypass_system_gain=%d\n",flag,fs3001->effect_id,fs3001->dts_info.fs3001_rtp_id_boundary,fs3001->activate_mode,fs3001->dts_info.fs3001_bypass_system_gain);
+	sprintf(str, "%s, enter flag = %d,fs3001->effect_id =%d,fs3001->dts_info.fs3001_rtp_id_boundary = %d,fs3001->activate_mode =%d,fs3001->dts_info.fs3001_bypass_system_gain=%d\n", __func__,flag,fs3001->effect_id,fs3001->dts_info.fs3001_rtp_id_boundary,fs3001->activate_mode,fs3001->dts_info.fs3001_bypass_system_gain);
+	fs3001_debug_message(fs3001, str);
 	
 	if (fs3001->effect_id > fs3001->dts_info.fs3001_rtp_id_boundary)
 		return 0;
@@ -3956,20 +4330,6 @@ static int fs3001_haptic_play_effect_seq(struct fs3001 *fs3001, unsigned char fl
 	{
 		if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_MODE) 
 		{
-			//20210719
-		    if((fs3001->effect_id == 1)||(fs3001->effect_id == 2)|| (fs3001->effect_id == 9))
-			{
-				fs3001->effect_id = 3;
-			}
-			else if(fs3001->effect_id == 4)
-			{
-				fs3001->effect_id = 8;
-			}else if(fs3001->effect_id == 5)
-			{
-				fs3001->effect_id = 6;
-			}
-
-			//20210719
 			fs3001_haptic_set_wav_seq(fs3001, 0x00,(char)fs3001->effect_id + 1);//set seq0
 			fs3001_haptic_set_pwm(fs3001, fs3001->dts_info.fs3001_play_ram_srate);//20210601
 			fs3001_haptic_set_wav_seq(fs3001, 0x01, 0x00);//set seq1 stop
@@ -3985,8 +4345,8 @@ static int fs3001_haptic_play_effect_seq(struct fs3001 *fs3001, unsigned char fl
 		}
 		if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE) 
 		{
-			//has been set in fs3001_duration_store->fs3001_haptic_duration_ram_play_config, so remove it if it's mediatek platform
-			//fs3001_haptic_set_repeat_wav_seq(fs3001,(fs3001->dts_info.fs3001_rtp_id_boundary +1));
+			//xxxx if set in fs3001_duration_store->fs3001_haptic_duration_ram_play_config, need to remove the function "fs3001_haptic_set_repeat_wav_seq"
+			fs3001_haptic_set_repeat_wav_seq(fs3001,(fs3001->dts_info.fs3001_rtp_id_boundary +1));
 			fs3001_haptic_set_pwm(fs3001,  fs3001->dts_info.fs3001_play_ram_srate);//20210601
 			if(fs3001->dts_info.fs3001_bypass_system_gain == 0)
 			{
@@ -3995,63 +4355,139 @@ static int fs3001_haptic_play_effect_seq(struct fs3001 *fs3001, unsigned char fl
 			fs3001_haptic_play_repeat_seq(fs3001, true);
 		}
 	}
-	pr_info("exit\n");
+	
+	sprintf(str, "%s, exit\n", __func__);
+	fs3001_debug_message(fs3001, str);
 	return 0;
 }
 
 static void fs3001_long_vibrate_work_routine(struct work_struct *work)
 {
+	int moto_mode = 0;
+
 	struct fs3001 *fs3001 = container_of(work, struct fs3001,long_vibrate_work);
 
-	pr_info("enter,state=%d activate_mode = %d duration = %d\n",fs3001->state, fs3001->activate_mode, fs3001->duration);
+	sprintf(str, "%s, enter,state=%d activate_mode = %d duration = %d\n", __func__,fs3001->state, fs3001->activate_mode, fs3001->duration);
+	fs3001_debug_message(fs3001, str);
 
-	pr_info("bbbbbbbbbbbbbbbefore mutex_lock(&fs3001->lock)\n");
+	sprintf(str, "%s, before mutex_lock(&fs3001->lock)\n", __func__);
+	fs3001_debug_message(fs3001, str);
 	mutex_lock(&fs3001->lock);
-	pr_info("aaaaaaaaaaaaaaaafter  mutex_lock(&fs3001->lock)\n");
+	sprintf(str, "%s, after  mutex_lock(&fs3001->lock)\n", __func__);
+	fs3001_debug_message(fs3001, str);
 	//Enter standby mode
 	fs3001_haptic_stop(fs3001);
-	if (fs3001->state) 
+	fs3001_haptic_upload_lra(fs3001, FS3001_F0_CALI);
+
+	/* moto mode select */
+	moto_mode =fs3001->moto_mode_ctl[0];
+	if (moto_mode> 2 || fs3001->duration > 0) 
 	{
-		fs3001_haptic_upload_lra(fs3001, FS3001_F0_CALI);
-		if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_MODE) 
+		/* rtp mode */
+		if (moto_mode >102) 
 		{
-			fs3001_haptic_ram_vbat_compensate(fs3001, false);//20210716
-			//fs3001_haptic_play_repeat_seq(fs3001, true);
-			fs3001_haptic_play_effect_seq(fs3001, true);
+
+		} 
+		else if ((fs3001->duration < fs3001->dts_info.fs3001_duration_time[2]) || moto_mode > 2)
+		{
+			/* mode -> index:3 -> 1 : simulate Home key or other hardware key down*/
+			/* mode -> index:4 -> 2 : simulate Home key or other hardware key up */
+			/* mode -> index:5 -> 3 : AOSP VIRTUAL_KEY */
+			/* mode -> index:6 -> 4 : AOSP CLOCK_TICK/GESTURE_END/GESTURE_START */ 
+			if (moto_mode > 2) 
+			{ /* moto custom */
+				if (moto_mode == 3) {
+					fs3001->effect_id = 0;
+				} else if (moto_mode ==4){
+					fs3001->effect_id = 0;
+				} else if (moto_mode ==5){
+					fs3001->effect_id = 1;
+				} else if (moto_mode == 6){
+					fs3001->effect_id = 2;
+				} else {
+					fs3001->effect_id = 0;
+				}
+			} 
+			else 
+			{/* duration ctl */
+				if((fs3001->duration > 0) && (fs3001->duration < fs3001->dts_info.fs3001_duration_time[0])) 
+				{
+					fs3001->effect_id = 2; /*1 level shrot shake */
+				} 
+				else if ((fs3001->duration >=fs3001->dts_info.fs3001_duration_time[0]) && (fs3001->duration < fs3001->dts_info.fs3001_duration_time[1])) 
+				{ 
+					fs3001->effect_id = 1; /*2 level shrot shake*/
+				} 
+				else if ((fs3001->duration >=fs3001->dts_info.fs3001_duration_time[1]) && (fs3001->duration < fs3001->dts_info.fs3001_duration_time[2])) 
+				{
+					fs3001->effect_id = 0; /*3 level shrot shake*/
+				}
+			}
+			if(fs3001->effect_id > fs3001->dts_info.fs3001_rtp_id_boundary) 
+			{
+				sprintf(str, "%s index %d out of range use default 1\n",__func__,fs3001->effect_id);
+				fs3001_debug_message(fs3001, str);
+				fs3001->effect_id = 0;
+			}
+			
+			fs3001->activate_mode=FS3001_HAPTIC_ACTIVATE_RAM_MODE;
+		} else {
+			fs3001->activate_mode =FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE;
 		}
-		else if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE) 
+
+		sprintf(str, "%s effect_id = %d \n",__func__,fs3001->effect_id);
+		fs3001_debug_message(fs3001, str);
+		/* moto mode select end */
+
+	
+		if (fs3001->state) 
 		{
-			fs3001_haptic_ram_vbat_compensate(fs3001, true);
-			fs3001_haptic_play_effect_seq(fs3001, true);
-			//fs3001_haptic_play_repeat_seq(fs3001, true);
-			// run ms timer
-			hrtimer_start(&fs3001->timer, ktime_set(fs3001->duration / 1000,(fs3001->duration % 1000) * 1000000), HRTIMER_MODE_REL);
-			pm_stay_awake(fs3001->dev);
-			fs3001->wk_lock_flag = 1;
-		}
-		else if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_CONT_MODE) 
-		{
-			pr_info("mode:%s\n","FS3001_HAPTIC_ACTIVATE_CONT_MODE");
-			fs3001_haptic_cont_config(fs3001);
-			// run ms timer
-			hrtimer_start(&fs3001->timer,ktime_set(fs3001->duration / 1000,(fs3001->duration % 1000) * 1000000),HRTIMER_MODE_REL);
+			if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_MODE) 
+			{
+				fs3001_haptic_ram_vbat_compensate(fs3001, false);//20210716
+				//fs3001_haptic_play_repeat_seq(fs3001, true);
+				fs3001_haptic_play_effect_seq(fs3001, true);
+			}
+			else if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE) 
+			{
+				fs3001_haptic_ram_vbat_compensate(fs3001, true);
+				fs3001_haptic_play_effect_seq(fs3001, true);
+				//fs3001_haptic_play_repeat_seq(fs3001, true);
+				// run ms timer
+				hrtimer_start(&fs3001->timer, ktime_set(fs3001->duration / 1000,(fs3001->duration % 1000) * 1000000), HRTIMER_MODE_REL);
+				pm_stay_awake(fs3001->dev);
+				fs3001->wk_lock_flag = 1;
+			}
+			else if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_CONT_MODE) 
+			{
+				pr_info("mode:%s\n","FS3001_HAPTIC_ACTIVATE_CONT_MODE");
+				fs3001_haptic_cont_config(fs3001);
+				// run ms timer
+				hrtimer_start(&fs3001->timer,ktime_set(fs3001->duration / 1000,(fs3001->duration % 1000) * 1000000),HRTIMER_MODE_REL);
+			}
+			else if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RTP_MODE) 
+			{
+				pr_info("mode:%s, do nothing\n","FS3001_HAPTIC_ACTIVATE_RTP_MODE");
+			}
+			else
+			{
+				pr_err("%s:activate_mode error\n", FSERROR);
+			}	
 		}
 		else 
 		{
-			pr_err("%s:activate_mode error\n", FSERROR);
+			if (fs3001->wk_lock_flag == 1) 
+			{
+				pm_relax(fs3001->dev);
+				fs3001->wk_lock_flag = 0;
+			}
 		}
 	}
-	else 
-	{
-		if (fs3001->wk_lock_flag == 1) 
-		{
-			pm_relax(fs3001->dev);
-			fs3001->wk_lock_flag = 0;
-		}
-	}
-	pr_info("bbbbbbbbbbbbbbbefore mutex_unlock(&fs3001->lock)\n");
+	sprintf(str, "%s, before mutex_unlock(&fs3001->lock)\n", __func__);
+	fs3001_debug_message(fs3001, str);
 	mutex_unlock(&fs3001->lock);
-	pr_info("aaaaaaaaaaaaaaaafter  mutex_unlock(&fs3001->lock)\n");
+	sprintf(str, "%s, after  mutex_unlock(&fs3001->lock)\n", __func__);
+	fs3001_debug_message(fs3001, str);
 }
 
 #ifdef FS_HAPSTREAM
@@ -4152,7 +4588,7 @@ static void fs3001_rtp_work_hapstream(struct work_struct *work)
 		} 
 		else 
 		{
-			mdelay(1);//mdelay(10);//zzzz for debug, otherwise too much debug message     
+			mdelay(1);//mdelay(10);//xxxx for debug, otherwise too much debug message     
 		}
 	}
 	if (count <= 0) 
@@ -4165,7 +4601,7 @@ static void fs3001_rtp_work_hapstream(struct work_struct *work)
 	mutex_unlock(&fs3001->lock);
 
 	mutex_lock(&fs3001->rtp_lock);
-	pm_qos_enable(true);
+	pm_qos_enable(fs3001, true);
 	fs3001_haptic_raminit(fs3001, true);
 	write_start = fs3001_get_sys_msecs();
 	reg_val_AF = 0x01;
@@ -4201,14 +4637,15 @@ static void fs3001_rtp_work_hapstream(struct work_struct *work)
 		}
 		else 
 		{
-			//pr_info("hapstream wait, reg_AF = 0x%02X, hapstream_buf->status = 0x%02X\n", reg_val_AF, hapstream_buf->status);
-			mdelay(1);//mdelay(10);//zzzz for debug, otherwise too much debug message     
+			if(fs3001->fs3001_debug_enable)
+				pr_info("hapstream wait, reg_AF = 0x%02X, hapstream_buf->status = 0x%02X\n", reg_val_AF, hapstream_buf->status);
+			mdelay(1);//mdelay(10);//xxxx for debug, otherwise too much debug message     
 		}
 		fs3001_i2c_read(fs3001, FS3001_INTSTATR2, &reg_val_AF);
 	}
 	fs3001_haptic_raminit(fs3001, false);
 
-	pm_qos_enable(false);
+	pm_qos_enable(fs3001, false);
 	fs3001->hapstream_stop_flag = true;
 	mutex_unlock(&fs3001->rtp_lock);
 }
@@ -4329,7 +4766,7 @@ int fs3001_vibrator_init(struct fs3001 *fs3001)
  
 #ifdef TIMED_OUTPUT
        pr_info("TIMED_OUT FRAMEWORK!\n");
-       fs3001->vib_dev.name = "foursemi_vibrator";
+       fs3001->vib_dev.name = "vibrator";
        fs3001->vib_dev.get_time = fs3001_vibrator_get_time;
        fs3001->vib_dev.enable = fs3001_vibrator_enable;
  
@@ -4443,15 +4880,20 @@ static void fs3001_haptic_misc_para_init(struct fs3001 *fs3001)
 static void fs3001_hack_init(struct fs3001 *fs3001)
 {
 	pr_info("enter\n");
-	fs3001_i2c_write(fs3001, FS3001_HDCTRL, 0xB1);//for A1 short 
-	fs3001_haptic_enable_key(fs3001,true);//enable key
-	fs3001_i2c_write_bits_1(fs3001, FS3001_ANACTRL,1,6,6);//Just in case of special circumstances, so enable it
-	fs3001_i2c_write(fs3001, FS3001_OTPPG0W2B4, 0x00);//for A1 short
-	fs3001_i2c_write_bits_1(fs3001, FS3001_ANACTRL,0,6,6);
-	fs3001_haptic_enable_key(fs3001,false);//disable key
+	fs3001_i2c_write(fs3001, FS3001_HDCTRL, 0xB1);//for short
+
+	if(fs3001->name== FS3001_A1)
+	{
+		fs3001_haptic_enable_key(fs3001,true);//enable key
+		fs3001_i2c_write_bits_1(fs3001, FS3001_ANACTRL,1,6,6);//Just in case of special circumstances, so enable it
+		fs3001_i2c_write(fs3001, FS3001_OTPPG0W2B4, 0x00);//for A1 short
+		fs3001_i2c_write_bits_1(fs3001, FS3001_ANACTRL,0,6,6);
+		fs3001_haptic_enable_key(fs3001,false);//disable key
+	}
 }
 
 
+/* xxxx
 static void fs3001_haptic_duration_ram_play_config(struct fs3001 *fs3001,int duration)
 {
 	unsigned char seq = 0;
@@ -4473,37 +4915,31 @@ static void fs3001_haptic_duration_ram_play_config(struct fs3001 *fs3001,int dur
 	{
 		seq = 1;//short-strong
 		loop = 0;
-		fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_MODE;
 	}
 	else if((duration < fs3001->dts_info.fs3001_duration_time[0]) && duration != 12)
 	{
 		seq = 3;//0-30 short-weak
 		loop = 0;
-		fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_MODE;
 	}
 	else if((duration >= fs3001->dts_info.fs3001_duration_time[0]) && (duration < fs3001->dts_info.fs3001_duration_time[1]))
 	{
 		seq = 1;//30-60 short-strong
 		loop = 0;
-		fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_MODE;
 	}
 	else if((duration >= fs3001->dts_info.fs3001_duration_time[1]) && (duration < fs3001->dts_info.fs3001_duration_time[2]) && duration != 65)
 	{
 		seq = 5;//60-90 long-weak
-		loop = 0x0E;
-		fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE;
+		loop = 15;
 	}
 	else if((duration >= fs3001->dts_info.fs3001_duration_time[2]) && duration != 95)
 	{
 		seq = 4;//over 90 long-strong
-		loop = 0x0E;
-		fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE;
+		loop = 15;
 	}
 	else
 	{
 		seq = 0;
 		loop = 0;
-		fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_MODE;
 	}
 
 	fs3001_haptic_set_wav_seq(fs3001,0,seq);
@@ -4511,10 +4947,14 @@ static void fs3001_haptic_duration_ram_play_config(struct fs3001 *fs3001,int dur
 	fs3001_haptic_set_wav_seq(fs3001,1,0);
 	fs3001_haptic_set_wav_loop(fs3001,1,0);
 }
-
+*/
 
 static void fs3001_haptic_diagnostic_sequence(struct fs3001 *fs3001)
 {
+	unsigned char uc_0xBC = 0;
+	unsigned char uc_0xBD = 0;
+ 	unsigned int ui_BCBD = 0;
+	
 	pr_info( "enter\n");
 	fs3001_haptic_enable_key(fs3001,true);//enable key
 	fs3001_i2c_write_bits_1(fs3001,FS3001_INTCTRL,0,7,7);// Disable interrupt output
@@ -4523,6 +4963,48 @@ static void fs3001_haptic_diagnostic_sequence(struct fs3001 *fs3001)
 	usleep_range(1000, 2000);//usleep_range(10, 20); //Wait > 5 us
 	fs3001_i2c_write(fs3001, FS3001_SWDIAG1, 0xD2);//0xB5 = 0xD2		// Turn on S1FN & S1FP & PGA
 	usleep_range(1000, 2000);//usleep_range(100, 150);//Wait > 100 us														 //Wait > 100 us  �����100ms
+
+	
+	
+	fs3001_i2c_write(fs3001, FS3001_SARCTRL, 0x82);// Enable SAR test mode, SAR ADC input =0.2*OUTP
+	fs3001_i2c_write(fs3001, FS3001_SARCTRL, 0x92);// SAR capture data
+	fs3001_i2c_write(fs3001, FS3001_SARCTRL, 0x82);
+	usleep_range(1000, 2000);//usleep_range(10, 20); //Wait > 10 us
+	//Read SAR data from {0xBD<1:0>, 0xBC<7:0>}, denoted as SAR_OUTP_READING. Check if SAR_OUTP_READING ��[100, 350] (TBD, 0.58V~2.05V). 
+	fs3001_i2c_read(fs3001, FS3001_SARTS_L, &uc_0xBC);//0xBC//low 8 offset value
+	fs3001_i2c_read(fs3001, FS3001_SARTS_L, &uc_0xBC);//0xBC//low 8 offset value
+	uc_0xBD = fs3001_i2c_read_bits(fs3001, FS3001_SARTS_H, 1,0);//0xBD//high 2 offset value
+	ui_BCBD = (uc_0xBD<<8 | uc_0xBC) + ui_BCBD;
+	if(ui_BCBD >= 100 && ui_BCBD<=350)
+	{
+		pr_info("SAR_OUTP is 0x%4x\n", ui_BCBD);
+	}
+	else
+	{
+		pr_err("%s:SAR_OUTP is out of range: 0x%4x\n",FSERROR, ui_BCBD);
+	}
+
+	fs3001_i2c_write(fs3001, FS3001_SARCTRL, 0x83);
+	fs3001_i2c_write(fs3001, FS3001_SARCTRL, 0x93);// SAR capture data
+	fs3001_i2c_write(fs3001, FS3001_SARCTRL, 0x83);
+	usleep_range(1000, 2000);//usleep_range(10, 20); //Wait > 10 us
+	//Read SAR data from {0xBD<1:0>, 0xBC<7:0>}
+	fs3001_i2c_read(fs3001, FS3001_SARTS_L, &uc_0xBC);//0xBC//low 8 offset value
+	fs3001_i2c_read(fs3001, FS3001_SARTS_L, &uc_0xBC);//0xBC//low 8 offset value
+	uc_0xBD = fs3001_i2c_read_bits(fs3001, FS3001_SARTS_H, 1,0);//0xBD//high 2 offset value
+	ui_BCBD = (uc_0xBD<<8 | uc_0xBC) + ui_BCBD;
+	if(ui_BCBD >= 100 && ui_BCBD<=350)
+	{
+		pr_info("SAR_OUTN is 0x%4x\n", ui_BCBD);
+	}
+	else
+	{
+		pr_err("%s:SAR_OUTN is out of range: 0x%4x\n",FSERROR, ui_BCBD);
+	}
+
+	
+	
+	
 }
 
 static void fs3001_haptic_set_diagnostic_reg_to_default_value(struct fs3001 *fs3001)
@@ -4647,11 +5129,11 @@ static enum hrtimer_restart fs3001_haptic_audio_timer_func(struct hrtimer *timer
 	return HRTIMER_NORESTART;
 }
 
-static void fs3001_haptic_auto_brk_enable(struct fs3001 *fs3001, unsigned char flag)
+static void fs3001_haptic_auto_brk_enable(struct fs3001 *fs3001, unsigned int flag)
 {
 	pr_info("enter, flag = %d\n", flag);
 
-	fs3001_i2c_write_bits_1(fs3001, FS3001_BRKCTRL,flag,7,7);
+	fs3001_i2c_write_bits_1(fs3001, FS3001_BRKCTRL,(unsigned char)flag,7,7);
 }
 
 void fs3001_reg_init(struct fs3001 *fs3001)
@@ -4730,7 +5212,7 @@ int fs3001_haptic_init(struct fs3001 *fs3001)
 	int ret = 0;
 	unsigned char i = 0;
 	unsigned char reg_val = 0;
-	//char*ptr;zzzz
+	//char*ptr;xxxx
 
 	pr_info("enter\n");
 	//haptic audio
@@ -4748,6 +5230,8 @@ int fs3001_haptic_init(struct fs3001 *fs3001)
 	mutex_lock(&fs3001->lock);
 	//haptic init
 	fs3001->fs3001_debug_enable = 0;
+	fs3001->buf_size = 384;
+	fs3001->Qos_time = 0;
 	fs3001->activate_mode = fs3001->dts_info.fs3001_default_vib_mode;
 	ret = fs3001_i2c_read(fs3001, FS3001_GAINCFG, &reg_val);
 	fs3001->gain = reg_val;
@@ -4785,7 +5269,7 @@ int fs3001_haptic_init(struct fs3001 *fs3001)
 	{
 		fs3001_haptic_f0_calibration(fs3001);
 	}
-/*zzzz
+/*xxxx
 	else if(fs3001->dts_info.fs3001_f0_cali_data_mode == FS3001_F0_CALI_DATA_CMDLINE_MODE)
 	{
 		ptr = strstr(saved_command_line, "fs3001_lk_f0_cali=");
@@ -4867,12 +5351,15 @@ irqreturn_t fs3001_irq(int irq, void *data)
 	unsigned int buf_len = 0;
 	unsigned char DIGSTAT_OPS = 0;
 
-	pr_info("enter\n");
+#ifdef FS_HAPSTREAM
+	pr_info("enter hapstream_stop_flag=%d\n",fs3001->hapstream_stop_flag);
 
 	if (fs3001->hapstream_stop_flag == false) 
 	{
 		return IRQ_HANDLED;
 	}
+#endif
+
 	
 	atomic_set(&fs3001->is_in_rtp_loop, 1);
 	fs3001_i2c_read(fs3001, FS3001_INTSTAT1, &reg_val);
@@ -4882,23 +5369,28 @@ irqreturn_t fs3001_irq(int irq, void *data)
 	}
 	
 	fs3001_i2c_read(fs3001, FS3001_INTSTAT2, &reg_val);
-	pr_info("reg INTSTAT2=0x%02X\n", reg_val);
-		
+	sprintf(str,"%s,reg INTSTAT2=0x%02X\n",__func__, reg_val);
+	fs3001_debug_message(fs3001, str);
+/*		
 	if (reg_val & FS3001_INTSTAT2_MASK_B7_DONE)
 	{
-		pr_info("chip playback done\n");
+		sprintf(str,"%s,chip playback done\n",__func__);
+		fs3001_debug_message(fs3001,str);
 	}			
-
+*/
 	if (reg_val & FS3001_INTSTAT2_MASK_B1_AE) 
 	{
-		pr_info("fs3001 rtp fifo almost empty\n");
+		sprintf(str,"%s,fs3001 rtp fifo almost empty\n",__func__);
+		fs3001_debug_message(fs3001,str);
 		if (fs3001->rtp_init) 
 		{
-			//almost full?
-			while ((!fs3001_haptic_rtp_get_fifo_afs(fs3001)) && (fs3001->play_mode == FS3001_HAPTIC_RTP_MODE) && !atomic_read(&fs3001->exit_in_rtp_loop)) 
+			while ((!fs3001_haptic_rtp_get_fifo_afs_0xAF(fs3001)) && (fs3001->play_mode == FS3001_HAPTIC_RTP_MODE) && !atomic_read(&fs3001->exit_in_rtp_loop)) 
 			{
 				mutex_lock(&fs3001->rtp_lock);
-				pr_info( "fs3001 rtp mode fifo update, cnt=%d\n", fs3001->rtp_cnt);
+
+				sprintf(str,"%s,fs3001 rtp mode fifo update, cnt=%d\n",__func__, fs3001->rtp_cnt);
+				fs3001_debug_message(fs3001, str);
+
 				if (!fs3001->rtp_container) 
 				{
 					pr_err("%s:fs3001->rtp_container is null, break!\n", FSERROR);
@@ -4912,11 +5404,21 @@ irqreturn_t fs3001_irq(int irq, void *data)
 				} 
 				else 
 				{
-					buf_len = (fs3001->ram.base_addr >> 2);
+					if(fs3001->fs3001_debug_enable)
+					{
+						buf_len = fs3001->buf_size;
+					}
+					else
+					{
+						buf_len = fs3001->ram.base_addr >> 2;
+					}
 				}
+				
 				fs3001->rtp_update_flag = fs3001_i2c_writes(fs3001,FS3001_RTPWDATA,&fs3001->rtp_container->data[fs3001->rtp_cnt],buf_len);
 				fs3001->rtp_cnt += buf_len;
 				fs3001_i2c_read(fs3001, FS3001_DIGSTAT, &DIGSTAT_OPS);
+
+				
 				DIGSTAT_OPS = DIGSTAT_OPS >> 4;//get 0x4 high 4 bits(7-4)
 				if ((fs3001->rtp_cnt == fs3001->rtp_container->len) || ((DIGSTAT_OPS & 0x0f) == 0)) 
 				{
@@ -4940,15 +5442,17 @@ irqreturn_t fs3001_irq(int irq, void *data)
 		}
 		else 
 		{
-			pr_err("%s:fs3001 rtp init = %d, init error\n", FSERROR,fs3001->rtp_init);
+			pr_info("fs3001 rtp init = %d\n", fs3001->rtp_init);
 		}
 	}
 
+/*
 	if (reg_val & FS3001_INTSTAT2_MASK_B1_AF)
 	{
-		pr_info("fs3001 rtp mode fifo almost full!\n");
+		sprintf(str,"%s,fs3001 rtp mode fifo almost full!\n",__func__);
+		fs3001_debug_message(fs3001,str);
 	}			
-		
+*/		
 
 	if (fs3001->play_mode != FS3001_HAPTIC_RTP_MODE || atomic_read(&fs3001->exit_in_rtp_loop))
 	{
@@ -4957,7 +5461,9 @@ irqreturn_t fs3001_irq(int irq, void *data)
 
 	atomic_set(&fs3001->is_in_rtp_loop, 0);
 	wake_up_interruptible(&fs3001->wait_q);
-	pr_info("exit\n");
+
+	sprintf(str,"%s,exit\n",__func__);
+	fs3001_debug_message(fs3001,str);
 
 	return IRQ_HANDLED;
 }
@@ -5006,7 +5512,8 @@ int fs3001_haptics_upload_effect (struct input_dev *dev,struct ff_effect *effect
 	s64 time_us;
 	int ret;
 
-	pr_info("enter\n");
+	sprintf(str,"%s,enter effect->type=0x%x,FF_CONSTANT=0x%x,FF_PERIODIC=0x%x\n",__func__,effect->type, FF_CONSTANT, FF_PERIODIC);
+	fs3001_debug_message(fs3001, str);
 
 	if (fs3001->osc_cali_run != 0)
 		return 0;
@@ -5019,21 +5526,42 @@ int fs3001_haptics_upload_effect (struct input_dev *dev,struct ff_effect *effect
 		usleep_range(time_us, time_us + 100);
 	}
 
-	pr_info("effect->type=0x%x,FF_CONSTANT=0x%x,FF_PERIODIC=0x%x\n",effect->type, FF_CONSTANT, FF_PERIODIC);
+	//include/uapi/linux/input.h
+	//#define FF_RUMBLE 0x50
+	//#define FF_PERIODIC	0x51
+	//#define FF_CONSTANT	0x52
+	//#define FF_SPRING 0x53
+	//#define FF_FRICTION	0x54
+	//#define FF_DAMPER 0x55
+	//#define FF_INERTIA	0x56
+	//#define FF_RAMP		0x57
+
+	
 	fs3001->effect_type = effect->type;
-	pr_info("bbbbbbbbbbbbbbbefore mutex_lock(&fs3001->lock)\n");
+	
+	sprintf(str,"%s,before mutex_lock(&fs3001->lock)\n",__func__);
+	fs3001_debug_message(fs3001, str);
+	
 	mutex_lock(&fs3001->lock);
-	pr_info("aaaaaaaaaaaaaaaaafter mutex_lock(&fs3001->lock)\n");
+	
+	sprintf(str,"%s,after mutex_lock(&fs3001->lock)\n",__func__);
+	fs3001_debug_message(fs3001, str);
+	
 	while (atomic_read(&fs3001->exit_in_rtp_loop)) 
 	{
-		pr_info("goint to waiting rtp  exit\n");
+		sprintf(str,"%s,goint to waiting rtp  exit\n",__func__);
+		fs3001_debug_message(fs3001, str);
 		mutex_unlock(&fs3001->lock);
 		ret = wait_event_interruptible(fs3001->stop_wait_q,atomic_read(&fs3001->exit_in_rtp_loop) == 0);
-		pr_info("wakeup \n");
+		
+		sprintf(str,"%s,wakeup \n",__func__);
+		fs3001_debug_message(fs3001, str);
+		
 		if (ret == -ERESTARTSYS) 
 		{
 			mutex_unlock(&fs3001->lock);
-			pr_err("%s:wake up by signal return error\n", FSERROR);
+			sprintf(str,"%s,%s:wake up by signal return error\n",__func__, FSERROR);
+			fs3001_debug_message(fs3001, str);
 			return ret;
 		}
 		mutex_lock(&fs3001->lock);
@@ -5056,7 +5584,8 @@ int fs3001_haptics_upload_effect (struct input_dev *dev,struct ff_effect *effect
 			return -EINVAL;
 		}
 
-		pr_info("effect_type is  FF_PERIODIC! \n");
+		sprintf(str,"%s,effect_type is  FF_PERIODIC! \n",__func__);
+		fs3001_debug_message(fs3001, str);
 		if (copy_from_user(data, effect->u.periodic.custom_data,sizeof(s16) * CUSTOM_DATA_LEN)) 
 		{
 			mutex_unlock(&fs3001->lock);
@@ -5064,11 +5593,20 @@ int fs3001_haptics_upload_effect (struct input_dev *dev,struct ff_effect *effect
 		}
 
 		fs3001->effect_id = data[0];//yyyy_get effect_id from data[0] as effect_type is FF_PERIODIC
-		pr_info("fs3001->effect_id =%d \n",fs3001->effect_id);
+		sprintf(str,"%s,fs3001->effect_id =%d \n",__func__,fs3001->effect_id);
+		fs3001_debug_message(fs3001, str);
+
+		
+		//this mapping for effect_id 21
+		if (fs3001->effect_id == 521) 
+		{
+			fs3001->effect_id = 21;
+		}
 		fs3001->play.vmax_mv = effect->u.periodic.magnitude;	//vmax level
 
 		if (fs3001->effect_id < 0 || fs3001->effect_id > fs3001->dts_info.fs3001_rtp_max) 
 		{
+			pr_err("%s:effect_id[%d] is out of the range\n", FSERROR, fs3001->effect_id);
 			mutex_unlock(&fs3001->lock);
 			return 0;
 		}
@@ -5076,23 +5614,28 @@ int fs3001_haptics_upload_effect (struct input_dev *dev,struct ff_effect *effect
 		if (fs3001->effect_id < fs3001->dts_info.fs3001_rtp_id_boundary) 
 		{
 			fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_MODE;
-			pr_info("fs3001->effect_id=%d , fs3001->activate_mode = %d\n", fs3001->effect_id,fs3001->activate_mode);
+			sprintf(str,"%s,fs3001->effect_id=%d , fs3001->activate_mode = %d\n",__func__, fs3001->effect_id,fs3001->activate_mode);
+			fs3001_debug_message(fs3001, str);
 			data[1] = fs3001->predefined[fs3001->effect_id].play_rate_us / 1000000;	//second data
 			data[2] = fs3001->predefined[fs3001->effect_id].play_rate_us / 1000;	//millisecond data
-			pr_info("fs3001->predefined[fs3001->effect_id].play_rate_us/1000 = %d\n",fs3001->predefined[fs3001->effect_id].play_rate_us / 1000);
+			sprintf(str,"%s,fs3001->predefined[fs3001->effect_id].play_rate_us/1000 = %d\n",__func__,fs3001->predefined[fs3001->effect_id].play_rate_us / 1000);
+			fs3001_debug_message(fs3001, str);
 		}
 		
 		if (fs3001->effect_id >= fs3001->dts_info.fs3001_rtp_id_boundary) 
 		{
 			fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RTP_MODE;
-			pr_info("fs3001->effect_id=%d , fs3001->activate_mode = %d\n", fs3001->effect_id,fs3001->activate_mode);
+			sprintf(str,"%s,fs3001->effect_id=%d , fs3001->activate_mode = %d\n",__func__, fs3001->effect_id,fs3001->activate_mode);
+			fs3001_debug_message(fs3001, str);
 			data[1] = fs3001->dts_info.fs3001_rtp_time[fs3001->effect_id] / 1000;	//second data
-			data[2] = fs3001->dts_info.fs3001_rtp_time[fs3001->effect_id];	//millisecond data
-			pr_info("data[1] = %d data[2] = %d\n",data[1], data[2]);
+			data[2] = fs3001->dts_info.fs3001_rtp_time[fs3001->effect_id] % 1000;	//millisecond data
+			sprintf(str,"%s,data[1] = %d data[2] = %d\n",__func__,data[1], data[2]);
+			fs3001_debug_message(fs3001, str);
 		}
 
 		if (copy_to_user(effect->u.periodic.custom_data, data,sizeof(s16) * CUSTOM_DATA_LEN)) 
 		{
+			pr_err("%s:copy_to_user failed\n", FSERROR);
 			mutex_unlock(&fs3001->lock);
 			return -EFAULT;
 		}
@@ -5101,10 +5644,12 @@ int fs3001_haptics_upload_effect (struct input_dev *dev,struct ff_effect *effect
 	{
 		pr_err("%s:Unsupported effect type: %d\n", FSERROR,effect->type);
 	}
-	pr_info("bbbbbbbbbbbbbbbefore mutex_unlock(&fs3001->lock)     fs3001->effect_type= 0x%x\n", fs3001->effect_type);
+	sprintf(str,"%s,before mutex_unlock(&fs3001->lock)     fs3001->effect_type= 0x%x\n",__func__, fs3001->effect_type);
+	fs3001_debug_message(fs3001, str);
 	
 	mutex_unlock(&fs3001->lock);
-	pr_info("aaaaaaaaaaaaaaaaafter unlock,fs3001->effect_type= 0x%x\n",fs3001->effect_type);
+	sprintf(str,"%s,after unlock,fs3001->effect_type= 0x%x\n",__func__,fs3001->effect_type);
+	fs3001_debug_message(fs3001, str);
 	return 0;
 }
 
@@ -5112,10 +5657,10 @@ int fs3001_haptics_playback(struct input_dev *dev, int effect_id, int val)
 {
 	struct fs3001 *fs3001 = input_get_drvdata(dev);
 	int rc = 0;
-	pr_info("enter effect_id=%d,val=%d\n",effect_id,val);
 
-	pr_info("effect_id=%d , val = %d\n", effect_id, val);
-	pr_info("fs3001->effect_id=%d , fs3001->activate_mode = %d\n", fs3001->effect_id, fs3001->activate_mode);
+	sprintf(str,"%s,enter: fs3001->effect_id=%d , fs3001->activate_mode = %d, val=%d, duration=%d\n",__func__, fs3001->effect_id, fs3001->activate_mode,val, fs3001->duration);
+	fs3001_debug_message(fs3001,str);
+		
 
 	//for osc calibration
 	if (fs3001->osc_cali_run != 0)
@@ -5132,21 +5677,26 @@ int fs3001_haptics_playback(struct input_dev *dev, int effect_id, int val)
 		fs3001->state = 0;
 	}
 	hrtimer_cancel(&fs3001->timer);
-	pr_info("hrtimer_cancel(&fs3001->timer)\n");
+
+	sprintf(str,"%s,hrtimer_cancel(&fs3001->timer)\n",__func__);
+	fs3001_debug_message(fs3001,str);
 
 	if (fs3001->effect_type == FF_CONSTANT && fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE) 
 	{
-		pr_info("enter ram_loop_mode \n");
+		sprintf(str,"%s,enter ram_loop_mode \n",__func__);
+		fs3001_debug_message(fs3001,str);
 		queue_work(fs3001->work_queue, &fs3001->long_vibrate_work);
 	} 
 	else if (fs3001->effect_type == FF_PERIODIC && fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RAM_MODE) 
 	{
-		pr_info("enter  ram_mode\n");
+		sprintf(str,"%s,enter  ram_mode\n",__func__);
+		fs3001_debug_message(fs3001,str);
 		queue_work(fs3001->work_queue, &fs3001->long_vibrate_work);
 	} 
 	else if (fs3001->effect_type == FF_PERIODIC && fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RTP_MODE) 
 	{
-		pr_info("enter  rtp_mode\n");
+		sprintf(str,"%s,enter  rtp_mode\n",__func__);
+		fs3001_debug_message(fs3001,str);
 		queue_work(fs3001->work_queue, &fs3001->rtp_work);
 		//if we are in the play mode, force to exit
 		if (val == 0) 
@@ -5166,7 +5716,9 @@ int fs3001_haptics_erase(struct input_dev *dev, int effect_id)
 {
 	struct fs3001 *fs3001 = input_get_drvdata(dev);
 	int rc = 0;
-	pr_info("enter\n");
+	
+	sprintf(str, "%s, enter\n", __func__);
+	fs3001_debug_message(fs3001, str);
 
 	//for osc calibration
 	if (fs3001->osc_cali_run != 0)
@@ -5183,7 +5735,8 @@ void fs3001_haptics_set_gain_work_routine(struct work_struct *work)
 {
 	struct fs3001 *fs3001 = container_of(work, struct fs3001, set_gain_work);
 
-	pr_info("enter\n");
+	sprintf(str, "%s, enter\n", __func__);
+	fs3001_debug_message(fs3001, str);
 
 	if (fs3001->new_gain >= 0x7FFF)
 	{		
@@ -5203,7 +5756,8 @@ void fs3001_haptics_set_gain_work_routine(struct work_struct *work)
 		fs3001->level = 0x1E;	//30
 	}
 
-	pr_info("set_gain queue work, new_gain = %x level = %x \n",fs3001->new_gain, fs3001->level);
+	sprintf(str, "%s, set_gain queue work, new_gain = %x level = %x \n", __func__,fs3001->new_gain, fs3001->level);
+	fs3001_debug_message(fs3001, str);
 
 	fs3001_haptic_set_gain(fs3001,fs3001->level);
 }
@@ -5211,7 +5765,6 @@ void fs3001_haptics_set_gain_work_routine(struct work_struct *work)
 void fs3001_haptics_set_gain(struct input_dev *dev, u16 gain)
 {
 	struct fs3001 *fs3001 = input_get_drvdata(dev);
-	pr_info("enter\n");
 	pr_info("enter set gain=%d\n",gain);
 	fs3001->new_gain = gain;
 	queue_work(fs3001->work_queue, &fs3001->set_gain_work);
