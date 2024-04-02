@@ -286,6 +286,7 @@ struct cps_wls_chrg_chip {
 	struct wakeup_source *cps_wls_wake_lock;
 	struct mutex irq_lock;
 	struct mutex i2c_lock;
+	struct mutex rx_vout_change_lock;
 	int state;
 	int wls_charge_int;
 	int cps_wls_irq;
@@ -356,6 +357,8 @@ struct cps_wls_chrg_chip {
 	struct delayed_work	light_fan_work;
 	struct delayed_work	offset_detect_work;
 	struct delayed_work	dump_info_work;
+	struct delayed_work	rx_vout_change_work;
+	bool rx_vout_change_done;
 	uint32_t bootmode;
 	struct thermal_cooling_device *tcd;
 	bool ntc_thermal;

@@ -1591,7 +1591,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 		chip->rx_offset = false;
 		cps_wls_log(CPS_LOG_DEBG, "[%s] rx_ldo_on:%d,rod_stop:%d",
 			__func__, chip->rx_ldo_on, chip->rod_stop);
-		return;
+		goto detect_exit;
 	}
 
 	if (chip->mode_type != Sys_Op_Mode_MOTO_WLC) {
@@ -1606,7 +1606,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 		chip->rod_stop = true;
 		chip->rx_offset_detect_count = 0;
 		chip->rx_offset = false;
-		return;
+		goto detect_exit;
 	}
 
 	current_now = cps_wls_get_rx_iout();
@@ -1618,7 +1618,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 				chip->thermal_wls_ccl < chip->MaxI) {
 				chip->rod_stop = true;
 				chip->rx_offset_detect_count = 0;
-				return;
+				goto detect_exit;
 			}
 			if (cps_wls_check_iout(WLS_BPP_ROD_THRESHOLD_CURRENT_MIN, current_now)) {
 				chip->rx_offset_detect_count ++;
@@ -1716,10 +1716,64 @@ static void cps_offset_detect_work(struct work_struct *work)
 
 	if (chip->enable_rod) {
 		queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(work_timedelay));
+		return;
 	} else if (chip->rx_offset) {
 		chip->rx_offset_detect_count = 0;
 		chip->rx_offset = false;
 	}
+
+detect_exit:
+
+	if (chip->rod_stop == true &&
+			chip->moto_stand == true &&
+			motoauth.WLS_WLC_ID == MOTO_15W_TX_ID &&
+			chip->wlc_tx_power >= WLS_RX_CAP_15W) {
+		queue_delayed_work(chip->wls_wq, &chip->rx_vout_change_work, msecs_to_jiffies(1000));
+	}
+}
+
+static void cps_rx_vout_change_work(struct work_struct *work)
+{
+	int wls_icl = 0;
+	int wls_rx_vout_target = 10000; //10V
+	int wls_icl_target_min = 350000; //350mA
+	int wls_icl_target_max = 1400000; //1400mA
+	int wls_icl_step = 200000; //200mA
+
+	if (!chip)
+		return;
+
+	if (!chip->chg1_dev)
+		return;
+
+	mutex_lock(&chip->rx_vout_change_lock);
+	pr_info("%s start\n", __func__);
+	charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
+
+	while (wls_icl > wls_icl_target_min && chip->wls_online) {
+		wls_icl = wls_icl - wls_icl_step;
+		charger_dev_set_input_current(chip->chg1_dev, wls_icl);
+		cps_wls_log(CPS_LOG_DEBG, "[%s] set icl %d\n", __func__, wls_icl);
+		msleep(100);
+		charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
+	}
+
+	if (chip->wls_online && wls_icl <= wls_icl_target_min) {
+		cps_wls_set_rx_vout_target(wls_rx_vout_target);
+		msleep(100);
+		if (cps_get_vbus() < wls_rx_vout_target + 500) {
+			do {
+				wls_icl = wls_icl + wls_icl_step;
+				charger_dev_set_input_current(chip->chg1_dev, wls_icl);
+				cps_wls_log(CPS_LOG_DEBG, "[%s] set icl %d\n", __func__, wls_icl);
+				msleep(100);
+				charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
+			} while ((wls_icl + wls_icl_step) < wls_icl_target_max && chip->wls_online);
+			chip->rx_vout_change_done = true;
+		}
+	}
+	mutex_unlock(&chip->rx_vout_change_lock);
+	pr_info("%s exit\n", __func__);
 }
 
 static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
@@ -1810,6 +1864,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			chip->rx_offset = false;
 			chip->rx_vout_set = 0;
 			chip->hs_st = HS_UNKONWN;
+			chip->rx_vout_change_done = false;
 			//if (chip->factory_wls_en == true) {
 			//	chip->factory_wls_en = false;
 			//	mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
@@ -3131,6 +3186,7 @@ static void cps_wls_lock_work_init(struct cps_wls_chrg_chip *chip)
 	pr_info("%s\n", __func__);
 	mutex_init(&chip->irq_lock);
 	mutex_init(&chip->i2c_lock);
+	mutex_init(&chip->rx_vout_change_lock);
 	name = devm_kasprintf(chip->dev, GFP_KERNEL, "%s", "cps_wls_wake_lock");
 	chip->cps_wls_wake_lock = wakeup_source_register(NULL, name);
 }
@@ -3275,11 +3331,12 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 	uint32_t wls_power = 0;
 	int wls_voltage = 0;
 
+	mutex_lock(&chip->rx_vout_change_lock);
 	if (chip->cable_ready_wait_count < 3 && !chip->moto_stand)
 	{
 		*cable_ready = false;
 		chip->cable_ready_wait_count++;
-		return;
+		goto select_exit;
 	}
 	*cable_ready = true;
 	*icl = 400000;
@@ -3292,7 +3349,7 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 			chg->MaxI = 1000;
 			*icl = 100000;
 			*vbus = 5000;
-			return;
+			goto select_exit;
 		}
 		chg->MaxV = 5000;
 		chg->MaxI = 1000;
@@ -3313,7 +3370,7 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 			*vbus = 12000;
 			if (chip->moto_stand == true &&
 				motoauth.WLS_WLC_ID == MOTO_15W_TX_ID &&
-				wls_voltage < 10500) {
+				chip->rx_vout_change_done) {
 				chg->MaxV = 10000;
 				chg->MaxI = 1400;
 				*icl = 1400000;
@@ -3351,6 +3408,8 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 	}
 	if (chip->wls_input_curr_max != 0 && chip->wls_input_curr_max < chg->MaxI)
 		*icl = chip->wls_input_curr_max * 1000;
+select_exit:
+	mutex_unlock(&chip->rx_vout_change_lock);
 }
 
 static void cps_epp_current_select(int *icl, int *vbus)
@@ -3372,14 +3431,6 @@ static void cps_epp_current_select(int *icl, int *vbus)
 			chg->MaxI = 1150;
 			*icl = 1150000;
 			*vbus = 12000;
-			if (chip->moto_stand == true &&
-				motoauth.WLS_WLC_ID == MOTO_15W_TX_ID &&
-				wls_voltage < 10500) {
-				chg->MaxV = 10000;
-				chg->MaxI = 1400;
-				*icl = 1400000;
-				*vbus = 10000;
-			}
 		}
 		else if (wls_power >= WLS_RX_CAP_10W) {
 			chg->MaxV = 9000;
@@ -3541,8 +3592,10 @@ static int cps_wls_set_status(int status)
 	if (status == WLC_TX_ID_CHANGED &&
 		chip->wlc_tx_power >= WLS_RX_CAP_15W &&
 		motoauth.WLS_WLC_ID == MOTO_15W_TX_ID) {
-		cps_wls_log(CPS_LOG_DEBG,"%s Reset moto 15w tx output 10V\n", __func__);
-		cps_wls_set_rx_vout_target(10000);
+		if (!chip->enable_rod) {
+			cps_wls_log(CPS_LOG_DEBG,"%s Reset moto 15w tx output 10V\n", __func__);
+			queue_delayed_work(chip->wls_wq, &chip->rx_vout_change_work, msecs_to_jiffies(2000));
+		}
 	}
 
 	return 0;
@@ -3991,6 +4044,8 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 		chip->enable_rod = true;
 		INIT_DELAYED_WORK(&chip->offset_detect_work, cps_offset_detect_work);
 	}
+
+	INIT_DELAYED_WORK(&chip->rx_vout_change_work, cps_rx_vout_change_work);
 
 	INIT_DELAYED_WORK(&chip->dump_info_work,
 				cps_wls_dump_info_work);
