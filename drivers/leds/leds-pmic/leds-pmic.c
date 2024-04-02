@@ -12,6 +12,11 @@
 #include <linux/property.h>
 #include <linux/slab.h>
 
+#ifdef CONFIG_MTK_BQ25890_LED_SUPPORT
+#include "bq2589x_reg.h"
+extern void bq2589x_enable_statpin(bool en);
+#endif
+
 #ifdef CONFIG_MTK_BQ2560x_SUPPORT
 #include <bq2560x.h>
 #endif
@@ -48,6 +53,18 @@ static void pmic_led_set(struct led_classdev *led_cdev,
 	}
 #endif
 //-EKELLIS-48, yaocankun.wt, 20210401, add led control node	
+// IKSWU-118943 jiacq4 20240403, add led control mode
+#ifdef CONFIG_MTK_BQ25890_LED_SUPPORT
+	if (level == 0) {
+		bq2589x_enable_statpin(0);
+	}
+	else
+	{
+		bq2589x_enable_statpin(1);
+	}
+#endif
+// IKSWU-118943 END
+
 }
 
 static const struct of_device_id of_pmic_leds_match[] = {
