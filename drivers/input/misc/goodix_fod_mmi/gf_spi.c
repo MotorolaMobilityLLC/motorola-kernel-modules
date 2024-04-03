@@ -881,9 +881,13 @@ static int gf_probe(struct platform_device *pdev)
 	gf_dev->notifier = goodix_noti_block;
 #if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
 	gf_dev->active_panel = NULL;
-	drm_check_dt(gf_dev);
-	status = drm_panel_notifier_register(gf_dev->active_panel, &gf_dev->notifier);
-	pr_info("gf_probe drm_panel_notifier_register: status = %d\n", status);
+	status = drm_check_dt(gf_dev);
+	if (status >= 0) {
+		status = drm_panel_notifier_register(gf_dev->active_panel, &gf_dev->notifier);
+		pr_info("gf_probe drm_panel_notifier_register: status = %d\n", status);
+	} else {
+		pr_info("gf_probe drm_panel is NULL:  = %d\n", status);
+	}
 #else
 	fb_register_client(&gf_dev->notifier);
 #endif
