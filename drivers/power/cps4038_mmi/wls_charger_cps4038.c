@@ -651,6 +651,7 @@ static void cps_wls_tx_enable(bool en);
 static bool cps_stop_epp_timeout(long ms);
 static void cps_wls_notify_tx_chrgfull(void);
 static int cps_get_bat_info(enum power_supply_property property);
+static int wireless_en(void *input, bool en);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
@@ -2256,6 +2257,9 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	cps_wls_log(CPS_LOG_DEBG, "CPS_REG_Sys_Op_Mode = 0x%02x, 0x%02x", temp, sys_mode_type);
 #endif
 	if (int_flag & RX_INT_HS_OK) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+		chip->hs_st = HS_OK;
+#endif
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_OK");
 		cps_get_sys_op_mode(&mode_type);
 		if (mode_type == Sys_Op_Mode_MOTO_WLC) {
@@ -2272,6 +2276,9 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	}
 	if (int_flag & RX_INT_HS_FAIL) {
 		chip->moto_stand = false;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+		chip->hs_st = HS_FAIL;
+#endif
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_HS_FAIL");
 		if (chip->bootmode == KERNEL_POWER_OFF_CHARGING_BOOT ||
 			chip->bootmode == LOW_POWER_OFF_CHARGING_BOOT)
@@ -2714,8 +2721,12 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	int tx_detected = gpio_get_value(chip->wls_det_int);
 
 	if (tx_detected) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
+#else
 		if (chip->factory_wls_en == true)
 			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
+#endif
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
 		if (chip->stop_epp_flag) {
 			chip->stop_epp_flag = false;
@@ -2725,8 +2736,11 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
 		chip->rx_int_ready = false;
 		chip->bpp_icl_done = false;
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+		if (!chip->stop_epp_flag && !chip->mode_select_force && !chip->factory_wls_en)
+#else
 		if (!chip->stop_epp_flag && !chip->mode_select_force)
+#endif
 			cps_wls_mode_select("wls_det_irq_handler", true);
 
 		if (chip->rx_ldo_on) {
@@ -2737,10 +2751,14 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			chip->rx_offset_detect_count = 0;
 			chip->rx_offset = false;
 			chip->rx_vout_set = 0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+			chip->hs_st = HS_UNKONWN;
+#else
 			if (chip->factory_wls_en == true) {
 				chip->factory_wls_en = false;
 				mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
 			}
+#endif
 			motoauth_disconnect(&motoauth);
 			//mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
 			//power_supply_changed(chip->wl_psy);
@@ -3884,6 +3902,41 @@ static ssize_t store_offset_detect_enable(struct device *dev, struct device_attr
 }
 static DEVICE_ATTR(offset_detect_enable, 0664, show_offset_detect_enable, store_offset_detect_enable);
 
+static ssize_t wireless_en_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long en;
+
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"wls: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &en);
+	if (r) {
+		cps_wls_log(CPS_LOG_ERR,"Invalid factory_wls_en = %lu\n", en);
+		return -EINVAL;
+	}
+	wireless_en(NULL, !!en);
+
+	return r ? r : count;
+}
+
+static ssize_t wireless_en_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	if (!chip) {
+		cps_wls_log(CPS_LOG_ERR,"WLS: chip not valid\n");
+		return -ENODEV;
+	}
+
+	return sprintf(buf, "%d\n", chip->factory_wls_en);
+}
+static DEVICE_ATTR(wireless_en, S_IRUGO|S_IWUSR, wireless_en_show, wireless_en_store);
+
 static void cps_wls_create_device_node(struct device *dev)
 {
     device_create_file(dev, &dev_attr_reg_addr);
@@ -3892,6 +3945,7 @@ static void cps_wls_create_device_node(struct device *dev)
     device_create_file(dev, &dev_attr_wireless_fw_version);
     device_create_file(dev, &dev_attr_wireless_fw_update);
     device_create_file(dev, &dev_attr_wireless_fw_force_update);
+    device_create_file(dev, &dev_attr_wireless_en);
 //-----------------------write password--------------
     //device_create_file(dev, &dev_attr_write_password);
 
@@ -4073,6 +4127,7 @@ static int cps_wls_register_psy(struct cps_wls_chrg_chip *chip)
 
 static int wireless_en(void *input, bool en)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,1,0)
 	int ret = 0;
 	struct chg_alg_device *alg;
 
@@ -4084,6 +4139,43 @@ static int wireless_en(void *input, bool en)
 	}
 	chip->factory_wls_en = en;
 	cps_wls_log(CPS_LOG_ERR,"wls: wls_en %d\n",en);
+#else
+	int ret = 0;
+	int wait = 0;
+	struct chg_alg_device *alg;
+
+	alg = get_chg_alg_by_name("wlc");
+	if (!alg) {
+		cps_wls_log(CPS_LOG_ERR,"wls: not found wlc\n");
+		return -1;
+	}
+
+	if (en) {
+		if (chip->factory_wls_en == false) {
+			chip->factory_wls_en = true;
+			ret = mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
+		}
+	} else {
+		if (chip->factory_wls_en == true) {
+			wait = 50;
+			while (wait > 0 && chip->hs_st == HS_UNKONWN) {
+				msleep(100);
+				wait --;
+			}
+			cps_wls_mode_select("factory_test_stop_epp", false);
+			wait = 50;
+			while (wait > 0 && (cps_get_vbus() > 6000)) {
+				msleep(10);
+				wait --;
+			}
+			ret = mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, false);
+			chip->factory_wls_en = false;
+			cps_wls_mode_select("factory_test_start_epp", true);
+		}
+	}
+
+	cps_wls_log(CPS_LOG_ERR,"wls: factory wls_en %d, ret=%d\n", en, ret);
+#endif
 	return ret;
 }
 
