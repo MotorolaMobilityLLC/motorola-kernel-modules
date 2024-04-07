@@ -54,7 +54,7 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 			return true;
 	}
 
-	if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
+	if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA) && !is_scene(UX_SCENE_AUDIO)
 		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)) {
 		return true;
 	}
@@ -102,7 +102,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_SYSTEM;
 	else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
 		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)
-		&& p->prio <= 120)
+		&& p->prio < 120)
 		prio = UX_PRIO_CAMERA;
 	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 		prio = UX_PRIO_KSWAPD;
