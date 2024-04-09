@@ -889,6 +889,9 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	qti_fg_charge_dump_info(chg, fg_info);
 #endif
 
+    mmi_info(chg, "Thermal: primary_limit_level = %d, primary_fcc_ma = %d, secondary_limit_level = %d, thermal_secondary_fcc_ma = %d",
+            chg->curr_thermal_primary_level, chg->thermal_primary_fcc_ua,
+            chg->curr_thermal_secondary_level, chg->thermal_secondary_fcc_ua);
 	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
 
 	return rc;
@@ -2194,7 +2197,7 @@ static ssize_t thermal_primary_charge_control_limit_store(struct device *dev,
 
 	chg->thermal_primary_fcc_ua = chg->thermal_primary_levels[charge_primary_limit_level];
 	chg->curr_thermal_primary_level = charge_primary_limit_level;
-	pr_info("charge_primary_limit_level = %lu\n, thermal_primary_fcc_ma = %d",
+	pr_info("charge_primary_limit_level = %lu, thermal_primary_fcc_ma = %d",
 			charge_primary_limit_level, chg->thermal_primary_fcc_ua);
 
 	r = qti_charger_write(chg, OEM_PROP_THERM_PRIMARY_CHG_CONTROL,
@@ -2269,7 +2272,7 @@ static ssize_t thermal_secondary_charge_control_limit_store(struct device *dev,
 
 	chg->thermal_secondary_fcc_ua = chg->thermal_secondary_levels[charge_secondary_limit_level];
 	chg->curr_thermal_secondary_level = charge_secondary_limit_level;
-	pr_info("charge_secondary_limit_level = %lu\n, thermal_secondary_fcc_ma = %d",
+	pr_info("charge_secondary_limit_level = %lu, thermal_secondary_fcc_ma = %d",
 			charge_secondary_limit_level, chg->thermal_secondary_fcc_ua);
 
 	r = qti_charger_write(chg, OEM_PROP_THERM_SECONDARY_CHG_CONTROL,
@@ -3198,25 +3201,25 @@ static void thermal_charge_control_init(struct qti_charger *chg)
 		return;
 	}
 
-	rc = device_create_file(battery_psy->dev.parent,
+	rc = device_create_file(&battery_psy->dev,
 				&dev_attr_thermal_primary_charge_control_limit);
 	if (rc) {
 		pr_err("couldn't create thermal_primary_charge_control_limit\n");
 	}
 
-	rc = device_create_file(battery_psy->dev.parent,
+	rc = device_create_file(&battery_psy->dev,
 				&dev_attr_thermal_primary_charge_control_limit_max);
 	if (rc) {
 		pr_err("couldn't create thermal_primary_charge_control_limit_max\n");
 	}
 
-	rc = device_create_file(battery_psy->dev.parent,
+	rc = device_create_file(&battery_psy->dev,
 				&dev_attr_thermal_secondary_charge_control_limit);
 	if (rc) {
 		pr_err("couldn't create thermal_secondary_charge_control_limit\n");
 	}
 
-	rc = device_create_file(battery_psy->dev.parent,
+	rc = device_create_file(&battery_psy->dev,
 				&dev_attr_thermal_secondary_charge_control_limit_max);
 	if (rc) {
 		pr_err("couldn't create thermal_secondary_charge_control_limit_max\n");
