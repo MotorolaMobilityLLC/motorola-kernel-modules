@@ -12,9 +12,16 @@
 #include <linux/property.h>
 #include <linux/slab.h>
 
-#ifdef CONFIG_MTK_BQ25890_LED_SUPPORT
+#ifdef CONFIG_MTK_MULTI_BQ_SGM_LED_SUPPORT
+#include <linux/power_supply.h>
 #include "bq2589x_reg.h"
-extern void bq2589x_enable_statpin(bool en);
+bool bq25890 = false;
+bool sgm41543d = false;
+void pimc_led_get_id(void);
+extern struct power_supply *power_supply_get_by_name(const char *name);
+#elif defined(CONFIG_MTK_BQ25890_LED_SUPPORT)
+#include "bq2589x_reg.h"
+bool bq25890 = true;
 #endif
 
 #ifdef CONFIG_MTK_BQ2560x_SUPPORT
@@ -52,20 +59,41 @@ static void pmic_led_set(struct led_classdev *led_cdev,
 		bq2560x_enable_statpin(1);
 	}
 #endif
-//-EKELLIS-48, yaocankun.wt, 20210401, add led control node	
+//-EKELLIS-48, yaocankun.wt, 20210401, add led control node
 // IKSWU-118943 jiacq4 20240403, add led control mode
 #ifdef CONFIG_MTK_BQ25890_LED_SUPPORT
-	if (level == 0) {
-		bq2589x_enable_statpin(0);
-	}
-	else
-	{
-		bq2589x_enable_statpin(1);
+	if(bq25890){
+		if (level == 0)
+			bq2589x_enable_statpin(0);
+		else
+			bq2589x_enable_statpin(1);
 	}
 #endif
 // IKSWU-118943 END
 
 }
+
+#ifdef CONFIG_MTK_MULTI_BQ_SGM_LED_SUPPORT
+// IKSWU-121600 jiacq4 20240410, add get ID
+void pimc_led_get_id(void)
+{
+	struct power_supply *chosen;
+	chosen = power_supply_get_by_name("primary_chg");
+
+	if(strstr(chosen->of_node->name,"bq25890")){
+		pr_info("chosen bq25890\n");
+		bq25890 = true;
+	}else if(strstr(chosen->of_node->name,"sgm41543d")){
+		pr_info("chosen sgm41543d\n");
+		sgm41543d = true;
+	}else{
+		bq25890 = false;
+		sgm41543d = false;
+		pr_info("chosen node null\n");
+	}
+}
+// IKSWU-121600 END
+#endif
 
 static const struct of_device_id of_pmic_leds_match[] = {
 	{ .compatible = "pmic-leds", },
@@ -84,6 +112,10 @@ static int pmic_led_probe(struct platform_device *pdev)
   	led = devm_kzalloc(&pdev->dev, sizeof(*led), GFP_KERNEL);
   	if (!led)
   		return -ENOMEM;
+
+#ifdef CONFIG_MTK_MULTI_BQ_SGM_LED_SUPPORT
+	pimc_led_get_id();
+#endif
 
   	/* Use label else node name */
   	led->cdev.name = of_get_property(np, "label", NULL) ? : np->name;
