@@ -1983,6 +1983,11 @@ static int cps_get_fw_revision(uint32_t* fw_revision)
 	uint32_t fw_minor_revision = 0;
 	int fw_version = 0;
 
+	if (CPS_CHIP_ID != cps_wls_get_chip_id()) {
+		*fw_revision = 0x00;
+		return CPS_WLS_FAIL;
+	}
+
 	fw_version = cps_wls_get_sys_fw_version();
 
 	if (CPS_WLS_FAIL != fw_version) {
@@ -2485,7 +2490,7 @@ static ssize_t wireless_fw_version_show(struct device *dev, struct device_attrib
 {
 	uint32_t fw_version = 0x00;
 
-	if (chip && chip->wls_fw_version) {
+	if (CPS_WLS_SUCCESS != cps_get_fw_revision(&fw_version)) {
 		fw_version = chip->wls_fw_version;
 	}
 
