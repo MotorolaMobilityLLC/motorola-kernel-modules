@@ -43,179 +43,60 @@ static int fs3001_haptic_offset_calibration(struct fs3001 *fs3001);
 
 static char *fs3001_ram_name = "fs3001_haptic.bin";
 static char fs3001_rtp_name[][FS3001_RTP_NAME_MAX] = {
-	{"aw8622x_osc_rtp_24K_5s.bin"},
-	{"AcousticGuitar_RTP.bin"},	//21
-	{"Blues_RTP.bin"},
-	{"Candy_RTP.bin"},
-	{"Carousel_RTP.bin"},
-	{"Celesta_RTP.bin"},
-	{"Childhood_RTP.bin"},
-	{"Country_RTP.bin"},
-	{"Cowboy_RTP.bin"},
-	{"Echo_RTP.bin"},
-	{"Fairyland_RTP.bin"},
-	{"Fantasy_RTP.bin"},	//31
-	{"Field_Trip_RTP.bin"},
-	{"Glee_RTP.bin"},
-	{"Glockenspiel_RTP.bin"},
-	{"Ice_Latte_RTP.bin"},
-	{"Kung_Fu_RTP.bin"},
-	{"Leisure_RTP.bin"},
-	{"Lollipop_RTP.bin"},
-	{"MiMix2_RTP.bin"},
-	{"Mi_RTP.bin"},
-	{"MiHouse_RTP.bin"},	//41
-	{"MiJazz_RTP.bin"},
-	{"MiRemix_RTP.bin"},
-	{"Mountain_Spring_RTP.bin"},
-	{"Orange_RTP.bin"},
-	{"WindChime_RTP.bin"},	//46
-	{"Space_Age_RTP.bin"},
-	{"ToyRobot_RTP.bin"},
-	{"Vigor_RTP.bin"},
-	{"Bottle_RTP.bin"},
-	{"Bubble_RTP.bin"},	//51
-	{"Bullfrog_RTP.bin"},
-	{"Burst_RTP.bin"},
-	{"Chirp_RTP.bin"},
-	{"Clank_RTP.bin"},
-	{"Crystal_RTP.bin"},
-	{"FadeIn_RTP.bin"},
-	{"FadeOut_RTP.bin"},
-	{"Flute_RTP.bin"},
-	{"Fresh_RTP.bin"},
-	{"Frog_RTP.bin"},	//61
-	{"Guitar_RTP.bin"},
-	{"Harp_RTP.bin"},
-	{"IncomingMessage_RTP.bin"},
-	{"MessageSent_RTP.bin"},
-	{"Moment_RTP.bin"},
-	{"NotificationXylophone_RTP.bin"},
-	{"Potion_RTP.bin"},
-	{"Radar_RTP.bin"},
-	{"Spring_RTP.bin"},
-	{"Swoosh_RTP.bin"},	//71
-	{"Gesture_UpSlide_RTP.bin"},
-	{"Gesture_UpHold_RTP.bin"},
-	{"Charge_Wire_RTP.bin"},
-	{"Charge_Wireless_RTP.bin"},
-	{"Unlock_Failed_RTP.bin"},
-	{"FOD_Motion1_RTP.bin"},
-	{"FOD_Motion2_RTP.bin"},
-	{"FOD_Motion3_RTP.bin"},
-	{"FOD_Motion4_RTP.bin"},
-	{"FaceID_Wrong1_RTP.bin"},
-	{"FaceID_Wrong2_RTP.bin"},	//82
-	{"uninstall_animation_rtp.bin"},
-	{"uninstall_dialog_rtp.bin"},
-	{"screenshot_rtp.bin"},
-	{"lockscreen_camera_entry_rtp.bin"},
-	{"launcher_edit_rtp.bin"},
-	{"launcher_icon_selection_rtp.bin"},
-	{"taskcard_remove_rtp.bin"},
-	{"task_cleanall_rtp.bin"},
-	{"new_iconfolder_rtp.bin"},
-	{"notification_remove_rtp.bin"},
-	{"notification_cleanall_rtp.bin"},
-	{"notification_setting_rtp.bin"},
-	{"game_turbo_rtp.bin"},
-	{"NFC_card_rtp.bin"},
-	{"wakeup_voice_assistant_rtp.bin"},
-	{"NFC_card_slow_rtp.bin"},
-	{"POCO_RTP.bin"},	//99
-	{"aw8622x_rtp.bin"},	//100
-	{"offline_countdown_RTP.bin"},
-	{"scene_bomb_injury_RTP.bin"},
-	{"scene_bomb_RTP.bin"},	//103
-	{"door_open_RTP.bin"},
-	{"aw8622x_rtp.bin"},
-	{"scene_step_RTP.bin"},	//106
-	{"crawl_RTP.bin"},
-	{"scope_on_RTP.bin"},
-	{"scope_off_RTP.bin"},
-	{"magazine_quick_RTP.bin"},
-	{"grenade_RTP.bin"},
-	{"scene_getshot_RTP.bin"},	//112
-	{"grenade_explosion_RTP.bin"},
-	{"punch_RTP.bin"},
-	{"pan_RTP.bin"},
-	{"bandage_RTP.bin"},
-	{"aw8622x_rtp.bin"},
-	{"scene_jump_RTP.bin"},
-	{"vehicle_plane_RTP.bin"},	//119
-	{"scene_openparachute_RTP.bin"},	//120
-	{"scene_closeparachute_RTP.bin"},	//121
-	{"vehicle_collision_RTP.bin"},
-	{"vehicle_buggy_RTP.bin"},	//123
-	{"vehicle_dacia_RTP.bin"},	//124
-	{"vehicle_moto_RTP.bin"},	//125
-	{"firearms_akm_RTP.bin"},	//126
-	{"firearms_m16a4_RTP.bin"},	//127
-	{"aw8622x_rtp.bin"},
-	{"firearms_awm_RTP.bin"},	//129
-	{"firearms_mini14_RTP.bin"},	//130
-	{"firearms_vss_RTP.bin"},	//131
-	{"firearms_qbz_RTP.bin"},	//132
-	{"firearms_ump9_RTP.bin"},	//133
-	{"firearms_dp28_RTP.bin"},	//134
-	{"firearms_s1897_RTP.bin"},	//135
-	{"aw8622x_rtp.bin"},
-	{"firearms_p18c_RTP.bin"},	//137
-	{"aw8622x_rtp.bin"},
-	{"aw8622x_rtp.bin"},
-	{"CFM_KillOne_RTP.bin"},
-	{"CFM_Headshot_RTP.bin"},	//141
-	{"CFM_MultiKill_RTP.bin"},
-	{"CFM_KillOne_Strong_RTP.bin"},
-	{"CFM_Headshot_Strong_RTP.bin"},
-	{"CFM_MultiKill_Strong_RTP.bin"},
-	{"CFM_Weapon_Grenade_Explode_RTP.bin"},
-	{"CFM_Weapon_Grenade_KillOne_RTP.bin"},
-	{"CFM_ImpactFlesh_Normal_RTP.bin"},
-	{"CFM_Weapon_C4_Installed_RTP.bin"},
-	{"CFM_Hero_Appear_RTP.bin"},
-	{"CFM_UI_Reward_OpenBox_RTP.bin"},
-	{"CFM_UI_Reward_Task_RTP.bin"},
-	{"CFM_Weapon_BLT_Shoot_RTP.bin"},	//153
-	{"Atlantis_RTP.bin"},
-	{"DigitalUniverse_RTP.bin"},
-	{"Reveries_RTP.bin"},
-	{"FOD_Motion_Triang_RTP.bin"},
-	{"FOD_Motion_Flare_RTP.bin"},
-	{"FOD_Motion_Ripple_RTP.bin"},
-	{"FOD_Motion_Spiral_RTP.bin"},
-	{"gamebox_launch_rtp.bin"}, // 161
-	{"Gesture_Back_Pull_RTP.bin"},// 162
-	{"Gesture_Back_Release_RTP.bin"},// 163
-	{"alert_rtp.bin"},// 164
-	{"feedback_negative_light_rtp.bin"},// 165
-	{"feedback_neutral_rtp.bin"},// 166
-	{"feedback_positive_rtp.bin"},// 167
-	{"fingerprint_record_rtp.bin"},// 168
-	{"lockdown_rtp.bin"},// 169
-	{"sliding_damping_rtp.bin"},// 170
-	{"todo_alldone_rtp.bin"},// 171
-	{"uninstall_animation_icon_rtp.bin"},// 172
-	{"signal_button_highlight_rtp.bin"},//173
-	{"signal_button_negative_rtp.bin"},
-	{"signal_button_rtp.bin"},
-	{"signal_clock_high_rtp.bin"},//176
-	{"signal_clock_rtp.bin"},
-	{"signal_clock_unit_rtp.bin"},
-	{"signal_inputbox_rtp.bin"},
-	{"signal_key_high_rtp.bin"},
-	{"signal_key_unit_rtp.bin"},//181
-	{"signal_list_highlight_rtp.bin"},
-	{"signal_list_rtp.bin"},
-	{"signal_picker_rtp.bin"},
-	{"signal_popup_rtp.bin"},
-	{"signal_seekbar_rtp.bin"},//186
-	{"signal_switch_rtp.bin"},
-	{"signal_tab_rtp.bin"},
-	{"signal_text_rtp.bin"},
-	{"signal_transition_light_rtp.bin"},
-	{"signal_transition_rtp.bin"},//191
-	{"haptics_video_rtp.bin"},//192
+	{"fs3001_rtp.bin"},							//1
+	{"fs3001_rtp_Argo_Navis.bin"},                 //2
+	{"fs3001_rtp_Attentive.bin"},                  //3
+	{"fs3001_rtp_Awake.bin"},                      //4
+	{"fs3001_rtp_Bird_Loop.bin"},                  //5
+	{"fs3001_rtp_Brilliant_Times.bin"},            //6
+	{"fs3001_rtp_Chimey_Phone.bin"},               //7
+	{"fs3001_rtp_Complex bin"},                    //8
+	{"fs3001_rtp_Crazy_Dream.bin"},                //9
+	{"fs3001_rtp_Curve_Ball_Blend.bin"},			//10
+	{"fs3001_rtp_Digital_Phone.bin"},              //11
+	{"fs3001_rtp_Electrovision.bin"},              //12
+	{"fs3001_rtp_Ether_Shake.bin"},                //13
+	{"fs3001_rtp_Fateful_Words.bin"},              //14
+	{"fs3001_rtp_Flutey_Phone.bin"},               //15
+	{"fs3001_rtp_Future_Funk.bin"},                //16
+	{"fs3001_rtp_Future_Hi_Tech.bin"},             //17
+	{"fs3001_rtp_Girtab.bin"},                     //18
+	{"fs3001_rtp_Hello.bin"},                      //19
+	{"fs3001_rtp_Hexagon.bin"},                    //20
+	{"fs3001_rtp_Hydra.bin"},                      //21
+	{"fs3001_rtp_Insert_Coin.bin"},                //22
+	{"fs3001_rtp_Jumping_Dots.bin"},               //23
+	{"fs3001_rtp_Keys.bin"},                       //24
+	{"fs3001_rtp_Loopy.bin"},                      //25
+	{"fs3001_rtp_Loopy_Lounge.bin"},               //26
+	{"fs3001_rtp_Modular.bin"},                    //27
+	{"fs3001_rtp_Momentum.bin"},                   //28
+	{"fs3001_rtp_Morning.bin"},                    //29
+	{"fs3001_rtp_Moto.bin"},                       //30
+	{"fs3001_rtp_Natural.bin"},                    //31
+	{"fs3001_rtp_New_Player.bin"},                 //32
+	{"fs3001_rtp_Onward.bin"},                     //33
+	{"fs3001_rtp_Organ_Dub.bin"},                  //34
+	{"fs3001_rtp_Overclocked.bin"},                //35
+	{"fs3001_rtp_Pegasus.bin"},                    //36
+	{"fs3001_rtp_Pyxis.bin"},                      //37
+	{"fs3001_rtp_Regrade.bin"},                    //38
+	{"fs3001_rtp_Scarabaeus.bin"},                 //39
+	{"fs3001_rtp_Sceptrum.bin"},                   //40
+	{"fs3001_rtp_Simple.bin"},                     //41
+	{"fs3001_rtp_Solarium.bin"},                   //42
+	{"fs3001_rtp_Sparse.bin"},                     //43
+	{"fs3001_rtp_Terrabytes.bin"},                 //44
+	{"fs3001_rtp_Zero_Hour.bin"},                  //45
+	{"fs3001_rtp_Play.bin"},                       //46
+	{"fs3001_rtp_TJINGLE.bin"},                    //47
+	{"fs3001_rtp_Verizon_Airwaves.bin"},           //48
+	{"fs3001_rtp_City_Lights.bin"},	            //49
+	{"fs3001_rtp_Firefly.bin"},                    //50
+	{"fs3001_rtp_Now_or_Never.bin"},               //51
+	{"fs3001_rtp_Moto_Retro.bin"},                 //52
+	{"fs3001_rtp_Moto_Original.bin"},          //53
+
 };
 
 struct pm_qos_request fs3001_pm_qos_req_vb;
@@ -805,7 +686,7 @@ int fs3001_parse_dt(struct device *dev, struct fs3001 *fs3001,struct device_node
 	if (val != 0)
 	{
 		pr_err("%s:fs3001_rtp_max not found\n", FSERROR);
-		fs3001->dts_info.fs3001_rtp_max = FS3001_RTP_MAX_DEFAULT -1;
+		fs3001->dts_info.fs3001_rtp_max = FS3001_RTP_MAX_DEFAULT;
 	}		
 	else
 	{
@@ -1462,7 +1343,7 @@ static int fs3001_haptic_cont_get_f0(struct fs3001 *fs3001)
 	unsigned int cnt = 200;
 	bool get_f0_flag = false;
 
-	pr_info("enter %d\n",ret);
+	pr_info("enter\n");
 	fs3001->f0 = fs3001->dts_info.fs3001_f0_ref;
 	// enter standby mode
 	fs3001_haptic_stop(fs3001);
@@ -1651,12 +1532,7 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 	sprintf(str,"%s,enter fs3001->effect_id=%d,fs3001->dts_info.fs3001_rtp_id_boundary=%d, fs3001->dts_info.fs3001_rtp_max=%d,fs3001->dts_info.fs3001_bypass_system_gain=%d\n",__func__, fs3001->effect_id,fs3001->dts_info.fs3001_rtp_id_boundary,fs3001->dts_info.fs3001_rtp_max,fs3001->dts_info.fs3001_bypass_system_gain);
 	fs3001_debug_message(fs3001, str);
 
-	if ((fs3001->effect_id < fs3001->dts_info.fs3001_rtp_id_boundary) || (fs3001->effect_id > fs3001->dts_info.fs3001_rtp_max))
-	{
-		return;
-	}
-
-	sprintf(str,"%s,effect_id =%d state = %d\n", __func__,fs3001->effect_id,fs3001->state);
+	sprintf(str,"%s,effect_id =%d, fs3001->rtp_file_num = %d, state = %d\n", __func__,fs3001->effect_id, fs3001->rtp_file_num, fs3001->state);
 	fs3001_debug_message(fs3001, str);
 	
 	mutex_lock(&fs3001->lock);
@@ -1688,8 +1564,6 @@ static void fs3001_rtp_work_routine(struct work_struct *work)
 	{
 		pm_stay_awake(fs3001->dev);
 		fs3001->wk_lock_flag = 1;
-		
-		fs3001->rtp_file_num = fs3001->effect_id - 20;
 		
 		if (fs3001->rtp_file_num < 0)
 			fs3001->rtp_file_num = 0;
@@ -3137,8 +3011,8 @@ static ssize_t fs3001_rtp_store(struct device *dev,struct device_attribute *attr
 	//fs3001_interrupt_clear(fs3001);
 	if (val < (sizeof(fs3001_rtp_name) / FS3001_RTP_NAME_MAX)) //xxxx_please refer to basic-51
 	{
-		fs3001->effect_id = val;
-		pr_info("fs3001_rtp_name[%d]: %s\n",(val - 20), fs3001_rtp_name[val - 20]);
+		fs3001->rtp_file_num = val;
+		pr_info("fs3001_rtp_name[%d]: %s\n",val, fs3001_rtp_name[val]);
 		schedule_work(&fs3001->rtp_work);
 	}
 	else
@@ -3397,8 +3271,8 @@ static ssize_t fs3001_seq_store(struct device *dev, struct device_attribute *att
 	mutex_lock(&fs3001->lock); 
 	for(i=0; i<4; i++) {
 		/* moto_mode_ctl[0] get databuf[0] byte4 */
-		fs3001->moto_mode_ctl[i]= (val>>((3-i)*8)) & 0xFF; 
-		fs3001_haptic_set_wav_seq(fs3001,i,fs3001->moto_mode_ctl[i]);
+		fs3001->moto_mode_ctl[i]= (val>>((FS3001_WAV_SEQ_SIZE-i-1)*8)) & 0xFF; 
+		//fs3001_haptic_set_wav_seq(fs3001,i,fs3001->moto_mode_ctl[i]);
 		sprintf(str,"%s: moto_mode_ctl[%d]=%d\n",__func__, i, fs3001->moto_mode_ctl[i]);
 		fs3001_debug_message(fs3001,str);
 	}
@@ -4224,6 +4098,15 @@ static ssize_t fs3001_auto_brake_store(struct device *dev, struct device_attribu
 	return count;
 }
 
+static ssize_t rtp_interface_show(struct device *dev,struct device_attribute *attr, char *buf)
+{
+	return 0;
+}
+
+static ssize_t rtp_interface_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	return count;
+}
 
 
 static DEVICE_ATTR(f0, 0644, fs3001_f0_show, NULL);
@@ -4265,6 +4148,7 @@ static DEVICE_ATTR(effect_id, 0644, fs3001_effect_id_show, fs3001_effect_id_stor
 static DEVICE_ATTR(buf_size, 0644, fs3001_buf_size_show, fs3001_buf_size_store);
 static DEVICE_ATTR(Qos_time, 0644, fs3001_Qos_time_show, fs3001_Qos_time_store);
 static DEVICE_ATTR(auto_brake, 0644, fs3001_auto_brake_show, fs3001_auto_brake_store);
+static DEVICE_ATTR(rtp_interface, 0644, rtp_interface_show, rtp_interface_store);
 
 
 
@@ -4309,6 +4193,7 @@ static struct attribute *fs3001_vibrator_attributes[] =
 	&dev_attr_buf_size.attr,
 	&dev_attr_Qos_time.attr,
 	&dev_attr_auto_brake.attr,
+	&dev_attr_rtp_interface.attr,
 	NULL
 };
 
@@ -4384,10 +4269,17 @@ static void fs3001_long_vibrate_work_routine(struct work_struct *work)
 	if (moto_mode> 2 || fs3001->duration > 0) 
 	{
 		/* rtp mode */
-		if (moto_mode >102) 
+		if (moto_mode > FS3001_SEQ_NO_RTP_BASE) 
 		{
-
-		} 
+			fs3001->rtp_file_num = moto_mode - FS3001_SEQ_NO_RTP_BASE; 
+			fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RTP_MODE;
+			/* rtp mode and no stop */
+			if (moto_mode >(FS3001_SEQ_NO_RTP_BASE + FS3001_SEQ_NO_RTP_REPEAT)) 
+			{
+				fs3001->rtp_file_num -= FS3001_SEQ_NO_RTP_REPEAT; 
+				fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RTP_LOOP_MODE;
+			}
+		}
 		else if ((fs3001->duration < fs3001->dts_info.fs3001_duration_time[2]) || moto_mode > 2)
 		{
 			/* mode -> index:3 -> 1 : simulate Home key or other hardware key down*/
@@ -4398,9 +4290,9 @@ static void fs3001_long_vibrate_work_routine(struct work_struct *work)
 			{ /* moto custom */
 				if (moto_mode == 3) {
 					fs3001->effect_id = 0;
-				} else if (moto_mode ==4){
+				} else if (moto_mode == 4){
 					fs3001->effect_id = 0;
-				} else if (moto_mode ==5){
+				} else if (moto_mode == 5){
 					fs3001->effect_id = 1;
 				} else if (moto_mode == 6){
 					fs3001->effect_id = 2;
@@ -4423,6 +4315,7 @@ static void fs3001_long_vibrate_work_routine(struct work_struct *work)
 					fs3001->effect_id = 0; /*3 level shrot shake*/
 				}
 			}
+			
 			if(fs3001->effect_id > fs3001->dts_info.fs3001_rtp_id_boundary) 
 			{
 				sprintf(str, "%s index %d out of range use default 1\n",__func__,fs3001->effect_id);
@@ -4430,13 +4323,23 @@ static void fs3001_long_vibrate_work_routine(struct work_struct *work)
 				fs3001->effect_id = 0;
 			}
 			
-			fs3001->activate_mode=FS3001_HAPTIC_ACTIVATE_RAM_MODE;
-		} else {
-			fs3001->activate_mode =FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE;
+			fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_MODE;
+		} 
+		else 
+		{
+			fs3001->activate_mode = FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE;
 		}
-
-		sprintf(str, "%s effect_id = %d \n",__func__,fs3001->effect_id);
-		fs3001_debug_message(fs3001, str);
+		
+		if(fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RTP_MODE || fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RTP_LOOP_MODE)
+		{
+			sprintf(str, "%s fs3001->rtp_file_num = %d \n",__func__,fs3001->rtp_file_num);
+			fs3001_debug_message(fs3001, str);
+		}
+		else 
+		{
+			sprintf(str, "%s effect_id = %d \n",__func__,fs3001->effect_id);
+			fs3001_debug_message(fs3001, str);
+		}
 		/* moto mode select end */
 
 	
@@ -4467,16 +4370,29 @@ static void fs3001_long_vibrate_work_routine(struct work_struct *work)
 			}
 			else if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RTP_MODE) 
 			{
-				pr_info("mode:%s, do nothing\n","FS3001_HAPTIC_ACTIVATE_RTP_MODE");
+				sprintf(str, "%s rtp mode \n",__func__);
+				fs3001_debug_message(fs3001, str);
+				queue_work(fs3001->work_queue, &fs3001->rtp_work);
+			}
+			else if (fs3001->activate_mode == FS3001_HAPTIC_ACTIVATE_RTP_LOOP_MODE) 
+			{
+				sprintf(str, "%s rtp loop mode \n",__func__);
+				fs3001_debug_message(fs3001, str);
+				hrtimer_start(&fs3001->timer,ktime_set(FS3001_SEQ_NO_RTP_STOP / 1000,(FS3001_SEQ_NO_RTP_STOP % 1000)* 1000000),HRTIMER_MODE_REL);
+				queue_work(fs3001->work_queue, &fs3001->rtp_work);
 			}
 			else
 			{
 				pr_err("%s:activate_mode error\n", FSERROR);
-			}	
+			}
+			if(fs3001->moto_mode_ctl[0] > 2)
+			{
+				fs3001->moto_mode_ctl[0] = 0;
+			}
 		}
 		else 
 		{
-			if (fs3001->wk_lock_flag == 1) 
+			if (fs3001->wk_lock_flag == 1)
 			{
 				pm_relax(fs3001->dev);
 				fs3001->wk_lock_flag = 0;

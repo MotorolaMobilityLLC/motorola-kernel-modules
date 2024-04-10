@@ -25,7 +25,7 @@
 
 
 //normal macro
-#define FOURSEMI_DRIVER_VERSION		("v1.0.70")
+#define FOURSEMI_DRIVER_VERSION		("v1.0.74")
 #define FOURSEMI_DEV_NAME			("foursemi_vibrator")
 #define HAP_BRAKE_PATTERN_MAX       4
 #define HAP_WAVEFORM_BUFFER_MAX     8

@@ -79,11 +79,14 @@ typedef struct led_classdev cdev_t;
 #define FS3001_DURATION_TIME_DEFAULT		(30)
 
 #define FS3001_RTP_ID_BOUNDARY_DEFAULT		(0x00)
-#define FS3001_RTP_MAX_DEFAULT				(194)
+#define FS3001_RTP_MAX_DEFAULT				(53)
 #define FS3001_RTP_TIME_DEFAULT				(20)
 
+#define FS3001_WAV_SEQ_SIZE					(4)
+#define FS3001_SEQ_NO_RTP_BASE				(102)
+#define FS3001_SEQ_NO_RTP_REPEAT			(100)
+#define FS3001_SEQ_NO_RTP_STOP				(120000)
 
-// static int wf_s_repeat[4] = { 1, 2, 4, 8 };
 
 enum fs3001_flags 
 {
@@ -109,6 +112,7 @@ enum fs3001_haptic_activate_mode
 	FS3001_HAPTIC_ACTIVATE_CONT_MODE = 1,
     FS3001_HAPTIC_ACTIVATE_RTP_MODE = 2,
 	FS3001_HAPTIC_ACTIVATE_RAM_LOOP_MODE = 3,
+	FS3001_HAPTIC_ACTIVATE_RTP_LOOP_MODE = 4,
 };
 
 enum fs3001_f0_cali_data_mode
