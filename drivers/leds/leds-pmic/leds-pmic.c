@@ -15,6 +15,7 @@
 #ifdef CONFIG_MTK_MULTI_BQ_SGM_LED_SUPPORT
 #include <linux/power_supply.h>
 #include "bq2589x_reg.h"
+#include "sgm415xx.h"
 bool bq25890 = false;
 bool sgm41543d = false;
 void pimc_led_get_id(void);
@@ -22,6 +23,9 @@ extern struct power_supply *power_supply_get_by_name(const char *name);
 #elif defined(CONFIG_MTK_BQ25890_LED_SUPPORT)
 #include "bq2589x_reg.h"
 bool bq25890 = true;
+#elif defined(CONFIG_MTK_SGM41543D_LED_SUPPORT)
+#include "sgm415xx.h"
+bool sgm41543d = true;
 #endif
 
 #ifdef CONFIG_MTK_BQ2560x_SUPPORT
@@ -67,6 +71,14 @@ static void pmic_led_set(struct led_classdev *led_cdev,
 			bq2589x_enable_statpin(0);
 		else
 			bq2589x_enable_statpin(1);
+	}
+#endif
+#ifdef CONFIG_MTK_SGM41543D_LED_SUPPORT
+	if(sgm41543d){
+		if (level == 0)
+			sgm41543_enable_statpin(0);
+		else
+			sgm41543_enable_statpin(1);
 	}
 #endif
 // IKSWU-118943 END
