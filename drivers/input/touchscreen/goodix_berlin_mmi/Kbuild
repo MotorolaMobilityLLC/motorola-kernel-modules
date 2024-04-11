@@ -31,6 +31,10 @@ endif
 ifneq ($(filter m y,$(CONFIG_GTP_FOD)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_FOD
     goodix_brl_mmi-objs += goodix_ts_gesture_fod.o
+
+    ifneq ($(filter m y,$(CONFIG_ENABLE_GTP_VIRTUAL_FOD)),)
+        EXTRA_CFLAGS += -DCONFIG_ENABLE_GTP_VIRTUAL_FOD
+    endif
 else
     goodix_brl_mmi-objs += goodix_ts_gesture.o
 endif

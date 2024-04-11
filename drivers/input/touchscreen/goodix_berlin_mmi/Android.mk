@@ -35,6 +35,9 @@ endif
 
 ifeq ($(TOUCHSCREEN_FOD),true)
 	KBUILD_OPTIONS += CONFIG_GTP_FOD=y
+	ifeq ($(ENABLE_GTP_VIRTUAL_FOD_UP),true)
+		KBUILD_OPTIONS += CONFIG_ENABLE_GTP_VIRTUAL_FOD=y
+	endif
 endif
 
 ifeq ($(TOUCHSCREEN_LAST_TIME),true)

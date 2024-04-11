@@ -73,6 +73,11 @@ static ssize_t goodix_ts_pitch_show(struct device *dev,
 static ssize_t goodix_ts_pitch_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size);
 
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+static ssize_t goodix_ts_fp_event_show(struct device *dev,
+	struct device_attribute *attr, char *buf);
+#endif
+
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
 static DEVICE_ATTR(interpolation, (S_IRUGO | S_IWUSR | S_IWGRP),
@@ -98,6 +103,11 @@ static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 
 static DEVICE_ATTR(pitch, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_pitch_show, goodix_ts_pitch_store);
+
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+static DEVICE_ATTR(fp_event, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_fp_event_show, NULL);
+#endif
 
 /* hal settings */
 #define ROTATE_0   0
@@ -159,6 +169,10 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->board_data.pitch_ctrl)
 		ADD_ATTR(pitch);
+
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+		ADD_ATTR(fp_event);
+#endif
 
 #ifdef CONFIG_GTP_LAST_TIME
 	ADD_ATTR(timestamp);
@@ -837,6 +851,26 @@ exit:
 	mutex_unlock(&core_data->mode_lock);
 	return size;
 }
+
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+static ssize_t goodix_ts_fp_event_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	int idata = 0;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	idata = atomic_read(&core_data->fp_event);
+	ts_info("fp_event state = 0x%02x.\n", idata);
+
+	//clear
+	atomic_set(&core_data->fp_event, 0x01);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x\n", idata);
+}
+#endif
 
 static int goodix_ts_mmi_refresh_rate(struct device *dev, int freq)
 {
@@ -1526,6 +1560,9 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev) {
 
 	ts_info("Suspend start");
 	atomic_set(&core_data->suspended, 1);
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+	atomic_set(&core_data->fp_event, 0x01);
+#endif
 
 #ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
 	//disable/stop ghost log capture

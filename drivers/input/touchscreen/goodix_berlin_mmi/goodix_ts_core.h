@@ -605,6 +605,9 @@ struct goodix_ts_core {
 	int gtp_pen_detect_flag;
 	struct notifier_block pen_notif;
 #endif
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+	atomic_t fp_event;
+#endif
 };
 
 #ifdef GTP_PEN_NOTIFIER
