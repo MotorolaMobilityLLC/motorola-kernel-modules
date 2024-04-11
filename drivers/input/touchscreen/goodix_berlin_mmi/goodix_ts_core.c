@@ -2690,6 +2690,9 @@ static int goodix_ts_probe(struct platform_device *pdev)
 		init_waitqueue_head(&core_data->pm_wq);
 	atomic_set(&core_data->pm_resume, 1);
 
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+	atomic_set(&core_data->fp_event, 0x01);
+#endif
 	/* debug node init */
 	goodix_tools_init();
 
