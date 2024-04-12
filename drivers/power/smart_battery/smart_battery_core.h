@@ -101,6 +101,7 @@ struct mmi_smart_battery {
 	int				gauge_count;
 	const char		**gauge_name_arry;
 	struct mmi_battery_pack *battery;
+	int				bat_cycle_count;
 };
 
 #define QUEUS_DELAYED_WORK_TIME  8000

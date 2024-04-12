@@ -331,7 +331,10 @@ static int batt_get_prop(struct power_supply *psy,
 		val->intval = chip->combo_charge_counter* 1000;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		val->intval = chip->combo_cycle_count;
+		if(chip->bat_cycle_count > 0)
+			val->intval = chip->bat_cycle_count;
+		else
+			val->intval = chip->combo_cycle_count;
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = mmi_batt_health_check();
@@ -723,10 +726,48 @@ static ssize_t manufacturing_date_store(struct device *dev,
 
 static DEVICE_ATTR(manufacturing_date, 0644, manufacturing_date_show, manufacturing_date_store);
 
+static ssize_t battery_cycle_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	if (!this_chip) {
+		pr_err("mmi_charger: chip is invalid\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, SMART_BATT_SHOW_MAX_SIZE, "%d\n", this_chip->bat_cycle_count);
+}
+
+static ssize_t battery_cycle_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	int r;
+	unsigned int battery_cycle = 0;
+
+	if (!this_chip) {
+		pr_err("mmi_charger: chip is invalid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtouint(buf, 0, &battery_cycle);
+	if (r) {
+		mmi_err(this_chip, "Invalid battery_cycle value = %d\n", battery_cycle);
+		return -EINVAL;
+	}
+
+	this_chip->bat_cycle_count = battery_cycle;
+
+	return r ? r : count;
+}
+
+static DEVICE_ATTR(battery_cycle, 0644, battery_cycle_show, battery_cycle_store);
+
 static struct attribute *  smart_batt_att[] = {
 	&dev_attr_state_of_health.attr,
 	&dev_attr_manufacturing_date.attr,
 	&dev_attr_first_usage_date.attr,
+	&dev_attr_battery_cycle.attr,
 	NULL,
 };
 
@@ -820,6 +861,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->taper_count = 0;
 	chip->gauge_count = -ENODATA;
 	chip->battery = NULL;
+	chip->bat_cycle_count = 0;
 	smart_battery_parse_dt(chip);
 	INIT_LIST_HEAD(&chip->battery_list);
 
