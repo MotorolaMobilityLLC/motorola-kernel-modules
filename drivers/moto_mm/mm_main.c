@@ -16,8 +16,10 @@
 #include <linux/module.h>
 #include <linux/types.h>
 #include <trace/hooks/vmscan.h>
+#include <trace/hooks/mm.h>
 #include <linux/swap.h>
 
+#include "mm_common.h"
 
 static void tune_inactive_ratio_hook(void *data, unsigned long *inactive_ratio, int file)
 {
@@ -29,42 +31,37 @@ static void tune_inactive_ratio_hook(void *data, unsigned long *inactive_ratio, 
 	return;
 }
 
-
-#define REGISTER_HOOK(name) do {\
-	rc = register_trace_android_vh_##name(name##_hook, NULL);\
-	if (rc) {\
-		pr_err("register hook %s failed", #name);\
-		goto err_out_##name;\
-	}\
-} while (0)
-
-#define UNREGISTER_HOOK(name) do {\
-	unregister_trace_android_vh_##name(name##_hook, NULL);\
-} while (0)
-
-#define ERROR_OUT(name) err_out_##name
-
 static int register_all_hooks(void)
 {
 	int rc;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	/* tune_inactive_ratio_hook */
 	REGISTER_HOOK(tune_inactive_ratio);
+#endif
 	return 0;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	UNREGISTER_HOOK(tune_inactive_ratio);
 ERROR_OUT(tune_inactive_ratio):
+#endif
 	return rc;
 }
 
-static void unregister_all_hook(void)
+static void unregister_all_hooks(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 	UNREGISTER_HOOK(tune_inactive_ratio);
+#endif
 }
 
 static int __init moto_mm_init(void)
 {
 	int ret = 0;
+
+	ret = moto_mm_proc_init();
+	if (ret != 0)
+		return ret;
 
 	ret = register_all_hooks();
 	if (ret != 0) {
@@ -77,7 +74,8 @@ static int __init moto_mm_init(void)
 
 static void __exit moto_mm_exit(void)
 {
-	unregister_all_hook();
+	unregister_all_hooks();
+	moto_mm_proc_deinit();
 
 	pr_info("moto_mm_exit succeed!\n");
 	return;
