@@ -4,3 +4,5 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 
 obj-m += moto_mm.o
 
+moto_mm-y := mm_main.o mm_sysfs.o
+
