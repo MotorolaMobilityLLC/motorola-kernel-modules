@@ -390,6 +390,7 @@ int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
 static int cps_get_vbus(void);
 static int factory_test_wls_en(void *input, bool en);
+static void cps_wls_switch_epp_to_bpp(void);
 
 int cps_wls_reg_check(void)
 {
@@ -3122,6 +3123,10 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 	of_property_read_u32(node, "enable_stop_epp", &chip->enable_stop_epp);
 	cps_wls_log(CPS_LOG_ERR,"[%s] enable_stop_epp %d\n", __func__, chip->enable_stop_epp);
 
+	chip->enable_bat_full_stop_epp = 0x00;
+	of_property_read_u32(node, "enable_bat_full_stop_epp", &chip->enable_bat_full_stop_epp);
+	cps_wls_log(CPS_LOG_ERR,"[%s] enable_bat_full_stop_epp %d\n", __func__, chip->enable_bat_full_stop_epp);
+
 	chip->enable_rx_offset_detect = 0x00;
 	of_property_read_u32(node, "enable_rx_offset_detect", &chip->enable_rx_offset_detect);
 	cps_wls_log(CPS_LOG_DEBG,"[%s] enable_rx_offset_detect %d\n", __func__, chip->enable_rx_offset_detect);
@@ -3619,6 +3624,18 @@ static void cps_wls_set_battery_soc(int uisoc)
 		} else
 			cps_wls_notify_tx_chrgfull();
 	}
+
+	cps_wls_log(CPS_LOG_DEBG, "%s hs_st:%d mode_type:%d online:%d soc=%d flag:%d\n", __func__,
+			chg->hs_st, chg->mode_type, chg->wls_online, soc, chg->stop_epp_flag);
+
+	if (soc == 100 &&
+		chg->enable_bat_full_stop_epp &&
+		chg->mode_type == Sys_Op_Mode_EPP &&
+		chg->hs_st != HS_UNKONWN &&
+		!chg->stop_epp_flag) {
+		cps_wls_log(CPS_LOG_DEBG, "%s switch to BPP\n", __func__);
+		cps_wls_switch_epp_to_bpp();
+	}
 }
 
 static bool cps_stop_epp_timeout(long ms)
@@ -3676,6 +3693,24 @@ static void cps_wls_stop_epp(void)
 			} else {
 				cps_wls_log(CPS_LOG_ERR, "%s failed\n", __func__);
 			}
+		}
+	}
+}
+
+static void cps_wls_switch_epp_to_bpp(void)
+{
+	if (!chip->wls_online) {
+		cps_wls_log(CPS_LOG_DEBG, "%s wls_online=0\n", __func__);
+		return;
+	}
+
+	if (chip->mode_type == Sys_Op_Mode_EPP) {
+		if (CPS_WLS_SUCCESS == cps_wls_mode_select("switch_epp_to_bpp", false)) {
+			chip->stop_epp_flag = true;
+			chip->stop_epp_ktime = ktime_get_boottime();
+			cps_wls_log(CPS_LOG_DEBG, "%s start\n", __func__);
+		} else {
+			cps_wls_log(CPS_LOG_ERR, "%s failed\n", __func__);
 		}
 	}
 }

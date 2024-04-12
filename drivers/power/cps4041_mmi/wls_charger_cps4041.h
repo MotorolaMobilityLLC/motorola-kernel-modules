@@ -376,6 +376,7 @@ struct cps_wls_chrg_chip {
 	int cable_ready_wait_count;
 	bool moto_stand;
 	int enable_stop_epp;
+	int enable_bat_full_stop_epp;
 	bool stop_epp_flag;
 	ktime_t stop_epp_ktime;
 	bool mode_select_force;
