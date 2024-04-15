@@ -20,19 +20,27 @@
 #include <linux/cgroup.h>
 #include <linux/version.h>
 
+/* Feature support check */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+// #define LRU_SHRINKER_SUPPORTED
+#define DRAIN_ALL_PAGES_BYPASS_SUPPORTED
+// #define MAPPED_PROTECTOR_SUPPORTED
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+#define MM_INFO_SUPPORTED
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+#define TUNE_INACTIVE_SUPPORTED
+#endif
+
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
 	if (cond)								\
 		trace_printk(fmt, ##__VA_ARGS__);	\
 } while (0)
-
-#define mm_err(fmt, ...) \
-		pr_err("[moto_mm][%s]"fmt, __func__, ##__VA_ARGS__)
-#define mm_warn(fmt, ...) \
-		pr_warn("[moto_mm][%s]"fmt, __func__, ##__VA_ARGS__)
-#define mm_debug(fmt, ...) \
-		pr_info("[moto_mm][%s]"fmt, __func__, ##__VA_ARGS__)
 
 #define REGISTER_HOOK(name) do {\
 	rc = register_trace_android_vh_##name(name##_hook, NULL);\
@@ -59,13 +67,25 @@ enum {
 };
 
 /* global vars and functions */
-extern int moto_alloc_warn_ms;
-
 extern int moto_mm_proc_init(void);
 extern void moto_mm_proc_deinit(void);
-extern int register_mem_alloc_hooks(void);
-extern void unregister_mem_alloc_hooks(void);
 
+#if defined(MM_INFO_SUPPORTED)
+extern int moto_mm_info_enabled;
+extern int moto_alloc_warn_ms;
+extern int mm_info_init(void);
+extern void mm_info_exit(void);
+#endif // defined(MM_INFO_SUPPORTED)
+
+#if defined(LRU_SHRINKER_SUPPORTED)
+extern int moto_lru_shrinker_enabled;
+extern int mm_lru_shrinker_init(void);
+extern void mm_lru_shrinker_exit(void);
+extern ssize_t proc_lru_shrinker_status_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos);
+#endif // defined(LRU_SHRINKER_SUPPORTED)
+
+/* inline functions */
 static inline int get_task_cgroup_id(struct task_struct *task)
 {
 	struct cgroup_subsys_state *css = task_css(task, cpu_cgrp_id);
