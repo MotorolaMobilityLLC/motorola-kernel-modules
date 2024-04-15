@@ -59,9 +59,12 @@ enum {
 };
 
 /* global vars and functions */
+extern int moto_alloc_warn_ms;
 
 extern int moto_mm_proc_init(void);
 extern void moto_mm_proc_deinit(void);
+extern int register_mem_alloc_hooks(void);
+extern void unregister_mem_alloc_hooks(void);
 
 static inline int get_task_cgroup_id(struct task_struct *task)
 {
