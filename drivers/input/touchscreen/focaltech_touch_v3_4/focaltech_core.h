@@ -81,9 +81,12 @@
 #define FTS_KEY_DIM                         10
 #define FTS_COORDS_ARR_SIZE                 4
 #define FTS_ONE_TCH_LEN                     6
-#define FTS_TOUCH_DATA_LEN  (FTS_MAX_POINTS_SUPPORT * FTS_ONE_TCH_LEN + 2)
 #define FTS_ONE_TCH_LEN_V2                  8
-#define FTS_TOUCH_DATA_LEN_V2  (FTS_MAX_POINTS_SUPPORT * FTS_ONE_TCH_LEN_V2 + 4)
+#if FTS_INPUT_PROTOCOL_V2
+#define FTS_TOUCH_DATA_LEN  (FTS_MAX_POINTS_SUPPORT * FTS_ONE_TCH_LEN_V2 + 4)
+#else
+#define FTS_TOUCH_DATA_LEN  (FTS_MAX_POINTS_SUPPORT * FTS_ONE_TCH_LEN + 2)
+#endif
 
 #define FTS_GESTURE_POINTS_MAX              6
 #define FTS_GESTURE_DATA_LEN               (FTS_GESTURE_POINTS_MAX * 4 + 4)
