@@ -4108,6 +4108,65 @@ static ssize_t rtp_interface_store(struct device *dev, struct device_attribute *
 	return count;
 }
 
+static ssize_t fs3001_strength_show(struct device *dev,struct device_attribute *attr, char *buf)
+{
+	unsigned char reg = 0;
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+	pr_info("enter\n");
+
+	fs3001_i2c_read(fs3001, FS3001_GAINCFG, &reg);
+
+	return snprintf(buf, PAGE_SIZE, "0x%02X\n", reg);
+}
+
+// same as set gain
+//cat strength
+//0x80
+//echo 0 > strength
+//cat strength
+//0x40
+//echo 1 > strength
+//cat strength
+//0x60
+//echo 2 > strength
+//cat strength
+//0x80
+
+static ssize_t fs3001_strength_store(struct device *dev,struct device_attribute *attr,const char *buf, size_t count)
+{
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+	unsigned int val = 0;
+	int rc = 0;
+	pr_info("enter\n");
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+	{
+		return rc;
+	}
+
+	pr_info("value=%d\n", val);
+	mutex_lock(&fs3001->lock);
+	switch(val)
+	{
+		case 0:
+			fs3001->gain = 0x40;
+			break;
+		case 1:
+			fs3001->gain = 0x60;
+			break;
+		case 2:
+			fs3001->gain = 0x80;
+			break;
+		default:
+			pr_err("Unsupported strength value: %d", val);
+			break;
+	}
+	fs3001_haptic_set_gain(fs3001, fs3001->gain);
+	mutex_unlock(&fs3001->lock);
+	return count;
+}
+
 
 static DEVICE_ATTR(f0, 0644, fs3001_f0_show, NULL);
 static DEVICE_ATTR(f0_ref, 0644, fs3001_f0_ref_show, fs3001_f0_ref_store);
@@ -4149,6 +4208,7 @@ static DEVICE_ATTR(buf_size, 0644, fs3001_buf_size_show, fs3001_buf_size_store);
 static DEVICE_ATTR(Qos_time, 0644, fs3001_Qos_time_show, fs3001_Qos_time_store);
 static DEVICE_ATTR(auto_brake, 0644, fs3001_auto_brake_show, fs3001_auto_brake_store);
 static DEVICE_ATTR(rtp_interface, 0644, rtp_interface_show, rtp_interface_store);
+static DEVICE_ATTR(strength, 0644, fs3001_strength_show, fs3001_strength_store);
 
 
 
@@ -4194,6 +4254,7 @@ static struct attribute *fs3001_vibrator_attributes[] =
 	&dev_attr_Qos_time.attr,
 	&dev_attr_auto_brake.attr,
 	&dev_attr_rtp_interface.attr,
+	&dev_attr_strength.attr,
 	NULL
 };
 
