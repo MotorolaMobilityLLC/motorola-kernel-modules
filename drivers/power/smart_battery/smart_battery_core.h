@@ -101,7 +101,9 @@ struct mmi_smart_battery {
 	int				gauge_count;
 	const char		**gauge_name_arry;
 	struct mmi_battery_pack *battery;
+#ifdef CONFIG_MOTO_1200_CYCLE
 	int				bat_cycle_count;
+#endif
 };
 
 #define QUEUS_DELAYED_WORK_TIME  8000
