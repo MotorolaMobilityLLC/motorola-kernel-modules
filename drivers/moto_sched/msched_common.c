@@ -100,7 +100,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_TOPAPP;
 	else if (ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER)) // Base feature: systemserver important lock
 		prio = UX_PRIO_SYSTEM;
-	else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
+	else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA) && !is_scene(UX_SCENE_AUDIO)
 		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)
 		&& p->prio < 120)
 		prio = UX_PRIO_CAMERA;
