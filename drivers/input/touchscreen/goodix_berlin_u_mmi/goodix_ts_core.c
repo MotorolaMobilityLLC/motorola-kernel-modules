@@ -1236,6 +1236,13 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->gesture_wait_pm = false;
 	}
 
+#ifdef CONFIG_GTP_POCKET_MODE
+	board_data->pocket_mode_ctrl = of_property_read_bool(node,
+		"goodix,pocket-mode-ctrl");
+	if (board_data->pocket_mode_ctrl)
+		ts_info("Support goodix touch pocket mode");
+#endif
+
 #ifdef CONFIG_GTP_DELAY_RELEASE
 	r = of_property_read_u32(node, "goodix,fod-x",
 				 &fod_area_x);

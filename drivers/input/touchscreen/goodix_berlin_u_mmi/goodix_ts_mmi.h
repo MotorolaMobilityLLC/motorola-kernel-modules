@@ -56,4 +56,5 @@ static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device
 #define ENTER_GESTURE_MODE_CMD   0xA6
 #define PALM_DETECTION_SWITCH_CMD   0x93
 #define ENTER_STOWED_MODE_CMD   0x97
+#define ENTER_POCKET_MODE_CMD   0x63
 #endif

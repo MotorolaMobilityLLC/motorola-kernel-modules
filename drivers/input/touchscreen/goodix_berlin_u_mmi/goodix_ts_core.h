@@ -335,6 +335,7 @@ struct goodix_ts_board_data {
 #ifdef CONFIG_GTP_MULTI_CONFIG
 	const char *panel_supplier;
 #endif
+	bool pocket_mode_ctrl;
 };
 
 enum goodix_fw_update_mode {
@@ -524,6 +525,7 @@ struct goodix_mode_info {
 	int palm_detection;
 #endif
 	int stowed;
+	int pocket_mode;
 };
 
 struct goodix_ts_core {

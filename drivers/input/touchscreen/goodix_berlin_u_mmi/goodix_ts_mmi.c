@@ -84,6 +84,15 @@ static DEVICE_ATTR(log_trigger, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_log_trigger_show, goodix_ts_log_trigger_store);
 #endif
 
+#ifdef CONFIG_GTP_POCKET_MODE
+static ssize_t goodix_ts_pocket_mode_show(struct device *dev,
+	struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size);
+static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
+#endif
+
 /* hal settings */
 #define ROTATE_0   0
 #define ROTATE_90   1
@@ -138,6 +147,11 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->board_data.stowed_mode_ctrl)
 		ADD_ATTR(stowed);
+
+#ifdef CONFIG_GTP_POCKET_MODE
+	if (core_data->board_data.pocket_mode_ctrl)
+		ADD_ATTR(pocket_mode);
+#endif
 
 #ifdef CONFIG_GTP_LAST_TIME
 	ADD_ATTR(timestamp);
@@ -966,6 +980,82 @@ static int goodix_ts_mmi_methods_reset(struct device *dev, int type) {
 	return ret;
 }
 
+#ifdef CONFIG_GTP_POCKET_MODE
+static ssize_t goodix_ts_pocket_mode_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info("Pocket mode state = %d.\n", core_data->set_mode.pocket_mode);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", core_data->set_mode.pocket_mode);
+}
+
+static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long value = 0;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		ts_err("pocket_mode: Failed to convert value\n");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+	switch (value) {
+		case 0x10:
+		case 0x20:
+			ts_info("touch pocket mode disable\n");
+			core_data->get_mode.pocket_mode = 0;
+			break;
+		case 0x11:
+		case 0x21:
+			ts_info("touch pocket mode enable\n");
+			core_data->get_mode.pocket_mode = 1;
+			break;
+		default:
+			ts_info("unsupport pocket mode type, value = %lu\n", value);
+			mutex_unlock(&core_data->mode_lock);
+			return -EINVAL;
+	}
+
+	if (core_data->set_mode.pocket_mode == core_data->get_mode.pocket_mode) {
+		ts_info("The value = %d is same, so not to write", core_data->get_mode.pocket_mode);
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	ret = goodix_ts_send_cmd(core_data, ENTER_POCKET_MODE_CMD, 5,
+		core_data->get_mode.pocket_mode , 0x00);
+	if (ret < 0) {
+		ts_err("failed to send pocket mode cmd");
+		goto exit;
+	}
+
+	core_data->set_mode.pocket_mode = core_data->get_mode.pocket_mode;
+	msleep(20);
+
+	ts_info("Success to %s pocket mode", core_data->get_mode.pocket_mode ? "Enable" : "Disable");
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return size;
+}
+#endif
+
 static int goodix_ts_firmware_update(struct device *dev, char *fwname) {
 	int ret = -ENODEV;
 	struct platform_device *pdev;
@@ -1234,6 +1324,18 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	if (core_data->board_data.stowed_mode_ctrl) {
 		core_data->set_mode.stowed = 0;
 	}
+
+#ifdef CONFIG_GTP_POCKET_MODE
+	if (core_data->board_data.pocket_mode_ctrl && core_data->get_mode.pocket_mode) {
+		ret = goodix_ts_send_cmd(core_data, ENTER_POCKET_MODE_CMD, 5,
+			core_data->get_mode.pocket_mode , 0x00);
+		if (!ret) {
+			core_data->set_mode.pocket_mode = core_data->get_mode.pocket_mode;
+			ts_info("Success to %s pocket mode", core_data->get_mode.pocket_mode ? "Enable" : "Disable");
+		}
+	}
+#endif
+
 	mutex_unlock(&core_data->mode_lock);
 #ifdef CONFIG_GTP_FOD
 	if(core_data->zerotap_data[0]) {
