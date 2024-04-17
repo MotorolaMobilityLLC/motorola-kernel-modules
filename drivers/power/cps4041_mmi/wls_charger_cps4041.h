@@ -358,6 +358,7 @@ struct cps_wls_chrg_chip {
 	struct delayed_work	offset_detect_work;
 	struct delayed_work	dump_info_work;
 	struct delayed_work	rx_vout_change_work;
+	struct delayed_work	wls_auto_switch_work;
 	bool rx_vout_change_done;
 	uint32_t bootmode;
 	struct thermal_cooling_device *tcd;
@@ -385,6 +386,9 @@ struct cps_wls_chrg_chip {
 	bool config_otg_support;
 	uint32_t config_otg_vout; //uV
 	uint32_t config_otg_iout; //uA
+	int enable_wls_auto_switch;
+	int wls_auto_switch_overtemp;
+	int wls_auto_switch_check_cnt;
 };
 
 typedef enum ept_reason

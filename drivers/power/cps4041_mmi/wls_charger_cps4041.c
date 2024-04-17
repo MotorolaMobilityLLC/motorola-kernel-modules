@@ -1731,6 +1731,12 @@ detect_exit:
 			chip->wlc_tx_power >= WLS_RX_CAP_15W) {
 		queue_delayed_work(chip->wls_wq, &chip->rx_vout_change_work, msecs_to_jiffies(1000));
 	}
+	if (chip->enable_wls_auto_switch &&
+			chip->rod_stop == true &&
+			wls_mode == Sys_Op_Mode_EPP) {
+		chip->wls_auto_switch_check_cnt = 0;
+		queue_delayed_work(chip->wls_wq, &chip->wls_auto_switch_work, msecs_to_jiffies(10000));
+	}
 }
 
 static void cps_rx_vout_change_work(struct work_struct *work)
@@ -1775,6 +1781,47 @@ static void cps_rx_vout_change_work(struct work_struct *work)
 	}
 	mutex_unlock(&chip->rx_vout_change_lock);
 	pr_info("%s exit\n", __func__);
+}
+
+static void cps_wls_auto_switch_work(struct work_struct *work)
+{
+	int wls_icl = 0;
+	int vbus = 0;
+	int input_power = 0;
+	int bat_temp = 0;
+
+	if (!chip || !chip->chg1_dev)
+		goto switch_out;
+
+	if (!chip->wls_online)
+		goto switch_out;
+
+	bat_temp = cps_get_bat_info(POWER_SUPPLY_PROP_TEMP);
+
+	charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
+	wls_icl = wls_icl / 1000;// uA->mA
+	vbus = cps_get_vbus();
+	input_power = vbus * wls_icl / 1000;
+
+	if ((bat_temp >= chip->wls_auto_switch_overtemp) ||
+		(input_power <= WLS_RX_CAP_5W * 1000)) {
+		chip->wls_auto_switch_check_cnt ++;
+	} else {
+		chip->wls_auto_switch_check_cnt = 0;
+	}
+	pr_info("%s vbus=%dmV icl=%dmA power=%dmW temp=%d cnt=%d\n", __func__,
+		vbus, wls_icl, input_power, bat_temp, chip->wls_auto_switch_check_cnt);
+
+	if (chip->wls_auto_switch_check_cnt > 3) {
+		cps_wls_switch_epp_to_bpp();
+		pr_info("%s exit\n", __func__);
+	} else {
+		queue_delayed_work(chip->wls_wq, &chip->wls_auto_switch_work, msecs_to_jiffies(2000));
+		return ;
+	}
+
+switch_out:
+	chip->wls_auto_switch_check_cnt = 0;
 }
 
 static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
@@ -1852,6 +1899,8 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
 		chip->rx_int_ready = false;
 		chip->bpp_icl_done = false;
+		cancel_delayed_work_sync(&chip->wls_auto_switch_work);
+		chip->wls_auto_switch_check_cnt = 0;
 
 		if (!chip->stop_epp_flag && !chip->mode_select_force && !chip->factory_wls_en)
 			cps_wls_mode_select("wls_det_irq_handler", true);
@@ -3127,6 +3176,16 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 	of_property_read_u32(node, "enable_bat_full_stop_epp", &chip->enable_bat_full_stop_epp);
 	cps_wls_log(CPS_LOG_ERR,"[%s] enable_bat_full_stop_epp %d\n", __func__, chip->enable_bat_full_stop_epp);
 
+	chip->enable_wls_auto_switch = 0x00;
+	of_property_read_u32(node, "enable_wls_auto_switch", &chip->enable_wls_auto_switch);
+	cps_wls_log(CPS_LOG_ERR,"[%s] enable_wls_auto_switch %d\n", __func__, chip->enable_wls_auto_switch);
+
+	if (chip->enable_wls_auto_switch) {
+		chip->wls_auto_switch_overtemp = 430;
+		of_property_read_u32(node, "wls_auto_switch_overtemp", &chip->wls_auto_switch_overtemp);
+		cps_wls_log(CPS_LOG_ERR,"[%s] wls_auto_switch_overtemp %d\n", __func__, chip->wls_auto_switch_overtemp);
+	}
+
 	chip->enable_rx_offset_detect = 0x00;
 	of_property_read_u32(node, "enable_rx_offset_detect", &chip->enable_rx_offset_detect);
 	cps_wls_log(CPS_LOG_DEBG,"[%s] enable_rx_offset_detect %d\n", __func__, chip->enable_rx_offset_detect);
@@ -4086,6 +4145,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 	}
 
 	INIT_DELAYED_WORK(&chip->rx_vout_change_work, cps_rx_vout_change_work);
+	INIT_DELAYED_WORK(&chip->wls_auto_switch_work, cps_wls_auto_switch_work);
 
 	INIT_DELAYED_WORK(&chip->dump_info_work,
 				cps_wls_dump_info_work);
