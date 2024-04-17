@@ -46,7 +46,7 @@ int pehv_get_log_level(void)
 #define PEHV_ITAOCP_RATIO	110
 #define PEHV_IBUSUCPF_RECHECK		250	/* mA */
 #define PEHV_VBUS_CALI_THRESHOLD	150	/* mV */
-#define PEHV_CV_LOWER_BOUND_GAP		50	/* mV */
+#define PEHV_CV_LOWER_BOUND_GAP		20	/* mV */
 #define PEHV_INIT_POLLING_INTERVAL	0	/* ms */
 #define PEHV_CV_POLLING_INTERVAL	500	/* ms */
 #define PEHV_INIT_RETRY_MAX		3
