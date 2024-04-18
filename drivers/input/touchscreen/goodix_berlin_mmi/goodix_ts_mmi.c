@@ -865,9 +865,6 @@ static ssize_t goodix_ts_fp_event_show(struct device *dev,
 
 	idata = atomic_read(&core_data->fp_event);
 	ts_info("fp_event state = 0x%02x.\n", idata);
-
-	//clear
-	atomic_set(&core_data->fp_event, 0x01);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x\n", idata);
 }
 #endif
