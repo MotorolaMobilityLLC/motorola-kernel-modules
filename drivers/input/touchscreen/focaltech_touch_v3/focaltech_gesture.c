@@ -442,6 +442,8 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 
                 FTS_INFO("invoke imported report double tap gesture function\n");
                 event.evcode = 4;
+                event.evdata.x = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_x);
+                event.evdata.y = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_y);
                 /* call class method */
                 ret = fts_data->imports->report_gesture(&event);
                 ++report_cnt;
@@ -453,6 +455,8 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 
                 FTS_INFO("invoke imported report single tap gesture function\n");
                 event.evcode = 1;
+                event.evdata.x = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_x);
+                event.evdata.y = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_y);
                 /* call class method */
                 ret = fts_data->imports->report_gesture(&event);
                 ++report_cnt;
