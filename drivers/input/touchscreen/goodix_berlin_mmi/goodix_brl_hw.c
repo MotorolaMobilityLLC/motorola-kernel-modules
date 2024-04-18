@@ -1225,10 +1225,7 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 	fp_flags = pre_buf[0] & GOODIX_FP_EVENTS;
 
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
-	if (fp_flags == 0)
-		atomic_cmpxchg(&cd->fp_event, 0x01, 0x0); //up
-	else
-		atomic_cmpxchg(&cd->fp_event, 0x00, 0x1); //other
+	atomic_set(&cd->fp_event, fp_flags);
 #endif
 
 	if(pre_flags != fp_flags) {
