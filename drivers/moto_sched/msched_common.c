@@ -133,7 +133,12 @@ EXPORT_SYMBOL(task_get_mvp_prio);
 static inline bool task_in_top_related_group(struct task_struct *p) {
 	return p->tgid == global_launcher_tgid
 			|| p->tgid == global_sysui_tgid
+			|| p->tgid == global_systemserver_tgid
 			|| task_in_top_app_group(p);
+}
+
+static inline bool task_is_animator(struct task_struct *p) {
+	return task_has_ux_type(p, UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI|UX_TYPE_ANIMATOR);
 }
 
 unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
@@ -199,7 +204,8 @@ EXPORT_SYMBOL(queue_ux_task);
 void binder_ux_type_set(struct task_struct *task) {
 	// Base feature: low latency binder
 	if (task && ((task_in_top_related_group(current) && task->group_leader->prio < MAX_RT_PRIO)
-					|| (current->group_leader->prio < MAX_RT_PRIO && task_in_top_related_group(task))))
+					|| (current->group_leader->prio < MAX_RT_PRIO && task_in_top_related_group(task))
+					|| (task_is_animator(current) && task_in_top_related_group(task))))
 		task_add_ux_type(task, UX_TYPE_LOW_LATENCY_BINDER);
 	else
 		task_clr_ux_type(task, UX_TYPE_LOW_LATENCY_BINDER);
