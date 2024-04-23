@@ -78,6 +78,7 @@ static bool CPS_RX_MODE_ERR = false;
 static bool CPS_TX_MODE = false;
 static bool CPS_TX_IRQ = false;
 static bool CPS_RX_CHRG_FULL = false;
+static bool CPS_RX_LDO_OFF = false;
 
 enum {
 	TX_MODE_EPT_ERR = -2,
@@ -94,6 +95,16 @@ enum {
 	TX_FUNC_EN_LP = 0x10,
 };
 
+enum {
+	RX_FUNC_WATCHDOG_EN = 0x01,
+	RX_FUNC_CMA12_EN = 0x02,
+	RX_FUNC_CMB12_EN = 0x04,
+	RX_FUNC_CM_POLARITY_EN = 0x08,
+	RX_FUNC_RP24BIT_EN = 0x10,
+	RX_FUNC_MLDO_EN = 0x20,
+	RX_FUNC_DISABLE_AS = 0x80,
+};
+
 struct tags_bootmode {
 	uint32_t size;
 	uint32_t tag;
@@ -104,6 +115,7 @@ struct tags_bootmode {
 /*define cps rx reg enum*/
 typedef enum
 {
+	CPS_RX_REG_FUNC_EN,
 	CPS_RX_REG_FC_VPA_VOLTAGE,
 	CPS_RX_REG_FC_MLDO_VOLTAGE,
 	CPS_RX_REG_FC_BOOST_MODE,
@@ -272,6 +284,7 @@ cps_reg_s cps_comm_reg[CPS_COMM_REG_MAX] = {
 
 cps_reg_s cps_rx_reg[CPS_RX_REG_MAX] = {
 	// reg name            bytes number      reg address          /
+	{CPS_RX_REG_FUNC_EN,              1,               0x0030},
 	{CPS_RX_REG_FC_VPA_VOLTAGE,       2,               0x0092},
 	{CPS_RX_REG_FC_MLDO_VOLTAGE,      2,               0x0094},
 	{CPS_RX_REG_FC_BOOST_MODE,        1,               0x0096},
@@ -391,6 +404,9 @@ int cps_wls_sysfs_notify(const char *attr);
 static int cps_get_vbus(void);
 static int factory_test_wls_en(void *input, bool en);
 static void cps_wls_switch_epp_to_bpp(void);
+static int backpower_mode_enter(struct cps_wls_chrg_chip *chg);
+static int backpower_mode_exit(struct cps_wls_chrg_chip *chg);
+static void backpower_mode_timeout_work_start(struct cps_wls_chrg_chip *chip, int ms);
 
 int cps_wls_reg_check(void)
 {
@@ -893,6 +909,36 @@ static int cps_wls_get_rx_vout_set(void)
 	return cps_wls_rx_get(CPS_RX_REG_VOUT_SET);
 }
 
+static int cps_wls_set_rx_enable_func_en(int en)
+{
+	int value = 0;
+	cps_reg_s *cps_reg;
+	cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_FUNC_EN]);
+
+	value = cps_wls_rx_get(CPS_RX_REG_FUNC_EN);
+	pr_info("%s read:0x%X write:0x%X\n", __func__, value, value|en);
+	if (value == CPS_WLS_FAIL)
+		return CPS_WLS_FAIL;
+	value |= en;
+
+	return cps_wls_write_reg((int)cps_reg->reg_addr, value & 0xFFFFFFFF, (int)cps_reg->reg_bytes_len);
+}
+
+static int cps_wls_set_rx_disable_func_en(int dis)
+{
+	int value = 0;
+	cps_reg_s *cps_reg;
+	cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_FUNC_EN]);
+
+	value = cps_wls_rx_get(CPS_RX_REG_FUNC_EN);
+	pr_info("%s read:0x%X write:0x%X\n", __func__, value, value & (~dis));
+	if (value == CPS_WLS_FAIL)
+		return CPS_WLS_FAIL;
+	value = value & (~dis);
+
+	return cps_wls_write_reg((int)cps_reg->reg_addr, value & 0xFFFFFFFF, (int)cps_reg->reg_bytes_len);
+}
+
 //-------------------CPS4041 TX interface-------------------
 static int cps_wls_get_tx_i_in(void)
 {
@@ -1253,9 +1299,11 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_POWER_ON");
 	}
 	if(int_flag & RX_INT_LDO_OFF) {
+		CPS_RX_LDO_OFF = true;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_LDO_OFF");
 	}
 	if (int_flag & RX_INT_LDO_ON) {
+		CPS_RX_LDO_OFF = false;
 		chip->rx_ldo_on = true;
 		chip->rx_start_ktime = ktime_get_boottime();
 		if (chip->wlc_status == WLC_DISCONNECTED) {
@@ -1440,6 +1488,11 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 	struct cps_wls_chrg_chip *chip = chg;
 
 	wls_online = cps_wls_rx_power_on();
+	if (chip->backpower_mode) {
+		cps_wls_log(CPS_LOG_DEBG, "%s backpower_mode online %d\n",
+			__func__, wls_online);
+		return;
+	}
 	if(!chip->wls_online && wls_online) {
 		cps_wls_log(CPS_LOG_DEBG, "%s wls_online 1\n" , __func__);
 		chip->wls_online = true;
@@ -1521,6 +1574,7 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 
 	if (chip->enable_rod) {
 		chip->rod_stop = false;
+		pr_info("%s start offset_detect_work\n", __func__);
 		queue_delayed_work(chip->wls_wq,
 			&chip->offset_detect_work,
 			msecs_to_jiffies(wls_current_now >= WLS_BPP_ROD_THRESHOLD_CURRENT_MAX ? 5000 : 0));
@@ -1735,7 +1789,13 @@ detect_exit:
 			chip->rod_stop == true &&
 			wls_mode == Sys_Op_Mode_EPP) {
 		chip->wls_auto_switch_check_cnt = 0;
+		pr_info("%s start wls_auto_switch_work\n", __func__);
 		queue_delayed_work(chip->wls_wq, &chip->wls_auto_switch_work, msecs_to_jiffies(10000));
+	}
+	if (chip->enable_wls_auto_stop &&
+			chip->rod_stop == true) {
+		pr_info("%s start wls_auto_stop_work\n", __func__);
+		queue_delayed_work(chip->wls_wq, &chip->wls_auto_stop_work, msecs_to_jiffies(10000));
 	}
 }
 
@@ -1829,6 +1889,8 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 	int int_flag = 0;
 	int int_clr = 0;
 	int sys_mode = 0x00;
+	static ktime_t acdet_ktime = 0;
+	int acdet_time_out = 0;
 	cps_wls_log(CPS_LOG_DEBG, "[%s] IRQ triggered\n", __func__);
 	mutex_lock(&chip->irq_lock);
 	cps_wls_set_int_enable();
@@ -1858,7 +1920,18 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 			cps_wls_tx_irq_handler(int_flag);
 			break;
 		case SYS_MODE_BACK_POWER:
-			if (CPS_TX_MODE == 0) {
+			pr_info("%s CPS_WLS IRQ:	SYS_MODE_BACK_POWER, int_flag:0x%X", __func__, int_flag);
+			if (chip->backpower_mode) {
+				if (int_flag & TX_INT_INIT_DONE) {
+					acdet_time_out = 2000;
+				} else if (int_flag & TX_INT_AC_DET) {
+					acdet_time_out = (long int)((ktime_get_boottime() - acdet_ktime)/1000000);
+					cps_wls_log(CPS_LOG_ERR, "[%s] t:%dms\n", __func__, acdet_time_out);
+				}
+				acdet_ktime = ktime_get_boottime();
+				acdet_time_out = acdet_time_out + 250;
+				backpower_mode_timeout_work_start(chip, acdet_time_out);
+			} else if (CPS_TX_MODE == 0) {
 				cps_wls_low_power_mode(true);
 			}
 			break;
@@ -1902,7 +1975,9 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		cancel_delayed_work_sync(&chip->wls_auto_switch_work);
 		chip->wls_auto_switch_check_cnt = 0;
 
-		if (!chip->stop_epp_flag && !chip->mode_select_force && !chip->factory_wls_en)
+		if (!chip->stop_epp_flag &&
+			!chip->mode_select_force &&
+			!chip->factory_wls_en)
 			cps_wls_mode_select("wls_det_irq_handler", true);
 
 		if (chip->rx_ldo_on) {
@@ -2500,6 +2575,33 @@ static void cps_firmware_update_work(struct work_struct *work)
 	wireless_fw_update(false);
 }
 
+static ssize_t show_backpower_mode(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "backpower_mode %d\n", chip->backpower_mode);
+}
+
+static ssize_t store_backpower_mode(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	if (IS_ERR_OR_NULL(chip))
+		return 0;
+
+	if (!chip->backpower_mode_support)
+		return 0;
+
+	if (buf[0] == 0x31) {
+		if (!chip->backpower_mode) {
+			backpower_mode_enter(chip);
+		}
+	} else {
+		if (chip->backpower_mode) {
+			backpower_mode_exit(chip);
+		}
+	}
+
+	return count;
+}
+static DEVICE_ATTR(backpower_mode, 0664, show_backpower_mode, store_backpower_mode);
+
 //-----------------------------reg addr----------------------------------
 static ssize_t show_reg_addr(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -3071,6 +3173,7 @@ static DEVICE_ATTR(factory_wireless_en, S_IRUGO|S_IWUSR, factory_wireless_en_sho
 static void cps_wls_create_device_node(struct device *dev)
 {
 	pr_info("%s\n", __func__);
+	device_create_file(dev, &dev_attr_backpower_mode);
 	device_create_file(dev, &dev_attr_reg_addr);
 	device_create_file(dev, &dev_attr_reg_data);
 //-----------------------program---------------------
@@ -3186,6 +3289,22 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 		cps_wls_log(CPS_LOG_ERR,"[%s] wls_auto_switch_overtemp %d\n", __func__, chip->wls_auto_switch_overtemp);
 	}
 
+	chip->enable_wls_auto_stop = 0x00;
+	of_property_read_u32(node, "enable_wls_auto_stop", &chip->enable_wls_auto_stop);
+	cps_wls_log(CPS_LOG_ERR,"[%s] enable_wls_auto_stop %d\n", __func__, chip->enable_wls_auto_stop);
+
+	if (chip->enable_wls_auto_stop) {
+		chip->wls_auto_stop_overtemp = 450;
+		of_property_read_u32(node, "wls_auto_stop_overtemp", &chip->wls_auto_stop_overtemp);
+		cps_wls_log(CPS_LOG_ERR,"[%s] wls_auto_stop_overtemp %d\n", __func__, chip->wls_auto_stop_overtemp);
+
+		chip->wls_auto_stop_undertemp = 400;
+		of_property_read_u32(node, "wls_auto_stop_undertemp", &chip->wls_auto_stop_undertemp);
+		cps_wls_log(CPS_LOG_ERR,"[%s] wls_auto_stop_undertemp %d\n", __func__, chip->wls_auto_stop_undertemp);
+	}
+
+	chip->backpower_mode_support = of_property_read_bool(node, "backpower-mode-support");
+
 	chip->enable_rx_offset_detect = 0x00;
 	of_property_read_u32(node, "enable_rx_offset_detect", &chip->enable_rx_offset_detect);
 	cps_wls_log(CPS_LOG_DEBG,"[%s] enable_rx_offset_detect %d\n", __func__, chip->enable_rx_offset_detect);
@@ -3256,6 +3375,7 @@ static void cps_wls_lock_work_init(struct cps_wls_chrg_chip *chip)
 	mutex_init(&chip->irq_lock);
 	mutex_init(&chip->i2c_lock);
 	mutex_init(&chip->rx_vout_change_lock);
+	mutex_init(&chip->bpm_lock);
 	name = devm_kasprintf(chip->dev, GFP_KERNEL, "%s", "cps_wls_wake_lock");
 	chip->cps_wls_wake_lock = wakeup_source_register(NULL, name);
 }
@@ -3719,6 +3839,171 @@ static bool cps_stop_epp_timeout(long ms)
 	}
 }
 
+static void backpower_mode_timeout_work_start(struct cps_wls_chrg_chip *chip, int ms)
+{
+	int ret = 0;
+	static int count = 0;
+
+	ret = cancel_delayed_work_sync(&chip->backpower_mode_timeout_work);
+
+	/* Start the exit work*/
+	ret = schedule_delayed_work(&chip->backpower_mode_timeout_work, msecs_to_jiffies(ms));
+
+	pr_info("%s: ret:%d, %lldms cnt:%d ms:%d\n", __func__, ret,
+		ktime_to_ms(ktime_get_boottime()), count, ms);
+	count ++ ;
+}
+
+static int backpower_mode_enter(struct cps_wls_chrg_chip *chg)
+{
+	int vbus = 0;
+	int i = 0;
+	int ret = -1;
+
+	if (!chg) {
+		cps_wls_log(CPS_LOG_DEBG, "%s chg=NULL\n", __func__);
+		return ret;
+	}
+
+	if (IS_ERR_OR_NULL(chg->chg1_dev)) {
+		cps_wls_log(CPS_LOG_DEBG, "%s chg1_dev=NULL\n", __func__);
+		return ret;
+	}
+
+	if (!chg->wls_online) {
+		cps_wls_log(CPS_LOG_DEBG, "%s wls_online=0\n", __func__);
+		return ret;
+	}
+
+	if (chg->mode_type != Sys_Op_Mode_BPP) {
+		cps_wls_log(CPS_LOG_DEBG, "%s not BPP mode\n", __func__);
+		return ret;
+	}
+
+	mutex_lock(&chg->bpm_lock);
+	pr_info("%s disable cps4041 ldo\n", __func__);
+	ret = cps_wls_set_rx_disable_func_en(RX_FUNC_MLDO_EN);
+	if (ret == CPS_WLS_FAIL) {
+		goto dis_ldo_failed;
+	}
+	do {
+		msleep(20);
+		vbus = cps_get_vbus();
+		pr_info("%s i=%d vbus=%dmV\n", __func__, i , vbus);
+		i++;
+	} while (chg->wls_online && vbus >= 1000 && i < 20 && !CPS_RX_LDO_OFF); //wait ldo off, rx_vout->0V
+	if (!CPS_RX_LDO_OFF) {
+		goto dis_ldo_failed;
+	}
+	if (chg->wls_online && chg->config_otg_support) {
+		if (charger_dev_config_otg(chg->chg1_dev, 4850000, 500000) == 0) {
+			ret = charger_dev_enable_otg(chg->chg1_dev, true);
+			if (ret != 0) {
+				pr_info("%s otg enable_otg failed, ret = %d\n", __func__, ret);
+				goto eanble_otg_failed;
+			}
+			chg->backpower_mode = true;
+			cps_wls_mode_select("backpower_mode_enter", false);
+			do {
+				msleep(50);
+				vbus = cps_get_vbus();
+				pr_info("%s otg i=%d vbus=%dmV\n", __func__, i , vbus);
+				i++;
+			} while (vbus < VBUS_VALID_MV && i < 10);
+			pr_info("%s enable_otg %d vbus=%d\n", __func__, ret, cps_get_vbus());
+			ret = cps_wls_set_rx_enable_func_en(RX_FUNC_DISABLE_AS);
+			pr_info("%s disable_func_en %d reg=%d\n", __func__,
+					ret, cps_wls_rx_get(CPS_RX_REG_FUNC_EN));
+			backpower_mode_timeout_work_start(chg, 3000);
+		}
+	}
+
+	goto exit;
+
+eanble_otg_failed:
+dis_ldo_failed:
+	cps_wls_set_rx_enable_func_en(RX_FUNC_MLDO_EN);//reset
+exit:
+	mutex_unlock(&chg->bpm_lock);
+	return ret;
+}
+
+
+static int backpower_mode_exit(struct cps_wls_chrg_chip *chg)
+{
+	int ret = -1;
+
+	if (IS_ERR_OR_NULL(chg))
+		return ret;
+
+	mutex_lock(&chg->bpm_lock);
+
+	ret = charger_dev_enable_otg(chg->chg1_dev, false);
+	pr_info("%s disable_otg %d\n", __func__, ret);
+	chg->backpower_mode = false;
+	cps_rx_online_check(chg);//recheck wls online
+
+	mutex_unlock(&chg->bpm_lock);
+
+	return ret;
+}
+
+static void cps_wls_stop(bool en)
+{
+	if (IS_ERR_OR_NULL(chip)) {
+		return;
+	}
+
+	if (chip->backpower_mode_support) {
+		if (en) {
+			if (!chip->backpower_mode) {
+				backpower_mode_enter(chip);
+			}
+		} else {
+			if (chip->backpower_mode)
+				cancel_delayed_work_sync(&chip->backpower_mode_timeout_work);
+			if (chip->backpower_mode) {
+				//if backpower mode exit, need keep low mode_select for BPP mode
+				cps_wls_mode_select("cps_wls_stop", false);
+				backpower_mode_exit(chip);
+			}
+		}
+	}
+}
+
+
+static void cps_wls_auto_stop_work(struct work_struct *work)
+{
+	int bat_temp = 0;
+
+	bat_temp = cps_get_bat_info(POWER_SUPPLY_PROP_TEMP);
+	pr_info("%s bat_temp=%d\n", __func__, bat_temp);
+
+	if (bat_temp <= chip->wls_auto_stop_undertemp) {
+		cps_wls_stop(false);
+	} else if (chip->wls_online &&
+			chip->mode_type == Sys_Op_Mode_BPP &&
+			chip->hs_st != HS_UNKONWN) {
+		if (bat_temp >= chip->wls_auto_stop_overtemp) {
+			cps_wls_stop(true);
+		}
+	}
+
+	if (chip->wls_online || chip->backpower_mode)
+		schedule_delayed_work(&chip->wls_auto_stop_work, msecs_to_jiffies(4000));
+}
+
+static void cps_backpower_mode_timeout_work(struct work_struct *work)
+{
+	pr_info("%s", __func__);
+	if (chip->backpower_mode) {
+		//if timeout, need pull high mode_select
+		cps_wls_mode_select("backpower_mode_timeout", true);
+		backpower_mode_exit(chip);
+	}
+}
+
+
 static void cps_wls_stop_epp(void)
 {
 	struct cps_wls_chrg_chip *chg = chip;
@@ -4146,10 +4431,14 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 
 	INIT_DELAYED_WORK(&chip->rx_vout_change_work, cps_rx_vout_change_work);
 	INIT_DELAYED_WORK(&chip->wls_auto_switch_work, cps_wls_auto_switch_work);
-
 	INIT_DELAYED_WORK(&chip->dump_info_work,
 				cps_wls_dump_info_work);
 
+	if (chip->enable_wls_auto_stop)
+		INIT_DELAYED_WORK(&chip->wls_auto_stop_work, cps_wls_auto_stop_work);
+
+	if (chip->backpower_mode_support)
+		INIT_DELAYED_WORK(&chip->backpower_mode_timeout_work, cps_backpower_mode_timeout_work);
 	/* Register thermal zone cooling device */
 	chip->tcd = thermal_of_cooling_device_register(dev_of_node(chip->dev),
 		"cps_wls_charger_l", chip, &cps_tcd_ops);
