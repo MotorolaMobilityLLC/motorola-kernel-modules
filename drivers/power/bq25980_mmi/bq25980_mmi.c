@@ -966,12 +966,17 @@ static bool bq25980_state_changed(struct bq25980_device *bq,
 		old_state.hiz != new_state->hiz ||
 		old_state.bypass != new_state->bypass);
 }
-
+#ifdef CONFIG_WORK_AROUND_FOR_REG_RESET
+static int bq25980_reg_init(struct bq25980_device *bq);
+#endif
 static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 {
 	struct bq25980_device *bq = private;
 	struct bq25980_state state;
 	int ret;
+#ifdef CONFIG_WORK_AROUND_FOR_REG_RESET
+	int val;
+#endif
 
 	dev_err(bq->dev,"[%s]%s enter\n",bq->model_name, __func__);
 	mutex_lock(&bq->irq_complete);
@@ -997,7 +1002,19 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 		mutex_unlock(&bq->irq_complete);
 		goto irq_out;
 	}
+#ifdef CONFIG_WORK_AROUND_FOR_REG_RESET
+        ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_3, &val);
+        if (ret)
+                dev_err(bq->dev, "Failed to read BQ25980_CHRGR_CTRL_3 register\n");
+        else {
+                val = val & BQ25980_WATCHDOG_DIS;
 
+                pr_err("[wdt-debug]watch dog dis_en = %d", val);
+
+                if (!val)
+                        bq25980_reg_init(bq);
+        }
+#endif
 	//dump_all_reg(bq);
 	mutex_unlock(&bq->irq_complete);
 
