@@ -490,6 +490,10 @@ static void smart_batt_update_thread(struct work_struct *work)
 	struct delayed_work *delay_work;
 	struct mmi_smart_battery *chip;
 	int rsoc;
+	int work_intervals = QUEUS_DELAYED_WORK_TIME;
+	int vbatt_empty;
+	int vbatt_low;
+	static int vbatt_empty_count = 0;
 
 	delay_work = container_of(work, struct delayed_work, work);
 	chip = container_of(delay_work, struct mmi_smart_battery, battery_delay_work);
@@ -505,6 +509,29 @@ static void smart_batt_update_thread(struct work_struct *work)
 	smart_batt_get_charge_counter(chip);
 	rsoc = smart_batt_soc100_forward(chip, rsoc);
 	rsoc = smart_batt_monotonic_soc(chip, rsoc);
+
+	if (chip->combo_batt_temp < chip->batt_cold_threshold){
+		vbatt_empty = chip->vbatt_empty_cold_mv * 1000;
+		vbatt_low = chip->vbatt_low_cold_mv * 1000;
+	}
+	else {
+		vbatt_empty = chip->vbatt_empty_mv * 1000;
+		vbatt_low = chip->vbatt_low_mv * 1000;
+	}
+
+	if (chip->combo_voltage_now < vbatt_empty) {
+		vbatt_empty_count ++;
+		if (vbatt_empty_count >= 2) {
+			rsoc = 0;
+			mmi_info(chip, "Low temperautre & vbat reach to empty, Force UISOC=0\n");
+		}
+	}
+	else
+		vbatt_empty_count = 0;
+
+	if (chip->combo_voltage_now < vbatt_low)
+		work_intervals = QUEUS_DELAYED_WORK_TIME_LOW_VOL;
+
 	if (chip->batt_psy) {
 		if (rsoc != chip->uisoc) {
 			chip->uisoc = rsoc;
@@ -517,7 +544,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 	mmi_info(chip, "UISOC:%d, Volt:%d, Current:%d, Temperature:%d, Cycle_count:%d, Soh:%d\n",
 		chip->uisoc, chip->combo_voltage_now, chip->combo_current_now, chip->combo_batt_temp, chip->combo_cycle_count, chip->combo_soh);
 
-	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(QUEUS_DELAYED_WORK_TIME));
+	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(work_intervals));
 }
 
 static int  tcmd_get_bat_temp(void *input, int* val)
@@ -590,7 +617,7 @@ static int smart_battery_resume(struct device *dev)
 static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 {
 	struct device_node *np = chip->dev->of_node;
-	int i, rc;
+	int i, rc,val;
 	chip->sync_boardtemp_to_fg = of_property_read_bool(np , "mmi,sync_boardtemp_to_fg");
 
 	if (of_property_read_u32(np, "mmi,ui_full_soc", &chip ->ui_full_soc) < 0) {
@@ -602,6 +629,39 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	if (chip ->ui_full_soc != 100) {
 		of_property_read_u32(np , "mmi,soc100_curr_threshod", &chip->soc100_curr_threshod);
 	}
+
+	rc = of_property_read_u32(np, "mmi,vbatt-empty-mv", &val);
+	if (rc < 0)
+		chip->vbatt_empty_mv = DEFAULT_VBATT_EMPTY_MV;
+	else
+		chip->vbatt_empty_mv = val;
+
+	rc = of_property_read_u32(np, "mmi,vbatt-empty-cold-mv", &val);
+	if (rc < 0)
+		chip->vbatt_empty_cold_mv = DEFAULT_VBATT_EMPTY_COLD_MV;
+	else
+		chip->vbatt_empty_cold_mv = val;
+
+	rc = of_property_read_u32(np, "mmi,batt-cold-threshold", &val);
+	if (rc < 0)
+		chip->batt_cold_threshold = DEFAULT_BATT_COLD_THRESHOLD;
+	else
+		chip->batt_cold_threshold = val;
+
+	rc = of_property_read_u32(np, "mmi,vbatt-low-mv", &val);
+	if (rc < 0)
+		chip->vbatt_low_mv = DEFAULT_VBATT_LOW_MV;
+	else
+		chip->vbatt_low_mv = val;
+
+	rc = of_property_read_u32(np, "mmi,vbatt-low-cold-mv", &val);
+	if (rc < 0)
+		chip->vbatt_low_cold_mv = DEFAULT_VBATT_LOW_COLD_MV;
+	else
+		chip->vbatt_low_cold_mv = val;
+
+	mmi_info(chip,"vbatt_empty_mv=%d vbatt_empty_cold_mv=%d batt_cold_threshold=%d, vbatt_low_mv=%d vbatt_low_cold_mv=%d",
+		chip->vbatt_empty_mv,chip->vbatt_empty_cold_mv, chip->batt_cold_threshold, chip->vbatt_low_mv, chip->vbatt_low_cold_mv);
 
 	chip->gauge_count = of_property_count_strings(np, "mmi,gauge_names");
 	if (chip->gauge_count < 0) {
