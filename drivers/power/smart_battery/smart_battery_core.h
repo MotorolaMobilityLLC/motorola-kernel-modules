@@ -99,6 +99,11 @@ struct mmi_smart_battery {
 	int				fake_soc;
 	int				fake_temp;
 	int				gauge_count;
+	int				vbatt_empty_cold_mv;
+	int				vbatt_empty_mv;
+	int				vbatt_low_mv;
+	int				vbatt_low_cold_mv;
+	int				batt_cold_threshold;
 	const char		**gauge_name_arry;
 	struct mmi_battery_pack *battery;
 #ifdef CONFIG_MOTO_1200_CYCLE
@@ -107,9 +112,16 @@ struct mmi_smart_battery {
 };
 
 #define QUEUS_DELAYED_WORK_TIME  8000
+#define QUEUS_DELAYED_WORK_TIME_LOW_VOL  4000
 #define QUEUE_START_WORK_TIME    1
 #define INVALID_TEMP (-2730)
 #define SMART_BATT_SHOW_MAX_SIZE 64
+
+#define DEFAULT_VBATT_EMPTY_MV		3000
+#define DEFAULT_VBATT_EMPTY_COLD_MV	3000
+#define DEFAULT_VBATT_LOW_MV		3000
+#define DEFAULT_VBATT_LOW_COLD_MV	3000
+#define DEFAULT_BATT_COLD_THRESHOLD	0
 
 extern int mmi_batt_health_check(void);
 
