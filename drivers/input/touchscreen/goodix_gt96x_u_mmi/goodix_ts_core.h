@@ -784,6 +784,8 @@ struct goodix_ts_core {
 	struct goodix_mode_info set_mode;
 	struct goodix_mode_info get_mode;
 	atomic_t post_suspended;
+	struct delayed_work work;
+	int ts_mmi_power_state;
 };
 
 struct goodix_device_resource {
