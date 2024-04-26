@@ -244,7 +244,7 @@ static int brl_power_on(struct goodix_ts_core *cd, bool on)
 		if (ret < 0)
 			goto power_off;
 
-		msleep(GOODIX_NORMAL_RESET_DELAY_MS);
+		msleep(GOODIX_NORMAL_RESET_DELAY_MS/2);
 		return 0;
 	}
 

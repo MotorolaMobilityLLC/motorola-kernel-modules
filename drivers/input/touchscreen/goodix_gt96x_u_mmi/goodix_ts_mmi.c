@@ -225,14 +225,9 @@ static int goodix_ts_mmi_methods_power(struct device *dev, int on) {
 
 	GET_GOODIX_DATA(dev);
 
-	if (on == TS_MMI_POWER_ON)
-		return goodix_ts_power_on(core_data);
-	else if(on == TS_MMI_POWER_OFF)
-		return goodix_ts_power_off(core_data);
-	else {
-		ts_err("Invalid power parameter %d.\n", on);
-		return -EINVAL;
-	}
+	core_data->ts_mmi_power_state = on;
+	schedule_delayed_work(&core_data->work, 0);
+	return 0;
 }
 
 static int goodix_ts_mmi_pre_suspend(struct device *dev) {
@@ -249,6 +244,68 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev) {
 	 * and charger detector to turn off the work
 	 */
 	goodix_ts_esd_off(core_data);
+
+	return 0;
+}
+
+void goodix_ts_delay(unsigned int ms)
+{
+	if (ms < 20)
+		usleep_range(ms * 1000, ms * 1000);
+	else
+		msleep(ms);
+}
+
+static int goodix_ts_mmi_wait_for_ready(struct device *dev)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	struct goodix_ts_hw_ops *hw_ops;
+	struct goodix_ts_cmd cmd_ack;
+	struct goodix_ts_cmd ts_cmd;
+	struct goodix_ic_info_misc *misc;
+	int ret = 0;
+	int retry;
+
+	GET_GOODIX_DATA(dev);
+
+	hw_ops = core_data->hw_ops;
+	misc= &core_data->ic_info.misc;
+
+	if (misc->cmd_addr == 0x0000) {
+		ts_err("invalid cmd addr:0x0000, skip cmd");
+		return -EINVAL;
+	}
+
+	retry = GOODIX_RETRY_5;
+	while (retry--) {
+		ts_cmd.cmd = MMI_GOODIX_CMD_COORD;
+		ts_cmd.len = 4;
+		ret = core_data->hw_ops->send_cmd(core_data, &ts_cmd);
+		if (ret < 0)
+			return ret;
+
+		/* check command result */
+		ret = hw_ops->read(core_data, misc->cmd_addr,
+			cmd_ack.buf, sizeof(cmd_ack));
+		if (ret < 0) {
+			ts_err("failed read command ack, %d", ret);
+			return -EINVAL;
+		}
+		ts_info("cmd ack data %*ph",
+			 (int)sizeof(cmd_ack), cmd_ack.buf);
+
+		if ((cmd_ack.buf[0] == MMI_CONFIG_CMD_STATUS_PASS) &&
+			(cmd_ack.buf[1] == MMI_CMD_ACK_OK))
+			break;
+
+		goodix_ts_delay(10);
+	}
+
+	if (retry < 0) {
+		ts_err("wait for IC ready timeout!");
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -677,12 +734,32 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	/* vendor specific attribute group */
 	.extend_attribute_group = goodix_ts_mmi_extend_attribute_group,
 	/* PM callback */
+	.wait_for_ready = goodix_ts_mmi_wait_for_ready,
 	.pre_suspend = goodix_ts_mmi_pre_suspend,
 	.panel_state = goodix_ts_mmi_panel_state,
 	.post_suspend = goodix_ts_mmi_post_suspend,
 	.pre_resume = goodix_ts_mmi_pre_resume,
 	.post_resume = goodix_ts_mmi_post_resume,
 };
+
+static void ts_mmi_worker_func(struct work_struct *w)
+{
+	struct delayed_work *dw =
+		container_of(w, struct delayed_work, work);
+	struct goodix_ts_core *core_data =
+		container_of(dw, struct goodix_ts_core, work);
+
+	if (core_data->ts_mmi_power_state == TS_MMI_POWER_ON)
+	{
+		goodix_ts_power_on(core_data);
+	}
+	else if (core_data->ts_mmi_power_state == TS_MMI_POWER_OFF)
+	{
+		goodix_ts_power_off(core_data);
+	} else {
+		ts_err("Invalid power parameter %d.\n", core_data->ts_mmi_power_state);
+	}
+}
 
 int goodix_ts_mmi_dev_register(struct platform_device *pdev) {
 	int ret;
@@ -693,6 +770,8 @@ int goodix_ts_mmi_dev_register(struct platform_device *pdev) {
 		ts_err("Failed to get driver data");
 		return -ENODEV;
 	}
+
+	INIT_DELAYED_WORK(&core_data->work, ts_mmi_worker_func);
 	mutex_init(&core_data->mode_lock);
 	ret = ts_mmi_dev_register(core_data->bus->dev, &goodix_ts_mmi_methods);
 	if (ret) {

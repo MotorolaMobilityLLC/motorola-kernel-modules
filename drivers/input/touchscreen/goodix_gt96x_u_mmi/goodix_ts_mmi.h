@@ -33,5 +33,7 @@ static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device
 #define ENTER_STOWED_MODE_CMD   0x97
 #define CHARGER_MODE_CMD    0xAF
 #define ENTER_POCKET_MODE_CMD   0x63
-
+#define MMI_CONFIG_CMD_STATUS_PASS 0x80
+#define MMI_CMD_ACK_OK 0x80
+#define MMI_GOODIX_CMD_COORD 0
 #endif
