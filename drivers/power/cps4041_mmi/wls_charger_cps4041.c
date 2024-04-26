@@ -3475,7 +3475,12 @@ static int wireless_get_chip_id(void *input)
 		return chip->chip_id;
 	}
 
+	if (CPS_TX_MODE || chip->wls_online || chip->backpower_mode) {
+		return CPS_WLS_FAIL;
+	}
+
 	if (cps_get_vbus() < VBUS_VALID_MV / 2) {
+		CPS_TX_MODE = true;
 		cps_wls_fw_set_boost(true);
 		while (retry < 3 && value != CPS_CHIP_ID) {
 			msleep(50);
@@ -3484,6 +3489,7 @@ static int wireless_get_chip_id(void *input)
 		}
 		chip->chip_id = value;
 		cps_wls_fw_set_boost(false);
+		CPS_TX_MODE = false;
 	}
 
 	cps_wls_log(CPS_LOG_ERR,"%s chip_id=0x%X, retry=%d\n", __func__, chip->chip_id, retry);
