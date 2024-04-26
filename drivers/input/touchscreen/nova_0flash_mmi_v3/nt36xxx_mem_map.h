@@ -57,6 +57,76 @@ struct nvt_ts_hw_info {
 	uint8_t hw_crc;
 };
 
+/* tddi */
+static const struct nvt_ts_mem_map NT36528A_memory_map = {
+	.EVENT_BUF_ADDR           = 0x22D00,
+	.RAW_PIPE0_ADDR           = 0x24000,
+	.RAW_PIPE1_ADDR           = 0x24000,
+	.BASELINE_ADDR            = 0x20980,
+	.BASELINE_BTN_ADDR        = 0,
+	.DIFF_PIPE0_ADDR          = 0x20480,
+	.DIFF_PIPE1_ADDR          = 0x24480,
+	.RAW_BTN_PIPE0_ADDR       = 0,
+	.RAW_BTN_PIPE1_ADDR       = 0,
+	.DIFF_BTN_PIPE0_ADDR      = 0,
+	.DIFF_BTN_PIPE1_ADDR      = 0,
+	//.ENB_CASC_REG             = {.addr = 0, .mask = 0},
+	/* FW History */
+	//.MMAP_HISTORY_EVENT0      = 0x22100,
+	//.MMAP_HISTORY_EVENT1      = 0x22140,
+	/* Phase 2 Host Download */
+	.BOOT_RDY_ADDR            = 0x3F10D,
+	//.ACI_ERR_CLR_ADDR         = 0x3F6C5,
+	/* BLD CRC */
+	.BLD_LENGTH_ADDR          = 0x3F138,	//0x3F138 ~ 0x3F13A	(3 bytes)
+	.ILM_LENGTH_ADDR          = 0x3F118,	//0x3F118 ~ 0x3F11A	(3 bytes)
+	.DLM_LENGTH_ADDR          = 0x3F130,	//0x3F130 ~ 0x3F132	(3 bytes)
+	.BLD_DES_ADDR             = 0x3F114,	//0x3F114 ~ 0x3F116	(3 bytes)
+	.ILM_DES_ADDR             = 0x3F128,	//0x3F128 ~ 0x3F12A	(3 bytes)
+	.DLM_DES_ADDR             = 0x3F12C,	//0x3F12C ~ 0x3F12E	(3 bytes)
+	.G_ILM_CHECKSUM_ADDR      = 0x3F100,	//0x3F100 ~ 0x3F103	(4 bytes)
+	.G_DLM_CHECKSUM_ADDR      = 0x3F104,	//0x3F104 ~ 0x3F107	(4 bytes)
+	.R_ILM_CHECKSUM_ADDR      = 0x3F120,	//0x3F120 ~ 0x3F123 (4 bytes)
+	.R_DLM_CHECKSUM_ADDR      = 0x3F124,	//0x3F124 ~ 0x3F127 (4 bytes)
+	.DMA_CRC_EN_ADDR          = 0x3F136,
+	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
+	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+};
+
+static const struct nvt_ts_mem_map NT36528_memory_map = {
+	.EVENT_BUF_ADDR           = 0x22D00,
+	.RAW_PIPE0_ADDR           = 0x24000,
+	.RAW_PIPE1_ADDR           = 0x24000,
+	.BASELINE_ADDR            = 0x21880,
+	.BASELINE_BTN_ADDR        = 0,
+	.DIFF_PIPE0_ADDR          = 0x20B00,
+	.DIFF_PIPE1_ADDR          = 0x24B00,
+	.RAW_BTN_PIPE0_ADDR       = 0,
+	.RAW_BTN_PIPE1_ADDR       = 0,
+	.DIFF_BTN_PIPE0_ADDR      = 0,
+	.DIFF_BTN_PIPE1_ADDR      = 0,
+	/* FW History */
+	//.MMAP_HISTORY_EVENT0      = 0x23768,
+	//.MMAP_HISTORY_EVENT1      = 0x237A8,
+	/* Phase 2 Host Download */
+	.BOOT_RDY_ADDR            = 0x3F10D,
+	//.ACI_ERR_CLR_ADDR         = 0x3F705,
+	/* BLD CRC */
+	.BLD_LENGTH_ADDR          = 0x3F138,	//0x3F138 ~ 0x3F13A	(3 bytes)
+	.ILM_LENGTH_ADDR          = 0x3F118,	//0x3F118 ~ 0x3F11A	(3 bytes)
+	.DLM_LENGTH_ADDR          = 0x3F130,	//0x3F130 ~ 0x3F132	(3 bytes)
+	.BLD_DES_ADDR             = 0x3F114,	//0x3F114 ~ 0x3F116	(3 bytes)
+	.ILM_DES_ADDR             = 0x3F128,	//0x3F128 ~ 0x3F12A	(3 bytes)
+	.DLM_DES_ADDR             = 0x3F12C,	//0x3F12C ~ 0x3F12E	(3 bytes)
+	.G_ILM_CHECKSUM_ADDR      = 0x3F100,	//0x3F100 ~ 0x3F103	(4 bytes)
+	.G_DLM_CHECKSUM_ADDR      = 0x3F104,	//0x3F104 ~ 0x3F107	(4 bytes)
+	.R_ILM_CHECKSUM_ADDR      = 0x3F120,	//0x3F120 ~ 0x3F123 (4 bytes)
+	.R_DLM_CHECKSUM_ADDR      = 0x3F124,	//0x3F124 ~ 0x3F127 (4 bytes)
+	.DMA_CRC_EN_ADDR          = 0x3F136,
+	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
+	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+};
+
 static const struct nvt_ts_mem_map NT36526_memory_map = {
 	.EVENT_BUF_ADDR           = 0x22D00,
 	.RAW_PIPE0_ADDR           = 0x24000,
@@ -216,6 +286,20 @@ static const struct nvt_ts_mem_map NT36676F_memory_map = {
 	.RW_FLASH_DATA_ADDR       = 0x14002,
 };
 
+static struct nvt_ts_hw_info NT36528A_hw_info = {
+	.carrier_system = 0,
+	.hw_crc         = 2,
+	//.hw_crc    = HWCRC_LEN_3Bytes,
+	//.hw_regs   = &hw_reg_addr_info_old_w_isp,
+};
+
+static struct nvt_ts_hw_info NT36528_hw_info = {
+	.carrier_system = 0,
+	.hw_crc         = 2,
+	//.hw_crc    = HWCRC_LEN_3Bytes,
+	//.hw_regs   = &hw_reg_addr_info_old_w_isp,
+};
+
 static struct nvt_ts_hw_info NT36526_hw_info = {
 	.carrier_system = 2,
 	.hw_crc         = 2,
@@ -256,6 +340,10 @@ struct nvt_ts_trim_id_table {
 };
 
 static const struct nvt_ts_trim_id_table trim_id_table[] = {
+	{.trim_id = "NT36528A",.id = {0x0A, 0xFF, 0xFF, 0x28, 0x65, 0x03}, .mask = {1, 0, 0, 1, 1, 1},
+		.mmap = &NT36528A_memory_map,  .hwinfo = &NT36528A_hw_info},
+	{.trim_id = "NT36528",.id = {0xFF, 0xFF, 0xFF, 0x28, 0x65, 0x03}, .mask = {0, 0, 0, 1, 1, 1},
+		.mmap = &NT36528_memory_map,  .hwinfo = &NT36528_hw_info},
 	{.trim_id = "NT36675",.id = {0x0D, 0xFF, 0xFF, 0x72, 0x66, 0x03}, .mask = {1, 0, 0, 1, 1, 1},
 		.mmap = &NT36675_memory_map,  .hwinfo = &NT36675_hw_info},
 	{.trim_id = "NT36675",.id = {0x20, 0xFF, 0xFF, 0x72, 0x66, 0x03}, .mask = {1, 0, 0, 1, 1, 1},
