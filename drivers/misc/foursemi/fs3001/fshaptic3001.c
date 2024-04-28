@@ -252,7 +252,7 @@ static int fs3001_i2c_write_bits_1(struct fs3001 *fs3001,unsigned char reg_addr,
 {
 	int ret = -1;
 	unsigned char reg_val = 0;
-	unsigned char t = 0;
+	unsigned char t1 = 0, t2 = 0;
 
 	if(i_start<i_stop || (i_start-i_stop+1)>8)
 	{
@@ -266,8 +266,9 @@ static int fs3001_i2c_write_bits_1(struct fs3001 *fs3001,unsigned char reg_addr,
 		pr_err("%s:ret=%d\n", FSERROR,ret);
 		return ret;
 	}
-	t = ~((pow2(i_start - i_stop + 1) - 1)<<i_stop);
-	reg_val = (reg_val & t) | (reg_data << i_stop);
+	t1 = (pow2(i_start - i_stop + 1) - 1)<<i_stop;
+	t2 = ~t1;
+	reg_val = (reg_val & t2) | (t1 & (reg_data << i_stop));
 	ret = fs3001_i2c_write(fs3001, reg_addr, reg_val);
 	if (ret < 0) 
 	{
@@ -4629,15 +4630,152 @@ static void fs3001_rtp_work_hapstream(struct work_struct *work)
 
 static void fs3001_rtp_irq_work_hapstream(struct work_struct*work)
 {
+	unsigned int cnt = 200;
+	unsigned char reg_val = 0;
+	bool rtp_work_flag = false;
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+
 	pr_info("enter\n");
+
+	mutex_lock(&fs3001->lock);
+	fs3001_haptic_stop(fs3001);
+	fs3001_haptic_set_rtp_aei(fs3001, false);
+	fs3001_interrupt_clear(fs3001);
+	fs3001_haptic_play_mode(fs3001, FS3001_HAPTIC_RTP_MODE);
+	fs3001_haptic_play_go(fs3001);
+	//usleep_range (2000, 2500);
+	while (cnt) 
+	{
+		fs3001_i2c_read(fs3001, FS3001_DIGSTAT, &reg_val);
+		if ((reg_val >> 4) == FS3001_DIGSTAT_B7_4_OPS_GO) //DIGSTAT_OPS == 0x20  go
+		{
+			cnt = 0;
+			rtp_work_flag = true;
+			sprintf(str,"%s,RTP_GO! OPS = 2\n",__func__);
+			fs3001_debug_message(fs3001,str);
+		} 
+		else 
+		{
+			cnt--;
+			sprintf(str,"%s,wait for RTP_GO, OPS=%d\n",__func__,(reg_val>>4));
+			fs3001_debug_message(fs3001, str);
+		}
+		usleep_range(2000, 2500);
+	}
+
+	if (!rtp_work_flag) 
+	{
+		pr_info( "failed to enter RTP_CO status!\n");
+		fs3001_haptic_stop(fs3001);
+	}
+	mutex_unlock(&fs3001->lock);
+
+	if (fs3001->hapstream_stop_flag == false) 
+	{
+		fs3001_haptic_rtp_init(fs3001);
+	}
 }
 
 
 static long fs3001_hapstream_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
+	struct fs3001 *fs3001 = g_foursemi->fs3001;
+	unsigned char reg_addr = 0;
+	unsigned char reg_data = 0;
+	int ret = 0;
+	unsigned int tmp = 0;
+
 	pr_info("enter,cmd=%d,arg=%ld\n",cmd,arg);
 
-	return 0;
+	switch (cmd) 
+	{
+		case HAPSTREAM_GET_HWINFO:
+			pr_info("cmd = HAPSTREAM_GET_HWINFO!\n");
+			tmp = fs3001->chipid;
+			if (copy_to_user((void __user *)arg, &tmp, sizeof(unsigned int)))
+				ret = -EFAULT;
+			break;
+		case HAPSTREAM_SETTING_GAIN:
+			pr_info("cmd = HAPSTREAM_SETTING_GAIN!, arg = 0x%2lx\n", arg);
+			mutex_lock(&fs3001->lock);
+			fs3001->gain = arg;
+			fs3001_haptic_set_gain(fs3001, fs3001->gain);
+			mutex_unlock(&fs3001->lock);
+			break;
+		case HAPSTREAM_GET_F0:
+			pr_info("cmd = HAPSTREAM_GET_F0!\n");
+			tmp = fs3001->f0;
+			if (copy_to_user((void __user *)arg, &tmp, sizeof(unsigned int)))
+				ret = -EFAULT;
+			break;
+		case HAPSTREAM_WRITE_REG:
+			pr_info("cmd = HAPSTREAM_WRITE_REG!\n");
+			reg_addr = (arg & 0xFF00) >> 8;
+			reg_data = arg & 0x00FF;
+			fs3001_i2c_write(fs3001, reg_addr, reg_data);
+			break;
+		case HAPSTREAM_READ_REG:
+			pr_info("cmd = HAPSTREAM_READ_REG!\n");
+			if (copy_from_user(&reg_addr, (void __user *)arg, sizeof(unsigned char))) {
+				ret = -EFAULT;
+				break;
+			}
+			fs3001_i2c_read(fs3001, reg_addr, &reg_data);
+			if (copy_to_user((void __user *)arg, &reg_data, sizeof(unsigned char)))
+				ret = -EFAULT;
+			break;
+		case HAPSTREAM_STOP_MODE:
+			pr_info("cmd = HAPSTREAM_STOP_MODE!\n");
+			fs3001->hapstream_stop_flag = true;
+			mutex_lock(&fs3001->lock);
+			fs3001_haptic_stop(fs3001);
+			mutex_unlock(&fs3001->lock);
+			break;
+		case HAPSTREAM_ON_MODE:
+			pr_info("cmd = HAPSTREAM_ON_MODE!, arg = %ld\n", arg);
+			tmp = arg;
+			vfree(fs3001->hapstream_rtp);
+			fs3001->hapstream_rtp = NULL;
+			fs3001->hapstream_rtp = vmalloc(tmp);
+			if (fs3001->hapstream_rtp == NULL) {
+				pr_info( "malloc hapstream_rtp memory failed\n");
+				return -ENOMEM;
+			}
+			break;
+		case HAPSTREAM_OFF_MODE:
+			pr_info("cmd = HAPSTREAM_OFF_MODE!\n");
+			fs3001->hapstream_stop_flag = true;
+			vfree(fs3001->hapstream_rtp);
+			break;
+		case HAPSTREAM_RTP_MODE:
+			//pr_info("cmd = HAPSTREAM_RTP_MODE!\n");
+			fs3001_hapstream_clean_buf(fs3001, MMAP_BUF_DATA_INVALID);
+			fs3001->hapstream_stop_flag = true;
+			if (fs3001->vib_stop_flag == false) 
+			{
+				mutex_lock(&fs3001->lock);
+				fs3001_haptic_stop(fs3001);
+				mutex_unlock(&fs3001->lock);
+			}
+
+			schedule_work(&fs3001->rtp_hapstream);
+			break;
+		case HAPSTREAM_SETTING_SPEED:
+			pr_info("cmd = HAPSTREAM_SETTING_SPEED!, arg = 0x%02lx\n", arg);
+			fs3001->dts_info.fs3001_play_rtp_srate = arg;
+			fs3001_haptic_set_pwm(fs3001, fs3001->dts_info.fs3001_play_rtp_srate);
+			break;
+		case HAPSTREAM_GET_SPEED:
+			pr_info("cmd = HAPSTREAM_GET_SPEED!\n");
+			tmp = fs3001->dts_info.fs3001_play_rtp_srate;
+			if (copy_to_user((void __user *)arg, &tmp, sizeof(unsigned int)))
+				ret = -EFAULT;
+			break;
+		default:
+			pr_info("unknown cmd = %d\n", cmd);
+			break;
+	}
+	return ret;
 }
 
 
