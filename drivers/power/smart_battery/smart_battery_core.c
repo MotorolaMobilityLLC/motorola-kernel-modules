@@ -485,6 +485,47 @@ static int smart_batt_soc100_forward(struct mmi_smart_battery *chip, int rsoc)
 	return logic_soc;
 }
 
+static void smart_batt_check_gauge_dev(struct mmi_smart_battery *chip)
+{
+	struct mmi_battery_pack *battery = NULL;
+	int i = 0;
+	bool has_added_list = false;
+	int fg_list_count = 0;
+
+	if (chip->get_gauge_done == true)
+		return;
+
+	for (i = 0; i < chip->gauge_count; i++) {
+		has_added_list = false;
+		list_for_each_entry(battery, &chip->battery_list, list) {
+			if (strcmp(battery->gauge_dev->dev.kobj.name, chip->gauge_name_arry[i]) == 0) {
+				has_added_list = true;
+				fg_list_count++;
+				break;
+			}
+		}
+
+		if (has_added_list == false) {
+			chip->battery[i].gauge_dev = get_gauge_by_name(chip->gauge_name_arry[i]);
+			if (chip->battery[i].gauge_dev) {
+				mmi_info(chip, "[%s]Found gauge_name=%s\n", __func__, chip->gauge_name_arry[i]);
+				gauge_dev_set_drvdata(chip->battery[i].gauge_dev, chip);
+				list_add_tail(&chip->battery[i].list, &chip->battery_list);
+				fg_list_count++;
+			} else {
+				mmi_err(chip, "[%s]Error:can't find gauge_name of %s \n", __func__, chip->gauge_name_arry[i]);
+			}
+		}
+
+	}
+
+	mmi_info(chip, "[%s]fg list count %d, gauge count %d\n", __func__, fg_list_count, chip->gauge_count);
+
+	if (fg_list_count == chip->gauge_count)
+		chip->get_gauge_done = true;
+
+}
+
 static void smart_batt_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
@@ -498,6 +539,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 	delay_work = container_of(work, struct delayed_work, work);
 	chip = container_of(delay_work, struct mmi_smart_battery, battery_delay_work);
 
+	smart_batt_check_gauge_dev(chip);
 	smart_batt_get_voltage_now(chip);
 	smart_batt_get_current_now(chip);
 	smart_batt_get_temperature(chip);
@@ -899,7 +941,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	int rc = 0;
 	struct mmi_smart_battery *chip;
 	struct power_supply_config psy_cfg = {};
-	int default_gauge_count = 0;
+	int fg_list_count = 0;
 	int i;
 
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
@@ -928,6 +970,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->soc100_curr_threshod = 0;
 	chip->taper_count = 0;
 	chip->gauge_count = -ENODATA;
+	chip->get_gauge_done = false;
 	chip->battery = NULL;
 #ifdef CONFIG_MOTO_1200_CYCLE
 	chip->bat_cycle_count = 0;
@@ -940,8 +983,8 @@ static int smart_battery_probe(struct platform_device *pdev)
 		mmi_info(chip, "devm_kzalloc mmi_battery_pack error\n");
 		goto cleanup;
 	}
-	default_gauge_count = chip->gauge_count;
-	for (i = 0; i < default_gauge_count; i++) {
+	fg_list_count = chip->gauge_count;
+	for (i = 0; i < chip->gauge_count; i++) {
 		chip->battery[i].gauge_dev = get_gauge_by_name(chip->gauge_name_arry[i]);
 		if (chip->battery[i].gauge_dev) {
 			mmi_info(chip, "Found gauge_name=%s\n", chip->gauge_name_arry[i]);
@@ -949,12 +992,15 @@ static int smart_battery_probe(struct platform_device *pdev)
 			list_add_tail(&chip->battery[i].list, &chip->battery_list);
 		} else {
 			mmi_err(chip, "*** Error : can't find gauge_name of %s ***\n", chip->gauge_name_arry[i]);
-			if (chip->gauge_count > 1)
-				chip->gauge_count--;
+			if (fg_list_count > 1)
+				fg_list_count--;
 			else
 				goto cleanup;
 		}
 	}
+
+	if (fg_list_count == chip->gauge_count)
+		chip->get_gauge_done = true;
 
 	if(is_atm_mode())
 		chip->factory_mode = true;
@@ -990,7 +1036,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 
 cleanup:
 	platform_set_drvdata(pdev, NULL);
-	return rc;
+	return -EPROBE_DEFER;
 }
 
 static int smart_battery_remove(struct platform_device *pdev)
