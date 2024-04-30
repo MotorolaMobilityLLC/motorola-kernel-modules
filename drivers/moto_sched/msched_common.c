@@ -92,7 +92,8 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	if (ux_type & UX_TYPE_PERF_DAEMON) // Base feature: perf daemon
 		prio = UX_PRIO_HIGHEST;
 	else if (is_enabled(UX_ENABLE_AUDIO)
-	    && (ux_type & UX_TYPE_AUDIO || ((ux_type & UX_TYPE_AUDIOSERVICE) && (p->prio == 101 || p->prio == 104))))
+	    && (ux_type & UX_TYPE_AUDIO || ((ux_type & UX_TYPE_AUDIOSERVICE) &&
+			((p->prio == 101 || p->prio == 104) || (is_heavy_scene() && is_scene(UX_SCENE_AUDIO) && p->prio <=120)))))
 		prio = UX_PRIO_AUDIO;
 	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER)) // Base feature: input & animation & low latency binder
 		prio = UX_PRIO_ANIMATOR;
