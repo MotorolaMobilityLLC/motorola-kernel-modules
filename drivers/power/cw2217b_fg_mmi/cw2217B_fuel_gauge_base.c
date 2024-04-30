@@ -1086,7 +1086,7 @@ static int cw2217_probe(struct i2c_client *client, const struct i2c_device_id *i
 	ret = cw_get_chip_id(cw_bat);
 	if (ret < 0) {
 		cw_err(cw_bat,"iic read write error");
-		goto error;
+		return -EPROBE_DEFER;
 	}
 	if (cw_bat->chip_id != IC_VCHIP_ID){
 		cw_err(cw_bat,"not cw2217B\n");
