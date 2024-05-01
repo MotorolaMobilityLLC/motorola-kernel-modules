@@ -3,6 +3,7 @@ ANDROID_BUILD_TOP := $(srctree)/..
 endif
 HAVE_KERNEL_5_4 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel/msm-5.4 && echo 1)
 HAVE_KERNEL_5_15 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel_platform/gki/kernel/5.15 && echo 1)
+HAVE_KERNEL_5_15 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel-5.15 && echo 1)
 HAVE_KERNEL_6_1 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel_platform/gki/kernel/6.1 && echo 1)
 HAVE_KERNEL_6_1 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel-6.1 && echo 1)
 
