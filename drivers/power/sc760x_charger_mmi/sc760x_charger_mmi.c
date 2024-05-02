@@ -1142,6 +1142,16 @@ static int sc760x_plug_out(struct charger_device *chgdev)
 	return 0;
 }
 
+static int mmi_is_enabled_charger(struct charger_device *chgdev, bool *en)
+{
+	struct sc760x_chip *sc = charger_get_data(chgdev);
+
+	*en = sc760x_is_enabled_charging(sc);
+
+	pr_info(" en = %d\n",*en);
+	return 0;
+}
+
 static int mmi_enable_charger(struct charger_device *chgdev, bool en)
 {
 	struct sc760x_chip *sc = charger_get_data(chgdev);
@@ -1184,6 +1194,7 @@ static const struct charger_ops sc760x_chg_ops = {
 	.plug_in = sc760x_plug_in,
 	.plug_out = sc760x_plug_out,
 	.enable = mmi_enable_charger,
+	.is_enabled = mmi_is_enabled_charger,
 	.set_charging_current = mmi_set_charging_current,
 	.get_charging_current = mmi_get_charging_current,
 };
