@@ -1543,14 +1543,19 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
                 return ret;
             }
         } else if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
+            ret = regmap_update_bits(bq->regmap, NU2115_VAC12PRET,
+                    NU2115_EN_OTG, NU2115_EN_OTG);
+	    ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &val);
+        	if (!ret)
+                    dev_err(bq->dev, "%s:NU2115_VAC12PRET = 0x%02X\n", __func__,val);
+
             ret = regmap_update_bits(bq->regmap, NU2115_ACDRV12_CTRL,
                     NU2115_ENABLE_TYPEC_MOS, 0);
             if (ret) {
                 dev_err(bq->dev, "%s:mmi_mux menu close wls mos fail ret=%d", __func__, ret);
                 return ret;
             }
-            mdelay(50);
-
+            mdelay(200);
             ret = regmap_update_bits(bq->regmap, NU2115_ACDRV12_CTRL,
                     NU2115_ENABLE_WLC_MOS, NU2115_ENABLE_WLC_MOS);
             if (ret) {
@@ -1558,7 +1563,6 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
                 return ret;
             }
         }
-
 
 	if (typec_mos == MMI_DVCHG_MUX_DISABLE) {
 	      ret = regmap_update_bits(bq->regmap, NU2115_ACDRV12_CTRL,
