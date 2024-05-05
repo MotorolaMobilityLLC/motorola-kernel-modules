@@ -55,6 +55,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_POCKET_MODE)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_POCKET_MODE
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_CS_DELAY)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_CS_DELAY
+endif
+
 ifneq ($(filter m y,$(CONFIG_GTP_DELAY_RELEASE)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_DELAY_RELEASE
 endif

@@ -210,6 +210,10 @@ static int goodix_spi_probe(struct spi_device *spi)
 	/* init spi_device */
 	spi->mode            = SPI_MODE_0;
 	spi->bits_per_word   = 8;
+#if defined(CONFIG_GTP_CS_DELAY)
+	spi->cs_setup.value = 3;
+	spi->cs_setup.unit = 0;
+#endif
 
 	ret = spi_setup(spi);
 	if (ret) {
