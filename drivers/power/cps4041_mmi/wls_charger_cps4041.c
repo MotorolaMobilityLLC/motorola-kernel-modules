@@ -1930,7 +1930,8 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 				}
 				acdet_ktime = ktime_get_boottime();
 				acdet_time_out = acdet_time_out + 250;
-				backpower_mode_timeout_work_start(chip, acdet_time_out);
+				//set time out to 5000ms as default
+				backpower_mode_timeout_work_start(chip, 5000);
 			} else if (CPS_TX_MODE == 0) {
 				cps_wls_low_power_mode(true);
 			}
