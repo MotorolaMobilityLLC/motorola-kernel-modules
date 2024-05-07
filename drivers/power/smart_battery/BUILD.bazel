@@ -15,6 +15,7 @@ define_mgk_ko(
         "Makefile",
     ]) + [
         "//motorola/kernel/modules:public_headers",
+        "//kernel_device_modules-6.1:mtk_public_headers",
     ],
     deps = [
         "//motorola/kernel/modules/drivers/power/mmi_gauge_class:mmi_gauge_class",

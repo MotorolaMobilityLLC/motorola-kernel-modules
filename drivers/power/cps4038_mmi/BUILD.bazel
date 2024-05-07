@@ -14,7 +14,9 @@ define_mgk_ko(
         "Kbuild",
         "Makefile",
         "Makefile.include",
-    ]),
+    ]) + [
+        "//kernel_device_modules-6.1:mtk_public_headers",
+    ],
 
     outs = ["cps4038_mmi.ko"],
 )
