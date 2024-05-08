@@ -126,7 +126,7 @@ static int smart_batt_get_cycle_count(struct mmi_smart_battery *chip)
 static int smart_batt_get_temperature(struct mmi_smart_battery *chip)
 {
 	struct mmi_battery_pack *battery = NULL;
-	int  avg_bat_temp;
+	int  avg_bat_temp = INVALID_TEMP;
 
 	list_for_each_entry(battery, &chip->battery_list, list) {
 		gauge_dev_get_temperature(battery->gauge_dev, &battery->curr_batt_temp);
@@ -140,10 +140,15 @@ static int smart_batt_get_temperature(struct mmi_smart_battery *chip)
 
 			mmi_info(chip, "%s: curr_bat_temp = %d, pre_bat_temp = %d, avg_bat_temp=%d\n", __func__,
 				battery->curr_batt_temp, chip->combo_batt_temp, avg_bat_temp);
-
-			chip->combo_batt_temp = avg_bat_temp;
+		}
+		else if (strcmp(battery->gauge_dev->dev.kobj.name, "flip_battery") == 0) {
+			chip->flip_batt_temp= battery->curr_batt_temp;
 		}
 	}
+	if (avg_bat_temp == INVALID_TEMP)
+		avg_bat_temp = chip->flip_batt_temp;
+
+	chip->combo_batt_temp = avg_bat_temp;
 
 	return chip->combo_batt_temp;
 }
@@ -193,7 +198,13 @@ static int smart_batt_get_voltage_now(struct mmi_smart_battery *chip)
 			strcmp(battery->gauge_dev->dev.kobj.name, "main_battery") == 0) {
 			voltage_total +=  battery->voltage_now;
 		}
+		else if (strcmp(battery->gauge_dev->dev.kobj.name, "flip_battery") == 0) {
+			chip->flip_batt_voltage = battery->voltage_now;
+		}
 	}
+	if (voltage_total == 0)
+		voltage_total = chip->flip_batt_voltage;
+
 	chip->combo_voltage_now = voltage_total * 1000;
 
 	return chip->combo_voltage_now;
@@ -962,6 +973,8 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->uisoc = -EINVAL;
 	chip->main_batt_soc = -EINVAL;
 	chip->flip_batt_soc = -EINVAL;
+	chip->flip_batt_temp = INVALID_TEMP;
+	chip->flip_batt_voltage = -EINVAL;
 	chip->combo_soh = 100;
 	chip->combo_voltage_now = -EINVAL;
 	chip->combo_current_now = -EINVAL;
