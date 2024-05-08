@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config MOTO_IOSCHED
+    tristate "io sched"
+    default n
+    help
+      io scheduler
+

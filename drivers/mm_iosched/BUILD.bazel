@@ -7,20 +7,14 @@ package(
 )
 
 define_mgk_ko(
-    name = "moto_sched",
+    name = "mm_iosched",
     srcs = glob([
-        "**/*.c",
-        "**/*.h",
+        "*.c",
+        "*.h",
         "Kbuild",
         "Makefile",
     ]) + [
-        "//kernel_device_modules-6.1:mtk_public_headers",
+        "//motorola/kernel/modules/drivers/moto_sched:sched_headers",
     ],
-)
-
-filegroup(
-    name = "sched_headers",
-    srcs = glob([
-        "*.h",
-    ]),
+    outs = ["mm_iosched.ko"],
 )
