@@ -82,6 +82,8 @@ struct mmi_smart_battery {
 	int				uisoc;
 	int				main_batt_soc;
 	int				flip_batt_soc;
+	int				flip_batt_temp;
+	int				flip_batt_voltage;
 	int				batt_tte;
 	int				combo_voltage_now;
 	int				combo_current_now;
