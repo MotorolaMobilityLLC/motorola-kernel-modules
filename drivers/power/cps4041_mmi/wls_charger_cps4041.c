@@ -2135,6 +2135,7 @@ static int cps_get_fw_revision(uint32_t* fw_revision)
 
 static void cps_wls_pm_set_awake(int awake)
 {
+	pr_info("%s %d\n", __func__, awake);
 	if(!chip->cps_wls_wake_lock->active && awake) {
 		__pm_stay_awake(chip->cps_wls_wake_lock);
 	} else if(chip->cps_wls_wake_lock->active && !awake) {
@@ -3907,6 +3908,7 @@ static int backpower_mode_enter(struct cps_wls_chrg_chip *chg)
 				pr_info("%s otg enable_otg failed, ret = %d\n", __func__, ret);
 				goto eanble_otg_failed;
 			}
+			cps_wls_pm_set_awake(1);
 			chg->backpower_mode = true;
 			cps_wls_mode_select("backpower_mode_enter", false);
 			do {
@@ -3937,16 +3939,27 @@ exit:
 static int backpower_mode_exit(struct cps_wls_chrg_chip *chg)
 {
 	int ret = -1;
+	int retry = 0;
 
 	if (IS_ERR_OR_NULL(chg))
 		return ret;
 
 	mutex_lock(&chg->bpm_lock);
 
-	ret = charger_dev_enable_otg(chg->chg1_dev, false);
+	while (retry < 3) {
+		ret = charger_dev_enable_otg(chg->chg1_dev, false);
+		pr_info("%s disable_otg ret=%d, retry=%d\n", __func__, ret, retry);
+		if (ret < 0) {
+			retry ++;
+			msleep(50);
+		} else {
+			break;
+		}
+	}
 	pr_info("%s disable_otg %d\n", __func__, ret);
 	chg->backpower_mode = false;
 	cps_rx_online_check(chg);//recheck wls online
+	cps_wls_pm_set_awake(0);
 
 	mutex_unlock(&chg->bpm_lock);
 
