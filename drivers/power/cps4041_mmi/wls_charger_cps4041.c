@@ -3898,10 +3898,8 @@ static int backpower_mode_enter(struct cps_wls_chrg_chip *chg)
 		vbus = cps_get_vbus();
 		pr_info("%s i=%d vbus=%dmV\n", __func__, i , vbus);
 		i++;
-	} while (chg->wls_online && vbus >= 1000 && i < 20 && !CPS_RX_LDO_OFF); //wait ldo off, rx_vout->0V
-	if (!CPS_RX_LDO_OFF) {
-		goto dis_ldo_failed;
-	}
+	} while (chg->wls_online && vbus >= 1000 && i < 20); //wait ldo off, rx_vout->0V
+
 	if (chg->wls_online && chg->config_otg_support) {
 		if (charger_dev_config_otg(chg->chg1_dev, 4850000, 500000) == 0) {
 			ret = charger_dev_enable_otg(chg->chg1_dev, true);
