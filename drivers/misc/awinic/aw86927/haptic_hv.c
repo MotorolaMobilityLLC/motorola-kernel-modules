@@ -1242,6 +1242,8 @@ static void richtap_clean_buf(struct aw_haptic *aw_haptic, int status)
 
 	for(i = 0; i < RICHTAP_MMAP_BUF_SUM; i++)
 	{
+		if (IS_ERR_OR_NULL(opbuf))
+			break;
 		memset(opbuf->data, 0, RICHTAP_MMAP_BUF_SIZE);
 		opbuf->status = status;
 		opbuf = opbuf->kernel_next;
