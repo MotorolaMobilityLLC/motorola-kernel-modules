@@ -3957,6 +3957,9 @@ static int backpower_mode_exit(struct cps_wls_chrg_chip *chg, bool timeout)
 		}
 	}
 	pr_info("%s disable_otg %d\n", __func__, ret);
+	//wait vbus drops
+	msleep(200);
+	cps_get_vbus();
 	chg->backpower_mode = false;
 	retry = 0;
 	if (!timeout) {
