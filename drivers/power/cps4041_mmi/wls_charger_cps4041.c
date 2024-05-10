@@ -405,7 +405,7 @@ static int cps_get_vbus(void);
 static int factory_test_wls_en(void *input, bool en);
 static void cps_wls_switch_epp_to_bpp(void);
 static int backpower_mode_enter(struct cps_wls_chrg_chip *chg);
-static int backpower_mode_exit(struct cps_wls_chrg_chip *chg);
+static int backpower_mode_exit(struct cps_wls_chrg_chip *chg, bool timeout);
 static void backpower_mode_timeout_work_start(struct cps_wls_chrg_chip *chip, int ms);
 
 int cps_wls_reg_check(void)
@@ -2595,7 +2595,7 @@ static ssize_t store_backpower_mode(struct device *dev, struct device_attribute 
 		}
 	} else {
 		if (chip->backpower_mode) {
-			backpower_mode_exit(chip);
+			backpower_mode_exit(chip, false);
 		}
 	}
 
@@ -3935,10 +3935,11 @@ exit:
 }
 
 
-static int backpower_mode_exit(struct cps_wls_chrg_chip *chg)
+static int backpower_mode_exit(struct cps_wls_chrg_chip *chg, bool timeout)
 {
 	int ret = -1;
 	int retry = 0;
+	int sys_mode = 0;
 
 	if (IS_ERR_OR_NULL(chg))
 		return ret;
@@ -3957,7 +3958,23 @@ static int backpower_mode_exit(struct cps_wls_chrg_chip *chg)
 	}
 	pr_info("%s disable_otg %d\n", __func__, ret);
 	chg->backpower_mode = false;
-	cps_rx_online_check(chg);//recheck wls online
+	retry = 0;
+	if (!timeout) {
+		//wait for cps rx power on
+		do {
+			msleep(200);
+			sys_mode = 0;
+			if (cps_wls_get_chip_id() == CPS_CHIP_ID)
+				sys_mode = cps_wls_get_sys_mode();
+			retry ++;
+		} while (sys_mode != SYS_MODE_RX && retry < 10);
+
+		if (sys_mode != SYS_MODE_RX) {
+			cps_wls_mode_select("cps rx off line", true);
+			cps_rx_online_check(chg);
+		}
+	} else
+		cps_rx_online_check(chg);//recheck wls online
 	cps_wls_pm_set_awake(0);
 
 	mutex_unlock(&chg->bpm_lock);
@@ -3982,7 +3999,7 @@ static void cps_wls_stop(bool en)
 			if (chip->backpower_mode) {
 				//if backpower mode exit, need keep low mode_select for BPP mode
 				cps_wls_mode_select("cps_wls_stop", false);
-				backpower_mode_exit(chip);
+				backpower_mode_exit(chip, false);
 			}
 		}
 	}
@@ -4016,7 +4033,7 @@ static void cps_backpower_mode_timeout_work(struct work_struct *work)
 	if (chip->backpower_mode) {
 		//if timeout, need pull high mode_select
 		cps_wls_mode_select("backpower_mode_timeout", true);
-		backpower_mode_exit(chip);
+		backpower_mode_exit(chip, true);
 	}
 }
 
