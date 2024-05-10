@@ -1651,6 +1651,54 @@ static DEVICE_ATTR(wls_fod_curr, 0664,
 		wls_fod_curr_show,
 		wls_fod_curr_store);
 
+static ssize_t batt_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int battsn_nums = 0, count = 0, i = 0;
+	int rc;
+
+	struct qti_charger *chg = dev_get_drvdata(dev);
+	struct profile_sn_map {
+		const char *id;
+		const char *sn;
+	} *map_table;
+
+	battsn_nums = of_property_count_strings(chg->dev->of_node, "profile-ids-map");
+	if (battsn_nums <= 0 || (battsn_nums % 2)) {
+		mmi_err(chg, "Invalid profile-ids-map in DT, rc=%d\n", battsn_nums);
+		return -EINVAL;
+	}
+
+	map_table = devm_kmalloc_array(chg->dev, battsn_nums / 2,
+					sizeof(struct profile_sn_map),
+					GFP_KERNEL);
+	if (!map_table)
+		return -ENOMEM;
+
+	rc = of_property_read_string_array(chg->dev->of_node, "profile-ids-map",
+					(const char **)map_table,
+					battsn_nums);
+	if (rc < 0) {
+		mmi_err(chg, "Failed to get profile-ids-map, rc=%d\n", rc);
+		goto free_map;
+	}
+
+	count += scnprintf(buf+count, CHG_SHOW_MAX_SIZE, "%d", battsn_nums / 2);
+
+	for (i = 0; i < battsn_nums / 2 && map_table[i].sn; i++) {
+		count += scnprintf(buf+count, CHG_SHOW_MAX_SIZE,
+				"%s", map_table[i].sn);
+	}
+	count += scnprintf(buf+count, CHG_SHOW_MAX_SIZE, "\n");
+
+free_map:
+	devm_kfree(chg->dev, map_table);
+
+	return count;
+}
+
+static DEVICE_ATTR_RO(batt_id);
+
 static ssize_t addr_store(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
@@ -3479,6 +3527,13 @@ static int qti_charger_init(struct qti_charger *chg)
 	}
 
 	rc = device_create_file(chg->dev,
+				&dev_attr_batt_id);
+	if (rc) {
+		mmi_err(chg,
+			   "Couldn't create batt_id\n");
+	}
+
+	rc = device_create_file(chg->dev,
 				&dev_attr_cid_status);
 	if (rc) {
 		mmi_err(chg,
@@ -3539,6 +3594,7 @@ static void qti_charger_deinit(struct qti_charger *chg)
 	device_remove_file(chg->dev, &dev_attr_wireless_chip_id);
 	device_remove_file(chg->dev, &dev_attr_wls_fod_curr);
 	device_remove_file(chg->dev, &dev_attr_wls_fod_gain);
+	device_remove_file(chg->dev, &dev_attr_batt_id);
 	device_remove_file(chg->dev, &dev_attr_addr);
 	device_remove_file(chg->dev, &dev_attr_data);
 
