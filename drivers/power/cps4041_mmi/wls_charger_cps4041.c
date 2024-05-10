@@ -1641,12 +1641,12 @@ static void cps_offset_detect_work(struct work_struct *work)
 	if (!chip)
 		return;
 
-	if (!chip->rx_ldo_on || chip->rod_stop) {
+	if (!chip->rx_ldo_on) {
 		chip->rx_offset_detect_count = 0;
 		chip->rx_offset = false;
 		cps_wls_log(CPS_LOG_DEBG, "[%s] rx_ldo_on:%d,rod_stop:%d",
 			__func__, chip->rx_ldo_on, chip->rod_stop);
-		goto detect_exit;
+		return;
 	}
 
 	if (chip->mode_type != Sys_Op_Mode_MOTO_WLC) {
@@ -1655,8 +1655,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 		wls_mode = chip->qi_mode_type;
 	}
 
-	if ((ktime_get_boottime() - chip->rx_start_ktime >= WLS_ROD_STOP_TIME) &&
-		(chip->wlc_status != WLC_ERR_LOWER_EFFICIENCY)) {
+	if (ktime_get_boottime() - chip->rx_start_ktime >= WLS_ROD_STOP_TIME) {
 		cps_wls_log(CPS_LOG_DEBG, "[%s] rx offset detect stop,wls status:%d\n", __func__, chip->wlc_status);
 		chip->rod_stop = true;
 		chip->rx_offset_detect_count = 0;
@@ -1769,7 +1768,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 		}
 	}
 
-	if (chip->enable_rod) {
+	if (chip->enable_rod && !chip->rod_stop) {
 		queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(work_timedelay));
 		return;
 	} else if (chip->rx_offset) {
