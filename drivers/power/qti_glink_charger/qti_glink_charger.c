@@ -795,6 +795,8 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 #endif
 	int prev_cid = -1;
 	int prev_lpd = 0;
+	static bool lpd_ulog_triggered = false;
+	static bool otg_ulog_triggered = false;
 
 	rc = qti_charger_read(chg, OEM_PROP_CHG_INFO,
 				&info,
@@ -816,7 +818,9 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 
 	if ((prev_cid != -1 && chg->lpd_info.lpd_cid == -1) ||
             (!prev_lpd && chg->lpd_info.lpd_present)) {
-		bm_ulog_enable_log(true);
+		if (!lpd_ulog_triggered && !otg_ulog_triggered)
+			bm_ulog_enable_log(true);
+		lpd_ulog_triggered = true;
 		mmi_err(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
 			chg->lpd_info.lpd_present,
 			chg->lpd_info.lpd_rsbu1,
@@ -824,7 +828,9 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 			chg->lpd_info.lpd_cid);
 	} else if ((chg->lpd_info.lpd_cid != -1 && prev_cid == -1) ||
 		   (!chg->lpd_info.lpd_present && prev_lpd)) {
-		bm_ulog_enable_log(false);
+		if (lpd_ulog_triggered && !otg_ulog_triggered)
+			bm_ulog_enable_log(false);
+		lpd_ulog_triggered = false;
 		mmi_warn(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
 			chg->lpd_info.lpd_present,
 			chg->lpd_info.lpd_rsbu1,
@@ -836,6 +842,17 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 			chg->lpd_info.lpd_rsbu1,
 			chg->lpd_info.lpd_rsbu2,
 			chg->lpd_info.lpd_cid);
+	}
+
+	if (info.chrg_otg_enabled && (info.chrg_uv < VBUS_MIN_MV * 1000)) {
+		if (!otg_ulog_triggered && !lpd_ulog_triggered)
+			bm_ulog_enable_log(true);
+		otg_ulog_triggered = true;
+		mmi_err(chg, "OTG: vbus collapse, vbus=%duV\n", info.chrg_uv);
+	} else if (info.chrg_otg_enabled) {
+		if (otg_ulog_triggered && !lpd_ulog_triggered)
+			bm_ulog_enable_log(false);
+		otg_ulog_triggered = false;
 	}
 
 	chg->chg_info.chrg_mv = info.chrg_uv / 1000;
