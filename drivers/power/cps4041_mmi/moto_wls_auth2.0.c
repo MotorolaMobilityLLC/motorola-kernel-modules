@@ -96,6 +96,16 @@ int moto_auth_send_ask_tx_id(void)
 	return status;
 }
 
+int moto_auth_send_ask_tx_adjust_fod(void)
+{
+	int status = MOTO_WLS_AUTH_SUCCESS;
+	uint8_t data[2] = {0x18, QI_ASK_CMD_ADJUST_FOD};
+
+	status = motoauth_wls_send_ask_packet(data, 2);
+	motoauth_wls_log(MOTOAUTH_LOG_DEBG, " CPS_WLS: QI send ask cmd QI_ASK_CMD_ADJUST_FOD");
+	return status;
+}
+
 int moto_auth_send_ask_qfod(void)
 {
 	int status = MOTO_WLS_AUTH_SUCCESS;
@@ -222,6 +232,28 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 			data[0], data[1], data[2]);
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, " WLC_MOTO, NOTIFY_EVENT_WLS_WLC_CHANGE , WLS_WLC_ID %d", motoauth->WLS_WLC_ID);
 		motoauth_wls_set_status(motoauth->WLC_STATUS);
+		if (motoauth->WLS_WLC_ID == MOTO_15W_TX_ID) {
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To set ADJUST_FOD next");
+			motoauth_event_notify(MOTOAUTH_EVENT_TX_ADJUST_FOD);
+		} else if (WLS_WLC_POWER_MAX <= 15) {
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_SN next");
+			motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
+		} else if (tx_id[0] == 0x01 && (tx_id[1] >> 4) == 0x5 && moto_auth_status == MOTO_AUTH_TX_ID) {
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_CAP next");
+			motoauth_event_notify(MOTOAUTH_EVENT_TX_CAP);
+		} else {
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_SN next");
+			motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
+		}
+		break;
+	case QI_ASK_CMD_ADJUST_FOD:
+		moto_auth_printf_data("ADJUST_FOD", data, data_len);
+		if (data_len != 5) {
+			motoauth_wls_log(MOTOAUTH_LOG_ERR, " data_len error with QI_ASK_CMD_ADJUST_FOD");
+			status = MOTO_WLS_AUTH_FAIL;
+			break;
+		}
+		motoauth_timer_stop();
 		if (WLS_WLC_POWER_MAX <= 15) {
 			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_SN next");
 			motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
@@ -393,6 +425,16 @@ int motoauth_events_process(void)
 			moto_auth_send_ask_tx_id();
 			motoauth_timer_start(delay_time_ms * 2);
 			break;
+		case MOTOAUTH_EVENT_TX_ADJUST_FOD:
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTOAUTH_EVENT_TX_ADJUST_FOD");
+			moto_auth_status = MOTO_AUTH_TX_ADJUST_FOD;
+			if (motoauth->WLC_STATUS == WLC_DISCONNECTED) {
+				motoauth->WLC_STATUS = WLC_CONNECTED;
+				motoauth_wls_set_status(motoauth->WLC_STATUS);
+			}
+			moto_auth_send_ask_tx_adjust_fod();
+			motoauth_timer_start(delay_time_ms * 2);
+			break;
 		case MOTOAUTH_EVENT_TX_CAP:
 			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTO_AUTH_EVENT_TX_CAP");
 			moto_auth_status = MOTO_AUTH_TX_CAP;
@@ -473,6 +515,8 @@ int motoauth_events_process(void)
 				motoauth_event_notify(MOTOAUTH_EVENT_TX_CAPABILITY);
 			} else if (moto_auth_status == MOTO_AUTH_TX_ID) {
 				motoauth_event_notify(MOTOAUTH_EVENT_TX_ID);
+			} else if (moto_auth_status == MOTO_AUTH_TX_ADJUST_FOD) {
+				motoauth_event_notify(MOTOAUTH_EVENT_TX_ADJUST_FOD);
 			} else if (moto_auth_status == MOTO_AUTH_TX_SN) {
 				motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
 			}
