@@ -75,6 +75,8 @@
 //#define IRQ_TYPE_EDGE_FALLING 2
 #define INT_TRIGGER_TYPE IRQ_TYPE_EDGE_RISING
 
+//---bus transfer length---
+#define BUS_TRANSFER_LENGTH  256
 
 //---SPI driver info.---
 #define NVT_SPI_NAME "NVT-ts"
@@ -251,12 +253,16 @@ struct nvt_ts_data {
 	const struct nvt_ts_mem_map *mmap;
 	uint8_t carrier_system;
 	uint8_t hw_crc;
+	uint8_t auto_copy;
 	uint16_t nvt_pid;
 	uint8_t *rbuf;
 	uint8_t *xbuf;
 	struct mutex xbuf_lock;
 	bool irq_enabled;
 	const char *panel_supplier;
+	uint32_t chip_ver_trim_addr;
+	uint32_t swrst_sif_addr;
+	uint32_t crc_err_flag_addr;
 #ifdef CONFIG_MTK_SPI
 	struct mt_chip_conf spi_ctrl;
 #endif
@@ -342,6 +348,7 @@ enum touch_state {
 #define DUMMY_BYTES (1)
 #define NVT_TRANSFER_LEN	(63*1024)
 #define NVT_READ_LEN		(2*1024)
+#define NVT_XBUF_LEN		(NVT_TRANSFER_LEN+1+DUMMY_BYTES)
 
 typedef enum {
 	NVTWRITE = 0,
@@ -381,14 +388,17 @@ void nvt_eng_reset(void);
 void nvt_sw_reset(void);
 void nvt_sw_reset_idle(void);
 void nvt_boot_ready(void);
-void nvt_bld_crc_enable(void);
+//void nvt_bld_crc_enable(void);
 void nvt_fw_crc_enable(void);
+void nvt_tx_auto_copy_mode(void);
+void nvt_read_fw_history(uint32_t fw_history_addr);
 int32_t nvt_update_firmware(char *firmware_name);
 int32_t nvt_check_fw_reset_state(RST_COMPLETE_STATE check_reset_state);
 int32_t nvt_get_fw_info(void);
 int32_t nvt_clear_fw_status(void);
 int32_t nvt_check_fw_status(void);
 int32_t nvt_set_page(uint32_t addr);
+int32_t nvt_wait_auto_copy(void);
 int32_t nvt_write_addr(uint32_t addr, uint8_t data);
 uint8_t nvt_touch_is_awake(void);
 #ifdef NVT_SENSOR_EN

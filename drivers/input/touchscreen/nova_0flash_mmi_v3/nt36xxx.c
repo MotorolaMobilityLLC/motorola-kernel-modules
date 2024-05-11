@@ -380,27 +380,49 @@ int32_t nvt_write_addr(uint32_t addr, uint8_t data)
 
 /*******************************************************
 Description:
-	Novatek touchscreen enable hw bld crc function.
+	Novatek touchscreen read value to specific register.
 
 return:
-	N/A.
+	Executive outcomes. 0---succeed. -5---access fail.
 *******************************************************/
-void nvt_bld_crc_enable(void)
+int32_t nvt_read_reg(nvt_ts_reg_t reg, uint8_t *val)
 {
-	uint8_t buf[4] = {0};
+	int32_t ret = 0;
+	uint32_t addr = 0;
+	uint8_t mask = 0;
+	uint8_t shift = 0;
+	uint8_t buf[8] = {0};
+	uint8_t temp = 0;
 
-	//---set xdata index to BLD_CRC_EN_ADDR---
-	nvt_set_page(ts->mmap->BLD_CRC_EN_ADDR);
+	addr = reg.addr;
+	mask = reg.mask;
+	/* get shift */
+	temp = reg.mask;
+	shift = 0;
+	while (1) {
+		if ((temp >> shift) & 0x01)
+			break;
+		if (shift == 8) {
+			NVT_ERR("mask all bits zero!\n");
+			ret = -1;
+			break;
+		}
+		shift++;
+	}
+	/* read the byte of the register is in */
+	nvt_set_page(addr);
+	buf[0] = addr & 0xFF;
+	buf[1] = 0x00;
+	ret = CTP_SPI_READ(ts->client, buf, 2);
+	if (ret < 0) {
+		NVT_ERR("CTP_SPI_READ failed!(%d)\n", ret);
+		goto nvt_read_register_exit;
+	}
+	/* get register's value in its field of the byte */
+	*val = (buf[1] & mask) >> shift;
 
-	//---read data from index---
-	buf[0] = ts->mmap->BLD_CRC_EN_ADDR & (0x7F);
-	buf[1] = 0xFF;
-	CTP_SPI_READ(ts->client, buf, 2);
-
-	//---write data to index---
-	buf[0] = ts->mmap->BLD_CRC_EN_ADDR & (0x7F);
-	buf[1] = buf[1] | (0x01 << 7);
-	CTP_SPI_WRITE(ts->client, buf, 2);
+nvt_read_register_exit:
+	return ret;
 }
 
 /*******************************************************
@@ -412,7 +434,7 @@ return:
 *******************************************************/
 void nvt_fw_crc_enable(void)
 {
-	uint8_t buf[4] = {0};
+	uint8_t buf[8] = {0};
 
 	//---set xdata index to EVENT BUF ADDR---
 	nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
@@ -420,12 +442,18 @@ void nvt_fw_crc_enable(void)
 	//---clear fw reset status---
 	buf[0] = EVENT_MAP_RESET_COMPLETE & (0x7F);
 	buf[1] = 0x00;
-	CTP_SPI_WRITE(ts->client, buf, 2);
+	buf[2] = 0x00;
+	buf[3] = 0x00;
+	buf[4] = 0x00;
+	buf[5] = 0x00;
+	buf[6] = 0x00;
+	CTP_SPI_WRITE(ts->client, buf, 7);
 
 	//---enable fw crc---
 	buf[0] = EVENT_MAP_HOST_CMD & (0x7F);
 	buf[1] = 0xAE;	//enable fw crc command
-	CTP_SPI_WRITE(ts->client, buf, 2);
+	buf[2] = 0x00;
+	CTP_SPI_WRITE(ts->client, buf, 3);
 }
 
 /*******************************************************
@@ -442,12 +470,133 @@ void nvt_boot_ready(void)
 
 	mdelay(5);
 
-	if (!ts->hw_crc) {
+	if (ts->hw_crc == HWCRC_NOSUPPORT) {
 		//---write BOOT_RDY status cmds---
 		nvt_write_addr(ts->mmap->BOOT_RDY_ADDR, 0);
 
 		//---write POR_CD cmds---
 		nvt_write_addr(ts->mmap->POR_CD_ADDR, 0xA0);
+	}
+}
+
+/*******************************************************
+Description:
+	Novatek touchscreen enable auto copy mode function.
+
+return:
+	N/A.
+*******************************************************/
+void nvt_tx_auto_copy_mode(void)
+{
+	if (ts->auto_copy == CHECK_SPI_DMA_TX_INFO) {
+		//---write TX_AUTO_COPY_EN cmds---
+		nvt_write_addr(ts->mmap->TX_AUTO_COPY_EN, 0x69);
+	} else if (ts->auto_copy == CHECK_TX_AUTO_COPY_EN) {
+		//---write SPI_MST_AUTO_COPY cmds---
+		nvt_write_addr(ts->mmap->TX_AUTO_COPY_EN, 0x56);
+	}
+
+	NVT_ERR("tx auto copy mode %d enable\n", ts->auto_copy);
+}
+
+/*******************************************************
+Description:
+	Novatek touchscreen check spi dma tx info function.
+
+return:
+	Executive outcomes. 0---succeed. -1---fail.
+*******************************************************/
+int32_t nvt_check_spi_dma_tx_info(void)
+{
+	uint8_t buf[8] = {0};
+	int32_t i = 0;
+	const int32_t retry = 200;
+
+	if (ts->mmap->SPI_DMA_TX_INFO == 0) {
+		NVT_ERR("error, SPI_DMA_TX_INFO = 0\n");
+		return -1;
+	}
+
+	for (i = 0; i < retry; i++) {
+		//---set xdata index to SPI_DMA_TX_INFO---
+		nvt_set_page(ts->mmap->SPI_DMA_TX_INFO);
+
+		//---read spi dma status---
+		buf[0] = ts->mmap->SPI_DMA_TX_INFO & 0x7F;
+		buf[1] = 0xFF;
+		CTP_SPI_READ(ts->client, buf, 2);
+
+		if (buf[1] == 0x00)
+			break;
+
+		usleep_range(1000, 1000);
+	}
+
+	if (i >= retry) {
+		NVT_ERR("failed, i=%d, buf[1]=0x%02X\n", i, buf[1]);
+		return -1;
+	} else {
+		return 0;
+	}
+}
+
+/*******************************************************
+Description:
+	Novatek touchscreen check tx auto copy state function.
+
+return:
+	Executive outcomes. 0---succeed. -1---fail.
+*******************************************************/
+int32_t nvt_check_tx_auto_copy(void)
+{
+	uint8_t buf[8] = {0};
+	int32_t i = 0;
+	const int32_t retry = 200;
+
+	if (ts->mmap->TX_AUTO_COPY_EN == 0) {
+		NVT_ERR("error, TX_AUTO_COPY_EN = 0\n");
+		return -1;
+	}
+
+	for (i = 0; i < retry; i++) {
+		//---set xdata index to SPI_MST_AUTO_COPY---
+		nvt_set_page(ts->mmap->TX_AUTO_COPY_EN);
+
+		//---read auto copy status---
+		buf[0] = ts->mmap->TX_AUTO_COPY_EN & 0x7F;
+		buf[1] = 0xFF;
+		CTP_SPI_READ(ts->client, buf, 2);
+
+		if (buf[1] == 0x00)
+			break;
+
+		usleep_range(1000, 1000);
+	}
+
+	if (i >= retry) {
+		NVT_ERR("failed, i=%d, buf[1]=0x%02X\n", i, buf[1]);
+		return -1;
+	} else {
+		return 0;
+	}
+}
+
+/*******************************************************
+Description:
+	Novatek touchscreen wait auto copy finished function.
+
+return:
+	Executive outcomes. 0---succeed. -1---fail.
+*******************************************************/
+int32_t nvt_wait_auto_copy(void)
+{
+	if (ts->auto_copy == CHECK_SPI_DMA_TX_INFO) {
+		return nvt_check_spi_dma_tx_info();
+	} else if (ts->auto_copy == CHECK_TX_AUTO_COPY_EN) {
+		return nvt_check_tx_auto_copy();
+	} else {
+		NVT_ERR("failed, not support mode %d!\n", ts->auto_copy);
+		return -1;
 	}
 }
 
@@ -477,8 +626,8 @@ return:
 *******************************************************/
 void nvt_sw_reset(void)
 {
-	//---software reset cmds to SWRST_N8_ADDR---
-	nvt_write_addr(SWRST_N8_ADDR, 0x55);
+	//---software reset cmds to SWRST_SIF_ADDR---
+	nvt_write_addr(ts->swrst_sif_addr, 0x55);
 
 	msleep(10);
 }
@@ -493,8 +642,8 @@ return:
 *******************************************************/
 void nvt_sw_reset_idle(void)
 {
-	//---MCU idle cmds to SWRST_N8_ADDR---
-	nvt_write_addr(SWRST_N8_ADDR, 0xAA);
+	//---MCU idle cmds to SWRST_SIF_ADDR---
+	nvt_write_addr(ts->swrst_sif_addr, 0xAA);
 
 	msleep(15);
 }
@@ -508,8 +657,8 @@ return:
 *******************************************************/
 void nvt_bootloader_reset(void)
 {
-	//---reset cmds to SWRST_N8_ADDR---
-	nvt_write_addr(SWRST_N8_ADDR, 0x69);
+	//---reset cmds to SWRST_SIF_ADDR---
+	nvt_write_addr(ts->swrst_sif_addr, 0x69);
 
 	mdelay(5);	//wait tBRST2FR after Bootload RST
 
@@ -517,6 +666,8 @@ void nvt_bootloader_reset(void)
 		/* disable SPI_RD_FAST */
 		nvt_write_addr(SPI_RD_FAST_ADDR, 0x00);
 	}
+
+	NVT_LOG("end\n");
 }
 
 /*******************************************************
@@ -572,6 +723,8 @@ int32_t nvt_check_fw_status(void)
 	uint8_t buf[8] = {0};
 	int32_t i = 0;
 	const int32_t retry = 50;
+
+	usleep_range(20000, 20000);
 
 	for (i = 0; i < retry; i++) {
 		//---set xdata index to EVENT BUF ADDR---
@@ -692,45 +845,32 @@ info_retry:
 
 	//---read fw info---
 	buf[0] = EVENT_MAP_FWINFO;
-	CTP_SPI_READ(ts->client, buf, 17);
-	ts->fw_ver = buf[1];
-	ts->x_num = buf[3];
-	ts->y_num = buf[4];
-	ts->abs_x_max = (uint16_t)((buf[5] << 8) | buf[6]);
-	ts->abs_y_max = (uint16_t)((buf[7] << 8) | buf[8]);
-	ts->max_button_num = buf[11];
-	ts->fw_type = buf[14];
-	//---clear x_num, y_num if fw info is broken---
+	CTP_SPI_READ(ts->client, buf, 39);
 	if ((buf[1] + buf[2]) != 0xFF) {
 		NVT_ERR("FW info is broken! fw_ver=0x%02X, ~fw_ver=0x%02X\n", buf[1], buf[2]);
-		ts->fw_ver = 0;
-		ts->x_num = 18;
-		ts->y_num = 32;
-		ts->abs_x_max = TOUCH_DEFAULT_MAX_WIDTH;
-		ts->abs_y_max = TOUCH_DEFAULT_MAX_HEIGHT;
-		ts->max_button_num = TOUCH_KEY_NUM;
-		ts->fw_type = 1;
-
-		if(retry_count < 3) {
+		if (retry_count < 3) {
 			retry_count++;
 			NVT_ERR("retry_count=%d\n", retry_count);
 			goto info_retry;
 		} else {
-			NVT_ERR("Set default fw_ver=%d, x_num=%d, y_num=%d, "
-					"abs_x_max=%d, abs_y_max=%d, max_button_num=%d!\n",
-					ts->fw_ver, ts->x_num, ts->y_num,
-					ts->abs_x_max, ts->abs_y_max, ts->max_button_num);
+			ts->fw_ver = 0;
+			ts->max_button_num = TOUCH_KEY_NUM;
+			NVT_ERR("Set default fw_ver=%d, max_button_num=%d!\n",
+					ts->fw_ver, ts->max_button_num);
 			ret = -1;
+			goto out;
 		}
-	} else {
-		ret = 0;
 	}
+	ts->fw_ver = buf[1];
+	ts->x_num = buf[3];
+	ts->y_num = buf[4];
+	ts->max_button_num = buf[11];
+	ts->nvt_pid = (uint16_t)((buf[36] << 8) | buf[35]);
 
-	NVT_LOG("fw_ver=%d, x_num=%d, y_num=%d, abs_xmax=%d, abs_y_max=%d, max_button_num=%d!\n", ts->fw_ver, ts->x_num, ts->y_num, ts->abs_x_max, ts->abs_y_max, ts->max_button_num);
-	NVT_LOG("FW type is 0x%02X\n", buf[14]);
+	NVT_LOG("fw_ver=0x%02X, fw_type=0x%02X, PID=0x%04X\n", ts->fw_ver, buf[14], ts->nvt_pid);
 
-	//---Get Novatek PID---
-	nvt_read_pid();
+	ret = 0;
+out:
 
 	return ret;
 }
@@ -1495,6 +1635,46 @@ static uint8_t nvt_wdt_fw_recovery(uint8_t *point_data)
 
    return recovery_enable;
 }
+
+void nvt_read_fw_history(uint32_t fw_history_addr)
+{
+	uint8_t i = 0;
+	uint8_t buf[65];
+	char str[128];
+
+	if (fw_history_addr == 0)
+		return;
+
+    nvt_set_page(fw_history_addr);
+
+    buf[0] = (uint8_t) (fw_history_addr & 0x7F);
+    CTP_SPI_READ(ts->client, buf, 64+1);	//read 64bytes history
+
+	//print all data
+	NVT_LOG("fw history 0x%X: \n", fw_history_addr);
+	for (i = 0; i < 4; i++) {
+		snprintf(str, sizeof(str),
+				"%02X %02X %02X %02X %02X %02X %02X %02X  "
+				"%02X %02X %02X %02X %02X %02X %02X %02X\n",
+				buf[1+i*16], buf[2+i*16], buf[3+i*16], buf[4+i*16],
+				buf[5+i*16], buf[6+i*16], buf[7+i*16], buf[8+i*16],
+				buf[9+i*16], buf[10+i*16], buf[11+i*16], buf[12+i*16],
+				buf[13+i*16], buf[14+i*16], buf[15+i*16], buf[16+i*16]);
+		NVT_LOG("%s", str);
+	}
+
+	nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
+}
+
+void nvt_clear_aci_error_flag(void)
+{
+	if (ts->mmap->ACI_ERR_CLR_ADDR == 0)
+		return;
+
+	nvt_write_addr(ts->mmap->ACI_ERR_CLR_ADDR, 0xA5);
+
+	nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
+}
 #endif	/* #if NVT_TOUCH_WDT_RECOVERY */
 
 #if POINT_DATA_CHECKSUM
@@ -1594,6 +1774,13 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
    /* ESD protect by WDT */
 	if (nvt_wdt_fw_recovery(point_data)) {
 		NVT_ERR("Recover for fw reset, %02X\n", point_data[1]);
+		if (point_data[1] == 0xFE) {
+			nvt_sw_reset_idle();
+			nvt_clear_aci_error_flag();
+		}
+		nvt_read_fw_history(ts->mmap->MMAP_HISTORY_EVENT0);
+		nvt_read_fw_history(ts->mmap->MMAP_HISTORY_EVENT1);
+
 		if(nvt_boot_firmware_name)
 			nvt_update_firmware(nvt_boot_firmware_name);
 		else
@@ -1820,7 +2007,7 @@ Description:
 return:
 	Executive outcomes. 0---NVT IC. -1---not NVT IC.
 *******************************************************/
-static int8_t nvt_ts_check_chip_ver_trim(uint32_t chip_ver_trim_addr)
+static int32_t nvt_ts_check_chip_ver_trim(struct nvt_ts_hw_reg_addr_info hw_regs)
 {
 	uint8_t buf[8] = {0};
 	int32_t retry = 0;
@@ -1828,15 +2015,34 @@ static int8_t nvt_ts_check_chip_ver_trim(uint32_t chip_ver_trim_addr)
 	int32_t i = 0;
 	int32_t found_nvt_chip = 0;
 	int32_t ret = -1;
+	uint8_t enb_casc = 0;
+
+	/* hw reg mapping */
+	ts->chip_ver_trim_addr = hw_regs.chip_ver_trim_addr;
+	ts->swrst_sif_addr = hw_regs.swrst_sif_addr;
+	ts->crc_err_flag_addr = hw_regs.crc_err_flag_addr;
+
+	NVT_LOG("check chip ver trim with chip_ver_trim_addr=0x%06x, "
+			"swrst_sif_addr=0x%06x, crc_err_flag_addr=0x%06x\n",
+			ts->chip_ver_trim_addr, ts->swrst_sif_addr, ts->crc_err_flag_addr);
 
 	//---Check for 5 times---
 	for (retry = 5; retry > 0; retry--) {
 
 		nvt_bootloader_reset();
 
-		nvt_set_page(chip_ver_trim_addr);
+		nvt_set_page(ts->chip_ver_trim_addr);
 
-		buf[0] = chip_ver_trim_addr & 0x7F;
+		buf[0] = ts->chip_ver_trim_addr & 0x7F;
+		buf[1] = 0x00;
+		buf[2] = 0x00;
+		buf[3] = 0x00;
+		buf[4] = 0x00;
+		buf[5] = 0x00;
+		buf[6] = 0x00;
+		CTP_SPI_WRITE(ts->client, buf, 7);
+
+		buf[0] = ts->chip_ver_trim_addr & 0x7F;
 		buf[1] = 0x00;
 		buf[2] = 0x00;
 		buf[3] = 0x00;
@@ -1844,7 +2050,6 @@ static int8_t nvt_ts_check_chip_ver_trim(uint32_t chip_ver_trim_addr)
 		buf[5] = 0x00;
 		buf[6] = 0x00;
 		CTP_SPI_READ(ts->client, buf, 7);
-		NVT_LOG("nvt_ts_check_chip_ver_trim: buf[0]=0x%02X\n", buf[0]);
 		NVT_LOG("buf[1]=0x%02X, buf[2]=0x%02X, buf[3]=0x%02X, buf[4]=0x%02X, buf[5]=0x%02X, buf[6]=0x%02X\n",
 			buf[1], buf[2], buf[3], buf[4], buf[5], buf[6]);
 
@@ -1866,10 +2071,33 @@ static int8_t nvt_ts_check_chip_ver_trim(uint32_t chip_ver_trim_addr)
 
 			if (found_nvt_chip) {
 				NVT_LOG("This is NVT touch IC\n");
-				ts->mmap = trim_id_table[list].mmap;
-				ts->carrier_system = trim_id_table[list].hwinfo->carrier_system;
+				if (trim_id_table[list].mmap->ENB_CASC_REG.addr) {
+					/* check single or cascade */
+					nvt_read_reg(trim_id_table[list].mmap->ENB_CASC_REG, &enb_casc);
+					/* NVT_LOG("ENB_CASC=0x%02X\n", enb_casc); */
+					if (enb_casc & 0x01) {
+						NVT_LOG("Single Chip\n");
+						ts->mmap = trim_id_table[list].mmap;
+					} else {
+						NVT_LOG("Cascade Chip\n");
+						ts->mmap = trim_id_table[list].mmap_casc;
+					}
+				} else {
+					/* for chip that do not have ENB_CASC */
+					ts->mmap = trim_id_table[list].mmap;
+				}
 				ts->hw_crc = trim_id_table[list].hwinfo->hw_crc;
-				strncpy(ts->product_id, trim_id_table[list].trim_id, 10);
+				ts->auto_copy = trim_id_table[list].hwinfo->auto_copy;
+
+				/* hw reg re-mapping */
+				ts->chip_ver_trim_addr = trim_id_table[list].hwinfo->hw_regs->chip_ver_trim_addr;
+				ts->swrst_sif_addr = trim_id_table[list].hwinfo->hw_regs->swrst_sif_addr;
+				ts->crc_err_flag_addr = trim_id_table[list].hwinfo->hw_regs->crc_err_flag_addr;
+
+				NVT_LOG("set reg chip_ver_trim_addr=0x%06x, "
+						"swrst_sif_addr=0x%06x, crc_err_flag_addr=0x%06x\n",
+						ts->chip_ver_trim_addr, ts->swrst_sif_addr, ts->crc_err_flag_addr);
+
 				ret = 0;
 				goto out;
 			} else {
@@ -1882,6 +2110,35 @@ static int8_t nvt_ts_check_chip_ver_trim(uint32_t chip_ver_trim_addr)
 	}
 
 out:
+	return ret;
+}
+
+/*******************************************************
+Description:
+	Novatek touchscreen check chip version trim loop
+	function. Check chip version trim via hw regs table.
+
+return:
+	Executive outcomes. 0---NVT IC. -1---not NVT IC.
+*******************************************************/
+static int32_t nvt_ts_check_chip_ver_trim_loop(void) {
+    uint8_t i = 0;
+	int32_t ret = 0;
+
+	struct nvt_ts_hw_reg_addr_info hw_regs_table[] = {
+		hw_reg_addr_info,
+		hw_reg_addr_info_old_w_isp,
+		hw_reg_addr_info_legacy_w_isp
+	};
+
+    for (i = 0; i < (sizeof(hw_regs_table) / sizeof(struct nvt_ts_hw_reg_addr_info)); i++) {
+        //---check chip version trim---
+        ret = nvt_ts_check_chip_ver_trim(hw_regs_table[i]);
+		if (!ret) {
+			break;
+		}
+    }
+
 	return ret;
 }
 
@@ -2523,6 +2780,8 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	static bool initialized_sensor;
 #endif
 
+	NVT_LOG("enter\n");
+
 #ifdef NVT_MTK_CHECK_PANEL
 	ret = nvt_check_panel();
 	if (ret) {
@@ -2647,15 +2906,11 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	msleep(10);
 
 	//---check chip version trim---
-	ret = nvt_ts_check_chip_ver_trim(CHIP_VER_TRIM_ADDR);
+	ret = nvt_ts_check_chip_ver_trim_loop();
 	if (ret) {
-		NVT_LOG("try to check from old chip ver trim address\n");
-		ret = nvt_ts_check_chip_ver_trim(CHIP_VER_TRIM_OLD_ADDR);
-		if (ret) {
-			NVT_ERR("chip is not identified\n");
-			ret = -EINVAL;
-			goto err_chipvertrim_failed;
-		}
+		NVT_ERR("chip is not identified\n");
+		ret = -EINVAL;
+		goto err_chipvertrim_failed;
 	}
 
 	//---allocate input device---
@@ -3109,6 +3364,11 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 	}
 
 	spi_set_drvdata(client, NULL);
+
+	if (ts->xbuf) {
+		kfree(ts->xbuf);
+		ts->xbuf = NULL;
+	}
 
 	if (ts) {
 		kfree(ts);

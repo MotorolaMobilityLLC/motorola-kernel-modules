@@ -1,8 +1,8 @@
 /*
- * Copyright (C) 2010 - 2018 Novatek, Inc.
+ * Copyright (C) 2010 - 2022 Novatek, Inc.
  *
- * $Revision: 43459 $
- * $Date: 2019-04-17 15:28:41 +0800 (週三, 17 四月 2019) $
+ * $Revision: 110851 $
+ * $Date: 2022-12-27 17:56:41 +0800 (週二, 27 十二月 2022) $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ void nvt_bootloader_reset_noflash_locked(void);
 int32_t nvt_esd_vdd_tp_recovery(void);
 #endif /* NVT_TOUCH_VDD_TP_RECOVERY */
 
-struct TIME_TYPE start, end;
+static ktime_t start, end;
 const struct firmware *fw_entry = NULL;
 static size_t fw_need_write_size = 0;
 static uint8_t *fwbuf = NULL;
@@ -97,7 +97,7 @@ static int32_t nvt_download_init(void)
 	//NVT_LOG("NVT_TRANSFER_LEN = 0x%06X\n", NVT_TRANSFER_LEN);
 
 	if (fwbuf == NULL) {
-		fwbuf = (uint8_t *)kzalloc((NVT_TRANSFER_LEN+2), GFP_KERNEL);
+		fwbuf = (uint8_t *)kzalloc((NVT_TRANSFER_LEN + 1 + DUMMY_BYTES), GFP_KERNEL);
 		if(fwbuf == NULL) {
 			NVT_ERR("kzalloc for fwbuf failed!\n");
 			return -ENOMEM;
@@ -143,6 +143,8 @@ return:
 *******************************************************/
 static uint32_t partition = 0;
 static uint8_t ilm_dlm_num = 2;
+static uint8_t cascade_2nd_header_info = 0;
+static uint8_t spi_dma_div_cnt_val = 0;
 static int32_t nvt_bin_header_parser(const u8 *fwdata, size_t fwsize)
 {
 	uint32_t list = 0;
@@ -151,13 +153,31 @@ static int32_t nvt_bin_header_parser(const u8 *fwdata, size_t fwsize)
 	uint8_t info_sec_num = 0;
 	uint8_t ovly_sec_num = 0;
 	uint8_t ovly_info = 0;
+	uint8_t find_bin_header = 0;
 
 	/* Find the header size */
 	end = fwdata[0] + (fwdata[1] << 8) + (fwdata[2] << 16) + (fwdata[3] << 24);
-	pos = 0x30;	// info section start at 0x30 offset
-	while (pos < end) {
-		info_sec_num ++;
-		pos += 0x10;	/* each header info is 16 bytes */
+
+	/* check cascade next header */
+	cascade_2nd_header_info = (fwdata[0x20] & 0x02) >> 1;
+	NVT_LOG("cascade_2nd_header_info = %d\n", cascade_2nd_header_info);
+
+	if (cascade_2nd_header_info) {
+		pos = 0x30;	// info section start at 0x30 offset
+		while (pos < (end / 2)) {
+			info_sec_num ++;
+			pos += 0x10;	/* each header info is 16 bytes */
+		}
+
+		info_sec_num = info_sec_num + 1; //next header section
+
+		spi_dma_div_cnt_val = fwdata[0x29] & 0x01;
+	} else {
+		pos = 0x30;	// info section start at 0x30 offset
+		while (pos < end) {
+			info_sec_num ++;
+			pos += 0x10;	/* each header info is 16 bytes */
+		}
 	}
 
 	/*
@@ -215,8 +235,13 @@ static int32_t nvt_bin_header_parser(const u8 *fwdata, size_t fwsize)
 		 * SRAM_addr : size : BIN_addr : crc (16-bytes)
 		 */
 		if ((list >= ilm_dlm_num) && (list < (ilm_dlm_num + info_sec_num))) {
-			/* others partition located at 0x30 offset */
-			pos = 0x30 + (0x10 * (list - ilm_dlm_num));
+			if (find_bin_header == 0) {
+				/* others partition located at 0x30 offset */
+				pos = 0x30 + (0x10 * (list - ilm_dlm_num));
+			} else if (find_bin_header && cascade_2nd_header_info) {
+				/* cascade 2nd header info */
+				pos = end - 0x10;
+			}
 
 			bin_map[list].SRAM_addr = byte_to_word(&fwdata[pos]);
 			bin_map[list].size = byte_to_word(&fwdata[pos+4]);
@@ -233,8 +258,9 @@ static int32_t nvt_bin_header_parser(const u8 *fwdata, size_t fwsize)
 				}
 			} //ts->hw_crc
 			/* detect header end to protect parser function */
-			if ((bin_map[list].BIN_addr == 0) && (bin_map[list].size != 0)) {
+			if ((bin_map[list].BIN_addr < end) && (bin_map[list].size != 0)) {
 				sprintf(bin_map[list].name, "Header");
+				find_bin_header = 1;
 			} else {
 				sprintf(bin_map[list].name, "Info-%d", (list - ilm_dlm_num));
 			}
@@ -689,10 +715,10 @@ static void nvt_set_bld_crc_bank(uint32_t DES_ADDR, uint32_t SRAM_ADDR,
 	fwbuf[0] = LENGTH_ADDR & 0x7F;
 	fwbuf[1] = (size) & 0xFF;
 	fwbuf[2] = (size >> 8) & 0xFF;
-	fwbuf[3] = (size >> 16) & 0x01;
-	if (ts->hw_crc == 1) {
+	fwbuf[3] = (size >> 16) & 0xFF;
+	if (ts->hw_crc == HWCRC_LEN_2Bytes) {
 		CTP_SPI_WRITE(ts->client, fwbuf, 3);
-	} else if (ts->hw_crc > 1) {
+	} else if (ts->hw_crc >= HWCRC_LEN_3Bytes) {
 		CTP_SPI_WRITE(ts->client, fwbuf, 4);
 	}
 
@@ -797,6 +823,29 @@ static void nvt_read_bld_hw_crc(void)
 			bin_map[1].crc, g_crc, r_crc);
 
 	return;
+}
+
+static void nvt_spi_dma_setup(void)
+{
+	uint8_t buf[33] = {0};
+
+	if (ts->mmap->SPI_DMA_VAL_ADDR) {
+		nvt_set_page(bin_map[1].SRAM_addr);
+		buf[0] = bin_map[1].SRAM_addr & 0x7F;
+		CTP_SPI_WRITE(ts->client, buf, 33);
+
+		nvt_set_page(ts->mmap->SPI_DMA_VAL_ADDR);
+		buf[0] = ts->mmap->SPI_DMA_VAL_ADDR & 0x7F;
+		buf[1] = 0x35;
+		buf[2] = 0x32;
+		buf[3] = 0xAA;
+		buf[4] = 0x00;
+		CTP_SPI_WRITE(ts->client, buf, 5);
+
+		NVT_LOG("set spi dma val finish\n");
+	} else {
+		NVT_ERR("spi dma val addr is NULL\n");
+	}
 }
 
 #if NVT_TOUCH_ESD_DISP_RECOVERY
@@ -1000,31 +1049,42 @@ static int32_t nvt_download_firmware_hw_crc(void)
 	uint8_t retry = 0;
 	int32_t ret = 0;
 
-	GET_TIME_OF_DAY(&start);
+	start = ktime_get();
 
 	while (1) {
 		/* bootloader reset to reset MCU */
 		nvt_bootloader_reset();
 
-		/* Start to write firmware process */
-		ret = nvt_write_firmware(fw_entry->data, fw_entry->size);
-		if (ret) {
-			NVT_ERR("Write_Firmware failed. (%d)\n", ret);
-			goto fail;
-		}
-
-#if NVT_DUMP_PARTITION
-		ret = nvt_dump_partition();
-		if (ret) {
-			NVT_ERR("nvt_dump_partition failed, ret = %d\n", ret);
-		}
-#endif
-
 		/* set ilm & dlm reg bank */
 		nvt_set_bld_hw_crc();
 
-		/* enable hw bld crc function */
-		nvt_bld_crc_enable();
+		/* Start to write firmware process */
+		if (cascade_2nd_header_info) {
+			/* for cascade */
+			if (spi_dma_div_cnt_val) {
+				nvt_spi_dma_setup();
+			}
+
+			nvt_tx_auto_copy_mode();
+
+			ret = nvt_write_firmware(fw_entry->data, fw_entry->size);
+			if (ret) {
+				NVT_ERR("Write_Firmware failed. (%d)\n", ret);
+				goto fail;
+			}
+
+			ret = nvt_wait_auto_copy();
+			if (ret) {
+				NVT_ERR("wait auto copy failed. (%d)\n", ret);
+				goto fail;
+			}
+		} else {
+			ret = nvt_write_firmware(fw_entry->data, fw_entry->size);
+			if (ret) {
+				NVT_ERR("Write_Firmware failed. (%d)\n", ret);
+				goto fail;
+			}
+		}
 
 		/* clear fw reset status & enable fw crc check */
 		nvt_fw_crc_enable();
@@ -1058,7 +1118,7 @@ fail:
 		}
 	}
 
-	GET_TIME_OF_DAY(&end);
+	end = ktime_get();
 
 	return ret;
 }
@@ -1076,7 +1136,7 @@ static int32_t nvt_download_firmware(void)
 	uint8_t retry = 0;
 	int32_t ret = 0;
 
-	GET_TIME_OF_DAY(&start);
+	start = ktime_get();
 
 	while (1) {
 		/*
@@ -1104,13 +1164,6 @@ static int32_t nvt_download_firmware(void)
 			goto fail;
 		}
 
-#if NVT_DUMP_PARTITION
-		ret = nvt_dump_partition();
-		if (ret) {
-			NVT_ERR("nvt_dump_partition failed, ret = %d\n", ret);
-		}
-#endif
-
 		/* Set Boot Ready Bit */
 		nvt_boot_ready();
 
@@ -1137,7 +1190,7 @@ fail:
 		}
 	}
 
-	GET_TIME_OF_DAY(&end);
+	end = ktime_get();
 
 	return ret;
 }
@@ -1177,19 +1230,15 @@ int32_t nvt_update_firmware(char *firmware_name)
 		goto download_fail;
 	}
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
-	NVT_LOG("Update firmware success! <%lld us>\n",
-			(end.tv_sec - start.tv_sec)*1000000L + (end.tv_nsec - start.tv_nsec)/1000);
-#else
 	NVT_LOG("Update firmware success! <%ld us>\n",
-			(end.tv_sec - start.tv_sec)*1000000L + (end.tv_usec - start.tv_usec));
-#endif
+			(long) ktime_us_delta(end, start));
 
 	/* Get FW Info */
 	ret = nvt_get_fw_info();
 	if (ret) {
 		NVT_ERR("nvt_get_fw_info failed. (%d)\n", ret);
 	}
+
 
 download_fail:
 	if (!IS_ERR_OR_NULL(bin_map)) {
