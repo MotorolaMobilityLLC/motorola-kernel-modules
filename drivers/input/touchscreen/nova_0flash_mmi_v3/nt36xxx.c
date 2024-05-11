@@ -1250,7 +1250,7 @@ static int32_t nvt_parse_dt(struct device *dev)
 	ret = of_property_read_u32(np, "novatek,swrst-n8-addr", &SWRST_N8_ADDR);
 	if (ret) {
 		NVT_ERR("error reading novatek,swrst-n8-addr. ret=%d\n", ret);
-		return ret;
+		//return ret;
 	} else {
 		NVT_LOG("SWRST_N8_ADDR=0x%06X\n", SWRST_N8_ADDR);
 	}
