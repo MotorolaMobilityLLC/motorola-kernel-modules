@@ -59,9 +59,6 @@ MOTO_WLS_AUTH_T motoauth;
 
 #define CPS_CHIP_ID 0x4041
 
-#define MOTO_15W_TX_ID (353)
-#define MOTO_50W_TX_ID (337)
-
 #define CPS_WLS_CHRG_DRV_NAME "cps-wls-charger"
 
 #define CPS_WLS_CHRG_PSY_NAME "wireless"
