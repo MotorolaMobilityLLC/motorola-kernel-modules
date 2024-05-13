@@ -2579,6 +2579,11 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	ts->client->bits_per_word = 8;
 	ts->client->mode = SPI_MODE_0;
 	ts->client->chip_select = 0;
+#if NVT_CS_SETUP
+	ts->client->cs_setup.value = 200;
+	ts->client->cs_setup.unit = 1;
+	NVT_LOG("set cs_setup.value=%d\n", ts->client->cs_setup.value);
+#endif
 
 	ret = spi_setup(ts->client);
 	if (ret < 0) {

@@ -163,6 +163,12 @@ extern const uint16_t gesture_key_array[];
 #define NVT_TOUCH_VDD_TP_RECOVERY 0
 #endif
 
+#ifdef CONFIG_NVT_CS_SETUP
+#define NVT_CS_SETUP 1
+#else
+#define NVT_CS_SETUP 0
+#endif
+
 #if NVT_TOUCH_ESD_PROTECT
 extern struct delayed_work nvt_esd_check_work;
 #endif
