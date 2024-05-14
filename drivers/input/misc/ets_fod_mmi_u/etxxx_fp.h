@@ -42,7 +42,7 @@
 
 #define EGIS_CHRD_DRIVER_NAME "egis_fp"
 #define EGIS_CLASS_NAME "egis_fp"
-
+#define TEE_SPI_LOCKED  1
 /* ------------------------- Opcode -------------------------------------*/
 #define FP_REGISTER_READ 0x01
 #define FP_REGISTER_WRITE 0x02

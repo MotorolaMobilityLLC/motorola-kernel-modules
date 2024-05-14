@@ -653,8 +653,9 @@ static void egis_get_io_stus(struct egisfp_dev_t *egis_dev)
 
 int set_egisfp_spi_pin_active(struct egisfp_dev_t *egis_dev, int en)
 {
-	int ret;
 	DEBUG_PRINT(" %s : en = 0x%X \n", __func__, en);
+#ifndef TEE_SPI_LOCKED
+	int ret;
 	if (en)
 	{
 		ret = pinctrl_select_state(egis_dev->pinctrl, egis_dev->spi_active);
@@ -666,6 +667,9 @@ int set_egisfp_spi_pin_active(struct egisfp_dev_t *egis_dev, int en)
 	if (ret)
 		ERROR_PRINT(" %s : failed ret = %d \n", __func__, ret);
 	return ret;
+#else
+    return 0;
+#endif
 }
 
 long egisfp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -1067,7 +1071,7 @@ int egisfp_platforminit(struct egisfp_dev_t *egis_dev)
 						goto egisfp_pinctrl_fail;
 				}
 			}
-
+#ifndef TEE_SPI_LOCKED
 			if (egis_dev->dd)
 			{
 				INFO_PRINT(" %s : find node enter \n", __func__);
@@ -1098,8 +1102,7 @@ int egisfp_platforminit(struct egisfp_dev_t *egis_dev)
 				if (pinctrl_select_state(egis_dev->pinctrl, egis_dev->spi_default))
 					goto egisfp_pinctrl_fail;
 			}
-
-
+#endif
 			egis_dev->platforminit_done = 1;
 			if (egis_dev->pwr_by_gpio && egis_dev->ctrl_power)
 				INFO_PRINT(" %s : successful status = %d gpio num -> vcc = %d rst = %d Irq = %d \n", __func__, status, egis_dev->vcc_33v_Pin, egis_dev->rstPin, egis_dev->irqPin);
