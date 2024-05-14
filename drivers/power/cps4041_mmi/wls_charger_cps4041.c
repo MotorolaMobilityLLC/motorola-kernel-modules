@@ -1886,6 +1886,8 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 	int sys_mode = 0x00;
 	static ktime_t acdet_ktime = 0;
 	int acdet_time_out = 0;
+	bool otg_en = false;
+
 	cps_wls_log(CPS_LOG_DEBG, "[%s] IRQ triggered\n", __func__);
 	mutex_lock(&chip->irq_lock);
 	cps_wls_set_int_enable();
@@ -1928,7 +1930,11 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 				//set time out to 5000ms as default
 				backpower_mode_timeout_work_start(chip, 5000);
 			} else if (CPS_TX_MODE == 0) {
-				cps_wls_low_power_mode(true);
+				if (!IS_ERR_OR_NULL(chip->chg1_dev)) {
+					charger_dev_is_otg_enabled(chip->chg1_dev, &otg_en);
+				}
+				if (otg_en)
+					cps_wls_low_power_mode(true);
 			}
 			break;
 		default:
