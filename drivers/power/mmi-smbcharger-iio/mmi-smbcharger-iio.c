@@ -530,6 +530,7 @@ struct smb_mmi_charger {
 	/*Battery info*/
 	unsigned long		manufacturing_date;
 	unsigned long		first_usage_date;
+	bool			lotx_enabled;
 };
 
 #define CHGR_FAST_CHARGE_CURRENT_CFG_REG	(CHGR_BASE + 0x61)
@@ -3744,11 +3745,9 @@ static void mmi_basic_charge_sm(struct smb_mmi_charger *chip,
 				prm->pres_chrg_step = STEP_FULL;
 		}
 	} else if (prm->pres_chrg_step == STEP_FULL) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,25)
-		if (stat->batt_soc <= 95) {
-#else
-		if (stat->batt_mv < (max_fv_mv - HYST_STEP_MV * 2)) {
-#endif
+		if (((chip->lotx_enabled) && (stat->batt_soc <= 95))
+				|| (!(chip->lotx_enabled) &&
+				(stat->batt_mv < (max_fv_mv - HYST_STEP_MV * 2)))) {
 			prm->chrg_taper_cnt = 0;
 			prm->pres_chrg_step = STEP_NORM;
 		}
@@ -4835,6 +4834,8 @@ static int parse_mmi_dt(struct smb_mmi_charger *chg)
 	chg->enable_dcp_ffc = of_property_read_bool(node, "mmi,enable-dcp-ffc");
 
 	chg->enable_fcc_large_qg_iterm = of_property_read_bool(node, "mmi,enable-fcc-large-qg-iterm");
+
+	chg->lotx_enabled = of_property_read_bool(node, "mmi,lotx-support");
 
 	return rc;
 }
