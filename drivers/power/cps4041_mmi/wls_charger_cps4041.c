@@ -4008,16 +4008,26 @@ static void cps_wls_stop(bool en)
 static void cps_wls_auto_stop_work(struct work_struct *work)
 {
 	int bat_temp = 0;
+	bool chg_en = true;
+	int rc = -1;
 
+	if (!IS_ERR_OR_NULL(chip->chg1_dev)) {
+		rc = charger_dev_is_enabled(chip->chg1_dev, &chg_en);
+	} else {
+		pr_info("%s chg1_dev is ERR or NULL\n", __func__);
+	}
+	if (rc < 0) {
+		pr_info("%s Error: rc = %d\n", __func__, rc);
+	}
 	bat_temp = cps_get_bat_info(POWER_SUPPLY_PROP_TEMP);
-	pr_info("%s bat_temp=%d\n", __func__, bat_temp);
+	pr_info("%s bat_temp=%d,chg_en=%d\n", __func__, bat_temp, chg_en);
 
-	if (bat_temp <= chip->wls_auto_stop_undertemp) {
+	if (bat_temp <= chip->wls_auto_stop_undertemp && chg_en) {
 		cps_wls_stop(false);
 	} else if (chip->wls_online &&
 			chip->mode_type == Sys_Op_Mode_BPP &&
 			chip->hs_st != HS_UNKONWN) {
-		if (bat_temp >= chip->wls_auto_stop_overtemp) {
+		if (!chg_en) {
 			cps_wls_stop(true);
 		}
 	}
