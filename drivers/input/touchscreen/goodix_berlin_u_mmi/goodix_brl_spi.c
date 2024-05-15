@@ -198,6 +198,10 @@ static void goodix_pdev_release(struct device *dev)
 static int goodix_spi_probe(struct spi_device *spi)
 {
 	int ret = 0;
+#if defined(CONFIG_GTP_SPI_PINCTRL)
+	struct pinctrl *pinctrl1;
+	struct pinctrl_state *pin_spi_default_mode;
+#endif
 
 	ts_info("goodix spi probe in");
 
@@ -252,6 +256,33 @@ static int goodix_spi_probe(struct spi_device *spi)
 	goodix_pdev->dev.platform_data = &goodix_spi_bus;
 	goodix_pdev->dev.release = goodix_pdev_release;
 
+#if defined(CONFIG_GTP_SPI_PINCTRL)
+	/* get pinctrl handler from of node */
+	pinctrl1 = devm_pinctrl_get(&spi->dev);
+	if (IS_ERR_OR_NULL(pinctrl1)) {
+		ts_info("Failed to get pinctrl handler[need confirm]");
+		pinctrl1 = NULL;
+	}
+	ts_debug("success get pinctrl");
+
+	/* spi mode */
+	pin_spi_default_mode = pinctrl_lookup_state(pinctrl1,
+				"gt9916_spi_mode");
+	if (IS_ERR_OR_NULL(pin_spi_default_mode)) {
+		ret = PTR_ERR(pin_spi_default_mode);
+		ts_err("Failed to get pinctrl state:%s, r:%d",
+				"gt9916_spi_mode", ret);
+		devm_pinctrl_put(pinctrl1);
+		pin_spi_default_mode = NULL;
+	}else{
+		ts_debug("success get pin spi mode pinctrl state");
+
+		ret = pinctrl_select_state(pinctrl1,
+					pin_spi_default_mode);
+		if (ret < 0)
+			ts_err("Failed to select pin_spi_default_mode, ret:%d", ret);
+	}
+#endif
 	/* register platform device, then the goodix_ts_core
 	 * module will probe the touch deivce.
 	 */
