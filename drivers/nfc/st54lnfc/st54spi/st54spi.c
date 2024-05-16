@@ -31,6 +31,9 @@
 
 #include <linux/uaccess.h>
 
+#include <linux/ktime.h>
+#include <linux/timekeeping.h>
+
 // Do we need to control the clock of SPI master ?
 // #define WITH_SPI_CLK_MNGT 1
 
@@ -121,7 +124,13 @@ struct st54spi_data {
 	int se_is_poweron_for_comm;
 	struct pinctrl *pctrl;
 	struct pinctrl_state *pctrl_mode_spi, *pctrl_mode_idle;
+	/* keep track of events to implement guard times as needed */
+	ktime_t last_nreset_falling; // for Tspi_reset
+	ktime_t last_nreset_rising; // for Tready
 };
+
+#define ST54SPI_TREADY 10
+#define ST54SPI_TSPI_RESET 3
 
 #define POWER_MODE_NONE -1
 #define POWER_MODE_ST54H 0
@@ -139,6 +148,20 @@ static bool debug_enabled = true;
 
 #define DEV (st54spi->spi ? &st54spi->spi->dev : &st54spi->spi_reset->dev)
 /*-------------------------------------------------------------------------*/
+
+static void st54spi_check_tready(struct st54spi_data *st54spi) {
+	if (st54spi && st54spi->power_or_nreset_gpio && st54spi->last_nreset_rising) {
+		ktime_t now = ktime_get();
+		s64 ms = ktime_to_ms(ktime_sub(now, st54spi->last_nreset_rising));
+		// Tready is 10ms
+		if (ms < ST54SPI_TREADY) {
+			// Force additional delay to ensure minimum duration
+			usleep_range((ST54SPI_TREADY - ms) * 1000, (ST54SPI_TREADY + 1 - ms) * 1000);
+		}
+		// reset the rising timestamp to avoid recheck clock next time.
+		st54spi->last_nreset_rising = 0;
+	}
+}
 
 static ssize_t st54spi_sync(struct st54spi_data *st54spi,
 			    struct spi_message *message)
@@ -212,6 +235,8 @@ static ssize_t st54spi_read(struct file *filp, char __user *buf, size_t count,
 	if (debug_enabled)
 		pr_debug("st54spi Read: %zu bytes\n", count);
 
+	st54spi_check_tready(st54spi);
+
 	mutex_lock(&st54spi->buf_lock);
 	status = st54spi_sync_read(st54spi, count);
 	if (status > 0) {
@@ -247,6 +272,8 @@ static ssize_t st54spi_write(struct file *filp, const char __user *buf,
 
 	if (debug_enabled)
 		pr_debug("st54spi Write: %zu bytes\n", count);
+
+	st54spi_check_tready(st54spi);
 
 	mutex_lock(&st54spi->buf_lock);
 	missing = copy_from_user(st54spi->tx_buffer, buf, count);
@@ -424,8 +451,10 @@ static void st54spi_power_off(struct st54spi_data *st54spi)
 		return;
 	}
 	// Set SE_PWR_REQ / SE_nRESET to low
-	if (st54spi->power_or_nreset_gpio)
+	if (st54spi->power_or_nreset_gpio) {
 		gpio_set_value(st54spi->power_or_nreset_gpio, 0);
+		st54spi->last_nreset_falling = ktime_get();
+	}
 
 	// Set NSS pin as highZ (ST54H and ST54J).
 
@@ -489,7 +518,15 @@ static void st54spi_power_on(struct st54spi_data *st54spi)
 
 	// set SE_PWR_REQ / SE_nRESET to high and wait for CLF + eSE reaction
 	if (st54spi->power_or_nreset_gpio) {
+		ktime_t now = ktime_get();
+		s64 ms = ktime_to_ms(ktime_sub(now, st54spi->last_nreset_falling));
+		// Tspi_reset is 3ms
+		if (ms < ST54SPI_TSPI_RESET) {
+			// Force additional delay to ensure 3ms at least
+			usleep_range((ST54SPI_TSPI_RESET - ms) * 1000, (ST54SPI_TSPI_RESET + 1 - ms) * 1000);
+		}
 		gpio_set_value(st54spi->power_or_nreset_gpio, 1);
+		st54spi->last_nreset_rising = ktime_get();
 		usleep_range(1000, 1500);
 	}
 
@@ -733,6 +770,8 @@ static long st54spi_ioctl(struct file *filp, unsigned int cmd,
 		if (!ioc)
 			break; /* n_ioc is also 0 */
 
+		st54spi_check_tready(st54spi);
+
 		/* translate to spi_message, execute */
 		retval = st54spi_message(st54spi, ioc, n_ioc);
 		kfree(ioc);
@@ -775,6 +814,8 @@ static long st54spi_compat_ioc_message(struct file *filp, unsigned int cmd,
 		dev_info(DEV, "st54spi compat_ioctl cmd %d\n", cmd);
 	if (spi == NULL)
 		return -ESHUTDOWN;
+
+	st54spi_check_tready(st54spi);
 
 	/* SPI_IOC_MESSAGE needs the buffer locked "normally" */
 	mutex_lock(&st54spi->buf_lock);
@@ -1259,6 +1300,8 @@ static int st54spi_probe(struct spi_device *spi)
 
 		/* active high */
 		gpio_set_value(st54spi->power_or_nreset_gpio, default_value);
+
+		st54spi->last_nreset_falling = ktime_get();
 	}
 
 	if (st54spi->power_or_nreset_gpio_mode == POWER_MODE_ST54H) {
