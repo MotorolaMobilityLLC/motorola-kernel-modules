@@ -1514,7 +1514,7 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 #define WLS_ROD_STOP_TIME (60*1000*1000*1000uL) /*60s*/
 
 #define WLS_EPP_ROD_DETECT_COUNT_MAX 3
-#define WLS_EPP_ROD_THRESHOLD_12V 10500 /*mV*/
+#define WLS_EPP_ROD_THRESHOLD_12V 9800 /*mV*/
 #define WLS_EPP_ROD_THRESHOLD_10V 9000 /*mV*/
 #define WLS_EPP_ROD_THRESHOLD_9V 8000 /*mV*/
 
