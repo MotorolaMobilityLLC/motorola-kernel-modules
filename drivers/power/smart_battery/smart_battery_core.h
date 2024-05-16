@@ -111,6 +111,7 @@ struct mmi_smart_battery {
 	struct mmi_battery_pack *battery;
 #ifdef CONFIG_MOTO_1200_CYCLE
 	int				bat_cycle_count;
+	bool			is_reset_battery_cycle;
 #endif
 };
 

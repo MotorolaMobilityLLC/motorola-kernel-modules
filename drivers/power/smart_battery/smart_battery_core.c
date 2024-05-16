@@ -630,6 +630,36 @@ static int  tcmd_get_bat_ocv(void *input, int* val)
 	return ret;
 }
 
+#ifdef CONFIG_MOTO_1200_CYCLE
+static int  tcmd_get_bat_cycle(void *input, int* val)
+{
+	int ret = 0;
+	struct mmi_smart_battery *chip = (struct mmi_smart_battery *)input;
+
+	if(chip->bat_cycle_count > 0)
+		*val = chip->bat_cycle_count;
+	else
+		*val = chip->combo_cycle_count;
+
+	return ret;
+}
+
+static int  tcmd_set_bat_cycle(void *input, int val)
+{
+	int ret = 0;
+	struct mmi_smart_battery *chip = (struct mmi_smart_battery *)input;
+
+	if (val == 0) {
+		chip->is_reset_battery_cycle = true;
+		chip->bat_cycle_count = 0;
+	} else {
+		chip->is_reset_battery_cycle = false;
+	}
+
+	return ret;
+}
+#endif
+
 static int battery_tcmd_register(struct mmi_smart_battery *chip)
 {
 	int ret = 0;
@@ -640,6 +670,10 @@ static int battery_tcmd_register(struct mmi_smart_battery *chip)
 	chip->batt_tcmd_client.get_bat_temp = tcmd_get_bat_temp;
 	chip->batt_tcmd_client.get_bat_voltage = tcmd_get_bat_voltage;
 	chip->batt_tcmd_client.get_bat_ocv= tcmd_get_bat_ocv;
+#ifdef CONFIG_MOTO_1200_CYCLE
+	chip->batt_tcmd_client.get_bat_cycle = tcmd_get_bat_cycle;
+	chip->batt_tcmd_client.set_bat_cycle= tcmd_set_bat_cycle;
+#endif
 
 	ret = moto_chg_tcmd_register(&chip->batt_tcmd_client);
 
@@ -987,6 +1021,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->battery = NULL;
 #ifdef CONFIG_MOTO_1200_CYCLE
 	chip->bat_cycle_count = 0;
+	chip->is_reset_battery_cycle = false;
 #endif
 	smart_battery_parse_dt(chip);
 	INIT_LIST_HEAD(&chip->battery_list);
