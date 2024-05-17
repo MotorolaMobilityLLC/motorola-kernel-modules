@@ -999,6 +999,19 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
 	}
 
 	if (!bq25980_state_changed(bq, &state)) {
+#ifdef CONFIG_WORK_AROUND_FOR_REG_RESET
+        ret = regmap_read(bq->regmap, BQ25980_CHRGR_CTRL_3, &val);
+        if (ret)
+                dev_err(bq->dev, "Failed to read BQ25980_CHRGR_CTRL_3 register\n");
+        else {
+                val = val & BQ25980_WATCHDOG_DIS;
+
+                pr_err("[wdt-debug]watch dog dis_en = %d", val);
+
+                if (!val)
+                        bq25980_reg_init(bq);
+        }
+#endif
 		mutex_unlock(&bq->irq_complete);
 		goto irq_out;
 	}
