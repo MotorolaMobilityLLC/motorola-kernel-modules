@@ -911,7 +911,10 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                 #ifdef CONFIG_MOTO_FPS_PRECISE_POWERON
 		fpsensor_power_enable(1);
                 #else
-                regulator_enable(gf_sensor->fp_regulator);
+                retval = regulator_enable(gf_sensor->fp_regulator);
+		if (retval != 0) {
+		    gf_debug(INFO_LOG, "%s: regulator_enable return %d\n", __func__, retval);
+		}
                 #endif
 		break;
 
@@ -1137,9 +1140,9 @@ static ssize_t gf_debug_store(struct device *dev,
 	struct gf_device *gf_dev =  dev_get_drvdata(dev);
 	int retval = 0;
 	u8 flag = 0;
-	struct mt_spi_t *ms = NULL;
+//	struct mt_spi_t *ms = NULL;
 
-	ms = spi_master_get_devdata(gf_dev->spi->master);
+//	ms = spi_master_get_devdata(gf_dev->spi->master);
 
 	if (!strncmp(buf, "-8", 2)) {
 		gf_debug(INFO_LOG, "%s: parameter is -8, enable spi clock test===============\n", __func__);
@@ -1325,6 +1328,9 @@ static int gf_platform_probe(struct platform_device *pldev)
 	fpsensor_power_enable(1);
         #else
 	retval = regulator_enable(gf_sensor->fp_regulator);
+	if(retval != 0){
+	   gf_debug(INFO_LOG, "%s, regulator_enable return: %d\n", __func__, retval);
+	}
         #endif
 
 	/*setup gf configurations.*/
