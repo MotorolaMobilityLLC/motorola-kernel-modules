@@ -1457,6 +1457,20 @@ static int nu2115_set_vbusovp_alarm(struct charger_device *chg_dev, u32 uV)
 	return 0;
 }
 
+static bool nu2115_is_vbusovp_en(struct nu2115_device *bq)
+{
+	unsigned int state;
+	int ret;
+
+	ret = regmap_read(bq->regmap, NU2115_BUSOVP, &state);
+	if (ret)
+		return ret;
+
+	ret = !!(state & NU2115_DIS_VBUSOVP);
+
+	return ret;
+}
+
 static int nu2115_config_mux(struct charger_device *chg_dev,
 			enum mmi_dvchg_mux_channel typec_mos, enum mmi_dvchg_mux_channel wls_mos)
 {
@@ -1499,6 +1513,12 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
                 dev_err(bq->dev, "%s:mmi_mux open typec mos fail ret=%d", __func__, ret);
                 return ret;
             }
+
+            if (nu2115_is_vbusovp_en(bq)) {
+                ret = regmap_update_bits(bq->regmap, NU2115_BUSOVP,NU2115_DIS_VBUSOVP,0);
+                dev_err(bq->dev, "%s need open vbus ovp function\n", __func__);
+            }
+
         } else if (typec_mos == MMI_DVCHG_MUX_OTG_OPEN) {
             ret = regmap_update_bits(bq->regmap, NU2115_VAC12PRET,
                 NU2115_EN_OTG, NU2115_EN_OTG);
@@ -1548,6 +1568,9 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 	    ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &val);
         	if (!ret)
                     dev_err(bq->dev, "%s:NU2115_VAC12PRET = 0x%02X\n", __func__,val);
+
+            ret = regmap_update_bits(bq->regmap, NU2115_BUSOVP,
+                    NU2115_DIS_VBUSOVP, NU2115_DIS_VBUSOVP);
 
             ret = regmap_update_bits(bq->regmap, NU2115_ACDRV12_CTRL,
                     NU2115_ENABLE_TYPEC_MOS, 0);
