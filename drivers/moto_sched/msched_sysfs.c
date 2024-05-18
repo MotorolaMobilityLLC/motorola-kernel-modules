@@ -16,9 +16,20 @@
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
 #include <linux/seq_file.h>
+#include <linux/version.h>
 
 #include "msched_sysfs.h"
 #include "msched_common.h"
+
+#if IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#include <linux/sched/cputime.h>
+#include <kernel/sched/sched.h>
+#include <drivers/misc/mediatek/sched/common.h>
+#else
+#include <drivers/misc/mediatek/sched/sched_mtk.h>
+#endif
+#endif
 
 #define MOTO_SCHED_PROC_DIR		"moto_sched"
 
