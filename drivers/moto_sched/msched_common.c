@@ -50,12 +50,10 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 			return true;
 		else if (p->prio == 104 || p->prio == 101)
 			return true;
-		else if (p->tgid == global_audioapp_tgid)
-			return true;
-	}
-
-	if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA) && !is_scene(UX_SCENE_AUDIO)
-		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)) {
+	// don't boost camera when audio active
+	} else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA)
+		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)
+		&& p->prio < 120) {
 		return true;
 	}
 
@@ -63,7 +61,20 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		return true;
 
 	if (is_heavy_scene()) {
+		// audio client app
+		if (is_enabled(UX_ENABLE_AUDIO) && is_scene(UX_SCENE_AUDIO)
+			&& p->tgid == global_audioapp_tgid) {
+			return true;
+		}
+
 		if (ux_type & UX_TYPE_NATIVESERVICE && p->prio <= 120)
+			return true;
+
+		// all high priority kernel threads
+		if (p->mm == NULL && p->prio == 100)
+			return true;
+
+		if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 			return true;
 
 		if (p->tgid == global_launcher_tgid
@@ -74,7 +85,7 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 			return true;
 	}
 
-	// Base feature: always boost top app's high prio threads.
+	// always boost top app's high prio threads.
 	if(p->prio <= moto_boost_prio && task_in_top_app_group(p))
 		return true;
 
@@ -89,32 +100,33 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	if (p->prio < 100)
 		return UX_PRIO_INVALID;
 
-	if (ux_type & UX_TYPE_PERF_DAEMON) // Base feature: perf daemon
+	// perf daemon
+	if (ux_type & UX_TYPE_PERF_DAEMON)
 		prio = UX_PRIO_HIGHEST;
-	else if (is_enabled(UX_ENABLE_AUDIO)
-	    && (ux_type & UX_TYPE_AUDIO || ((ux_type & UX_TYPE_AUDIOSERVICE) &&
-			((p->prio == 101 || p->prio == 104) || (is_heavy_scene() && is_scene(UX_SCENE_AUDIO) && p->prio <=120)))))
+	// high priority audio
+	else if (is_enabled(UX_ENABLE_AUDIO) && (ux_type & UX_TYPE_AUDIO
+				|| ((ux_type & UX_TYPE_AUDIOSERVICE) && ((p->prio == 101 || p->prio == 104)
+					|| (is_heavy_scene() && is_scene(UX_SCENE_AUDIO) && p->prio <=120)))))
 		prio = UX_PRIO_AUDIO;
-	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER)) // Base feature: input & animation & low latency binder
+	// input & animation & low latency binder
+	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER))
 		prio = UX_PRIO_ANIMATOR;
-	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI)) // Base feature: main & render thread of top app, launcher and top UI.
+	// main & render thread of top app, launcher and top UI.
+	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI))
 		prio = UX_PRIO_TOPAPP;
-	else if (ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER)) // Base feature: systemserver important lock
+	// system lock & service mgr
+	else if (ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER))
 		prio = UX_PRIO_SYSTEM;
-	else if (is_enabled(UX_ENABLE_CAMERA) && is_scene(UX_SCENE_CAMERA) && !is_scene(UX_SCENE_AUDIO)
-		&& (p->tgid == global_camera_tgid || ux_type & UX_TYPE_CAMERASERVICE)
-		&& p->prio < 120)
-		prio = UX_PRIO_CAMERA;
-	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
-		prio = UX_PRIO_KSWAPD;
+	// inherit lock & binder
 	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER|UX_TYPE_INHERIT_LOCK)))
 		prio = UX_PRIO_OTHER;
-	else if (task_in_ux_related_group(p))
+	// others high & others low but small tasks.
+	else if (task_in_ux_related_group(p) && (p->prio <= moto_boost_prio || moto_task_util(p) < moto_boost_task_util))
 		prio = UX_PRIO_OTHER;
 
 	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
-		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d mvp_prio=%d\n",
-		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, prio);
+		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d task_util=%lu mvp_prio=%d\n",
+		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, moto_task_util(p), prio);
 
 	return prio;
 }
