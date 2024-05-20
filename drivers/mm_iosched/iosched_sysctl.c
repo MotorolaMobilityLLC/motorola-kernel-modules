@@ -19,7 +19,8 @@
 #include "mio.h"
 
 
-#define UX_TYPE_MASK ( UX_TYPE_INHERIT_BINDER | UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI |UX_TYPE_INHERIT_LOCK | UX_TYPE_SYSTEM_LOCK | UX_TYPE_PERF_DAEMON | UX_TYPE_AUDIO |UX_TYPE_AUDIOSERVICE |UX_TYPE_LOW_LATENCY_BINDER)
+#define UX_TYPE_MASK ( UX_TYPE_INHERIT_BINDER | UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI |UX_TYPE_INHERIT_LOCK | UX_TYPE_SYSTEM_LOCK \
+	 | UX_TYPE_PERF_DAEMON | UX_TYPE_AUDIO |UX_TYPE_AUDIOSERVICE |UX_TYPE_LOW_LATENCY_BINDER | UX_TYPE_NATIVESERVICE)
 
 static struct ctl_table_header *ctl_table_hdr;
 int enable_boost = 0;
@@ -92,12 +93,15 @@ static inline bool is_android_app(struct task_struct *tsk)
 	return ( tsk->parent &&  tsk->parent->pid == system_pid);
 }
 
-static inline bool request_worker(struct task_struct *tsk, struct request *rq)
+static inline bool request_worker(struct task_struct *tsk, struct request *rq, struct moto_task_struct *oem_data)
 {
-	if (unlikely(tsk->flags & (PF_WQ_WORKER | PF_IO_WORKER)) /* && (rq_data_dir(rq) == READ ) */
-		/*&& (tsk->prio <= 100)
-		&& (ui_iowait > jiffies)*/)
+	if (( tsk->flags & (PF_WQ_WORKER | PF_IO_WORKER )) \
+		|| ((tsk->flags & PF_KTHREAD ) && ( tsk->prio < DEFAULT_PRIO )))
 	{
+		return true;
+	}else if  ((tsk->flags & PF_KTHREAD )&& (strstr(tsk->comm, "f2fs_ckpt-")))
+	{
+		oem_data->ux_type |= UX_TYPE_NATIVESERVICE;
 		return true;
 	}
 	else
@@ -130,6 +134,15 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request 
 	{
 		goto output;
 	}
+
+	if ((tsk->pid == srv_pid ) \
+			|| (oem_data->ux_type & UX_TYPE_MASK ))
+	{
+			isboost = true;
+			goto output;
+	}
+
+	// is_top = task_in_tf_app_group(tsk);
 	is_top = task_in_top_app_group(tsk);
 	/*
 	if ((rq_data_dir(rq) == WRITE) && ( tsk->pid != tsk->tgid))
@@ -141,19 +154,11 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request 
 	if (isboost)
 		goto output;
 
-	isboost = request_worker(tsk, rq);
-	if (isboost)
-		goto output;
-	if (!isboost) {
-		// step = 2;
-		if ((tsk->pid == srv_pid )
-			|| (oem_data->ux_type & UX_TYPE_MASK ))
-		{
-			isboost = true;
-		}
-	}
+	isboost = request_worker(tsk, rq,oem_data);
+
 output:
-	//mio_log(" boost %d ppid %d ux type 0x%x w:%d top:%d u:%d adj:%d\n", isboost, tsk->tgid, oem_data->ux_type, rq_data_dir(rq), is_top,tsk->cred->uid.val, tsk->signal->oom_score_adj);
+	// if (isboost)
+	// mio_log(" boost %d ppid %d ux type 0x%x w:%d top:%d u:%d comm:%s\n", isboost, tsk->tgid, oem_data->ux_type, rq_data_dir(rq), is_top,tsk->cred->uid.val, tsk->comm);
 	return isboost;
 }
 void request_finish(struct request *rq, u64 now,  struct mio_rq_info *rqi)

@@ -127,7 +127,7 @@ struct mdd_data {
 	enum mdd_prio last_prio;
 	int dispatch_fifo;
 	int latency;
-
+	int prio_request;
 };
 
 
@@ -150,6 +150,17 @@ static inline bool task_in_top_app_group(struct task_struct *p)
     return (rcu_access_pointer(wts->grp) != NULL);
 #else
     return get_task_cgroup_id(p) == CGROUP_TOP_APP;
+#endif
+}
+
+static inline bool task_in_tf_app_group(struct task_struct *p)
+{
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	return (rcu_access_pointer(wts->grp) != NULL);
+#else
+	int cgrp_id = get_task_cgroup_id(p);
+	return (cgrp_id == CGROUP_TOP_APP ) || ( cgrp_id == CGROUP_FOREGROUND) ;
 #endif
 }
 
