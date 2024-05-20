@@ -31,7 +31,7 @@
 #include <drivers/misc/mediatek/sched/common.h>
 #endif
 
-#define VERION 1009
+#define VERION 1010
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -134,6 +134,7 @@ extern int __read_mostly moto_sched_enabled;
 extern int __read_mostly moto_sched_debug;
 extern int __read_mostly moto_sched_scene;
 extern int __read_mostly moto_boost_prio;
+extern int __read_mostly moto_boost_task_util;
 extern pid_t __read_mostly global_systemserver_tgid;
 extern pid_t __read_mostly global_launcher_tgid;
 extern pid_t __read_mostly global_sysui_tgid;
@@ -168,6 +169,16 @@ static inline bool is_scene(int scene) {
 static inline bool is_heavy_scene(void) {
 	return (is_enabled(UX_ENABLE_INTERACTION) && is_scene(UX_SCENE_LAUNCH|UX_SCENE_TOUCH))
 			|| (is_enabled(UX_ENABLE_BOOST) && is_scene(UX_SCENE_BOOST));
+}
+
+static inline unsigned long moto_task_util(struct task_struct *p)
+{
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	return wts->demand_scaled;
+#else
+	return READ_ONCE(p->se.avg.util_avg);
+#endif
 }
 
 static inline struct moto_task_struct *get_moto_task_struct(struct task_struct *p)
