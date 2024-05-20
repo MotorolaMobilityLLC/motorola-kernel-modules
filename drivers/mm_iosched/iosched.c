@@ -635,7 +635,7 @@ static struct request *mdd_dispatch_prio_aged_requests(struct mdd_data *dd,
 		return NULL;
 
 	for (prio = DD_BE_PRIO; prio <= DD_PRIO_MAX; prio++) {
-		if ( dd->per_prio[DD_TB_PRIO].stats.dispatching >= 64 )
+		if ( dd->per_prio[DD_TB_PRIO].stats.dispatching >= dd->prio_request)
 		{
 			rq = __mdd_dispatch_request(dd, &dd->per_prio[prio],
 						now - (HZ>>1));
@@ -880,6 +880,7 @@ static int mdd_init_sched(struct request_queue *q, struct elevator_type *e)
 	dd->last_prio = 0;
 	dd->dispatch_fifo = 0;
 	dd->latency = 0;
+	dd->prio_request = 64;
 
 	//hctx = ((struct blk_mq_hw_ctx*)xa_load(&q->hctx_table, 0));
 	dd->rqs = kmalloc_array(q->nr_requests,
@@ -974,13 +975,15 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 	struct mio_rq_info *mrq;
 	LIST_HEAD(free);
 
-
-	ioprio = get_current_ioprio();
-	if ((ioprio != IOPRIO_CLASS_RT) && ( IOPRIO_CLASS_RT == task_nice_ioclass(current) ))
+	if (IOPRIO_CLASS_NONE == ioprio_class)
 	{
-		ioprio = IOPRIO_CLASS_RT;
+		if ((IOPRIO_CLASS_RT == IOPRIO_PRIO_CLASS(get_current_ioprio())) \
+			|| (IOPRIO_CLASS_RT == task_nice_ioclass(current)))
+		{
+			//mio_log(" rq_ioprio %d: class %d: %s\n", req_get_ioprio(rq),ioprio_class, current->comm);
+			ioprio_class = IOPRIO_CLASS_RT;
+		}
 	}
-	ioprio_class = IOPRIO_PRIO_CLASS(ioprio);
 
 	prio = ioprio_class_to_prio[ioprio_class];
 	mrq = get_mio_rq_info(dd, rq);
@@ -1021,7 +1024,7 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 		return;
 	}
 	trace_block_rq_insert(rq);
-
+	trace_rq_sched_log(rq, at_head, prio, data_dir, current->tgid);
 	if (at_head || blk_rq_is_passthrough(rq)) {
 		if (at_head)
 			list_add(&rq->queuelist, &per_prio->dispatch);
@@ -1044,7 +1047,6 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 		rq->fifo_time = jiffies + dd->fifo_expire[data_dir];
 		list_add_tail(&rq->queuelist, &per_prio->fifo_list[data_dir]);
 	}
-	trace_rq_sched_log(rq, at_head, prio, data_dir, current->tgid);
 	//trace_rq_sched_insert(rq);
 }
 
@@ -1187,6 +1189,7 @@ SHOW_INT(__mdd_fifo_batch_show, dd->fifo_batch);
 SHOW_INT(__mdd_dispatch_fifo_show, dd->dispatch_fifo);
 SHOW_INT(__mdd_latency_show, dd->latency);
 SHOW_INT(__mdd_boost_show, enable_boost);
+SHOW_INT(__mdd_prio_request_show, dd->prio_request);
 #undef SHOW_INT
 #undef SHOW_JIFFIES
 
@@ -1221,6 +1224,7 @@ STORE_INT(__mdd_fifo_batch_store, &dd->fifo_batch, 0, INT_MAX);
 STORE_INT(__mdd_dispatch_fifo_store, &dd->dispatch_fifo, 0, INT_MAX);
 STORE_INT(__mdd_latency_store, &dd->latency, 0, INT_MAX);
 STORE_INT(__mdd_boost_store, &enable_boost, 0, INT_MAX);
+STORE_INT(__mdd_prio_request_store, &dd->prio_request, 2, 128);
 #undef STORE_FUNCTION
 #undef STORE_INT
 #undef STORE_JIFFIES
@@ -1239,6 +1243,7 @@ static struct elv_fs_entry __mdd_attrs[] = {
 	DD_ATTR(dispatch_fifo),
 	DD_ATTR(latency),
 	DD_ATTR(boost),
+	DD_ATTR(prio_request),
 	DD_ATTR(prio_aging_expire),
 	__ATTR_NULL
 };
