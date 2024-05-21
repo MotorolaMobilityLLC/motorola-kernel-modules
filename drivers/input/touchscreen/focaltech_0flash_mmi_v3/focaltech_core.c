@@ -2720,6 +2720,7 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     return 0;
 }
 
+#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 static void fts_gesture_type_store()
 {
 	int ret = 0, gest_type = 0;
@@ -2749,6 +2750,7 @@ static void fts_gesture_type_store()
 
 	return;
 }
+#endif
 
 static int fts_ts_suspend(struct device *dev)
 {

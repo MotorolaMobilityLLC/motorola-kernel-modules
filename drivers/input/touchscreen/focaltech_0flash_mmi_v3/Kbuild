@@ -1,8 +1,12 @@
 # add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
+ifeq ($(DEVICE_MODULES_PATH),)
+DEVICE_MODULES_PATH = $(srctree)
+endif
+$(warning DEVICE_MODULES_PATH=$(DEVICE_MODULES_PATH))
 EXTRA_CFLAGS += \
-		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/gpu/drm/mediatek/mediatek_v2/ \
-		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/gpu/drm/
+		-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/ \
+		-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/sensors \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/focaltech_0flash_mmi_v3 \
