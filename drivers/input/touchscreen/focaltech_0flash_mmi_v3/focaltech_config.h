@@ -70,6 +70,8 @@
 #define _FT7250AB           0x7250B824
 #define _FT7130             0x71300825
 #define _FT8205             0x82050826
+#define _FT8057             0x80570828
+#define _FT8057S            0x8057C828
 #define _FT8725             0x87250829
 
 #define _FT5426             0x54260402
@@ -186,6 +188,9 @@
 #define FTS_CHIP_NAME   "ft8725"
 #define FTS_CHIP_TYPE_1   _FT8726
 #define FTS_CHIP_NAME_1   "ft8726"
+#elif defined(CONFIG_FTS_IC_NAME_FT8057S)
+#define FTS_CHIP_TYPE   _FT8057S
+#define FTS_CHIP_NAME   "ft8057s"
 #elif defined(CONFIG_FTS_IC_NAME_FT8725)
 #define FTS_CHIP_TYPE   _FT8725
 #define FTS_CHIP_NAME   "ft8725"
