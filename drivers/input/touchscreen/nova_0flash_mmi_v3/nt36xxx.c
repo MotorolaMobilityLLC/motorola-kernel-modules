@@ -1278,7 +1278,35 @@ static int nvt_get_dt_def_coords(struct device *dev, char *name)
 }
 
 #ifdef NVT_CONFIG_MULTI_SUPPLIER
-static nvt_get_panel_supplier() {
+#ifdef NVT_MTK_CHECK_PANEL
+static nvt_get_panel_supplier(struct device_node *np) {
+	int ret = 0;
+	int num_of_panel_supplier;
+
+	//multi nova ic
+	num_of_panel_supplier = of_property_count_strings(np, "novatek,panel-supplier");
+	//NVT_DBG("get novatek,panel-supplier count=%d", num_of_panel_supplier);
+	if (num_of_panel_supplier) {
+		int j;
+		for (j = 0; j < num_of_panel_supplier; j++) {
+			ret = of_property_read_string_index(np, "novatek,panel-supplier", j, &ts->panel_supplier);
+			if (ret < 0) {
+				NVT_LOG("cannot parse panel-supplier: %d\n", ret);
+				break;
+			} else if (ts->panel_supplier && strstr(active_panel_name, ts->panel_supplier)) {
+				NVT_LOG("matched panel_supplier: %s", ts->panel_supplier);
+				return 0;
+			}
+		}
+		NVT_LOG("multi ic: panel-supplier not matched!\n");
+	} else
+		NVT_LOG("multi ic warn: panel-supplier not set\n");
+
+	NVT_LOG("end ret -1\n");
+	return -1;
+}
+#else
+static nvt_get_panel_supplier(struct device_node *np) {
 	//parse panel supplier from cmdline
 	if (saved_command_line) {
 		char *sub;
@@ -1314,6 +1342,7 @@ static nvt_get_panel_supplier() {
 	NVT_LOG("end ret -1\n");
 	return -1;
 }
+#endif
 #endif
 
 #ifdef NVT_CHECK_DEVICE_BOOTMODE
@@ -1396,7 +1425,7 @@ static int32_t nvt_parse_dt(struct device *dev)
 	}
 
 #if defined(NVT_CONFIG_MULTI_SUPPLIER)
-	ret = nvt_get_panel_supplier();
+	ret = nvt_get_panel_supplier(np);
 #else
 	ret = of_property_read_string(np, "novatek,panel-supplier",
 		&ts->panel_supplier);
