@@ -254,7 +254,8 @@
 #define SX937X_COMPENSATION_CONTROL           0x0000000E
 #define SX937X_ENTER_CONTROL                  0x0000000D
 #define SX937X_EXIT_CONTROL                   0x0000000C
-
+#define MAX_CHANNEL_NUMBER 8
+#define CHECK_TIMES  3
 
 typedef enum{
 	SX937X_POWER_SUPPLY_TYPE_PMIC_LDO,	// pmic LDO
@@ -413,6 +414,12 @@ static struct _buttonInfo psmtcButtons[] =
 	
 };
 
+typedef struct sx937x_esd_data{
+	int check_round;
+	u32 ph_useful[MAX_CHANNEL_NUMBER][CHECK_TIMES];
+	int err_cnt;
+}sx937x_esd_data_t;
+
 typedef struct sx937x_platform_data
 {
 	const char *dbg_name;
@@ -432,6 +439,7 @@ typedef struct sx937x_platform_data
 	int ref_phase_c;
     //vdd
 	struct regulator *cap_vdd;
+	sx937x_esd_data_t  esd_data;
 	bool cap_vdd_en;
 	int eldo_gpio;
 	bool eldo_vdd_en;

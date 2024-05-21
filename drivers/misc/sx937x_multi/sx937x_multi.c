@@ -58,8 +58,10 @@
 #define SX937X_I2C_WATCHDOG_TIME 10000
 #define SX937X_I2C_WATCHDOG_TIME_ERR 2000
 
-#define MAX_CHANNEL_NUMBER 8
-#define CHECK_TIMES  3
+/* when we hold a channel ,the value will reach to max value 1073740800
+this is read from  phx useful readback register 0X81F0 to 0X820C*/
+#define USEFUL_MAX_VALUE           1073740800
+
 static struct class *capsense_class;
 
 static void sx937x_reinitialize(psx93XX_t this);
@@ -1766,9 +1768,10 @@ static void sx937x_register_err(psx93XX_t this)
 {
 	int ph = 0, idx = 0, num_same_val,i = 0;
 	u32 reg_val, phen =0;
-	static int check_round = 0;
-	static u32 ph_useful[MAX_CHANNEL_NUMBER][CHECK_TIMES] ={0};
+	//static int check_round = 0;
+	//static u32 ph_useful[MAX_CHANNEL_NUMBER][CHECK_TIMES] ={0};
 	//sx937x_i2c_read_16bit(this->bus, SX937X_GENERAL_SETUP, &phen);
+	sx937x_esd_data_t* esd_data = &this->hw->esd_data;
 	struct _buttonInfo *buttons = this->hw->buttons;
 	int buttonSize = this->hw->buttonSize;
 	bool freeze = false;
@@ -1784,20 +1787,20 @@ static void sx937x_register_err(psx93XX_t this)
 	for(ph=0; ph<MAX_CHANNEL_NUMBER; ph++) {
 		if(phen & 1<<ph) {
 			sx937x_i2c_read_16bit(this->bus, SX937X_USEFUL_PH0 + ph*4, &reg_val);
-			ph_useful[ph][check_round] = reg_val;
+			esd_data->ph_useful[ph][esd_data->check_round] = reg_val;
 		} else {
-			ph_useful[ph][check_round] = 0;
+			esd_data->ph_useful[ph][esd_data->check_round] = 0;
 		}
-		LOG_DBG("phen = %d useful[%d][%d] = %d\n",phen,ph,check_round,ph_useful[ph][check_round]);
+		LOG_DBG("phen = %d useful[%d][%d] = %d\n",phen,ph,esd_data->check_round,esd_data->ph_useful[ph][esd_data->check_round]);
 	}
 	//reset if any phase read the same value by CHECK_TIMES
 	for(ph=0; ph<MAX_CHANNEL_NUMBER; ph++) {
 		num_same_val = 0;
 		if(phen & 1<<ph) {
 			for(idx=1; idx<CHECK_TIMES; idx++) {
-				if(ph_useful[ph][idx] != 0 && ph_useful[ph][idx-1] == ph_useful[ph][idx]) {
+				if(esd_data->ph_useful[ph][idx] != 0 && esd_data->ph_useful[ph][idx] != USEFUL_MAX_VALUE && esd_data->ph_useful[ph][idx-1] == esd_data->ph_useful[ph][idx]) {
 					if(++num_same_val >= CHECK_TIMES-1) {
-						LOG_ERR("maybe esd trriger sx937x ph[%d] no change:%d %d %d\n",ph,ph_useful[ph][idx-2],ph_useful[ph][idx-1],ph_useful[ph][idx]);
+						LOG_ERR("maybe esd trriger sx937x ph[%d] no change:%d %d %d\n",ph,esd_data->ph_useful[ph][idx-2],esd_data->ph_useful[ph][idx-1],esd_data->ph_useful[ph][idx]);
 						freeze = true ;
 
 					}
@@ -1812,13 +1815,14 @@ static void sx937x_register_err(psx93XX_t this)
 		goto reinit_end;
 	}
 reinit_end:
-	check_round = (check_round + 1) % CHECK_TIMES;
+	esd_data->check_round = (esd_data->check_round + 1) % CHECK_TIMES;
 	freeze = false;
 }
 static void sx937x_i2c_watchdog_work(struct work_struct *work)
 {
-	static int err_cnt = 0;
+	//static int err_cnt = 0;
 	psx93XX_t this = container_of(work, sx93XX_t, i2c_watchdog_work.work);
+	sx937x_esd_data_t* esd_data = &this->hw->esd_data;
 	int ret;
 	u32 temp;
 	int delay = SX937X_I2C_WATCHDOG_TIME;
@@ -1828,11 +1832,11 @@ static void sx937x_i2c_watchdog_work(struct work_struct *work)
 		ret = sx937x_i2c_read_16bit(this->bus, SX937X_IRQ_MASK_A, &temp);
 		if (ret < 0) {
 			//err_1:i2c fail
-			err_cnt++;
-			LOG_ERR("sx937x_i2c_watchdog_work err_cnt: %d", err_cnt);
+			esd_data->err_cnt++;
+			LOG_ERR("sx937x_i2c_watchdog_work err_cnt: %d", esd_data->err_cnt);
 			delay = SX937X_I2C_WATCHDOG_TIME_ERR;
-			if (err_cnt >= 3) {
-				err_cnt = 0;
+			if (esd_data->err_cnt >= 3) {
+				esd_data->err_cnt = 0;
 				vdd_power_off_on(this, 0);
 				msleep(100);
 				vdd_power_off_on(this, 1);
@@ -1841,7 +1845,7 @@ static void sx937x_i2c_watchdog_work(struct work_struct *work)
 			}
 		} else {
 
-			err_cnt = 0;
+			esd_data->err_cnt = 0;
 			//err_2:default value of 0x4004 is 0x60 and usually will be configured to 0x70
 			if(temp == 0x60) {
 				LOG_ERR("sx937x_i2c_watchdog_work 0x4004 used default value: %d\n", temp);
