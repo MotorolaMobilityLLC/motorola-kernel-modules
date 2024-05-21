@@ -97,6 +97,8 @@
 #define FTS_FW_IDE_SIG                              "IDE_"
 #define FTS_FW_IDE_SIG_LEN                          4
 #define MAX_MODULE_VENDOR_NAME_LEN                  16
+#define FTS_MAX_RETRIES_READID_RESUME               5
+
 
 #define FTS_ROMBOOT_CMD_ECC_NEW_LEN                 7
 #define FTS_ECC_FINISH_TIMEOUT                      100
@@ -133,6 +135,13 @@ enum UPGRADE_SPEC {
     UPGRADE_SPEC_V_1_1 = 0x0101,
     UPGRADE_SPEC_V_1_2 = 0x0102,
 };
+#if FTS_FW_MODE_EN
+enum FW_TYPE {
+    FW_AUTO,
+    FW_GESTURE,
+    FW_NORMAL,
+};
+#endif
 
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
@@ -195,6 +204,11 @@ struct fts_upgrade {
     struct upgrade_module *module_info;
     struct upgrade_func *func;
     struct upgrade_setting_nf *setting_nf;
+#if FTS_FW_MODE_EN
+    struct work_struct fwupg_work;
+    struct work_struct fwload_work;
+    struct work_struct fwrecover_work;
+#endif
     int module_id;
     bool fw_from_request;
     u8 *fw;

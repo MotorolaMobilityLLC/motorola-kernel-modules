@@ -56,6 +56,10 @@ ifneq ($(filter m y, $(CONFIG_FOCAL_SPI_DRIVE)),)
         EXTRA_CFLAGS += -DCONFIG_FOCAL_SPI_DRIVE
 endif
 
+ifneq ($(filter m y,$(CONFIG_FOCAL_FW_DOWNLOAD_OLD)),)
+EXTRA_CFLAGS += -DFTS_FW_DOWNLOAD_OLD
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_MULTI_IC_EN)),)
 	EXTRA_CFLAGS += -DCONFIG_FTS_MULTI_IC_EN
 endif

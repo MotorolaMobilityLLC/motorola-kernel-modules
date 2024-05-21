@@ -84,6 +84,7 @@
 #define FTS_CMD_READ_ID                     0x90
 #define FTS_CMD_READ_ID_LEN                 4
 #define FTS_CMD_READ_ID_LEN_INCELL          1
+#define FTS_CMD_READ_BOOT_STATE             0xD0
 #define FTS_CMD_READ_INFO                   0x5E
 
 /*register address*/

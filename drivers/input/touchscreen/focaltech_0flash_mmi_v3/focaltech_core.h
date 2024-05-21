@@ -228,7 +228,9 @@ struct fts_ts_data {
     struct fts_ts_platform_data *pdata;
     struct ts_ic_info ic_info;
     struct workqueue_struct *ts_workqueue;
+#if !FTS_FW_MODE_EN
     struct work_struct fwupg_work;
+#endif
     struct delayed_work esdcheck_work;
     struct delayed_work prc_work;
     struct work_struct resume_work;
@@ -356,6 +358,14 @@ enum _FTS_GESTURE_BMODE {
     GESTURE_BM_TOUCH,
 };
 
+#if FTS_FW_MODE_EN
+enum _FTS_FW_MODE {
+    FW_MODE_NORMAL = 0xAA,
+    FW_MODE_FACTORY = 0x55,
+    FW_MODE_GESTURE = 0x66,
+};
+#endif
+
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
@@ -408,6 +418,7 @@ void fts_esdcheck_switch(struct fts_ts_data *ts_data, bool enable);
 void fts_esdcheck_proc_busy(struct fts_ts_data *ts_data, bool proc_debug);
 void fts_esdcheck_suspend(struct fts_ts_data *ts_data);
 void fts_esdcheck_resume(struct fts_ts_data *ts_data);
+bool fts_esdcheck_is_running(struct fts_ts_data *ts_data);
 #endif
 
 /* Host test */
@@ -420,7 +431,12 @@ void fts_prc_queue_work(struct fts_ts_data *ts_data);
 /* FW upgrade */
 int fts_fwupg_init(struct fts_ts_data *ts_data);
 int fts_fwupg_exit(struct fts_ts_data *ts_data);
+#if FTS_FW_MODE_EN
+int fts_enter_normal_fw(void);
+int fts_enter_gesture_fw(void);
+#else
 int fts_fw_resume(bool need_reset);
+#endif
 int fts_fw_recovery(void);
 int fts_upgrade_bin(char *fw_name, bool force);
 int fts_enter_test_environment(bool test_state);

@@ -417,6 +417,12 @@ static int fts_create_esd_sysfs(struct device *dev)
     return 0;
 }
 
+bool fts_esdcheck_is_running(struct fts_ts_data *ts_data)
+{
+    return fts_esdcheck_data.mode;
+}
+
+
 int fts_esdcheck_init(struct fts_ts_data *ts_data)
 {
     FTS_FUNC_ENTER();

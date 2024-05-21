@@ -2864,6 +2864,9 @@ static int fts_ts_resume(struct device *dev)
         fts_reset_proc(200);
     }
 
+#if FTS_FW_MODE_EN
+    fts_enter_normal_fw();
+#endif
     fts_wait_tp_to_valid();
     fts_ex_mode_recovery(ts_data);
 

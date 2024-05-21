@@ -288,6 +288,14 @@
  * auto upgrade
  */
 #define FTS_AUTO_UPGRADE_EN                     1
+#ifdef FTS_FW_DOWNLOAD_OLD
+#define FTS_FW_MODE_EN                        	0
+#define FTS_MULTI_FW_NUM                        0
+#else
+//enable FW mode by default
+#define FTS_FW_MODE_EN		                1
+#define FTS_MULTI_FW_NUM                        3
+#endif
 
 /*
  * auto upgrade for lcd cfg
