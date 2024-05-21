@@ -1516,7 +1516,7 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
 #define WLS_EPP_ROD_DETECT_COUNT_MAX 3
 #define WLS_EPP_ROD_THRESHOLD_12V 9800 /*mV*/
 #define WLS_EPP_ROD_THRESHOLD_10V 9000 /*mV*/
-#define WLS_EPP_ROD_THRESHOLD_9V 8000 /*mV*/
+#define WLS_EPP_ROD_THRESHOLD_9V 7800 /*mV*/
 
 static void cps_bpp_mode_icl_work(struct work_struct *work)
 {
