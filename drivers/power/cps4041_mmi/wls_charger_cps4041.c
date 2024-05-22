@@ -3922,7 +3922,7 @@ static int backpower_mode_enter(struct cps_wls_chrg_chip *chg)
 			ret = cps_wls_set_rx_enable_func_en(RX_FUNC_DISABLE_AS);
 			pr_info("%s disable_func_en %d reg=%d\n", __func__,
 					ret, cps_wls_rx_get(CPS_RX_REG_FUNC_EN));
-			backpower_mode_timeout_work_start(chg, 3000);
+			backpower_mode_timeout_work_start(chg, 6000);
 		}
 	}
 
