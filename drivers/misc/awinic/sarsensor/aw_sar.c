@@ -244,6 +244,9 @@ int32_t aw_sar_load_bin_comm(struct aw_sar *p_sar)
 		return -AW_ERR;
 	} else {
 		AWLOGD(p_sar->dev, "reg_bin %s load ok!",p_sar->load_bin.bin_name);
+		/*wxm add start by 2023/12/5*/
+		p_sar->load_bin_flag = true;
+		/*wxm add end by 2023/12/5*/
 	}
 
 	return AW_OK;
@@ -269,7 +272,15 @@ int32_t aw_sar_parse_dts_comm(struct device *dev, struct device_node *np, struct
 	} else {
 		AWLOGI(dev, "irq gpio provided ok.");
 	}
-
+	/*wxm add start by 2023/12/5*/
+	val = of_property_read_u32(np, "monitor_esd_flag", &p_dts_info->monitor_esd_flag);
+	if (val != 0) {
+		AWLOGE(dev, "monitor_esd_flag failed!");
+		//return -AW_ERR;
+	} else {
+		AWLOGI(dev, "monitor_esd_flag = %d", p_dts_info->monitor_esd_flag);
+	}
+	/*wxm add end by 2023/12/5*/
 	val = of_property_read_u32(np, "channel_use_flag", &p_dts_info->channel_use_flag);
 	if (val != 0) {
 		AWLOGE(dev, "channel_use_flag failed!");
@@ -623,7 +634,9 @@ static int32_t aw_sar_para_loaded(struct aw_sar *p_sar)
 	}
 
 	aw_sar_para_loaded_func(p_sar->i2c, p_sar->p_sar_para->p_reg_arr);
-
+	/*wxm add start by 2023/12/5*/
+	p_sar->load_bin_flag = true;
+	/*wxm add end by 2023/12/5*/
 	return AW_OK;
 }
 
@@ -1869,6 +1882,50 @@ if (p_sar->dts_info.use_plug_cail_flag == true) {
 
 	return -AW_ERR;
 }
+/*wxm add start by 2023/12/5*/
+static void aw96xxx_monitor_work_func(struct work_struct *aw96xxx_work)
+{
+	struct aw_sar *p_sar = container_of(aw96xxx_work, struct aw_sar, monitor_work.work);
+	uint32_t data = 0;
+	int32_t ret = 0;
+	//AWLOGE(p_sar->dev,"enter");
+	mutex_lock(&aw_sar_lock);
+	ret = aw_sar_i2c_read(p_sar->i2c, 0x0000, &data);
+	if (ret != AW_OK) {
+		AWLOGE(p_sar->dev, "read 0x0000 err: %d", ret);
+		mutex_unlock(&aw_sar_lock);
+		return;
+	}
+	if(data == 0 && p_sar->load_bin_flag == true)
+	{
+		AWLOGE(p_sar->dev,"aw96xxx may reset");
+		p_sar->load_bin_flag = false;
+		aw_sar_disable_irq(p_sar);
+		ret = aw_sar_soft_reset(p_sar);
+		if (ret != AW_OK) {
+			AWLOGE(p_sar->dev, "soft_reset error!");
+			mutex_unlock(&aw_sar_lock);
+			return;
+		}
+		ret = aw_sar_check_init_over_irq(p_sar);
+		if (ret != AW_OK) {
+			AWLOGE(p_sar->dev, "check_init_over_irqt error!");
+			mutex_unlock(&aw_sar_lock);
+			return;
+		}
+		ret = aw_sar_load_def_reg_bin(p_sar);
+		if (ret != AW_OK) {
+			p_sar->ret_val = AW_REG_LOAD_ERR;
+			AWLOGE(p_sar->dev, "reg_bin load err!");
+			aw_sar_para_loaded(p_sar);
+		}
+		aw_sar_mode_set(p_sar, p_sar->p_sar_para->p_chip_mode->active);
+		aw_sar_enable_irq(p_sar);
+	}
+	queue_delayed_work(p_sar->monitor_wq, &p_sar->monitor_work, msecs_to_jiffies(5000));
+	mutex_unlock(&aw_sar_lock);
+}
+/*wxm add start by 2023/12/5*/
 
 /**
  * @brief sar sensor initialization logic.
@@ -2018,7 +2075,18 @@ static int32_t aw_sar_i2c_probe(struct i2c_client *i2c, const struct i2c_device_
 		AWLOGE(&i2c->dev, "chip_init error!");
 		goto err_chip_init;
 	}
-
+	/*wxm add start by 2023/12/5*/
+	if(p_sar->dts_info.monitor_esd_flag)
+	{
+		p_sar->monitor_wq = create_singlethread_workqueue("aw96xxx_sar_workqueue");
+		if (!p_sar->monitor_wq) {
+			AWLOGE(&i2c->dev, "aw96xxx_sar_workqueue error\n");
+			goto err_chip_init;
+		}
+		INIT_DELAYED_WORK(&p_sar->monitor_work, aw96xxx_monitor_work_func);
+		queue_delayed_work(p_sar->monitor_wq, &p_sar->monitor_work, msecs_to_jiffies(5000));
+	}
+	/*wxm add end by 2023/12/5*/
 	AWLOGD(&i2c->dev, "probe success!");
 
 	return 0;
@@ -2087,7 +2155,11 @@ static int aw_sar_suspend(struct device *dev)
 		}
 		aw_sar_mode_set(p_sar, p_sar->p_sar_para->p_platform_config->p_pm_chip_mode->suspend_set_mode);
 	}
-
+	/*wxm add start by 2023/12/5*/
+	if(p_sar->dts_info.monitor_esd_flag){
+		cancel_delayed_work_sync(&p_sar->monitor_work);
+	}
+	/*wxm add end by 2023/12/5*/
 	return 0;
 }
 
@@ -2109,6 +2181,11 @@ static int aw_sar_resume(struct device *dev)
 		}
 		aw_sar_mode_set(p_sar, p_sar->p_sar_para->p_platform_config->p_pm_chip_mode->resume_set_mode);
 	}
+	/*wxm add start by 2023/12/5*/
+	if(p_sar->dts_info.monitor_esd_flag){
+		queue_delayed_work(p_sar->monitor_wq, &p_sar->monitor_work, msecs_to_jiffies(5000));
+	}
+	/*wxm add end by 2023/12/5*/
 	return 0;
 }
 

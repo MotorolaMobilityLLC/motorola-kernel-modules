@@ -122,6 +122,9 @@ struct aw_sar_dts_info {
 	bool update_fw_flag;
 	bool use_plug_cail_flag;
 	const char *plat_state[1];
+	/*wxm modify start by 2023/12/5*/
+	uint32_t monitor_esd_flag;
+	/*wxm modify end by 2023/12/5*/
 };
 
 struct aw_sar_irq_init_comm_t {
@@ -318,7 +321,11 @@ struct aw_sar {
 	struct aw_sar_pinctrl pinctrl;
 	struct work_struct ps_notify_work;
 	struct notifier_block ps_notif;
-
+	/*wxm add start by 2023/12/5*/
+	struct delayed_work monitor_work;
+	struct workqueue_struct *monitor_wq;
+	bool load_bin_flag;
+	/*wxm add end by 2023/12/5*/
 	bool ps_is_present;
 	uint8_t chip_type;
 	uint8_t chip_name[20];
