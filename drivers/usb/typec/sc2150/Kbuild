@@ -1,0 +1,24 @@
+# add -Wall to try to catch everything we can.
+ifeq ($(ANDROID_BUILD_TOP),)
+  ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+                -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/usb/typec/sc2150 \
+                -I$(ANDROID_BUILD_TOP)/kernel-5.15/include \
+                -I$(ANDROID_BUILD_TOP)/kernel-5.15/drivers/misc/mediatek/typec/tcpc
+
+EXTRA_CFLAGS += \
+                -DAW_HAVE_SNK \
+                -DAW_HAVE_SRC \
+                -DAW_HAVE_DRP \
+                -DAW_HAVE_ACCMODE \
+                -DAW_HAVE_EXT_MSG \
+                -DAW_HAVE_VDM \
+                -DAW_HAVE_DP
+
+sc2150_objs  += type_sc2150.o
+
+obj-$(CONFIG_TCPC_SC2150) :=sc2150.o
+sc2150-y := $(sc2150_objs)
