@@ -1841,7 +1841,7 @@ static void cps_rx_vout_change_work(struct work_struct *work)
 
 static void cps_wls_auto_switch_work(struct work_struct *work)
 {
-	int wls_icl = 0;
+	int wls_ibus = 0;
 	int vbus = 0;
 	int input_power = 0;
 	int bat_temp = 0;
@@ -1854,18 +1854,18 @@ static void cps_wls_auto_switch_work(struct work_struct *work)
 
 	bat_temp = cps_get_bat_info(POWER_SUPPLY_PROP_TEMP);
 
-	charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
-	wls_icl = wls_icl / 1000;// uA->mA
+	charger_dev_get_ibus(chip->chg1_dev, &wls_ibus);
+	wls_ibus = wls_ibus / 1000;// uA->mA
 	vbus = cps_get_vbus();
-	input_power = vbus * wls_icl / 1000;
+	input_power = vbus * wls_ibus / 1000;
 
-	if (input_power <= WLS_RX_CAP_5W * 1000) {
+	if (input_power <= WLS_RX_CAP_5W * 800) { // 5W*1000*80% = 4000mW
 		chip->wls_auto_switch_check_cnt ++;
 	} else {
 		chip->wls_auto_switch_check_cnt = 0;
 	}
-	pr_info("%s vbus=%dmV icl=%dmA power=%dmW temp=%d cnt=%d\n", __func__,
-		vbus, wls_icl, input_power, bat_temp, chip->wls_auto_switch_check_cnt);
+	pr_info("%s vbus=%dmV ibus=%dmA power=%dmW temp=%d cnt=%d\n", __func__,
+		vbus, wls_ibus, input_power, bat_temp, chip->wls_auto_switch_check_cnt);
 
 	if (chip->wls_auto_switch_check_cnt > 3) {
 		cps_wls_switch_epp_to_bpp();
