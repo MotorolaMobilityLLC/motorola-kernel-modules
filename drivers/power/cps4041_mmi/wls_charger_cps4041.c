@@ -2325,6 +2325,11 @@ static int wireless_fw_update(bool force)
 	bool boost_enable = false;
 	int sys_mode = 0x00;
 
+	if ((cps_get_vbus() > VBUS_VALID_MV/2) && chip->secure_hardware) {
+		cps_wls_log(CPS_LOG_ERR,"%s Skip FW update when secure phone has charger plug-in\n", __func__);
+		return CPS_WLS_FAIL;
+	}
+
 	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
 			"Wireless fw update failed. Battery SOC should be at least 10%%\n");
@@ -3223,8 +3228,24 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 	struct device_node *node = chip->dev->of_node;
 	struct device_node *boot_node = NULL;
 	struct tags_bootmode *tag = NULL;
+	struct device_node *np = of_find_node_by_path("/chosen");
+	const char *mmi_bootconfig = NULL;
 
 	pr_info("%s\n", __func__);
+	if (!IS_ERR_OR_NULL(np)) {
+		if (!of_property_read_string(np, "mmi,bootconfig", &mmi_bootconfig)) {
+			pr_debug("%s mmi_bootconfig=%s\n", __func__, mmi_bootconfig);
+			if (strstr(mmi_bootconfig, "secure_hardware=1"))
+				chip->secure_hardware = true;
+			pr_info("%s secure_hardware=%d\n", __func__, chip->secure_hardware);
+		} else {
+			pr_err("%s mmi,bootconfig read failed\n", __func__);
+		}
+		of_node_put(np);
+	} else {
+		pr_err("%s chosen is error or null\n", __func__);
+	}
+
 	boot_node = of_parse_phandle(node, "bootmode", 0);
 	if (!boot_node)
 		cps_wls_log(CPS_LOG_ERR, "%s: failed to get boot mode phandle\n", __func__);

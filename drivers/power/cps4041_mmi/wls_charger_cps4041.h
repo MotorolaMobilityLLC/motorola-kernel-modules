@@ -363,6 +363,7 @@ struct cps_wls_chrg_chip {
 	struct delayed_work	backpower_mode_timeout_work;
 	bool rx_vout_change_done;
 	uint32_t bootmode;
+	bool secure_hardware;
 	struct thermal_cooling_device *tcd;
 	bool ntc_thermal;
 	bool tx_ept_flag;
