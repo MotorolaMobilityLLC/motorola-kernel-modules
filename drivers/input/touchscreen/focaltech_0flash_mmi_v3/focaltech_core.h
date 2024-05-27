@@ -145,6 +145,11 @@
 #define FTS_TOUCH_HIRES_EN                  0
 #endif
 
+#ifdef CONFIG_FTS_CS_SETUP
+#define FTS_CS_SETUP 1
+#else
+#define FTS_CS_SETUP 0
+#endif
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
 *****************************************************************************/

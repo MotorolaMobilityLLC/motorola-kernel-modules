@@ -2953,6 +2953,11 @@ static int fts_ts_probe(struct spi_device *spi)
     spi->mode = SPI_MODE_0;
     spi->bits_per_word = 8;
     spi->chip_select = 0;
+#if FTS_CS_SETUP
+    spi->cs_setup.value = 210;
+    spi->cs_setup.unit = 1;
+    FTS_INFO("set cs_setup.value=%d\n", spi->cs_setup.value);
+#endif
     ret = spi_setup(spi);
     if (ret) {
         FTS_ERROR("spi setup fail");
