@@ -1,0 +1,5 @@
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+
+focal_fps_tee-y += ff_spi.o ff_core.o
+
+obj-m += focal_fps_tee.o
