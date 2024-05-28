@@ -78,6 +78,7 @@
 #define SGM4154x_CHRG_EN	BIT(4)
 #define SGM4154x_HIZ_EN		BIT(7)
 #define SGM4154x_TERM_EN	BIT(7)
+#define SGM4154x_PFM_EN		BIT(7)
 #define SGM4154x_VAC_OVP_MASK	GENMASK(7, 6)
 #define SGM4154x_DPDM_ONGOING	BIT(7)
 #define SGM4154x_VBUS_GOOD	BIT(7)
@@ -85,6 +86,7 @@
 #define SGM4154x_BOOSTV		GENMASK(5, 4)
 #define SGM4154x_BOOST_LIM	BIT(7)
 #define SGM4154x_OTG_EN		BIT(5)
+#define SGM4154x_FORCE_DPDM	BIT(7)
 
 /* Part ID  */
 #define SGM4154x_PN_MASK		GENMASK(6, 3)
@@ -104,6 +106,7 @@
 #define SGM4154x_SAFETY_TIMER_EN	BIT(3)
 #define SGM4154x_SAFETY_TIMER_5H	0
 #define SGM4154x_SAFETY_TIMER_10H	BIT(2)
+#define SGM4154x_SAFETY_TIMER_RM2X	BIT(6)
 
 /* recharge voltage  */
 #define SGM4154x_VRECHARGE		BIT(0)
@@ -167,7 +170,7 @@
 #define SGM4154x_VREG_V_MASK		GENMASK(7, 3)
 #define SGM4154x_VREG_V_MAX_uV		4624000
 #define SGM4154x_VREG_V_MIN_uV		3856000
-#define SGM4154x_VREG_V_DEF_uV		4208000
+#define SGM4154x_VREG_V_DEF_uV		4500000
 #define SGM4154x_VREG_V_STEP_uV		32000
 
 /* iindpm current  */
@@ -180,6 +183,7 @@
 #endif
 #define SGM4154x_IINDPM_STEP_uA		100000
 #define SGM4154x_IINDPM_DEF_uA		2400000
+#define SGM4154x_DPM_MASK               GENMASK(1, 0)
 
 /* vindpm voltage  */
 #define SGM4154x_VINDPM_V_MASK		GENMASK(3, 0)
@@ -188,6 +192,7 @@
 #define SGM4154x_VINDPM_STEP_uV		100000
 #define SGM4154x_VINDPM_DEF_uV		3900000
 #define SGM4154x_VINDPM_OS_MASK		GENMASK(1, 0)
+#define SGM4154x_VINDPM_TRACK		GENMASK(1, 0)
 
 /* DP DM SEL  */
 #define SGM4154x_DP_VSEL_MASK		GENMASK(4, 3)
@@ -198,24 +203,8 @@
 #define SGM4154x_PUMPX_UP		BIT(6)
 #define SGM4154x_PUMPX_DN		BIT(5)
 
-/* customer define jeita paramter */
-#define JEITA_TEMP_ABOVE_T4_CC_CURRENT	0
-#define JEITA_TEMP_T3_TO_T4_CC_CURRENT	1000000
-#define JEITA_TEMP_T2_TO_T3_CC_CURRENT	2400000
-#define JEITA_TEMP_T1_TO_T2_CC_CURRENT	2000000
-#define JEITA_TEMP_T0_TO_T1_CC_CURRENT	0
-#define JEITA_TEMP_BELOW_T0_CC_CURRENT	0
-
-#define TEMP_T4_THRES			50
-#define TEMP_T4_THRES_MINUS_X_DEGREE	47
-#define TEMP_T3_THRES			45
-#define TEMP_T3_THRES_MINUS_X_DEGREE	39
-#define TEMP_T2_THRES_PLUS_X_DEGREE	16
-#define TEMP_T1_THRES			0
-#define TEMP_T1_THRES_PLUS_X_DEGREE	6
-#define TEMP_T0_THRES			0
-#define TEMP_T0_THRES_PLUS_X_DEGREE	0
-#define TEMP_NEG_10_THRES		0
+/* REGISTER RESET*/
+#define SGM4151x_REG_RST		BIT(7)
 
 struct sgm4154x_init_data {
 	u32 ichg;	/* charge current		*/
@@ -243,31 +232,6 @@ struct sgm4154x_state {
 	u8 health;
 	u8 chrg_fault;
 	u8 ntc_fault;
-};
-
-struct sgm4154x_jeita {
-	int jeita_temp_above_t4_cv;
-	int jeita_temp_t3_to_t4_cv;
-	int jeita_temp_t2_to_t3_cv;
-	int jeita_temp_t1_to_t2_cv;
-	int jeita_temp_t0_to_t1_cv;
-	int jeita_temp_below_t0_cv;
-	int jeita_temp_above_t4_cc_current;
-	int jeita_temp_t3_to_t4_cc_current;
-	int jeita_temp_t2_to_t3_cc_current;
-	int jeita_temp_t1_to_t2_cc_current;
-	int jeita_temp_below_t0_cc_current;
-	int temp_t4_thres;
-	int temp_t4_thres_minus_x_degree;
-	int temp_t3_thres;
-	int temp_t3_thres_minus_x_degree;
-	int temp_t2_thres;
-	int temp_t2_thres_plus_x_degree;
-	int temp_t1_thres;
-	int temp_t1_thres_plus_x_degree;
-	int temp_t0_thres;
-	int temp_t0_thres_plus_x_degree;
-	int temp_neg_10_thres;
 };
 
 struct sgm4154x_device {
@@ -299,15 +263,20 @@ struct sgm4154x_device {
 
 	struct delayed_work charge_detect_delayed_work;
 	struct delayed_work charge_monitor_work;
+	struct delayed_work retry_charger_detect_work;
 	struct notifier_block pm_nb;
 	bool sgm4154x_suspend_flag;
 
 	struct wakeup_source *charger_wakelock;
 	bool enable_sw_jeita;
-	struct sgm4154x_jeita data;
 
 	int chg_type;
 	int psy_usb_type;
+	struct power_supply *battery;
+	int batt_vol;
+	int batt_curr;
+	struct iio_channel *vbus;
+	int force_detect_count;
 };
 
 #endif /* _SGM4154x_CHARGER_H__ */
