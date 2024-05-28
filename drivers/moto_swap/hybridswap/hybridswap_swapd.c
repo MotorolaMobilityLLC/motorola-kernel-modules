@@ -15,9 +15,6 @@
 #include <linux/device.h>
 #include <linux/cpuhotplug.h>
 #include <linux/cpumask.h>
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-#include <linux/msm_drm_notify.h>
-#endif
 #include <linux/version.h>
 
 #ifdef CONFIG_ZRAM_5_4
@@ -41,7 +38,7 @@
 #endif
 #include "hybridswap_internal.h"
 
-#define MOTO_SWAP_VERSION 2
+#define MOTO_SWAP_VERSION 3
 
 struct swapd_param {
 	unsigned int min_grade;
@@ -111,15 +108,12 @@ static struct zram *swapd_zram = NULL;
 static u64 max_reclaimin_size = MAX_RECLAIMIN_SZ;
 atomic_long_t page_fault_pause = ATOMIC_LONG_INIT(0);
 atomic_long_t page_fault_pause_cnt = ATOMIC_LONG_INIT(0);
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-static struct notifier_block fb_notif;
-static atomic_t display_off = ATOMIC_LONG_INIT(0);
-#endif
 static unsigned long swapd_shrink_window = SWAPD_SHRINK_WINDOW;
 static unsigned long swapd_shrink_limit_per_window = SWAPD_SHRINK_SIZE_PER_WINDOW;
 static unsigned long swapd_last_window_start;
 static unsigned long swapd_last_window_shrink;
 static atomic_t swapd_pause = ATOMIC_INIT(0);
+static atomic64_t swapd_shrink_enabled = ATOMIC_LONG_INIT(0);
 static atomic_t swapd_enabled = ATOMIC_INIT(0);
 static unsigned long swapd_nap_jiffies = 1;
 
@@ -133,9 +127,6 @@ extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 		unsigned long nr_pages,
 		gfp_t gfp_mask,
 		bool may_swap);
-#endif
-#ifdef CONFIG_OPLUS_JANK
-extern u32 fetch_cpu_load(u32 win_cnt, struct cpumask *mask);
 #endif
 
 inline u64 fetch_zram_wm_scale_value(void)
@@ -887,13 +878,14 @@ static bool fetch_infos_pagefault_status(void)
 
 	total_pagefault_percent = scale;
 
-	if (scale > fetch_infos_pagefault_level_value())
-		return true;
-
 	hybp(HYB_INFO, "current %llu t %llu last %llu t %lu scale %llu pagefault_scale %llu\n",
 			cur_anon_pagefault, cur_time,
 			infos_last_anon_pagefault, last_refresh_t,
 			scale, (unsigned long long)infos_pagefault_level.counter);
+
+	if (scale > fetch_infos_pagefault_level_value())
+		return true;
+
 false_out:
 	return false;
 }
@@ -954,6 +946,23 @@ static int swapd_shrink_parameter_show(struct seq_file *m, void *v)
 			jiffies_to_msecs(jiffies - swapd_last_window_start));
 	seq_printf(m, "%-32s %lu MB\n", "swapd_last_window_shrink",
 			swapd_last_window_shrink);
+
+	return 0;
+}
+
+static s64 swapd_shrink_enabled_read(struct cgroup_subsys_state *css,
+		struct cftype *cft)
+{
+	return atomic64_read(&swapd_shrink_enabled);
+}
+
+static int swapd_shrink_enabled_write(struct cgroup_subsys_state *css,
+		struct cftype *cft, s64 val)
+{
+	if (val < 0)
+		return -EINVAL;
+
+	atomic64_set(&swapd_shrink_enabled, val);
 
 	return 0;
 }
@@ -1172,6 +1181,12 @@ struct cftype mem_cgroup_swapd_legacy_files[] = {
 		.seq_show = swapd_shrink_parameter_show,
 	},
 	{
+		.name = "swapd_shrink_enabled",
+		.flags = CFTYPE_ONLY_ON_ROOT,
+		.write_s64 = swapd_shrink_enabled_write,
+		.read_s64 = swapd_shrink_enabled_read,
+	},
+	{
 		.name = "swapd_nap_jiffies",
 		.flags = CFTYPE_ONLY_ON_ROOT,
 		.write = swapd_nap_jiffies_write,
@@ -1320,11 +1335,11 @@ static bool zram_need_swapout(void)
 	ufs_wm_ok = hybridswap_stored_wm_ok();
 #endif
 
-	if (zram_wm_ok && avail_buffer_wm_ok && ufs_wm_ok)
-		return true;
-
 	hybp(HYB_INFO, "zram_wm_ok %d avail_buffer_wm_ok %d ufs_wm_ok %d\n",
 			zram_wm_ok, avail_buffer_wm_ok, ufs_wm_ok);
+
+	if (zram_wm_ok && avail_buffer_wm_ok && ufs_wm_ok)
+		return true;
 
 	return false;
 }
@@ -1345,28 +1360,6 @@ bool zram_watermark_exceed(void)
 	return false;
 }
 
-#ifdef CONFIG_OPLUS_JANK
-static bool is_cpu_busy(void)
-{
-	unsigned int cpuload = 0;
-	int i;
-	struct cpumask mask;
-
-	cpumask_clear(&mask);
-
-	for (i = 0; i < 6; i++)
-		cpumask_set_cpu(i, &mask);
-
-	cpuload = fetch_cpu_load(1, &mask);
-	if (cpuload > fetch_cpuload_level_value()) {
-		hybp(HYB_INFO, "cpuload %d\n", cpuload);
-		return true;
-	}
-
-	return false;
-}
-#endif
-
 static void wakeup_swapd(pg_data_t *pgdat)
 {
 	unsigned long curr_interval;
@@ -1379,11 +1372,6 @@ static void wakeup_swapd(pg_data_t *pgdat)
 		count_swapd_event(SWAPD_MANUAL_PAUSE);
 		return;
 	}
-
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-	if (atomic_read(&display_off))
-		return;
-#endif
 
 	if (!waitqueue_active(&hyb_task->swapd_wait))
 		return;
@@ -1554,7 +1542,7 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 
 			if (swapd_nap_jiffies && time_after_eq(jiffies, start_js + swapd_nap_jiffies)) {
 				set_current_state(TASK_INTERRUPTIBLE);
-				schedule_timeout((jiffies - start_js) * 2);
+				schedule_timeout(msecs_to_jiffies(100));
 				start_js = jiffies;
 			}
 		}
@@ -1579,23 +1567,11 @@ static void swapd_shrink_node(pg_data_t *pgdat)
 	unsigned long nr_reclaimed = 0;
 	unsigned long nr_to_reclaim;
 
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-	if (atomic_read(&display_off))
-		return;
-#endif
-
 	if (zram_is_low())
 		return;
 
 	if (high_buffer_is_suitable())
 		return;
-
-#ifdef CONFIG_OPLUS_JANK
-	if (is_cpu_busy()) {
-		count_swapd_event(SWAPD_CPU_BUSY_BREAK_TIMES);
-		return;
-	}
-#endif
 
 	if ((jiffies - swapd_last_window_start) < swapd_shrink_window) {
 		if (swapd_last_window_shrink >= swapd_shrink_limit_per_window) {
@@ -1644,7 +1620,6 @@ static int swapd(void *p)
 	struct hybridswapd_task* hyb_task = PGDAT_ITEM_DATA(pgdat);
 	static unsigned long last_reclaimin_jiffies = 0;
 	long page_fault_pause_value;
-	int display_un_blank = 1;
 
 	swapid = tsk->pid;
 
@@ -1663,8 +1638,8 @@ static int swapd(void *p)
 		atomic_set(&hyb_task->swapd_wait_flag, 0);
 		if (unlikely(kthread_should_stop()))
 			break;
+
 		count_swapd_event(SWAPD_WAKEUP);
-		hybp(HYB_INFO, "SWAPD_WAKEUP");
 
 		if (fetch_infos_pagefault_status() && hybridswap_scale_ok()) {
 			pagefault = true;
@@ -1672,16 +1647,15 @@ static int swapd(void *p)
 			goto do_eswap;
 		}
 
-		swapd_shrink_node(pgdat);
+		if (atomic64_read(&swapd_shrink_enabled))
+			swapd_shrink_node(pgdat);
+
 		last_swapd_time = jiffies;
 do_eswap:
 		page_fault_pause_value = atomic_long_read(&page_fault_pause);
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-		display_un_blank = !atomic_read(&display_off);
-#endif
-		if (!hybridswap_reclaim_work_running() && display_un_blank &&
-				(zram_need_swapout() || pagefault) && !page_fault_pause_value &&
-				jiffies_to_msecs(jiffies - last_reclaimin_jiffies) >= 50) {
+		if (!hybridswap_reclaim_work_running() && (zram_need_swapout() || pagefault)
+				&& !page_fault_pause_value
+				&& jiffies_to_msecs(jiffies - last_reclaimin_jiffies) >= 50) {
 			wmhigh = fetch_high_mem_watermark_value();
 			available = system_cur_usable_mem();
 
@@ -1700,7 +1674,6 @@ do_eswap:
 				count_swapd_event(SWAPD_SKIP_SWAPOUT);
 			}
 		}
-		hybp(HYB_INFO, "SWAPD_SLEEP");
 	}
 
 	return 0;
@@ -1907,26 +1880,6 @@ ssize_t hybridswap_swapd_pause_show(struct device *dev,
 	return size;
 }
 
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-static int bright_fb_notifier_callback(struct notifier_block *self,
-		unsigned long event, void *data)
-{
-	struct msm_drm_notifier *evdata = data;
-	int *blank;
-
-	if (evdata && evdata->data) {
-		blank = evdata->data;
-
-		if (*blank ==  MSM_DRM_BLANK_POWERDOWN)
-			atomic_set(&display_off, 1);
-		else if (*blank == MSM_DRM_BLANK_UNBLANK)
-			atomic_set(&display_off, 0);
-	}
-
-	return NOTIFY_OK;
-}
-#endif
-
 void __init swapd_pre_init(void)
 {
 	all_totalreserve_pages = fetch_totalreserve_pages();
@@ -1947,15 +1900,6 @@ int swapd_init(struct zram *zram)
 		return ret;
 	}
 
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-	fb_notif.notifier_call = bright_fb_notifier_callback;
-	ret = msm_drm_register_client(&fb_notif);
-	if (ret) {
-		hybp(HYB_ERR, "msm_drm_register_client failed, ret=%d\n", ret);
-		goto msm_drm_register_fail;
-	}
-#endif
-
 	ret = refresh_daemonrun();
 	if (ret) {
 		hybp(HYB_ERR, "refresh_daemonrun failed, ret=%d\n", ret);
@@ -1975,10 +1919,6 @@ int swapd_init(struct zram *zram)
 create_swapd_fail:
 	refresh_daemonexit();
 refresh_daemonfail:
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-	msm_drm_unregister_client(&fb_notif);
-msm_drm_register_fail:
-#endif
 	unregister_memory_notifier(&swapd_notifier_nb);
 	return ret;
 }
@@ -1987,9 +1927,6 @@ void swapd_exit(void)
 {
 	destroy_swapd_thread();
 	refresh_daemonexit();
-#if IS_ENABLED(CONFIG_DRM_MSM) || IS_ENABLED(CONFIG_DRM_OPLUS_NOTIFY)
-	msm_drm_unregister_client(&fb_notif);
-#endif
 	unregister_memory_notifier(&swapd_notifier_nb);
 	atomic_set(&swapd_enabled, 0);
 }
