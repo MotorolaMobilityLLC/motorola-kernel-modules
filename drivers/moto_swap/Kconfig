@@ -66,13 +66,3 @@ config HYBRIDSWAP_CORE
 	  If unsure, say N here.
 	  This module can't be compiled as a module,
 	  the module is as one part of the ZRAM driver.
-
-config HYBRIDSWAP_ASYNC_COMPRESS
-	bool "hypbridswap support asynchronous compress anon pages"
-	depends on HYBRIDSWAP_ZRAM && HYBRIDSWAP
-	default n
-	help
-	  Say Y here if you want to create asynchronous thread
-	  for compress anon pages.
-	  If unsure, say N here.
-	  This feature will reduce the kswapd cpu load.
