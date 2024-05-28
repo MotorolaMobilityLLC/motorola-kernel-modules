@@ -2829,16 +2829,6 @@ void swap_sorted_list_add(struct zram *zram, u32 index, struct mem_cgroup *memcg
 		hybp(HYB_ERR, "WB object, index = %d\n", index);
 		return;
 	}
-#ifdef CONFIG_HYBRIDSWAP_ASYNC_COMPRESS
-	if (zram_test_flag(zram, index, ZRAM_CACHED)) {
-		hybp(HYB_ERR, "CACHED object, index = %d\n", index);
-		return;
-	}
-	if (zram_test_flag(zram, index, ZRAM_CACHED_COMPRESS)) {
-		hybp(HYB_ERR, "CACHED_COMPRESS object, index = %d\n", index);
-		return;
-	}
-#endif
 	if (zram_test_flag(zram, index, ZRAM_SAME))
 		return;
 
@@ -2880,16 +2870,6 @@ void swap_sorted_list_add_tail(struct zram *zram, u32 index, struct mem_cgroup *
 		hybp(HYB_ERR, "WB object, index = %d\n", index);
 		return;
 	}
-#ifdef CONFIG_HYBRIDSWAP_ASYNC_COMPRESS
-	if (zram_test_flag(zram, index, ZRAM_CACHED)) {
-		hybp(HYB_ERR, "CACHED object, index = %d\n", index);
-		return;
-	}
-	if (zram_test_flag(zram, index, ZRAM_CACHED_COMPRESS)) {
-		hybp(HYB_ERR, "CACHED_COMPRESS object, index = %d\n", index);
-		return;
-	}
-#endif
 	if (zram_test_flag(zram, index, ZRAM_SAME))
 		return;
 
