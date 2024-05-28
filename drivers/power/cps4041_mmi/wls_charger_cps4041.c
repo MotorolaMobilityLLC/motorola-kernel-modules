@@ -1859,7 +1859,7 @@ static void cps_wls_auto_switch_work(struct work_struct *work)
 	vbus = cps_get_vbus();
 	input_power = vbus * wls_ibus / 1000;
 
-	if (input_power <= WLS_RX_CAP_5W * 800) { // 5W*1000*80% = 4000mW
+	if (input_power <= WLS_RX_CAP_5W * 900) { // 5W*1000*90% = 4.5W
 		chip->wls_auto_switch_check_cnt ++;
 	} else {
 		chip->wls_auto_switch_check_cnt = 0;
