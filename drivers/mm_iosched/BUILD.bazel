@@ -16,5 +16,9 @@ define_mgk_ko(
     ]) + [
         "//motorola/kernel/modules/drivers/moto_sched:sched_headers",
     ],
+    deps = [
+        "//motorola/kernel/modules/drivers/moto_sched:moto_sched",
+    ],
+
     outs = ["mm_iosched.ko"],
 )

@@ -110,14 +110,14 @@ DEFINE_EVENT(rq_sched, rq_sched_finish,
 
 TRACE_EVENT(rq_sched_log,
 
-    TP_PROTO(struct request *rq, u8 at_head, u8 prio, u8 data_dir, pid_t tid),
+    TP_PROTO(struct request *rq, u8 in_queue, u8 prio, u8 data_dir, pid_t tid),
 
-    TP_ARGS(rq, at_head, prio, data_dir, tid),
+    TP_ARGS(rq, in_queue, prio, data_dir, tid),
 
     TP_STRUCT__entry(
         __field(  dev_t,    dev         )
         __field(  sector_t, sector          )
-        __field(  u8, at_head       )
+        __field(  u8, in_queue       )
         __field(  u8, prio       )
         __field(  u8, data_dir       )
         __field(  pid_t, tid       )
@@ -131,7 +131,7 @@ TRACE_EVENT(rq_sched_log,
          __entry->dev       = rq->q->disk ? disk_devt(rq->q->disk) : 0;
 #endif
         __entry->sector    = blk_rq_pos(rq);
-		__entry->at_head 	   = at_head;
+		__entry->in_queue 	   = in_queue;
 		__entry->prio 	   = prio;
 		__entry->data_dir  = data_dir;
         __entry->tid  = tid;
@@ -139,10 +139,10 @@ TRACE_EVENT(rq_sched_log,
 
     ),
 
-    TP_printk("%d,%d %llu H:%u P:%u W:%u [%d] %d",
+    TP_printk("%d,%d %llu IN:%u P:%u W:%u [%d] %d",
           MAJOR(__entry->dev), MINOR(__entry->dev),
           (unsigned long long)__entry->sector,
-		 __entry->at_head,
+		 __entry->in_queue,
 		 __entry->prio,
          __entry->data_dir,
          __entry->tid,  __entry->tag)

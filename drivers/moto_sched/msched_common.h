@@ -121,6 +121,7 @@ struct moto_task_struct {
 
 	u64				boost_kernel_start;
 	int				boost_kernel_lock_depth;
+	char			cgr_type;
 };
 
 /* global vars and functions */

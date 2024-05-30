@@ -49,6 +49,13 @@ pid_t __read_mostly global_camera_tgid = -1; 	// Moto Camera only!
 
 pid_t global_task_pid_to_read = -1;
 
+
+EXPORT_SYMBOL(moto_sched_scene);
+EXPORT_SYMBOL(global_launcher_tgid);
+EXPORT_SYMBOL(global_sysui_tgid);
+
+
+
 struct proc_dir_entry *d_moto_sched;
 
 enum {

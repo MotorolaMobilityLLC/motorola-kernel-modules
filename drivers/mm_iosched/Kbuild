@@ -15,6 +15,5 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-6.1
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1
 endif
 
-
 mm_iosched-objs := iosched.o iosched_sysctl.o iosched_cgroup.o iosched_util.o
 obj-m +=  mm_iosched.o
