@@ -931,7 +931,7 @@ static int mtk_nu2115_enable_adc(struct charger_device *chg_dev, bool enable)
 }
 /*TN End modified by zhen.liu11/860655 20230912 CR/EKFOGO4G-1483*/
 #endif
-/*static int nu2115_set_chg_mode(struct charger_device *chg_dev, int mode)
+static int nu2115_set_chg_mode(struct charger_device *chg_dev, int mode)
 {
 	struct nu2115 *chip = charger_get_data(chg_dev);
 	int ret = 0;
@@ -963,7 +963,6 @@ static int nu2115_get_chg_mode(struct charger_device *chg_dev, int *mode)
 
 	return 0;
 }
-*/
 static int nu2115_get_adc(struct charger_device *chg_dev,
 			   enum adc_channel chan, int *min, int *max)
 {
@@ -1244,6 +1243,7 @@ static int nu2115_enable_acdrv1(struct charger_device *chg_dev, bool enable)
 	return ret;
 }
 #endif
+
 static const struct charger_ops nu2115_chg_ops = {
 	.enable = nu2115_enable_chg,
 	.is_enabled = nu2115_is_chg_enabled,
@@ -1389,6 +1389,62 @@ static int nu2115_psy_register(struct nu2115 *chip)
 }
 /******************psy end****************************/
 /* debugfs interface */
+
+static ssize_t show_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ret;
+	int state = 0;
+	int enable;
+	struct nu2115 *chip = dev_get_drvdata(dev);
+	if (!chip) {
+		pr_err("nu2115: chip not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+
+	ret = nu2115_get_chg_mode(chip->chg_dev, &enable);
+	if (ret < 0) {
+		pr_err("nu2115: nu2115_is_chg_en not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+	state = enable;
+	pr_info("show nu2115  %s charging \n",
+			   enable ? "enable" : "disable");
+	return state;
+end:
+	return sprintf(buf, "%d\n", state);
+}
+
+static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int ret;
+	int enable;
+	struct nu2115 *chip = dev_get_drvdata(dev);
+	if (!chip) {
+		pr_err("nu2115 chip not valid\n");
+		return -ENODEV;
+	}
+	enable = simple_strtoul(buf, NULL, 0);
+	ret = nu2115_set_chg_mode(chip->chg_dev, enable);
+	if (ret) {
+		pr_err("nu2115 Couldn't %s charging rc=%d\n",
+			   enable ? "enable" : "disable", (int)ret);
+		return ret;
+	}
+
+	pr_info("nu2115  %s charging \n",
+			   enable ? "enable" : "disable");
+
+	return count;
+}
+static DEVICE_ATTR(force_chg_auto_enable, 0664, show_force_chg_auto_enable, store_force_chg_auto_enable);
+
+static void nu2115_create_device_node(struct device *dev)
+{
+    device_create_file(dev, &dev_attr_force_chg_auto_enable);
+}
+
 static int debugfs_get_data(void *data, u64 *val)
 {
 	struct nu2115 *chip = data;
@@ -1729,8 +1785,8 @@ static int nu2115_probe(struct i2c_client *client,
 		dev_err(&client->dev, "nu2115_charger_device_register failed.\n");
 		return ret;
 	}
-
 	create_debugfs_entries(chip);
+	nu2115_create_device_node(chip->dev);
 
 #if IS_ENABLED(CONFIG_OEM_DEVINFO)
 	FULL_PRODUCT_DEVICE_INFO(ID_CHARGER_PUMP, "NU2115");

@@ -1240,9 +1240,58 @@ static ssize_t sc8541_store_register(struct device *dev,
 
 static DEVICE_ATTR(registers, 0660, sc8541_show_registers, sc8541_store_register);
 
+static ssize_t show_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int ret;
+	int state = 0;
+	bool enable;
+	struct sc8541_chip *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8541: chip not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+
+	ret = sc8541_check_charge_enabled(sc, &enable);
+	if (ret < 0) {
+		pr_err("sc8541: sc8541_is_chg_en not valid\n");
+		state = -ENODEV;
+		goto end;
+	}
+	state = enable;
+end:
+	return sprintf(buf, "%d\n", state);
+}
+
+static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int ret;
+	bool enable;
+	struct sc8541_chip *sc = dev_get_drvdata(dev);
+	if (!sc) {
+		pr_err("sc8541 chip not valid\n");
+		return -ENODEV;
+	}
+
+	enable = simple_strtoul(buf, NULL, 0);
+	ret = sc8541_enable_charge(sc, enable);
+	if (ret) {
+		pr_err("sc8541 Couldn't %s charging rc=%d\n",
+			   enable ? "enable" : "disable", (int)ret);
+		return ret;
+	}
+
+	pr_info("sc8541  %s charging \n",
+			   enable ? "enable" : "disable");
+
+	return count;
+}
+static DEVICE_ATTR(force_chg_auto_enable, 0664, show_force_chg_auto_enable, store_force_chg_auto_enable);
+
 static void sc8541_create_device_node(struct device *dev)
 {
 	device_create_file(dev, &dev_attr_registers);
+	device_create_file(dev, &dev_attr_force_chg_auto_enable);
 }
 /********************creat devices note end*************************************************/
 
