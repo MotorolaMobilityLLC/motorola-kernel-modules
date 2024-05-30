@@ -15,6 +15,7 @@
 #include <trace/hooks/sched.h>
 #include <trace/hooks/cgroup.h>
 
+
 #include "mot-io-trace.h"
 #include "mio.h"
 
@@ -32,7 +33,17 @@ static int enable_hook = 0;
 #define system_pid  sys_pid[0]
 static pid_t srv_pid = 0;
 
+static uid_t top_uid = 0;
+static pid_t top_pid = 0;
 
+// #define MAX_TOP 3
+// struct top_entry
+// {
+// 	uid_t uid;
+// 	pid_t pid;
+// };
+
+// static struct top_entry  top_list[MAX_TOP];
 
 
 struct ctl_table iosched_table[] = {
@@ -54,6 +65,13 @@ struct ctl_table iosched_table[] = {
         .procname   = "sys_pid",
         .data       = &sys_pid,
         .maxlen     = 2*sizeof(pid_t),
+        .mode       = 0644,
+        .proc_handler   = proc_dointvec_minmax,
+    },
+    {
+        .procname   = "top_uid",
+        .data       = &top_uid,
+        .maxlen     = sizeof(uid_t),
         .mode       = 0644,
         .proc_handler   = proc_dointvec_minmax,
     },
@@ -120,15 +138,18 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request 
 		if ((tsk->parent) && (!strcmp(tsk->comm, "system_server"))) /* || (!strcmp(tsk->parent->comm, "main")))) */
 		{
 			system_pid = tsk->parent->pid;
-			printk("%s system_pid %d %d\n", __func__, system_pid, tsk->pid);
+			// pr_info("system_pid %d %d\n",  system_pid, tsk->pid);
 			srv_pid = tsk->pid;
 		}
 	}
 	if (unlikely(!enable_boost))
-		goto output;
+		return false;
 
-	if (system_pid <=0)
-		goto output;
+	if ((system_pid <=0) && (tsk->cred->uid.val > 10000)  && (tsk->parent->pid != 1))
+	{
+		system_pid = tsk->parent->pid;
+		// pr_info("system_pid %d %d\n", system_pid, tsk->pid);
+	}
 
 	if (!rq_is_sync(rq))
 	{
@@ -139,18 +160,22 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request 
 			|| (oem_data->ux_type & UX_TYPE_MASK ))
 	{
 			isboost = true;
-			goto output;
 	}
 
 	// is_top = task_in_tf_app_group(tsk);
-	is_top = task_in_top_app_group(tsk);
-	/*
-	if ((rq_data_dir(rq) == WRITE) && ( tsk->pid != tsk->tgid))
+	is_top =  (oem_data->ux_type & UX_TYPE_TOPAPP) || task_in_top_app_group(tsk);
+	if (isboost && (!top_uid) && is_top  && (tsk->cred->uid.val >= 10000 ))
 	{
-		goto output;
+		/* check top app */
+		if ((tsk->pid == tsk->tgid) \
+				&& (!(oem_data->ux_type & ( UX_TYPE_SYSUI | UX_TYPE_LAUNCHER ))))
+		{
+			top_uid = tsk->cred->uid.val;
+			top_pid = tsk->tgid;
+		}
 	}
-	*/
-	isboost = (is_top && is_android_app(tsk));
+
+	isboost  = ( isboost || is_top || ( top_uid  && (top_uid == tsk->cred->uid.val)));
 	if (isboost)
 		goto output;
 
@@ -158,7 +183,7 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request 
 
 output:
 	// if (isboost)
-	// mio_log(" boost %d ppid %d ux type 0x%x w:%d top:%d u:%d comm:%s\n", isboost, tsk->tgid, oem_data->ux_type, rq_data_dir(rq), is_top,tsk->cred->uid.val, tsk->comm);
+	// mio_log(" boost %d ppid %d ux type 0x%x w:%d top:%d u:%d %d\n", isboost, tsk->tgid, oem_data->ux_type, rq_data_dir(rq), is_top,tsk->cred->uid.val,top_uid);
 	return isboost;
 }
 void request_finish(struct request *rq, u64 now,  struct mio_rq_info *rqi)
@@ -173,29 +198,95 @@ void request_finish(struct request *rq, u64 now,  struct mio_rq_info *rqi)
 
 static void oem_android_vh_free_task_handler(void *unused, struct task_struct *tsk)
 {
-	if ( tsk && (tsk->pid == system_pid ))
+	if (!tsk)
+		return;
+	if (tsk->pid == system_pid)
 	{
 		system_pid = 0;
+	}
+	else if(tsk->pid == top_pid)
+	{
+		top_uid = 0;
+		top_pid = 0;
 	}
 }
 
 
-// static void oem_android_rvh_cpu_cgroup_attach(void *unused,
-//                         struct cgroup_taskset *tset)
-// {
-// 	struct task_struct *task;
-//     struct cgroup_subsys_state *css;
+static void oem_android_rvh_cpu_cgroup_attach(void *unused,
+                        struct cgroup_taskset *tset)
+{
+	struct task_struct *task;
+    struct cgroup_subsys_state *css;
+	struct moto_task_struct *oem_data;
+	// pid_t pid;
+	if (unlikely(!enable_boost))
+		return;
 
-//     cgroup_taskset_for_each(task, css, tset)
-//         mio_log("tsk %d tgid %d, cgroup %d\n", task->pid, task->tgid, css->id);
-// }
+
+    cgroup_taskset_first(tset, &css);
+    if (!css)
+        return;
+
+	//cgroup_taskset_for_each_leader(task, css, tset)
+	cgroup_taskset_for_each(task, css, tset)
+	{
+		oem_data  = get_moto_task_struct(task);
+		oem_data->cgr_type = css->id;
+		// mio_log("task %d tgid %d, %d, top:%d ux:%x\n", task->pid, task->tgid, task->cred->uid.val, css->id, oem_data->ux_type);//, cgrptg->colocate,  cgrptg->groupid);
+		if ( task != task->group_leader)
+			continue;
+		if ( task->cred->uid.val < 10000 )
+			continue;
+		if ( oem_data->ux_type & ( UX_TYPE_SYSUI | UX_TYPE_LAUNCHER ) )
+			continue;
+		if ( oem_data->ux_type & UX_TYPE_TOPAPP )
+		{
+			top_uid = task->cred->uid.val;
+			top_pid = task->tgid;
+			continue;
+		}
+
+		// // pid = is_top_uid(task->cred->uid.val);
+		// // if ((CGROUP_BACKGROUND == css->id) && top_pid) ||
+		if ((top_pid == task->tgid) &&  (!( oem_data->ux_type & UX_TYPE_TOPAPP )))
+		// if (((CGROUP_BACKGROUND == css->id) && top_pid ) || ((pid == task->tgid) && ( css->id != CGROUP_TOP_APP )))
+		{
+			top_uid = 0;
+			top_pid = 0;
+			continue;
+		}
+		//TODO save top group info
+	}
+	// cgroup_taskset_for_each(task, css, tset) {
+	// 	oem_data  = get_moto_task_struct(task);
+	// 	oem_data->cgr_type = get_task_cgroup_id(task);
+    // }
+
+}
+
+static void oem_android_rvh_wake_up_new_task(void *unused, struct task_struct *task)
+{
+	struct moto_task_struct *oem_data;
+	if (unlikely(!enable_boost))
+		return;
+	// if (system_pid <=0)
+	// 	return;
+	// if (task->parent && (system_pid == task->parent->pid))
+	{
+		oem_data  = get_moto_task_struct(task);
+		// oem_data->cgr_type = CGROUP_TOP_APP;
+		oem_data->cgr_type = get_task_cgroup_id(task);
+	}
+}
 
 void iosched_ctl_init(void)
 {
 	ctl_table_hdr = register_sysctl_table(iosched_base_table);
 
-    register_trace_android_vh_free_task(oem_android_vh_free_task_handler, NULL);
-	// register_trace_android_rvh_cpu_cgroup_attach(oem_android_rvh_cpu_cgroup_attach, NULL);
+	register_trace_android_vh_free_task(oem_android_vh_free_task_handler, NULL);
+	register_trace_android_rvh_cpu_cgroup_attach(oem_android_rvh_cpu_cgroup_attach, NULL);
+	register_trace_android_rvh_wake_up_new_task(oem_android_rvh_wake_up_new_task, NULL);
+
 }
 
 void iosched_ctl_deinit(void)

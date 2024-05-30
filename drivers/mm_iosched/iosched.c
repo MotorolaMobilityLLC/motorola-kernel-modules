@@ -599,6 +599,7 @@ done:
 	ioprio_class = mdd_rq_ioclass(dd, rq);
 	prio = ioprio_class_to_prio[ioprio_class];
 	dd->per_prio[prio].stats.dispatched++;
+
 	if (prio != DD_RT_PRIO ) {
 		if ( dd->last_prio == prio )
 			dd->per_prio[prio].stats.dispatching++;
@@ -611,6 +612,7 @@ done:
 	/*
 	 * If the request needs its target zone locked, do it.
 	 */
+	//mio_log(" prio %d ing %d now %d:%d\n", dd->last_prio, dd->per_prio[dd->last_prio].stats.dispatching, mdd_queued(dd, DD_TB_PRIO), mdd_queued(dd, DD_BE_PRIO));
 	blk_req_zone_write_lock(rq);
 	rq->rq_flags |= RQF_STARTED;
 	return rq;
@@ -635,10 +637,10 @@ static struct request *mdd_dispatch_prio_aged_requests(struct mdd_data *dd,
 		return NULL;
 
 	for (prio = DD_BE_PRIO; prio <= DD_PRIO_MAX; prio++) {
-		if ( dd->per_prio[DD_TB_PRIO].stats.dispatching >= dd->prio_request)
+		if ( dd->per_prio[DD_TB_PRIO].stats.dispatching >= (is_launch()?dd->min_prio_request:dd->max_prio_request))
 		{
-			rq = __mdd_dispatch_request(dd, &dd->per_prio[prio],
-						now - (HZ>>1));
+			rq = __mdd_dispatch_request(dd, &dd->per_prio[prio],now);
+						// now - is_launch()?0:(HZ>>1));
 		}else
 		rq = __mdd_dispatch_request(dd, &dd->per_prio[prio],
 					   now - dd->prio_aging_expire);
@@ -687,10 +689,12 @@ unlock:
 	if (rq) {
 		struct mio_rq_info *mrq;
 		mrq = get_mio_rq_info(dd, rq);
-		if (likely(mrq))
+		if (likely(mrq)) {
 			mrq->data_size = blk_rq_bytes(rq);
+			trace_rq_sched_log(rq, 0, dd->last_prio, dd->last_dir, mrq->tid);
+		}
 
-		trace_rq_sched_dispatch(rq);
+		// trace_rq_sched_dispatch(rq);
 	}
 	// mio_log(" in_queue %d  rq %p\n", atomic_read(&dd->in_queue_rqs) , rq);
 	return rq;
@@ -878,9 +882,9 @@ static int mdd_init_sched(struct request_queue *q, struct elevator_type *e)
 	dd->nr_requests = q->nr_requests;
 	dd->nr_threshold_rqs = dd->nr_requests * 4 / 5 ;
 	dd->last_prio = 0;
-	dd->dispatch_fifo = 0;
 	dd->latency = 0;
-	dd->prio_request = 64;
+	dd->max_prio_request = 32;
+	dd->min_prio_request = 16;
 
 	//hctx = ((struct blk_mq_hw_ctx*)xa_load(&q->hctx_table, 0));
 	dd->rqs = kmalloc_array(q->nr_requests,
@@ -994,7 +998,7 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 		if (likely(mrq))
 			mrq->io_class = ioprio_class;
 		dd->boosted++;
-		mio_log("%d:%d (%d %d) in be when boost\n", mdd_queued(dd, DD_TB_PRIO), mdd_queued(dd, DD_BE_PRIO), mdd_owned_by_driver(dd, DD_TB_PRIO),mdd_owned_by_driver(dd, DD_BE_PRIO));
+		//mio_log("%d:%d (%d %d) in be when boost\n", mdd_queued(dd, DD_TB_PRIO), mdd_queued(dd, DD_BE_PRIO), mdd_owned_by_driver(dd, DD_TB_PRIO),mdd_owned_by_driver(dd, DD_BE_PRIO));
 	}
 	rq->elv.priv[1] = (void *)(uintptr_t)ioprio_class;
 	lockdep_assert_held(&dd->lock);
@@ -1024,7 +1028,7 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 		return;
 	}
 	trace_block_rq_insert(rq);
-	trace_rq_sched_log(rq, at_head, prio, data_dir, current->tgid);
+	trace_rq_sched_log(rq, 1, prio, data_dir, current->tgid);
 	if (at_head || blk_rq_is_passthrough(rq)) {
 		if (at_head)
 			list_add(&rq->queuelist, &per_prio->dispatch);
@@ -1186,10 +1190,10 @@ SHOW_INT(__mdd_writes_starved_show, dd->writes_starved);
 SHOW_INT(__mdd_front_merges_show, dd->front_merges);
 SHOW_INT(__mdd_async_depth_show, dd->async_depth);
 SHOW_INT(__mdd_fifo_batch_show, dd->fifo_batch);
-SHOW_INT(__mdd_dispatch_fifo_show, dd->dispatch_fifo);
 SHOW_INT(__mdd_latency_show, dd->latency);
 SHOW_INT(__mdd_boost_show, enable_boost);
-SHOW_INT(__mdd_prio_request_show, dd->prio_request);
+SHOW_INT(__mdd_max_prio_request_show, dd->max_prio_request);
+SHOW_INT(__mdd_min_prio_request_show, dd->min_prio_request);
 #undef SHOW_INT
 #undef SHOW_JIFFIES
 
@@ -1221,10 +1225,10 @@ STORE_INT(__mdd_writes_starved_store, &dd->writes_starved, INT_MIN, INT_MAX);
 STORE_INT(__mdd_front_merges_store, &dd->front_merges, 0, 1);
 STORE_INT(__mdd_async_depth_store, &dd->async_depth, 1, INT_MAX);
 STORE_INT(__mdd_fifo_batch_store, &dd->fifo_batch, 0, INT_MAX);
-STORE_INT(__mdd_dispatch_fifo_store, &dd->dispatch_fifo, 0, INT_MAX);
 STORE_INT(__mdd_latency_store, &dd->latency, 0, INT_MAX);
 STORE_INT(__mdd_boost_store, &enable_boost, 0, INT_MAX);
-STORE_INT(__mdd_prio_request_store, &dd->prio_request, 2, 128);
+STORE_INT(__mdd_max_prio_request_store, &dd->max_prio_request, 2, 128);
+STORE_INT(__mdd_min_prio_request_store, &dd->min_prio_request, 2, 128);
 #undef STORE_FUNCTION
 #undef STORE_INT
 #undef STORE_JIFFIES
@@ -1240,10 +1244,10 @@ static struct elv_fs_entry __mdd_attrs[] = {
 	DD_ATTR(front_merges),
 	DD_ATTR(async_depth),
 	DD_ATTR(fifo_batch),
-	DD_ATTR(dispatch_fifo),
 	DD_ATTR(latency),
 	DD_ATTR(boost),
-	DD_ATTR(prio_request),
+	DD_ATTR(max_prio_request),
+	DD_ATTR(min_prio_request),
 	DD_ATTR(prio_aging_expire),
 	__ATTR_NULL
 };

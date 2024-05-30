@@ -125,9 +125,9 @@ struct mdd_data {
 	atomic_t in_queue_rqs;
 
 	enum mdd_prio last_prio;
-	int dispatch_fifo;
 	int latency;
-	int prio_request;
+	int max_prio_request;
+	int min_prio_request;
 };
 
 
@@ -144,27 +144,22 @@ struct mdd_data {
 
 static inline bool task_in_top_app_group(struct task_struct *p)
 {
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-    struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
-	// return ((wts->grp) != NULL);
-    return (rcu_access_pointer(wts->grp) != NULL);
-#else
-    return get_task_cgroup_id(p) == CGROUP_TOP_APP;
-#endif
+	struct moto_task_struct *oem_data;
+	oem_data  = get_moto_task_struct(p);
+	// mio_log(" top %d:%d\n", oem_data->cgr_type, get_task_cgroup_id(p));
+	return ( oem_data->cgr_type == CGROUP_TOP_APP );
 }
 
 static inline bool task_in_tf_app_group(struct task_struct *p)
 {
-#if IS_ENABLED(CONFIG_SCHED_WALT)
-	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
-	return (rcu_access_pointer(wts->grp) != NULL);
-#else
 	int cgrp_id = get_task_cgroup_id(p);
 	return (cgrp_id == CGROUP_TOP_APP ) || ( cgrp_id == CGROUP_FOREGROUND) ;
-#endif
 }
 
-
+static inline bool is_launch(void)
+{
+	return (moto_sched_scene & UX_SCENE_LAUNCH);
+}
 
 void iosched_ctl_init(void);
 void iosched_ctl_deinit(void);
