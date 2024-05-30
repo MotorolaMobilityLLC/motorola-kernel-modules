@@ -269,6 +269,9 @@ struct fts_ts_data {
     bool prc_support;
     bool prc_mode;
     bool esd_support;
+    bool fwdbg_support;
+    int fwdbg_value;
+    struct delayed_work fwdbg_work;
 
     bool gesture_support;   /* gesture enable or disable, default: disable */
     u8 gesture_bmode;       /*gesture buffer mode*/
@@ -360,6 +363,7 @@ enum _FTS_TOUCH_ETYPE {
     TOUCH_PROTOCOL_v2 = 0x02,
     TOUCH_EXTRA_MSG = 0x08,
     TOUCH_PEN = 0x0B,
+    TOUCH_FWDBG = 0x0E,
     TOUCH_GESTURE = 0x80,
     TOUCH_FW_INIT = 0x81,
     TOUCH_IGNORE = 0xFE,
@@ -451,6 +455,10 @@ int fts_ex_mode_recovery(struct fts_ts_data *ts_data);
 void fts_irq_disable(void);
 void fts_irq_enable(void);
 int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable);
+int fts_fwdbg_init(struct fts_ts_data *ts_data);
+int fts_fwdbg_exit(struct fts_ts_data *ts_data);
+int fts_fwdbg_readdata(struct fts_ts_data *ts_data, u8 *buf);
+void fts_fwdbg_handle_reset(struct fts_ts_data *ts_data);
 #ifdef FOCALTECH_SENSOR_EN
 bool fts_is_fod_resume(struct fts_ts_data *ts_data);
 #endif
