@@ -17,6 +17,7 @@ focaltech_v3_4-objs += focaltech_spi.o
 focaltech_v3_4-objs += focaltech_test/focaltech_test.o
 focaltech_v3_4-objs += focaltech_test/focaltech_test_ini.o
 focaltech_v3_4-objs += focaltech_ts_config.o
+focaltech_v3_4-objs += focaltech_debug.o
 
 ifneq ($(filter ft3681,$(CONFIG_INPUT_FOCAL_IC_NAME)),)
 	EXTRA_CFLAGS += -DCONFIG_FTS_IC_FT3681

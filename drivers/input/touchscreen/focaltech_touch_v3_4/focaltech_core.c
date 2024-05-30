@@ -186,6 +186,8 @@ int fts_reset_proc(int hdelayms)
     if (hdelayms) {
         msleep(hdelayms);
     }
+    if (fts_data->fwdbg_support)
+        fts_fwdbg_handle_reset(fts_data);
 
     return 0;
 }
@@ -1181,6 +1183,7 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
         break;
 
     case TOUCH_IGNORE:
+    case TOUCH_FWDBG:
     case TOUCH_ERROR:
         break;
 
@@ -1221,6 +1224,9 @@ static irqreturn_t fts_irq_handler(int irq, void *data)
         if (ts_data->ta_buf && ts_data->ta_size)
             memcpy(ts_data->ta_buf, ts_data->touch_buf, ts_data->ta_size);
         wake_up_interruptible(&ts_data->ts_waitqueue);
+    }
+    if (ts_data->fwdbg_support) {
+        fts_fwdbg_readdata(ts_data, ts_data->touch_buf);
     }
 
     return IRQ_HANDLED;
@@ -2377,6 +2383,10 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     if (ret) {
         FTS_ERROR("create sysfs node fail");
     }
+    ret = fts_fwdbg_init(ts_data);
+    if (ret) {
+        FTS_ERROR("FwDebug init fail");
+    }
 
     ret = fts_point_report_check_init(ts_data);
     if (ret) {
@@ -2515,6 +2525,7 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     fts_release_apk_debug_channel(ts_data);
     fts_remove_sysfs(ts_data);
     fts_ex_mode_exit(ts_data);
+    fts_fwdbg_exit(ts_data);
 
     fts_fwupg_exit(ts_data);
 
