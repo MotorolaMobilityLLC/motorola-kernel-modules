@@ -954,6 +954,16 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
 
 		events[i].id = pointid;
 		events[i].flag = touch_buf[FTS_TOUCH_OFF_E_XH + base] >> 6;
+#ifdef CONFIG_INPUT_HIGH_RESOLUTION_4
+//4x
+		events[i].x = ((touch_buf[FTS_TOUCH_OFF_E_XH + base] & 0x0F) << 10) \
+					  + ((touch_buf[FTS_TOUCH_OFF_XL + base] & 0xFF) << 2) \
+					  + ((touch_buf[FTS_TOUCH_OFF_PRE + base] >> 4) & 0x03);
+		events[i].y = ((touch_buf[FTS_TOUCH_OFF_ID_YH + base] & 0x0F) << 10) \
+					  + ((touch_buf[FTS_TOUCH_OFF_YL + base] & 0xFF) << 2) \
+					  + (touch_buf[FTS_TOUCH_OFF_PRE + base] & 0x03);
+#else
+//default 1x
 		events[i].x = ((touch_buf[FTS_TOUCH_OFF_E_XH + base] & 0x0F) << 12) \
 					  + ((touch_buf[FTS_TOUCH_OFF_XL + base] & 0xFF) << 4) \
 					  + ((touch_buf[FTS_TOUCH_OFF_PRE + base] >> 4) & 0x0F);
@@ -962,6 +972,7 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
 					  + (touch_buf[FTS_TOUCH_OFF_PRE + base] & 0x0F);
 		events[i].x = (events[i].x * FTS_TOUCH_HIRES_X ) / FTS_HI_RES_X_MAX;
 		events[i].y = (events[i].y * FTS_TOUCH_HIRES_X ) / FTS_HI_RES_X_MAX;
+#endif
 		events[i].area = touch_buf[FTS_TOUCH_OFF_AREA + base];
 		if (events[i].area <= 0) events[i].area = 0x09;
 		event_num++;
