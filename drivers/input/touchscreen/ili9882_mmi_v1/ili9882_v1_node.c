@@ -4267,10 +4267,7 @@ int ilitek_sys_init(void)
 	dev_t devno;
 	struct device_attribute *attrs = touchscreen_attributes;
 
-#ifdef ILI_PASSIVE_PEN
-	ret = alloc_chrdev_region(&devno, 0, 1, ILI_SPI_NAME_PRIMARY);
-#endif
-#ifdef ILI_PRIMARY_NODE
+#if defined(ILI_PASSIVE_PEN) || defined(ILI_PRIMARY_NODE)
 	ret = alloc_chrdev_region(&devno, 0, 1, ILI_SPI_NAME_PRIMARY);
 #else
 	ret = alloc_chrdev_region(&devno, 0, 1, ILI_SPI_NAME);
@@ -4288,10 +4285,7 @@ int ilitek_sys_init(void)
 			ILI_ERR("Failed to create touchscreen class!\n");
 			return ret;
 		}
-#ifdef ILI_PASSIVE_PEN
-		touchscreen_class_dev = device_create(touchscreen_class, NULL, devno, NULL, ILI_SPI_NAME_PRIMARY);
-#endif
-#ifdef ILI_PRIMARY_NODE
+#if defined(ILI_PASSIVE_PEN) || defined(ILI_PRIMARY_NODE)
 		touchscreen_class_dev = device_create(touchscreen_class, NULL, devno, NULL, ILI_SPI_NAME_PRIMARY);
 #else
 		touchscreen_class_dev = device_create(touchscreen_class, NULL, devno, NULL, ILI_SPI_NAME);

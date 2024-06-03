@@ -1100,11 +1100,9 @@ int ili_set_tp_data_len(int format, bool send, u8 *data)
 	}
 
 	ilits->tp_data_format = format;
-#if TOUCH_WIDTH
-	ilits->tp_data_len = P5_X_5B_LOW_RESOLUTION_LENGTH + P5_X_CUSTOMER_LENGTH;
-#else
+
 	ilits->tp_data_len = len;
-#endif
+
 	ILI_INFO("TP mode = %d, format = %d, len = %d\n",
 		tp_mode, ilits->tp_data_format, ilits->tp_data_len);
 
