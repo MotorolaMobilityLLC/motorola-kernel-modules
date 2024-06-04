@@ -43,7 +43,7 @@
  *********************************************************/
 #define PHY_MODE_BC11_SET 1
 #define PHY_MODE_BC11_CLR 2
-
+#define SGM4154X_CHIP_ID	2
 #define SGM4154x_REG_NUM	(0xF)
 #define SINGLE_DUMP_LEN		22
 #define TOTAL_DUMP_LEN		(SINGLE_DUMP_LEN * (SGM4154x_REG_NUM))
@@ -2013,6 +2013,16 @@ __maybe_unused static int sgm4154x_vbus_regulator_register(struct sgm4154x_devic
 	return ret;
 }
 
+static int sgm4154x_get_chip_id(struct charger_device *chg_dev, int *id)
+{
+	int ret = 0;
+	struct sgm4154x_device *sgm = charger_get_data(chg_dev);
+
+	*id = SGM4154X_CHIP_ID;
+	dev_info(sgm->dev, "%s  id = %d \n", __func__, *id);
+	return ret;
+}
+
 static struct charger_ops sgm4154x_chg_ops = {
 	.dump_registers = sgm4154x_dump_register,
 	/* cable plug in/out */
@@ -2081,6 +2091,7 @@ static struct charger_ops sgm4154x_chg_ops = {
 	.enable_dpdm_hz = sgm4154x_enable_dpdm_hiz,
 #endif
 	.event = sgm4154x_do_event,
+	.get_chip_id = sgm4154x_get_chip_id,
 
 };
 

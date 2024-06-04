@@ -45,7 +45,7 @@
 #endif /*CONFIG_MTK_CHARGER_V4P19*/
 
 #define SC8989X_DRV_VERSION		"1.0.0_G"
-
+#define SC8989X_CHIP_ID 			1
 #define R_VBUS_CHARGER_1   330
 #define R_VBUS_CHARGER_2   39
 
@@ -1371,6 +1371,16 @@ static int sc8989x_get_vbus(struct charger_device *chgdev, u32 *vbus)
         return ret;
 }
 
+static int sc8989x_get_chip_id(struct charger_device *chg_dev, int *id)
+{
+	int ret = 0;
+	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
+
+	*id = SC8989X_CHIP_ID;
+	dev_info(sc->dev, "%s id = %d \n", __func__, *id);
+	return ret;
+}
+
 static struct charger_ops sc8989x_chg_ops = {
 	/* Normal charging */
 	.plug_in = sc8989x_plug_in,
@@ -1419,6 +1429,7 @@ static struct charger_ops sc8989x_chg_ops = {
 	.enable_dpdm_hz = sc8989x_enable_dpdm_hiz,
 #endif
 	.enable_termination = sc8989x_enable_terminate,
+	.get_chip_id = sc8989x_get_chip_id,
 };
 
 static const struct charger_properties sc8989x_chg_props = {
