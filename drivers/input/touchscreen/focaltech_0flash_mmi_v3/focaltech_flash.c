@@ -1421,16 +1421,14 @@ static int fts_get_fw_file_via_request_firmware(struct fts_upgrade *upg)
     char fwname[FILE_NAME_LENGTH] = { 0 };
 
 
-    if (fts_data->panel_supplier) {
-        FTS_INFO("fts_data->panel_supplier=%s\n", fts_data->panel_supplier);
-        snprintf(fwname, FILE_NAME_LENGTH, "%s%s.bin", \
-                 FTS_FW_NAME_PREX_WITH_REQUEST, \
-                 fts_data->panel_supplier);
-        }
-    else
-        snprintf(fwname, FILE_NAME_LENGTH, "%s%s.bin", \
-             FTS_FW_NAME_PREX_WITH_REQUEST, \
-             upg->module_info->vendor_name);
+    if (fts_data->panel_supplier && !strlen(upg->module_info->vendor_name)) {
+        snprintf(upg->module_info->vendor_name, MAX_MODULE_VENDOR_NAME_LEN, "%s", fts_data->panel_supplier);
+        FTS_INFO("set vendor_name as panel_supplier: %s", upg->module_info->vendor_name);
+    }
+
+    snprintf(fwname, FILE_NAME_LENGTH, "%s%s.bin", \
+         FTS_FW_NAME_PREX_WITH_REQUEST, \
+         upg->module_info->vendor_name);
 
     ret = request_firmware(&fw, fwname, upg->ts_data->dev);
     if (0 == ret) {
