@@ -4052,8 +4052,7 @@ static void cps_wls_auto_stop_work(struct work_struct *work)
 	if (bat_temp <= chip->wls_auto_stop_undertemp && chg_en) {
 		cps_wls_stop(false);
 	} else if (chip->wls_online &&
-			chip->mode_type == Sys_Op_Mode_BPP &&
-			chip->hs_st != HS_UNKONWN) {
+			chip->mode_type == Sys_Op_Mode_BPP) {
 		if (!chg_en) {
 			cps_wls_stop(true);
 		}
