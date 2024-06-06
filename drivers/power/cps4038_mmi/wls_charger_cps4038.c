@@ -2715,6 +2715,44 @@ static int cps_wls_mode_select(char *str, bool mode)
 	return rt;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+static int wls_control_cp_vbusovp(bool val)
+{
+	struct mtk_charger *info = NULL;
+	struct power_supply *chg_psy = NULL;
+	int ret = 0;
+
+	if(val)
+		cps_wls_log(CPS_LOG_ERR,"%s:enable\n",__func__);
+	else
+		cps_wls_log(CPS_LOG_ERR,"%s:disable\n",__func__);
+
+	chg_psy = power_supply_get_by_name("mtk-master-charger");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		cps_wls_log(CPS_LOG_ERR,"%s Couldn't get chg_psy\n",__func__);
+		return CPS_WLS_FAIL;
+	} else {
+		info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
+	}
+
+	info->dvchg1_dev = get_charger_by_name("primary_dvchg");
+	if (info->dvchg1_dev)
+		cps_wls_log(CPS_LOG_ERR,"%s:Found primary divider charger\n",__func__);
+	else {
+		cps_wls_log(CPS_LOG_ERR,"%s,*** Error : can't find primary divider charger ***\n",__func__);
+		return CPS_WLS_FAIL;
+	}
+
+	ret = charger_dev_enable_vbusovp(info->dvchg1_dev,val);
+	if(ret)
+		cps_wls_log(CPS_LOG_ERR,"%s,enable ovp failed ret = %d\n",__func__,ret);
+
+	return ret;
+}
+#endif
+#endif
+
 static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 {
 	struct cps_wls_chrg_chip *chip = dev_id;
@@ -2723,6 +2761,9 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 	if (tx_detected) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
 		cps_wls_log(CPS_LOG_DEBG, "Detected an attach event.\n");
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+		wls_control_cp_vbusovp(false);
+#endif
 #else
 		if (chip->factory_wls_en == true)
 			mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_FACTORY_TEST, true);
@@ -2734,6 +2775,11 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		}
 	} else {
 		cps_wls_log(CPS_LOG_DEBG, "mmi_mux Detected a detach event.\n");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#ifdef CONFIG_MOTO_CHANNEL_SWITCH
+		wls_control_cp_vbusovp(true);
+#endif
+#endif
 		chip->rx_int_ready = false;
 		chip->bpp_icl_done = false;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)

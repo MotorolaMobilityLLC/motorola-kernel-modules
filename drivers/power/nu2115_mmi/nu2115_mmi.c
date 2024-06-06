@@ -1565,7 +1565,8 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
         } else if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
             ret = regmap_update_bits(bq->regmap, NU2115_VAC12PRET,
                     NU2115_EN_OTG, NU2115_EN_OTG);
-	    ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &val);
+
+	    	ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &val);
         	if (!ret)
                     dev_err(bq->dev, "%s:NU2115_VAC12PRET = 0x%02X\n", __func__,val);
 
@@ -1634,6 +1635,28 @@ static int nu2115_get_vmos_chg(struct charger_device *chg_dev, bool type, int *m
 	}
 	return 0;
 }
+
+static int nu2115_enable_vbusovp(struct charger_device *chg_dev,bool val)
+{
+	int ret = 0;
+	struct nu2115_device *bq = charger_get_data(chg_dev);
+	unsigned int reg_val;
+
+	if(val){
+		if(nu2115_is_vbusovp_en(bq)){
+			ret = regmap_update_bits(bq->regmap, NU2115_BUSOVP,NU2115_DIS_VBUSOVP, 0);
+			dev_err(bq->dev, "%s:enable vbus ovp = %d\n", __func__,ret);
+			ret = regmap_read(bq->regmap, 0x07, &reg_val);
+			dev_err(bq->dev, "%s_dump_registe:Reg[07] = 0x%02X\n",__func__,reg_val);
+		}
+	}else{
+		ret = regmap_update_bits(bq->regmap, NU2115_BUSOVP,NU2115_DIS_VBUSOVP, NU2115_DIS_VBUSOVP);
+		dev_err(bq->dev, "%s:disable vbus ovp = %d\n", __func__,ret);
+		ret = regmap_read(bq->regmap, 0x07, &reg_val);
+		dev_err(bq->dev, "%s_dump_registe:Reg[07] = 0x%02X\n",__func__,reg_val);
+	}
+	return ret;
+}
 #endif
 
 static const struct charger_ops nu2115_chg_ops = {
@@ -1656,6 +1679,7 @@ static const struct charger_ops nu2115_chg_ops = {
 	.enable_adc = nu2115_enable_adc,
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	.get_vmos_chg = nu2115_get_vmos_chg,
+	.enable_vbusovp = nu2115_enable_vbusovp,
 #endif
 };
 
