@@ -42,9 +42,8 @@
 struct proc_dir_entry *proc_entry;
 #define SKB_LATENCY_DIR "skb_latency"
 #define LATENCY_ENABLE "enable"
-#define MONITOR_APP "comm_name"
-#define PROC_NUMBUF 13
-char comm_name[TASK_COMM_LEN] = {0};
+#define MONITOR_APP "app_id"
+#define PROC_NUMBUF 64
 u32 task_uid = 0;
 static unsigned int latency_enable = 0;
 
@@ -141,21 +140,36 @@ void clean_all_nodes(void) {
 /*
  * Get the seq of a TCP packet before sending, and store the seq to a new node
  */
-static unsigned int hook_func_out(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+static unsigned int track_out(struct sk_buff *skb) {
     struct tcphdr *th = NULL;
-
+    struct sock *sk = NULL;
     if (!latency_enable || !task_uid)
         return NF_ACCEPT;
 
+    sk = skb_to_full_sk(skb);
+    if (!sk) {
+        return NF_ACCEPT;
+    }
     if (skb->protocol == htons(ETH_P_IP) &&
         ((struct iphdr *)ip_hdr(skb))->protocol == IPPROTO_TCP &&
-        ((struct sock *)skb_to_full_sk(skb))->sk_uid.val == task_uid) {
+        refcount_inc_not_zero(&sk->sk_refcnt) && sk->sk_uid.val == task_uid) {
         th = tcp_hdr(skb);
         if (th && skb->sk) {
             spin_lock(&skb_latency_lock);
             create_node(skb->sk, th->seq);
             spin_unlock(&skb_latency_lock);
         }
+        sock_put(sk);
+    } else if (skb->protocol == htons(ETH_P_IPV6) &&
+        ((struct ipv6hdr *)ipv6_hdr(skb))->nexthdr == IPPROTO_TCP &&
+        refcount_inc_not_zero(&sk->sk_refcnt) && sk->sk_uid.val == task_uid) {
+        th = tcp_hdr(skb);
+        if (th && skb->sk) {
+            spin_lock(&skb_latency_lock);
+            create_node(skb->sk, th->seq);
+            spin_unlock(&skb_latency_lock);
+        }
+        sock_put(sk);
     }
     return NF_ACCEPT;
 }
@@ -165,7 +179,7 @@ static unsigned int hook_func_out(void *priv, struct sk_buff *skb, const struct 
  * TCP packet.
  * RTT = (time stamp of the ack_seq) - (time stamp of the seq)
  */
-static unsigned int hook_func_in(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+static unsigned int track_in(struct sk_buff *skb) {
     struct tcphdr *th = NULL;
     __be32 ack_seq = 0;
     ktime_t tstamp = 0;
@@ -175,7 +189,7 @@ static unsigned int hook_func_in(void *priv, struct sk_buff *skb, const struct n
     if (!latency_enable || !task_uid)
         return NF_ACCEPT;
 
-    sk = skb->sk;
+    sk = skb_to_full_sk(skb);
     if (!sk) {
         return NF_ACCEPT;
     /* We need to make sure the socket has not been destoryed */
@@ -197,48 +211,126 @@ static unsigned int hook_func_in(void *priv, struct sk_buff *skb, const struct n
                     }
                 }
             }
+        } else if (skb->protocol == htons(ETH_P_IPV6) &&
+            ((struct ipv6hdr *)ipv6_hdr(skb))->nexthdr == IPPROTO_TCP &&
+            sk->sk_uid.val == task_uid) {
+            th = tcp_hdr(skb);
+            if (th) {
+                ack_seq = th->ack_seq;
+                tstamp = ktime_get_real();
+                spin_lock(&skb_latency_lock);
+                result_tstamp = find_and_delete_olders(sk, ack_seq);
+                spin_unlock(&skb_latency_lock);
+                if (result_tstamp != 0) {
+                    measured_rtt = ktime_to_ns(ktime_sub(tstamp, result_tstamp));
+                    if (enable_debug) {
+                        pr_info("Measured RTT for skb: %llu ns\n", measured_rtt);
+                    }
+                }
+            }
         }
         sock_put(sk);
     }
     return NF_ACCEPT;
 }
 
-static ssize_t comm_name_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+static unsigned int hook_func_out(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+    return track_out(skb);
+}
+
+static unsigned int hook_func_in(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+    return track_in(skb);
+}
+
+static unsigned int hook_func_out6(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+    return track_out(skb);
+}
+
+static unsigned int hook_func_in6(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+    return track_in(skb);
+}
+
+static ssize_t app_id_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
     struct task_struct *task = &init_task;
-    if (count > TASK_COMM_LEN - 1)
-        count = TASK_COMM_LEN - 1;
+    char *data = NULL;
+    char *delimiter = NULL, *key = NULL, *value = NULL;
+    ssize_t ret = 0;
+    char *real_data = NULL;
+    ssize_t length = count;
+    u32 uid = 0;
 
-    if (copy_from_user(comm_name, buf, count))
-        return -EFAULT;
+    data = kmalloc(count, GFP_KERNEL);
+    if (data == NULL)
+        return -ENOMEM;
 
-    comm_name[count] = '\0';
-    for_each_process(task)
-    {
-        if (strcmp(task->comm, comm_name) == 0) {
-            task_uid = task->cred->uid.val;
-            pr_info("Update tracked process: UID %d, COMM: [%s]\n", task_uid, task->comm);
+    ret = strncpy_from_user(data, buf, count);
+    if (ret < 0) {
+        goto out_free;
+    }
+
+    /*
+     * If the string was passed by echo command, a '\n' will be at the end of
+     * the string.
+     */
+    real_data = strchr(data, '\n');
+    if (real_data) {
+        length = real_data - data;
+    }
+    data[length] = '\0';
+
+    delimiter = strchr(data, '=');
+    if (delimiter == NULL) {
+        pr_info("Invalid format, '=' not found.\n");
+        ret = -EINVAL;
+        goto out_free;
+    }
+
+    *delimiter = '\0';
+    key = data;
+    value = delimiter + 1;
+    if (!strcasecmp(key, "uid")) {
+        if (!kstrtouint(value, 10, &uid)) {
+            task_uid = uid;
+            pr_info("Update tracked process: UID %d\n", task_uid);
             spin_lock(&skb_latency_lock);
             clean_all_nodes();
             spin_unlock(&skb_latency_lock);
-            break;
+        }
+    } else if (!strcasecmp(key, "name")) {
+        if (strlen(value) < TASK_COMM_LEN) {
+            for_each_process(task)
+            {
+                if (!strncmp(task->comm, value, strlen(value))) {
+                    task_uid = task->cred->uid.val;
+                    pr_info("Update tracked process: UID %d, COMM: [%s]\n", task_uid, task->comm);
+                    spin_lock(&skb_latency_lock);
+                    clean_all_nodes();
+                    spin_unlock(&skb_latency_lock);
+                    break;
+                }
+            }
         }
     }
+
+out_free:
+    kfree(data);
+
     return count;
 }
 
-static ssize_t comm_name_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
+static ssize_t app_id_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-    char buffer[64];
+    char buffer[PROC_NUMBUF];
     size_t len = 0;
     len = snprintf(buffer, sizeof(buffer), "[%u]: Latest measured RTT was %llu ns\n", task_uid, measured_rtt);
     return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
 
-static const struct proc_ops comm_name_ops = {
-    .proc_write	= comm_name_write,
-    .proc_read	= comm_name_read,
-    .proc_lseek	= default_llseek,
+static const struct proc_ops app_id_ops = {
+    .proc_write = app_id_write,
+    .proc_read = app_id_read,
+    .proc_lseek = default_llseek,
 };
 
 static ssize_t latency_enable_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
@@ -268,7 +360,7 @@ static ssize_t latency_enable_write(struct file *file, const char __user *buf, s
 
 static ssize_t latency_enable_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
-    char buffer[64];
+    char buffer[PROC_NUMBUF];
     size_t len = 0;
     len = snprintf(buffer, sizeof(buffer), "enabled:%u, cached_length: %u\n", latency_enable, list_length);
     return simple_read_from_buffer(buf, count, ppos, buffer, len);
@@ -290,7 +382,7 @@ static int __init proc_init(void)
     }
 
     proc_create(LATENCY_ENABLE, 0666, proc_entry, &skb_latency_enable_ops);
-    proc_create(MONITOR_APP, 0666, proc_entry, &comm_name_ops);
+    proc_create(MONITOR_APP, 0666, proc_entry, &app_id_ops);
 
     return 0;
 }
@@ -312,6 +404,18 @@ static struct nf_hook_ops latency_hook_ops[] __read_mostly = {
     {
         .hook		= hook_func_in,
         .pf		= PF_INET,
+        .hooknum	= NF_INET_LOCAL_IN,
+        .priority	= NF_IP_PRI_FIRST,
+    },
+    {
+        .hook		= hook_func_out6,
+        .pf		= PF_INET6,
+        .hooknum	= NF_INET_LOCAL_OUT,
+        .priority	= NF_IP_PRI_FIRST,
+    },
+    {
+        .hook		= hook_func_in6,
+        .pf		= PF_INET6,
         .hooknum	= NF_INET_LOCAL_IN,
         .priority	= NF_IP_PRI_FIRST,
     },
