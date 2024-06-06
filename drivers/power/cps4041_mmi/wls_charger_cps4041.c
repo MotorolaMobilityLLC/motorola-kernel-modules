@@ -4625,6 +4625,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 	motoauth.wls_send_ask_packet = cps_wls_send_ask_packet;
 	motoauth.wls_sysfs_notify = cps_wls_sysfs_notify;
 	motoauth.wls_set_status = cps_wls_set_status;
+	motoauth.wls_update_light_fan = cps_wls_wlc_update_light_fan;
 	if (0 == moto_wls_auth_init(&motoauth)){
 		cps_wls_log(CPS_LOG_DEBG, "[%s] moto_wls_auth_init successful!\n", __func__);
 	} else {
