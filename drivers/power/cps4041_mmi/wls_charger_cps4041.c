@@ -1605,11 +1605,18 @@ static bool cps_wls_check_iout(int target_current, int current_now)
 	bool rt = false;
 	int batt_soc = 0;
 	bool skip_rod = false;
+	bool chg_en = true;
 
 	if (!chip)
 		return rt;
 
-	if (chip->thermal_icl != -1 &&
+	if (!IS_ERR_OR_NULL(chip->chg1_dev)) {
+		charger_dev_is_enabled(chip->chg1_dev, &chg_en);
+	}
+
+	if (!chg_en) {
+		skip_rod = true;
+	} else if (chip->thermal_icl != -1 &&
 		chip->thermal_icl < chip->MaxI) {
 		skip_rod = true;
 	} else if (chip->rod_stop_battery_soc > 0 &&
