@@ -963,6 +963,7 @@ static int nu2115_get_chg_mode(struct charger_device *chg_dev, int *mode)
 
 	return 0;
 }
+
 static int nu2115_get_adc(struct charger_device *chg_dev,
 			   enum adc_channel chan, int *min, int *max)
 {
@@ -1296,32 +1297,32 @@ static int nu2115_charger_get_property(struct power_supply *psy,
 		ret = nu2115_is_charger_enabled(chip, &chip->charger_enable);
 		val->intval = chip->charger_enable;
 		break;
-	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		ret = nu2115_get_adc_data(chip, NU2115_ADC_VBUS, &result);
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
+		ret = __nu2115_get_adc(chip, NU2115_ADC_VBUS, &result);
 		if (!ret)
 			chip->vbus_uv = result;
 		val->intval = chip->vbus_uv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		ret = nu2115_get_adc_data(chip, NU2115_ADC_IBUS, &result);
+		ret = __nu2115_get_adc(chip, NU2115_ADC_IBUS, &result);
 		if (!ret)
 			chip->ibus_ua = result;
 		val->intval = chip->ibus_ua;
 		break;
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
-		ret = nu2115_get_adc_data(chip, NU2115_ADC_VBAT, &result);
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+		ret = __nu2115_get_adc(chip, NU2115_ADC_VBAT, &result);
 		if (!ret)
 			chip->vbat_uv = result;
 		val->intval = chip->vbat_uv;
 		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
-		ret = nu2115_get_adc_data(chip, NU2115_ADC_IBAT, &result);
+		ret = __nu2115_get_adc(chip, NU2115_ADC_IBAT, &result);
 		if (!ret)
 			chip->ibat_ua = result;
 		val->intval = chip->ibat_ua;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		ret = nu2115_get_adc_data(chip, NU2115_ADC_TDIE, &result);
+		ret = __nu2115_get_adc(chip, NU2115_ADC_TDIE, &result);
 		if (!ret)
 			chip->die_temp = result - 8; //due to the temp higher sc8541
 		val->intval = chip->die_temp;

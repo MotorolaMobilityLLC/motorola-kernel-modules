@@ -1424,7 +1424,7 @@ static int sc8541_charger_get_property(struct power_supply *psy,
 		sc8541_check_charge_enabled(sc, &sc->charge_enabled);
 		val->intval = sc->charge_enabled;
 		break;
-	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		ret = sc8541_get_adc_data(sc, ADC_VBUS, &result);
 		if (!ret)
 			sc->vbus_volt = result;
@@ -1436,7 +1436,7 @@ static int sc8541_charger_get_property(struct power_supply *psy,
 			sc->ibus_curr = result;
 		val->intval = sc->ibus_curr * 1000;
 		break;
-	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
+	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		ret = sc8541_get_adc_data(sc, ADC_VBAT, &result);
 		if (!ret)
 			sc->vbat_volt = result;

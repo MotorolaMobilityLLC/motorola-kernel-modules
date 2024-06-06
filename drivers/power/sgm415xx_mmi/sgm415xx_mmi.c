@@ -2023,6 +2023,22 @@ static int sgm4154x_get_chip_id(struct charger_device *chg_dev, int *id)
 	return ret;
 }
 
+static int sgm4154x_enable_powerpath(struct charger_device *chg_dev, bool en)
+{
+	int ret = 0;
+	struct sgm4154x_device *sgm = charger_get_data(chg_dev);
+
+	dev_info(sgm->dev, "%s en = %d\n", __func__ , en);
+
+	/* Enable charging */
+	if (en)
+		ret = sgm4154x_set_hiz_en(chg_dev, false);
+	else
+		ret = sgm4154x_set_hiz_en(chg_dev, true);
+
+	return ret;
+}
+
 static struct charger_ops sgm4154x_chg_ops = {
 	.dump_registers = sgm4154x_dump_register,
 	/* cable plug in/out */
@@ -2062,7 +2078,7 @@ static struct charger_ops sgm4154x_chg_ops = {
 	//.safety_check = mt6375_sw_check_eoc,
 	.is_charging_done = sgm4154x_get_charging_status,
 	/* power path */
-	//.enable_powerpath = mt6375_enable_buck,
+	.enable_powerpath = sgm4154x_enable_powerpath,
 	//.is_powerpath_enabled = mt6375_is_buck_enabled,
 	/* timer */
 	.enable_safety_timer = sgm4154x_enable_safetytimer,
