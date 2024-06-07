@@ -4050,6 +4050,54 @@ static ssize_t gesture_store(struct device *dev,
 	return err;
 }
 
+#ifdef ILI_STOWED_SUPPORT
+static ssize_t stowed_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ILI_INFO("Stowed state = %d.\n", ilits->set_stowed);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", ilits->set_stowed);
+}
+
+static ssize_t stowed_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int mode, ret = 0;
+
+	ret = sscanf(buf, "%d", &mode);
+	if (ret < 0) {
+		ILI_INFO("Failed to convert value\n");
+		return -EINVAL;
+	}
+
+	ilits->get_stowed = mode;
+	if (ilits->set_stowed == mode) {
+		ILI_INFO("The value = %d is same, so not to write", mode);
+		ret = size;
+		return ret;
+	}
+
+	mutex_lock(&ilits->touch_mutex);
+	if (ilits->tp_suspend && ilits->should_enable_gesture) {
+		if (mode) {
+			ili_proximity_near(DDI_POWER_ON);
+		} else {
+			ili_proximity_far(WAKE_UP_SWITCH_GESTURE_MODE);
+		}
+	} else {
+		ILI_INFO("Skip stowed mode setting suspended:%d,ilits->should_enable_gesture:%d", ilits->tp_suspend,ilits->should_enable_gesture);
+		ret = size;
+                mutex_unlock(&ilits->touch_mutex);
+		return ret;
+	}
+
+	ilits->set_stowed = mode;
+	ret = size;
+	ILI_INFO("Success to set stowed mode %d\n", mode);
+	mutex_unlock(&ilits->touch_mutex);
+	return ret;
+}
+#endif
+
 /*
  * gesture type debug value used for nvt driver to check current gesture mode
  */
@@ -4120,6 +4168,9 @@ static struct device_attribute touchscreen_attributes[] = {
 #ifdef ILI_DOUBLE_TAP_CTRL
 	__ATTR(gesture, S_IRUGO | S_IWUSR | S_IWGRP, gesture_show, gesture_store),
 	__ATTR(gesture_type_dbg, S_IRUGO | S_IWUSR | S_IWGRP, gesture_type_dbg_show, gesture_type_dbg_store),
+#endif
+#ifdef ILI_STOWED_SUPPORT
+	__ATTR(stowed, S_IRUGO | S_IWUSR | S_IWGRP, stowed_show, stowed_store),
 #endif
 	__ATTR_NULL
 };

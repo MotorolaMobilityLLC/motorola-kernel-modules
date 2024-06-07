@@ -168,6 +168,11 @@ static void ilitek_resume_by_ddi_work(struct work_struct *work)
 		ilits->gesture_enabled = false;
 		ilits->wakeable = false;
 	}
+#ifdef ILI_STOWED_SUPPORT
+	ilits->set_stowed = 0;
+	ilits->prox_near = false;
+	ILI_INFO("ilits->set_stowed = %d,ilits->prox_near = %d\n",ilits->set_stowed,ilits->prox_near);
+#endif
 #else
 	if (ilits->gesture)
 		disable_irq_wake(ilits->irq_num);
@@ -678,6 +683,13 @@ int ili_sleep_handler(int mode)
 			enable_irq_wake(ilits->irq_num);
 			ili_irq_enable();
 			ilits->wakeable = true;
+#ifdef ILI_STOWED_SUPPORT
+			if (ilits->get_stowed) {
+				ili_proximity_near(DDI_POWER_ON);
+				ilits->set_stowed = ilits->get_stowed;
+				ILI_INFO("Enable stowed mode suspend\n");
+			}
+#endif
 		} else {
 			if (ili_ic_func_ctrl("sleep", DEEP_SLEEP_IN) < 0)
 				ILI_ERR("Write sleep in cmd failed\n");
@@ -762,6 +774,12 @@ int ili_sleep_handler(int mode)
 #else
 	if (ilits->gesture)
 		disable_irq_wake(ilits->irq_num);
+#endif
+
+#ifdef ILI_STOWED_SUPPORT
+		ilits->set_stowed = 0;
+        ilits->prox_near = false;
+		ILI_INFO("ilits->set_stowed = %d,ilits->prox_near = %d\n", ilits->set_stowed,ilits->prox_near);
 #endif
 
 		ILI_INFO("TP resume end\n");

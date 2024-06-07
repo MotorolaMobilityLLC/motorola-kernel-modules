@@ -1343,6 +1343,10 @@ struct ilitek_ts_data {
 	uint8_t supported_gesture_type;
 	uint8_t sys_gesture_type;
 #endif
+#ifdef ILI_STOWED_SUPPORT
+	int set_stowed;
+	int get_stowed;
+#endif
 	struct mutex state_mutex;
 	struct ili_sensor_platform_data *sensor_pdata;
 #ifdef CONFIG_HAS_WAKELOCK
