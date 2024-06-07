@@ -1874,6 +1874,80 @@ static ssize_t gesture_store(struct device *dev,
 }
 #endif
 
+#ifdef FTS_STOWED_MODE_SUPPORT
+int fts_stow_state_update(int mode)
+{
+	int ret = 0, stow_cmd;
+	u8 state = 0xFF;
+	u8 i, retry = 5;
+	struct input_dev *input_dev = fts_data->input_dev;
+
+	if (mode)
+		stow_cmd = FTS_STOW_CMD_VALUE_EN;
+	else
+		stow_cmd = FTS_STOW_CMD_VALUE_DIS;
+
+	mutex_lock(&input_dev->mutex);
+	for (i = 0; i < retry; i++) {
+		ret = fts_write_reg(FTS_STOW_CMD_REG, stow_cmd);
+		msleep(1);
+		if (!ret) {
+			fts_read_reg(FTS_STOW_CMD_REG, &state);
+			if (state == stow_cmd)
+				break;
+		}
+	}
+	if (i >= retry)
+		FTS_INFO("stow reg write rety: %d", i);
+
+	mutex_unlock(&input_dev->mutex);
+
+	return ret;
+}
+
+static ssize_t stowed_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int mode = 0;
+	int ret = 0;
+
+	ret = sscanf(buf, "%d", &mode);
+	if (ret < 0) {
+		FTS_INFO("Failed to convert value.\n");
+		return -EINVAL;
+	}
+	fts_data->get_stowed = mode;
+	if (fts_data->set_stowed == mode) {
+		FTS_INFO("Skip same stow value :%d", mode);
+		ret = size;
+		return ret;
+	}
+
+	if (fts_data->suspended && fts_data->wakeable) {
+		ret = fts_stow_state_update(mode);
+		if (ret < 0)
+			FTS_INFO("failed to set stowed mode = %d", mode);
+		else {
+			FTS_INFO("Success to set stowed mode %d\n", mode);
+			fts_data->set_stowed = fts_data->get_stowed;
+			ret = size;
+		}
+	} else {
+		FTS_INFO("Skip stowed mode setting when suspended:%d, wakeable:%d", fts_data->suspended,fts_data->wakeable);
+		ret = size;
+	}
+
+	return ret;
+}
+
+static ssize_t stowed_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	FTS_INFO("Stowed state = %d.\n", fts_data->set_stowed);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", fts_data->get_stowed);
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
@@ -1884,6 +1958,9 @@ static struct device_attribute touchscreen_attributes[] = {
 #endif
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 	__ATTR_RW(gesture),
+#endif
+#ifdef FTS_STOWED_MODE_SUPPORT
+	__ATTR_RW(stowed),
 #endif
 	__ATTR(debug_level_en, S_IRUGO | S_IWUSR | S_IWGRP, debug_level_en_show, debug_level_en_store),
 	__ATTR_NULL

@@ -2789,6 +2789,17 @@ static int fts_ts_suspend(struct device *dev)
     if (ts_data->gesture_support && (fts_gesture_suspend(ts_data) == 0)) {
         ts_data->screen_state = SCREEN_OFF;
         ts_data->wakeable = true;
+#ifdef FTS_STOWED_MODE_SUPPORT
+	if (ts_data->get_stowed) {
+		ret = fts_stow_state_update(1);
+		if (ret < 0)
+			FTS_INFO("fail to enable stowed mode when supsend\n");
+		else {
+			ts_data->set_stowed = ts_data->get_stowed;
+			FTS_INFO("Enable stowed mode when suspend\n");
+		}
+	}
+#endif
         mutex_unlock(&ts_data->state_mutex);
         FTS_INFO("tap gesture suspend\n");
         touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
@@ -2885,6 +2896,9 @@ static int fts_ts_resume(struct device *dev)
 #endif
         ts_data->suspended = false;
 
+#ifdef FTS_STOWED_MODE_SUPPORT
+        ts_data->set_stowed = 0;
+#endif
         return 0;
     }
 #endif

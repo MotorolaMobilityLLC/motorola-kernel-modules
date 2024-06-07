@@ -137,6 +137,12 @@
 #define FACTORY_REG_OPEN_ADDR		    0xCF
 #endif
 
+#ifdef FTS_STOWED_MODE_SUPPORT
+#define FTS_STOW_CMD_REG		    0xC6
+#define FTS_STOW_CMD_VALUE_EN		    0x11
+#define FTS_STOW_CMD_VALUE_DIS		    0x00
+#endif
+
 #ifdef CONFIG_INPUT_HIGH_RESOLUTION_4
 #define FTS_TOUCH_HIRES_EN                  1
 #define FTS_TOUCH_HIRES_X                   4
@@ -268,6 +274,10 @@ struct fts_ts_data {
     enum display_state screen_state;
     struct mutex state_mutex;
     struct focaltech_sensor_platform_data *sensor_pdata;
+#ifdef FTS_STOWED_MODE_SUPPORT
+    int set_stowed;
+    int get_stowed;
+#endif
 #endif
 
     u8 pen_etype;
@@ -432,6 +442,9 @@ int fts_check_cid(struct fts_ts_data *ts_data, u8 id_h);
 int fts_wait_tp_to_valid(void);
 void fts_release_all_finger(void);
 void fts_tp_state_recovery(struct fts_ts_data *ts_data);
+#ifdef FTS_STOWED_MODE_SUPPORT
+int fts_stow_state_update(int mode);
+#endif
 int fts_ex_mode_init(struct fts_ts_data *ts_data);
 int fts_ex_mode_exit(struct fts_ts_data *ts_data);
 int fts_ex_mode_recovery(struct fts_ts_data *ts_data);
