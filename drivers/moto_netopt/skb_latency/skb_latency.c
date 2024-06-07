@@ -75,7 +75,7 @@ static DEFINE_SPINLOCK(skb_latency_lock);
  */
 void create_node(struct sock *sock, __be32 seq) {
     tracked_tcp_seq *new_entry = NULL;
-    new_entry = kmalloc(sizeof(tracked_tcp_seq), GFP_KERNEL);
+    new_entry = kmalloc(sizeof(tracked_tcp_seq), GFP_ATOMIC);
     if (new_entry) {
         new_entry->seq = seq;
         new_entry->sock = sock;
