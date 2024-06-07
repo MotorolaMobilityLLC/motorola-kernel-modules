@@ -89,7 +89,7 @@ struct nu2115 {
 	int vbat_uv;
 	int ibat_ua;
 	int die_temp;
-
+	int force_chg_enable_flag;
 	struct charger_device *chg_dev;
 	struct charger_properties chg_prop;
 
@@ -917,7 +917,7 @@ static int nu2115_is_charger_enabled(struct nu2115 *chip, bool *en)
 	return 0;
 }
 #if 0
-/*TN Begin modified by zhen.liu11/860655 20230912 CR/EKFOGO4G-1483*/
+
 static int mtk_nu2115_enable_adc(struct charger_device *chg_dev, bool enable)
 {
 	int ret;
@@ -929,8 +929,7 @@ static int mtk_nu2115_enable_adc(struct charger_device *chg_dev, bool enable)
 		dev_err(chip->dev, "%s fail\n", __func__);
 	return ret;
 }
-/*TN End modified by zhen.liu11/860655 20230912 CR/EKFOGO4G-1483*/
-#endif
+
 static int nu2115_set_chg_mode(struct charger_device *chg_dev, int mode)
 {
 	struct nu2115 *chip = charger_get_data(chg_dev);
@@ -963,6 +962,7 @@ static int nu2115_get_chg_mode(struct charger_device *chg_dev, int *mode)
 
 	return 0;
 }
+#endif
 
 static int nu2115_get_adc(struct charger_device *chg_dev,
 			   enum adc_channel chan, int *min, int *max)
@@ -1393,9 +1393,7 @@ static int nu2115_psy_register(struct nu2115 *chip)
 
 static ssize_t show_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	int ret;
 	int state = 0;
-	int enable;
 	struct nu2115 *chip = dev_get_drvdata(dev);
 	if (!chip) {
 		pr_err("nu2115: chip not valid\n");
@@ -1403,18 +1401,11 @@ static ssize_t show_force_chg_auto_enable(struct device *dev, struct device_attr
 		goto end;
 	}
 
-	ret = nu2115_get_chg_mode(chip->chg_dev, &enable);
-	if (ret < 0) {
-		pr_err("nu2115: nu2115_is_chg_en not valid\n");
-		state = -ENODEV;
-		goto end;
-	}
-	state = enable;
+	state = chip->force_chg_enable_flag;
 	pr_info("show nu2115  %s charging \n",
-			   enable ? "enable" : "disable");
-	return state;
+			   state ? "enable" : "disable");
 end:
-	return sprintf(buf, "%d\n", state);
+	return sprintf(buf, "%d\n", chip->force_chg_enable_flag);
 }
 
 static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -1427,7 +1418,7 @@ static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_att
 		return -ENODEV;
 	}
 	enable = simple_strtoul(buf, NULL, 0);
-	ret = nu2115_set_chg_mode(chip->chg_dev, enable);
+	ret = nu2115_enable_chg(chip->chg_dev, enable);
 	if (ret) {
 		pr_err("nu2115 Couldn't %s charging rc=%d\n",
 			   enable ? "enable" : "disable", (int)ret);
@@ -1436,6 +1427,8 @@ static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_att
 
 	pr_info("nu2115  %s charging \n",
 			   enable ? "enable" : "disable");
+
+	chip->force_chg_enable_flag = enable;
 
 	return count;
 }
@@ -1786,6 +1779,7 @@ static int nu2115_probe(struct i2c_client *client,
 		dev_err(&client->dev, "nu2115_charger_device_register failed.\n");
 		return ret;
 	}
+	chip->force_chg_enable_flag = 0;
 	create_debugfs_entries(chip);
 	nu2115_create_device_node(chip->dev);
 
