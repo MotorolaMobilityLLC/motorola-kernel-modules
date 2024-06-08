@@ -64,7 +64,7 @@
 /* USB Type-C Tab */
 #define Type_C_Implements_Try_SRC NO        /* only one shall be enabled by */
 #define Type_C_Implements_Try_SNK YES        /* the port at the same time, try src or snk*/
-#define Rp_Value 2                          /* 0: Def 1: 1.5A 2: 3A Advertised*/
+#define Rp_Value 0                          /* 0: Def 1: 1.5A 2: 3A Advertised*/
 #define Type_C_Supports_Audio_Accessory YES
 #define Type_C_Is_VCONN_Powered_Accessory NO
 #define Type_C_Is_Debug_Target_SRC YES

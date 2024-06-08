@@ -899,8 +899,8 @@ void PolicySourceTransitionSupply(Port_t *port)
 		if (PolicySendCommand(port, CMTPS_RDY, peSourceReady, 0,
 					SOP_TYPE_SOP) == STAT_SUCCESS) {
 			/* Set to 1.5A (SinkTxNG) */
-			if (port->SourceCurrent != utcc1p5A) {
-				UpdateCurrentAdvert(port, utcc1p5A);
+			if (port->SourceCurrent != utccDefault) {
+				UpdateCurrentAdvert(port, utccDefault);
 				updateSourceMDACHigh(port);
 			}
 
@@ -1118,9 +1118,9 @@ void PolicySourceReady(Port_t *port)
 #endif /* AW_HAVE_VDM */
 	else {
 		port->PEIdle = AW_TRUE;
-		if (port->SourceCurrent != utcc3p0A) {
+		if (port->SourceCurrent != utccDefault) {
 			/* Set to 3.0A (SinkTXOK) */
-			UpdateCurrentAdvert(port, utcc3p0A);
+			UpdateCurrentAdvert(port, utccDefault);
 			updateSourceMDACHigh(port);
 		}
 	}
