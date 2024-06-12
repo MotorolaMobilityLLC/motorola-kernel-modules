@@ -4442,29 +4442,6 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 		goto free_source;
 	}
 
-	if(chip->cps_wls_irq){
-		ret = devm_request_threaded_irq(&client->dev, chip->cps_wls_irq, NULL,
-			cps_wls_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "cps_wls_irq", chip);
-		if(ret){
-			cps_wls_log(CPS_LOG_ERR, "[%s] request cps_wls_int irq failed ret = %d\n", __func__, ret);
-			goto free_source;
-		}
-		enable_irq_wake(chip->cps_wls_irq);
-	}
-
-	if(chip->wls_det_irq){
-		ret = devm_request_threaded_irq(&client->dev, chip->wls_det_irq, NULL,
-			wls_det_irq_handler, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT, "wls_det_irq", chip);
-		if(ret){
-			cps_wls_log(CPS_LOG_ERR, "[%s] request wls_det_irq irq failed ret = %d\n", __func__, ret);
-			goto free_source;
-		}
-		enable_irq_wake(chip->wls_det_irq);
-	}
-
-	//Enable IC EPP mode as default
-	cps_wls_mode_select("cps_wls_chrg_probe", true);
-
 	cps_wls_lock_work_init(chip);
 
 	cps_wls_create_device_node(&(client->dev));
@@ -4534,6 +4511,29 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
 	} else {
 		cps_wls_log(CPS_LOG_ERR, "[%s] moto_wls_auth_init failed!\n", __func__);
 	}
+
+	if(chip->cps_wls_irq){
+		ret = devm_request_threaded_irq(&client->dev, chip->cps_wls_irq, NULL,
+			cps_wls_irq_handler, IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "cps_wls_irq", chip);
+		if(ret){
+			cps_wls_log(CPS_LOG_ERR, "[%s] request cps_wls_int irq failed ret = %d\n", __func__, ret);
+			goto free_source;
+		}
+		enable_irq_wake(chip->cps_wls_irq);
+	}
+
+	if(chip->wls_det_irq){
+		ret = devm_request_threaded_irq(&client->dev, chip->wls_det_irq, NULL,
+			wls_det_irq_handler, IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING | IRQF_ONESHOT, "wls_det_irq", chip);
+		if(ret){
+			cps_wls_log(CPS_LOG_ERR, "[%s] request wls_det_irq irq failed ret = %d\n", __func__, ret);
+			goto free_source;
+		}
+		enable_irq_wake(chip->wls_det_irq);
+	}
+
+	//Enable IC EPP mode as default
+	cps_wls_mode_select("cps_wls_chrg_probe", true);
 
 	//queue_delayed_work(chip->wls_wq,&chip->fw_update_work, msecs_to_jiffies(5000));
 	cps_wls_reg_check();
