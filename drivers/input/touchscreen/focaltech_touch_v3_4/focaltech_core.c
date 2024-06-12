@@ -1100,16 +1100,6 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
 #endif
         mutex_unlock(&ts_data->report_mutex);
 
-#ifdef FOCALTECH_SENSOR_EN
-        if (ts_data->fod_event) {
-            input_report_key(ts_data->input_dev, ts_data->fod_event, 1);
-            input_sync(ts_data->input_dev);
-            input_report_key(ts_data->input_dev, ts_data->fod_event, 0);
-            input_sync(ts_data->input_dev);
-            FTS_INFO("report BTN_TRIGGER_HAPPY code(%d)", ts_data->fod_event);
-            ts_data->fod_event = 0;
-        }
-#endif
         break;
 
 #if FTS_PEN_EN
