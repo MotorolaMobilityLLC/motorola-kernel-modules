@@ -834,7 +834,7 @@ bool fetch_memcg_pagefault_status(struct mem_cgroup *memcg,
 		hybridswap_read_mcg_stats(memcg, MCG_ZRAM_STORED_PG_SZ);
 	scale = (cur_anon_pagefault - hybs->reclaimed_pagefault) *
 		percent_constant / (anon_total + 1);
-	hybp(HYB_INFO, "CHECK MEMCG PAGEFAULT %s: anon pagefault %u%%(%u)\n", hybs->name,
+	hybp(HYB_DEBUG, "CHECK MEMCG PAGEFAULT %s: anon pagefault %u%%(%u)\n", hybs->name,
 			scale, thresh);
 
 	if (scale >= thresh)
@@ -878,13 +878,13 @@ static bool fetch_infos_pagefault_status(void)
 
 	total_pagefault_percent = scale;
 
-	hybp(HYB_INFO, "current %llu t %llu last %llu t %lu scale %llu pagefault_scale %llu\n",
+	if (scale > fetch_infos_pagefault_level_value())
+		return true;
+
+	hybp(HYB_DEBUG, "current %llu t %llu last %llu t %lu scale %llu pagefault_scale %llu\n",
 			cur_anon_pagefault, cur_time,
 			infos_last_anon_pagefault, last_refresh_t,
 			scale, (unsigned long long)infos_pagefault_level.counter);
-
-	if (scale > fetch_infos_pagefault_level_value())
-		return true;
 
 false_out:
 	return false;
@@ -1335,11 +1335,11 @@ static bool zram_need_swapout(void)
 	ufs_wm_ok = hybridswap_stored_wm_ok();
 #endif
 
-	hybp(HYB_INFO, "zram_wm_ok %d avail_buffer_wm_ok %d ufs_wm_ok %d\n",
-			zram_wm_ok, avail_buffer_wm_ok, ufs_wm_ok);
-
 	if (zram_wm_ok && avail_buffer_wm_ok && ufs_wm_ok)
 		return true;
+
+	hybp(HYB_DEBUG, "zram_wm_ok %d avail_buffer_wm_ok %d ufs_wm_ok %d\n",
+			zram_wm_ok, avail_buffer_wm_ok, ufs_wm_ok);
 
 	return false;
 }
@@ -1494,7 +1494,7 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 
 	reclaim_cycles = (nr_to_reclaim / RECLAIM_PAGES_PER_CYCLE) + (nr_to_reclaim % RECLAIM_PAGES_PER_CYCLE > 0 ? 1 : 0);
 
-	hybp(HYB_INFO, "SWAPD_SHRINK ANON + available %uMB(%lu) to_reclaim %luKB can_reclaimed %luKB reclaim_cycles %lu",
+	hybp(HYB_DEBUG, "SWAPD_SHRINK ANON + available %uMB(%lu) to_reclaim %luKB can_reclaimed %luKB reclaim_cycles %lu",
 			(unsigned int)system_cur_usable_mem(), (unsigned long)fetch_high_mem_watermark_value(),
 			page_to_kb(nr_to_reclaim), (unsigned long)page_to_kb(total_can_reclaimed), reclaim_cycles);
 
@@ -1555,7 +1555,7 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 	}
 
 out:
-	hybp(HYB_INFO, "SWAPD_SHRINK ANON - available %uMB(%lu) reclaimed %luKB from memcg %lu\n",
+	hybp(HYB_DEBUG, "SWAPD_SHRINK ANON - available %uMB(%lu) reclaimed %luKB from memcg %lu\n",
 			(unsigned int)system_cur_usable_mem(), (unsigned long)fetch_high_mem_watermark_value(),
 			page_to_kb(nr_reclaimed), reclaim_memcg_cnt);
 	return nr_reclaimed;
@@ -1576,7 +1576,7 @@ static void swapd_shrink_node(pg_data_t *pgdat)
 	if ((jiffies - swapd_last_window_start) < swapd_shrink_window) {
 		if (swapd_last_window_shrink >= swapd_shrink_limit_per_window) {
 			count_swapd_event(SWAPD_SKIP_SHRINK_OF_WINDOW);
-			hybp(HYB_INFO, "swapd_last_window_shrink %lu, skip shrink\n",
+			hybp(HYB_DEBUG, "swapd_last_window_shrink %lu, skip shrink\n",
 					swapd_last_window_shrink);
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule_timeout(msecs_to_jiffies(reclaim_exceed_sleep_ms));
@@ -1605,7 +1605,7 @@ static void swapd_shrink_node(pg_data_t *pgdat)
 			swapd_skip_interval =
 				fetch_nothing_ignore_skip_interval_value();
 		last_round_is_empty = true;
-		hybp(HYB_INFO, "SWAPD_SHRINK_EMPTY_ROUND, reclaimed %lu KB, swapd_skip_interval %llu\n",
+		hybp(HYB_DEBUG, "SWAPD_SHRINK_EMPTY_ROUND, reclaimed %lu KB, swapd_skip_interval %llu\n",
 				(unsigned long)nr_reclaimed * 4, swapd_skip_interval);
 	} else {
 		swapd_skip_interval = 0;
