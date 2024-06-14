@@ -545,7 +545,7 @@ static ssize_t mem_cgroup_force_shrink_anon(struct kernfs_open_file *of,
 	else
 		nr_need_reclaim = memcg_inactive_anon_pages(memcg);
 
-	hybp(HYB_INFO, "FORCE SHRINK +\n");
+	hybp(HYB_DEBUG, "FORCE SHRINK +\n");
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	nr_reclaimed = try_to_free_mem_cgroup_pages(memcg, nr_need_reclaim,
 			GFP_KERNEL, MEMCG_RECLAIM_MAY_SWAP);
@@ -553,7 +553,7 @@ static ssize_t mem_cgroup_force_shrink_anon(struct kernfs_open_file *of,
 	nr_reclaimed = try_to_free_mem_cgroup_pages(memcg, nr_need_reclaim,
 			GFP_KERNEL, true);
 #endif
-	hybp(HYB_INFO, "FORCE SHRINK - to_reclaim %lu reclaimed %lu\n", nr_need_reclaim, nr_reclaimed);
+	hybp(HYB_DEBUG, "FORCE SHRINK - to_reclaim %lu reclaimed %lu\n", nr_need_reclaim, nr_reclaimed);
 	return nbytes;
 }
 
