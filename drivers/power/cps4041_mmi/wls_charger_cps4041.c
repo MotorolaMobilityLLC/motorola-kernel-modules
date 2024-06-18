@@ -1528,7 +1528,7 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 	int retry = 2;
 	int i = 0;
 
-	wls_icl = WLS_ICL_INCREASE_STEP_mA;
+	wls_icl = 3 * WLS_ICL_INCREASE_STEP_mA;
 	chg->bpp_icl_done = false;
 	if (chip && chip->wls_input_curr_max > 0) {
 		wls_icl_max = chip->wls_input_curr_max;
@@ -3638,6 +3638,54 @@ select_exit:
 	mutex_unlock(&chip->rx_vout_change_lock);
 }
 
+#define WLS_ICL_MIN 300000
+#define WLS_ICL_STEP 100000
+
+static int cps_wls_set_current(int icl, int cc)
+{
+	int input_current = 0;
+	int wls_icl = 0;
+	int step_cnt = 0;
+
+	if (IS_ERR_OR_NULL(chip))
+		return CPS_WLS_FAIL;
+
+	if (IS_ERR_OR_NULL(chip->chg1_dev))
+		return CPS_WLS_FAIL;
+
+	charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
+	if (icl < WLS_ICL_MIN) {
+		input_current = WLS_ICL_MIN;
+	} else {
+		input_current = icl;
+	}
+
+	step_cnt = (wls_icl - input_current) / WLS_ICL_STEP;
+	pr_info("%s wls_icl:%d input_current:%d cnt:%d\n",
+			__func__, wls_icl, input_current, step_cnt);
+	while (step_cnt > 0) {
+		if (cps_wls_get_sys_mode() != SYS_MODE_RX) {
+			return CPS_WLS_FAIL;
+		}
+		wls_icl = wls_icl - WLS_ICL_STEP;
+		pr_info("%s wls_icl:%d cnt:%d\n", __func__, wls_icl, step_cnt);
+		charger_dev_set_input_current(chip->chg1_dev, wls_icl);
+		msleep(100);
+		charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
+		step_cnt --;
+	}
+	if (wls_icl != input_current) {
+		msleep(50);
+	}
+
+	pr_info("%s input_current:%d icl:%d cc:%d\n", __func__, input_current, icl, cc);
+
+	charger_dev_set_charging_current(chip->chg1_dev, cc);
+	charger_dev_set_input_current(chip->chg1_dev, input_current);
+
+	return CPS_WLS_SUCCESS;
+}
+
 static void cps_epp_current_select(int *icl, int *vbus)
 {
 	struct cps_wls_chrg_chip *chg = chip;
@@ -4145,6 +4193,7 @@ static int wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 	cm->wls_chg_ops.wls_stop_epp = cps_wls_stop_epp;
 	cm->wls_chg_ops.wls_notify_thermal_icl = cps_wls_notify_thermal_input_current_limit;
 	cm->wls_chg_ops.wls_notify_cur_state = cps_wls_notify_cur_state;
+	cm->wls_chg_ops.wls_set_current = cps_wls_set_current;
 
 	if (cm->wls_tx_support && cm->config_otg_support) {
 		cm->wls_chg_ops.wls_set_tx_mode = cps_wls_force_set_tx_mode;
