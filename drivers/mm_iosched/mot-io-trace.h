@@ -117,6 +117,7 @@ TRACE_EVENT(rq_sched_log,
     TP_STRUCT__entry(
         __field(  dev_t,    dev         )
         __field(  sector_t, sector          )
+        __field(  unsigned int, nr_sector       )
         __field(  u8, in_queue       )
         __field(  u8, prio       )
         __field(  u8, data_dir       )
@@ -131,6 +132,7 @@ TRACE_EVENT(rq_sched_log,
          __entry->dev       = rq->q->disk ? disk_devt(rq->q->disk) : 0;
 #endif
         __entry->sector    = blk_rq_pos(rq);
+        __entry->nr_sector = blk_rq_trace_nr_sectors(rq);
 		__entry->in_queue 	   = in_queue;
 		__entry->prio 	   = prio;
 		__entry->data_dir  = data_dir;
@@ -139,13 +141,14 @@ TRACE_EVENT(rq_sched_log,
 
     ),
 
-    TP_printk("%d,%d %llu IN:%u P:%u W:%u [%d] %d",
+    TP_printk("%d,%d %llu + %u IN:%u P:%u W:%u [%d] %d",
           MAJOR(__entry->dev), MINOR(__entry->dev),
           (unsigned long long)__entry->sector,
-		 __entry->in_queue,
-		 __entry->prio,
-         __entry->data_dir,
-         __entry->tid,  __entry->tag)
+		__entry->nr_sector,
+		__entry->in_queue,
+		__entry->prio,
+		__entry->data_dir,
+		__entry->tid,  __entry->tag)
 );
 
 #endif  /* _TRACE_IO_MOT_H */
