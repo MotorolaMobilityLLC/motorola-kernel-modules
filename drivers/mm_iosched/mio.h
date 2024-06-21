@@ -53,7 +53,6 @@ struct mio_rq_info {
 	pid_t pid;
 	uid_t uid;
 	pid_t tid;
-	int 	task_i;
 	u64 	start_time;
 	u8		io_class;
 	u8 		m_prio;
@@ -113,7 +112,6 @@ struct mdd_data {
 	int front_merges;
 	u32 async_depth;
 	int prio_aging_expire;
-	int boosted;
 	struct mio_latency __percpu *io_latency;
 
 	spinlock_t lock;
@@ -130,6 +128,9 @@ struct mdd_data {
 	int min_prio_request;
 };
 
+struct bio_oem {
+	u8 ioprio_class;
+};
 
 
 
@@ -141,7 +142,10 @@ struct mdd_data {
 	} \
 } while (0)
 
-
+static inline  struct bio_oem* get_bio_oem(struct bio *bio)
+{
+	return (struct bio_oem*)&bio->android_oem_data1;
+}
 static inline bool task_in_top_app_group(struct task_struct *p)
 {
 	struct moto_task_struct *oem_data;
@@ -171,7 +175,7 @@ int mio_blkcg_activate(struct request_queue *q);
 void mio_blkcg_deactivate(struct request_queue *q);
 void mio_blkcg_depth_updated(struct blk_mq_hw_ctx *hctx);
 
-bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request *rq, struct mio_rq_info *rqi);
+bool request_boost(struct mdd_data *dd, struct task_struct *tsk, bool sync, int data_dir);
 void request_finish(struct request *rq, u64 now, struct mio_rq_info *rqi);
 bool is_enabled_boost(void);
 void enable_mdd(void);

@@ -21,7 +21,7 @@
 
 
 #define UX_TYPE_MASK ( UX_TYPE_INHERIT_BINDER | UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI |UX_TYPE_INHERIT_LOCK | UX_TYPE_SYSTEM_LOCK \
-	 | UX_TYPE_PERF_DAEMON | UX_TYPE_AUDIO |UX_TYPE_AUDIOSERVICE |UX_TYPE_LOW_LATENCY_BINDER | UX_TYPE_NATIVESERVICE)
+	 | UX_TYPE_PERF_DAEMON | UX_TYPE_AUDIO |UX_TYPE_AUDIOSERVICE |UX_TYPE_LOW_LATENCY_BINDER | UX_TYPE_NATIVESERVICE | UX_TYPE_KSWAPD )
 
 static struct ctl_table_header *ctl_table_hdr;
 int enable_boost = 0;
@@ -51,28 +51,28 @@ struct ctl_table iosched_table[] = {
         .procname   = "enable_io_boost",
         .data       = &enable_boost,
         .maxlen     = sizeof(int),
-        .mode       = 0644,
+        .mode       = 0600,
         .proc_handler   = proc_dointvec_minmax,
     },
 	{
         .procname   = "enable_log",
         .data       = &enable_log,
         .maxlen     = sizeof(int),
-        .mode       = 0644,
+        .mode       = 0600,
         .proc_handler   = proc_dointvec_minmax,
     },
     {
         .procname   = "sys_pid",
         .data       = &sys_pid,
         .maxlen     = 2*sizeof(pid_t),
-        .mode       = 0644,
+        .mode       = 0600,
         .proc_handler   = proc_dointvec_minmax,
     },
     {
         .procname   = "top_uid",
         .data       = &top_uid,
         .maxlen     = sizeof(uid_t),
-        .mode       = 0644,
+        .mode       = 0600,
         .proc_handler   = proc_dointvec_minmax,
     },
     { }
@@ -111,7 +111,7 @@ static inline bool is_android_app(struct task_struct *tsk)
 	return ( tsk->parent &&  tsk->parent->pid == system_pid);
 }
 
-static inline bool request_worker(struct task_struct *tsk, struct request *rq, struct moto_task_struct *oem_data)
+static inline bool request_worker(struct task_struct *tsk, struct moto_task_struct *oem_data)
 {
 	if (( tsk->flags & (PF_WQ_WORKER | PF_IO_WORKER )) \
 		|| ((tsk->flags & PF_KTHREAD ) && ( tsk->prio < DEFAULT_PRIO )))
@@ -126,7 +126,7 @@ static inline bool request_worker(struct task_struct *tsk, struct request *rq, s
 		return false;
 }
 
-bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request *rq, struct mio_rq_info *rqi)
+bool request_boost(struct mdd_data *dd, struct task_struct *tsk, bool is_sync, int data_dir)
 {
 	bool isboost = false;
 	struct moto_task_struct *oem_data;
@@ -151,7 +151,7 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request 
 		// pr_info("system_pid %d %d\n", system_pid, tsk->pid);
 	}
 
-	if (!rq_is_sync(rq))
+	if (!is_sync)
 	{
 		goto output;
 	}
@@ -179,7 +179,7 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, struct request 
 	if (isboost)
 		goto output;
 
-	isboost = request_worker(tsk, rq,oem_data);
+	isboost = request_worker(tsk, oem_data);
 
 output:
 	// if (isboost)

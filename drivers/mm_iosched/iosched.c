@@ -145,6 +145,7 @@ static inline struct mio_request_info *get_mio_request_info(struct request *rq)
 }
 
 static u32 mdd_owned_by_driver(struct mdd_data *dd, enum mdd_prio prio);
+static u32 mdd_queued(struct mdd_data *dd, enum mdd_prio prio);
 
 static struct mio_rq_info *get_mio_rq_info(struct mdd_data *dd, struct request *rq)
 {
@@ -190,8 +191,49 @@ __mdd_rb_root(struct mdd_per_prio *per_prio, struct request *rq)
 static u8 mdd_rq_ioclass(struct mdd_data *dd , struct request *rq)
 {
 	struct mio_rq_info *mrq =  get_mio_rq_info(dd, rq);
+	u8 ioprio_class = mrq?mrq->io_class:(uintptr_t)(rq->elv.priv[1]);
 
-	return mrq?mrq->io_class:(uintptr_t)(rq->elv.priv[1]);
+	return (ioprio_class <= IOPRIO_CLASS_TB)?ioprio_class:IOPRIO_CLASS_BE;
+}
+static u8 mdd_bio_ioclass(struct bio *bio)
+{
+	u8 ioprio_class = get_bio_oem(bio)->ioprio_class;
+
+	return (ioprio_class <= IOPRIO_CLASS_TB)?ioprio_class:IOPRIO_CLASS_BE;
+}
+
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 0, 0)
+static inline u8 mdd_task_ioclass(struct task_struct* task)
+{
+	u8 ioprio_class = IOPRIO_CLASS_NONE;
+	if ((IOPRIO_CLASS_RT == IOPRIO_PRIO_CLASS(get_current_ioprio())) \
+		|| (IOPRIO_CLASS_RT == task_nice_ioclass(current)))
+	{
+		ioprio_class = IOPRIO_CLASS_RT;
+	}
+	return ioprio_class;
+}
+#endif
+
+static inline u8 get_ioclass_task_bio(struct mdd_data *dd, struct task_struct *task, struct bio *bio)
+{
+	u8 ioprio_class = IOPRIO_PRIO_CLASS(bio->bi_ioprio);
+	enum mdd_prio prio;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 0, 0)
+	if (IOPRIO_CLASS_NONE == ioprio_class)
+	{
+		ioprio_class = mdd_task_ioclass(current);
+	}
+#endif
+	if (ioprio_class > IOPRIO_CLASS_IDLE)
+		ioprio_class = IOPRIO_CLASS_BE;
+	prio = ioprio_class_to_prio[ioprio_class];
+	if ((prio > DD_TB_PRIO) && request_boost(dd,current, op_is_sync(bio->bi_opf),bio_data_dir(bio)))
+	{
+		ioprio_class =  IOPRIO_CLASS_TB;
+	}
+	return ioprio_class;
 }
 
 /*
@@ -261,6 +303,32 @@ static void __mdd_remove_request(struct request_queue *q,
 		q->last_merge = NULL;
 }
 
+static enum elv_merge
+__blk_try_merge(struct request *rq, struct bio *bio)
+{
+	if (blk_discard_mergable(rq))
+		return ELEVATOR_DISCARD_MERGE;
+	else if (blk_rq_pos(rq) + blk_rq_sectors(rq) == bio->bi_iter.bi_sector)
+		return ELEVATOR_BACK_MERGE;
+	else if (blk_rq_pos(rq) - bio_sectors(bio) == bio->bi_iter.bi_sector)
+		return ELEVATOR_FRONT_MERGE;
+	return ELEVATOR_NO_MERGE;
+}
+
+
+static bool mdd_allow_merge(struct request_queue *q, struct request *rq, struct bio *bio)
+{
+	struct mdd_data *dd = q->elevator->elevator_data;
+	u8 ioprio_class, ioprio_bio;
+
+	if ( ELEVATOR_NO_MERGE == __blk_try_merge(rq,bio))
+		return false;
+
+	ioprio_class = mdd_rq_ioclass(dd, rq);
+	ioprio_bio = mdd_bio_ioclass(bio);
+	return (ioprio_class_to_prio[ioprio_class] == ioprio_class_to_prio[ioprio_bio]);
+}
+
 static void mdd_request_merged(struct request_queue *q, struct request *req,
 			      enum elv_merge type)
 {
@@ -296,7 +364,8 @@ static void mdd_merged_requests(struct request_queue *q, struct request *req,
 	 * if next expires before rq, assign its expire time to rq
 	 * and move into next position (next will be deleted) in fifo
 	 */
-	if (!list_empty(&req->queuelist) && !list_empty(&next->queuelist)) {
+	if (!list_empty(&req->queuelist) && !list_empty(&next->queuelist)
+			&& (ioprio_class_to_prio[mdd_rq_ioclass(dd, req)] == prio)){
 		if (time_before((unsigned long)next->fifo_time,
 				(unsigned long)req->fifo_time)) {
 			list_move(&req->queuelist, &next->queuelist);
@@ -687,11 +756,10 @@ static struct request *mdd_dispatch_request(struct blk_mq_hw_ctx *hctx)
 unlock:
 	spin_unlock(&dd->lock);
 	if (rq) {
-		struct mio_rq_info *mrq;
-		mrq = get_mio_rq_info(dd, rq);
+		struct mio_rq_info *mrq = get_mio_rq_info(dd, rq);
 		if (likely(mrq)) {
 			mrq->data_size = blk_rq_bytes(rq);
-			trace_rq_sched_log(rq, 0, dd->last_prio, dd->last_dir, mrq->tid);
+			trace_rq_sched_log(rq, 0, mrq->m_prio, dd->last_dir, mrq->tid);
 		}
 
 		// trace_rq_sched_dispatch(rq);
@@ -817,11 +885,10 @@ static void mdd_exit_sched(struct elevator_queue *e)
 		spin_unlock(&dd->lock);
 
 		WARN_ONCE(queued != 0,
-			"statistics for priority %d: i %u m %u d %u c %u b %u\n",
+			"statistics for priority %d: i %u m %u d %u c %u\n",
 			  prio, stats->inserted, stats->merged,
-			  stats->dispatched, atomic_read(&stats->completed), dd->boosted);
+			  stats->dispatched, atomic_read(&stats->completed));
 	}
-	printk(" %s boost %d \n", __func__, dd->boosted);
     free_percpu(dd->io_latency);
 	kfree(dd->rqs);
 	kfree(dd);
@@ -918,7 +985,7 @@ static int mdd_request_merge(struct request_queue *q, struct request **rq,
 			    struct bio *bio)
 {
 	struct mdd_data *dd = q->elevator->elevator_data;
-	const u8 ioprio_class = IOPRIO_PRIO_CLASS(bio->bi_ioprio);
+	const u8 ioprio_class = mdd_bio_ioclass(bio);
 	const enum mdd_prio prio = ioprio_class_to_prio[ioprio_class];
 	struct mdd_per_prio *per_prio = &dd->per_prio[prio];
 	sector_t sector = bio_end_sector(bio);
@@ -951,8 +1018,10 @@ static bool mdd_bio_merge(struct request_queue *q, struct bio *bio,
 {
 	struct mdd_data *dd = q->elevator->elevator_data;
 	struct request *free = NULL;
+	struct bio_oem* oem = get_bio_oem(bio);
 	bool ret;
 
+	oem->ioprio_class = get_ioclass_task_bio(dd, current, bio);
 	spin_lock(&dd->lock);
 	ret = blk_mq_sched_try_merge(q, bio, nr_segs, &free);
 	spin_unlock(&dd->lock);
@@ -979,47 +1048,43 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 	struct mio_rq_info *mrq;
 	LIST_HEAD(free);
 
-	if (IOPRIO_CLASS_NONE == ioprio_class)
-	{
-		if ((IOPRIO_CLASS_RT == IOPRIO_PRIO_CLASS(get_current_ioprio())) \
-			|| (IOPRIO_CLASS_RT == task_nice_ioclass(current)))
-		{
-			//mio_log(" rq_ioprio %d: class %d: %s\n", req_get_ioprio(rq),ioprio_class, current->comm);
-			ioprio_class = IOPRIO_CLASS_RT;
-		}
-	}
 
+	ioprio_class = mdd_bio_ioclass(rq->bio);
 	prio = ioprio_class_to_prio[ioprio_class];
-	mrq = get_mio_rq_info(dd, rq);
 
-	if ((prio > DD_TB_PRIO) && request_boost(dd,current, rq, mrq))
+	if ((prio > DD_TB_PRIO) && request_boost(dd,current, rq_is_sync(rq), rq_data_dir(rq)))
 	{
 		ioprio_class =  IOPRIO_CLASS_TB;
-		if (likely(mrq))
-			mrq->io_class = ioprio_class;
-		dd->boosted++;
+		get_bio_oem(rq->bio)->ioprio_class = ioprio_class;
 		//mio_log("%d:%d (%d %d) in be when boost\n", mdd_queued(dd, DD_TB_PRIO), mdd_queued(dd, DD_BE_PRIO), mdd_owned_by_driver(dd, DD_TB_PRIO),mdd_owned_by_driver(dd, DD_BE_PRIO));
 	}
-	rq->elv.priv[1] = (void *)(uintptr_t)ioprio_class;
 	lockdep_assert_held(&dd->lock);
+
 	/*
 	 * This may be a requeue of a write request that has locked its
 	 * target zone. If it is the case, this releases the zone lock.
 	 */
 	blk_req_zone_write_unlock(rq);
-
 	prio = ioprio_class_to_prio[ioprio_class];
+	// mio_log("  insert %lld + %d C:%d-%d %d P:%d\n", rq->bio->bi_iter.bi_sector, bio_sectors(rq->bio), ioprio_class, IOPRIO_PRIO_CLASS(rq->bio->bi_ioprio), IOPRIO_PRIO_CLASS(req_get_ioprio(rq)),prio);
+
+	rq->elv.priv[1] = (void *)(uintptr_t)ioprio_class;
+	mrq = get_mio_rq_info(dd, rq);
+	if (likely(mrq)){
+		mrq->io_class = ioprio_class;
+		mrq->m_prio = prio;
+	}
+
 	per_prio = &dd->per_prio[prio];
 	if (!rq->elv.priv[0]) {
 		per_prio->stats.inserted++;
 		rq->elv.priv[0] = (void *)1;
 		atomic_inc(&dd->in_queue_rqs);
-		if (likely(mrq)) {
+		if (likely(mrq))
+		{
 			mrq->pid = current->tgid;
 			mrq->tid = current->pid;
-			mrq->task_i=0;
-			mrq->io_class = ioprio_class;
-			mrq->m_prio = prio;
+			mrq->uid = current->cred->uid.val;
 		}
 	}
 
@@ -1051,7 +1116,6 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 		rq->fifo_time = jiffies + dd->fifo_expire[data_dir];
 		list_add_tail(&rq->queuelist, &per_prio->fifo_list[data_dir]);
 	}
-	//trace_rq_sched_insert(rq);
 }
 
 /*
@@ -1137,6 +1201,7 @@ static void mdd_finish_request(struct request *rq)
 	{
 		mrq->pid = 0;
 		mrq->tid = 0;
+		mrq->uid = 0;
 		mrq->start_time = 0;
 	}
 
@@ -1535,6 +1600,7 @@ static struct elevator_type mdd_iosched = {
 		.completed_request =  mdd_completed_request,
 		.next_request		= elv_rb_latter_request,
 		.former_request		= elv_rb_former_request,
+		.allow_merge		= mdd_allow_merge,
 		.bio_merge		= mdd_bio_merge,
 		.request_merge		= mdd_request_merge,
 		.requests_merged	= mdd_merged_requests,
