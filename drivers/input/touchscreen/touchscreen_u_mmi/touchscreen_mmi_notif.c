@@ -118,6 +118,16 @@ static int ts_mmi_panel_event_handle(struct ts_mmi_dev *touch_cdev, enum ts_mmi_
 		break;
 
 	case TS_MMI_EVENT_PRE_DISPLAY_ON:
+#ifdef CONFIG_TOUCHSCREEN_EARLY_RESET_ON_RESUME
+		if (NEED_TO_SET_POWER) {
+			/* powering on early */
+			TRY_TO_CALL(power, TS_MMI_POWER_ON);
+			dev_dbg(DEV_MMI, "%s: touch powered on\n", __func__);
+		} else {
+			dev_info(DEV_MMI, "%s: ts_mmi_panel_on\n", __func__);
+			ts_mmi_panel_on(touch_cdev);
+		}
+#else
 		if (NEED_TO_SET_POWER) {
 			/* powering on early */
 			TRY_TO_CALL(power, TS_MMI_POWER_ON);
@@ -130,15 +140,22 @@ static int ts_mmi_panel_event_handle(struct ts_mmi_dev *touch_cdev, enum ts_mmi_
 			dev_dbg(DEV_MMI, "%s: resetting...\n", __func__);
 			TRY_TO_CALL(reset, TS_MMI_RESET_HARD);
 		}
+#endif
 		break;
 
 	case TS_MMI_EVENT_DISPLAY_ON:
+#ifdef CONFIG_TOUCHSCREEN_EARLY_RESET_ON_RESUME
+		if (NEED_TO_SET_POWER) {
+			ts_mmi_panel_on(touch_cdev);
+		}
+#else
 		/* out of reset to allow wait for boot complete */
 		if (NEED_TO_SET_PINCTRL) {
 			TRY_TO_CALL(pinctrl, TS_MMI_PINCTL_ON);
 			dev_dbg(DEV_MMI, "%s: touch pinctrl_on\n", __func__);
 		}
 		ts_mmi_panel_on(touch_cdev);
+#endif
 		break;
 
 	default:
