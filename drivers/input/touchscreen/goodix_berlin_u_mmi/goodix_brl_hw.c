@@ -1245,6 +1245,11 @@ static int goodix_touch_handler(struct goodix_ts_core *cd,
 #ifdef CONFIG_GTP_FOD
 	ts_debug("touch pre_buf[0]=0x%x", pre_buf[0]);
 	fp_flags = pre_buf[0] & GOODIX_FP_EVENTS;
+
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+	atomic_set(&cd->fp_event, fp_flags);
+#endif
+
 	if(pre_flags != fp_flags) {
 		if(fp_flags)
 			ts_event->gesture_type =  GOODIX_GESTURE_FOD_DOWN;

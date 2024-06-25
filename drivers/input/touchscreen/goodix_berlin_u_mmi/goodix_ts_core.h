@@ -615,6 +615,9 @@ struct goodix_ts_core {
 	bool data_valid;
 	struct mutex frame_log_lock;
 #endif
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+	atomic_t fp_event;
+#endif
 };
 
 /* external module structures */

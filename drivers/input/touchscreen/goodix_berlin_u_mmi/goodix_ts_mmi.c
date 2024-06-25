@@ -63,6 +63,10 @@ static ssize_t goodix_ts_log_trigger_store(struct device *dev,
 static ssize_t goodix_ts_log_trigger_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 #endif
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+static ssize_t goodix_ts_fp_event_show(struct device *dev,
+	struct device_attribute *attr, char *buf);
+#endif
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -93,6 +97,10 @@ static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
 #endif
 
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+static DEVICE_ATTR(fp_event, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_fp_event_show, NULL);
+#endif
 /* hal settings */
 #define ROTATE_0   0
 #define ROTATE_90   1
@@ -152,7 +160,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 	if (core_data->board_data.pocket_mode_ctrl)
 		ADD_ATTR(pocket_mode);
 #endif
-
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+		ADD_ATTR(fp_event);
+#endif
 #ifdef CONFIG_GTP_LAST_TIME
 	ADD_ATTR(timestamp);
 #endif
@@ -655,7 +665,22 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 	ts_info("Stowed state = %d.\n", core_data->set_mode.stowed);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.stowed);
 }
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+static ssize_t goodix_ts_fp_event_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	int idata = 0;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	idata = atomic_read(&core_data->fp_event);
+	ts_info("fp_event state = 0x%02x.\n", idata);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x\n", idata);
+}
+#endif
 static int goodix_ts_mmi_refresh_rate(struct device *dev, int freq)
 {
 	struct platform_device *pdev;
@@ -1362,6 +1387,10 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev) {
 
 	ts_info("Suspend start");
 	atomic_set(&core_data->suspended, 1);
+#ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
+	atomic_set(&core_data->fp_event, 0x01);
+#endif
+
 #ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
 	//disable/stop ghost log capture
 	atomic_set(&core_data->allow_capture, 0);
