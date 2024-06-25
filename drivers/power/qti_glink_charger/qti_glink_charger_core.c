@@ -263,6 +263,9 @@ struct qti_charger {
 	bool				*debug_enabled;
 	u32				wls_curr_max;
 	int				rx_connected;
+	u32				rx_dev_mfg;
+	u32				rx_dev_type;
+	u32				rx_dev_id;
 	u32				weak_charge_disable;
 	u32				switched_nums;
 	bool				mosfet_supported;
@@ -669,7 +672,7 @@ void qti_wireless_charge_dump_info(struct qti_charger *chg, struct wls_dump wls_
 
 	mmi_info(chg, "Wireless dump info -2: TX_IIN: %dmA, TX_VIN: %dmV, TX_VRECT: %dmV, "
 		"TX_DET_RX_POWER: %dmW, TX_POWER: %dmW, POWER_LOSS: %dmW, TX_FOD: %d, "
-		"RX_CONNECTED: %d, TX_EPT_RSN: 0x%04x, ",
+		"RX_CONNECTED: %d, RX_DEV_INFO: 0x%x:0x%x:0x%x, TX_EPT_RSN: 0x%04x, ",
 		wls_info.tx_iin_ma,
 		wls_info.tx_vin_mv,
 		wls_info.tx_vrect_mv,
@@ -678,6 +681,9 @@ void qti_wireless_charge_dump_info(struct qti_charger *chg, struct wls_dump wls_
 		wls_info.power_loss,
 		(wls_info.irq_status & (0x01<<12)) ? 1 : 0,
 		chg->rx_connected,
+		chg->rx_dev_mfg,
+		chg->rx_dev_type,
+		chg->rx_dev_id,
 		wls_info.tx_ept);
 
 	mmi_info(chg, "Wireless dump info -3: rx_ept: %d, rx_ce: %d, "
@@ -2081,6 +2087,79 @@ static DEVICE_ATTR(rx_connected, S_IRUGO,
 		rx_connected_show,
 		NULL);
 
+static ssize_t rx_dev_manufacturing_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	u32 rx_dev_mfg = 0;
+	struct qti_charger *chg = this_chip;
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	qti_charger_read(chg, OEM_PROP_WLS_RX_DEV_MFG,
+				&rx_dev_mfg,
+				sizeof(rx_dev_mfg));
+
+	chg->rx_dev_mfg= rx_dev_mfg;
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%#x\n", chg->rx_dev_mfg);
+}
+static DEVICE_ATTR(rx_dev_manufacturing, S_IRUGO,
+		rx_dev_manufacturing_show,
+		NULL);
+
+static ssize_t rx_dev_type_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	u32 rx_dev_type = 0;
+	struct qti_charger *chg = this_chip;
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	qti_charger_read(chg, OEM_PROP_WLS_RX_DEV_TYPE,
+				&rx_dev_type,
+				sizeof(rx_dev_type));
+
+	chg->rx_dev_type = rx_dev_type;
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%#x\n", chg->rx_dev_type);
+}
+static DEVICE_ATTR(rx_dev_type, S_IRUGO,
+		rx_dev_type_show,
+		NULL);
+
+static ssize_t rx_dev_id_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	u32 rx_dev_id = 0;
+	struct qti_charger *chg = this_chip;
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	qti_charger_read(chg, OEM_PROP_WLS_RX_DEV_ID,
+				&rx_dev_id,
+				sizeof(rx_dev_id));
+
+	chg->rx_dev_id = rx_dev_id;
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%#x\n", chg->rx_dev_id);
+}
+static DEVICE_ATTR(rx_dev_id, S_IRUGO,
+		rx_dev_id_show,
+		NULL);
+
+
 static ssize_t wlc_st_changed_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
@@ -2660,6 +2739,30 @@ static int wireless_charger_notify_callback(struct notifier_block *nb,
 			}
 		}
 		break;
+        case NOTIFY_EVENT_WLS_RX_DEV_INFO_UPDATE:
+	/* RX dev info update */
+		if (notify_data->data[0] != chg->rx_dev_mfg) {
+			if (chg->wls_psy) {
+				pr_info("report rx_dev_mfg %#x\n", notify_data->data[0]);
+				sysfs_notify(&chg->wls_psy->dev.parent->kobj, NULL, "rx_dev_manufacturing");
+			}
+			chg->rx_dev_mfg = notify_data->data[0];
+		}
+		if (notify_data->data[1] != chg->rx_dev_type) {
+			if (chg->wls_psy) {
+				pr_info("report rx_dev_type %#x\n", notify_data->data[1]);
+				sysfs_notify(&chg->wls_psy->dev.parent->kobj, NULL, "rx_dev_type");
+			}
+			chg->rx_dev_type = notify_data->data[1];
+		}
+		if (notify_data->data[2] != chg->rx_dev_id) {
+			if (chg->wls_psy) {
+				pr_info("report rx_dev_id %#x\n", notify_data->data[2]);
+				sysfs_notify(&chg->wls_psy->dev.parent->kobj, NULL, "rx_dev_id");
+			}
+			chg->rx_dev_id = notify_data->data[2];
+		}
+		break;
         default:
 		pr_err("Unknown wireless event: %#lx\n", event);
                 break;
@@ -2701,6 +2804,21 @@ static void wireless_psy_init(struct qti_charger *chg)
 				&dev_attr_rx_connected);
         if (rc)
 		pr_err("couldn't create wireless rx_connected\n");
+
+	rc = device_create_file(chg->wls_psy->dev.parent,
+				&dev_attr_rx_dev_manufacturing);
+        if (rc)
+		pr_err("couldn't create wireless rx_dev_manufacturing\n");
+
+	rc = device_create_file(chg->wls_psy->dev.parent,
+				&dev_attr_rx_dev_type);
+        if (rc)
+		pr_err("couldn't create wireless rx_dev_type\n");
+
+	rc = device_create_file(chg->wls_psy->dev.parent,
+				&dev_attr_rx_dev_id);
+        if (rc)
+		pr_err("couldn't create wireless rx_dev_id\n");
 
 	rc = device_create_file(chg->wls_psy->dev.parent,
 				&dev_attr_wls_input_current_limit);
