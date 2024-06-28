@@ -18,6 +18,7 @@
 #include <linux/debugfs.h>
 #include <linux/iio/consumer.h>
 #include <linux/mmi_gauge_class.h>
+#include <linux/thermal.h>
 
 #define REG_CHIP_ID             0x00
 #define REG_VCELL_H             0x02
@@ -114,6 +115,7 @@ struct cw_battery {
 	struct iio_channel *vref_channel;
 	struct fg_temp *ntc_temp_table;
 	bool has_ext_ntc;
+	bool android_auto_connected;
 	int  rbat_pull_up_r;
 	int  chip_id;
 	int  voltage_now;
@@ -474,6 +476,63 @@ int adc_battemp(struct cw_battery *cw_bat, int res)
 
 	return tbatt_value;
 }
+
+static int get_ntc_temp(const char *name, int *ntc_temp)
+{
+	struct thermal_zone_device *ntc;
+	int quiet_ntc = 0;
+	int ret = -1;
+
+	ntc = thermal_zone_get_zone_by_name(name);
+	if (IS_ERR_OR_NULL(ntc)) {
+		pr_err("get %s zone failure\n", name);
+		return ret;
+	}
+
+	ret = thermal_zone_get_temp(ntc, &quiet_ntc);
+	if (ret) {
+		pr_err("Error reading temperature for %s:%d\n", name, ret);
+		return ret;
+	}
+
+	*ntc_temp = quiet_ntc / 100;
+	pr_info("%s = %d\n", name, *ntc_temp);
+
+	return ret;
+}
+static ssize_t android_auto_connected_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct cw_battery *cw_bat = (struct cw_battery *)dev->driver_data;
+
+	if (IS_ERR_OR_NULL(cw_bat))
+		return 0;
+	return sprintf(buf, "%d\n", cw_bat->android_auto_connected);
+}
+
+static ssize_t android_auto_connected_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct cw_battery *cw_bat = (struct cw_battery *)dev->driver_data;
+	unsigned long tmp = 0;
+
+	tmp = simple_strtoul(buf, NULL, 0);
+	pr_info("%s %ld\n", __func__, tmp);
+
+	if (IS_ERR_OR_NULL(cw_bat))
+		return 0;
+
+	if (tmp == 1) {
+		cw_bat->android_auto_connected = true;
+	} else if (tmp == 0) {
+		cw_bat->android_auto_connected = false;
+	} else {
+		cw_err(cw_bat, "Error value for android_auto_connected\n");
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(android_auto_connected);
+
 /*
  * The TEMP register is an UNSIGNED 8bit read only register.
  * It reports the real-time battery temperature
@@ -487,7 +546,8 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 	unsigned char reg_val;
 	int batt_ntc_v = 0;
 	int bif_v = 0;
-	int tres_temp,delta_v, batt_temp;;
+	int tres_temp,delta_v, batt_temp;
+	int quiet_ntc_temp = 0;
 
 	if (cw_bat->has_ext_ntc) {
 		iio_read_channel_processed(cw_bat->Batt_NTC_channel, &batt_ntc_v);
@@ -504,6 +564,10 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 
 		batt_temp = adc_battemp(cw_bat, tres_temp) * 10;
 		cw_info(cw_bat,"read batt temperature from PMIC,temp = %d \n",batt_temp);
+		if (cw_bat->android_auto_connected && 0 == get_ntc_temp("quiet_ntc", &quiet_ntc_temp)) {
+			cw_info(cw_bat, "use quiet_ntc=%d, batt_temp=%d\n", quiet_ntc_temp, batt_temp);
+			batt_temp = quiet_ntc_temp;
+		}
 	} else {
 		ret = cw_read(cw_bat, REG_TEMP, &reg_val);
 		if (ret < 0)
@@ -1069,6 +1133,11 @@ static int cw2217_probe(struct i2c_client *client, const struct i2c_device_id *i
 	if (ret) {
 		cw_err(cw_bat, "Failed to parse cw2217 properties\n");
 		return ret;
+	}
+
+	ret = device_create_file(&(client->dev), &dev_attr_android_auto_connected);
+	if (ret) {
+		cw_err(cw_bat, "Failed to create file android_auto_connected\n");
 	}
 
 	cw_bat->vdd_i2c_vreg = devm_regulator_get_optional(
