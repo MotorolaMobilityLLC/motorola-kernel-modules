@@ -589,6 +589,8 @@ static void smart_batt_update_thread(struct work_struct *work)
 		if (rsoc != chip->uisoc) {
 			chip->uisoc = rsoc;
 			power_supply_changed(chip->batt_psy);
+		} else if (chip->combo_batt_temp >= 650) {
+			power_supply_changed(chip->batt_psy);
 		}
 	}
 	if (chip->sync_boardtemp_to_fg)
