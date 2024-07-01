@@ -81,6 +81,7 @@ enum oem_property_type {
 	OEM_PROP_FG_OPERATION,
 	OEM_PROP_TYPEC_RESET,
 	OEM_PROP_CHG_PARTNER_SOC,
+	OEM_PROP_ENCRYT_DATA,
 	OEM_PROP_MAX,
 };
 
@@ -136,6 +137,12 @@ struct fg_dump {
 	u16 cycle_count;
 	u32 remaining_capacity;
 	u32 full_capacity;
+};
+
+struct encrypted_data {
+	u32 random_num[4];
+	u32 hmac_data[4];
+	u32 sha1_data[4];
 };
 
 extern int qti_charger_set_property(u32 property, const void *val, size_t val_len);

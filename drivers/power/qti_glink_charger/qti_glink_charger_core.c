@@ -33,7 +33,7 @@
 
 #include "mmi_charger.h"
 #include "qti_glink_charger.h"
-
+#include "trusted_shash_lib.h"
 /* PPM specific definitions */
 #define MSG_OWNER_OEM			32782
 #define MSG_TYPE_REQ_RESP		1
@@ -280,6 +280,10 @@ struct qti_charger {
 	int curr_thermal_secondary_level;
 	int num_thermal_secondary_levels;
 	struct thermal_cooling_device *secondary_tcd;
+
+	u32				random_num[SHA256_NUM];
+	u8 				sha1_digest[SHA1_DIGEST_SIZE];
+	u8 				hmac_digest[SHA256_DIGEST_SIZE];
 
 	struct notifier_block		wls_nb;
 	struct dentry		*debug_root;
@@ -779,6 +783,43 @@ void qti_fg_charge_dump_info(struct qti_charger *chg, struct fg_dump fg_info)
 }
 #endif
 
+static void qti_encrypt_authentication(struct qti_charger *chg)
+{
+	int i;
+	TRUSTED_SHASH_RESULT trusted_result;
+	struct encrypted_data send_data;
+	u8 random_num[4] = {0};
+
+	memset(&send_data, 0, sizeof(send_data));
+	for (i = 0;i < 4;i++) {
+		get_random_bytes(&(random_num[i]),sizeof(*random_num));
+		trusted_result.random_num[i] = random_num[i] % 26 + 'a';
+		send_data.random_num[i] = trusted_result.random_num[i];
+		mmi_info(chg, "encrypt random_num1[%d]: %d, 0x%x \n", i, send_data.random_num[i], send_data.random_num[i]);
+	}
+
+	trusted_sha1(trusted_result.random_num, 4, trusted_result.sha1);
+	trusted_hmac(trusted_result.random_num, 4, trusted_result.hmac_sha256);
+
+	for (i = 0;i < 4;i++) {
+	    send_data.hmac_data[i] = trusted_result.hmac_sha256[3 + (4 * i)] + (trusted_result.hmac_sha256[2 + (4 * i)] << 8) +
+	            (trusted_result.hmac_sha256[1 + (4 * i)] << 16) + (trusted_result.hmac_sha256[0 + (4 * i)] << 24);
+	    mmi_info(chg, "encrypt hmac_sha256[%d]: 0x%x \n", i, send_data.hmac_data[i]);
+
+	}
+
+	for (i = 0;i < 4;i++) {
+	    send_data.sha1_data[i] = trusted_result.sha1[3 + (4 * i)] + (trusted_result.sha1[2 + (4 * i)] << 8) +
+	            (trusted_result.sha1[1 + (4 * i)] << 16) + (trusted_result.sha1[0 + (4 * i)] << 24);
+	    mmi_info(chg, "encrypt hmac_sha1[%d]: 0x%x \n", i, send_data.sha1_data[i]);
+	}
+
+	qti_charger_write(chg, OEM_PROP_ENCRYT_DATA,
+				&send_data,
+				sizeof(struct encrypted_data));
+
+}
+
 static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_info)
 {
 	int rc;
@@ -861,6 +902,9 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	chg->chg_info.chrg_ma = info.chrg_ua / 1000;
 	chg->chg_info.chrg_type = info.chrg_type;
 	chg->chg_info.chrg_pmax_mw = info.chrg_pmax_mw;
+	if (chg->chg_info.chrg_present != info.chrg_present && !info.chrg_present) {
+		qti_encrypt_authentication(chg);
+	}
 	chg->chg_info.chrg_present = info.chrg_present;
 	if (!info.chrg_present && info.chrg_type != 0)
 		chg->chg_info.chrg_present = 1;
@@ -3507,6 +3551,7 @@ static int qti_charger_init(struct qti_charger *chg)
 	thermal_charge_control_init(chg);
 
 	create_debugfs_entries(chg);
+	trusted_shash_alloc();
 	return 0;
 }
 
@@ -3546,7 +3591,7 @@ static void qti_charger_deinit(struct qti_charger *chg)
 
 	wireless_psy_deinit(chg);
 	thermal_charge_control_deinit(chg);
-
+	trusted_shash_release();
 	if (chg->debug_root)
 		debugfs_remove_recursive(chg->debug_root);
 
