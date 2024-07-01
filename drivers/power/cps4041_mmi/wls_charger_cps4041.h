@@ -400,6 +400,7 @@ struct cps_wls_chrg_chip {
 	bool backpower_mode;
 	bool backpower_mode_support;
 	struct mutex bpm_lock;
+	bool android_auto_connected;
 };
 
 typedef enum ept_reason

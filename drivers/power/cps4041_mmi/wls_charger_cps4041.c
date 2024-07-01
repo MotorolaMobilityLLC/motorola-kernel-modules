@@ -404,6 +404,7 @@ static void cps_wls_switch_epp_to_bpp(void);
 static int backpower_mode_enter(struct cps_wls_chrg_chip *chg);
 static int backpower_mode_exit(struct cps_wls_chrg_chip *chg, bool timeout);
 static void backpower_mode_timeout_work_start(struct cps_wls_chrg_chip *chip, int ms);
+static void cps_wls_stop_epp(void);
 
 int cps_wls_reg_check(void)
 {
@@ -1956,6 +1957,11 @@ static int cps_wls_mode_select(char *str, bool mode)
 	struct cps_wls_chrg_chip *chg = chip;
 	int rt = CPS_WLS_FAIL;
 
+	if (chg && chg->android_auto_connected && mode) {
+		cps_wls_log(CPS_LOG_DEBG, "[%s] cps_wls_mode_select skip when android auto connected\n", str);
+		return rt;
+	}
+
 	if (chg && gpio_is_valid(chg->wls_mode_select)) {
 		gpio_set_value(chg->wls_mode_select, mode);
 		rt = CPS_WLS_SUCCESS;
@@ -3185,6 +3191,49 @@ static ssize_t factory_wireless_en_show(struct device *dev,
 }
 static DEVICE_ATTR(factory_wireless_en, S_IRUGO|S_IWUSR, factory_wireless_en_show, factory_wireless_en_store);
 
+static ssize_t show_android_auto_connected(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", chip->android_auto_connected);
+}
+
+static ssize_t store_android_auto_connected(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int sys_mode = 0;
+	unsigned long tmp = 0;
+
+	tmp = simple_strtoul(buf, NULL, 0);
+	cps_wls_log(CPS_LOG_DEBG, "[%s] %ld\n", __func__, tmp);
+
+	if (IS_ERR_OR_NULL(chip))
+		return 0;
+
+	sys_mode = cps_wls_get_sys_mode();
+	if (tmp == 1) {
+		chip->android_auto_connected = true;
+		if (gpio_is_valid(chip->wls_mode_select) &&
+				gpio_get_value(chip->wls_mode_select)) {
+			if (sys_mode == SYS_MODE_RX) {
+				cps_wls_log(CPS_LOG_DEBG, "[%s] cps_wls_stop_epp\n", __func__);
+				cps_wls_stop_epp();
+			} else {
+				cps_wls_mode_select("android auto connected", false);
+			}
+		}
+	} else if (tmp == 0) {
+		chip->android_auto_connected = false;
+		if (sys_mode == CPS_WLS_FAIL &&
+				gpio_is_valid(chip->wls_mode_select) &&
+				!gpio_get_value(chip->wls_mode_select)) {
+			cps_wls_mode_select("android auto disconnected", true);
+		}
+	} else {
+		cps_wls_log(CPS_LOG_DEBG, "[%s] Error parameters\n", __func__);
+	}
+
+	return count;
+}
+static DEVICE_ATTR(android_auto_connected, 0664, show_android_auto_connected, store_android_auto_connected);
+
 static void cps_wls_create_device_node(struct device *dev)
 {
 	pr_info("%s\n", __func__);
@@ -3228,6 +3277,8 @@ static void cps_wls_create_device_node(struct device *dev)
 	device_create_file(dev, &dev_attr_wlc_tx_sn);
 //-----------------------MOTO RX Offset Detect---------
 	device_create_file(dev, &dev_attr_offset_detect_enable);
+//-----------------------Android Auto------------------
+	device_create_file(dev, &dev_attr_android_auto_connected);
 }
 
 static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
@@ -3551,11 +3602,15 @@ static int wls_tcmd_register(struct cps_wls_chrg_chip *cm)
 	return ret;
 }
 
+#define ANDROID_AUTO_LIMIT_ICL 500000	//500mA
+#define ANDROID_AUTO_LIMIT_TEMP 390		//39℃
+
 static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 {
 	struct cps_wls_chrg_chip *chg = chip;
 	uint32_t wls_power = 0;
 	int wls_voltage = 0;
+	static bool android_auto_over_temp = false;
 
 	mutex_lock(&chip->rx_vout_change_lock);
 	if (chip->cable_ready_wait_count < 3 && !chip->moto_stand)
@@ -3634,6 +3689,19 @@ static void cps_wls_current_select(int *icl, int *vbus, bool *cable_ready)
 	}
 	if (chip->wls_input_curr_max != 0 && chip->wls_input_curr_max < chg->MaxI)
 		*icl = chip->wls_input_curr_max * 1000;
+
+	if (chip->android_auto_connected) {
+		if (cps_get_bat_info(POWER_SUPPLY_PROP_TEMP) >= ANDROID_AUTO_LIMIT_TEMP) {
+			android_auto_over_temp = true;
+		} else if (cps_get_bat_info(POWER_SUPPLY_PROP_TEMP) <= (ANDROID_AUTO_LIMIT_TEMP - 30)) {
+			android_auto_over_temp = false;
+		}
+		if (*icl > ANDROID_AUTO_LIMIT_ICL && android_auto_over_temp) {
+			*icl = ANDROID_AUTO_LIMIT_ICL;
+		}
+	} else {
+		android_auto_over_temp = false;
+	}
 select_exit:
 	mutex_unlock(&chip->rx_vout_change_lock);
 }
