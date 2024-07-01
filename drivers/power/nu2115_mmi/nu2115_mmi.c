@@ -179,7 +179,7 @@ static struct reg_default nu2115_reg_init_val[] = {
 	{NU2115_INT_FLAG,	0x00},//default
 	{NU2115_INT_MASK,	0x00},//default
 	{NU2115_FLT_MASK,	0x00},//default
-	{NU2115_ADC_CTRL,	0x80},//default mean {NU2115_ADC_CONTROL1,	0x00}, 0x80:enable adc
+	{NU2115_ADC_CTRL,	0x00},//default mean {NU2115_ADC_CONTROL1,	0x00}, 0x80:enable adc
 	//{NU2115_ADC_FN_DIS,	0x07},//0x06:TSBUS TSBAT mean {NU2115_ADC_CONTROL2,	0x06}
 	//{NU2115_TSBUS_FLT,	0x15},
 	//{NU2115_TSBAT_FLG,	0x15},
