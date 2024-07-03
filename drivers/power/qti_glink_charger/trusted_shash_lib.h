@@ -23,6 +23,7 @@
 #include <linux/random.h>
 #include <crypto/hash.h>
 #include <crypto/hash_info.h>
+#include <linux/version.h>
 
 #define SHA_NUM                  4
 typedef struct trusted_shash{

@@ -85,7 +85,12 @@ int trusted_sha1_set(const unsigned char *data, unsigned int datalen,
 	}
 
 	ret = crypto_shash_digest(&sdesc->shash, data, datalen, digest);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
 	kfree_sensitive(sdesc);
+#else
+	kzfree(sdesc);
+#endif
 	return ret;
 }
 
@@ -146,7 +151,11 @@ int trusted_hmac_set(unsigned char *digest, const unsigned char *key,
 
 out:
 	kfree(data_in);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
 	kfree_sensitive(sdesc);
+#else
+	kzfree(sdesc);
+#endif
 	return ret;
 }
 
