@@ -271,7 +271,6 @@ void fts_read_report_fod_event(struct fts_ts_data *ts_data)
     struct gesture_event_data event;
     int fod_down_interval = 0;
     static unsigned long start = 0;
-    struct input_dev *input_dev = ts_data->input_dev;
 
     ret = fts_read(&cmd, 1, fod_data, 9);
     if (ret < 0)
@@ -351,10 +350,6 @@ void fts_read_report_fod_event(struct fts_ts_data *ts_data)
         {
             //FTS_INFO("Get FOD-UP normal");
             FTS_INFO("report BTN_TRIGGER_HAPPY2");
-            input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 1);
-            input_sync(input_dev);
-            input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 0);
-            input_sync(input_dev);
             ts_data->fod_event = BTN_TRIGGER_HAPPY2;
             last_fod_down = false;
         }
@@ -363,10 +358,6 @@ void fts_read_report_fod_event(struct fts_ts_data *ts_data)
             //FTS_INFO("Get FOD-DOWN normal");
             if (last_fod_down == false)
             {
-                input_report_key(input_dev, BTN_TRIGGER_HAPPY1, 1);
-                input_sync(input_dev);
-                input_report_key(input_dev, BTN_TRIGGER_HAPPY1, 0);
-                input_sync(input_dev);
                 ts_data->fod_event = BTN_TRIGGER_HAPPY1;
                 last_fod_down = true;
                 FTS_INFO("report BTN_TRIGGER_HAPPY1");
