@@ -68,8 +68,9 @@ static void mio_blkcg_set_shallow_depth(struct mio_blkcg *mio_blkcg,
 
 
 	mio_blkg->shallow_depth =
-		max_t(unsigned int, 1, (depth * mio_blkcg->weight / 100U) / map_nr);
-	// printk("%s shallow_depth %d  map_nr %d depth %d\n", __func__, mio_blkg->shallow_depth, map_nr, depth);
+		max_t(unsigned int, 1, (depth * max(25, mio_blkcg->weight) / 100U) / map_nr);
+	mio_blkg->async_shallow_depth = mio_blkg->shallow_depth * 3 /4;
+	//printk("%s shallow_depth %d  map_nr %d depth %d\n", __func__, mio_blkg->shallow_depth, map_nr, depth);
 }
 
 static struct blkg_policy_data *mio_blkcg_pd_alloc(gfp_t gfp,
@@ -155,20 +156,26 @@ static struct cgroup_subsys_state *blkcg_css(void)
 }
 #endif
 
-unsigned int mio_blkcg_shallow_depth(struct request_queue *q)
+u32 mio_blkcg_shallow_depth(struct request_queue *q, bool is_sync, int *weight)
 {
 	struct blkcg_gq *blkg;
 	struct mio_blkg *mio_blkg;
+	struct mio_blkcg *mio_blkcg;
 
 	rcu_read_lock();
 	blkg = blkg_lookup(css_to_blkcg(blkcg_css()), q);
 	mio_blkg = BLKG_TO_MIO_BLKG(blkg);
+	mio_blkcg = BLKCG_TO_MIO_BLKCG(blkg->blkcg);
 	rcu_read_unlock();
 
 	if (IS_ERR_OR_NULL(mio_blkg))
 		return 0;
-	// trace_printk("%s shallow_depth  %d %p\n", __func__,  mio_blkg->shallow_depth, mio_blkg);
-	return mio_blkg->shallow_depth;
+
+	if (IS_ERR_OR_NULL(mio_blkcg))
+		return 0;
+	*weight = mio_blkcg->weight;
+
+	return is_sync?mio_blkg->shallow_depth:mio_blkg->async_shallow_depth;
 }
 
 void mio_blkcg_depth_updated(struct blk_mq_hw_ctx *hctx)

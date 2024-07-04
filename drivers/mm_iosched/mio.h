@@ -46,7 +46,8 @@ struct mio_blkcg {
 struct mio_blkg {
 	struct blkg_policy_data pd; /* must be the first member */
 
-	unsigned int shallow_depth;
+	u32 shallow_depth;
+	u32 async_shallow_depth;
 };
 
 struct mio_rq_info {
@@ -167,7 +168,7 @@ static inline bool is_launch(void)
 
 void iosched_ctl_init(void);
 void iosched_ctl_deinit(void);
-unsigned int mio_blkcg_shallow_depth(struct request_queue *q);
+u32 mio_blkcg_shallow_depth(struct request_queue *q, bool is_sync , int *weight);
 
 int mio_blkcg_init(void);
 void mio_blkcg_exit(void);

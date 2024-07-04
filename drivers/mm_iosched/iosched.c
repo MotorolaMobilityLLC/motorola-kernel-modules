@@ -800,6 +800,8 @@ static void mdd_completed_request(struct request *rq, u64 now)
 static void mdd_limit_depth(blk_opf_t opf, struct blk_mq_alloc_data *data)
 {
 	struct mdd_data *dd = data->q->elevator->elevator_data;
+	int weight = 100;
+	u32 s_depth;
 
 	/* Do not throttle synchronous reads. */
 	if (op_is_sync(opf) && !op_is_write(opf)){
@@ -809,15 +811,18 @@ static void mdd_limit_depth(blk_opf_t opf, struct blk_mq_alloc_data *data)
 		if (task_in_top_app_group(current)) {
 			return;
 		}
+		s_depth = mio_blkcg_shallow_depth(data->q, true, &weight);
+		if (weight != 100 )
+			data->shallow_depth = s_depth;
 		if (atomic_read(&dd->in_queue_rqs ) > (dd->nr_threshold_rqs))
 		{
 			if (is_task_nr_rq_more(dd, current, (dd->nr_requests >>1 )))
 			{
-				data->shallow_depth = max(dd->async_depth,  mio_blkcg_shallow_depth(data->q)>>1);
+				data->shallow_depth = max(dd->async_depth,  s_depth>>1);
 			}
 		}
 		// if (data->shallow_depth)
-			// mio_log(" non top pid %d depth %d\n", current->tgid, data->shallow_depth);
+		// 	mio_log(" non top pid %d depth %d\n", current->tgid, data->shallow_depth);
 		return;
 	}
 
@@ -825,8 +830,24 @@ static void mdd_limit_depth(blk_opf_t opf, struct blk_mq_alloc_data *data)
 	 * Throttle asynchronous requests and writes such that these requests
 	 * do not block the allocation of synchronous requests.
 	 */
-	data->shallow_depth = max(dd->async_depth, mio_blkcg_shallow_depth(data->q));
-	// mio_log("limit_depth pid %d depth %d\n", current->tgid, data->shallow_depth);
+	data->shallow_depth = max(dd->async_depth, mio_blkcg_shallow_depth(data->q, false, &weight));
+
+	if (!is_enabled_boost() || task_in_top_app_group(current))
+	{
+		// mio_log(" async top pid %d depth %d\n", current->tgid, data->shallow_depth);
+		return;
+	}
+
+	if (atomic_read(&dd->in_queue_rqs) > (dd->nr_threshold_rqs))
+	{
+		if (is_task_nr_rq_more(dd, current, (dd->nr_requests >>1 )))
+		{
+			data->shallow_depth = mio_blkcg_shallow_depth(data->q, true, &weight)>>1;
+		}
+	}
+	data->shallow_depth = max(dd->async_depth, data->shallow_depth);
+	// if (data->shallow_depth)
+	// 	mio_log(" async pid %d depth %d\n", current->tgid, data->shallow_depth);
 }
 
 /* Called by blk_mq_update_nr_requests(). */
@@ -848,9 +869,10 @@ static void mdd_depth_updated(struct blk_mq_hw_ctx *hctx)
 			sizeof(struct mio_rq_info),
 			GFP_KERNEL | __GFP_ZERO);
 		dd->nr_requests = depth;
-		dd->nr_threshold_rqs = dd->nr_requests * 3 /4;
+		dd->nr_threshold_rqs = dd->nr_requests * 4 /5;
 	}
-	dd->async_depth = max(1U,  (1U << shift)  / 4);
+	//dd->async_depth = max(1U,  (1U << shift)  / 4);
+	dd->async_depth = max(1U,  (1U << shift)/10);
 	mio_blkcg_depth_updated(hctx);
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(6, 0, 0)
 	sbitmap_queue_min_shallow_depth(tags->bitmap_tags, dd->async_depth);
@@ -1049,13 +1071,11 @@ static void mdd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 	LIST_HEAD(free);
 
 
-	ioprio_class = mdd_bio_ioclass(rq->bio);
 	prio = ioprio_class_to_prio[ioprio_class];
 
 	if ((prio > DD_TB_PRIO) && request_boost(dd,current, rq_is_sync(rq), rq_data_dir(rq)))
 	{
 		ioprio_class =  IOPRIO_CLASS_TB;
-		get_bio_oem(rq->bio)->ioprio_class = ioprio_class;
 		//mio_log("%d:%d (%d %d) in be when boost\n", mdd_queued(dd, DD_TB_PRIO), mdd_queued(dd, DD_BE_PRIO), mdd_owned_by_driver(dd, DD_TB_PRIO),mdd_owned_by_driver(dd, DD_BE_PRIO));
 	}
 	lockdep_assert_held(&dd->lock);
