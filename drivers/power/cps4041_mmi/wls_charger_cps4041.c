@@ -1295,6 +1295,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		if(chip->bootmode == 8 || chip->bootmode == 9)
 			cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_POWER_ON");
+		queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(2000));
 	}
 	if(int_flag & RX_INT_LDO_OFF) {
 		CPS_RX_LDO_OFF = true;
@@ -1309,7 +1310,6 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		}
 		cps_bpp_icl_on();
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_LDO_ON");
-		queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(2000));
 	}
 	if(int_flag & RX_INT_READY){
 		data[0] = 0x38;
@@ -3807,18 +3807,34 @@ static void cps_epp_current_select(int *icl, int *vbus)
 
 static void cps_wls_dump_info_work(struct work_struct *work)
 {
+	int load_mod = 0;
+	int load_nomod = 0;
+
 	if (!chip)
 		return;
 
-	if (!chip->rx_ldo_on)
+	if (cps_wls_get_sys_mode() != SYS_MODE_RX)
 		return;
 
 	chip->rx_fop = cps_wls_get_rx_fop_value();
 	chip->rx_ept = cps_wls_get_rx_ept_code();
 	chip->rx_ce = cps_wls_get_rx_ce_pkt_value();
 	chip->rx_dietmp = cps_wls_get_rx_die_tmp();
+
+	if (chip->rx_ce & 0x8000)
+		chip->rx_ce = chip->rx_ce - 65536;
 	cps_wls_log(CPS_LOG_DEBG, "cps_dump_info fop %dkHz,ept 0x%04X, ce %d, dietmp %d\n",
 		chip->rx_fop, chip->rx_ept, chip->rx_ce, chip->rx_dietmp);
+
+	if (chip->rx_dietmp > 50) {
+		load_mod = cps_wls_rx_get(CPS_RX_REG_DUMY_LOAD_MOD);
+		load_nomod = cps_wls_rx_get(CPS_RX_REG_DUMY_LOAD_NO_MOD);
+		chip->rx_irect = cps_wls_get_rx_irect();
+		chip->rx_vrect = cps_wls_get_rx_vrect();
+		chip->rx_vout = cps_wls_get_rx_vout();
+		cps_wls_log(CPS_LOG_DEBG, "cps_dump_info irect %d, vrect %d, vout %d, load_mod %d, load_nomod %d\n",
+			chip->rx_irect, chip->rx_vrect, chip->rx_vout, load_mod, load_nomod);
+	}
 
 	queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(3000));
 }
