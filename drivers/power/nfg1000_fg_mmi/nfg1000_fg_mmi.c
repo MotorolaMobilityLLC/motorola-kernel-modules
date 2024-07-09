@@ -2105,10 +2105,27 @@ static int fg_read_volt(struct mmi_fg_chip *mmi)
 
 }
 
+static int fg_read_avg_current(struct mmi_fg_chip *mmi, int *curr)
+{
+        int ret;
+        u16 avg_curr = 0;
+
+        ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_AI], &avg_curr);
+        if (ret < 0) {
+                mmi_err("could not read avg current, ret = %d\n", ret);
+                return ret;
+        }
+        *curr = (int)((s16)avg_curr);
+        mmi_info("avg curr = %d", *curr);
+
+        return ret;
+}
+
 static int fg_read_current(struct mmi_fg_chip *mmi, int *curr)
 {
 	int ret;
 	u16 avg_curr = 0;
+	int tmp_curr = 0;
 
 	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_CURRENT], &avg_curr);
 	if (ret < 0) {
@@ -2117,6 +2134,8 @@ static int fg_read_current(struct mmi_fg_chip *mmi, int *curr)
 	}
 	*curr = (int)((s16)avg_curr);
 	mmi_info(" curr = %d", *curr);
+
+	fg_read_avg_current(mmi, &tmp_curr);
 
 	return ret;
 }
