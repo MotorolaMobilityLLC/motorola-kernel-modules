@@ -1134,10 +1134,10 @@ static int sc760x_plug_in(struct charger_device *chgdev)
 
 static int sc760x_plug_out(struct charger_device *chgdev)
 {
-	struct sc760x_chip *sc = charger_get_data(chgdev);
-	
-	sc760x_disable_charger(sc);
-	sc760x_set_auto_bsm_dis(sc, false);
+	//struct sc760x_chip *sc = charger_get_data(chgdev);
+
+	//sc760x_disable_charger(sc);
+	//sc760x_set_auto_bsm_dis(sc, false);
 
 	return 0;
 }
