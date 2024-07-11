@@ -1267,11 +1267,6 @@ static void cps_epp_icl_on(void)
 			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
 			charger_dev_set_input_current(chip->chg1_dev, icl);
 		}
-		if (chip->enable_rod) {
-			chip->rx_start_ktime = ktime_get_boottime();
-			chip->rod_stop = false;
-			queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(3000));
-		}
 	}
 }
 
@@ -1296,6 +1291,13 @@ static int cps_wls_rx_irq_handler(int int_flag)
 			cps_rx_online_check(chip);
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_POWER_ON");
 		queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(2000));
+		chip->rx_start_ktime = ktime_get_boottime();
+		if (chip->enable_rod) {
+			chip->rod_stop = false;
+			chip->rx_ldo_detect_count = 0;
+			pr_info("%s start offset_detect_work\n", __func__);
+			queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(4000));
+		}
 	}
 	if(int_flag & RX_INT_LDO_OFF) {
 		CPS_RX_LDO_OFF = true;
@@ -1304,7 +1306,6 @@ static int cps_wls_rx_irq_handler(int int_flag)
 	if (int_flag & RX_INT_LDO_ON) {
 		CPS_RX_LDO_OFF = false;
 		chip->rx_ldo_on = true;
-		chip->rx_start_ktime = ktime_get_boottime();
 		if (chip->wlc_status == WLC_DISCONNECTED) {
 			cps_wls_set_status(WLC_CONNECTED);
 		}
@@ -1569,14 +1570,6 @@ static void cps_bpp_mode_icl_work(struct work_struct *work)
 	}
 
 	chg->bpp_icl_done = true;
-
-	if (chip->enable_rod) {
-		chip->rod_stop = false;
-		pr_info("%s start offset_detect_work\n", __func__);
-		queue_delayed_work(chip->wls_wq,
-			&chip->offset_detect_work,
-			msecs_to_jiffies(wls_current_now >= WLS_BPP_ROD_THRESHOLD_CURRENT_MAX ? 5000 : 0));
-	}
 }
 
 static void cps_wls_notify_thermal_input_current_limit(int thermal_icl)
@@ -1648,12 +1641,37 @@ static void cps_offset_detect_work(struct work_struct *work)
 	if (!chip)
 		return;
 
-	if (!chip->rx_ldo_on) {
-		chip->rx_offset_detect_count = 0;
-		chip->rx_offset = false;
-		cps_wls_log(CPS_LOG_DEBG, "[%s] rx_ldo_on:%d,rod_stop:%d",
-			__func__, chip->rx_ldo_on, chip->rod_stop);
+	if (chip->stop_epp_flag) {
 		return;
+	}
+
+	if (cps_wls_get_chip_id() != CPS_CHIP_ID) { //chip not power on
+		return;
+	}
+
+	if (!chip->rx_ldo_on) {
+		if (cps_wls_get_sys_mode() == SYS_MODE_RX) {
+			chip->rx_ldo_detect_count ++;
+			if (chip->rx_ldo_detect_count >= 3 &&
+				!chip->rx_offset) {
+				chip->rx_offset = true;
+				cps_wls_set_status(WLC_ERR_LOWER_EFFICIENCY);
+				pr_info("%s chip->rx_offset=%d\n", __func__, chip->rx_offset);
+			}
+			if (ktime_get_boottime() - chip->rx_start_ktime >= WLS_ROD_STOP_TIME) {
+				cps_wls_log(CPS_LOG_DEBG, "[%s] rx_ldo_on detect stop,wls status:%d\n", __func__, chip->wlc_status);
+				chip->rod_stop = true;
+				chip->rx_offset = false;
+			} else
+				queue_delayed_work(chip->wls_wq, &chip->offset_detect_work, msecs_to_jiffies(1000));
+			return;
+		} else { //Disconnected
+			chip->rx_offset_detect_count = 0;
+			chip->rx_offset = false;
+			cps_wls_log(CPS_LOG_DEBG, "[%s] rx_ldo_on:%d,rod_stop:%d",
+				__func__, chip->rx_ldo_on, chip->rod_stop);
+			return;
+		}
 	}
 
 	if (chip->mode_type != Sys_Op_Mode_MOTO_WLC) {
@@ -1672,7 +1690,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 
 	current_now = cps_wls_get_rx_iout();
 	wls_power = cps_wls_get_rx_neg_power() / 2;
-	if (wls_mode == Sys_Op_Mode_BPP ||
+	if ((wls_mode == Sys_Op_Mode_BPP && chip->bpp_icl_done) ||
 		(wls_mode == Sys_Op_Mode_EPP && wls_power == WLS_RX_CAP_5W)) {
 		if (!chip->rx_offset) {
 			if (chip->thermal_state != 0 &&
@@ -2003,6 +2021,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			cps_rx_online_check(chip);
 			chip->rx_ldo_on = false;
 			chip->rx_offset_detect_count = 0;
+			chip->rx_ldo_detect_count = 0;
 			chip->rx_offset = false;
 			chip->rx_vout_set = 0;
 			chip->hs_st = HS_UNKONWN;
