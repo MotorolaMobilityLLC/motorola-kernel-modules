@@ -299,6 +299,7 @@ struct cps_wls_chrg_chip {
     ktime_t stop_epp_ktime;
     bool mode_select_force;
     cps_hs_st_e hs_st;
+    bool android_auto_connected;
 };
 
 typedef enum ept_reason
