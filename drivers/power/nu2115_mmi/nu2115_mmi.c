@@ -185,7 +185,7 @@ static struct reg_default nu2115_reg_init_val[] = {
 	//{NU2115_TSBAT_FLG,	0x15},
 	//{NU2115_TDIE_ALM,	0x48},//0x48:60C
 	{NU2115_IBUS_UCP,	0xE8},
-	//{NU2115_VAC12PRET,	0x01},
+	{NU2115_VAC12PRET,	0x00},
 	//{NU2115_ACDRV12_CTRL,   0x80},
 	{NU2115_P2VOUT_UOVP,    0x70},
 	{NU2115_DEGLITC_REG,    0x0D},
@@ -242,7 +242,7 @@ static struct reg_default nu2115_reg_defs[] = {
 	{NU2115_TSBAT_FLG,     0x15},
 	{NU2115_TDIE_ALM,      0xC3},
 	{NU2115_IBUS_UCP,      0xE0},
-	{NU2115_VAC12PRET,     0x01},
+	{NU2115_VAC12PRET,     0x00},
 	{NU2115_ACDRV12_CTRL,  0x80},
 	{NU2115_DEV_INFO,      0x90},
 	{NU2115_P2VOUT_UOVP,   0x50},
@@ -798,6 +798,9 @@ static irqreturn_t nu2115_irq_handler_thread(int irq, void *private)
 	struct nu2115_device *bq = private;
 	struct nu2115_state state;
 	int ret;
+#ifdef CONFIG_WORK_AROUND_FOR_EN_DISVACDRV
+	unsigned int val;
+#endif
 
 	dev_err(bq->dev,"[%s]%s enter\n",bq->model_name, __func__);
 	mutex_lock(&bq->irq_complete);
@@ -813,6 +816,19 @@ static irqreturn_t nu2115_irq_handler_thread(int irq, void *private)
 	}
 	bq->irq_waiting = false;
 
+#ifdef CONFIG_WORK_AROUND_FOR_EN_DISVACDRV
+	ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &val);
+	if (!ret) {
+            dev_err(bq->dev, "%s: Reg NU2115_VAC12PRET] = 0x%02X\n", __func__, val);
+            val = val & NU2115_DIS_ACDRV;
+            dev_err(bq->dev, "%s: dis_acdrv = %d\n", __func__, val);
+            if (val) {
+                ret = regmap_write(bq->regmap, NU2115_VAC12PRET, 0);
+                if (ret)
+                    dev_err(bq->dev, "%s: disable dis_acdrv fail ret=%d", __func__, ret);
+            }
+    }
+#endif
 	ret = nu2115_get_state(bq, &state);
 	if (ret < 0) {
 		mutex_unlock(&bq->irq_complete);
@@ -1479,8 +1495,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 	struct nu2115_device *bq  = charger_get_data(chg_dev);
 
 	if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN) {
-		ret = regmap_update_bits(bq->regmap, NU2115_VAC12PRET,
-			NU2115_EN_OTG, 0);
+		ret = regmap_write(bq->regmap, NU2115_VAC12PRET, 0);
 		if (ret) {
 			dev_err(bq->dev, "%s:mmi_mux close en otg fail ret=%d", __func__, ret);
 			return ret;
@@ -1520,8 +1535,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
             }
 
         } else if (typec_mos == MMI_DVCHG_MUX_OTG_OPEN) {
-            ret = regmap_update_bits(bq->regmap, NU2115_VAC12PRET,
-                NU2115_EN_OTG, NU2115_EN_OTG);
+            ret = regmap_write(bq->regmap, NU2115_VAC12PRET, NU2115_EN_OTG);
             if (ret) {
                 dev_err(bq->dev, "%s:mmi_mux  en otg fail ret=%d", __func__, ret);
                 return ret;
@@ -1537,8 +1551,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
             }
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
         } else if (typec_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
-            ret = regmap_update_bits(bq->regmap, NU2115_VAC12PRET,
-                NU2115_EN_OTG, NU2115_EN_OTG);
+            ret = regmap_write(bq->regmap, NU2115_VAC12PRET, NU2115_EN_OTG);
             if (ret) {
                 dev_err(bq->dev, "%s:mmi_mux  en otg fail ret=%d", __func__, ret);
                 return ret;
@@ -1563,8 +1576,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
                 return ret;
             }
         } else if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
-            ret = regmap_update_bits(bq->regmap, NU2115_VAC12PRET,
-                    NU2115_EN_OTG, NU2115_EN_OTG);
+            ret = regmap_write(bq->regmap, NU2115_VAC12PRET, NU2115_EN_OTG);
 
 	    	ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &val);
         	if (!ret)
@@ -1608,8 +1620,21 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 	}
 
         ret = regmap_read(bq->regmap, NU2115_VAC12PRET, &val);
+#ifdef CONFIG_WORK_AROUND_FOR_EN_DISVACDRV
+        if (!ret) {
+            dev_err(bq->dev, "%s:mmi_mux Reg NU2115_VAC12PRET] = 0x%02X\n", __func__, val);
+            val = val & NU2115_DIS_ACDRV;
+            dev_err(bq->dev, "%s:mmi_mux dis_acdrv = %d\n", __func__, val);
+            if (val) {
+                ret = regmap_write(bq->regmap, NU2115_VAC12PRET, 0);
+                if (ret)
+                    dev_err(bq->dev, "%s:mmi_mux disable dis_acdrv fail ret=%d", __func__, ret);
+            }
+        }
+#else
         if (!ret)
                 dev_err(bq->dev, "%s:mmi_mux Reg NU2115_VAC12PRET] = 0x%02X\n", __func__,val);
+#endif
         ret = regmap_read(bq->regmap, NU2115_ACDRV12_CTRL, &val);
         if (!ret)
                 dev_err(bq->dev, "%s:mmi_mux Reg NU2115_ACDRV12_CTRL] = 0x%02X\n", __func__, val);

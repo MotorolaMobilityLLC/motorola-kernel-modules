@@ -134,6 +134,7 @@
 #define NU2115_AC_PRESENT_MASK		(BIT(7) | BIT(4))
 #define NU2115_BUS_PRESENT_MASK      BIT(7)
 #define NU2115_DIS_VBUSOVP      BIT(6)
+#define NU2115_DIS_ACDRV        BIT(0)
 
 
 // #define NU2115_STAT3_OVP_MASK		(BIT(7) | BIT(6))
