@@ -37,7 +37,6 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/mmi_gauge_class.h>
-#include <linux/thermal.h>
 
 
 #define mmi_info	pr_info
@@ -190,7 +189,6 @@ struct mmi_fg_chip {
 	struct mutex update_lock;
 
 	bool resume_completed;
-	bool android_auto_connected;
 
 	u8 chip;
 	u8 regs[NUM_REGS];
@@ -2056,62 +2054,6 @@ int adc_battemp(struct mmi_fg_chip *mmi_fg, int res)
 	return tbatt_value;
 }
 
-static int get_ntc_temp(const char *name, int *ntc_temp)
-{
-	struct thermal_zone_device *ntc;
-	int quiet_ntc = 0;
-	int ret = -1;
-
-	ntc = thermal_zone_get_zone_by_name(name);
-	if (IS_ERR_OR_NULL(ntc)) {
-		pr_err("get %s zone failure\n", name);
-		return ret;
-	}
-
-	ret = thermal_zone_get_temp(ntc, &quiet_ntc);
-	if (ret) {
-		pr_err("Error reading temperature for %s:%d\n", name, ret);
-		return ret;
-	}
-
-	*ntc_temp = quiet_ntc / 100;
-	pr_info("%s = %d\n", name, *ntc_temp);
-
-	return ret;
-}
-static ssize_t android_auto_connected_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct mmi_fg_chip *mmi = (struct mmi_fg_chip *)dev->driver_data;
-
-	if (IS_ERR_OR_NULL(mmi))
-		return 0;
-	return sprintf(buf, "%d\n", mmi->android_auto_connected);
-}
-
-static ssize_t android_auto_connected_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	struct mmi_fg_chip *mmi = (struct mmi_fg_chip *)dev->driver_data;
-	unsigned long tmp = 0;
-
-	tmp = simple_strtoul(buf, NULL, 0);
-	pr_info("%s %ld\n", __func__, tmp);
-
-	if (IS_ERR_OR_NULL(mmi))
-		return 0;
-
-	if (tmp == 1) {
-		mmi->android_auto_connected = true;
-	} else if (tmp == 0) {
-		mmi->android_auto_connected = false;
-	} else {
-		mmi_err("Error value for android_auto_connected\n");
-	}
-
-	return count;
-}
-
-static DEVICE_ATTR_RW(android_auto_connected);
-
 #define OUTOF_RANGE_TEMP 700
 #define K2C_TEMP_BASE 2730
 static int fg_read_temperature(struct mmi_fg_chip *mmi)
@@ -2121,7 +2063,6 @@ static int fg_read_temperature(struct mmi_fg_chip *mmi)
 	int tres_temp,delta_v, batt_temp;
 	u16 temp;
 	int fgTemp;
-	int quiet_ntc_temp = 0;
 
 	iio_read_channel_processed(mmi->Batt_NTC_channel, &batt_ntc_v);
 	iio_read_channel_processed(mmi->vref_channel, &bif_v);
@@ -2133,11 +2074,6 @@ static int fg_read_temperature(struct mmi_fg_chip *mmi)
 	batt_temp = adc_battemp(mmi, tres_temp);
 	batt_temp *= 10;
 	mmi_info("read batt temperature from PMIC,temp = %d \n",batt_temp);
-
-	if (mmi->android_auto_connected && 0 == get_ntc_temp("quiet_ntc", &quiet_ntc_temp)) {
-		mmi_info("use quiet_ntc=%d, batt_temp=%d\n", quiet_ntc_temp, batt_temp);
-		batt_temp = quiet_ntc_temp;
-	}
 
 	if (fg_read_word(mmi, mmi->regs[BQ_FG_REG_TEMP], &temp) <0 ) {
 		mmi_err("Error reading batt temperature from FG\n");
@@ -2855,11 +2791,6 @@ static int mmi_fg_probe(struct i2c_client *client,
 	mmi->params_data = NULL;
 
 	mmi_parse_dt(mmi);
-
-	ret = device_create_file(&(client->dev), &dev_attr_android_auto_connected);
-	if (ret) {
-		mmi_err("Failed to create file android_auto_connected\n");
-	}
 
 	if (mmi->chip == NFG1000) {
 		regs = nfg1000_regs;
