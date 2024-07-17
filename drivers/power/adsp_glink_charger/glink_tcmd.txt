@@ -1,0 +1,212 @@
+Glink Test Command:
+tcmd path: /sys/devices/platform/soc/soc:qcom,pmic_glink/soc:qcom,pmic_glink:mmi,qti-glink-charger/tcmd
+input data type: u32
+Encode format:
+DevID: 4bits[0:3]
+enum dev_id_batt {
+    GLINK_DEV_ID_BATT_DEF = 0,
+    GLINK_DEV_ID_BATT_PRI = 1,
+    GLINK_DEV_ID_BATT_SEC = 2,
+    GLINK_DEV_ID_BATT_NUM,
+};
+enum dev_id_chg {
+    GLINK_DEV_ID_CHG_DEF = 0,
+    GLINK_DEV_ID_CHG_PRI,
+    GLINK_DEV_ID_CHG_SEC,
+    GLINK_DEV_ID_CHG_NUM,
+};
+enum dev_id_wls {
+    GLINK_DEV_ID_WLS_DEFAULT = 0,
+    GLINK_DEV_ID_WLS_CPS4019,
+    GLINK_DEV_ID_WLS_NUM,
+};
+enum dev_id_pump {
+    GLINK_DEV_ID_PUMP_MASTER = 0,
+    GLINK_DEV_ID_PUMP_SLAVE,
+    GLINK_DEV_ID_PUMP_NUM,
+};
+enum dev_id_buck {
+    GLINK_DEV_ID_BUCK_MASTER = 0,
+    GLINK_DEV_ID_BUCK_SLAVE,
+    GLINK_DEV_ID_BUCK_NUM,
+};
+enum dev_id_bcr {
+    GLINK_DEV_ID_BCR_MASTER = 0,
+    GLINK_DEV_ID_BCR_SLAVE,
+    GLINK_DEV_ID_BCR_NUM,
+};
+
+DevType：4bits[4:7]
+typedef enum {
+    GLINK_DEV_TYPE_BAT = 0,
+    GLINK_DEV_TYPE_CHG = 1,
+    GLINK_DEV_TYPE_USB = 2,
+    GLINK_DEV_TYPE_WLS = 3,
+    GLINK_DEV_TYPE_PUMP = 4,
+    GLINK_DEV_TYPE_BUCK = 5,
+    GLINK_DEV_TYPE_BCR = 6,
+} glink_dev_t;
+
+cmd: 8bits[8:15]
+enum batt_tcmd {
+    TCMD_BATT_SET_CYCLE_COUNT = 0,
+    TCMD_BATT_SET_DESIGNE_CAPACITY = 1,
+    TCMD_BATT_FG_RESET = 0x66,
+};
+enum wls_tcmd {
+    TCMD_WLS_STEP_VADP_ENABLE = 1,
+    TCMD_WLS_STEP_VADP_INCREASE = 2,
+    TCMD_WLS_STEP_VADP_DECREASE = 3,
+};
+enum pump_tcmd {
+    TCMD_PUMP_ENABLE = 0,
+    TCMD_PUMP_DUMP_STAT = 1,
+    TCMD_PUMP_GET_VBAT = 2,
+    TCMD_PUMP_SET_MODE = 3,
+    TCMD_PUMP_SET_OVPGATE = 4,
+    TCMD_PUMP_SET_MANUAL = 5,
+};
+enum buck_tcmd {
+    TCMD_BUCK_ENABLE = 0,
+    TCMD_BUCK_DUMP_STAT = 1,
+    TCMD_BUCK_ENABLE_CHG = 2,
+    TCMD_BUCK_SUSPEND_INPUT = 3,
+    TCMD_BUCK_SET_ICL = 4,
+    TCMD_BUCK_SET_FCC = 5,
+    TCMD_BUCK_SET_FV = 6,
+};
+enum bcr_tcmd {
+    TCMD_BCR_ENABLE = 0,
+    TCMD_BCR_DUMP_STAT = 1,
+    TCMD_BCR_SET_AUTO_BSM = 2,
+    TCMD_BCR_SET_CHG_CURR = 3,
+    TCMD_BCR_SET_DISCHG_CURR = 4,
+    TCMD_BCR_SET_EXT_SW_ENABLE = 5,
+};
+
+data: 16bits[16:31]
+This is optional field depend on test purpose.
+
+battery tcmd instance:
+1. Primary battery FG reset
+Devid = GLINK_DEV_BATT_ID_PRI = 1
+Devtype = GLINK_DEV_TYPE_BAT = 0
+Cmd = TCMD_BATT_FG_RESET = 0x66
+Data = 0xXXXX
+Tcmd = 0xXXXX6601
+
+2. Set secondary battery cycle count to 100
+Devid = GLINK_DEV_BATT_ID_SEC = 2
+Devtype = GLINK_DEV_TYPE_BAT = 0
+Cmd = TCMD_BATT_SET_CYCLE_COUNT = 0
+Data = 0x0064
+Tcmd = 0x00640002
+
+Wireless RX/TX tcmd instance:
+1. Enable/Disable WLS MCP VADP stepping
+Devid = 0
+Devtype = GLINK_DEV_TYPE_WLS = 3
+Cmd = TCMD_WLS_STEP_VADP_ENABLE = 0
+Data = 0: disabled，1: enabled
+Tcmd =  enabled: 0x00010030，disabled: 0x00000030
+
+2. Increase WLS MCP VADP
+Devid = 0
+Devtype = GLINK_DEV_TYPE_WLS = 3
+Cmd = TCMD_WLS_STEP_VADP_INCREASE = 1
+Data = optional
+Tcmd = 0xXXXX0130
+
+3. Decrease WLS MCP VADP
+Devid = 0
+Devtype = GLINK_DEV_TYPE_WLS = 3
+Cmd = TCMD_WLS_STEP_VADP_DECREASE = 2
+Data = optional
+Tcmd = 0xXXXX0230
+
+Pump charger IC tcmd instance:
+1. enable/disable master charge pump IC
+Devid = GLINK_DEV_ID_PUMP_MASTER = 0
+Devtype = GLINK_DEV_TYPE_PUMP = 4
+Cmd = TCMD_PUMP_ENABLE = 0
+Data = enabled: 0x0001，disabled: 0x0000
+Tcmd = enabled: 0x00010040, disabled: 0x00000040
+
+2. Set work mode D2CP for master charge pump IC
+Devid = GLINK_DEV_ID_PUMP_MASTER = 0
+Devtype = GLINK_DEV_TYPE_PUMP = 4
+Cmd = TCMD_PUMP_SET_MODE = 3
+Data = NONE:0, D2CP:1, D4CP:2, 2X:3, 4X:4, PT:5
+Tcmd = 0x00010340
+
+3. Turn on/off ovpgate for master charge pump IC
+Devid = GLINK_DEV_ID_PUMP_MASTER = 0
+Devtype = GLINK_DEV_TYPE_PUMP = 4
+Cmd = TCMD_PUMP_SET_OVPGATE = 4
+Data = on: 0x0001，off: 0x0000
+Tcmd = enabled: 0x00010440, disabled: 0x00000440
+
+4. Turn on/off manual mode for slave charge pump IC
+Devid = GLINK_DEV_ID_PUMP_SLAVE = 1
+Devtype = GLINK_DEV_TYPE_PUMP = 4
+Cmd = TCMD_PUMP_SET_MANUAL = 5
+Data = on: 0x0001，off: 0x0000
+Tcmd = enabled: 0x00010541, disabled: 0x00000541
+
+Bulk charger IC tcmd instance:
+1. enable/disable master buck charger IC
+Devid = GLINK_DEV_ID_BUCK_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BUCK = 5
+Cmd = TCMD_BUCK_ENABLE = 0
+Data = enabled: 0x0001，disabled: 0x0000
+Tcmd = enabled: 0x00010050, disabled: 0x00000050
+
+2. enable/disable charging for master buck charger
+Devid = GLINK_DEV_ID_BUCK_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BUCK = 5
+Cmd = TCMD_BUCK_ENABLE_CHG = 2
+Data = enabled: 0x0001，disabled: 0x0000
+Tcmd = enabled: 0x00010250, disabled: 0x00000250
+
+3. suspend input for master buck charger
+Devid = GLINK_DEV_ID_BUCK_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BUCK = 5
+Cmd = TCMD_BUCK_SUSPEND_INPUT = 3
+Data = enabled: 0x0001，disabled: 0x0000
+Tcmd = enabled: 0x00010350, disabled: 0x00000350
+
+4. set ICL to 1500mA for master buck charger
+Devid = GLINK_DEV_ID_SWC_BUCK_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BUCK = 5
+Cmd = TCMD_BUCK_SET_ICL = 4
+Data = 0x05dc
+Tcmd = 0x05dc0450
+
+Battery Current Regulator tcmd instance:
+1. enable/disable master BCR
+Devid = GLINK_DEV_ID_BCR_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BCR = 6
+Cmd = TCMD_BCR_ENABLE = 0
+Data = enabled: 0x0001，disabled: 0x0000
+Tcmd = enabled: 0x00010060, disabled: 0x00000060
+
+2. Set max charging current 5000mA for master BCR
+Devid = GLINK_DEV_ID_BCR_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BCR = 6
+Cmd = TCMD_BCR_SET_CHG_CURR = 3
+Data = 0x1388
+Tcmd = 0x13880360
+
+3. Set max discharging current 10000mA for master BCR
+Devid = GLINK_DEV_ID_BCR_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BCR = 6
+Cmd = TCMD_BCR_SET_DISCHG_CURR = 4
+Data = 0x2710
+Tcmd = 0x27100460
+
+4. enable/disable external switch for for master BCR
+Devid = GLINK_DEV_ID_BCR_MASTER = 0
+Devtype = GLINK_DEV_TYPE_BCR = 6
+Cmd = TCMD_BCR_SET_DISCHG_CURR = 5
+Data = enabled: 0x0001，disabled: 0x0000
+Tcmd = enabled: 0x00010560, disabled: 0x00000560

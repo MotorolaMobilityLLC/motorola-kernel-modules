@@ -1,0 +1,42 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/mmi_charger
+
+ifneq ($(filter m y,$(CONFIG_WIRELESS_CPS4035B)),)
+	EXTRA_CFLAGS += -DWIRELESS_CPS4035B
+endif
+
+ifneq ($(filter m y,$(CONFIG_WIRELESS_CPS4019)),)
+	EXTRA_CFLAGS += -DWIRELESS_CPS4019
+endif
+
+ifneq ($(filter m y,$(CONFIG_MSB_DEV)),)
+	EXTRA_CFLAGS += -DMSB_DEV
+endif
+
+ifneq ($(filter m y,$(CONFIG_SWITCHEDCAP_DUMP)),)
+	EXTRA_CFLAGS += -DSWITCHEDCAP_DUMP
+endif
+
+ifneq ($(filter m y,$(CONFIG_SKIP_QTI_CHARGER_CONFIRMAION)),)
+	EXTRA_CFLAGS += -DSKIP_QTI_CHARGER_CONFIRMAION
+endif
+
+ifneq ($(filter m y,$(CONFIG_FUELGUAGE_DUMP)),)
+	EXTRA_CFLAGS += -DFUELGUAGE_DUMP
+endif
+
+obj-m += adsp_glink_charger.o
+adsp_glink_charger-objs = glink_core.o
+adsp_glink_charger-objs += glink_batt.o
+adsp_glink_charger-objs += glink_charger.o trusted_shash_lib.o
+adsp_glink_charger-objs += glink_usb.o
+adsp_glink_charger-objs += glink_wls.o
+adsp_glink_charger-objs += glink_pump.o
+adsp_glink_charger-objs += glink_buck.o
+adsp_glink_charger-objs += glink_bcr.o
+
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../bm_adsp_ulog/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../mmi_charger/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../mmi_relay/$(GKI_OBJ_MODULE_DIR)/Module.symvers
