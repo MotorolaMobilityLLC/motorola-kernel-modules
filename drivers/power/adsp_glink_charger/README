@@ -1,0 +1,479 @@
+Motorola Mobility. ADSP GLINK Charger Specific Bindings
+
+This glink charger driver is the target of redesign from qit_glink_charger
+driver to make the glink charger driver more flexible, modularized
+and compatible with old products using qit_glink_charger and new
+QCOM platform products with complex charging HW design.
+
+Glink Charger Driver Architecture:
+-----------------------------------------------------------------------------------------------------------
+Userspace        batt_health/healthd/tcmd
+-----------------------------|-----------------------------------------------------------------------------
+Kernel                   glink_core                     (module main and provide common interface
+                      /  |   |   |  \                    for glink devices, and common sysfs nodes
+                     /   |   |   |   \                   like: adsp glink communication APIs)
+                    /    |   |   |    \
+                   /     |   |   |     \
+                 batt   chg usb wls pump/buck/bcr       (glink devices response to handle it's own
+                   |     |   |   |     |                 specific business)
+                   |     |   |   |     |
+-------------adsp OEM glink communication channel---------------------------------------------------------
+                            |
+                            |
+           ADSP OEM GLINK MSG Receiver/Transmitter
+----------------------------------------------------------------------------------------------------------
+glink_core.c
+It's the main body of the adsp_glink_charger module to provide common
+interfaces for all the registered glink devices, manage all the glink
+devices and provide common sysfs nodes for functionality or debugging.
+
+glink_batt.c
+It's the glink device that handles all the battery related business
+responses to get all batteries status information from ADSP and provides
+optional battery supply and sysfs nodes for debugging or factory test.
+
+glink_charger.c
+It's the glink device that handles all the battery charging related
+business, responses to get overall charger status information, connect
+to mmi_charger driver for Motorola common charging policy controlling
+and provides sysfs nodes for charging debugging or factory test.
+
+glink_usb.c
+It's the glink device that handles all the USB Type-C related business
+responses for Motorola CID/LPD state handling and events broadcasting,
+and support USB VBUS over temperature protection for specific SKUs.
+
+glink_wls.c
+It's the glink device that handles all the wireless RX/TX power related
+business, responses to get wireless RX/TX information from ADSP, provide
+sysfs nodes for Motorola specific wireless charging controlling, and
+debugging or factory test.
+
+glink_pump.c
+It's the glink device that handles all switched charge pump related
+business, responses to get charge pump information inside ADSP, and
+provides sysfs nodes for charging specific debugging or factory test.
+
+glink_buck.c
+It's the glink device that handles all switched buck charger related
+business, responses to get buck charger information inside ADSP, and
+provides sysfs nodes for charging specific debugging or factory test.
+
+glink_bcr.c
+It's the glink device that handles all switched battery current regulator
+related business, responses to get battery current regulator information
+inside ADSP, and provides sysfs nodes for charging specific debugging or
+factory test.
+
+Benefit from glink charger driver design:
+1. Easy upgrade, migration, and maintenance, as it's a common driver
+   to be compatible with adsp based QCOM platform products.
+2. Reduce develop workload, as developers can pay more energy and
+   efforts on HW or platform specific business logic.
+3. Easy to support complex battery charging solution, as it can support
+   N couples of charger IC & battery pack in one system at the same time
+   theoretically.
+
+This glink charger driver is built as DLKM:
+Module Name: adsp_glink_charger.ko
+Log Tag: GLINK_CHG
+Support Platform: adsp charging based QCOM platforms
+
+devicetree properties description:
+glink_common:
+- type
+ Usage:      mandatory
+ Value Type: <u32>
+ Definition: Set the glink device type to specify which kind of glink
+device to be as.
+bits[0:7]: glink device id: 0 ~ 0xFF to identify different sub-device
+under the same device type specified in bit[8:15].
+bits[8:15]: device type enumeration
+GLINK_DEV_TYPE_BAT = 0,
+GLINK_DEV_TYPE_CHG = 1,
+GLINK_DEV_TYPE_USB = 2,
+GLINK_DEV_TYPE_WLS = 3,
+GLINK_DEV_TYPE_PUMP = 4,
+GLINK_DEV_TYPE_BUCK = 5,
+GLINK_DEV_TYPE_BCR = 6,
+
+- polling-interval-ms
+ Usage:      optional
+ Value Type: <u32>
+ Definition: define the polling interval to notify glink devices to update status.
+
+glink_batt:
+- battid-utags
+ Usage:      optional
+ Value Type: <string>
+ Definition: battery id utags name
+
+- df-serialnum
+ Usage:      optional
+ Value Type: <string>
+ Definition: default battery serial number
+
+- profile-ids-map
+ Usage:      optional
+ Value Type: Array of <string>
+ Definition: Unlimited array of arrays. Each internal array needs to have a set
+of 2 data members, each one representing this sequence: Battery Profile ID
+(in integer value), Battery Serial Number(provided by battery spec). Battery
+profile ID will be set to 0 if this property is not specified.
+
+- battery-psy-enabled
+ Usage:      optional
+ Value Type: <bool>
+ Definition: decide if create a power supply for the battery
+
+glink_charger:
+- battery
+ Usage:      mandatory
+ Value Type: <dt-node>
+ Definition: device tree node reference to battery bound to current charger
+
+- mmi-charger-disabled
+ Usage:      optional
+ Value Type: <bool>
+ Definition: decide if register to mmi_charger driver for common charging policy controlling
+
+- partner_psy_name
+ Usage:      optional
+ Value Type: <string>
+ Definition: decide the partner charger name used to sync partner battery charging state with charger in ADSP
+
+- max-fcc-ma
+ Usage:      optional
+ Value Type: <u32>
+ Definition: Maximum fast charging current for configuring thermal charging mitigation
+
+- thermal-primary-mitigation
+ Usage:      optional
+ Value Type: Array of <u32>
+ Definition: primary thermal mitigation table for battery charging mitigation.
+
+- thermal-secondary-mitigation
+ Usage:      optional
+ Value Type: Array of <u32>
+ Definition: secondary thermal mitigation table for battery charging mitigation.
+
+- encrypted-chg-enabled
+ Usage:      optional
+ Value Type: <bool>
+ Definition: decide if enable the encryption algorithm on charger identifiction.
+
+glink_usb:
+- therm-supported
+ Usage:      optional
+ Value Type: <bool>
+ Definition: decide if support usb thermal mitigation
+
+- otp-en-gpio
+ Usage:      optional
+ Value Type: <gpio node>
+ Definition: gpio switch to control VBUS over temperature protection
+
+glink_wls:
+
+glink_pump:
+- pump-psy-enabled
+ Usage:      optional
+ Value Type: <bool>
+ Definition: decide if create power supply for charge pump device
+
+glink_buck:
+- buck-psy-enabled
+ Usage:      optional
+ Value Type: <bool>
+ Definition: decide if create power supply for charge buck device
+
+glink_bcr:
+- bcr-psy-enabled
+ Usage:      optional
+ Value Type: <bool>
+ Definition: decide if create power supply for charge bcr device
+
+This glink charger was designed to be compatible with below HW/SW solutions:
+Instance1: single battery charging in ADSP
+ADSP pmic/wls/pump charging
++
+AP mmi_charger + AP adsp_glink_charger
+-----------------------------------------------------------------------------------------------------------
+Userspace  Common Interfaces for Charging Features and Factory Test
+-----------------------------------------------------------------------------------------------------------
+Kernel           mmi_charger                            (Motorola demo, step, flash-fast charging,
+                      |                                  factory and debugging interfaces)
+                      |
+              adsp_glink_charger                         (basic charging functions HW
+                      |                                  specific factory debugging interfaces)
+                      |
+--------------------glink-----------------------------------------------------------------------------
+                      |
+                      |
+                     ADSP
+                  /   |    \
+                 /    |     \
+                /     |      \
+               /      |       \
+              /       |        \
+            pmic   wls/pump   FG                        (Main battery FG and charging in ADSP side)
+
+Velar Product Example:
+adsp_glink_charger: mmi,qti-glink-charger {
+	compatible = "mmi,adsp-glink-charger";
+        def_batt: battery {
+                type = <0x0000>;
+                battid-utags = "mmi,battid";
+                df-serialnum = "SB18D58448";
+                profile-ids-map = "107000", "SB18D58448";
+        };
+
+        glink_charger {
+                type = <0x0100>;
+                battery = <&def_batt>;
+        };
+
+        usb {
+                type = <0x0200>;
+                therm-supported;
+        };
+
+        wireless_cps4035b {
+                type = <0x0301>;
+        };
+
+        pump_charger_master {
+                type = <0x0400>;
+        };
+
+        pump_charger_slave {
+                type = <0x0401>;
+        };
+};
+
+Instance2: dual battery charging in ADSP and AP
+ADSP main battery charging with pmic/pump/buck/wls charger
++
+AP flip battery charging with bcr charger and FG
++
+AP mmi_charger + AP adsp_glink_charger
+-----------------------------------------------------------------------------------------------------------
+Userspace  Common Interfaces for Charging Features and Factory Test
+-----------------------------------------------------------------------------------------------------------
+Kernel               mmi_charger                            (Motorola demo, step, flash-fast charging,
+                    /     |     \                           factory and debugging interfaces)
+                   /      |      \
+                  /       |       \
+                 /        |        \
+                /         |         \
+               /          |          \
+              /           |           \
+             /            |            \
+    adsp_glink_charger   bcr           FG2                  (basic charging functions HW
+            |             |             |                    specific factory debugging interfaces)
+            |             |             |                   (Flip battery FG and charging in AP side)
+----------glink----------i2c-----------i2c--------------------------------------------------------------------------
+            |             |             |
+            |             |             |
+            |          i2c chip      i2c chip
+           ADSP
+        /   |    \
+       /    |     \
+      /     |      \
+     /      |       \
+    /       |        \
+ pmic wls/pump/buck FG1                                     (Main battery FG and charging in ADSP side)
+
+Aura Product Example:
+adsp_glink_charger: mmi,qti-glink-charger {
+	compatible = "mmi,adsp-glink-charger";
+        main_batt: main_battery {
+                type = <0x0000>;
+                battery-psy-enabled;
+                battid-utags = "mmi,battid";
+                df-serialnum = "SB18E07971";
+                profile-ids-map = "107000", "SB18E07971";
+        };
+
+        glink_charger {
+                type = <0x0100>;
+                battery = <&main_batt>;
+                partner_psy_name = "charger";
+                max-fcc-ma = <5000>;
+                thermal-primary-mitigation = <4000000 2900000 2000000 1000000 500000 300000 200000>;
+                thermal-secondary-mitigation = <5000000 4000000 3000000 2000000 1100000 500000 100000>;
+        };
+
+        usb {
+                type = <0x0200>;
+                therm-supported;
+                otp-en-gpio = <&tlmm 107 0>;
+        };
+
+        wireless_cps4035b {
+                type = <0x0301>;
+        };
+
+        pump_charger {
+                type = <0x0400>;
+        };
+
+        buck_charger {
+                type = <0x0500>;
+        };
+};
+
+Instance3: dual battery charging in ADSP
+ADSP main/flip battery charging
++
+AP mmi_charger + AP adsp_glink_charger
+This solution supports battery property combination either in ADSP or AP.
+-----------------------------------------------------------------------------------------------------------
+Userspace  Common Interfaces for Charging Features and Factory Test
+-----------------------------------------------------------------------------------------------------------
+Kernel           mmi_charger                            (Motorola demo, step, flash-fast charging,
+                      |                                  factory and debugging interfaces)
+                      |
+              adsp_glink_charger                        (basic charging functions HW
+                      |                                  specific factory debugging interfaces)
+                      |
+--------------------glink-----------------------------------------------------------------------------
+                      |
+                      |
+                     ADSP
+                 /    |      \
+                /     |       \
+               /      |        \
+              /       |         \
+             /        |          \
+         pmic  wls/pump/buck/bcr FG1/FG2                (Main and Flip battery FG and charging in ADSP side)
+
+
+Orion Product Example: battery status combination in ADSP side
+adsp_glink_charger: mmi,qti-glink-charger {
+	compatible = "mmi,adsp-glink-charger";
+        def_batt: battery {
+                type = <0x0000>;
+                battid-utags = "mmi,battid";
+                df-serialnum = "SB18E07971";
+                profile-ids-map = "107000", "SB18E07971";
+        };
+
+        main_batt: main_battery {
+                type = <0x0001>;
+                battery-psy-enabled;
+                battid-utags = "mmi,battid";
+                df-serialnum = "SB18E07971";
+                profile-ids-map = "107000", "SB18E07971";
+        };
+
+        flip_batt: flip_battery {
+                type = <0x0002>;
+                battery-psy-enabled;
+                battid-utags = "mmi,battid-1";
+                df-serialnum = "SB18E07970";
+                profile-ids-map = "107000", "SB18E07970";
+        };
+
+        glink_charger {
+                type = <0x0100>;
+                battery = <&def_batt>;
+                max-fcc-ma = <5000>;
+                thermal-primary-mitigation = <4000000 2900000 2000000 1000000 500000 300000 200000>;
+                thermal-secondary-mitigation = <5000000 4000000 3000000 2000000 1100000 500000 100000>;
+        };
+
+        usb {
+                type = <0x0200>;
+                therm-supported;
+                otp-en-gpio = <&tlmm 107 0>;
+        };
+
+        wireless_cps4035b {
+                type = <0x0301>;
+        };
+
+        pump_charger_master {
+                type = <0x0400>;
+        };
+
+        pump_charger_slave {
+                type = <0x0401>;
+        };
+
+        buck_charger {
+                type = <0x0500>;
+        };
+
+        bcr_charger_master {
+                type = <0x0600>;
+        };
+
+        bcr_charger_slave {
+                type = <0x0601>;
+        };
+};
+
+Orion Product Example: battery status combination in HLOS side
+adsp_glink_charger: mmi,qti-glink-charger {
+	compatible = "mmi,adsp-glink-charger";
+        main_batt: main_battery {
+                type = <0x0001>;
+                battery-psy-enabled;
+                battid-utags = "mmi,battid";
+                df-serialnum = "SB18E07971";
+                profile-ids-map = "107000", "SB18E07971";
+        };
+
+        flip_batt: flip_battery {
+                type = <0x0002>;
+                battery-psy-enabled;
+                battid-utags = "mmi,battid-1";
+                df-serialnum = "SB18E07970";
+                profile-ids-map = "107000", "SB18E07970";
+        };
+
+        charger_main {
+                type = <0x0100>;
+                battery = <&main_batt>;
+                max-fcc-ma = <5000>;
+                thermal-primary-mitigation = <4000000 2900000 2000000 1000000 500000 300000 200000>;
+                thermal-secondary-mitigation = <5000000 4000000 3000000 2000000 1100000 500000 100000>;
+        };
+
+        charger_flip {
+                type = <0x0101>;
+                battery = <&flip_batt>;
+        };
+
+        usb {
+                type = <0x0200>;
+                therm-supported;
+                otp-en-gpio = <&tlmm 107 0>;
+        };
+
+        wireless_cps4035b {
+                type = <0x0301>;
+        };
+
+        pump_charger_master {
+                type = <0x0400>;
+        };
+
+        pump_charger_slave {
+                type = <0x0401>;
+        };
+
+        buck_charger {
+                type = <0x0500>;
+        };
+
+        bcr_charger_master {
+                type = <0x0600>;
+        };
+
+        bcr_charger_slave {
+                type = <0x0601>;
+        };
+};
+
