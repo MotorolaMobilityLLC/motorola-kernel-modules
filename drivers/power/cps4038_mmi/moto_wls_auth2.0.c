@@ -475,6 +475,10 @@ int motoauth_events_process(void)
 			}
 			break;
 		case MOTOAUTH_EVENT_DONE:
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, " MOTOAUTH_EVENT_DONE for fan and light");
+			if (motoauth->wls_update_light_fan) {
+				motoauth->wls_update_light_fan();
+			}
 			break;
 		default:
 			status = MOTO_WLS_AUTH_FAIL;
