@@ -1224,7 +1224,9 @@ static struct usb_function *usbnet_alloc(struct usb_function_instance *fi)
 	dev->function.strings = usbnet_strings;
 	dev->function.setup = usbnet_ctrlrequest;
 	dev->function.free_func = usbnet_free_func;
+#if (KERNEL_VERSION(6, 6, 30) > LINUX_VERSION_CODE)
 	fi->f = &dev->function;
+#endif
 	return &dev->function;
 }
 
