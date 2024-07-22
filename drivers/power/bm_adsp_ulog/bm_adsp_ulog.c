@@ -5,6 +5,7 @@
 
 #define pr_fmt(fmt)	"BM_ULOG: %s: " fmt, __func__
 
+#include <linux/version.h>
 #include <linux/debugfs.h>
 #include <linux/device.h>
 #include <linux/module.h>
@@ -14,7 +15,11 @@
 #include <linux/platform_device.h>
 #include <linux/ipc_logging.h>
 #include <linux/rpmsg.h>
+#if (KERNEL_VERSION(6, 6, 30) > LINUX_VERSION_CODE)
 #include <linux/soc/qcom/pmic_glink.h>
+#else
+#include <linux/soc/qcom/qti_pmic_glink.h>
+#endif
 #include <linux/power/bm_adsp_ulog.h>
 
 #include <linux/kthread.h>
