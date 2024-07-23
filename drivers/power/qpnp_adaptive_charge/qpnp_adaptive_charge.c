@@ -30,6 +30,8 @@
 #include <linux/version.h>
 #ifdef USE_MMI_CHARGER
 #include "mmi_charger.h"
+#elif USE_MMI_GLINK_CHARGER
+#include "mmi_glink_core.h"
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 61))
 #include <linux/mmi-pmic-voter.h>
 #else
@@ -39,7 +41,7 @@
 #include <linux/notifier.h>
 #include <linux/moduleparam.h>
 
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 61))
 #define vote(votable, client_str, enabled, val) \
 	mmi_vote(votable, client_str, enabled, val)
@@ -51,7 +53,7 @@ static struct adap_chg_data {
 	struct power_supply	*batt_psy;
 	struct power_supply *dc_psy;
 	struct power_supply *usb_psy;
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 #else
 	struct votable	*usb_icl_votable;
 	struct votable	*dc_suspend_votable;
@@ -95,7 +97,7 @@ static int get_ps_int_prop(struct power_supply *psy, enum power_supply_property 
 static void suspend_charging(bool on)
 {
 	if(!adap_chg_data.charging_suspended && on) {
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 		mmi_vote_charger_suspend(ADAPTIVE_CHARGING_VOTER, on);
 #else
 		vote(adap_chg_data.usb_icl_votable, ADAPTIVE_CHARGING_VOTER, true, 0);
@@ -106,7 +108,7 @@ static void suspend_charging(bool on)
 	}
 
 	if(adap_chg_data.charging_suspended && !on) {
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 		mmi_vote_charger_suspend(ADAPTIVE_CHARGING_VOTER, on);
 #else
 		vote(adap_chg_data.usb_icl_votable, ADAPTIVE_CHARGING_VOTER, false, 0);
@@ -121,7 +123,7 @@ static void suspend_charging(bool on)
 static void stop_charging(bool on)
 {
 	if(!adap_chg_data.charging_stopped && on) {
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 		mmi_vote_charging_disable(ADAPTIVE_CHARGING_VOTER, on);
 #else
 		vote(adap_chg_data.fcc_votable, ADAPTIVE_CHARGING_VOTER, true, 0);
@@ -132,7 +134,7 @@ static void stop_charging(bool on)
 	}
 
 	if(adap_chg_data.charging_stopped && !on) {
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 		mmi_vote_charging_disable(ADAPTIVE_CHARGING_VOTER, on);
 #else
 		vote(adap_chg_data.fcc_votable, ADAPTIVE_CHARGING_VOTER, false, 0);
@@ -267,7 +269,7 @@ static int get_blocking(char *buffer, const struct kernel_param *kp)
 	bool usb_connected = false;
 
 	if (adap_chg_data.init_success) {
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 		usb_connected = (get_ps_int_prop(adap_chg_data.usb_psy,
 			POWER_SUPPLY_PROP_ONLINE) > 0 ? true : false);
 
@@ -363,7 +365,7 @@ static int qpnp_adap_chg_init_work(void)
 		goto psy_fail;
 	}
 
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 	adap_chg_data.dc_psy = power_supply_get_by_name("wireless");
 	if (!adap_chg_data.dc_psy)
 		pr_info("No wireless power supply found\n");
@@ -380,7 +382,7 @@ static int qpnp_adap_chg_init_work(void)
 		goto fail;
 	}
 
-#ifdef USE_MMI_CHARGER
+#if defined(USE_MMI_CHARGER) || defined(USE_MMI_GLINK_CHARGER)
 #else
 	adap_chg_data.usb_icl_votable = find_votable("USB_ICL");
 	if (IS_ERR(adap_chg_data.usb_icl_votable)) {

@@ -16,3 +16,7 @@ clean:
 ifneq ($(filter m y, $(CONFIG_USE_MMI_CHARGER)),)
        KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../mmi_charger/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 endif
+
+ifneq ($(filter m y, $(CONFIG_USE_MMI_GLINK_CHARGER)),)
+       KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../mmi_glink_charger/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+endif
