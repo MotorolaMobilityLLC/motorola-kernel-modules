@@ -1600,16 +1600,23 @@ static bool cps_wls_check_iout(int target_current, int current_now)
 	int batt_soc = 0;
 	bool skip_rod = false;
 	bool chg_en = true;
+	bool powerpath_en = true;
+	int wls_icl = 0;
 
 	if (!chip)
 		return rt;
 
 	if (!IS_ERR_OR_NULL(chip->chg1_dev)) {
 		charger_dev_is_enabled(chip->chg1_dev, &chg_en);
+		charger_dev_is_powerpath_enabled(chip->chg1_dev, &powerpath_en);
+		charger_dev_get_input_current(chip->chg1_dev, &wls_icl);
+		wls_icl = wls_icl / 1000;// uA-> mA
 	}
 
-	if (!chg_en) {
+	if (!chg_en || !powerpath_en || wls_icl <= target_current) {
 		skip_rod = true;
+		pr_info("%s chg_en:%d, powerpath_en:%d wls_icl:%d\n",
+				__func__, chg_en, powerpath_en, wls_icl);
 	} else if (chip->thermal_icl != -1 &&
 		chip->thermal_icl < chip->MaxI) {
 		skip_rod = true;
