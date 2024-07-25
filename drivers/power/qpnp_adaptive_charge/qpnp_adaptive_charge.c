@@ -30,7 +30,7 @@
 #include <linux/version.h>
 #ifdef USE_MMI_CHARGER
 #include "mmi_charger.h"
-#elif USE_MMI_GLINK_CHARGER
+#elif defined(USE_MMI_GLINK_CHARGER)
 #include "mmi_glink_core.h"
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 61))
 #include <linux/mmi-pmic-voter.h>
