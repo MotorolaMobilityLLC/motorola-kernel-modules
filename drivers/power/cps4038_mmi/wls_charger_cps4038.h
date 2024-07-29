@@ -300,6 +300,7 @@ struct cps_wls_chrg_chip {
     bool mode_select_force;
     cps_hs_st_e hs_st;
     bool android_auto_connected;
+    bool android_auto_over_temp;
 };
 
 typedef enum ept_reason

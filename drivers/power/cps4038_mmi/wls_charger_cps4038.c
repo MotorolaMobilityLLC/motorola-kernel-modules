@@ -2499,6 +2499,8 @@ static bool cps_wls_check_iout(int target_current, int current_now)
 	if (chip->thermal_icl != -1 &&
 		chip->thermal_icl < chip->MaxI) {
 		skip_rod = true;
+	} else if (chip->android_auto_over_temp) {
+		skip_rod = true;
 	} else if (chip->rod_stop_battery_soc > 0 &&
 			chip->rod_stop_battery_soc < 100) {
 		batt_soc = cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY);
@@ -2801,6 +2803,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 			chip->rx_offset_detect_count = 0;
 			chip->rx_offset = false;
 			chip->rx_vout_set = 0;
+			chip->android_auto_over_temp = false;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
 			chip->hs_st = HS_UNKONWN;
 #else
@@ -4352,7 +4355,6 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
     struct cps_wls_chrg_chip *chg = chip;
     uint32_t wls_power = 0;
     int wls_voltage = 0;
-    static bool android_auto_over_temp = false;
 
     if (chip->cable_ready_wait_count < 3 && !chip->moto_stand)
     {
@@ -4430,15 +4432,15 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
 
     if (chip->android_auto_connected) {
         if (cps_get_bat_info(POWER_SUPPLY_PROP_TEMP) >= ANDROID_AUTO_LIMIT_TEMP) {
-            android_auto_over_temp = true;
+            chip->android_auto_over_temp = true;
         } else if (cps_get_bat_info(POWER_SUPPLY_PROP_TEMP) <= (ANDROID_AUTO_LIMIT_TEMP - 30)) {
-            android_auto_over_temp = false;
+            chip->android_auto_over_temp = false;
         }
-        if (*icl > ANDROID_AUTO_LIMIT_ICL && android_auto_over_temp) {
+        if (*icl > ANDROID_AUTO_LIMIT_ICL && chip->android_auto_over_temp) {
             *icl = ANDROID_AUTO_LIMIT_ICL;
         }
     } else {
-        android_auto_over_temp = false;
+        chip->android_auto_over_temp = false;
     }
 }
 
