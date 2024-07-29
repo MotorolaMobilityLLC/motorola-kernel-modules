@@ -1297,6 +1297,9 @@ int mmi_dp_dm(struct adapter_device *dev, int val)
 	case DP_DM_FORCE_QC3_5V:
 		ret = wt6670f_force_qc3_5V();
 		break;
+	case DP_DM_FORCE_QC3P_5V:
+		ret = wt6670f_set_voltage(5000);
+		break;
 	case DP_DM_DP_PULSE:
 		ret = wt6670f_set_volt_count(1);
 		break;

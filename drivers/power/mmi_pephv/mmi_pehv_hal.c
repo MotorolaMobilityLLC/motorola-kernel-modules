@@ -138,6 +138,21 @@ int pehv_hal_set_ta_vbus(struct chg_alg_device *alg, int target_mV)
 	return ret;
 }
 
+int pehv_hal_reset_ta(struct chg_alg_device *alg)
+{
+	int ret = 0;
+	struct pehv_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+
+	ret = charger_dev_set_dp_dm(hal->chgdevs[MMI_CHGTYP_SWCHG], DP_DM_FORCE_QC3P_5V);
+	if (ret < 0) {
+		PEHV_ERR("Couldn't force qc3p 5V ret=%d\n", ret);
+	}
+
+	msleep(2000);
+
+	return ret;
+}
+
 int pehv_hal_init_hardware(struct chg_alg_device *alg)
 {
 	struct pehv_algo_info *info = chg_alg_dev_get_drvdata(alg);

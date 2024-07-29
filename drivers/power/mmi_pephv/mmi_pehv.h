@@ -235,6 +235,7 @@ static inline int micro_to_milli(int val)
 }
 
 extern int pehv_hal_set_ta_vbus(struct chg_alg_device *alg, int target_mV);
+extern int pehv_hal_reset_ta(struct chg_alg_device *alg);
 
 extern int pehv_hal_init_hardware(struct chg_alg_device *alg);
 extern int pehv_hal_enable_sw_vbusovp(struct chg_alg_device *alg, bool en);

@@ -746,9 +746,11 @@ static int pehv_stop(struct pehv_algo_info *info, struct pehv_stop_info *sinfo)
 	do_reset = !(data->notify & PEHV_RESET_NOTIFY);
 	mutex_unlock(&data->notify_lock);
 	if (do_reset) {
-		if (sinfo->reset_ta)
+		if (sinfo->reset_ta) {
+			pehv_hal_reset_ta(info->alg);
 			pehv_set_ta_vbus(info, PEHV_VTA_INIT,
 				      PEHV_ITA_INIT);
+		}
 	}
 
 	pehv_enable_swchg_charging(info, true);
@@ -1581,6 +1583,42 @@ static bool pehv_check_dvchg_ibusocp(struct pehv_algo_info *info,
 	return true;
 }
 
+#define IBUSUCP_TH 300
+static bool pehv_check_dvchg_ibusucp(struct pehv_algo_info *info,
+				     struct pehv_stop_info *sinfo)
+{
+	int ret, i, ibus, acc = 0;
+	struct pehv_algo_data *data = info->data;
+	u32 ibusucp = IBUSUCP_TH;
+
+	if (!data->is_dvchg_en[PEHV_DVCHG_MASTER] || data->state == PEHV_ALGO_INIT)
+		return true;
+
+	for (i = PEHV_DVCHG_MASTER; i < PEHV_DVCHG_MAX; i++) {
+		if (!data->is_dvchg_en[i])
+			continue;
+		pehv_hal_get_adc_accuracy(info->alg, to_chgidx(i),
+					  PEHV_ADCCHAN_IBUS, &acc);
+		ret = pehv_hal_get_adc(info->alg, to_chgidx(i),
+				       PEHV_ADCCHAN_IBUS, &ibus);
+		if (ret < 0) {
+			PEHV_ERR("get ibus fail(%d)\n", ret);
+			return false;
+		}
+
+		PEHV_INFO("(%s)ibus(%d+-%dmA), ibusucp(%dmA)\n",
+			 pehv_dvchg_role_name[i], ibus, acc, ibusucp);
+		if (ibus > acc)
+			ibus -= acc;
+		if (ibus < ibusucp) {
+			PEHV_ERR("(%s)ibus(%dmA) < ibusucp(%dmA)\n",
+				 pehv_dvchg_role_name[i], ibus, ibusucp);
+			return false;
+		}
+	}
+	return true;
+}
+
 /*
  * Check VBUS voltage of divider charger
  * return false if VBUS is over voltage otherwise return true
@@ -1673,6 +1711,7 @@ static struct pehv_safety_check_fn_desc fn_descs[] = {
 	{pehv_check_vbatovp, true},
 	{pehv_check_ibatocp, true},
 	{pehv_check_eoc, false},
+	{pehv_check_dvchg_ibusucp, true},
 };
 
 static bool pehv_algo_safety_check(struct pehv_algo_info *info)

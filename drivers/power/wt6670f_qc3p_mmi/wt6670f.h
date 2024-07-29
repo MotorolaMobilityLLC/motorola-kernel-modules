@@ -23,10 +23,11 @@ enum detect_status {
 
 enum {
 	DP_DM_UNKNOWN = 0,
-	DP_DM_FORCE_QC2_5V = 1,
-	DP_DM_FORCE_QC3_5V = 2,
-	DP_DM_DP_PULSE = 3,
-	DP_DM_DM_PULSE = 4,
+	DP_DM_FORCE_QC2_5V,
+	DP_DM_FORCE_QC3_5V,
+	DP_DM_FORCE_QC3P_5V,
+	DP_DM_DP_PULSE,
+	DP_DM_DM_PULSE,
 };
 
 struct wt6670f {
