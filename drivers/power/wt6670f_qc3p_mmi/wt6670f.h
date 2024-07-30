@@ -24,6 +24,7 @@ enum detect_status {
 enum {
 	DP_DM_UNKNOWN = 0,
 	DP_DM_FORCE_QC2_5V,
+	DP_DM_FORCE_QC2_9V,
 	DP_DM_FORCE_QC3_5V,
 	DP_DM_FORCE_QC3P_5V,
 	DP_DM_DP_PULSE,

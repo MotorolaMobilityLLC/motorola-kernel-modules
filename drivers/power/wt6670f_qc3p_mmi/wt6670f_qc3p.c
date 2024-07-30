@@ -853,7 +853,7 @@ int wt6670f_en_hvdcp(void)
 }
 EXPORT_SYMBOL_GPL(wt6670f_en_hvdcp);
 
-int wt6670f_force_qc2_5V(void)
+int wt6670f_force_qc2_vbus(int cmd)
 {
 	int ret = -1;
 	u16 data = 0x01;
@@ -861,19 +861,24 @@ int wt6670f_force_qc2_5V(void)
 	if (_wt->chg_ready == false)
 		return ret;
 
+	if (cmd == DP_DM_FORCE_QC2_5V)
+		data = 0x01;
+	else if (cmd == DP_DM_FORCE_QC2_9V)
+		data = 0x02;
+
 	if(1 == g_qc3p_id)
 		ret = mmi_wt6670f_write_word(_wt, 0x02, data);
 	else
 		ret = mmi_wt6670f_write_word(_wt, 0xB1, data);
 	if (ret < 0)
 	{
-		pr_info("%s force qc2 5V fail\n",g_qc3p_id?"z350":"wt6670f");
+		pr_info("%s force qc2 vbus fail\n",g_qc3p_id?"z350":"wt6670f");
 		return ret;
 	}
 
 	return data & 0xff;
 }
-EXPORT_SYMBOL_GPL(wt6670f_force_qc2_5V);
+EXPORT_SYMBOL_GPL(wt6670f_force_qc2_vbus);
 
 int wt6670f_force_qc3_5V(void)
 {
@@ -1292,7 +1297,10 @@ int mmi_dp_dm(struct adapter_device *dev, int val)
 	int ret = 0;
 	switch (val) {
 	case DP_DM_FORCE_QC2_5V:
-		ret = wt6670f_force_qc2_5V();
+		ret = wt6670f_force_qc2_vbus(DP_DM_FORCE_QC2_5V);
+		break;
+	case DP_DM_FORCE_QC2_9V:
+		ret = wt6670f_force_qc2_vbus(DP_DM_FORCE_QC2_9V);
 		break;
 	case DP_DM_FORCE_QC3_5V:
 		ret = wt6670f_force_qc3_5V();
