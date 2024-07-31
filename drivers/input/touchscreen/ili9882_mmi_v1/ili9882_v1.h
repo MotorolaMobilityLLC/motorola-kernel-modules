@@ -655,7 +655,7 @@ struct ilitek_pen_info {
 #if SPI_DMA_TRANSFER_SPLIT
 #define SPI_UPGRADE_LEN				2048
 #else
-#define SPI_UPGRADE_LEN				0
+#define SPI_UPGRADE_LEN				(16 * K)
 #endif
 #define SPI_BUF_SIZE				MAX_HEX_FILE_SIZE
 #define INFO_HEX_ST_ADDR			0x4F
