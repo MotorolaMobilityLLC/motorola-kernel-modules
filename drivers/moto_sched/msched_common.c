@@ -74,9 +74,6 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		if (p->mm == NULL && p->prio == 100)
 			return true;
 
-		if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
-			return true;
-
 		if (p->tgid == global_launcher_tgid
 				|| p->tgid == global_systemserver_tgid
 				|| p->tgid == global_sysui_tgid
@@ -114,6 +111,8 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	// main & render thread of top app, launcher and top UI.
 	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI))
 		prio = UX_PRIO_TOPAPP;
+	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
+		prio = UX_PRIO_KSWAPD;
 	// system lock & service mgr
 	else if (ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER))
 		prio = UX_PRIO_SYSTEM;
