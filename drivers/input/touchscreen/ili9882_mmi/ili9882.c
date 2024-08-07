@@ -151,6 +151,42 @@ out:
 	return ret;
 }
 
+int ilitek_set_report_mode(int on)
+{
+	u8 cmd[3] = {0};
+	int ret = 0;
+
+	ILI_INFO("Set report mode = %d\n", on);
+
+	cmd[0] = 0x01;
+	cmd[1] = 0x13;
+
+	//mutex_lock(&ilits->touch_mutex);
+	switch(on) {
+	case 2:
+		cmd[2] = 0x02;
+		if (ilits->wrapper(cmd, sizeof(cmd), NULL, 0, ON, OFF)) {
+			ILI_ERR("Write report mode open fail\n");
+			ret = -ENODEV;
+		}
+		break;
+	case 0:
+		cmd[2] = 0x04;
+		if (ilits->wrapper(cmd, sizeof(cmd), NULL, 0, ON, OFF)) {
+			ILI_ERR("Write report mode close fail\n");
+			ret = -ENODEV;
+		}
+		break;
+	default:
+		ILI_ERR("Unknown mode\n");
+		ret = -ENODEV;
+		break;
+	}
+	//mutex_unlock(&ilits->touch_mutex);
+
+	return ret;
+}
+
 int ili_switch_tp_mode(u8 mode)
 {
 	int ret = 0;
@@ -603,6 +639,15 @@ int ili_sleep_handler(int mode)
 		ili_resume_by_ddi();
 #endif
 		ili_irq_enable();
+		if (ilits->interpolation_ctrl){
+			if(2 == ilits->interpolation){
+				ret = ilitek_set_report_mode(mode);
+				if(ret) {
+					ILI_ERR("set report mode fail. \n");
+				}
+			}
+		}
+
 		break;
 	default:
 		ILI_ERR("Unknown sleep mode, %d\n", mode);

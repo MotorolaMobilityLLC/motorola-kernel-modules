@@ -1072,6 +1072,8 @@ struct ilitek_ts_data {
 #ifdef ILI_TOUCH_LAST_TIME
 	ktime_t last_event_time;
 #endif
+	int interpolation;
+	bool interpolation_ctrl;
 };
 extern struct ilitek_ts_data *ilits;
 
@@ -1278,7 +1280,7 @@ extern int ili_get_tp_recore_ctrl(int data);
 extern int ili_get_tp_recore_data(void);
 extern void ili_demo_debug_info_mode(u8 *buf, size_t rlen);
 extern void ili_demo_debug_info_id0(u8 *buf, size_t len);
-
+extern int ilitek_set_report_mode(int on);
 #ifdef ILI_SET_TOUCH_STATE
 int touch_set_state(int state, int panel_idx);
 int check_touch_state(int *state, int panel_idx);

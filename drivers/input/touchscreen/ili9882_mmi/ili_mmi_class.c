@@ -131,6 +131,32 @@ static ssize_t ili_palm_settings_store(struct device *dev,
 	return err;
 }
 
+static ssize_t interpolation_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%02x\n", ilits->interpolation);
+}
+
+static ssize_t interpolation_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	int ret =0;
+	unsigned long mode = 0;
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ILI_ERR("Failed to convert value.");
+		return -EINVAL;
+	}
+
+	ilits->interpolation = mode;
+
+	ret = ilitek_set_report_mode(mode);
+	if(ret) {
+		ILI_ERR("set report mode fail\n");
+	}
+	return count;
+}
+
 #ifdef ILI_TOUCH_LAST_TIME
 static ssize_t ili_mmi_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -152,6 +178,8 @@ static DEVICE_ATTR(timestamp, S_IRUGO, ili_mmi_timestamp_show, NULL);
 
 static DEVICE_ATTR(palm_settings, S_IRUGO | S_IWUSR | S_IWGRP, ili_palm_settings_show, ili_palm_settings_store);
 
+static DEVICE_ATTR(interpolation, S_IRUGO | S_IWUSR | S_IWGRP, interpolation_show, interpolation_store);
+
 static int ili_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
 {
 	int idx = 0;
@@ -160,6 +188,8 @@ static int ili_mmi_extend_attribute_group(struct device *dev, struct attribute_g
 #ifdef ILI_TOUCH_LAST_TIME
 	ADD_ATTR(timestamp);
 #endif
+	if (ilits->interpolation_ctrl)
+		ADD_ATTR(interpolation);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;

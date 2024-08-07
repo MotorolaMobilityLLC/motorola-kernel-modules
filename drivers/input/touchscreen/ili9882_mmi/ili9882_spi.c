@@ -583,6 +583,11 @@ static int parse_dt(struct device_node *np)
                 ilits->check_resolution = 0;
         }
 
+	ilits->interpolation_ctrl = of_property_read_bool(np,
+					"ilitek,interpolation-ctrl");
+	if (ilits->interpolation_ctrl)
+		ILI_INFO("support ilitek interpolation mode");
+
 #ifdef ILI_CONFIG_PANEL_GESTURE
 	//parse gesture by panel config
 	if (active_panel_name) {
