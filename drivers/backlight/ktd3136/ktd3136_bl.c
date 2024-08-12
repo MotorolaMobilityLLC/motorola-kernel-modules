@@ -342,6 +342,9 @@ int ktd3136_set_brightness(struct ktd3136_data *drvdata, int brt_val)
 		} else if(ALIGN_BL_MAPPING_1000 == drvdata->led_current_align) {
 			brt_val = bl_mapping_1000[brt_val];
 			pr_info("%s bl_mapping 1000nit brt_val: %d\n", __func__, brt_val);
+		}else if(ALIGN_BL_MAPPING_GAMMA15 == drvdata->led_current_align){
+			brt_val = bl_mapping_gamma15[brt_val];
+			pr_info("%s bl_mapping gamma15 brt_val: %d\n", __func__, brt_val);
 		} else if (drvdata->led_current_align)
 			pr_info("%s: unsupport align type: %d\n", __func__, drvdata->led_current_align);
 	}
