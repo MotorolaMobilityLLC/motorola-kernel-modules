@@ -1,27 +1,18 @@
-# Makefile for the focaltech touchscreen drivers.
+all: modules
+
+modules:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)
+
+modules_install:
+	$(MAKE) INSTALL_MOD_STRIP=1 -C $(KERNEL_SRC) M=$(M) modules_install
+
+%:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) $@ $(KBUILD_OPTIONS)
+
+clean:
+	rm -f *.o *.ko *.mod.c *.mod.o *~ .*.cmd Module.symvers
+	rm -rf .tmp_versions
 
 
-
-obj-$(CONFIG_TOUCHSCREEN_FTS) += focaltech_tp.o
-focaltech_tp-y := focaltech_core.o \
-		focaltech_ex_fun.o \
-		focaltech_ex_mode.o \
-		focaltech_gesture.o \
-		focaltech_esdcheck.o \
-		focaltech_point_report_check.o \
-		focaltech_proximity.o
-
-
-
-
-focaltech_tp-y += focaltech_spi_v2.o
-
-
-focaltech_tp-y += focaltech_debug.o
-
-focaltech_tp-y += focaltech_hp.o
-
-
-
-focaltech_tp-y += focaltech_flash.o
-focaltech_tp-y += focaltech_flash/focaltech_upgrade_ft3383.o
+KBUILD_EXTRA_SYMBOLS += $(M)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(M)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
