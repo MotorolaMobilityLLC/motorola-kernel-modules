@@ -2,9 +2,14 @@
 # Focaltech Touchscreen driver configuration
 #
 
-config TOUCHSCREEN_FTS
-    tristate "Focaltech Touchscreen"
-    default m
+config TOUCHSCREEN_FTS_V3_5
+    bool "Focaltech Touchscreen v3"
+    default n
     help
       Say Y here if you have Focaltech touch panel.
       If unsure, say N.
+
+config TOUCHSCREEN_FTS_DIRECTORY_V3_5
+    string "Focaltech ts v3.5 directory name"
+    default "focaltech_touch_v3_5"
+    depends on TOUCHSCREEN_FTS_V3_5
