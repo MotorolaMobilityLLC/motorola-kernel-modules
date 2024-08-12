@@ -100,7 +100,7 @@ static ssize_t fts_interpolation_store(struct device *dev,
 		FTS_ERROR("Failed to convert value.");
 		return -EINVAL;
 	}
-
+	mode = (mode == 2 ? 1 : mode);
 	mutex_lock(&ts_data->mode_lock);
 	ts_data->get_mode.interpolation = mode;
 	ret = fts_mmi_set_report_rate(ts_data);
@@ -123,7 +123,7 @@ static ssize_t fts_interpolation_show(struct device *dev,
 	GET_TS_DATA(dev);
 
 	FTS_INFO("interpolation = %d.", ts_data->set_mode.interpolation);
-	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts_data->set_mode.interpolation);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", (ts_data->set_mode.interpolation == 1 ? 2 : 0));
 }
 
 #define ADD_ATTR(name) { \
@@ -378,10 +378,7 @@ static int fts_mmi_post_resume(struct device *dev)
 #endif
 
 #if FTS_GESTURE_EN
-	if (fts_gesture_resume(ts_data) == 0) {
-		ts_data->suspended = false;
-		return 0;
-	}
+	fts_gesture_resume(ts_data);
 #endif
 
 	mutex_lock(&ts_data->mode_lock);
