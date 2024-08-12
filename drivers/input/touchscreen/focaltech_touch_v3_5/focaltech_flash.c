@@ -595,12 +595,12 @@ static bool fts_fwupg_check_fw_valid(void)
 static bool fts_fwupg_check_state(
     struct fts_upgrade *upg, enum FW_STATUS rstate)
 {
-    int ret = 0;
+    //int ret = 0;
     int i = 0;
     enum FW_STATUS cstate = FTS_RUN_IN_ERROR;
 
     for (i = 0; i < FTS_UPGRADE_LOOP; i++) {
-        ret = fts_fwupg_get_boot_state(upg, &cstate);
+        fts_fwupg_get_boot_state(upg, &cstate);
         /* FTS_DEBUG("fw state=%d, retries=%d", cstate, i); */
         if (cstate == rstate)
             return true;
@@ -777,7 +777,7 @@ static bool fts_fwupg_check_flash_status(
     int retries,
     int retries_delay)
 {
-    int ret = 0;
+    //int ret = 0;
     int i = 0;
     u8 cmd = 0;
     u8 val[FTS_CMD_FLASH_STATUS_LEN] = { 0 };
@@ -785,7 +785,7 @@ static bool fts_fwupg_check_flash_status(
 
     for (i = 0; i < retries; i++) {
         cmd = FTS_CMD_FLASH_STATUS;
-        ret = fts_read(&cmd , 1, val, FTS_CMD_FLASH_STATUS_LEN);
+        fts_read(&cmd , 1, val, FTS_CMD_FLASH_STATUS_LEN);
         read_status = (((u16)val[0]) << 8) + val[1];
         if (flash_status == read_status) {
             /* FTS_DEBUG("[UPGRADE]flash status ok"); */

@@ -1666,7 +1666,7 @@ static int fts_power_init(struct fts_ts_data *ts_data)
     fts_msleep(200);
     return 0;
 }
-
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
 static int fts_power_suspend(struct fts_ts_data *ts_data)
 {
     int ret = 0;
@@ -1730,6 +1730,7 @@ static int fts_power_resume(struct fts_ts_data *ts_data)
     FTS_FUNC_EXIT();
     return 0;
 }
+#endif
 
 static int fts_gpio_configure(struct fts_ts_data *ts_data)
 {
@@ -1883,13 +1884,13 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     }
 
     /* reset, irq gpio info */
-    pdata->reset_gpio = of_get_named_gpio_flags(np, "focaltech,reset-gpio",
-                        0, &pdata->reset_gpio_flags);
+    pdata->reset_gpio = of_get_named_gpio(np, "focaltech,reset-gpio",
+                        0);
     if (pdata->reset_gpio < 0)
         FTS_ERROR("Unable to get reset_gpio");
 
-    pdata->irq_gpio = of_get_named_gpio_flags(np, "focaltech,irq-gpio",
-                      0, &pdata->irq_gpio_flags);
+    pdata->irq_gpio = of_get_named_gpio(np, "focaltech,irq-gpio",
+                      0);
     if (pdata->irq_gpio < 0)
         FTS_ERROR("Unable to get irq_gpio");
 
@@ -1913,6 +1914,7 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     return 0;
 }
 
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
 static int fts_ts_suspend(struct device *dev)
 {
     struct fts_ts_data *ts_data = fts_data;
@@ -2037,7 +2039,6 @@ static void fts_resume_work(struct work_struct *work)
     struct fts_ts_data *ts_data = container_of(work, struct fts_ts_data, resume_work);
     fts_ts_resume(ts_data->dev);
 }
-
 
 #if IS_ENABLED(CONFIG_DRM)
 #if IS_ENABLED(CONFIG_DRM_PANEL)
@@ -2170,6 +2171,7 @@ static int fts_notifier_callback_exit(struct fts_ts_data *ts_data)
     FTS_FUNC_EXIT();
     return 0;
 }
+#endif
 
 
 int fts_ts_probe_entry(struct fts_ts_data *ts_data)
@@ -2194,7 +2196,9 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     if (!ts_data->ts_workqueue) {
         FTS_ERROR("create fts workqueue fail");
     } else {
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
         INIT_WORK(&ts_data->resume_work, fts_resume_work);
+#endif
     }
     spin_lock_init(&ts_data->irq_lock);
     mutex_init(&ts_data->report_mutex);
@@ -2313,12 +2317,12 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     init_completion(&ts_data->pm_completion);
     ts_data->pm_suspend = false;
 #endif
-
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
     ret = fts_notifier_callback_init(ts_data);
     if (ret) {
         FTS_ERROR("init notifier callback fail");
     }
-
+#endif
     FTS_FUNC_EXIT();
     return 0;
 
@@ -2378,7 +2382,9 @@ int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 {
     FTS_FUNC_ENTER();
     cancel_work_sync(&ts_data->resume_work);
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
     fts_notifier_callback_exit(ts_data);
+#endif
     free_irq(ts_data->irq, ts_data);
     fts_fwupg_exit(ts_data);
     fts_esdcheck_exit(ts_data);
