@@ -59,6 +59,18 @@ struct mmi_sys_temp_dev {
 
 static struct mmi_sys_temp_dev *sys_temp_dev;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,30)
+struct thermal_zone_device *thermal_zone_device_register(const char *type, int ntrips, int mask,
+                                                        void *devdata, struct thermal_zone_device_ops *ops,
+                                                        const struct thermal_zone_params *tzp, int passive_delay,
+                                                        int polling_delay)
+{
+       return thermal_zone_device_register_with_trips(type, NULL, ntrips, mask,
+                                                      devdata, ops, tzp,
+                                                      passive_delay, polling_delay);
+}
+#endif
+
 static int uevent_generate(struct mmi_sys_temp_dev *data, int index)
 {
 	struct kobj_uevent_env *env;
