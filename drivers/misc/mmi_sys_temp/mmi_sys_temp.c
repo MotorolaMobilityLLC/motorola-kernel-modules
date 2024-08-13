@@ -29,6 +29,7 @@
 #include <linux/notifier.h>
 #include <linux/workqueue.h>
 #include <linux/compat.h>
+#include <linux/version.h>
 
 #define TEMP_NODE_SENSOR_NAMES "mmi,temperature-names"
 #define SENSOR_LISTENER_NAMES "mmi,sensor-listener-names"
@@ -59,7 +60,7 @@ struct mmi_sys_temp_dev {
 
 static struct mmi_sys_temp_dev *sys_temp_dev;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,30)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,30)
 struct thermal_zone_device *thermal_zone_device_register(const char *type, int ntrips, int mask,
                                                         void *devdata, struct thermal_zone_device_ops *ops,
                                                         const struct thermal_zone_params *tzp, int passive_delay,
