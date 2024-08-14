@@ -300,7 +300,7 @@
 /*
  * auto upgrade
  */
-#define FTS_AUTO_UPGRADE_EN                     0
+#define FTS_AUTO_UPGRADE_EN                     1
 
 /* for none flash project, set it to be the using FW number */
 #define FTS_MULTI_FW_NUM                        0

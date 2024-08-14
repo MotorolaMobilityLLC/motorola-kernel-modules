@@ -148,8 +148,8 @@
  * FTS_XXX_HIRES_X, a multiple relative to the original resolution
  * FTS_HI_RES_X_MAX, const value, can't be modified
  */
-#define FTS_TOUCH_HIRES_EN                  0
-#define FTS_TOUCH_HIRES_X                   10
+#define FTS_TOUCH_HIRES_EN                  1
+#define FTS_TOUCH_HIRES_X                   16
 
 #define FTS_PEN_HIRES_EN                    1
 #define FTS_PEN_HIRES_X                     10
