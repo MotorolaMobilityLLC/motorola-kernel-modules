@@ -406,7 +406,7 @@ static int aw37004_i2c_probe(struct i2c_client *client,
 
 	ret = regmap_read(regmap, AW37004_REG_ID2, &data);
 	if (ret < 0 || data != AW37004_ID2) {
-		dev_err(dev, "Failed to read CHIP ID2: %d\n", ret);
+		dev_err(dev, "Failed to read CHIP ID2: %d,CHIP ID2: %d\n", ret,data);
 		ret = -ENODEV;
 		goto err_id;
 	}
