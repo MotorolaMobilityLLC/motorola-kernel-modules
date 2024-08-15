@@ -905,16 +905,20 @@ static void mmi_configure_charger(struct mmi_glink_chip *chip)
 
 	if (pre_charger_suspend != chip->charger_suspend) {
 		value = chip->charger_suspend;
-		qti_charger_set_property(OEM_PROP_CHG_SUSPEND,
+		if(qti_charger_set_property(OEM_PROP_CHG_SUSPEND,
 					&value,
-					sizeof(value));
+					sizeof(value) < 0)) {
+		    chip->charger_suspend = pre_charger_suspend;
+        }
 	}
 
 	if (pre_charging_disable!= chip->charging_disable) {
 		value = chip->charging_disable;
-		qti_charger_set_property(OEM_PROP_CHG_DISABLE,
+		if(qti_charger_set_property(OEM_PROP_CHG_DISABLE,
 					&value,
-					sizeof(value));
+					sizeof(value)) < 0) {
+		    chip->charging_disable = pre_charging_disable;
+        }
 	}
 
 	mmi_info(chip, "CDIS=%d, CSUS=%d, CFULL=%d\n",
