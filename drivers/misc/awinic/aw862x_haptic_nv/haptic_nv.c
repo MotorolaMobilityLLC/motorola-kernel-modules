@@ -64,6 +64,11 @@ struct transient_trig_data {
 	struct led_classdev *led_cdev;
 };
 
+#ifdef FCNT_VIBRATION
+static unsigned int short_vib_gain = 0x80;
+static unsigned int long_vib_gain = 0x80;
+#endif
+
 /*********************************************************
  *
  * I2C Read/Write
@@ -2379,6 +2384,58 @@ static ssize_t haptic_audio_store(struct device *dev,
 	return count;
 }
 
+#ifdef FCNT_VIBRATION
+static ssize_t rakuraku_mode_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "short_vib_gain = 0x%02X\n", short_vib_gain);
+}
+
+static ssize_t rakuraku_mode_store(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	cdev_t *cdev = dev_get_drvdata(dev);
+	struct aw_haptic *aw_haptic = container_of(cdev, struct aw_haptic,
+						   vib_dev);
+	uint32_t val = 0;
+	int rc = 0;
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+	aw_info("value=0x%02x", val);
+	mutex_lock(&aw_haptic->lock);
+	short_vib_gain = val;
+	mutex_unlock(&aw_haptic->lock);
+	return count;
+}
+
+static ssize_t amplitude_show(struct device *dev, struct device_attribute *attr,
+			 char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "long_vib_gain = 0x%02X\n", long_vib_gain);
+}
+
+static ssize_t amplitude_store(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t count)
+{
+	cdev_t *cdev = dev_get_drvdata(dev);
+	struct aw_haptic *aw_haptic = container_of(cdev, struct aw_haptic,
+						   vib_dev);
+	uint32_t val = 0;
+	int rc = 0;
+
+	rc = kstrtouint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+	aw_info("value=0x%02x", val);
+	mutex_lock(&aw_haptic->lock);
+	long_vib_gain = val;
+	mutex_unlock(&aw_haptic->lock);
+	return count;
+}
+#endif
+
 static DEVICE_ATTR(aw_state, 0664, state_show, state_store);
 static DEVICE_ATTR(reg, 0664, reg_show, reg_store);
 static DEVICE_ATTR(aw_duration, 0664, duration_show, duration_store);
@@ -2407,6 +2464,10 @@ static DEVICE_ATTR(bullet_nr, 0664, bullet_nr_show, bullet_nr_store);
 static DEVICE_ATTR(haptic_audio_time, 0664, haptic_audio_time_show,
 		   haptic_audio_time_store);
 static DEVICE_ATTR(haptic_audio, 0664, haptic_audio_show, haptic_audio_store);
+#ifdef FCNT_VIBRATION
+static DEVICE_ATTR(rakuraku_mode, S_IWUSR | S_IRUGO, rakuraku_mode_show, rakuraku_mode_store);
+static DEVICE_ATTR(amplitude, S_IWUSR | S_IRUGO, amplitude_show, amplitude_store);
+#endif
 static struct attribute *vibrator_attributes[] = {
 	&dev_attr_aw_state.attr,
 	&dev_attr_aw_duration.attr,
@@ -2432,6 +2493,10 @@ static struct attribute *vibrator_attributes[] = {
 	&dev_attr_bullet_nr.attr,
 	&dev_attr_haptic_audio_time.attr,
 	&dev_attr_haptic_audio.attr,
+#ifdef FCNT_VIBRATION
+	&dev_attr_rakuraku_mode.attr,
+	&dev_attr_amplitude.attr,
+#endif
 	NULL
 };
 
@@ -2784,16 +2849,26 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 
 #ifdef FCNT_VIBRATION
 	if(duration == 8) {
+		//short vibration process
 		mutex_lock(&aw_haptic->lock);
-		aw_info("short vibration enable duration:%llu", duration);
+		aw_info("short vibration enable duration:%llu gain:%u", duration, short_vib_gain);
 		aw_haptic->state = level;
 		aw_haptic->activate_mode = AW_RAM_LOOP_MODE;
 		aw_haptic->func->set_wav_seq(aw_haptic, 0, 1);
 		aw_haptic->func->set_wav_seq(aw_haptic, 1, 0);
 		aw_haptic->func->set_wav_loop(aw_haptic, 0, 0x00);
+		aw_haptic->gain = short_vib_gain;
+		aw_haptic->func->set_gain(aw_haptic, aw_haptic->gain);
 		mutex_unlock(&aw_haptic->lock);
 		schedule_work(&aw_haptic->vibrator_work);
 		return;
+	} else {
+		//long vibration process
+		mutex_lock(&aw_haptic->lock);
+		aw_info("long vibration set gain:%u", long_vib_gain);
+		aw_haptic->gain = long_vib_gain;
+		aw_haptic->func->set_gain(aw_haptic, aw_haptic->gain);
+		mutex_unlock(&aw_haptic->lock);
 	}
 #endif
 
