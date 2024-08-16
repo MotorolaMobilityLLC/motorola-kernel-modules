@@ -51,12 +51,14 @@
 #define KEY_GESTURE_V                           KEY_V
 #define KEY_GESTURE_C                           KEY_C
 #define KEY_GESTURE_Z                           KEY_Z
+#define KEY_GESTURE_F1                          KEY_F1
 
 #define GESTURE_LEFT                            0x20
 #define GESTURE_RIGHT                           0x21
 #define GESTURE_UP                              0x22
 #define GESTURE_DOWN                            0x23
 #define GESTURE_DOUBLECLICK                     0x24
+#define GESTURE_SINGLECLICK                     0x27
 #define GESTURE_O                               0x30
 #define GESTURE_W                               0x31
 #define GESTURE_M                               0x32
@@ -66,6 +68,8 @@
 #define GESTURE_V                               0x54
 #define GESTURE_Z                               0x41
 #define GESTURE_C                               0x34
+
+#define REPORT_MAX_COUNT 10000
 
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
@@ -251,6 +255,7 @@ static int fts_create_gesture_sysfs(struct device *dev)
 static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 {
     int gesture;
+    static int report_cnt = 0;
 
     FTS_DEBUG("gesture_id:0x%x", gesture_id);
     switch (gesture_id) {
@@ -268,6 +273,9 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
         break;
     case GESTURE_DOUBLECLICK:
         gesture = KEY_GESTURE_U;
+        break;
+    case GESTURE_SINGLECLICK:
+        gesture = KEY_GESTURE_F1;
         break;
     case GESTURE_O:
         gesture = KEY_GESTURE_O;
@@ -303,10 +311,44 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
     /* report event key */
     if (gesture != -1) {
         FTS_DEBUG("Gesture Code=%d", gesture);
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+        /* report double tap */
+        if (gesture == KEY_GESTURE_U) {
+            if (fts_data->imports && fts_data->imports->report_gesture) {
+                struct gesture_event_data event;
+
+                FTS_INFO("invoke imported report double tap gesture function\n");
+                event.evcode = 4;
+                event.evdata.x = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_x);
+                event.evdata.y = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_y);
+                /* call class method */
+                fts_data->imports->report_gesture(&event);
+                ++report_cnt;
+            }
+        /* report single tap */
+        } else if (gesture == KEY_GESTURE_F1) {
+            if (fts_data->imports && fts_data->imports->report_gesture) {
+                struct gesture_event_data event;
+
+                FTS_INFO("invoke imported report single tap gesture function\n");
+                event.evcode = 1;
+                event.evdata.x = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_x);
+                event.evdata.y = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_y);
+                /* call class method */
+                fts_data->imports->report_gesture(&event);
+                ++report_cnt;
+            }
+        }
+
+        FTS_INFO("input report: %d", report_cnt);
+        if (report_cnt >= REPORT_MAX_COUNT)
+            report_cnt = 0;
+#else
         input_report_key(input_dev, gesture, 1);
         input_sync(input_dev);
         input_report_key(input_dev, gesture, 0);
         input_sync(input_dev);
+#endif
     }
 }
 
@@ -399,9 +441,12 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
     u8 state = 0xFF;
 
     FTS_FUNC_ENTER();
+    if (enable_irq_wake(ts_data->irq)) {
+        FTS_ERROR("enable_irq_wake(irq:%d) fail", ts_data->irq);
+    }
 
     for (i = 0; i < FTS_MAX_RETRIES_WRITEREG; i++) {
-        fts_write_reg(0xD1, 0xFF);
+        fts_write_reg(0xD1, ts_data->gsx_cmd);
         fts_write_reg(0xD2, 0xFF);
         fts_write_reg(0xD5, 0xFF);
         fts_write_reg(0xD6, 0xFF);
@@ -425,6 +470,7 @@ int fts_gesture_suspend(struct fts_ts_data *ts_data)
 
 int fts_gesture_resume(struct fts_ts_data *ts_data)
 {
+    int ret = 0;
     int i = 0;
     u8 state = 0xFF;
 
@@ -441,6 +487,11 @@ int fts_gesture_resume(struct fts_ts_data *ts_data)
         FTS_ERROR("make IC exit gesture(resume) fail,state:%x", state);
     else
         FTS_INFO("resume from gesture successfully");
+
+    ret = disable_irq_wake(ts_data->irq);
+    if (ret) {
+        FTS_ERROR("disable_irq_wake(irq:%d) fail", ts_data->irq);
+    }
 
     FTS_FUNC_EXIT();
     return 0;

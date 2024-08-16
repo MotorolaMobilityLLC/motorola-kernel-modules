@@ -49,6 +49,11 @@
 #endif //CONFIG_DRM
 #include "focaltech_core.h"
 
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+extern int fts_mmi_dev_register(struct fts_ts_data *ts_data);
+extern void fts_mmi_dev_unregister(struct fts_ts_data *ts_data);
+#endif
+
 /*****************************************************************************
 * Private constant and macro definitions using #define
 *****************************************************************************/
@@ -216,6 +221,7 @@ void fts_irq_disable(void)
     if (!fts_data->irq_disabled) {
         disable_irq_nosync(fts_data->irq);
         fts_data->irq_disabled = true;
+        FTS_INFO("Irq disabled");
     }
 
     spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
@@ -232,6 +238,7 @@ void fts_irq_enable(void)
     if (fts_data->irq_disabled) {
         enable_irq(fts_data->irq);
         fts_data->irq_disabled = false;
+        FTS_INFO("Irq enabled");
     }
 
     spin_unlock_irqrestore(&fts_data->irq_lock, irqflags);
@@ -748,6 +755,12 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
                           events[i].id, events[i].x, events[i].y,
                           events[i].p, events[i].area);
             }
+
+            if (FTS_TOUCH_DOWN == events[i].flag) {
+                ts_data->last_event_time = ktime_get_boottime();
+                FTS_DEBUG("TOUCH: [%d] logged timestamp\n", i);
+            }
+
         } else {
             input_mt_slot(input_dev, events[i].id);
             input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, false);
@@ -1468,24 +1481,34 @@ static int fts_pinctrl_init(struct fts_ts_data *ts)
 
     ts->pins_active = pinctrl_lookup_state(ts->pinctrl, "pmx_ts_active");
     if (IS_ERR_OR_NULL(ts->pins_active)) {
-        FTS_ERROR("Pin state[active] not found");
-        ret = PTR_ERR(ts->pins_active);
-        goto err_pinctrl_lookup;
+        ts->pins_active = pinctrl_lookup_state(ts->pinctrl, "cli_pmx_ts_active");
+        if (IS_ERR_OR_NULL(ts->pins_active)) {
+            FTS_ERROR("Pin state[active] not found");
+            ret = PTR_ERR(ts->pins_active);
+            goto err_pinctrl_lookup;
+        }
     }
 
     ts->pins_suspend = pinctrl_lookup_state(ts->pinctrl, "pmx_ts_suspend");
     if (IS_ERR_OR_NULL(ts->pins_suspend)) {
-        FTS_ERROR("Pin state[suspend] not found");
-        ret = PTR_ERR(ts->pins_suspend);
-        goto err_pinctrl_lookup;
+        ts->pins_suspend = pinctrl_lookup_state(ts->pinctrl, "cli_pmx_ts_suspend");
+        if (IS_ERR_OR_NULL(ts->pins_suspend)) {
+            FTS_ERROR("Pin state[suspend] not found");
+            ret = PTR_ERR(ts->pins_suspend);
+            goto err_pinctrl_lookup;
+        }
     }
 
     ts->pins_release = pinctrl_lookup_state(ts->pinctrl, "pmx_ts_release");
     if (IS_ERR_OR_NULL(ts->pins_release)) {
-        FTS_ERROR("Pin state[release] not found");
-        ret = PTR_ERR(ts->pins_release);
+        ts->pins_release = pinctrl_lookup_state(ts->pinctrl, "cli_pmx_ts_release");
+        if (IS_ERR_OR_NULL(ts->pins_release)) {
+            FTS_ERROR("Pin state[release] not found");
+            ret = PTR_ERR(ts->pins_release);
+        }
     }
 
+    FTS_INFO("Pinctrl init success");
     return 0;
 err_pinctrl_lookup:
     if (ts->pinctrl) {
@@ -1504,7 +1527,7 @@ err_pinctrl_get:
 /*****************************************************************************
 * Power Control
 *****************************************************************************/
-static int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
+int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
 {
     int ret = 0;
 
@@ -2323,6 +2346,11 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         FTS_ERROR("init notifier callback fail");
     }
 #endif
+
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+    fts_mmi_dev_register(ts_data);
+#endif
+
     FTS_FUNC_EXIT();
     return 0;
 
@@ -2382,6 +2410,10 @@ int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 {
     FTS_FUNC_ENTER();
     cancel_work_sync(&ts_data->resume_work);
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+    fts_mmi_dev_unregister(ts_data);
+#endif
+
 #ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
     fts_notifier_callback_exit(ts_data);
 #endif

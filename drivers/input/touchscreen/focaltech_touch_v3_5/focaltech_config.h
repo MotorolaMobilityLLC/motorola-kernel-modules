@@ -221,6 +221,7 @@
  * choose your ic chip type of focaltech
  */
 #define FTS_CHIP_TYPE   _FT3383
+#define FTS_CHIP_NAME   "ft3383"
 
 /******************* Enables *********************/
 /*********** 1 to enable, 0 to disable ***********/
@@ -271,7 +272,7 @@
  * Pinctrl enable
  * default: disable
  */
-#define FTS_PINCTRL_EN                          0
+#define FTS_PINCTRL_EN                          1
 
 /* power policy:
  * FTS_POWER_SOURCE_CUST_EN,FTS_POWER_SUSPEND_OFF_EN
@@ -300,7 +301,7 @@
 /*
  * auto upgrade
  */
-#define FTS_AUTO_UPGRADE_EN                     1
+#define FTS_AUTO_UPGRADE_EN                     0
 
 /* for none flash project, set it to be the using FW number */
 #define FTS_MULTI_FW_NUM                        0
