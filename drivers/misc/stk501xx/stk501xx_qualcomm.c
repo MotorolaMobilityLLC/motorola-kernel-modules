@@ -1119,7 +1119,7 @@ err_exit:
 #endif // STK_SENSING_WATCHDOG
 err_free_mem:
     mutex_destroy(&stk_wrapper->i2c_mgr.lock);
-    kfree(stk);
+    kfree(stk_wrapper);
     return err;
 }
 
