@@ -1219,7 +1219,9 @@ static int sx937x_parse_dts(struct sx937x_platform_data *pdata, struct device *d
 
 	pdata->reinit_on_cali = of_property_read_bool(dNode, "reinit-on-cali");
 	pdata->reinit_on_i2c_failure = of_property_read_bool(dNode, "reinit-on-i2c-failure");
-	LOG_INFO("reinit_on_cali %d,reinit_on_i2c_failure %d \n", pdata->reinit_on_cali,pdata->reinit_on_i2c_failure);
+	pdata->capsensor_upd_support = 0;
+	of_property_read_u32(dNode,"capsensor_upd_support",&pdata->capsensor_upd_support) ;
+	LOG_INFO("reinit_on_cali %d,reinit_on_i2c_failure %d,capsensor_upd_support %d \n", pdata->reinit_on_cali,pdata->reinit_on_i2c_failure,pdata->capsensor_upd_support);
 
 	LOG_DBG("-[%d] parse_dt complete\n", pdata->irq_gpio);
 	return 0;
@@ -1298,12 +1300,19 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 			if (enable == 1) {
 				LOG_INFO("enable cap sensor : %s\n", sensors_cdev->name);
 				sx937x_i2c_read_16bit(this->bus, SX937X_GENERAL_SETUP, &temp);
-				temp = temp | 0x000000FF;
+				if (this->hw->capsensor_upd_support)
+				{
+					temp = temp | 0x0000007F;
+				}
+				else
+				{
+					temp = temp | 0x000000FF;
+				}
 				if (!strncmp(sensors_cdev->name, "Moto_Top_Approach_Det", 21))
 				{
 					LOG_INFO("MotoTopApproach_ENABLE_FLAG is true and calibrate MotoTopApproach channel");
 					MotoTopApproach_ENABLE_FLAG = 1;
-					//temp = temp | 0x80FF;
+					temp = temp | 0x00FF;
 				}
 				LOG_DBG("set reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
 				sx937x_i2c_write_16bit(this->bus, SX937X_GENERAL_SETUP, temp);

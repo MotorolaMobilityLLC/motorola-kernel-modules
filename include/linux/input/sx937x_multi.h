@@ -453,7 +453,7 @@ typedef struct sx937x_platform_data
 	bool reinit_on_cali;
 	bool reinit_on_i2c_failure;
 	bool state_flip_open;
-
+	int capsensor_upd_support;
 	int (*get_is_nirq_low)(void);
 
 	int     (*init_platform_hw)(struct i2c_client *client);
