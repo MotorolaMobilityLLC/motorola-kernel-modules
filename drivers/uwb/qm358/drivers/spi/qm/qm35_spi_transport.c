@@ -86,8 +86,8 @@ static int qm35_spi_start(struct qm35 *qm35)
 
 	if (!try_module_get(THIS_MODULE)) {
 		rc = -ENODEV;
-		dev_err(dev, "Fail to increase refcnt for %s module! (%d)\n",
-			THIS_MODULE->name, module_refcount(THIS_MODULE));
+		dev_err(dev, "Fail to increase refcnt for %s module!\n",
+			THIS_MODULE->name);
 		goto error;
 	}
 
