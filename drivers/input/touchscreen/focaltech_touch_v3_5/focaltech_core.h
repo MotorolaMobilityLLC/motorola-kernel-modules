@@ -74,6 +74,10 @@
 #include <linux/pinctrl/consumer.h>
 #endif
 
+#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+#include <linux/touchscreen_mmi.h>
+#endif
+
 /*****************************************************************************
 * Private constant and macro definitions using #define
 *****************************************************************************/
@@ -137,7 +141,7 @@
 /*
  * For commnication error in PM(deep sleep) state
  */
-#define FTS_PATCH_COMERR_PM                 0
+#define FTS_PATCH_COMERR_PM                 1
 #define FTS_TIMEOUT_COMERR_PM               700
 
 /*
@@ -186,6 +190,9 @@ struct fts_ts_platform_data {
     u32 x_min;
     u32 y_min;
     u32 max_touch_number;
+    bool pocket_mode_ctrl;
+    bool sample_ctrl;
+    bool stowed_mode_ctrl;
 };
 
 struct ts_event {
@@ -211,6 +218,12 @@ struct pen_event {
     int tilt_y;
     int azimuth;
     int tool_type;
+};
+
+struct fts_mode_info {
+    int pocket_mode;
+    int sample;
+    int stowed;
 };
 
 struct fts_ts_data {
@@ -299,6 +312,15 @@ struct fts_ts_data {
     struct pinctrl_state *pins_release;
 #endif
     struct notifier_block fb_notif;
+
+    struct mutex mode_lock;
+    struct fts_mode_info set_mode;
+    struct fts_mode_info get_mode;
+#if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+    struct ts_mmi_class_methods *imports;
+#endif
+    u8 gsx_cmd;
+    ktime_t last_event_time;
 };
 
 enum _FTS_BUS_TYPE {
@@ -398,8 +420,10 @@ void fts_prc_queue_work(struct fts_ts_data *ts_data);
 int fts_fwupg_init(struct fts_ts_data *ts_data);
 int fts_fwupg_exit(struct fts_ts_data *ts_data);
 int fts_upgrade_bin(char *fw_name, bool force);
+void fts_fwupg_bin(void);
 int fts_enter_test_environment(bool test_state);
 int fts_enter_normal_fw(void);
+int fts_fw_update_vendor_name(const char* name);
 
 /* Other */
 void fts_msleep(unsigned long msecs);
@@ -409,6 +433,7 @@ int fts_check_cid(struct fts_ts_data *ts_data, u8 id_h);
 int fts_wait_tp_to_valid(void);
 void fts_release_all_finger(void);
 void fts_tp_state_recovery(struct fts_ts_data *ts_data);
+void fts_tp_resume_recovery(struct fts_ts_data *ts_data);
 int fts_ex_mode_init(struct fts_ts_data *ts_data);
 int fts_ex_mode_exit(struct fts_ts_data *ts_data);
 int fts_ex_mode_recovery(struct fts_ts_data *ts_data);
@@ -416,6 +441,7 @@ int fts_input_report_buffer(struct fts_ts_data *ts_data, u8 *touch_buf);
 
 void fts_irq_disable(void);
 void fts_irq_enable(void);
+int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable);
 
 #if FTS_PSENSOR_EN
 int fts_proximity_init(struct fts_ts_data *ts_data);
