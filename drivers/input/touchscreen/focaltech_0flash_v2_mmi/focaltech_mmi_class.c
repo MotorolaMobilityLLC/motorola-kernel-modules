@@ -499,9 +499,11 @@ static struct ts_mmi_methods fts_mmi_methods = {
 
 int fts_mmi_dev_register(struct fts_ts_data *ts_data) {
 	int ret;
+	mutex_init(&ts_data->mode_lock);
 	ret = ts_mmi_dev_register(ts_data->dev, &fts_mmi_methods);
 	if (ret) {
 		dev_err(ts_data->dev, "Failed to register ts mmi\n");
+		mutex_destroy(&ts_data->mode_lock);
 		return ret;
 	}
 
@@ -512,5 +514,6 @@ int fts_mmi_dev_register(struct fts_ts_data *ts_data) {
 }
 
 void fts_mmi_dev_unregister(struct fts_ts_data *ts_data) {
+	mutex_destroy(&ts_data->mode_lock);
 	ts_mmi_dev_unregister(ts_data->dev);
 }
