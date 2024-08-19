@@ -79,8 +79,8 @@ struct __packed coredump_pkt {
 	};
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0) && \
-	!defined(CONFIG_SYSFS_HAS_REMOVE_SELF)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0) && \
+	!defined(CONFIG_SYSFS_HAS_REMOVE_SELF)) || IS_ENABLED(CONFIG_SYSFS_IMPORT_REMOVE_SELF)
 
 #include <linux/completion.h>
 

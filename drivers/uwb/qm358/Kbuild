@@ -15,6 +15,10 @@ ifneq ($(CONFIG_DEBUG_INFO),y)
 subdir-ccflags-y += -g
 endif
 
+ifneq ($(filter m y,$(CONFIG_SYSFS_IMPORT_REMOVE_SELF)),)
+        EXTRA_CFLAGS += -DCONFIG_SYSFS_IMPORT_REMOVE_SELF
+endif
+
 # QM35 core apis module
 qm35_apis-y := \
 		drivers/base/qm/qm35_bypass.o \
