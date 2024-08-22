@@ -78,6 +78,11 @@ int trusted_sha1_set(const unsigned char *data, unsigned int datalen,
 	struct sdesc *sdesc;
 	int ret;
 
+	if (!hashalg) {
+		pr_info("trusted: hashlg is NULL\n");
+		return -1;
+	}
+
 	sdesc = init_sdesc(hashalg);
 	if (IS_ERR(sdesc)) {
 		pr_info("trusted_key: can't alloc %s\n", hash_alg);
@@ -119,6 +124,11 @@ int trusted_hmac_set(unsigned char *digest, const unsigned char *key,
 	struct sdesc *sdesc;
 	int ret = 0, i = 0,j = 0;
 	uint8_t *data_in;
+
+	if (!hmacalg) {
+		pr_info("trusted: hmacalg is NULL\n");
+		return -1;
+	}
 
 	data_in = kzalloc(sizeof(*data_in) * dsize *4, GFP_KERNEL);
 	if (!data_in) {
