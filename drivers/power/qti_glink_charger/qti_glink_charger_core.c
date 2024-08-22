@@ -791,7 +791,7 @@ void qti_fg_charge_dump_info(struct qti_charger *chg, struct fg_dump fg_info)
 
 static void qti_encrypt_authentication(struct qti_charger *chg)
 {
-	int i;
+	int i = 0, ret = 0;
 	TRUSTED_SHASH_RESULT trusted_result;
 	struct encrypted_data send_data;
 	u8 random_num[4] = {0};
@@ -804,8 +804,13 @@ static void qti_encrypt_authentication(struct qti_charger *chg)
 		mmi_info(chg, "encrypt random_num1[%d]: %d, 0x%x \n", i, send_data.random_num[i], send_data.random_num[i]);
 	}
 
-	trusted_sha1(trusted_result.random_num, 4, trusted_result.sha1);
-	trusted_hmac(trusted_result.random_num, 4, trusted_result.hmac_sha256);
+	ret = trusted_sha1(trusted_result.random_num, 4, trusted_result.sha1);
+	ret = trusted_hmac(trusted_result.random_num, 4, trusted_result.hmac_sha256);
+
+	if (ret) {
+		mmi_info(chg, "encrypt failed\n");
+		return;
+	}
 
 	for (i = 0;i < 4;i++) {
 	    send_data.hmac_data[i] = trusted_result.hmac_sha256[3 + (4 * i)] + (trusted_result.hmac_sha256[2 + (4 * i)] << 8) +
