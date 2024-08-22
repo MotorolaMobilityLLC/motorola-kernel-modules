@@ -7,6 +7,10 @@ ifneq (,$(filter kobe%, $(TARGET_PRODUCT)))
        EXTRA_CFLAGS += -DFCNT_VIBRATION
 endif
 
+ifneq (,$(filter kobe, $(TARGET_PRODUCT)))
+       EXTRA_CFLAGS += -DCONFIG_AF_NOISE_ELIMINATION
+endif
+
 obj-m += aw862x_haptic_nv.o
 
 aw862x_haptic_nv-objs += haptic_nv.o

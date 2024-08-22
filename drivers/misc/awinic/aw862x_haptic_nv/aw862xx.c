@@ -31,6 +31,12 @@
 #include "haptic_nv.h"
 #include "haptic_nv_reg.h"
 
+#ifdef CONFIG_AF_NOISE_ELIMINATION
+extern int mot_actuator_on_vibrate_start(void);
+extern int mot_actuator_on_vibrate_stop(void);
+static int is_af_enabled = false;
+#endif
+
 static void aw862xx_interrupt_setup(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
@@ -288,6 +294,14 @@ static void aw862xx_play_stop(struct aw_haptic *aw_haptic)
 					 AW862XX_BIT_SYSCTRL2_STANDBY_MASK,
 					 AW862XX_BIT_SYSCTRL2_STANDBY_OFF);
 	}
+
+#ifdef CONFIG_AF_NOISE_ELIMINATION
+	if(is_af_enabled) {
+		aw_info("AF_NOISE_ELIMINATION stop");
+		mot_actuator_on_vibrate_stop();
+		is_af_enabled = false;
+	}
+#endif
 }
 
 static void aw862xx_set_pwm(struct aw_haptic *aw_haptic, uint8_t mode)
@@ -387,6 +401,15 @@ static void aw862xx_play_go(struct aw_haptic *aw_haptic, bool flag)
 	uint8_t val = 0;
 
 	aw_info("enter");
+
+#ifdef CONFIG_AF_NOISE_ELIMINATION
+	//Enabled only when duration is greater than 500
+	if( (aw_haptic->loop[0] != 0 || aw_haptic->index != 1) && aw_haptic->duration >= 500) {
+		aw_info("AF_NOISE_ELIMINATION start");
+		is_af_enabled = true;
+		mot_actuator_on_vibrate_start();
+	}
+#endif
 	if (flag == true) {
 		val = AW862XX_BIT_PLAYCFG4_GO_ON;
 		haptic_nv_i2c_writes(aw_haptic, AW862XX_REG_PLAYCFG4, &val,
