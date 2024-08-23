@@ -32,6 +32,7 @@ struct balance_dev_info
 	int ls_off;
 	int auto_bsm_dis;
 	int lpm_mode;
+	int extmos_en;
 };
 
 struct balance_glink_dev {

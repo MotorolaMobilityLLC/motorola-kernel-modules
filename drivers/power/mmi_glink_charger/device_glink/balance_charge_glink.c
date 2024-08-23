@@ -385,9 +385,10 @@ static int balance_notify_handler(struct notifier_block *nb, unsigned long event
 			return rc;
 		}
 		mmi_info(this_root_chip, "Balance_dev[%d]: work_mode %d, ibat_ma %d, ibat_limit %d, "
-							"vchg_mv %d, vbat_mv %d, die_temp %d, ls_off %d, auto_bsm_dis %d, lpm_mode %d",
+							"vchg_mv %d, vbat_mv %d, die_temp %d, ls_off %d, auto_bsm_dis %d, extmos_en %d, lpm_mode %d",
 							balance_chip->dev_role, balance_info.work_mode, balance_info.ibat_ma, balance_info.ibat_limit,
-							balance_info.vchg_mv, balance_info.vbat_mv, balance_info.die_temp, balance_info.ls_off, balance_info.auto_bsm_dis, balance_info.lpm_mode);
+							balance_info.vchg_mv, balance_info.vbat_mv, balance_info.die_temp, balance_info.ls_off, balance_info.auto_bsm_dis,
+							balance_info.extmos_en, balance_info.lpm_mode);
 	}
 
 	return NOTIFY_DONE;
