@@ -1574,6 +1574,29 @@ static DEVICE_ATTR(wireless_chip_id, S_IRUGO,
 		wireless_chip_id_show,
 		NULL);
 
+static ssize_t wireless_fw_ver_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	int data;
+	struct qti_charger *chg = dev_get_drvdata(dev);
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	qti_charger_read(chg, OEM_PROP_WLS_FW_VER,
+				&data,
+				sizeof(int));
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "0x%04x\n", data);
+}
+
+static DEVICE_ATTR(wireless_fw_ver, S_IRUGO,
+		wireless_fw_ver_show,
+		NULL);
+
 static int fod_gain_store(struct qti_charger *chip, const char *buf,
 	u32 *fod_array)
 {
@@ -2232,7 +2255,7 @@ static ssize_t wlc_fac_vbus_voltage_show(struct device *dev,
 				&vbus,
 				sizeof(vbus));
 
-	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%#x\n", vbus);
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", vbus);
 }
 static DEVICE_ATTR(wlc_fac_vbus_voltage, S_IRUGO,
 		wlc_fac_vbus_voltage_show,
@@ -2254,7 +2277,7 @@ static ssize_t wlc_fac_ibus_current_show(struct device *dev,
 				&ibus,
 				sizeof(ibus));
 
-	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%#x\n", ibus);
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", ibus);
 }
 static DEVICE_ATTR(wlc_fac_ibus_current, S_IRUGO,
 		wlc_fac_ibus_current_show,
@@ -3721,6 +3744,13 @@ static int qti_charger_init(struct qti_charger *chg)
 	if (rc) {
 		mmi_err(chg,
 			   "Couldn't create wireless_chip_id\n");
+	}
+
+	rc = device_create_file(chg->dev,
+				&dev_attr_wireless_fw_ver);
+	if (rc) {
+		mmi_err(chg,
+			   "Couldn't create wireless_fw_ver\n");
 	}
 
 	rc = device_create_file(chg->dev,
