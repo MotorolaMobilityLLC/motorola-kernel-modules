@@ -3,4 +3,6 @@ EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 
 obj-m += watchdogtest.o
+ifeq ($(shell expr $(KERNELVERSION) \< 5.4), 1)
 KBUILD_EXTRA_SYMBOLS += $(KBUILD_OUTPUT)/Module.symvers
+endif
