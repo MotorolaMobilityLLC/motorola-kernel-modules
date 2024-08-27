@@ -2303,7 +2303,7 @@ void set_pen_mode_boot(struct goodix_ts_core *cd)
 	else if (value == PEN_DETECTION_PULL)
 		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
 
-	mutex_lock_interruptible(&cd->mode_lock);
+	ret = mutex_lock_interruptible(&cd->mode_lock);
 	if (cd->power_on == 0) {
 		ts_err("The touch is in sleep state, restore the value when resume\n");
 		goto exit;
@@ -2550,7 +2550,7 @@ static int pen_notifier_callback(struct notifier_block *self,
 		cd->get_mode.stylus_mode = GTP_PEN_MODE;
 	}
 
-	mutex_lock_interruptible(&cd->mode_lock);
+	ret = mutex_lock_interruptible(&cd->mode_lock);
 
 	if (cd->power_on == 0) {
 		ts_err("The touch is in sleep state, restore the value when resume\n");
