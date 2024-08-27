@@ -135,6 +135,16 @@ struct mmi_charger_status {
 	enum charging_limit_modes charging_limit_modes;
 };
 
+struct mmi_charger_constraint {
+	int demo_mode;
+	bool factory_mode;
+	bool factory_version;
+	int dcp_pmax;
+	int hvdcp_pmax;
+	int pd_pmax;
+	int wls_pmax;
+};
+
 struct mmi_glink_chip {
 	char			*name;
 	struct device		*dev;
@@ -150,6 +160,7 @@ struct mmi_glink_chip {
 
 	struct mmi_charger_info charger_info;
 	struct mmi_charger_status charger_status;
+	struct mmi_charger_constraint charger_constraint;
 	struct battery_info battery_info;
 	struct mmi_lpd_info lpd_info;
 

@@ -551,6 +551,7 @@ static void mmi_update_charger_event(struct mmi_glink_chip *chip)
 	int power_watt = 0;
 
 	charger_rate = mmi_get_battery_charger_rate(chip);
+	power_watt = chip->charger_info.chrg_pmax_mw;
 
 	if (max_charger_rate < charger_rate || charger_rate == MMI_POWER_SUPPLY_CHARGE_RATE_NONE)
 		max_charger_rate = charger_rate;
@@ -853,6 +854,48 @@ static void mmi_update_charger_status(struct mmi_glink_chip *chip)
 
 }
 
+static void mmi_charger_set_constraint(struct mmi_glink_chip *chip)
+{
+	int rc;
+	u32 value;
+
+	if (chip->dcp_pmax != chip->charger_constraint.dcp_pmax) {
+		value = chip->dcp_pmax;
+		rc = qti_charger_set_property(OEM_PROP_CHG_BC_PMAX,
+					&value,
+					sizeof(value));
+		if (!rc)
+			chip->charger_constraint.dcp_pmax = chip->dcp_pmax;
+	}
+
+	if (chip->hvdcp_pmax != chip->charger_constraint.hvdcp_pmax) {
+		value = chip->hvdcp_pmax;
+		rc = qti_charger_set_property(OEM_PROP_CHG_QC_PMAX,
+					&value,
+					sizeof(value));
+		if (!rc)
+			chip->charger_constraint.hvdcp_pmax = chip->hvdcp_pmax;
+	}
+
+	if (chip->pd_pmax != chip->charger_constraint.pd_pmax) {
+		value = chip->pd_pmax;
+		rc = qti_charger_set_property(OEM_PROP_CHG_PD_PMAX,
+					&value,
+					sizeof(value));
+		if (!rc)
+			chip->charger_constraint.pd_pmax = chip->pd_pmax;
+	}
+
+	if (chip->wls_pmax != chip->charger_constraint.wls_pmax) {
+		value = chip->wls_pmax;
+		qti_charger_set_property(OEM_PROP_CHG_WLS_PMAX,
+					&value,
+					sizeof(value));
+		if (!rc)
+			chip->charger_constraint.wls_pmax = chip->wls_pmax;
+	}
+}
+
 static void mmi_configure_charger(struct mmi_glink_chip *chip)
 {
 	struct mmi_charger_status *status = &chip->charger_status;
@@ -925,6 +968,7 @@ static void mmi_configure_charger(struct mmi_glink_chip *chip)
 		chip->charging_disable,
 		chip->charger_suspend,
 		charging_full);
+
 	return;
 }
 
@@ -960,6 +1004,7 @@ static void mmi_charger_heartbeat_work(struct work_struct *work)
 	mmi_get_charger_info(chip);
 	mmi_update_charger_status(chip);
 	mmi_configure_charger(chip);
+	mmi_charger_set_constraint(chip);
 	mmi_update_charger_event(chip);
 	mutex_unlock(&chip->charger_lock);
 
