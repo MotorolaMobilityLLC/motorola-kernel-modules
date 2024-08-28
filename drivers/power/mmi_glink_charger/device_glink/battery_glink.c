@@ -22,6 +22,7 @@ static struct battery_glink_dev *this_batt_chip[BATT_NUM] = {NULL};
 
 static enum power_supply_property batt_psy_props[] = {
 	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_CAPACITY,
 	POWER_SUPPLY_PROP_HEALTH,
@@ -65,7 +66,7 @@ static int batt_psy_get_prop(struct power_supply *psy,
 		pval->intval = batt_info.batt_status;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-		pval->intval = batt_info.batt_temp > BPD_TEMP_THRE? 1 : 0;
+		pval->intval = batt_info.present;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
 		pval->intval = batt_info.batt_uv;
