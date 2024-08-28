@@ -586,7 +586,7 @@ bool bm_ulog_is_bm_ulog_enabled(struct bm_ulog_dev *bmdev)
 	}
 
 	if (!of_property_read_string(np, "bootargs", &bootargs)) {
-		bm_ulog_enabled = strstr(bootargs, "bm_ulog_enabled=1 ");
+		bm_ulog_enabled = strstr(bootargs, "bm_ulog_enabled=1");
 		bm_info(bmdev, "of_property_read_string bm_ulog_enabled=%s\n", bm_ulog_enabled);
 		if (bm_ulog_enabled) {
 			rt = true;
