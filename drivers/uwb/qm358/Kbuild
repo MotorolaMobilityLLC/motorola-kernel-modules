@@ -1,3 +1,7 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+
 GITVERSION := unknown
 
 subdir-ccflags-y := -I$(src) -I$(src)/include \
@@ -82,3 +86,4 @@ CFLAGS_drivers/spi/qm/libqmrom/qm358xx_rom.o := -DQM358XX_WRITE_STATS
 CFLAGS_drivers/spi/qm/libfwupdater/fwupdater.o := -DWRITE_STATS
 obj-m += qm35_spi.o
 
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../mmi_info/Module.symvers

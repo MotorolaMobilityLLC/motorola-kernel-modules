@@ -30,6 +30,7 @@
 #ifdef CONFIG_EVENT_TRACING
 #include <linux/trace_events.h> /* for trace_set_clr_event() */
 #endif
+#include <linux/mmi_device.h>
 
 #include "qm35_core.h"
 #include "qm35_hsspi.h"
@@ -155,14 +156,21 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 
 	dev_info(&spi->dev, "Probing new QM35 SPI device...\n");
 
+	if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+		pr_err("%s : mmi: device not supported\n", __func__);
+		return -ENODEV;
+	} else {
+		pr_err("%s : supported uwb device found\n", __func__);
+	}
+
 	uwb_clk = devm_clk_get(&spi->dev, "uwb_rf_clk5");
-    if (IS_ERR(uwb_clk)) {
-            dev_err(&spi->dev, "%s: uwb_clk not found", __func__);
-    } else {
-            rc = clk_prepare_enable(uwb_clk);
-            if(rc)
-                dev_err(&spi->dev, "%s: uwb_clk enable failed", __func__);
-    }
+	if (IS_ERR(uwb_clk)) {
+		dev_err(&spi->dev, "%s: uwb_clk not found", __func__);
+	} else {
+		rc = clk_prepare_enable(uwb_clk);
+	if(rc)
+		dev_err(&spi->dev, "%s: uwb_clk enable failed", __func__);
+	}
 
 
 	/* Parameters management. */
