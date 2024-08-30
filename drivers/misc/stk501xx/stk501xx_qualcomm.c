@@ -850,10 +850,10 @@ void stk_report_sar_data(struct stk_data* stk)
 
     for (i = 0; i < ch_num; i ++)
     {
-        nf_flag = is_change = 0;
+        nf_flag = is_change = is_dist1_change =0;
         is_change |= stk->state_change[mapping_phase[i]];
         is_dist1_change |= stk->state_change_dist1[mapping_phase[i]];
-        STK_ERR("stk_report_sar_data:: change ph[%d] =%d[%d],(%d)", mapping_phase[i], stk->state_change[mapping_phase[i]], stk->state_change_dist1[mapping_phase[i]], is_change);
+        STK_ERR("stk_report_sar_data:: change ph[%d] =%d[%d],(%d),(%d)", mapping_phase[i], stk->state_change[mapping_phase[i]], stk->state_change_dist1[mapping_phase[i]], is_change,is_dist1_change);
 
         if (STK_SAR_NEAR_BY == stk->last_nearby[mapping_phase[i]])
         {
@@ -871,7 +871,7 @@ void stk_report_sar_data(struct stk_data* stk)
         {
             input_report_abs(stk_wrapper->channels[i].input_dev, ABS_DISTANCE, nf_flag);
             input_sync(stk_wrapper->channels[i].input_dev);
-            STK_ERR("stk_report_sar_data, ph[%d] nf_flag =%d\n",  mapping_phase[i], nf_flag);
+            STK_ERR("ph[%d] nf_flag =%d\n",  mapping_phase[i], nf_flag);
         }
 
         if (STK_SAR_NEAR_BY == stk->last_nearby_dist1[mapping_phase[i]])
@@ -881,7 +881,7 @@ void stk_report_sar_data(struct stk_data* stk)
         {
             input_report_abs(stk_wrapper->channels[i].input_dev, ABS_DISTANCE, nf_flag);
             input_sync(stk_wrapper->channels[i].input_dev);
-            STK_ERR("stk_report_sar_data, ph[%d] nf_flag =%d\n",  mapping_phase[i], nf_flag);
+            STK_ERR("ph[%d] nf_flag =%d\n",  mapping_phase[i], nf_flag);
         }
     }
 }

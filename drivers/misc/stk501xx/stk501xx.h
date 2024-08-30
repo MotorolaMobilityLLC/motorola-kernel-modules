@@ -216,7 +216,7 @@ typedef enum
 #define STK_IRQ_CONFIG_SENS_RATE_OPT_SHIFT      24
 
 #define STK_ADDR_SCAN_PERIOD                    0x00D0
-//#define STK_SCAN_PERIOD_VALUE                   0x00000FA0 //200ms
+#define STK_SCAN_PERIOD_VALUE                   0x00000960 // 0821 modify 120ms
 
 #define STK_ADDR_WATCH_DOG                      0x00D4
 #define STK_SNS_WATCH_DOG_MASK                  0x000000FF
@@ -288,6 +288,7 @@ typedef enum
     #define STK_PROX_CTRL1_PH0_VALUE                0x00000007
 #endif
 */
+#define STK_TX_CTRL_PH0_VALUE                   0x05001210   // 0821 modify
 #define STK_ADDR_SCAN_OPT_PH1                   0x0240
 #define STK_ADDR_TX_CTRL_PH1                    0x0248
 #define STK_ADDR_SENS_CTRL_PH1                  0x024C
@@ -350,6 +351,8 @@ typedef enum
     #define STK_PROX_CTRL1_PH2_VALUE                0x00000007
 #endif
 */
+#define STK_TX_CTRL_PH2_VALUE           0x07001204 // 0821 modify
+#define STK_SENS_CTRL_PH2_VALUE         0x00005003
 #define STK_ADDR_SCAN_OPT_PH3                   0x02C0
 #define STK_ADDR_TX_CTRL_PH3                    0x02C8
 #define STK_ADDR_SENS_CTRL_PH3                  0x02CC
@@ -381,6 +384,8 @@ typedef enum
     #define STK_PROX_CTRL1_PH3_VALUE                0x00000007
 #endif
 */
+#define STK_TX_CTRL_PH3_VALUE 0x05001204 // 0821 modify
+#define STK_SENS_CTRL_PH3_VALUE 0x00005003 // 0821 modify
 #define STK_ADDR_SCAN_OPT_PH4                   0x0300
 #define STK_ADDR_TX_CTRL_PH4                    0x0308
 #define STK_ADDR_SENS_CTRL_PH4                  0x030C
@@ -474,6 +479,8 @@ typedef enum
     #define STK_PROX_CTRL1_PH6_VALUE                0x00000007
 #endif
 */
+#define STK_TX_CTRL_PH6_VALUE 0x07001204 // 0821 modify
+#define STK_SENS_CTRL_PH6_VALUE 0x00005003  // 0821 modify
 #define STK_ADDR_SCAN_OPT_PH7                   0x03C0
 #define STK_ADDR_TX_CTRL_PH7                    0x03C8
 #define STK_ADDR_SENS_CTRL_PH7                  0x03CC
