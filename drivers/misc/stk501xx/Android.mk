@@ -1,6 +1,18 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
+ifeq ($(STK501xx_USB_CAL),true)
+    KBUILD_OPTIONS += CONFIG_STK501xx_USB_CAL=y
+endif
+
+ifeq ($(STK501xx_USB_USE_ONLINE),true)
+    KBUILD_OPTIONS += CONFIG_STK501xx_POWER_SUPPLY_ONLINE=y
+endif
+
+ifeq ($(STK501xx_FLIP_CAL),true)
+    KBUILD_OPTIONS += CONFIG_STK501xx_FLIP_CAL=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := stk501xx_sar.ko
 LOCAL_MODULE_TAGS := optional

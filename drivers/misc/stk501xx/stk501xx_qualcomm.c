@@ -19,6 +19,8 @@
 #include <linux/pm_wakeup.h>
 #include <linux/interrupt.h>
 #include <linux/version.h>
+#include <linux/usb.h>
+#include <linux/power_supply.h>
 #ifndef STK_SPREADTRUM
     #include <linux/sensors.h>
 #endif // STK_SPREADTRUM
@@ -1017,6 +1019,145 @@ static int get_platform_data(stk501xx_wrapper *stk_wrapper)
     return 0;
 }
 
+#ifdef CONFIG_CAPSENSE_USB_CAL
+static void ps_notify_callback_work(struct work_struct *work)
+{
+    STK_ERR("class_stk_phase_USB_cali , reset all phase\n");
+    stk501xx_phase_reset(global_stk, STK_TRIGGER_REG_INIT_ALL);
+}
+
+static int ps_get_state(struct power_supply *psy, bool *present)
+{
+    union power_supply_propval pval = {0};
+    int retval;
+
+#ifdef CONFIG_USE_POWER_SUPPLY_ONLINE
+    retval = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE,
+            &pval);
+#else
+    retval = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
+            &pval);
+#endif
+
+    if (retval) {
+        STK_LOG("%s psy get property failed\n", psy->desc->name);
+        return retval;
+    }
+    *present = (pval.intval) ? true : false;
+
+#ifdef CONFIG_USE_POWER_SUPPLY_ONLINE
+    STK_LOG("%s is %s\n", psy->desc->name,
+            (*present) ? "online" : "not online");
+#else
+    STK_LOG("%s is %s\n", psy->desc->name,
+            (*present) ? "present" : "not present");
+#endif
+
+    return 0;
+}
+
+static int ps_notify_callback(struct notifier_block *self,
+        unsigned long event, void *p)
+{
+    struct stk501xx_wrapper *data =
+        container_of(self, struct stk501xx_wrapper, ps_notif);
+    struct power_supply *psy = p;
+    bool present;
+    int retval;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,9,0)
+    if (event == PSY_EVENT_PROP_CHANGED
+#else
+    if ((event == PSY_EVENT_PROP_ADDED || event == PSY_EVENT_PROP_CHANGED)
+#endif
+            && psy && psy->desc->get_property && psy->desc->name &&
+            !strncmp(psy->desc->name, "usb", sizeof("usb")) && data) {
+        STK_LOG("ps notification: event = %lu\n", event);
+        retval = ps_get_state(psy, &present);
+        if (retval) {
+            return retval;
+        }
+
+        if (event == PSY_EVENT_PROP_CHANGED) {
+            if (data->ps_is_present == present) {
+                STK_LOG("ps present state not change\n");
+                return 0;
+            }
+        }
+        data->ps_is_present = present;
+        schedule_work(&data->ps_notify_work);
+    }
+
+#ifdef CONFIG_CAPSENSE_ATTACH_CAL
+    if (event == PSY_EVENT_PROP_CHANGED
+            && psy && psy->desc->get_property && psy->desc->name &&
+            !strncmp(psy->desc->name, "phone", sizeof("phone")) && data) {
+        STK_LOG("phone ps notification: event = %lu\n", event);
+
+        retval = ps_get_state(psy, &present);
+        if (retval)
+            return retval;
+
+        if (data->phone_is_present != present) {
+            data->phone_is_present = present;
+            schedule_work(&data->ps_notify_work);
+        }
+    }
+#endif
+
+    return 0;
+}
+
+#ifdef CONFIG_CAPSENSE_FLIP_CAL
+static void write_flip_regs(int num_regs, struct smtc_reg_data *regs)
+{
+    int i;
+
+    for(i=0; i < num_regs; i++)
+    {
+  /* Write all registers/values contained in i2c_reg */
+        STK_LOG("Going to Write Reg from dts: 0x%x Value: 0x%x\n",
+                regs[i].reg, regs[i].val);
+        STK_REG_WRITE(global_stk, regs[i].reg, (uint8_t*)&regs[i].val);
+    }
+}
+
+static void update_flip_regs(struct stk501xx_wrapper *data, unsigned long state)
+{
+    if (data->phone_flip_update_regs) {
+        if (state == data->phone_flip_open_val) {
+  /* Flip open */
+            STK_LOG("Writing %d regs on open\n",
+                data->num_flip_open_regs);
+            write_flip_regs(data->num_flip_open_regs, data->flip_open_regs);
+        } else {
+   /* Flip closed */
+            STK_LOG("Writing %d regs on close\n",
+                data->num_flip_closed_regs);
+            write_flip_regs(data->num_flip_closed_regs, data->flip_closed_regs);
+        }
+    }
+}
+
+static int flip_notify_callback(struct notifier_block *self,
+        unsigned long state, void *p)
+{
+    struct stk501xx_wrapper *data =
+        container_of(self, struct stk501xx_wrapper, flip_notif);
+    struct extcon_dev *edev = p;
+
+    if(data->ext_flip_det == edev) {
+        if(data->phone_flip_state != state) {
+            update_flip_regs(data, state);
+            data->phone_flip_state = state;
+            schedule_work(&data->ps_notify_work);
+        }
+    }
+
+ return 0;
+}
+#endif
+#endif
 /*
  * @brief: Probe function for i2c_driver.
  *
@@ -1032,6 +1173,9 @@ int stk_i2c_probe(struct i2c_client *client, struct common_function *common_fn)
     int err = 0;
     stk501xx_wrapper *stk_wrapper;
     struct stk_data *stk;
+#ifdef CONFIG_CAPSENSE_USB_CAL
+    struct power_supply *psy = NULL;
+#endif
     STK_LOG("STK_HEADER_VERSION: %s ", STK_HEADER_VERSION);
     STK_LOG("STK_C_VERSION: %s ", STK_C_VERSION);
     STK_LOG("STK_DRV_I2C_VERSION: %s ", STK_DRV_I2C_VERSION);
@@ -1105,6 +1249,45 @@ int stk_i2c_probe(struct i2c_client *client, struct common_function *common_fn)
     }
 
     stk_report_sar_state(stk, -1);
+#ifdef CONFIG_CAPSENSE_USB_CAL
+  /*notify usb state*/
+        INIT_WORK(&stk_wrapper->ps_notify_work, ps_notify_callback_work);
+        stk_wrapper->ps_notif.notifier_call = ps_notify_callback;
+        err = power_supply_reg_notifier(&stk_wrapper->ps_notif);
+        if (err)
+            STK_ERR("Unable to register ps_notifier: %d\n", err);
+
+        psy = power_supply_get_by_name("usb");
+        if (psy) {
+            err = ps_get_state(psy, &stk_wrapper->ps_is_present);
+            if (err) {
+                STK_ERR("psy get property failed rc=%d\n", err);
+                power_supply_unreg_notifier(&stk_wrapper->ps_notif);
+            }
+        }
+#ifdef CONFIG_CAPSENSE_FLIP_CAL
+        if (of_property_read_bool(client->dev.of_node, "extcon")) {
+            stk_wrapper->flip_notif.notifier_call = flip_notify_callback;
+            stk_wrapper->ext_flip_det =
+                extcon_get_edev_by_phandle(&client->dev, 0);
+            if (IS_ERR(stk_wrapper->ext_flip_det)) {
+                stk_wrapper->ext_flip_det = NULL;
+                STK_ERR("failed to get extcon flip dev\n");
+            } else {
+                if(extcon_register_notifier(stk_wrapper->ext_flip_det,
+                    EXTCON_MECHANICAL, &stk_wrapper->flip_notif))
+                    STK_ERR("failed to register extcon flip dev notifier\n");
+                else {
+                    stk_wrapper->phone_flip_state =
+                        extcon_get_state(stk_wrapper->ext_flip_det,
+                            EXTCON_MECHANICAL);
+                    update_flip_regs(stk_wrapper, stk_wrapper->phone_flip_state);
+                }
+            }
+        } else
+            STK_ERR("extcon not in dev tree!\n");
+#endif
+#endif
 
     STK_LOG("Success");
     return 0;
@@ -1134,6 +1317,11 @@ int stk_i2c_remove(struct i2c_client *client)
 {
     stk501xx_wrapper *stk_wrapper = i2c_get_clientdata(client);
     struct stk_data *stk = &stk_wrapper->stk;
+#ifdef CONFIG_CAPSENSE_USB_CAL
+    cancel_work_sync(&stk_wrapper->ps_notify_work);
+    power_supply_unreg_notifier(&stk_wrapper->ps_notif);
+#endif
+
     stk_exit_qualcomm(stk_wrapper);
 #ifdef STK_INTERRUPT_MODE
     STK_GPIO_IRQ_REMOVE(stk, &stk->gpio_info);

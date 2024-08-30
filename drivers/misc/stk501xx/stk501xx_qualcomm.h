@@ -4,6 +4,9 @@
 #include "stk501xx.h"
 #include "common_define.h"
 
+#ifdef CONFIG_CAPSENSE_FLIP_CAL
+#include <linux/extcon.h>
+#endif
 #define STK_HEADER_VERSION          "0.0.7"//C+D+E+F
 #define STK_C_VERSION               "0.0.3"
 #define STK_DRV_I2C_VERSION         "0.0.2"
@@ -48,6 +51,26 @@ typedef struct stk501xx_wrapper
     struct i2c_manager      i2c_mgr;
     struct stk_data         stk;
     channels_t              channels[ch_num];
+#ifdef CONFIG_CAPSENSE_USB_CAL
+    struct work_struct ps_notify_work;
+    struct notifier_block ps_notif;
+    bool ps_is_present;
+#ifdef CONFIG_CAPSENSE_ATTACH_CAL
+    bool phone_is_present;
+#endif
+
+#ifdef CONFIG_CAPSENSE_FLIP_CAL
+    struct notifier_block flip_notif;
+    struct extcon_dev *ext_flip_det;
+    bool phone_flip_state;
+    bool phone_flip_update_regs;
+    int phone_flip_open_val;
+    int num_flip_closed_regs;
+    int num_flip_open_regs;
+    struct smtc_reg_data *flip_open_regs;
+    struct smtc_reg_data *flip_closed_regs;
+#endif
+#endif
 } stk501xx_wrapper;
 
 int stk_i2c_probe(struct i2c_client* client,
