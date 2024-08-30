@@ -28,7 +28,6 @@ int __read_mostly moto_sched_enabled;
 int __read_mostly moto_sched_debug;
 int __read_mostly moto_sched_scene;
 int __read_mostly moto_boost_prio = 119;
-int __read_mostly moto_boost_task_util = 100;
 pid_t __read_mostly global_systemserver_tgid = -1;
 pid_t __read_mostly global_launcher_tgid = -1;
 pid_t __read_mostly global_sysui_tgid = -1;
@@ -48,15 +47,6 @@ enum {
 };
 
 #if IS_ENABLED(CONFIG_SCHED_WALT)
-static struct msched_ops sched_ops = {
-	.task_get_mvp_prio	= task_get_mvp_prio,
-	.task_get_mvp_limit	= task_get_mvp_limit,
-	.binder_inherit_ux_type = binder_inherit_ux_type,
-	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type,
-	.binder_ux_type_set = binder_ux_type_set,
-	.queue_ux_task = queue_ux_task
-};
-#elif IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
 static struct msched_ops sched_ops = {
 	.task_get_mvp_prio	= task_get_mvp_prio,
 	.task_get_mvp_limit	= task_get_mvp_limit,
@@ -91,9 +81,6 @@ static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
 #if IS_ENABLED(CONFIG_SCHED_WALT)
 	set_moto_sched_enabled(moto_sched_enabled);
 	set_moto_sched_ops(moto_sched_enabled? &sched_ops : NULL);
-#elif IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
-	set_moto_sched_enabled(moto_sched_enabled);
-	set_moto_sched_ops(moto_sched_enabled? &sched_ops : NULL);
 #endif
 
 	return count;
@@ -105,7 +92,7 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 	char buffer[128];
 	size_t len = 0;
 
-	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d kernel=%d\n",
+	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d\n",
 			moto_sched_enabled,
 			is_enabled(UX_ENABLE_BASE),
 			is_enabled(UX_ENABLE_INTERACTION),
@@ -114,8 +101,7 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 			is_enabled(UX_ENABLE_AUDIO),
 			is_enabled(UX_ENABLE_CAMERA),
 			is_enabled(UX_ENABLE_KSWAPD),
-			is_enabled(UX_ENABLE_BOOST),
-			is_enabled(UX_ENABLE_KERNEL));
+			is_enabled(UX_ENABLE_BOOST));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
@@ -135,7 +121,7 @@ static ssize_t proc_debug_write(struct file *file, const char __user *buf,
 		return -EFAULT;
 
 	buffer[count] = '\0';
-	err = kstrtoint(strstrip(buffer), 16, &val);
+	err = kstrtoint(strstrip(buffer), 10, &val);
 	if (err)
 		return err;
 
@@ -147,15 +133,10 @@ static ssize_t proc_debug_write(struct file *file, const char __user *buf,
 static ssize_t proc_debug_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	char buffer[128];
+	char buffer[13];
 	size_t len = 0;
 
 	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_sched_debug);
-	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d lock=%d binder=%d \n",
-			moto_sched_debug,
-			is_debuggable(DEBUG_BASE),
-			is_debuggable(DEBUG_LOCK),
-			is_debuggable(DEBUG_BINDER));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
@@ -373,44 +354,6 @@ static ssize_t proc_boost_prio_read(struct file *file, char __user *buf,
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
 
-static ssize_t proc_boost_task_util_write(struct file *file, const char __user *buf,
-		size_t count, loff_t *ppos)
-{
-	char buffer[13];
-	int err, val;
-	static DEFINE_MUTEX(boost_task_util_mutex);
-
-	memset(buffer, 0, sizeof(buffer));
-
-	if (count > sizeof(buffer) - 1)
-		count = sizeof(buffer) - 1;
-
-	if (copy_from_user(buffer, buf, count))
-		return -EFAULT;
-
-	buffer[count] = '\0';
-	err = kstrtoint(strstrip(buffer), 10, &val);
-	if (err)
-		return err;
-
-	mutex_lock(&boost_task_util_mutex);
-	moto_boost_task_util = val;
-	mutex_unlock(&boost_task_util_mutex);
-	return count;
-}
-
-static ssize_t proc_boost_task_util_read(struct file *file, char __user *buf,
-		size_t count, loff_t *ppos)
-{
-	char buffer[13];
-	size_t len = 0;
-
-	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_boost_task_util);
-
-	return simple_read_from_buffer(buf, count, ppos, buffer, len);
-}
-
-
 static ssize_t proc_version_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
@@ -445,11 +388,6 @@ static const struct proc_ops proc_ux_task_fops = {
 static const struct proc_ops proc_boost_prio_fops = {
 	.proc_write		= proc_boost_prio_write,
 	.proc_read		= proc_boost_prio_read,
-};
-
-static const struct proc_ops proc_boost_task_util_fops = {
-	.proc_write		= proc_boost_task_util_write,
-	.proc_read		= proc_boost_task_util_read,
 };
 
 static const struct proc_ops proc_version_fops = {
@@ -490,12 +428,6 @@ int moto_sched_proc_init(void)
 		goto err_creat_boost_prio;
 	}
 
-	proc_node = proc_create("boost_task_util", 0666, d_moto_sched, &proc_boost_task_util_fops);
-	if (!proc_node) {
-		sched_err("failed to create proc node boost_task_util\n");
-		goto err_creat_boost_task_util;
-	}
-
 	proc_node = proc_create("version", 0444, d_moto_sched, &proc_version_fops);
 	if (!proc_node) {
 		sched_err("failed to create proc node version\n");
@@ -514,9 +446,6 @@ err_creat_debug:
 	remove_proc_entry("version", d_moto_sched);
 
 err_create_version:
-	remove_proc_entry("boost_task_util", d_moto_sched);
-
-err_creat_boost_task_util:
 	remove_proc_entry("boost_prio", d_moto_sched);
 
 err_creat_boost_prio:
@@ -539,7 +468,6 @@ void moto_sched_proc_deinit(void)
 {
 	remove_proc_entry("debug", d_moto_sched);
 	remove_proc_entry("version", d_moto_sched);
-	remove_proc_entry("boost_task_util", d_moto_sched);
 	remove_proc_entry("boost_prio", d_moto_sched);
 	remove_proc_entry("ux_task", d_moto_sched);
 	remove_proc_entry("ux_scene", d_moto_sched);
