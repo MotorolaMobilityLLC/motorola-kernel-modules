@@ -116,6 +116,8 @@ struct cw_battery {
 	struct fg_temp *ntc_temp_table;
 	bool has_ext_ntc;
 	bool android_auto_connected;
+	struct power_supply  *wl_psy;
+	bool use_quiet_ntc;
 	int  rbat_pull_up_r;
 	int  chip_id;
 	int  voltage_now;
@@ -548,6 +550,8 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 	int bif_v = 0;
 	int tres_temp,delta_v, batt_temp;
 	int quiet_ntc_temp = 0;
+	union power_supply_propval val;
+	bool wlc_is_online = false;
 
 	if (cw_bat->has_ext_ntc) {
 		iio_read_channel_processed(cw_bat->Batt_NTC_channel, &batt_ntc_v);
@@ -564,9 +568,28 @@ static int cw_get_temp(struct gauge_device *gauge_dev, int *temp_out)
 
 		batt_temp = adc_battemp(cw_bat, tres_temp) * 10;
 		cw_info(cw_bat,"read batt temperature from PMIC,temp = %d \n",batt_temp);
-		if (cw_bat->android_auto_connected && 0 == get_ntc_temp("quiet_ntc", &quiet_ntc_temp)) {
-			cw_info(cw_bat, "use quiet_ntc=%d, batt_temp=%d\n", quiet_ntc_temp, batt_temp);
-			batt_temp = quiet_ntc_temp;
+
+		if (cw_bat->use_quiet_ntc) {
+			if (IS_ERR_OR_NULL(cw_bat->wl_psy)) {
+				cw_bat->wl_psy = power_supply_get_by_name("wireless");
+			}
+			if (!IS_ERR_OR_NULL(cw_bat->wl_psy)) {
+				ret = power_supply_get_property(cw_bat->wl_psy,
+						POWER_SUPPLY_PROP_ONLINE, &val);
+				if (val.intval) {
+					wlc_is_online = true;
+				}
+			}
+
+			ret = get_ntc_temp("quiet_ntc", &quiet_ntc_temp);
+			if (ret == 0) {
+				if (cw_bat->android_auto_connected) {
+					batt_temp = quiet_ntc_temp;
+				} else if (wlc_is_online == true) {
+					batt_temp = quiet_ntc_temp + 20; //quiet ntc + 2C.
+				}
+				cw_info(cw_bat, "read quiet_ntc=%d, batt_temp=%d\n", quiet_ntc_temp, batt_temp);
+			}
 		}
 	} else {
 		ret = cw_read(cw_bat, REG_TEMP, &reg_val);
@@ -1034,6 +1057,9 @@ static int cw_parse_dts(struct cw_battery *cw_bat)
 			cw_info(cw_bat,"Failed to get rbat_pull_up_r, err:%d, use default 24K pull_up_r\n", rc);
 		}
 	}
+
+	//Use quiet ntc as batt ntc when wireless is online.
+	cw_bat->use_quiet_ntc = of_property_read_bool(np, "use_quiet_ntc");
 
 	return 0;
 }
