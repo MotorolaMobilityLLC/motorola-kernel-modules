@@ -1,18 +1,13 @@
-ifeq ($(ANDROID_BUILD_TOP),)
-ANDROID_BUILD_TOP := $(srctree)/..
-endif
-
 # add -Wall to try to catch everything we can.
+HAVE_KERNEL_6_1 = $(shell test -d $(ANDROID_BUILD_TOP)/kernel_platform/gki/kernel/6.1 && echo 1)
+
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/moto_sched
 
-ifneq ($(filter m y,$(CONFIG_MTK_SCHED_VIP_TASK)),)
-EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-6.1
-EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1
-CONFIG_MOTO_MUTEX_INHERIT := y
-CONFIG_MOTO_RWSEM_INHERIT := y
+ifeq ($(HAVE_KERNEL_6_1),1)
+EXTRA_CFLAGS += -DCONFIG_KERNEL_6_1
 endif
 
 obj-m += moto_sched.o
