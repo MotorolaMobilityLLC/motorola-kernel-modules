@@ -46,6 +46,10 @@
 #include "cts_config.h"
 #include "cts_core.h"
 
+#ifdef CFG_MTK_PANEL_NOTIFIER
+#include "mtk_disp_notify.h"
+#endif
+
 extern bool cts_show_debug_log;
 
 #ifndef LOG_TAG
@@ -110,6 +114,10 @@ struct cts_platform_data {
 #ifdef CONFIG_CTS_PM_FB_NOTIFIER
     struct notifier_block fb_notifier;
 #endif /* CONFIG_CTS_PM_FB_NOTIFIER */
+
+#ifdef CFG_MTK_PANEL_NOTIFIER
+    struct notifier_block disp_notifier;
+#endif
 
 #ifdef CFG_CTS_FORCE_UP
     struct delayed_work touch_event_timeout_work;

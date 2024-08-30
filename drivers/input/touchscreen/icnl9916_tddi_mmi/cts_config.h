@@ -130,6 +130,11 @@
 /****************************************************************************
  * Platform configurations
  ****************************************************************************/
+#ifdef CONFIG_MTK_PANEL_NOTIFICATIONS
+#define CFG_MTK_PANEL_NOTIFIER
+#else
+//#define CONFIG_CTS_PM_FB_NOTIFIER
+#endif //CONFIG_MTK_PANEL_NOTIFICATIONS
 
 #include "cts_plat_qcom_config.h"
 
