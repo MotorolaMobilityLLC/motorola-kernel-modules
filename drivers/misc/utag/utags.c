@@ -2220,10 +2220,34 @@ static int utags_remove(struct platform_device *pdev)
 	remove_proc_subtree(ctrl->dir_name, NULL);
 	destroy_workqueue(ctrl->load_queue);
 	destroy_workqueue(ctrl->store_queue);
-	if (ctrl->main.filep)
+	if (ctrl->main.filep) {
 		filp_close(ctrl->main.filep, NULL);
-	if (ctrl->backup.filep)
+		ctrl->main.filep = NULL;
+	}
+	if (ctrl->backup.filep) {
 		filp_close(ctrl->backup.filep, NULL);
+		ctrl->backup.filep = NULL;
+	}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	if (ctrl->main.bdev) {
+		blkdev_put(ctrl->main.bdev, &ctrl->main);
+		ctrl->main.bdev = NULL;
+	}
+	if (ctrl->backup.bdev) {
+		blkdev_put(ctrl->backup.bdev, &ctrl->backup);
+		ctrl->backup.bdev = NULL;
+	}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(CONFIG_MMI_UTAG_RW_BIO)
+	if (ctrl->main.bdev) {
+		blkdev_put(ctrl->main.bdev, FMODE_READ | FMODE_WRITE);
+		ctrl->main.bdev = NULL;
+	}
+	if (ctrl->backup.bdev) {
+		blkdev_put(ctrl->backup.bdev, FMODE_READ | FMODE_WRITE);
+		ctrl->backup.bdev = NULL;
+	}
+#endif
 
 	if (ctrl->main.name)
 		kfree(ctrl->main.name);
