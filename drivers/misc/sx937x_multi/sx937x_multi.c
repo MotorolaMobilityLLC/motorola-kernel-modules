@@ -363,25 +363,41 @@ static int manual_offset_calibration(psx937x_platform_data_t data)
 	return ret;
 
 }
+static void smtc_get_ph_prox_state(u32 prox_reg_val, PROX_STATE ph_state[NUM_PHASES])
+{
+	int ph;
+	struct _buttonInfo *btn_info = NULL;
 
+	for (ph=0; ph<NUM_PHASES; ph++)
+	{
+		btn_info = &psmtcButtons[ph];
+
+		if (prox_reg_val & btn_info->BodyMask){
+			ph_state[ph] = PROX_STATE_2;
+		}
+		else if (prox_reg_val & btn_info->ProxMask){
+			ph_state[ph] = PROX_STATE_1;
+		}
+		else{
+			ph_state[ph] = PROX_STATE_0;
+		}
+	}
+}
 //class node use
-static void read_dbg_raw(psx93XX_t this)
+static void read_dbg_raw(psx93XX_t this, PROX_STATE prox_state[NUM_PHASES])
 {
 	int ph;
 	u32 uData, ph_sel;
 	s32 ant_use, ant_raw;
 	s32 avg, diff;
 	u16 off;
-	s32 adc_min, adc_max, use_flt_dlt_var;
+	s32 uflt_dlt;
 	s32 ref_a_use=0, ref_b_use=0, ref_c_use=0;
 	int ref_ph_a, ref_ph_b, ref_ph_c;
 
 	ref_ph_a = this->hw->ref_phase_a;
 	ref_ph_b = this->hw->ref_phase_b;
 	ref_ph_c = this->hw->ref_phase_c;
-
-	sx937x_i2c_read_16bit(this->bus, SX937X_DEVICE_STATUS_A, &uData);
-	LOG_INFO("SX937X_STAT0_REG= 0x%X\n", uData);
 
 	if(ref_ph_a != -1)
 	{
@@ -401,14 +417,10 @@ static void read_dbg_raw(psx93XX_t this)
 
 	sx937x_i2c_read_16bit(this->bus, SX937X_DEBUG_SETUP, &ph_sel);
 
-	sx937x_i2c_read_16bit(this->bus, SX937X_DEBUG_READBACK_0, &uData);
-	adc_min = (s32)uData>>10;
-	sx937x_i2c_read_16bit(this->bus, SX937X_DEBUG_READBACK_1, &uData);
-	adc_max = (s32)uData>>10;
 	sx937x_i2c_read_16bit(this->bus, SX937X_DEBUG_READBACK_2, &uData);
 	ant_raw = (s32)uData>>10;
 	sx937x_i2c_read_16bit(this->bus, SX937X_DEBUG_READBACK_3, &uData);
-	use_flt_dlt_var = (s32)uData>>4;
+	uflt_dlt = (s32)uData>>4;
 
 	ph = (ph_sel >> 3) & 0x7;
 
@@ -421,10 +433,18 @@ static void read_dbg_raw(psx93XX_t this)
 	diff = (s32)uData>>10;
 	sx937x_i2c_read_16bit(this->bus, SX937X_OFFSET_PH0 + ph*4*3, &uData);
 	off = (u16)(uData & 0x3FFF);
-	//state = psmtcButtons[ph].state;
 
-	LOG_INFO("SMTC_DBG PH= %d USE= %d RAW= %d PH%d_USE= %d PH%d_USE= %d PH%d_USE= %d AVG= %d DIFF= %d OFF= %d ADC_MIN= %d ADC_MAX= %d DLT= %d SMTC_END\n",
-			ph, ant_use, ant_raw, ref_ph_a, ref_a_use,  ref_ph_b, ref_b_use, ref_ph_c, ref_c_use, avg,diff,off, adc_min,adc_max, use_flt_dlt_var);
+	LOG_INFO("SMTC_DBG PH= %d DIFF= %d STATE= %d PH%d_USE= %d PH%d_USE= %d PH%d_USE= %d USE= %d AVG= %d OFF= %d RAW= %d DLT= %d SMTC_END\n",
+			ph, diff, prox_state[ph], ref_ph_a, ref_a_use,  ref_ph_b, ref_b_use, ref_ph_c, ref_c_use, ant_use, avg, off, ant_raw, uflt_dlt);
+}
+
+static u32 smtc_off_to_dcap(u16 offset)
+{
+	u32 hig, low;
+
+	hig = (offset >> 7 & 0x7F) * 31000;
+	low = (offset & 0x7F) * 540;
+	return (hig + low)/100;
 }
 
 static void read_rawData(psx93XX_t this)
@@ -436,15 +456,18 @@ static void read_rawData(psx93XX_t this)
 	u32 use_hex, avg_hex, dif_hex, dlt_hex, dbg_ph;
 	u16 offset;
 	int ref_ph_a, ref_ph_b, ref_ph_c;
+	PROX_STATE prox_state[NUM_PHASES];
 
 	if(this)
 	{
 		ref_ph_a = this->hw->ref_phase_a;
 		ref_ph_b = this->hw->ref_phase_b;
 		ref_ph_c = this->hw->ref_phase_c;
-		LOG_INFO("[SX937x] ref_ph_a= %d ref_ph_b= %d ref_ph_c= %d\n", ref_ph_a, ref_ph_b, ref_ph_c);
+		LOG_DBG("[SX937x] ref_ph_a= %d ref_ph_b= %d ref_ph_c= %d\n", ref_ph_a, ref_ph_b, ref_ph_c);
 
 		sx937x_i2c_read_16bit(this->bus, SX937X_DEVICE_STATUS_A, &uData);
+		smtc_get_ph_prox_state(uData, prox_state);
+
 		sx937x_i2c_read_16bit(this->bus, SX937X_DEBUG_SETUP, &dbg_ph);
 		dbg_ph = (dbg_ph >> 3) & 0x7;
 		sx937x_i2c_read_16bit(this->bus, SX937X_DEBUG_READBACK_3, &dlt_hex);
@@ -477,16 +500,14 @@ static void read_rawData(psx93XX_t this)
 			sx937x_i2c_read_16bit(this->bus, SX937X_OFFSET_PH0 + index*3, &uData);
 			offset = (u16)(uData & 0x3FFF);
 
-			//state = this->hw->[csx].state;
+			LOG_INFO("SMTC_DBG PH= %d DIFF= %d STATE= %d PH%d_USE= %d PH%d_USE= %d PH%d_USE= %d USE= %d AVG= %d OFF= %d SMTC_END\n",
+					csx, diff, prox_state[csx], ref_ph_a, ref_a_use,  ref_ph_b, ref_b_use, ref_ph_c, ref_c_use, useful, average, offset);
 
-			LOG_INFO("SMTC_DAT PH= %d DIFF= %d USE= %d PH%d_USE= %d PH%d_USE= %d PH%d_USE= %d OFF= %d AVG= %d SMTC_END\n",
-					csx, diff, useful, ref_ph_a, ref_a_use, ref_ph_b, ref_b_use, ref_ph_c, ref_c_use, offset, average);
-
-			LOG_INFO("SMTC_HEX PH= %d USE= 0x%X AVG= 0x%X DIF= 0x%X PH%d_DLT= 0x%X SMTC_END\n",
+			LOG_DBG("SMTC_HEX PH= %d USE= 0x%X AVG= 0x%X DIF= 0x%X PH%d_DLT= 0x%X SMTC_END\n",
 					csx, use_hex, avg_hex, dif_hex, dbg_ph, dlt_hex);
 		}
 
-		read_dbg_raw(this);
+		read_dbg_raw(this, prox_state);
 	}
 }
 
@@ -593,7 +614,7 @@ static ssize_t capsense_raw_data_show(struct device *dev,
 	char *p = buf;
 	int csx;
 	s32 useful, average, diff;
-	u32 uData;
+	u32 uData, dcap;
 	u16 offset;
 
 	psx93XX_t this = dev_get_drvdata(dev);
@@ -607,8 +628,10 @@ static ssize_t capsense_raw_data_show(struct device *dev,
 			diff = (s32)uData>>10;
 			sx937x_i2c_read_16bit(this->bus, SX937X_OFFSET_PH0 + csx*12, &uData);
 			offset = (u16)(uData & 0x3FFF);
-			p += snprintf(p, PAGE_SIZE, "PH= %d Useful = %d Average = %d DIFF = %d Offset = %d \n",
-					csx,useful,average,diff,offset);
+			dcap = smtc_off_to_dcap(offset);
+
+			p += snprintf(p, PAGE_SIZE, "PH= %d Useful= %d Average= %d DIFF= %d Offset= %d CAP= %d\n",
+					csx,useful,average,diff,offset, dcap);
 		}
 	}
 	return (p-buf);

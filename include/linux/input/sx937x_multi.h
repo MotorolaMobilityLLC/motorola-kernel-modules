@@ -257,11 +257,22 @@
 #define MAX_CHANNEL_NUMBER 8
 #define CHECK_TIMES  3
 
+#define NUM_PHASES 8
+
 typedef enum{
 	SX937X_POWER_SUPPLY_TYPE_PMIC_LDO,	// pmic LDO
 	SX937X_POWER_SUPPLY_TYPE_ALWAYS_ON, // power-supply always on
 	SX937X_POWER_SUPPLY_TYPE_EXTERNAL_LDO,	// external LDO
 }sx937x_power_supply_type_t;
+
+typedef enum{
+	PROX_STATE_0,
+	PROX_STATE_1,
+	PROX_STATE_2,
+	PROX_STATE_3,
+	PROX_STATE_4,
+}PROX_STATE;
+
 
 /**************************************
  *   define platform data
