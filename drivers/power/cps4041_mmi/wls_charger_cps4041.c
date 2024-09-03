@@ -1320,6 +1320,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 		//data[0] = 0x38;
 		// cps_wls_send_handshake_packet(data,4);
 		chip->rx_int_ready = true;
+		chip->hs_st = HS_UNKONWN;
 		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:	RX_INT_READY");
 	}
 	//if(int_flag & RX_INT_FSK_ACK){}
@@ -3782,6 +3783,39 @@ static int cps_wls_set_current(int icl, int cc)
 	return CPS_WLS_SUCCESS;
 }
 
+static int cps_wls_notify_otg_plugin(bool on)
+{
+	int wait = 0;
+	Sys_Op_Mode op_mode = Sys_Op_Mode_INVALID;
+
+	pr_info("%s on:%d\n", __func__, on);
+	if (on) {
+		cps_get_sys_op_mode(&op_mode);
+		if (Sys_Op_Mode_BPP == op_mode) {
+			return 0;
+		}
+
+		if (cps_wls_get_sys_mode() == SYS_MODE_RX) {
+			wait = 50;
+			while (wait > 0 && chip->hs_st == HS_UNKONWN) {
+				msleep(100);
+				wait --;
+			}
+			chip->mode_select_force = true;
+			cps_wls_mode_select("otg_plugin", false);
+			wait = 50;
+			while (wait > 0 && (cps_get_vbus() > 5500)) {
+				msleep(10);
+				wait --;
+			}
+			chip->mode_select_force = false;
+			//cps_wls_mode_select("otg_plugin", true);
+		}
+	}
+
+	return CPS_WLS_SUCCESS;
+}
+
 static void cps_epp_current_select(int *icl, int *vbus)
 {
 	struct cps_wls_chrg_chip *chg = chip;
@@ -4306,6 +4340,7 @@ static int wls_chg_ops_register(struct cps_wls_chrg_chip *cm)
 	cm->wls_chg_ops.wls_notify_thermal_icl = cps_wls_notify_thermal_input_current_limit;
 	cm->wls_chg_ops.wls_notify_cur_state = cps_wls_notify_cur_state;
 	cm->wls_chg_ops.wls_set_current = cps_wls_set_current;
+	cm->wls_chg_ops.wls_notify_otg_plugin = cps_wls_notify_otg_plugin;
 
 	if (cm->wls_tx_support && cm->config_otg_support) {
 		cm->wls_chg_ops.wls_set_tx_mode = cps_wls_force_set_tx_mode;
