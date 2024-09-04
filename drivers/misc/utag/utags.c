@@ -216,7 +216,7 @@ static ssize_t rw_bdev(struct block_device *bdev, void *buf, size_t count, int o
 {
 	int ret;
 
-	ret = utags_submit_bio(bdev, buf, 1 << get_order(count), opf);
+	ret = utags_submit_bio(bdev, buf, DIV_ROUND_UP(count, PAGE_SIZE), opf);
 	return  ret < 0 ? ret : count;
 }
 
