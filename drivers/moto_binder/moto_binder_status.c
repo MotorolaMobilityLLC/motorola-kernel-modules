@@ -54,11 +54,41 @@ static bool moto_binder_status_initialized = false;
 // 	spin_unlock(&proc->inner_lock);
 // }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static long __copy_from_user_nofault(void *dst, const void __user *src, size_t size)
+{
+	long ret = -EFAULT;
+	if (access_ok(src, size)) {
+		pagefault_disable();
+		ret = __copy_from_user_inatomic(dst, src, size);
+		pagefault_enable();
+	}
+	if (ret)
+		return -EFAULT;
+	return 0;
+}
+#endif
+
+static long copy_from_user_compatible(void *dst, const void __user *src, size_t size)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+	return __copy_from_user_nofault(dst, src, size);
+#else
+	return copy_from_user(dst, src, size);
+#endif
+}
+
 void binder_trans_handler(void *data, struct binder_proc *target_proc,
 				struct binder_proc *proc,
 				struct binder_thread *thread,
 				struct binder_transaction_data *tr)
 {
+	char buf_data[INTERFACETOKEN_BUFF_SIZE];
+	size_t buf_data_size;
+	char buf[INTERFACETOKEN_BUFF_SIZE] = {0};
+	int i = 0;
+	int j = 0;
+
 	/*report sync binder call*/
 	if (!(tr->flags & TF_ONE_WAY)
 		&& target_proc
@@ -68,6 +98,32 @@ void binder_trans_handler(void *data, struct binder_proc *target_proc,
 		&& (proc->pid != target_proc->pid)
 		&& is_frozen_tg(target_proc->tsk)) {
 		moto_binder_write_status(CALL_BINDER, task_uid(proc->tsk).val, task_tgid_nr(proc->tsk), task_uid(target_proc->tsk).val, task_tgid_nr(target_proc->tsk), 0, 0);
+	}
+
+	if ((tr->flags & TF_ONE_WAY) /*report async binder call*/
+		&& target_proc
+		&& (NULL != target_proc->tsk)
+		&& (NULL != proc->tsk)
+		&& (task_uid(target_proc->tsk).val > MIN_USERAPP_UID)
+		&& (proc->pid != target_proc->pid)
+		&& is_frozen_tg(target_proc->tsk)) {
+		buf_data_size = tr->data_size>INTERFACETOKEN_BUFF_SIZE ?INTERFACETOKEN_BUFF_SIZE:tr->data_size;
+		if (!copy_from_user_compatible(buf_data, (char*)tr->data.ptr.buffer, buf_data_size)) {
+			/*1.skip first PARCEL_OFFSET bytes (useless data)
+			  2.make sure the invalid address issue is not occuring(j =PARCEL_OFFSET+1, j+=2)
+			  3.java layer uses 2 bytes char. And only the first bytes has the data.(p+=2)*/
+			if (buf_data_size > PARCEL_OFFSET) {
+				char *p = (char *)(buf_data) + PARCEL_OFFSET;
+				j = PARCEL_OFFSET + 1;
+				while (i < INTERFACETOKEN_BUFF_SIZE && j < buf_data_size && *p != '\0') {
+					buf[i++] = *p;
+					j += 2;
+					p += 2;
+				}
+				if (i == INTERFACETOKEN_BUFF_SIZE) buf[i-1] = '\0';
+			}
+			moto_binder_write_status(ASYNC_BINDER, task_uid(proc->tsk).val, task_tgid_nr(proc->tsk), task_uid(target_proc->tsk).val, task_tgid_nr(target_proc->tsk), 0, tr->code);
+		}
 	}
 }
 

@@ -25,6 +25,8 @@
 #include "../../drivers/android/binder_internal.h"
 #include "../../drivers/android/binder_alloc.h"
 
+#define INTERFACETOKEN_BUFF_SIZE (140)
+#define PARCEL_OFFSET (16) /* sync with the writeInterfaceToken */
 
 #define MIN_USERAPP_UID (10000)
 #define MAX_SYSTEM_UID  (2000)
