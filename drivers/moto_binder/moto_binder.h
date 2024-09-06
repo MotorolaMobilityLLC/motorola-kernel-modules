@@ -35,6 +35,7 @@
 #define CALL_BINDER 0
 #define ASYNC_BINDER 1
 #define REPLY_BINDER 2
+#define ASYNC_ALLOC_FULL 3
 
 static inline bool is_jobctl_frozen(struct task_struct *task)
 {
