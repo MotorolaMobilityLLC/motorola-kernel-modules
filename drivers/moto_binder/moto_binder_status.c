@@ -23,7 +23,7 @@
 #include <linux/uaccess.h>
 #include "moto_binder.h"
 
-
+#define ASYNC_REPORT_DISABLE 1
 static bool moto_binder_status_initialized = false;
 
 /**
@@ -134,7 +134,9 @@ void moto_binder_write_status(int call_type, int caller_uid, int caller_pid, int
 	e->target_pid = target_pid;
 	e->arg1 = arg1;
 	e->arg2 = arg2;
-
+#if ASYNC_REPORT_DISABLE
+	if (call_type != ASYNC_BINDER)
+#endif
 	moto_binder_send_uevent(call_type, caller_uid, caller_pid, target_uid, target_pid, arg1, arg2);
 }
 
