@@ -14,17 +14,10 @@
 #include <linux/swap.h>
 #include <linux/version.h>
 
-#ifdef CONFIG_ZRAM_5_4
-#include <linux/genhd.h>
-#include "../zram-5.4/zram_drv.h"
-#include "../zram-5.4/zram_drv_internal.h"
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
-#elif defined CONFIG_ZRAM_5_15
-#include <linux/genhd.h>
-#include "../zram-5.15/zram_drv.h"
-#include "../zram-5.15/zram_drv_internal.h"
-#define BIO_MAX_PAGES BIO_MAX_VECS
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
+#include "hybridswap_internal.h"
+#include "hybridswap.h"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0)
 static unsigned long memcg_page_state_local(struct mem_cgroup *memcg, int idx)
 {
 	long x = 0;
@@ -38,23 +31,7 @@ static unsigned long memcg_page_state_local(struct mem_cgroup *memcg, int idx)
 #endif
 	return x;
 }
-#elif defined CONFIG_ZRAM_6_1
-#include <linux/blkdev.h>
-#include <linux/memcontrol.h>
-#include "../zram-6.1/zram_drv.h"
-#include "../zram-6.1/zram_drv_internal.h"
-#define BIO_MAX_PAGES BIO_MAX_VECS
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
-#else
-#include <linux/genhd.h>
-#include "../zram-5.10/zram_drv.h"
-#include "../zram-5.10/zram_drv_internal.h"
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
 #endif
-#include "hybridswap_internal.h"
-#include "hybridswap.h"
-
-
 
 static const char *swapd_text[NR_EVENT_ITEMS] = {
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
