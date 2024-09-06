@@ -143,6 +143,52 @@ void binder_reply_handler(void *data, struct binder_proc *target_proc,
 	}
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+void binder_alloc_handler(void *data, size_t size, size_t *free_async_space, int is_async)
+{
+	struct task_struct *p = NULL;
+	struct binder_alloc *alloc = NULL;
+
+	alloc = container_of(free_async_space, struct binder_alloc, free_async_space);
+	if (alloc == NULL) {
+		return;
+	}
+
+	/*
+	* async buffer free space bigger 1/3 buffer or buffer free lower 100K
+	*/
+	if (is_async
+		&& (alloc->free_async_space < 3 * (size + sizeof(struct binder_buffer))
+		|| (alloc->free_async_space < 100*1024))) {
+		rcu_read_lock();
+		p = find_task_by_vpid(alloc->pid);
+		rcu_read_unlock();
+		if (p != NULL && is_frozen_tg(p)) {
+			moto_binder_write_status(ASYNC_ALLOC_FULL, task_uid(current).val, task_tgid_nr(current), task_uid(p).val, task_tgid_nr(p), 0, 0);
+		}
+	}
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))
+void binder_alloc_handler(void *data, size_t size, struct binder_alloc *alloc, int is_async)
+{
+	struct task_struct *p = NULL;
+
+	/*
+	* async buffer free space bigger 1/3 buffer or buffer free lower 100K
+	*/
+	if (is_async
+		&& (alloc->free_async_space < 3 * (size + sizeof(struct binder_buffer))
+		|| (alloc->free_async_space < 100*1024))) {
+		rcu_read_lock();
+		p = find_task_by_vpid(alloc->pid);
+		rcu_read_unlock();
+		if (p != NULL && is_frozen_tg(p)) {
+			moto_binder_write_status(ASYNC_ALLOC_FULL, task_uid(current).val, task_tgid_nr(current), task_uid(p).val, task_tgid_nr(p), 0, 0);
+		}
+	}
+}
+#endif
+
 struct moto_binder_transaction_log_entry {
 	int seq_id;
 	int call_type;
@@ -240,6 +286,11 @@ int register_moto_binder_hooks(void)
 		return rc;
 	}
 
+	rc = register_trace_android_vh_binder_alloc_new_buf_locked(binder_alloc_handler, NULL);
+	if (rc != 0) {
+		pr_err("register_trace_android_vh_binder_alloc_new_buf_locked failed, rc=%d\n", rc);
+		return rc;
+	}
 	return rc;
 }
 
@@ -247,6 +298,7 @@ void unregister_moto_binder_hooks(void)
 {
 	unregister_trace_android_vh_binder_trans(binder_trans_handler, NULL);
 	unregister_trace_android_vh_binder_reply(binder_reply_handler, NULL);
+	unregister_trace_android_vh_binder_alloc_new_buf_locked(binder_alloc_handler, NULL);
 }
 
 int moto_binder_status_init(void)
