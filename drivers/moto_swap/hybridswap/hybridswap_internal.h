@@ -12,6 +12,44 @@
 #include <linux/device.h>
 #include <linux/memcontrol.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#include <linux/blkdev.h>
+#include <linux/sched/debug.h>
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+#include <linux/genhd.h>
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include "../zram-6.6/zram_drv.h"
+#include "../zram-6.6/zram_drv_internal.h"
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#include "../zram-6.1/zram_drv.h"
+#include "../zram-6.1/zram_drv_internal.h"
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#include "../zram-5.15/zram_drv.h"
+#include "../zram-5.15/zram_drv_internal.h"
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+#include "../zram-5.10/zram_drv.h"
+#include "../zram-5.10/zram_drv_internal.h"
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+#include "../zram-5.4/zram_drv.h"
+#include "../zram-5.4/zram_drv_internal.h"
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
+#else
+#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
+#endif
+
+#ifndef BIO_MAX_PAGES
+#define BIO_MAX_PAGES BIO_MAX_VECS
+#endif
+
+#ifndef MEM_CGROUP_ID_MAX
+#define MEM_CGROUP_ID_MAX	((1UL << MEM_CGROUP_ID_SHIFT) - 1)
+#endif
+
 #define ESWAP_SHIFT        15
 #define ESWAP_SIZE         (1UL << ESWAP_SHIFT)
 #define ESWAP_PG_CNT		(ESWAP_SIZE >> PAGE_SHIFT)

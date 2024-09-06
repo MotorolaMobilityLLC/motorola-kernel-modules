@@ -17,27 +17,6 @@
 #endif
 #include <linux/version.h>
 
-#ifdef CONFIG_ZRAM_5_4
-#include "../zram-5.4/zram_drv.h"
-#include "../zram-5.4/zram_drv_internal.h"
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
-#elif defined CONFIG_ZRAM_5_15
-#include "../zram-5.15/zram_drv.h"
-#include "../zram-5.15/zram_drv_internal.h"
-#define BIO_MAX_PAGES BIO_MAX_VECS
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
-#elif defined CONFIG_ZRAM_6_1
-#include <linux/blkdev.h>
-#include <linux/sched/debug.h>
-#include "../zram-6.1/zram_drv.h"
-#include "../zram-6.1/zram_drv_internal.h"
-#define BIO_MAX_PAGES BIO_MAX_VECS
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1[0])
-#else
-#include "../zram-5.10/zram_drv.h"
-#include "../zram-5.10/zram_drv_internal.h"
-#define MEMCG_OEM_DATA(memcg) ((memcg)->android_oem_data1)
-#endif
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
 
@@ -4118,10 +4097,14 @@ bool hybridswap_reach_life_protect(void)
 	return atomic64_read(&stat->reclaimin_bytes_daily) > quota;
 }
 
-void hybridswap_close_bdev(struct block_device *bdev, struct file *backing_dev)
+void hybridswap_close_bdev(struct zram *zram, struct block_device *bdev, struct file *backing_dev)
 {
-	if (bdev)
+	if (zram && bdev)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+		blkdev_put(bdev, zram);
+#else
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE | FMODE_EXCL);
+#endif
 
 	if (backing_dev)
 		filp_close(backing_dev, NULL);
@@ -4145,7 +4128,7 @@ struct file *hybridswap_open_bdev(const char *file_name)
 
 	if (unlikely(!S_ISBLK(backing_dev->f_mapping->host->i_mode))) {
 		hybp(HYB_ERR, "%s isn't a blk device\n", file_name);
-		hybridswap_close_bdev(NULL, backing_dev);
+		hybridswap_close_bdev(NULL, NULL, backing_dev);
 		return NULL;
 	}
 
@@ -4165,8 +4148,13 @@ int hybridswap_bind(struct zram *zram, const char *file_name)
 		return -EINVAL;
 
 	inode = backing_dev->f_mapping->host;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	bdev = blkdev_get_by_dev(inode->i_rdev,
+			BLK_OPEN_READ | BLK_OPEN_WRITE, zram, NULL);
+#else
 	bdev = blkdev_get_by_dev(inode->i_rdev,
 			FMODE_READ | FMODE_WRITE | FMODE_EXCL, zram);
+#endif
 	if (IS_ERR(bdev)) {
 		hybp(HYB_ERR, "%s blkdev_fetch failed!\n", file_name);
 		err = PTR_ERR(bdev);
@@ -4188,7 +4176,7 @@ int hybridswap_bind(struct zram *zram, const char *file_name)
 	return 0;
 
 out:
-	hybridswap_close_bdev(bdev, backing_dev);
+	hybridswap_close_bdev(zram, bdev, backing_dev);
 
 	return err;
 }
