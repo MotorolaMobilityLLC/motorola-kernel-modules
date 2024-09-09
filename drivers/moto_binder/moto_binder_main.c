@@ -18,6 +18,8 @@
 #include <linux/netlink.h>
 #include <linux/genetlink.h>
 #include <linux/skbuff.h>
+#include <linux/task_work.h>
+#include <linux/mutex.h>
 #include <net/sock.h>
 #include <net/genetlink.h>
 #include <linux/uaccess.h>
@@ -26,101 +28,190 @@
 #include <linux/miscdevice.h>   /* for misc_register, and SYNTH_MINOR */
 #include "moto_binder.h"
 
+#define MOTO_BINDER_DRV_NAME "moto_binder"
 
-static struct miscdevice moto_binder_object;
+typedef struct {
+	int type;
+	int caller_uid;
+	int caller_pid;
+	int target_uid;
+	int target_pid;
+	int arg1;
+	int arg2;
+	struct work_struct work;
+} event_ctx_t;
+
+typedef struct {
+	struct mutex lock;
+	atomic_t work_cnt;
+	struct miscdevice miscdev;
+	struct workqueue_struct *work_wq;
+} moto_binder_context_t;
+
+static bool moto_binder_initialized = false;
+static moto_binder_context_t *g_context = NULL;
+static void moto_binder_report_event(struct work_struct *ws);
+
+void moto_binder_send_uevent(int type, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2)
+{
+	event_ctx_t *ctx;
+
+	if (atomic_read(&g_context->work_cnt) > 100) {
+		pr_err("alloc work cnt more than 100, skip reporting\n");
+		return;
+	}
+
+	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	if (!ctx) {
+		pr_err("no memory\n");
+		return;
+	}
+
+	ctx->type = type;
+	ctx->caller_uid = caller_uid;
+	ctx->caller_pid = caller_pid;
+	ctx->target_uid = target_uid;
+	ctx->target_pid = target_pid;
+	ctx->arg1 = arg1;
+	ctx->arg2 = arg2;
+
+	INIT_WORK(&ctx->work, moto_binder_report_event);
+	atomic_inc(&g_context->work_cnt);
+
+	if (g_context)
+		queue_work(g_context->work_wq, &ctx->work);
+	else
+		pr_err("Driver not initialized\n");
+
+}
+
+static void moto_binder_report_event(struct work_struct *ws)
+{
+	event_ctx_t *ctx = container_of(ws, event_ctx_t, work);
+	struct kobj_uevent_env *env;
+
+	env = kzalloc(sizeof(*env), GFP_KERNEL);
+	if (!env)
+		return;
+	if (add_uevent_var(env, "type=%d", ctx->type))
+		goto _err;
+	if (add_uevent_var(env, "caller_uid=%d", ctx->caller_uid))
+		goto _err;
+	if (add_uevent_var(env, "caller_pid=%d", ctx->caller_pid))
+		goto _err;
+	if (add_uevent_var(env, "target_uid=%d", ctx->target_uid))
+		goto _err;
+	if (add_uevent_var(env, "target_pid=%d", ctx->target_pid))
+		goto _err;
+	if (add_uevent_var(env, "arg1=%d", ctx->arg1))
+		goto _err;
+	if (add_uevent_var(env, "arg2=%d", ctx->arg2))
+		goto _err;
+
+	kobject_uevent_env(&g_context->miscdev.this_device->kobj, KOBJ_CHANGE, env->envp);
+	kfree(env);
+	kfree(ctx);
+	atomic_dec(&g_context->work_cnt);
+
+	return;
+_err:
+	kfree(env);
+	kfree(ctx);
+	atomic_dec(&g_context->work_cnt);
+	pr_info("send uevent failed");
+}
+
+static moto_binder_context_t moto_binder_context = {
+	.miscdev = {
+		.minor = MISC_DYNAMIC_MINOR,
+		.name  = MOTO_BINDER_DRV_NAME,
+	}
+};
+
+static void moto_binder_uevent_exit(void)
+{
+	if (g_context) {
+		destroy_workqueue(g_context->work_wq);
+		kobject_uevent(&g_context->miscdev.this_device->kobj, KOBJ_REMOVE);
+		misc_deregister(&g_context->miscdev);
+		g_context = NULL;
+	}
+}
 
 static int moto_binder_uevent_init(void)
 {
 	int ret = 0;
 
-	moto_binder_object.name = "moto_binder";
-	moto_binder_object.minor = MISC_DYNAMIC_MINOR;
-	ret = misc_register(&moto_binder_object);
+	ret = misc_register(&moto_binder_context.miscdev);
 	if (ret) {
 		pr_info("misc_register error:%d\n", ret);
 		return ret;
 	}
 
 	ret = kobject_uevent(
-			&moto_binder_object.this_device->kobj, KOBJ_ADD);
+			&moto_binder_context.miscdev.this_device->kobj, KOBJ_ADD);
 
 	if (ret) {
-		misc_deregister(&moto_binder_object);
+		misc_deregister(&moto_binder_context.miscdev);
 		pr_info("uevent creat fail:%d\n", ret);
-		return ret;
+		goto __err_add;
 	}
+
+	/* Create workqueue for the write work */
+	moto_binder_context.work_wq = alloc_workqueue("moto_binder", WQ_UNBOUND, 1);
+	if (!moto_binder_context.work_wq) {
+		pr_err("Could not create workqueue\n");
+		goto __err_wq;
+	}
+
+	atomic_set(&moto_binder_context.work_cnt, 0);
+	g_context = &moto_binder_context;
 
 	return ret;
+
+__err_wq:
+	kobject_uevent(&moto_binder_context.miscdev.this_device->kobj, KOBJ_REMOVE);
+
+__err_add:
+	misc_deregister(&moto_binder_context.miscdev);
+	return -1;
 }
 
-static void moto_binder_uevent_exit(void)
-{
-	misc_deregister(&moto_binder_object);
-}
-
-#define ENV_KV_SIZE 30
-void moto_binder_send_uevent(int type, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2)
-{
-	int ret;
-	char name[7][ENV_KV_SIZE];
-	char *envp[8];
-
-	snprintf(name[0], ENV_KV_SIZE, "type=%d", type);
-	snprintf(name[1], ENV_KV_SIZE, "caller_uid=%d", caller_uid);
-	snprintf(name[2], ENV_KV_SIZE, "caller_pid=%d", caller_pid);
-	snprintf(name[3], ENV_KV_SIZE, "target_uid=%d", target_uid);
-	snprintf(name[4], ENV_KV_SIZE, "target_pid=%d", target_pid);
-	snprintf(name[5], ENV_KV_SIZE, "arg1=%d", arg1);
-	snprintf(name[6], ENV_KV_SIZE, "arg2=%d", arg2);
-
-	envp[0] = name[0];
-	envp[1] = name[1];
-	envp[2] = name[2];
-	envp[3] = name[3];
-	envp[4] = name[4];
-	envp[5] = name[5];
-	envp[6] = name[6];
-	envp[7] = NULL;
-
-	ret = kobject_uevent_env(&moto_binder_object.this_device->kobj, KOBJ_CHANGE, envp);
-	if (ret != 0) {
-		pr_info("send uevent failed");
-		return;
-	}
-}
-
-static int __init moto_binder_init(void)
+int moto_binder_init(void)
 {
 	int ret = 0;
 
-	ret = moto_binder_proc_init();
+	if (moto_binder_initialized) return 0;
+
+	ret = moto_binder_status_init();
 	if (ret != 0)
-		return ret;
+		goto __status_err;
 
 	ret = moto_binder_uevent_init();
 	if (ret != 0)
-		return ret;
+		goto __uevent_err;
 
-	if (moto_binder_status_enabled > 0) {
-		ret = moto_binder_status_init();
-		if (ret != 0)
-			return ret;
-	}
+	pr_info("moto binder init succeed!\n");
+	moto_binder_initialized = true;
 
-	pr_info("moto_binder_init succeed!\n");
+	return ret;
+
+__uevent_err:
+	moto_binder_status_exit();
+__status_err:
+	pr_info("moto binder init failed!\n");
+
 	return ret;
 
 }
 
-static void __exit moto_binder_exit(void)
+void moto_binder_exit(void)
 {
+	if (!moto_binder_initialized) return;
+
 	moto_binder_status_exit();
 	moto_binder_uevent_exit();
-	moto_binder_proc_deinit();
-	pr_info("moto_binder_exit succeed!\n");
-}
 
-module_init(moto_binder_init);
-module_exit(moto_binder_exit);
-MODULE_DESCRIPTION("Motorola binder optimization driver");
-MODULE_LICENSE("GPL v2");
+	moto_binder_initialized = false;
+	pr_info("moto binder exit succeed!\n");
+}

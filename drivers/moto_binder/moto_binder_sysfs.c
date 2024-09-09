@@ -23,8 +23,8 @@
 
 #define MAX_SET (128)
 
-int moto_binder_status_enabled = 0;
-struct proc_dir_entry *d_moto_binder;
+static int moto_binder_status_enabled = 0;
+static struct proc_dir_entry *d_moto_binder;
 
 static ssize_t proc_binder_status_enabled_write(struct file *file, const char __user *buf,
 		size_t count, loff_t *ppos)
@@ -48,9 +48,9 @@ static ssize_t proc_binder_status_enabled_write(struct file *file, const char __
 	moto_binder_status_enabled = val;
 
 	if (moto_binder_status_enabled > 0)
-		moto_binder_status_init();
+		moto_binder_init();
 	else
-		moto_binder_status_exit();
+		moto_binder_exit();
 
 	return count;
 }
@@ -105,7 +105,7 @@ static const struct proc_ops proc_binder_status_fops = {
 	.proc_release	= seq_release,
 };
 
-int moto_binder_proc_init(void)
+static int __init moto_binder_proc_init(void)
 {
 	struct proc_dir_entry *proc_node;
 
@@ -129,7 +129,6 @@ int moto_binder_proc_init(void)
 
 	return 0;
 
-	remove_proc_entry("binder_status", NULL);
 err_create_binder_status:
 
 	remove_proc_entry("binder_status_enabled", NULL);
@@ -140,10 +139,14 @@ err_creat_d_moto_binder:
 	return -ENOENT;
 }
 
-void moto_binder_proc_deinit(void)
+static void __exit moto_binder_proc_deinit(void)
 {
 	remove_proc_entry("binder_status", NULL);
 	remove_proc_entry("binder_status_enabled", d_moto_binder);
 	remove_proc_entry(MOTO_BINDER_PROC_DIR, NULL);
 }
 
+module_init(moto_binder_proc_init);
+module_exit(moto_binder_proc_deinit);
+MODULE_DESCRIPTION("Motorola binder optimization driver");
+MODULE_LICENSE("GPL v2");
