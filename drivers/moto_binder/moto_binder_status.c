@@ -24,7 +24,6 @@
 #include "moto_binder.h"
 
 #define ASYNC_REPORT_DISABLE 1
-static bool moto_binder_status_initialized = false;
 
 /**
  * binder_inner_proc_lock() - Acquire inner lock for given binder_proc
@@ -308,26 +307,20 @@ int moto_binder_status_init(void)
 {
 	int ret;
 
-	if (moto_binder_status_initialized) return 0;
-
 	ret = register_moto_binder_hooks();
 	if (ret != 0) {
 		unregister_moto_binder_hooks();
 		return ret;
 	}
 
-	moto_binder_status_initialized = true;
-	pr_info("moto_binder_status_init succeed!\n");
+	pr_info("moto binder status init succeed!\n");
 
 	return 0;
 }
 
 void moto_binder_status_exit(void)
 {
-	if (!moto_binder_status_initialized) return;
-
 	unregister_moto_binder_hooks();
 
-	moto_binder_status_initialized = false;
-	pr_info("moto_binder_status_exit succeed!\n");
+	pr_info("moto binder status exit succeed!\n");
 }
