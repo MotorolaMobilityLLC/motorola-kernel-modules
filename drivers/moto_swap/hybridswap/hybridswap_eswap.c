@@ -16,6 +16,9 @@
 #include <linux/healthinfo/fg.h>
 #endif
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#include <linux/sched/task_stack.h>
+#endif
 
 #include "hybridswap_internal.h"
 #include "hybridswap.h"
@@ -1509,7 +1512,14 @@ static void hybperf_init_monitor(
 
 	record->task = current;
 	get_task_struct(record->task);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	if (object_is_on_stack((void *)&record->lat_monitor))
+		timer_setup_on_stack(&record->lat_monitor, hybperf_warning, 0);
+	else
+		timer_setup(&record->lat_monitor, hybperf_warning, 0);
+#else
 	timer_setup(&record->lat_monitor, hybperf_warning, 0);
+#endif
 	mod_timer(&record->lat_monitor,
 			jiffies + msecs_to_jiffies(record->warn_level));
 }
@@ -1521,6 +1531,10 @@ static void hybperf_stop_monitor(
 		return;
 
 	del_timer_sync(&record->lat_monitor);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	if (object_is_on_stack((void *)&record->lat_monitor))
+		destroy_timer_on_stack(&record->lat_monitor);
+#endif
 	put_task_struct(record->task);
 }
 
