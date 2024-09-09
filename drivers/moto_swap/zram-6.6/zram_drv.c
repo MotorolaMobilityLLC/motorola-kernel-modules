@@ -1311,6 +1311,41 @@ static int zram_read_from_zspool(struct zram *zram, struct page *page,
 	return ret;
 }
 
+#ifdef CONFIG_HYBRIDSWAP_CORE
+struct hybridswap_work {
+	struct work_struct work;
+	struct zram *zram;
+	u32 index;
+	int error;
+};
+
+static void hybridswap_page_fault_sync_read(struct work_struct *work)
+{
+	struct hybridswap_work *hw = container_of(work, struct hybridswap_work, work);
+	struct zram *zram = hw->zram;
+	u32 index = hw->index;
+	zram_slot_lock(zram, index);
+	hw->error = hybridswap_page_fault(zram, index);
+	zram_slot_unlock(zram, index);
+}
+
+int hybridswap_page_fault_sync(struct zram *zram, u32 index)
+{
+	struct hybridswap_work work;
+
+	zram_slot_unlock(zram, index);
+	work.zram = zram;
+	work.index = index;
+
+	INIT_WORK_ONSTACK(&work.work, hybridswap_page_fault_sync_read);
+	queue_work(system_unbound_wq, &work.work);
+	flush_work(&work.work);
+	destroy_work_on_stack(&work.work);
+	zram_slot_lock(zram, index);
+	return work.error;
+}
+#endif
+
 static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 			  struct bio *parent)
 {
@@ -1319,14 +1354,16 @@ static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 	zram_slot_lock(zram, index);
 
 #ifdef CONFIG_HYBRIDSWAP_CORE
-	if (likely(!parent)) {
+	if (!parent)
 		ret = hybridswap_page_fault(zram, index);
-		if (unlikely(ret)) {
-			pr_err("search in hybridswap failed! err=%d, page=%u\n",
-					ret, index);
-			zram_slot_unlock(zram, index);
-			return ret;
-		}
+	else
+		ret = hybridswap_page_fault_sync(zram, index);
+
+	if (unlikely(ret)) {
+		pr_err("search in hybridswap failed! err=%d, page=%u\n",
+				ret, index);
+		zram_slot_unlock(zram, index);
+		return ret;
 	}
 #endif
 
