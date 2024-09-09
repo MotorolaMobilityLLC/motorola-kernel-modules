@@ -57,11 +57,14 @@ static inline bool is_frozen_tg(struct task_struct *task)
 	return ((cgroup_task_frozen(task) && is_jobctl_frozen(task)) || is_frozen_state_compatible(task->group_leader) || freezing(task->group_leader));
 }
 
+extern int moto_binder_check_uid;
+
 int moto_binder_init(void);
 void moto_binder_exit(void);
 int moto_binder_status_init(void);
 void moto_binder_status_exit(void);
 int proc_binder_status_show(struct seq_file *m, void *unused);
+int proc_binder_check_status_show(struct seq_file *m, void *unused);
 void moto_binder_write_status(int call_type, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2);
 void moto_binder_send_uevent(int call_type, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2);
 
