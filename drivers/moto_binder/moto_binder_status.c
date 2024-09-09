@@ -236,9 +236,12 @@ void moto_binder_write_status(int call_type, int caller_uid, int caller_pid, int
 	e->target_pid = target_pid;
 	e->arg1 = arg1;
 	e->arg2 = arg2;
+
 #if ASYNC_REPORT_DISABLE
-	if (call_type != ASYNC_BINDER)
+	if (call_type == ASYNC_BINDER || call_type == ASYNC_ALLOC_FULL)
+		return;
 #endif
+
 	moto_binder_send_uevent(call_type, caller_uid, caller_pid, target_uid, target_pid, arg1, arg2);
 }
 
