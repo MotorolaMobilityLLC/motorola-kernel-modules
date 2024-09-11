@@ -18,7 +18,9 @@ mmi_glink_charger-objs += device_glink/wireless_charge_glink.o
 mmi_glink_charger-objs += device_glink/charge_pump_glink.o
 mmi_glink_charger-objs += device_glink/balance_charge_glink.o
 mmi_glink_charger-objs += device_glink/switch_buck_glink.o
+mmi_glink_charger-objs += device_glink/usb_glink.o
 
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../mmi_relay/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../bm_adsp_ulog/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/qti_glink_charger_v2/$(GKI_OBJ_MODULE_DIR)/Module.symvers

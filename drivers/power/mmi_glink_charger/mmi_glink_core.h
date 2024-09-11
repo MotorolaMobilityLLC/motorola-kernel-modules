@@ -139,6 +139,7 @@ struct mmi_charger_constraint {
 	int demo_mode;
 	bool factory_mode;
 	bool factory_version;
+	bool is_softbank;
 	int dcp_pmax;
 	int hvdcp_pmax;
 	int pd_pmax;
@@ -162,14 +163,12 @@ struct mmi_glink_chip {
 	struct mmi_charger_status charger_status;
 	struct mmi_charger_constraint charger_constraint;
 	struct battery_info battery_info;
-	struct mmi_lpd_info lpd_info;
 
 	int			max_charger_rate;
 	int			real_charger_type;
 	bool			usb_present;
 	bool			wls_present;
 	bool			vbus_present;
-	bool			lpd_present;
 	int			power_watt;
 
 	int			suspended;
@@ -179,6 +178,7 @@ struct mmi_glink_chip {
 	bool			factory_kill_armed;
 	bool			force_charger_disabled;
 	bool			force_charging_enabled;
+	bool			is_softbank;
 
 	bool			charging_disable;
 	bool			charger_suspend;

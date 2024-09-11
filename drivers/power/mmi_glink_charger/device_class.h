@@ -22,6 +22,7 @@ typedef enum dev_type {
 	DEV_CHARGE_PUMP,
 	DEV_BALANCE_CHG,
 	DEV_WLS,
+	DEV_USB,
 	DEV_ALL,
 	DEV_INVALID,
 } DEV_TYPE;
