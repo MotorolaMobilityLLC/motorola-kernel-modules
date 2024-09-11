@@ -31,20 +31,7 @@ int gh_get_gpio_dts_info(struct gh_device *gh_dev)
 		return -1;
 	}
 */
-    /*get reset resource*/
-    gh_dev->reset_gpio = of_get_named_gpio(np,GH_GPIO_RESET,0);
-    if(!gpio_is_valid(gh_dev->reset_gpio)) {
-	  gh_debug(ERR_LOG, "%s, RESET GPIO is invalid.\n", __func__);
-	  return -1;
-    }
-    rc = gpio_request(gh_dev->reset_gpio, "goodix_reset");
-    if(rc) {
-	  gh_debug(ERR_LOG, "%s, Failed to request RESET GPIO. rc = %d\n", __func__, rc);
-	  return -1;
-    }
-    gpio_direction_output(gh_dev->reset_gpio, 1);
-
-    /*get reset resource*/
+    /*get pwr resource*/
     gh_dev->gh_vdd = of_get_named_gpio(np,GH_POWER_VDD,0);
     if(!gpio_is_valid(gh_dev->gh_vdd)) {
 	  gh_debug(ERR_LOG, "%s, gh_vdd GPIO is invalid.\n", __func__);
@@ -57,7 +44,7 @@ int gh_get_gpio_dts_info(struct gh_device *gh_dev)
     }
     gpio_direction_output(gh_dev->gh_vdd, 1);
 
-    /*get reset resource*/
+    /*get io resource*/
     gh_dev->gh_vdd_id = of_get_named_gpio(np,GH_POWER_VDD_IO,0);
     if(!gpio_is_valid(gh_dev->gh_vdd_id)) {
 	  gh_debug(ERR_LOG, "%s, gh_vdd_id GPIO is invalid.\n", __func__);
@@ -69,6 +56,19 @@ int gh_get_gpio_dts_info(struct gh_device *gh_dev)
 	  return -1;
     }
     gpio_direction_output(gh_dev->gh_vdd_id, 1);
+    msleep(50);
+    /*get reset resource*/
+    gh_dev->reset_gpio = of_get_named_gpio(np,GH_GPIO_RESET,0);
+    if(!gpio_is_valid(gh_dev->reset_gpio)) {
+	  gh_debug(ERR_LOG, "%s, RESET GPIO is invalid.\n", __func__);
+	  return -1;
+    }
+    rc = gpio_request(gh_dev->reset_gpio, "goodix_reset");
+    if(rc) {
+	  gh_debug(ERR_LOG, "%s, Failed to request RESET GPIO. rc = %d\n", __func__, rc);
+	  return -1;
+    }
+    gpio_direction_output(gh_dev->reset_gpio, 1);
 
     /*get irq resourece*/
     gh_dev->irq_gpio = of_get_named_gpio(np,GH_GPIO_IRQ,0);

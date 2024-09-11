@@ -222,7 +222,7 @@ static void gh_class_read(unsigned short addr, unsigned short *val)
     ret = i2c_transfer(s_gh_dev->client->adapter, msgs, 2);
     if (0 > ret)
     {
-        gh_debug(ERR_LOG, "%s: i2c_transfer failed\n", __func__);
+        gh_debug(ERR_LOG, "%s: i2c_transfer failed ret = %d\n", __func__,ret);
     }
 
     *val = read_buf[0];
@@ -691,6 +691,8 @@ static int gh_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	struct device *dev;
 	int retval = 0;
 	int status = -EINVAL;
+	int conunt = 10;
+	unsigned short val = 0;
 
 	FUNC_ENTRY();
 
@@ -824,6 +826,15 @@ static int gh_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		mutex_unlock(&gh_dev->release_lock);
 		goto err_input;
 	}
+	//read chip id
+	do {
+		gh_class_sendcmd(WAKE_UP_CMD);
+		gh_class_read(0x0034, &val);
+		msleep(50);
+		gh_debug(ERR_LOG, "%s, chipid reg:0x0034=0x%04X\n", __func__,val);
+		if(0x0012 == val)
+		    break;
+	}while (conunt--);
 
 	gh_dev->probe_finish = 1;
 	gh_dev->is_sleep_mode = 0;
