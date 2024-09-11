@@ -161,6 +161,7 @@ static DEVICE_ATTR(charge_pump_ovpgate_en, S_IRUGO, charge_pump_ovpgate_en_show,
 static enum power_supply_property charge_pump_psy_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_STATUS,
+	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
@@ -206,7 +207,7 @@ static int charge_pump_psy_get_prop(struct power_supply *psy,
 		pval->intval = charge_pump_info.vout_mv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		pval->intval = charge_pump_info.ibat_ma;
+		pval->intval = charge_pump_info.ibus_ma;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		pval->intval = charge_pump_info.die_temp;
