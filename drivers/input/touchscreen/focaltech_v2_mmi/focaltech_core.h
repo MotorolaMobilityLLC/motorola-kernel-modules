@@ -261,6 +261,10 @@ struct fts_ts_data {
 #if defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
     struct ts_mmi_class_methods *imports;
 #endif
+
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    bool palm_on;
+#endif
 };
 
 enum _FTS_BUS_TYPE {

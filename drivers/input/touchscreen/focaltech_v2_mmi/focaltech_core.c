@@ -465,6 +465,14 @@ static int fts_input_report_b(struct fts_ts_data *data)
     u32 max_touch_num = data->pdata->max_touch_number;
     struct ts_event *events = data->events;
 
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    unsigned int tool_type;
+#endif
+
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    tool_type = data->palm_on ? MT_TOOL_PALM : MT_TOOL_FINGER;
+#endif
+
     for (i = 0; i < data->touch_point; i++) {
         if (fts_input_report_key(data, i) == 0) {
             continue;
@@ -474,7 +482,11 @@ static int fts_input_report_b(struct fts_ts_data *data)
         input_mt_slot(data->input_dev, events[i].id);
 
         if (EVENT_DOWN(events[i].flag)) {
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+            input_mt_report_slot_state(data->input_dev, tool_type, true);
+#else
             input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, true);
+#endif
 
 #if FTS_REPORT_PRESSURE_EN
             if (events[i].p <= 0) {
@@ -501,7 +513,12 @@ static int fts_input_report_b(struct fts_ts_data *data)
             }
         } else {
             uppoint++;
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+            input_mt_report_slot_state(data->input_dev, tool_type, false);
+            FTS_INFO("touch palm on %d",tool_type);
+#else
             input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, false);
+#endif
             data->touchs &= ~BIT(events[i].id);
             if (data->log_level >= 1) {
                 FTS_DEBUG("[B]P%d UP!", events[i].id);
@@ -517,7 +534,11 @@ static int fts_input_report_b(struct fts_ts_data *data)
                 }
                 va_reported = true;
                 input_mt_slot(data->input_dev, i);
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+                input_mt_report_slot_state(data->input_dev, tool_type, false);
+#else
                 input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER, false);
+#endif
             }
         }
     }
@@ -660,6 +681,9 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
     struct ts_event *events = data->events;
     int max_touch_num = data->pdata->max_touch_number;
     u8 *buf = data->point_buf;
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    u8 val;
+#endif
 #ifdef FOCALTECH_PALM_SENSOR_EN
     int pd_state = 0;
 #endif
@@ -676,6 +700,16 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
     if (ret) {
         return ret;
     }
+
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    ret = fts_read_reg(01,&val);
+
+    if (val == 1) {
+        fts_data->palm_on = true;
+    } else if (val == 0){
+        fts_data->palm_on = false;
+    }
+#endif
 
 #ifdef FOCALTECH_PALM_SENSOR_EN
     if (data->palm_detection_enabled) {
@@ -935,6 +969,11 @@ static int fts_input_init(struct fts_ts_data *ts_data)
 #else
     input_set_abs_params(input_dev, ABS_MT_PRESSURE, 0, 0xFF, 0, 0);
 #endif
+#endif
+
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    input_set_abs_params(input_dev, ABS_MT_TOOL_TYPE,
+            MT_TOOL_FINGER, MT_TOOL_PALM, 0, 0);
 #endif
 
     ret = input_register_device(input_dev);
