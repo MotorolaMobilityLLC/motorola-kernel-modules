@@ -346,5 +346,6 @@ int fts_ex_mode_recovery(struct fts_ts_data *ts_data);
 
 void fts_irq_disable(void);
 void fts_irq_enable(void);
+void fts_cable_detect_func(bool force_renew);
 int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable);
 #endif /* __LINUX_FOCALTECH_CORE_H__ */

@@ -287,6 +287,9 @@ static int fts_mmi_post_resume(struct device *dev)
 	struct fts_ts_data *ts_data;
 
 	GET_TS_DATA(dev);
+#if FTS_USB_DETECT_EN
+	fts_cable_detect_func(true);
+#endif
 
 /*	if (!ts_data->pdata->always_on_vio) {
 		FTS_INFO("Reset IC in resume");
