@@ -776,10 +776,28 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
         events[i].flag = buf[FTS_TOUCH_EVENT_POS + base] >> 6;
         events[i].id = buf[FTS_TOUCH_ID_POS + base] >> 4;
         events[i].area = buf[FTS_TOUCH_AREA_POS + base] >> 4;
+
+#ifdef CONFIG_ENABLE_RESOLITION_BOOST
+        events[i].x = ((buf[FTS_TOUCH_OFF_E_XH + base] & 0x0F) << 11)
+                      +((buf[FTS_TOUCH_OFF_XL + base] & 0xFF) << 3)
+                      +((buf[FTS_TOUCH_OFF_PRE + base] & 0xC0) >> 5)
+                      +((buf[FTS_TOUCH_OFF_E_XH + base]& 0x20) >>  5);
+
+        events[i].y = ((buf[FTS_TOUCH_OFF_ID_YH + base] & 0x0F) << 12)
+                      +((buf[FTS_TOUCH_OFF_YL + base] & 0xFF) << 4)
+                      +((buf[FTS_TOUCH_OFF_PRE + base] & 0x30) >>  2)
+                      +((buf[FTS_TOUCH_OFF_E_XH + base] & 0x10) >> 3)
+                      +((buf[FTS_TOUCH_OFF_AREA + base] & 0x80) >> 7);
+        events[i].x = events[i].x / 4;
+        events[i].y = events[i].y / 4;
+#endif
+
 #ifdef PICOLEAF_DATA_EN
         if(press == 0){
             FTS_DEBUG("RKRK 0ff events[0].p = (%d)", events[0].p);
+#ifndef CONFIG_ENABLE_RESOLITION_BOOST
             events[i].p =  buf[FTS_TOUCH_PRE_POS + base];
+#endif
         } else {
             FTS_DEBUG("RKRK on events[0].p = (%d)", events[0].p);
             events[i].p = press;//buf[FTS_TOUCH_PRE_POS + base];

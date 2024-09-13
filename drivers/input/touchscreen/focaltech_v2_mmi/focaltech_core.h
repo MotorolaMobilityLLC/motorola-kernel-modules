@@ -86,6 +86,14 @@
 #define FTS_GESTURE_DATA_LEN               (FTS_GESTURE_POINTS_MAX * 4 + 4)
 
 #define FTS_MAX_ID                          0x0A
+#ifdef CONFIG_ENABLE_RESOLITION_BOOST
+#define FTS_TOUCH_OFF_E_XH                  3
+#define FTS_TOUCH_OFF_XL                    4
+#define FTS_TOUCH_OFF_ID_YH                 5
+#define FTS_TOUCH_OFF_YL                    6
+#define FTS_TOUCH_OFF_PRE                   7
+#define FTS_TOUCH_OFF_AREA                  8
+#endif
 #define FTS_TOUCH_X_H_POS                   3
 #define FTS_TOUCH_X_L_POS                   4
 #define FTS_TOUCH_Y_H_POS                   5
