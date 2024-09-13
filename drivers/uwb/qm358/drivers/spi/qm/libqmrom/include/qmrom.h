@@ -9,27 +9,27 @@
 
 #ifndef __KERNEL__
 #include <errno.h>
+#include <inttypes.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <byteswap.h>
-#include <inttypes.h>
 #else
-#include <linux/kernel.h>
 #include <linux/errno.h>
-#include <linux/types.h>
+#include <linux/kernel.h>
 #include <linux/string.h>
-#define bswap_16 be16_to_cpu
+#include <linux/types.h>
 #define PRIu32 "u"
+#define PRIu64 "llu"
 #endif
 
-#include <qmrom_error.h>
+#include "qmrom_endian.h"
+#include "qmrom_error.h"
 
 #undef CHECK_STCS
 
 enum chip_revision_e {
 	CHIP_REVISION_A0 = 0xA0,
+	CHIP_REVISION_A1 = 0xA1,
 	CHIP_REVISION_B0 = 0xB0,
 	CHIP_REVISION_C0 = 0xC0,
 	CHIP_REVISION_C2 = 0xC2,
@@ -39,7 +39,17 @@ enum chip_revision_e {
 enum device_generation_e {
 	DEVICE_GEN_QM357XX,
 	DEVICE_GEN_QM358XX,
+	DEVICE_GEN_QPF51XX,
 	DEVICE_GEN_UNKNOWN = 0xFF
+};
+
+enum device_version_e {
+	DEVICE_VER_QM357XX_A0 = 0x0410,
+	DEVICE_VER_QM357XX_B0 = 0x0420,
+	DEVICE_VER_QM357XX_C0 = 0x0430,
+	DEVICE_VER_QM358XX = 0x0440,
+	DEVICE_VER_QPF51XX = 0x0450,
+	DEVICE_VER_UNKNOWN = 0xFFFF
 };
 
 struct qmrom_handle;
@@ -99,7 +109,7 @@ typedef int (*erase_secure_dbg_pkg_fn)(struct qmrom_handle *handle);
 typedef int (*run_test_mode_fn)(struct qmrom_handle *handle);
 typedef int (*load_sram_fw_fn)(struct qmrom_handle *handle,
 			       const struct firmware *sram_fw);
-struct qm35xxx_rom_code_ops {
+struct rom_code_ops {
 	flash_fw_fn flash_fw;
 	flash_unstitched_fw_fn flash_unstitched_fw;
 	flash_debug_cert_fn flash_debug_cert;
@@ -112,6 +122,7 @@ struct qm35xxx_rom_code_ops {
 	run_test_mode_fn run_test_mode;
 	load_sram_fw_fn load_sram_fw;
 };
+
 struct qmrom_handle {
 	void *spi_handle;
 	void *reset_handle;
@@ -122,14 +133,13 @@ struct qmrom_handle {
 	uint16_t device_version;
 	struct device_ops dev_ops;
 	int spi_speed;
-	struct qm35xxx_rom_code_ops qm35xxx_rom_ops;
+	struct rom_code_ops rom_ops;
 	struct stc *hstc;
 	struct stc *sstc;
 	union {
 		struct qm357xx_soc_infos qm357xx_soc_info;
 		struct qm358xx_soc_infos qm358xx_soc_info;
 	};
-	bool is_be;
 	bool skip_check_fw_boot;
 };
 

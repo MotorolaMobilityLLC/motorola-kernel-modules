@@ -26,17 +26,15 @@
 #include <linux/regulator/consumer.h>
 #include <linux/atomic.h>
 
+#define QM35_MAX_REGULATORS 5
+
 /**
  * struct qm35_regulators - QM35 power regulators.
- * @vdd: Generic power supply.
- * @v1p8: 1.8V power supply.
- * @v2p5: 2.5V power supply.
+ * @vdd: Array of regulators.
  * @enabled: Current power regulator status.
  */
 struct qm35_regulators {
-	struct regulator *vdd;
-	struct regulator *v1p8;
-	struct regulator *v2p5;
+	struct regulator *vdd[QM35_MAX_REGULATORS];
 	atomic_t enabled;
 };
 

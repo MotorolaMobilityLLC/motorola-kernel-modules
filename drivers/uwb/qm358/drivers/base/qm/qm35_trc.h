@@ -72,19 +72,8 @@ TRACE_DEFINE_ENUM(QM35_STATE_ERROR);
  *	Basic event classes	  *
  **********************************/
 
-#if defined(QM35_BYPASS_TRACES) || defined(QM35_CORE_TRACES)
-DECLARE_EVENT_CLASS(qm_only_evt,
-	TP_PROTO(struct qm35 *qm),
-	TP_ARGS(qm),
-	TP_STRUCT__entry(
-		QM_ENTRY
-	),
-	TP_fast_assign(
-		QM_ASSIGN;
-	),
-	TP_printk(QM_PR_FMT, QM_PR_ARG)
-);
-#endif
+#if defined(QM35_CORE_TRACES) || defined(QM35_BYPASS_TRACES) || \
+	defined(QM35_NOTIFIER_TRACES)
 
 DECLARE_EVENT_CLASS(qm_evt_with_return,
 	TP_PROTO(struct qm35 *qm, int ret),
@@ -100,10 +89,24 @@ DECLARE_EVENT_CLASS(qm_evt_with_return,
 	TP_printk(QM_PR_FMT ", return: %d", QM_PR_ARG, __entry->ret)
 );
 
+#endif
+
 /************************************************
  *	QM35 core device functions traces	*
  ************************************************/
 #ifdef QM35_CORE_TRACES
+
+DECLARE_EVENT_CLASS(qm_only_evt,
+	TP_PROTO(struct qm35 *qm),
+	TP_ARGS(qm),
+	TP_STRUCT__entry(
+		QM_ENTRY
+	),
+	TP_fast_assign(
+		QM_ASSIGN;
+	),
+	TP_printk(QM_PR_FMT, QM_PR_ARG)
+);
 
 TRACE_EVENT(qm35_alloc_device,
 	TP_PROTO(size_t priv_size),
@@ -190,14 +193,59 @@ TRACE_EVENT(qm35_bypass_open,
 		  QM_PR_ARG, __entry->cb, __entry->priv_data)
 );
 
-DEFINE_EVENT(qm_evt_with_return, qm35_bypass_open_return,
-	TP_PROTO(struct qm35 *qm, int ret),
-	TP_ARGS(qm, ret)
+TRACE_EVENT(qm35_bypass_open_return,
+	TP_PROTO(struct qm35 *qm, qm35_bypass_handle hnd),
+	TP_ARGS(qm, hnd),
+	TP_STRUCT__entry(
+		QM_ENTRY
+		__field(void *, hnd)
+	),
+	TP_fast_assign(
+		QM_ASSIGN;
+		__entry->hnd = hnd;
+	),
+	TP_printk(QM_PR_FMT ", channel: %pe",
+		  QM_PR_ARG, __entry->hnd)
 );
 
-DEFINE_EVENT(qm_only_evt, qm35_bypass_close,
-	TP_PROTO(struct qm35 *qm),
-	TP_ARGS(qm)
+#define qmbh2qm(x) (container_of((x)->bypass, struct qm35, bypass_data))
+#define QM_ASSIGN_BH(x)							\
+	__entry->qm_id = (IS_ERR_OR_NULL(x) ? -1 : qmbh2qm(x)->dev_id);	\
+	__entry->hnd = x
+#define QM_ENTRY_BH				\
+	QM_ENTRY				\
+	__field(void *, hnd)
+
+DECLARE_EVENT_CLASS(qmbh_only_evt,
+	TP_PROTO(qm35_bypass_handle qmbh),
+	TP_ARGS(qmbh),
+	TP_STRUCT__entry(
+		QM_ENTRY_BH
+	),
+	TP_fast_assign(
+		QM_ASSIGN_BH(qmbh);
+	),
+	TP_printk(QM_PR_FMT ", channel: %pe", QM_PR_ARG, __entry->hnd)
+);
+
+DECLARE_EVENT_CLASS(qmbh_evt_with_return,
+	TP_PROTO(qm35_bypass_handle qmbh, int ret),
+	TP_ARGS(qmbh, ret),
+	TP_STRUCT__entry(
+		QM_ENTRY_BH
+		__field(int, ret)
+	),
+	TP_fast_assign(
+		QM_ASSIGN_BH(qmbh);
+		__entry->ret = ret;
+	),
+	TP_printk(QM_PR_FMT ", channel: %pe, return: %d",
+		  QM_PR_ARG, __entry->hnd, __entry->ret)
+);
+
+DEFINE_EVENT(qmbh_only_evt, qm35_bypass_close,
+	TP_PROTO(qm35_bypass_handle qmbh),
+	TP_ARGS(qmbh)
 );
 
 DEFINE_EVENT(qm_evt_with_return, qm35_bypass_close_return,
@@ -205,46 +253,47 @@ DEFINE_EVENT(qm_evt_with_return, qm35_bypass_close_return,
 	TP_ARGS(qm, ret)
 );
 
-DEFINE_EVENT(qm_only_evt, qm35_bypass_send,
-	TP_PROTO(struct qm35 *qm),
-	TP_ARGS(qm)
+DEFINE_EVENT(qmbh_only_evt, qm35_bypass_send,
+	TP_PROTO(qm35_bypass_handle qmbh),
+	TP_ARGS(qmbh)
 );
 
-DEFINE_EVENT(qm_evt_with_return, qm35_bypass_send_return,
-	TP_PROTO(struct qm35 *qm, int ret),
-	TP_ARGS(qm, ret)
+DEFINE_EVENT(qmbh_evt_with_return, qm35_bypass_send_return,
+	TP_PROTO(qm35_bypass_handle qmbh, int ret),
+	TP_ARGS(qmbh, ret)
 );
 
-DEFINE_EVENT(qm_only_evt, qm35_bypass_recv,
-	TP_PROTO(struct qm35 *qm),
-	TP_ARGS(qm)
+DEFINE_EVENT(qmbh_only_evt, qm35_bypass_recv,
+	TP_PROTO(qm35_bypass_handle qmbh),
+	TP_ARGS(qmbh)
 );
 
-DEFINE_EVENT(qm_evt_with_return, qm35_bypass_recv_return,
-	TP_PROTO(struct qm35 *qm, int ret),
-	TP_ARGS(qm, ret)
+DEFINE_EVENT(qmbh_evt_with_return, qm35_bypass_recv_return,
+	TP_PROTO(qm35_bypass_handle qmbh, int ret),
+	TP_ARGS(qmbh, ret)
 );
 
 TRACE_EVENT(qm35_bypass_control,
-	TP_PROTO(struct qm35 *qm, enum qm35_bypass_actions action, long *param),
-	TP_ARGS(qm, action, param),
+	TP_PROTO(qm35_bypass_handle qmbh, enum qm35_bypass_actions action,
+		 long *param),
+	TP_ARGS(qmbh, action, param),
 	TP_STRUCT__entry(
-		QM_ENTRY
+		QM_ENTRY_BH
 		BYPASS_ACTION_ENTRY
 		__field(long, param)
 	),
 	TP_fast_assign(
-		QM_ASSIGN;
+		QM_ASSIGN_BH(qmbh);
 		BYPASS_ACTION_ASSIGN(action);
 		__entry->param = param ? *param : 0;
 	),
-	TP_printk(QM_PR_FMT "" BYPASS_ACTION_PR_FMT ", param: 0x%lx",
-		  QM_PR_ARG, BYPASS_ACTION_PR_ARG, __entry->param)
+	TP_printk(QM_PR_FMT ", channel: %pe" BYPASS_ACTION_PR_FMT ", param: 0x%lx",
+		  QM_PR_ARG, __entry->hnd, BYPASS_ACTION_PR_ARG, __entry->param)
 );
 
-DEFINE_EVENT(qm_evt_with_return, qm35_bypass_control_return,
-	TP_PROTO(struct qm35 *qm, int ret),
-	TP_ARGS(qm, ret)
+DEFINE_EVENT(qmbh_evt_with_return, qm35_bypass_control_return,
+	TP_PROTO(qm35_bypass_handle qmbh, int ret),
+	TP_ARGS(qmbh, ret)
 );
 
 #endif /* QM35_BYPASS_TRACES */

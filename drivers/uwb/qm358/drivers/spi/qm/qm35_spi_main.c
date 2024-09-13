@@ -254,6 +254,9 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 	/* Initialize firmware update mutex. */
 	mutex_init(&qmspi->fw.update_lock);
 
+	/* Initialize info file mutex. */
+	mutex_init(&qmspi->info_mutex);
+
 	/* Register MCPS 802.15.4 device */
 	rc = qm35_register_device(qm);
 	if (rc) {
@@ -317,6 +320,11 @@ static int qm35_spi_driver_remove(struct spi_device *spi)
 	/* Restore configured device max speed. */
 	spi->max_speed_hz = qmspi->of_max_speed_hz;
 	spi_setup(spi);
+	mutex_lock(&qmspi->info_mutex);
+	if (qmspi->info_bin_attr.attr.name)
+		sysfs_remove_bin_file(&spi->dev.kobj, &qmspi->info_bin_attr);
+	mutex_unlock(&qmspi->info_mutex);
+	mutex_destroy(&qmspi->info_mutex);
 	/* Unregister subsystems. */
 	qm35_unregister_device(qm);
 	/* Mark the firmware update mutex uninitialized. */

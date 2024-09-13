@@ -35,7 +35,6 @@
 #include "qm35_logs.h"
 #include "qm35_notifier.h"
 #include "qm35_transport.h"
-#include "uci/uci.h"
 
 #define LOG_PRINTK 0 /* Set to 1 if you want log on printk when they arrive. */
 
@@ -154,10 +153,12 @@ struct qm35_qtraces_header {
  */
 static void qm35_logs_list_clear(struct qm35_logs_list *ll, struct qm35 *qm35)
 {
-	struct sk_buff *s, *n;
+	struct list_head *l = &ll->list;
+	struct sk_buff *s;
 	unsigned long flags;
+
 	spin_lock_irqsave(&ll->lock, flags);
-	list_for_each_entry_safe (s, n, &ll->list, list) {
+	while ((s = list_first_entry_or_null(l, struct sk_buff, list))) {
 		list_del(&s->list);
 		ll->count--;
 		spin_unlock_irqrestore(&ll->lock, flags);
@@ -235,7 +236,8 @@ static ssize_t qm35_qtraces_read(struct file *filp, struct kobject *kobp,
 	struct qm35_logs *qml =
 		container_of(bin_attr, struct qm35_logs, qtraces.bin_attr);
 	struct qm35_logs_list *ll = &qml->qtraces;
-	struct sk_buff *skb, *n;
+	struct list_head *l = &ll->list;
+	struct sk_buff *skb;
 	unsigned long flags;
 	unsigned copied = 0;
 	int error = 0;
@@ -245,7 +247,7 @@ static ssize_t qm35_qtraces_read(struct file *filp, struct kobject *kobp,
 	((void)pos); /* unused */
 
 	spin_lock_irqsave(&ll->lock, flags);
-	list_for_each_entry_safe (skb, n, &ll->list, list) {
+	while ((skb = list_first_entry_or_null(l, struct sk_buff, list))) {
 		if (remain < skb->len) {
 			error = copied ? 0 : -ENOSPC;
 			break; /* no space in buffer. */
@@ -346,7 +348,7 @@ freepkt:
  * @parent: Pointer to struct dentry of parent directory.
  * @log_pkt: Log packet to check.
  *
- * Helper function for qm35_logs_show() to ease reading code.
+ * Helper function for qm35_logs_read_common() to ease reading code.
  *
  * Returns: True if module name in log packet matches the parent name
  *          else false.
@@ -411,6 +413,25 @@ static ssize_t qm35_logs_read_common(struct qm35_logs *qml,
 	char __user *cur = buf;
 
 	spin_lock_irqsave(&ll->lock, flags);
+	/* TODO: Remove per-category logs in debugfs (UWB-20260).
+	 *
+	 * Per-category logs bring little value in practice, compared to fwlogs
+	 * file in sysfs.
+	 * Furthermore, per-category logs depend on filtering using the
+	 * check_name() function, which forces us to acquire the lock for the
+	 * duration of the iteration over the whole list.
+	 * Without the lock, it could be possible for 2 threads concurrently
+	 * reading logs to call list_del() on the same element of the list,
+	 * causing a kernel panic.
+	 * And finally keeping the lock also has an impact on driver latency:
+	 * when a log packet is received while a read operation is in progress,
+	 * the SPI thread first has to wait for it to complete.
+	 *
+	 * Once the per-category logs and filtering are removed, the
+	 * list_for_each_entry_safe() loop can be replaced with a
+	 * while(list_first_entry_or_null()) one, and the lock can be release
+	 * between iterations, just like in qm35_qtraces_read().
+	 */
 	list_for_each_entry_safe (skb, n, &ll->list, list) {
 		struct qm35_logs_rsp *log_pkt;
 		bool copy;
@@ -421,20 +442,17 @@ static ssize_t qm35_logs_read_common(struct qm35_logs *qml,
 			break; /* no space in buffer. */
 		}
 
-		/* Ensure producer thread can add new entries in list during copy. */
-		spin_unlock_irqrestore(&ll->lock, flags);
-
 		copy = !parent || check_name(parent, log_pkt);
-		if (!copy) {
-			spin_lock_irqsave(&ll->lock, flags);
+		if (!copy)
 			continue;
-		}
 
 		/* Copy this log entry. */
 		if (parent) {
 			if (copy_to_user(cur, log_pkt->data,
-					 log_pkt->hdr.body_size))
-				return -EFAULT;
+					 log_pkt->hdr.body_size)) {
+				error = -EFAULT;
+				break;
+			}
 		} else {
 			memcpy(cur, log_pkt->data, log_pkt->hdr.body_size);
 		}
@@ -444,13 +462,9 @@ static ssize_t qm35_logs_read_common(struct qm35_logs *qml,
 		cur += log_pkt->hdr.body_size;
 		copied++;
 
-		/* Re-lock for list management. */
-		spin_lock_irqsave(&ll->lock, flags);
+		/* Remove from list and free packet. */
 		list_del(&skb->list);
 		ll->count--;
-
-		/* Free packet (inside lock after list_del to avoid race with
-		 * another reader). */
 		kfree_skb(skb);
 	}
 	spin_unlock_irqrestore(&ll->lock, flags);

@@ -27,7 +27,7 @@
 
 struct qm35_spi;
 
-#define QM35_HSSPI_RETRY_COUNT 3
+#define QM35_HSSPI_RETRY_COUNT 10
 #define QM35_HSSPI_RETRY_DELAY_US 50
 
 /* See peg_spi_driver/HSSPI.{c,h} at
@@ -72,7 +72,7 @@ struct qm35_hsspi_header {
 } __packed;
 
 int qm35_hsspi_send(struct qm35_spi *qmspi, u8 ul_value, const void *data,
-		    size_t length, bool do_prd);
+		    size_t length);
 int qm35_hsspi_recv(struct qm35_spi *qmspi, struct qm35_hsspi_header *header,
 		    void *data, size_t size);
 int qm35_hsspi_wakeup(struct qm35_spi *qmspi, bool force);

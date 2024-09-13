@@ -5,8 +5,8 @@
  */
 
 #include <qmrom.h>
-#include <qmrom_spi.h>
 #include <qmrom_log.h>
+#include <qmrom_spi.h>
 #include <qmrom_utils.h>
 #include <spi_rom_protocol.h>
 
@@ -95,9 +95,10 @@ int qm357xx_rom_b0_probe_device(struct qmrom_handle *handle)
 		return rc;
 
 	handle->chip_rev =
-		SSTC2UINT16(handle, CHIP_VERSION_CHIP_REV_PAYLOAD_OFFSET) &
-		0xFF;
-	handle->device_version = bswap_16(
+		be16toh(SSTC2UINT16(handle,
+				    CHIP_VERSION_CHIP_REV_PAYLOAD_OFFSET)) >>
+		8;
+	handle->device_version = be16toh(
 		SSTC2UINT16(handle, CHIP_VERSION_DEV_REV_PAYLOAD_OFFSET));
 	if (handle->chip_rev != CHIP_REVISION_B0) {
 		LOG_ERR("%s: wrong chip revision 0x%x\n", __func__,
@@ -135,12 +136,10 @@ int qm357xx_rom_b0_probe_device(struct qmrom_handle *handle)
 	/* Set device type */
 	handle->dev_gen = DEVICE_GEN_QM357XX;
 	/* Set rom ops */
-	handle->qm35xxx_rom_ops.flash_unstitched_fw =
+	handle->rom_ops.flash_unstitched_fw =
 		qm357xx_rom_b0_flash_unstitched_fw;
-	handle->qm35xxx_rom_ops.flash_debug_cert =
-		qm357xx_rom_b0_flash_debug_cert;
-	handle->qm35xxx_rom_ops.erase_debug_cert =
-		qm357xx_rom_b0_erase_debug_cert;
+	handle->rom_ops.flash_debug_cert = qm357xx_rom_b0_flash_debug_cert;
+	handle->rom_ops.erase_debug_cert = qm357xx_rom_b0_erase_debug_cert;
 
 	check_stcs(__func__, __LINE__, handle);
 	return 0;
@@ -150,7 +149,8 @@ static int qm357xx_rom_b0_flash_data(struct qmrom_handle *handle,
 				     struct firmware *fw, uint8_t cmd,
 				     uint8_t exp)
 {
-	int rc, sent = 0;
+	int rc;
+	size_t sent = 0;
 	const char *bin_data = (const char *)fw->data;
 
 	check_stcs(__func__, __LINE__, handle);

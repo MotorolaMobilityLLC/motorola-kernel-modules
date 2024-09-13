@@ -23,8 +23,10 @@
 #ifndef __QM35_SPI_H
 #define __QM35_SPI_H
 
-#include <linux/spi/spi.h>
 #include <linux/atomic.h>
+#include <linux/mutex.h>
+#include <linux/spi/spi.h>
+#include <linux/sysfs.h>
 
 #include "qm35.h"
 #include "qm35_spi_setup.h"
@@ -123,6 +125,13 @@ struct qm35_spi {
 	atomic_t should_read;
 	atomic_t should_write;
 	int prd_length;
+	struct bin_attribute info_bin_attr;
+	struct {
+		struct qm35_uci_device_info udi;
+		char vendor_data[128 - sizeof(struct qm35_uci_device_info)];
+	} infobuf;
+	size_t len_infobuf;
+	struct mutex info_mutex;
 };
 
 static inline struct qm35_spi *qm35_to_qm35_spi(const struct qm35 *qm35)

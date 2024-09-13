@@ -28,8 +28,8 @@ qm35_spi-y := \
 # Uncomment to change default auto suspend delay value to 250 MS
 #CFLAGS_qm35_spi_pm.o := -DAUTOSUSPEND_DELAY_MS=250
 
-CFLAGS_libqmrom/qm357xx_rom_c0.o := -DC0_WRITE_STATS
-CFLAGS_libqmrom/qm358xx_rom.o := -DQM358XX_WRITE_STATS
-CFLAGS_libfwupdater/fwupdater.o := -DWRITE_STATS
+CFLAGS_libqmrom/src/qm357xx_rom_c0.o := -DCONFIG_FLASHING_STATS
+CFLAGS_libqmrom/src/qm358xx_rom.o := -DCONFIG_FLASHING_STATS
+CFLAGS_libfwupdater/src/fwupdater.o := -DCONFIG_FLASHING_STATS
 obj-m += ../../../qm35_spi.o
 

@@ -20,10 +20,10 @@
  * software for any purpose without first obtaining a commercial license from
  * Qorvo. Please contact Qorvo to inquire about licensing terms.
  */
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
 
 #include "qm35_hsspi.h"
 #include "qm35_spi.h"
@@ -58,6 +58,31 @@ static const char *const qm35_default_fw_list[] = {
 	CONFIG_QM35_FIRMWARE_DIR "qm35.bin",
 	NULL
 };
+
+/**
+ * info_read() - Read received device info.
+ * @filp: The struct file instance.
+ * @kobp: Device kernel object associated.
+ * @bin_attr: Pointer to written binary attribute.
+ * @buf: Pointer to application buffer.
+ * @pos: Offset pointer.
+ * @count: Buffer size.
+ *
+ * Returns: Written size.
+ */
+static ssize_t info_read(struct file *filp, struct kobject *kobp,
+			       struct bin_attribute *bin_attr, char *buf,
+			       loff_t pos, size_t count)
+{
+	struct qm35_spi *qmspi = container_of(bin_attr, struct qm35_spi, info_bin_attr);
+	int ret;
+
+	mutex_lock(&qmspi->info_mutex);
+	ret = memory_read_from_buffer(buf, count, &pos, &qmspi->infobuf, qmspi->len_infobuf);
+	mutex_unlock(&qmspi->info_mutex);
+
+	return ret;
+}
 /* clang-format on */
 
 /*
@@ -520,7 +545,7 @@ static int qm35_send_work(struct qm35_spi *qmspi, const void *in, void *out)
 		return qmspi->work_send.ret;
 	/* Direct cast of type because enum match expected ul_value. */
 	ret = qm35_hsspi_send(qmspi, (u8)params->type, params->data_out,
-			      params->size, atomic_read(&qmspi->should_read));
+			      params->size);
 	if (!ret && (qm35_debug_flags & QMSPI_COMBINED_WRITE))
 		atomic_set(&qmspi->should_write, false);
 	return ret;
@@ -554,6 +579,7 @@ static int qm35_spi_send(struct qm35 *qm35, enum qm35_transport_msg_type type,
 		.size = size,
 		.wakeup = false,
 	};
+	bool wakeup_forced = false;
 	int retry_count = QM35_HSSPI_RETRY_COUNT;
 	int retry_udelay = QM35_HSSPI_RETRY_DELAY_US;
 	int ret;
@@ -579,12 +605,19 @@ static int qm35_spi_send(struct qm35 *qm35, enum qm35_transport_msg_type type,
 	while ((ret == -EAGAIN || ret == -EBUSY) && retry_count--) {
 		usleep_range(retry_udelay, 2 * retry_udelay);
 		retry_udelay *= 2;
-		/* Update send params to force wakeup if needed. */
-		qmspi->send_params.wakeup = (ret == -EBUSY) &&
-					    !qmspi->exton_gpio;
+		if (!qmspi->exton_gpio) {
+			qmspi->send_params.wakeup = false;
+			/* Update send params to force wakeup if needed. */
+			if (ret == -EBUSY && !wakeup_forced) {
+				qmspi->send_params.wakeup = true;
+				wakeup_forced = true;
+				/* If the chip is sleeping on last retry, retry once more. */
+				retry_count = !retry_count ? 1 : retry_count;
+			}
+		}
 		ret = qm35_enqueue(qmspi, &qmspi->work_send);
 	}
-	if (!retry_count && (qm35_debug_flags & QMSPI_COMBINED_WRITE))
+	if (ret && (qm35_debug_flags & QMSPI_COMBINED_WRITE))
 		atomic_set(&qmspi->should_write, false);
 	/* Request auto-suspend in all cases. */
 	qm35_spi_pm_idle(qmspi);
@@ -623,7 +656,7 @@ static int qm35_recv_work(struct qm35_spi *qmspi, const void *in, void *out)
 		return ret;
 	params->type = (enum qm35_transport_msg_type)header.ul_value;
 	params->flags = (int)header.flags;
-	return (int)header.length;
+	return ret;
 }
 
 /**
@@ -721,6 +754,7 @@ error:
 static int qm35_spi_probe(struct qm35 *qm35, char *infobuf, size_t len)
 {
 	struct qm35_spi *qmspi = qm35_to_qm35_spi(qm35);
+	struct device *dev = &qmspi->spi->dev;
 	bool soft_reset_sent = false;
 	int rc;
 
@@ -744,8 +778,37 @@ static int qm35_spi_probe(struct qm35 *qm35, char *infobuf, size_t len)
 			goto cleanup_probe;
 		soft_reset_sent = true;
 	}
+
 	rc = qm35_uci_probe_device_info(
 		qmspi, (struct qm35_uci_device_info *)infobuf, len);
+	if (rc)
+		goto cleanup_probe;
+
+	mutex_lock(&qmspi->info_mutex);
+	/* Save info */
+	qmspi->len_infobuf = min(
+		sizeof(qmspi->infobuf),
+		sizeof(struct qm35_uci_device_info) +
+			((struct qm35_uci_device_info *)infobuf)->vendor_length);
+	memcpy(&qmspi->infobuf, infobuf, qmspi->len_infobuf);
+	/* Remove sysfs control file. */
+	if (qmspi->info_bin_attr.attr.name)
+		sysfs_remove_bin_file(&dev->kobj, &qmspi->info_bin_attr);
+	/* Create info file. */
+	sysfs_bin_attr_init(&qmspi->info_bin_attr);
+	qmspi->info_bin_attr.size = qmspi->len_infobuf;
+	qmspi->info_bin_attr.read = info_read;
+	qmspi->info_bin_attr.attr.mode = 0444; /* RO */
+	qmspi->info_bin_attr.attr.name = "fwinfo";
+	rc = sysfs_create_bin_file(&dev->kobj, &qmspi->info_bin_attr);
+	if (rc) {
+		dev_warn(dev,
+			 "Cannot create fwinfo file with probed data. (%d)\n",
+			 rc);
+		qmspi->info_bin_attr.attr.name = NULL;
+		rc = 0; /* Ignore this error. */
+	}
+	mutex_unlock(&qmspi->info_mutex);
 
 cleanup_probe:
 	qm35_uci_probe_cleanup(qmspi);

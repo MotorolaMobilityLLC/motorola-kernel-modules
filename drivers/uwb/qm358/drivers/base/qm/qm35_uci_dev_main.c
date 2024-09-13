@@ -20,12 +20,13 @@
  * software for any purpose without first obtaining a commercial license from
  * Qorvo. Please contact Qorvo to inquire about licensing terms.
  */
-#include "asm-generic/errno-base.h"
-#include "linux/err.h"
+#include <linux/bitfield.h>
+#include <linux/err.h>
+#include <linux/list.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
-#include <linux/bitfield.h>
 #ifdef CONFIG_EVENT_TRACING
 #include <linux/trace_events.h> /* for trace_set_clr_event() */
 #endif
@@ -33,6 +34,7 @@
 #include "qm35_bypass.h"
 #include "qm35_core.h"
 #include "qm35_notifier.h"
+#include "qm35_transport.h"
 #include "qm35_uci_dev.h"
 #include "qm35_uci_dev_trc.h"
 #include "qm35_uci_dev_ioctl.h"
@@ -48,20 +50,20 @@ static inline void qm35_uci_dev_set_state(struct qm35_uci_dev *uci_dev,
 	uci_dev->state = state;
 }
 
-static inline unsigned
-qm35_uci_dev_get_hsspi_msg_type(struct qm35_uci_dev *uci_dev)
+static inline int qm35_uci_dev_get_msg_type(qm35_uci_dev_handle udh)
 {
-	return uci_dev->hsspi_msg_type;
+	/* Get current message type from bypass channel. */
+	return qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_MSG_TYPE,
+				   NULL);
 }
 
-static inline void qm35_uci_dev_set_hsspi_msg_type(struct qm35_uci_dev *uci_dev,
-						   unsigned hsspi_msg_type)
+static inline int qm35_uci_dev_set_msg_type(qm35_uci_dev_handle udh,
+					    int msg_type)
 {
-	long param = (long)hsspi_msg_type;
+	long param = msg_type;
 	/* Keep in sync type of message sent and message received */
-	if (qm35_bypass_control(uci_dev->channel, QM35_BYPASS_ACTION_MSG_TYPE,
-				&param) >= 0)
-		uci_dev->hsspi_msg_type = hsspi_msg_type;
+	return qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_MSG_TYPE,
+				   &param);
 }
 
 /**
@@ -77,13 +79,13 @@ static inline void qm35_uci_dev_set_hsspi_msg_type(struct qm35_uci_dev *uci_dev,
  */
 static int qm35_uci_dev_listener(void *data, enum qm35_bypass_events event)
 {
-	struct qm35_uci_dev *uci_dev = data;
+	qm35_uci_dev_handle udh = (qm35_uci_dev_handle)data;
 
-	qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_READY);
-	uci_dev->data_available = true;
-	uci_dev->bypass_events = event;
+	qm35_uci_dev_set_state(udh->uci_dev, QM35_UCI_DEV_CTRL_STATE_READY);
+	udh->data_available = true;
+	udh->event = event;
 	/* Wake up the file reader or ioctl processes. */
-	wake_up_interruptible_all(&uci_dev->wait_queue);
+	wake_up_interruptible_all(&udh->wait_queue);
 	return 0;
 }
 
@@ -105,22 +107,52 @@ static int qm35_uci_dev_listener(void *data, enum qm35_bypass_events event)
  */
 static int qm35_uci_dev_open(struct inode *inode, struct file *file)
 {
-	struct qm35_uci_dev *uci_dev = file_to_qm35_uci_dev(file);
+	struct qm35_uci_dev *uci_dev =
+		container_of(file->private_data, struct qm35_uci_dev, miscdev);
 	struct qm35 *qm35 = uci_dev->qm35;
-	qm35_bypass_handle hnd;
-	int rc = 0;
+	qm35_uci_dev_handle udh;
+	int first, rc = -ENOMEM;
 
 	trace_qm35_uci_dev_open(qm35);
-	hnd = qm35_bypass_open(qm35, qm35_uci_dev_listener, uci_dev);
-	if (IS_ERR(hnd)) {
-		rc = PTR_ERR(hnd);
+
+	udh = kmalloc(sizeof(struct qm35_uci_dev_channel), GFP_KERNEL);
+	if (!udh)
+		goto error;
+	/* Setup new channel */
+	udh->uci_dev = uci_dev;
+	udh->data_available = false;
+	udh->event = QM35_BYPASS_MAX;
+	init_waitqueue_head(&udh->wait_queue);
+
+	/* Open underlying bypass channel. */
+	udh->bypass = qm35_bypass_open(qm35, qm35_uci_dev_listener, udh);
+	if (IS_ERR(udh->bypass)) {
+		rc = PTR_ERR(udh->bypass);
+		kfree(udh);
 		goto error;
 	}
-	uci_dev->channel = hnd;
 
-	/* Set default state and message type when opened. */
-	qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_READY);
-	qm35_uci_dev_set_hsspi_msg_type(uci_dev, QM35_TRANSPORT_MSG_UCI);
+	/* Add new channel to channels list. */
+	mutex_lock(&uci_dev->lock);
+	first = list_empty(&uci_dev->channels);
+	list_add_tail(&udh->list, &uci_dev->channels);
+	mutex_unlock(&uci_dev->lock);
+
+	/* Update file structure to allow other ops direct access to udh. */
+	file->private_data = udh;
+
+	/* Set default message type when opened.
+	 * This can fail if one channel for this message type is active. */
+	qm35_uci_dev_set_msg_type(udh, QM35_TRANSPORT_MSG_UCI);
+
+	if (first) {
+		/* First channel opened.
+		 * Previous qm35_bypass_open() call started the device.
+		 * Any event on any channel will change state to READY. */
+		qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_RESET);
+	}
+	rc = 0;
+
 error:
 	trace_qm35_uci_dev_open_return(qm35, rc);
 	return rc;
@@ -139,18 +171,29 @@ error:
  */
 static int qm35_uci_dev_release(struct inode *inode, struct file *file)
 {
-	struct qm35_uci_dev *uci_dev = file_to_qm35_uci_dev(file);
+	qm35_uci_dev_handle udh = file->private_data;
+	struct qm35_uci_dev *uci_dev = udh->uci_dev;
 	struct qm35 *qm35 = uci_dev->qm35;
-	int rc;
+	int rc, empty;
 
 	trace_qm35_uci_dev_close(qm35);
-	rc = qm35_bypass_close(uci_dev->channel);
+	rc = qm35_bypass_close(udh->bypass);
 	if (rc < 0)
 		goto error;
-	uci_dev->data_available = false;
 
-	/* Previous call stopped the device. */
-	qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_OFF);
+	mutex_lock(&uci_dev->lock);
+	list_del(&udh->list);
+	empty = list_empty(&uci_dev->channels);
+	mutex_unlock(&uci_dev->lock);
+
+	kfree(udh);
+
+	if (empty) {
+		/* No more channel opened.
+		 * Previous qm35_bypass_close() call stopped the device. */
+		qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_OFF);
+	}
+
 error:
 	trace_qm35_uci_dev_close_return(qm35, rc);
 	return rc;
@@ -173,7 +216,8 @@ error:
 static ssize_t qm35_uci_dev_read(struct file *file, char __user *buf,
 				 size_t count, loff_t *ppos)
 {
-	struct qm35_uci_dev *uci_dev = file_to_qm35_uci_dev(file);
+	qm35_uci_dev_handle udh = file->private_data;
+	struct qm35_uci_dev *uci_dev = udh->uci_dev;
 	struct qm35 *qm35 = uci_dev->qm35;
 	enum qm35_transport_msg_type type;
 	int flags, rc;
@@ -181,8 +225,8 @@ static ssize_t qm35_uci_dev_read(struct file *file, char __user *buf,
 	trace_qm35_uci_dev_read(qm35);
 	if (!(file->f_flags & O_NONBLOCK)) {
 		/* Blocking read, go to sleep. */
-		rc = wait_event_interruptible(uci_dev->wait_queue,
-					      uci_dev->data_available);
+		rc = wait_event_interruptible(udh->wait_queue,
+					      udh->data_available);
 		if (rc) {
 			/* A signal has arrived. Return -ERESTARTSYS lets the VFS restart the
 			 * system call or return -EINTR */
@@ -190,11 +234,9 @@ static ssize_t qm35_uci_dev_read(struct file *file, char __user *buf,
 		}
 	}
 	/* Here, wake up or non blocking read, try to read data. */
-	rc = qm35_bypass_recv(uci_dev->channel, buf, count, &type, &flags);
+	rc = qm35_bypass_recv(udh->bypass, buf, count, &type, &flags);
 	if (rc == -EAGAIN)
-		uci_dev->data_available = false;
-	if (rc < 0)
-		goto error;
+		udh->data_available = false;
 
 error:
 	trace_qm35_uci_dev_read_return(qm35, rc);
@@ -217,25 +259,26 @@ error:
 static ssize_t qm35_uci_dev_write(struct file *file, const char __user *buf,
 				  size_t count, loff_t *ppos)
 {
-	struct qm35_uci_dev *uci_dev = file_to_qm35_uci_dev(file);
+	qm35_uci_dev_handle udh = file->private_data;
+	struct qm35_uci_dev *uci_dev = udh->uci_dev;
 	struct qm35 *qm35 = uci_dev->qm35;
 	int rc;
 
 	trace_qm35_uci_dev_write(qm35);
 	/* Check size first. */
-	if (count > sizeof(uci_dev->write_buffer)) {
+	if (count > sizeof(udh->write_buffer)) {
 		rc = -ENOBUFS;
 		goto error;
 	}
 
 	/* Get the data, only the UCI message, from the user mode. */
-	if (copy_from_user(uci_dev->write_buffer, buf, count)) {
+	if (copy_from_user(udh->write_buffer, buf, count)) {
 		rc = -EFAULT;
 		goto error;
 	}
 
 	/* Send the UCI message to the device. */
-	rc = qm35_bypass_send(uci_dev->channel, uci_dev->write_buffer, count);
+	rc = qm35_bypass_send(udh->bypass, udh->write_buffer, count);
 	if (!rc)
 		rc = count;
 error:
@@ -258,7 +301,8 @@ error:
 static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 			       unsigned long args)
 {
-	struct qm35_uci_dev *uci_dev = file_to_qm35_uci_dev(file);
+	qm35_uci_dev_handle udh = file->private_data;
+	struct qm35_uci_dev *uci_dev = udh->uci_dev;
 	void __user *argp = (void __user *)args;
 	int rc;
 	unsigned int param;
@@ -268,8 +312,7 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 	switch (cmd) {
 	case QM35_CTRL_RESET:
 		bypass_param = 0;
-		rc = qm35_bypass_control(uci_dev->channel,
-					 QM35_BYPASS_ACTION_RESET,
+		rc = qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_RESET,
 					 &bypass_param);
 		if (rc)
 			return rc;
@@ -281,8 +324,7 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 		if (copy_from_user(&param, argp, sizeof(param)))
 			return -EFAULT;
 		bypass_param = param;
-		rc = qm35_bypass_control(uci_dev->channel,
-					 QM35_BYPASS_ACTION_RESET,
+		rc = qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_RESET,
 					 &bypass_param);
 		qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_RESET);
 		return rc;
@@ -294,8 +336,8 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 	case QM35_CTRL_FW_UPLOAD:
 		qm35_uci_dev_set_state(uci_dev,
 				       QM35_UCI_DEV_CTRL_STATE_FW_DOWNLOADING);
-		rc = qm35_bypass_control(uci_dev->channel,
-					 QM35_BYPASS_ACTION_FWUPD, NULL);
+		rc = qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_FWUPD,
+					 NULL);
 		param = QM35_UCI_DEV_CTRL_STATE_RESET;
 		qm35_uci_dev_set_state(uci_dev, param);
 		return copy_to_user(argp, &param, sizeof(param)) ? -EFAULT : 0;
@@ -303,10 +345,10 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 	case QM35_CTRL_FW_UPLOAD_EXT:
 		if (copy_from_user(&ext_params, argp, sizeof(ext_params)))
 			return -EFAULT;
+		ext_params.fw_name[QM35_FIRMWARE_FILENAME_SIZE - 1] = '\0';
 		qm35_uci_dev_set_state(uci_dev,
 				       QM35_UCI_DEV_CTRL_STATE_FW_DOWNLOADING);
-		rc = qm35_bypass_control(uci_dev->channel,
-					 QM35_BYPASS_ACTION_FWUPD,
+		rc = qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_FWUPD,
 					 (long *)ext_params.fw_name);
 		qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_RESET);
 		return rc;
@@ -317,8 +359,7 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 		if (param > 1)
 			return -EINVAL;
 		bypass_param = param;
-		rc = qm35_bypass_control(uci_dev->channel,
-					 QM35_BYPASS_ACTION_POWER,
+		rc = qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_POWER,
 					 &bypass_param);
 		qm35_uci_dev_set_state(uci_dev,
 				       param ? QM35_UCI_DEV_CTRL_STATE_RESET :
@@ -332,25 +373,23 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 		return 0;
 
 	case QM35_CTRL_GET_TYPE:
-		param = qm35_uci_dev_get_hsspi_msg_type(uci_dev);
+		param = qm35_uci_dev_get_msg_type(udh);
 		return copy_to_user(argp, &param, sizeof(param)) ? -EFAULT : 0;
 
 	case QM35_CTRL_SET_TYPE:
 		if (copy_from_user(&param, argp, sizeof(param)))
 			return -EFAULT;
-		qm35_uci_dev_set_hsspi_msg_type(uci_dev, param);
-		return 0;
+		rc = qm35_uci_dev_set_msg_type(udh, param);
+		return rc < 0 ? rc : 0;
 
 	case QM35_CTRL_WAIT_EVENT:
 		/* Blocking read, go to sleep. */
-		rc = wait_event_interruptible(uci_dev->wait_queue,
-					      uci_dev->data_available);
+		rc = wait_event_interruptible(udh->wait_queue,
+					      udh->data_available);
+		/* A signal may had interrupted this call. Forward to caller. */
 		if (rc)
-			/* A signal has arrived. Return -ERESTARTSYS lets the VFS restart the
-			 * system call or return -EINTR */
 			return rc;
-		return copy_to_user(argp, &uci_dev->bypass_events,
-				    sizeof(uci_dev->bypass_events)) ?
+		return copy_to_user(argp, &udh->event, sizeof(udh->event)) ?
 			       -EFAULT :
 			       0;
 
@@ -372,14 +411,15 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 static __poll_t qm35_uci_dev_poll(struct file *file,
 				  struct poll_table_struct *wait)
 {
-	struct qm35_uci_dev *uci_dev = file_to_qm35_uci_dev(file);
+	qm35_uci_dev_handle udh = file->private_data;
+	struct qm35_uci_dev *uci_dev = udh->uci_dev;
 	struct qm35 *qm35 = uci_dev->qm35;
 	__poll_t mask = EPOLLOUT | EPOLLWRNORM; // Can always write.
 
 	trace_qm35_uci_dev_poll(qm35);
-	poll_wait(file, &uci_dev->wait_queue, wait);
+	poll_wait(file, &udh->wait_queue, wait);
 
-	if (qm35_bypass_queue_check(uci_dev->channel) > 0)
+	if (qm35_bypass_queue_check(udh->bypass) > 0)
 		mask |= EPOLLIN;
 	trace_qm35_uci_dev_poll_return(qm35, mask);
 
@@ -399,8 +439,25 @@ static const struct file_operations qm35_uci_dev_fops = {
 static struct list_head uci_devs_list = LIST_HEAD_INIT(uci_devs_list);
 
 /**
- * qm35_uci_dev_misc_register() - Register a miscdevice.
- * @qm35: The associated qm35 device to this miscdevice.
+ * qm35_uci_dev_destroy() - Cleanup an UCI miscdevice.
+ * @uci_dev: The UCI miscdevice to clean.
+ *
+ * It calls ``misc_deregister()`` to destroy the misc device associated to the
+ * QM35 device.
+ *
+ * Context: Kernel thread context.
+ * Return: void.
+ */
+static void qm35_uci_dev_destroy(struct qm35_uci_dev *uci_dev)
+{
+	misc_deregister(&uci_dev->miscdev);
+	list_del(&uci_dev->dev_list);
+	kfree(uci_dev);
+}
+
+/**
+ * qm35_uci_dev_misc_register() - Register an UCI miscdevice.
+ * @qm35: The associated QM35 device to this UCI miscdevice.
  *
  * It calls misc_register() to create the ``/dev/uciX`` misc device associated
  * to the newly created QM35 device.
@@ -432,14 +489,17 @@ static int qm35_uci_dev_misc_register(struct qm35 *qm35)
 	uci_dev->miscdev.minor = MISC_DYNAMIC_MINOR;
 	uci_dev->miscdev.fops = &qm35_uci_dev_fops;
 	uci_dev->miscdev.parent = dev;
+
 	uci_dev->qm35 = qm35;
+	mutex_init(&uci_dev->lock);
+	INIT_LIST_HEAD(&uci_dev->channels);
+
 	rc = misc_register(&uci_dev->miscdev);
 	if (rc) {
 		dev_err(dev, "Unable to register misc device %s\n",
 			uci_dev->miscdev.name);
 		goto error_free;
 	}
-	init_waitqueue_head(&uci_dev->wait_queue);
 	list_add_tail(&uci_dev->dev_list, &uci_devs_list);
 	return 0;
 
@@ -464,9 +524,7 @@ static void qm35_uci_dev_misc_deregister(struct qm35 *qm35)
 
 	list_for_each_entry_safe (cur, n, &uci_devs_list, dev_list) {
 		if (cur->qm35 == qm35) {
-			misc_deregister(&cur->miscdev);
-			list_del(&cur->dev_list);
-			kfree(cur);
+			qm35_uci_dev_destroy(cur);
 			break;
 		}
 	}
@@ -554,9 +612,7 @@ static int qm35_uci_dev_exit(void)
 	struct qm35_uci_dev *cur, *n;
 
 	list_for_each_entry_safe (cur, n, &uci_devs_list, dev_list) {
-		misc_deregister(&cur->miscdev);
-		list_del(&cur->dev_list);
-		kfree(cur);
+		qm35_uci_dev_destroy(cur);
 	}
 	return qm35_unregister_notifier(&nb);
 }

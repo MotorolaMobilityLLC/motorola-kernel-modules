@@ -24,6 +24,7 @@
 #define __QM35_UCI_DEV_H
 
 #include <linux/miscdevice.h>
+#include <linux/mutex.h>
 #include <linux/fs.h>
 
 #include "qm35_bypass.h"
@@ -33,42 +34,52 @@
 
 #define QM35_UCI_DEV_MAX_PACKET_SIZE 1024
 
+struct qm35_uci_dev;
+
+/**
+ * struct qm35_uci_dev_channel - UCI char device channel structure.
+ * @list: List element to put this channel in channels list.
+ * @uci_dev: Back-pointer to UCI char device structure.
+ * @bypass: Underlying bypass channel handle.
+ * @event: Last received bypass event.
+ * @wait_queue: File read wait queue.
+ * @data_available: Data are available.
+ * @write_buffer: The write buffer.
+ */
+struct qm35_uci_dev_channel {
+	struct list_head list;
+	struct qm35_uci_dev *uci_dev;
+	qm35_bypass_handle bypass;
+	enum qm35_bypass_events event;
+	wait_queue_head_t wait_queue;
+	bool data_available;
+	char write_buffer[QM35_UCI_DEV_MAX_PACKET_SIZE];
+};
+
+typedef struct qm35_uci_dev_channel *qm35_uci_dev_handle;
+
 /**
  * struct qm35_uci_dev - UCI char device structure.
  * @miscdev: The miscdevice.
- * @qm35: Pointer the associated QM35 instance to this miscdevice.
  * @name: The name of the miscdevice.
- * @channel: The opened bypass channel handle of the associated QM35 device.
- * @write_buffer: The write buffer.
- * @wait_queue: File read wait queue.
- * @data_available: Data are available.
- * @bypass_events: Last received bypass event.
+ * @qm35: Pointer the associated QM35 instance to this miscdevice.
  * @state: State of this UCI char device.
- * @hsspi_msg_type: The current HSSPI message type.
+ * @lock: Mutex protecting the channels list update.
+ * @channels: The opened channels on the associated QM35 device.
  * @dev_list: List element of the chained qm35_uci_dev devices.
  */
 struct qm35_uci_dev {
 	struct miscdevice miscdev;
-	struct qm35 *qm35;
-	qm35_bypass_handle channel;
 	char name[QM35_UCI_DEV_DEVICE_NAME_SIZE];
-	char write_buffer[QM35_UCI_DEV_MAX_PACKET_SIZE];
-	wait_queue_head_t wait_queue;
-	bool data_available;
-	enum qm35_bypass_events bypass_events;
+	struct qm35 *qm35;
 	unsigned int state;
-	u8 hsspi_msg_type;
+	struct mutex lock;
+	struct list_head channels;
 	struct list_head dev_list;
 };
 
-static inline struct qm35_uci_dev *file_to_qm35_uci_dev(struct file *file)
-{
-	return container_of(file->private_data, struct qm35_uci_dev, miscdev);
-}
-
 #ifdef QM35_UCI_DEV_TESTS
 
-#define KU_NO_KMALLOC_MOCK
 #include "mocks/ku_base.h"
 #include "mocks/ku_alloc_free.h"
 #include "mocks/ku_copy_user.h"
@@ -86,7 +97,7 @@ int ku_qm35_bypass_send(qm35_bypass_handle hnd, void *buffer, size_t len);
 int ku_qm35_bypass_recv(qm35_bypass_handle hnd, void *buffer, size_t len,
 			enum qm35_transport_msg_type *type, int *flags);
 int ku_qm35_bypass_control(qm35_bypass_handle hnd,
-			   enum qm35_bypass_actions action, void *param);
+			   enum qm35_bypass_actions action, long *param);
 
 int ku_misc_register(struct miscdevice *misc);
 void ku_misc_deregister(struct miscdevice *misc);

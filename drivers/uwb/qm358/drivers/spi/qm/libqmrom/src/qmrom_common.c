@@ -4,13 +4,17 @@
  *
  */
 
-#include <qmrom_utils.h>
+#include <qmrom.h>
 #include <qmrom_log.h>
 #include <qmrom_spi.h>
-#include <qmrom.h>
+#include <qmrom_utils.h>
 #include <spi_rom_protocol.h>
 
 #define SPI_PROBE_CLOCKRATE 1000000
+#define RSP_OFFSET 0
+#define READY_FOR_CS_LOW_RSP 0
+#define C0_INITIAL_MESSAGE_CHIP_REV_OFFSET 10
+#define C0_CHIP_REV 0x0430
 
 int qm357xx_rom_b0_probe_device(struct qmrom_handle *handle);
 int qm357xx_rom_c0_probe_device(struct qmrom_handle *handle);
@@ -266,8 +270,6 @@ int qmrom_probe_device(struct qmrom_handle *handle,
 	int retries = handle->comms_retries;
 	int rc;
 
-	handle->is_be = false;
-
 	if (handle->spi_speed == 0)
 		qmrom_spi_set_freq(SPI_PROBE_CLOCKRATE);
 	else
@@ -290,9 +292,15 @@ int qmrom_probe_device(struct qmrom_handle *handle,
 		}
 
 		rc = -1;
+		/* The initial response message is:
+		 * - 8 bytes on QM358xx
+		 * - 12 bytes on QM357xx C0
+		 * - 1 byte on QM357xx B0
+		 */
 		switch (handle->sstc->len) {
 		case 8:
 			if (dev_gen_hint != DEVICE_GEN_QM358XX &&
+			    dev_gen_hint != DEVICE_GEN_QPF51XX &&
 			    dev_gen_hint != DEVICE_GEN_UNKNOWN)
 				break;
 			/* Initial response message checked in function. */
@@ -302,25 +310,33 @@ int qmrom_probe_device(struct qmrom_handle *handle,
 			if (dev_gen_hint != DEVICE_GEN_QM357XX &&
 			    dev_gen_hint != DEVICE_GEN_UNKNOWN)
 				break;
-			/* Check res_READY_FOR_CS_LOW_CMD and device_id. */
-			if (handle->sstc->payload[0] == 0 &&
-			    bswap_16(SSTC2UINT16(handle, 10)) == 0x0430)
+			/* Check response and device_id. */
+			if (handle->sstc->payload[RSP_OFFSET] ==
+				    READY_FOR_CS_LOW_RSP &&
+			    be16toh(SSTC2UINT16(
+				    handle,
+				    C0_INITIAL_MESSAGE_CHIP_REV_OFFSET)) ==
+				    C0_CHIP_REV)
 				rc = qm357xx_rom_c0_probe_device(handle);
 			else
 				LOG_ERR("%s: bad response (%d, 0x%04x)\n",
-					__func__, handle->sstc->payload[0],
-					bswap_16(SSTC2UINT16(handle, 10)));
+					__func__,
+					handle->sstc->payload[RSP_OFFSET],
+					be16toh(SSTC2UINT16(
+						handle,
+						C0_INITIAL_MESSAGE_CHIP_REV_OFFSET)));
 			break;
 		case 1:
 			if (dev_gen_hint != DEVICE_GEN_QM357XX &&
 			    dev_gen_hint != DEVICE_GEN_UNKNOWN)
 				break;
-			/* Check res_READY_FOR_CS_LOW_CMD. */
-			if (handle->sstc->payload[0] == 0)
+			/* Check response. */
+			if (handle->sstc->payload[RSP_OFFSET] ==
+			    READY_FOR_CS_LOW_RSP)
 				rc = qm357xx_rom_b0_probe_device(handle);
 			else
 				LOG_ERR("%s: bad response (%d)\n", __func__,
-					handle->sstc->payload[0]);
+					handle->sstc->payload[RSP_OFFSET]);
 			break;
 		}
 	} while (--retries && rc);

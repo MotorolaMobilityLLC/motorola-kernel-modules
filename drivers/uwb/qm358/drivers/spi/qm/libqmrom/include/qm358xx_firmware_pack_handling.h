@@ -17,6 +17,8 @@ extern "C" {
 
 #ifndef __KERNEL__
 #include <stdint.h>
+#else
+#include <linux/types.h>
 #endif
 
 /*!
@@ -25,7 +27,8 @@ extern "C" {
 */
 
 /*! Cert magic word conversion macro */
-#define MAGIC_STR_TO_U32(x) ((x[3]) | (x[2] << 8) | (x[1] << 16) | (x[0] << 24))
+#define MAGIC_STR_TO_U32(x) \
+	((uint32_t)(((x)[3]) | ((x)[2] << 8) | ((x)[1] << 16) | ((x)[0] << 24)))
 
 /*! Cert version word conversion macro */
 #define CERT_VER_TO_U32(maj, min) (((maj) << 16) | ((min) << 24))

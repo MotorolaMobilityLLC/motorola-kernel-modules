@@ -100,6 +100,7 @@ struct qm35_logs {
 #ifdef QM35_LOGS_TESTS
 
 #include "mocks/ku_base.h"
+#define KU_NO_KMALLOC_MOCK
 #include "mocks/ku_alloc_free.h"
 #define KU_NO_ALLOC_SKB_MOCK
 #include "mocks/ku_alloc_free_skb.h"

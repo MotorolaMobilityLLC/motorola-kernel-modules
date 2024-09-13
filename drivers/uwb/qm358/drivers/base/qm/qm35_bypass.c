@@ -22,6 +22,8 @@
  */
 #include <linux/device.h>
 #include <linux/err.h>
+#include <linux/errno.h>
+#include <linux/gfp.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/module.h>
@@ -29,22 +31,11 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
+#include "qm35.h"
 #include "qm35_ids.h"
 #include "qm35_bypass.h"
 #include "qm35_transport.h"
 #include "qm35_trc.h"
-
-static inline int qm35_bypass_check(struct qm35_bypass *bypass)
-{
-	/* Check bypass is opened */
-	if (!bypass->opened)
-		return -EBADF;
-	/* Check if the current caller thread is the same group that the one
-	 * that opened the bypass channel. */
-	if (bypass->owner != current->tgid)
-		return -EPERM;
-	return 0;
-}
 
 /**
  * qm35_bypass_event_cb() - Receive event transport handler callback.
@@ -78,44 +69,70 @@ void qm35_bypass_event_cb(void *data, struct sk_buff *skb)
 }
 
 /**
- * qm35_bypass_set_expected() - Update expected_type and associated transport handler.
+ * qm35_bypass_set_expected() - Associated bypass channel to packet type.
  * @hnd: The bypass channel handle to configure.
- * @expected: The new expected packets type to handle.
+ * @expected: The new expected packet type to handle.
  *
- * This function is called when the /dev/uciX special file is opened or ioctl called.
+ * This function is called by qm35_bypass_open() or qm35_bypass_control() by
+ * the client (``/dev/uciX``).
+ *
+ * It install the qm35_bypass_event_cb() transport handler for the specified
+ * packet type. This may fail if this expected message type is already
+ * registered by another bypass channel.
+ *
+ * If registration of packet type handler has failed, the bypass channel is
+ * not bound to any message type.
  *
  * Context: User context.
+ * Return: Zero on success else a negative error.
  */
-static void qm35_bypass_set_expected(qm35_bypass_handle hnd,
-				     enum qm35_transport_msg_type expected)
+static int qm35_bypass_set_expected(qm35_bypass_handle hnd,
+				    enum qm35_transport_msg_type expected)
 {
-	struct qm35 *qm35 = container_of(hnd, struct qm35, bypass_data.chan);
+	struct qm35 *qm35 = container_of(hnd->bypass, struct qm35, bypass_data);
+	enum qm35_transport_msg_type cur;
+	int rc;
 
 	if (expected == hnd->expected_type)
-		return;
-	if (hnd->expected_type != QM35_TRANSPORT_MSG_MAX) {
-		/* Remove previous type handler. */
-		qm35_transport_unregister(qm35, hnd->expected_type,
-					  QM35_TRANSPORT_PRIO_HIGH,
+		return 0;
+	if (qm35_bypass_bound(hnd, &cur)) {
+		/* Remove previous type handler (cannot fail). */
+		qm35_transport_unregister(qm35, cur, QM35_TRANSPORT_PRIO_HIGH,
 					  qm35_bypass_event_cb);
+		hnd->expected_type = QM35_TRANSPORT_MSG_MAX;
 	}
-	/* Install handler for current expected type. */
-	qm35_transport_register(qm35, expected, QM35_TRANSPORT_PRIO_HIGH,
-				qm35_bypass_event_cb, hnd);
-	/* Save new expected type. */
-	hnd->expected_type = expected;
+	/* Install handler for current expected type. May fail if this expected
+	 * message type is already registered by another bypass channel. */
+	rc = qm35_transport_register(qm35, expected, QM35_TRANSPORT_PRIO_HIGH,
+				     qm35_bypass_event_cb, hnd);
+	if (!rc)
+		/* Save new expected type. */
+		hnd->expected_type = expected;
+	return rc;
 }
 
-static int qm35_bypass_cleanup_hnd(qm35_bypass_handle hnd)
+/**
+ * qm35_bypass_cleanup() - Cleanup a bypass channel.
+ * @hnd: The bypass channel handle to configure.
+ *
+ * This function free any resources associated to this bypass channel. This
+ * includes all unread packets stored in the list and the given @hnd.
+ *
+ * This function also ensures the qm35_bypass_event_cb() transport handler for
+ * the expected packet type is unregistered correctly.
+ *
+ * Return: Number of freed unread skb or zero if none.
+ */
+static int qm35_bypass_cleanup(qm35_bypass_handle hnd)
 {
-	struct qm35 *qm35 = container_of(hnd, struct qm35, bypass_data.chan);
+	struct qm35 *qm35 = container_of(hnd->bypass, struct qm35, bypass_data);
+	enum qm35_transport_msg_type cur;
 	struct sk_buff *p, *n;
 	int rc = 0;
 
 	/* Remove previous registered handler. */
-	if (hnd->expected_type != QM35_TRANSPORT_MSG_MAX) {
-		qm35_transport_unregister(qm35, hnd->expected_type,
-					  QM35_TRANSPORT_PRIO_HIGH,
+	if (qm35_bypass_bound(hnd, &cur)) {
+		qm35_transport_unregister(qm35, cur, QM35_TRANSPORT_PRIO_HIGH,
 					  qm35_bypass_event_cb);
 	}
 	/* Free all remaining packet in list. */
@@ -126,21 +143,7 @@ static int qm35_bypass_cleanup_hnd(qm35_bypass_handle hnd)
 	}
 	/* Reset fields. */
 	module_put(THIS_MODULE);
-	hnd->expected_type = QM35_TRANSPORT_MSG_MAX;
-	hnd->listener = NULL;
-	hnd->listener_data = NULL;
-	return rc;
-}
-
-static int qm35_bypass_cleanup(struct qm35_bypass *bypass)
-{
-	int rc;
-
-	rc = qm35_bypass_cleanup_hnd(&bypass->chan);
-
-	/* Reset fields. */
-	bypass->opened = false;
-	bypass->owner = 0;
+	kfree(hnd);
 	return rc;
 }
 
@@ -160,9 +163,6 @@ static int qm35_bypass_cleanup(struct qm35_bypass *bypass)
  * messages, all communication from other auxiliary modules which use the same
  * messages type are disabled.
  *
- * It will set ``qm35->bypass_data.opened`` to ``true`` and also reset the
- * ``qm35->bypass_data.expected_type`` to ``QM35_TRANSPORT_MSG_UCI``.
- *
  * The reference count of the module is incremented with ``try_module_get()``.
  *
  * It also calls the ``qm35_transport_start()`` to allow the transport module
@@ -177,51 +177,58 @@ qm35_bypass_handle qm35_bypass_open(struct qm35 *qm35,
 				    qm35_bypass_listener_cb cb, void *priv_data)
 {
 	struct qm35_bypass *bypass = &qm35->bypass_data;
-	qm35_bypass_handle hnd = &bypass->chan;
-	int rc = 0;
+	qm35_bypass_handle hnd;
+	int rc = -EINVAL;
 
 	trace_qm35_bypass_open(qm35, cb, priv_data);
 	if (!qm35 || !cb) {
-		rc = -EINVAL;
 		goto error;
 	}
 
-	spin_lock(&bypass->lock);
-	if (bypass->opened) {
-		rc = -EBUSY;
-		goto unlock;
+	hnd = kmalloc(sizeof(struct qm35_bypass_channel), GFP_KERNEL);
+	if (!hnd) {
+		rc = -ENOMEM;
+		goto error;
 	}
+
+	/* Setup new bypass channel handle. */
+	hnd->bypass = bypass;
+	hnd->listener = cb;
+	hnd->listener_data = priv_data;
+	spin_lock_init(&hnd->lock);
+	INIT_LIST_HEAD(&hnd->packets);
+	hnd->expected_type = QM35_TRANSPORT_MSG_MAX;
+
+	spin_lock(&bypass->lock);
+	list_add_tail(&hnd->list, &bypass->channels);
+	spin_unlock(&bypass->lock);
 
 	if (!try_module_get(THIS_MODULE)) {
 		rc = -ENOENT;
-		goto unlock;
+		goto error_free;
 	}
 
-	/* Init bypass handle (unique) */
-	spin_lock_init(&hnd->lock);
-	INIT_LIST_HEAD(&hnd->packets);
-	hnd->listener = cb;
-	hnd->listener_data = priv_data;
-	hnd->expected_type = QM35_TRANSPORT_MSG_MAX;
-	qm35_bypass_set_expected(hnd, QM35_TRANSPORT_MSG_UCI);
+	if (atomic_inc_return(&bypass->opened) == 1) {
+		/* First opening. Ensure the QM35 chip is started */
+		rc = qm35_transport_start(qm35);
+		if (rc < 0)
+			goto error_put;
+	}
 
-	bypass->owner = current->tgid;
-	bypass->opened = true; /* Must stay after set of expected */
-unlock:
+	trace_qm35_bypass_open_return(qm35, hnd);
+	return hnd;
+
+error_put:
+	module_put(THIS_MODULE);
+	atomic_dec(&bypass->opened);
+error_free:
+	spin_lock(&bypass->lock);
+	list_del(&hnd->list);
 	spin_unlock(&bypass->lock);
-	if (rc)
-		goto error;
-	/* If opened without error, ensure the QM35 chip is started */
-	rc = qm35_transport_start(qm35);
-	if (rc < 0) {
-		/* Rollback if error during start */
-		spin_lock(&bypass->lock);
-		qm35_bypass_cleanup(bypass);
-		spin_unlock(&bypass->lock);
-	}
+	kfree(hnd);
 error:
-	trace_qm35_bypass_open_return(qm35, rc);
-	return rc ? ERR_PTR(rc) : hnd;
+	trace_qm35_bypass_open_return(qm35, ERR_PTR(rc));
+	return ERR_PTR(rc);
 }
 EXPORT_SYMBOL(qm35_bypass_open);
 
@@ -265,37 +272,40 @@ EXPORT_SYMBOL(qm35_bypass_queue_check);
  * power-down the device if no other active user remains.
  *
  * Context: User context.
- * Return: Zero on success, else -EINVAL if @hnd is invalid, -EBADF if the
- * bypass channel is not opened, -EPERM if the current caller thread is not the
- * same one that opened the bypass channel.
+ * Return: Number of unread packets freed on success, else -EINVAL if @hnd is
+ *   invalid.
  */
 int qm35_bypass_close(qm35_bypass_handle hnd)
 {
-	struct qm35 *qm35 = container_of(hnd, struct qm35, bypass_data.chan);
-	struct qm35_bypass *bypass = &qm35->bypass_data;
+	struct qm35_bypass *bypass;
+	struct qm35 *qm35 = NULL;
 	int rc = -EINVAL;
 
-	trace_qm35_bypass_close(hnd ? qm35 : NULL);
+	trace_qm35_bypass_close(hnd);
 	if (IS_ERR_OR_NULL(hnd))
 		goto error;
+	bypass = hnd->bypass;
+	qm35 = container_of(bypass, struct qm35, bypass_data);
 
-	spin_lock(&bypass->lock);
-	rc = qm35_bypass_check(bypass);
-	if (rc)
-		goto unlock;
-	rc = qm35_bypass_cleanup(bypass);
-	if (rc) {
-		dev_warn(qm35->dev,
-			 "Bypass closed while %d packet(s) remain in queue!\n",
-			 rc);
-		rc = 0; /* This isn't an error. */
+	if (atomic_dec_and_test(&bypass->opened)) {
+		/* Last close. No more channel opened. Ensure the QM35 chip is
+		 * stopped. */
+		qm35_transport_stop(qm35);
 	}
-unlock:
+
+	/* Remove from list. */
+	spin_lock(&bypass->lock);
+	list_del(&hnd->list);
 	spin_unlock(&bypass->lock);
+
+	/* Cleanup the bypass channel. */
+	rc = qm35_bypass_cleanup(hnd);
 	if (rc)
-		goto error;
-	/* If closed without error, ensure the QM35 chip is stopped. */
-	qm35_transport_stop(qm35);
+		dev_warn(qm35->dev,
+			 "Bypass channel closed while %d packet(s) remain in "
+			 "queue!\n",
+			 rc);
+
 error:
 	trace_qm35_bypass_close_return(qm35, rc);
 	return rc;
@@ -323,59 +333,64 @@ EXPORT_SYMBOL(qm35_bypass_close);
  * This function is called when the /dev/uciX special file IOCTL api is used.
  *
  * Context: User context.
- * Return:
- * * Zero or positive value on success;
- * * -EINVAL if @qm35 or @param (when dereferenced by action) is NULL;
- * * -EBADF if the bypass channel is not opened;
- * * -EPERM if the current caller thread isn't authorized;
- * * -EOPNOTSUPP if unknown command.
+ * Return: Zero or positive value on success else a negative error:
+ *   * -EINVAL if @hnd or @param (when required by action) are invalid,
+ *   * -EOPNOTSUPP if unknown command.
  */
 int qm35_bypass_control(qm35_bypass_handle hnd, enum qm35_bypass_actions action,
 			long *param)
 {
-	struct qm35 *qm35 = container_of(hnd, struct qm35, bypass_data.chan);
-	struct qm35_bypass *bypass = &qm35->bypass_data;
+	struct qm35_bypass *bypass;
+	struct qm35 *qm35;
+	enum qm35_transport_msg_type cur, new;
 	int rc = -EINVAL;
 
-	trace_qm35_bypass_control(hnd ? qm35 : NULL, action, param);
+	trace_qm35_bypass_control(hnd, action, param);
 	if (IS_ERR_OR_NULL(hnd))
 		goto error;
-
-	/* Do sanity checks */
-	spin_lock(&bypass->lock);
-	rc = qm35_bypass_check(bypass);
-	spin_unlock(&bypass->lock);
-	if (rc)
-		goto error;
-
-	/* Check that param can be dereferenced. */
-	switch (action) {
-	case QM35_BYPASS_ACTION_RESET:
-	case QM35_BYPASS_ACTION_POWER:
-		if (IS_ERR_OR_NULL(param)) {
-			rc = -EINVAL;
-			goto error;
-		}
-		break;
-	default:
-		break;
-	}
+	bypass = hnd->bypass;
+	qm35 = container_of(bypass, struct qm35, bypass_data);
 
 	/* Now perform the requested action (outside critical section) */
 	switch (action) {
 	case QM35_BYPASS_ACTION_RESET:
+		if (IS_ERR_OR_NULL(param))
+			break;
 		qm35_bypass_set_expected(hnd, QM35_TRANSPORT_MSG_UCI);
 		rc = qm35_transport_reset(qm35, *param);
 		break;
 	case QM35_BYPASS_ACTION_MSG_TYPE:
-		rc = hnd->expected_type;
-		if (param)
-			qm35_bypass_set_expected(hnd, *param);
+		if (!qm35_bypass_bound(hnd, &cur))
+			cur = QM35_TRANSPORT_MSG_MAX;
+		if (param) {
+			new = *param;
+			rc = qm35_bypass_set_expected(hnd, new);
+			if (!rc)
+				rc = cur;
+		} else {
+			rc = cur;
+		}
 		break;
 	case QM35_BYPASS_ACTION_FWUPD:
 		rc = qm35_transport_fw_update(qm35, NULL, 0, (char *)param);
+		/* Reprobe device in case of success with firmware flashed. */
+		if (rc == 2) {
+			char infobuf[64];
+			/* Temporarily unregister qm35_bypass_event_cb() so
+			 * qm35_uci_probe_handle() can be set up instead. */
+			qm35_transport_unregister(qm35, hnd->expected_type,
+						  QM35_TRANSPORT_PRIO_HIGH,
+						  qm35_bypass_event_cb);
+			rc = qm35_transport_probe(qm35, infobuf, sizeof(infobuf)) ?:
+				     rc;
+			qm35_transport_register(qm35, hnd->expected_type,
+						QM35_TRANSPORT_PRIO_HIGH,
+						qm35_bypass_event_cb, hnd);
+		}
 		break;
 	case QM35_BYPASS_ACTION_POWER:
+		if (IS_ERR_OR_NULL(param))
+			break;
 		rc = qm35_transport_power(qm35, *param);
 		break;
 	default:
@@ -383,7 +398,7 @@ int qm35_bypass_control(qm35_bypass_handle hnd, enum qm35_bypass_actions action,
 		rc = -EOPNOTSUPP;
 	}
 error:
-	trace_qm35_bypass_control_return(qm35, rc);
+	trace_qm35_bypass_control_return(hnd, rc);
 	return rc;
 }
 EXPORT_SYMBOL(qm35_bypass_control);
@@ -404,32 +419,31 @@ EXPORT_SYMBOL(qm35_bypass_control);
  * to a low level transports modules.
  *
  * Context: User context.
- * Returns: Zero on success, else -EINVAL if @hnd is not valid, -EBADF if
- * the bypass channel is not opened, -EPERM if the current caller is not the
- * same one that opened the bypass channel or send callback function error
- * code.
+ * Return: Send transport callback function result else a negative error:
+ *   * -EINVAL if any parameter is not valid,
+ *   * -EBADTYPE if the bypass channel isn't bound yet to any packet type.
  */
 int qm35_bypass_send(qm35_bypass_handle hnd, void *buffer, size_t len)
 {
-	struct qm35 *qm35 = container_of(hnd, struct qm35, bypass_data.chan);
-	struct qm35_bypass *bypass = &qm35->bypass_data;
+	struct qm35_bypass *bypass;
+	struct qm35 *qm35;
 	int rc = -EINVAL;
 
-	trace_qm35_bypass_send(hnd ? qm35 : NULL);
+	trace_qm35_bypass_send(hnd);
 	if (IS_ERR_OR_NULL(hnd) || !buffer || !len)
 		goto error;
-
-	/* Do sanity checks */
-	spin_lock(&bypass->lock);
-	rc = qm35_bypass_check(bypass);
-	spin_unlock(&bypass->lock);
-	if (rc)
+	if (!qm35_bypass_bound(hnd, NULL)) {
+		rc = -EBADTYPE;
 		goto error;
+	}
+
+	bypass = hnd->bypass;
+	qm35 = container_of(bypass, struct qm35, bypass_data);
 
 	/* Checks passed, now call send transport callback. */
 	rc = qm35_transport_send_direct(qm35, hnd->expected_type, buffer, len);
 error:
-	trace_qm35_bypass_send_return(qm35, rc);
+	trace_qm35_bypass_send_return(hnd, rc);
 	return rc;
 }
 EXPORT_SYMBOL(qm35_bypass_send);
@@ -452,77 +466,63 @@ EXPORT_SYMBOL(qm35_bypass_send);
  * Context: User context.
  * Return: Received message length on success else a negative error:
  *   * -EAGAIN if no packet is available,
- *   * -EINVAL if @hnd is not valid,
- *   * -EBADF if the bypass channel is not opened,
- *   * -EPERM if the caller thread isn't permitted to call,
- *   * -EMSGSIZE if provided buffer is too small for the awaiting packet,
- *   * or recv callback function result
- *     (which may be the number of received bytes).
+ *   * -EINVAL if any parameter is not valid,
+ *   * -EFAULT if cannot copy packet to provided user buffer,
+ *   * -EBADTYPE if the bypass channel isn't bound yet to any packet type.
  */
 int qm35_bypass_recv(qm35_bypass_handle hnd, void __user *buffer, size_t len,
 		     enum qm35_transport_msg_type *type, int *flags)
 {
-	struct qm35 *qm35 = container_of(hnd, struct qm35, bypass_data.chan);
-	struct qm35_bypass *bypass = &qm35->bypass_data;
 	struct sk_buff *skb;
 	int rc = -EINVAL;
 
-	trace_qm35_bypass_recv(hnd ? qm35 : NULL);
-	if (IS_ERR_OR_NULL(hnd) || !type || !flags)
+	trace_qm35_bypass_recv(hnd);
+	if (IS_ERR_OR_NULL(hnd) || !type || !flags || !buffer || !len)
 		goto error;
-
-	/* Do sanity checks */
-	spin_lock(&bypass->lock);
-	rc = qm35_bypass_check(bypass);
-	spin_unlock(&bypass->lock);
-	if (rc)
+	if (!qm35_bypass_bound(hnd, NULL)) {
+		rc = -EBADTYPE;
 		goto error;
-
-	spin_lock(&hnd->lock);
-
-	/* Return early if nothing received. Since this function is called
-	 * after the listener had been called, we always have a packet ready
-	 * in blocking mode. In non-blocking mode, just return this error if
-	 * nothing received and don't call the transport receive callback.
-	 */
-	if (list_empty(&hnd->packets)) {
-		rc = -EAGAIN;
-		goto unlock;
 	}
 
 	/* Take next packet in the list. */
-	skb = list_first_entry(&hnd->packets, struct sk_buff, list);
-
-	*type = skb->cb[0];
-	*flags = skb->cb[1];
-
-	/* Check length of received packet (by construction, it cannot be
-	 * fragmented here). */
-	if (len > skb->len)
-		len = skb->len;
-	if (len == skb->len) {
-		/* Packet finished, early remove from the list while locked. */
-		list_del(&skb->list);
+	spin_lock(&hnd->lock);
+	skb = list_first_entry_or_null(&hnd->packets, struct sk_buff, list);
+	if (skb) {
+		/* Check length of received packet. */
+		if (len > skb->len)
+			len = skb->len;
+		/* Early remove from the list while locked if needed. */
+		if (len == skb->len)
+			list_del(&skb->list);
 	}
-
-unlock:
 	spin_unlock(&hnd->lock);
-	if (rc)
+	if (!skb) {
+		/* Return early if nothing received.
+		 * Since this function is called after the listener had been
+		 * called, we always have a packet ready in blocking mode.
+		 * In non-blocking mode, just return this error if nothing
+		 * received and don't call the transport receive callback. */
+		rc = -EAGAIN;
 		goto error;
+	}
 
 	/* Copy received frame to user-space buffer (outside lock section) */
 	if (copy_to_user(buffer, skb->data, len)) {
 		rc = -EFAULT;
 	} else {
-		skb_pull(skb, len);
-		if (!skb->len) {
-			/* Packet finished, free it. Already removed from list. */
+		/* Retrieve metadata from skb control block. */
+		*type = skb->cb[0];
+		*flags = skb->cb[1];
+		/* Update skb and free it if needed. */
+		if (skb->len == len)
 			kfree_skb(skb);
-		}
+		else
+			skb_pull(skb, len);
+		/* Returns total bytes copied to buffer. */
 		rc = len;
 	}
 error:
-	trace_qm35_bypass_recv_return(qm35, rc);
+	trace_qm35_bypass_recv_return(hnd, rc);
 	return rc;
 }
 EXPORT_SYMBOL(qm35_bypass_recv);

@@ -8,6 +8,7 @@
 #define __QM358XX_ROM_H__
 
 #define QM358XX_ROM_UUID_LEN 0x10
+#define QM358XX_ROM_GIT_VERSION_LEN 8
 
 /* Life cycle state definitions. */
 #define LCS_TEST (0x00) /* Previously: CC_BSV_CHIP_MANUFACTURE_LCS */
@@ -31,6 +32,7 @@ struct qm358xx_soc_infos {
 	uint8_t sec_ver_icv;
 	uint8_t sec_ver_oem;
 	uint8_t enc_l2_lock;
+	uint8_t git_version[QM358XX_ROM_GIT_VERSION_LEN];
 };
 
 int qm358xx_rom_gen_secrets(struct qmrom_handle *handle);

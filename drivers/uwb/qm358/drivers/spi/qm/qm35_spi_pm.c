@@ -42,8 +42,6 @@ static int qm35_power_supply_one(struct regulator *regulator, bool on)
 {
 	int rc;
 
-	if (!regulator)
-		return 0;
 	if (on)
 		rc = regulator_enable(regulator);
 	else
@@ -72,10 +70,10 @@ static int qm35_spi_power_supply(struct qm35_spi *qmspi, bool on)
 {
 	struct qm35_regulators *power = &qmspi->regulators;
 	struct device *dev = qmspi->base.dev;
-	int rc;
+	int i, rc;
 
 	/* Early return if no regulator defined */
-	if (!power->v1p8 && !power->v2p5 && !power->vdd)
+	if (!power->vdd[0])
 		return 0;
 	/* Early return if no action required */
 	if (on) {
@@ -85,25 +83,18 @@ static int qm35_spi_power_supply(struct qm35_spi *qmspi, bool on)
 		if (!atomic_dec_and_test(&power->enabled))
 			return 0;
 	}
-	dev_warn(dev, "Power-%s QM35 device\n", on ? "on" : "off");
+	dev_dbg(dev, "Power-%s QM35 device\n", on ? "on" : "off");
 	/* Change defined regulators state */
-	rc = qm35_power_supply_one(power->v1p8, on);
-	if (rc < 0) {
-		dev_err(dev, "Regulator %s failed for v1p8 (%d)\n",
-			on ? "enable" : "disable", rc);
-		return rc;
-	}
-	rc = qm35_power_supply_one(power->v2p5, on);
-	if (rc < 0) {
-		dev_err(dev, "Regulator %s failed for v2p5 (%d)\n",
-			on ? "enable" : "disable", rc);
-		return rc;
-	}
-	rc = qm35_power_supply_one(power->vdd, on);
-	if (rc < 0) {
-		dev_err(dev, "Regulator %s failed for vdd (%d)\n",
-			on ? "enable" : "disable", rc);
-		return rc;
+	for (i = 0; i < QM35_MAX_REGULATORS; i++) {
+		struct regulator *reg = power->vdd[i];
+		if (!reg)
+			break;
+		rc = qm35_power_supply_one(reg, on);
+		if (rc < 0) {
+			dev_err(dev, "Regulator %s failed for vdd%d (%d)\n",
+				on ? "enable" : "disable", i, rc);
+			return rc;
+		}
 	}
 	/* Add some delay to wait regulator stable */
 	usleep_range(qm35_regulator_delay_us, qm35_regulator_delay_us + 100);
@@ -182,7 +173,19 @@ int qm35_spi_pm_remove(struct qm35_spi *qmspi)
 	trace_qm35_spi_pm_remove(qmspi);
 	dev_pm_clear_wake_irq(dev);
 	device_set_wakeup_capable(dev, false);
+
+	pm_runtime_get_sync(dev);
+	pm_runtime_put_noidle(dev);
 	pm_runtime_disable(dev);
+
+	/* As the device was resumed either by device_driver_detach() or by
+	 * pm_runtime_get_sync() just before, we need to ensure IRQ is disabled
+	 * and power supplies are down. */
+
+	/* Disable interrupts (counting) */
+	disable_irq(qmspi->spi->irq);
+	/* Power-down device */
+	qm35_spi_power_supply(qmspi, false);
 	return 0;
 }
 
@@ -273,16 +276,6 @@ static int __maybe_unused qm35_pm_runtime_suspend(struct device *dev)
 
 	trace_qm35_pm_runtime_suspend(qmspi);
 
-	/* Power-down device */
-	rc = qm35_spi_power_supply(qmspi, false);
-	if (rc < 0) {
-		dev_warn(dev, "Failure to power-off the QM35! (%d)\n", rc);
-		goto error;
-	}
-
-	/* Disable interrupts (counting) */
-	disable_irq(qmspi->spi->irq);
-
 	/* Hold reset_gpio if wanted. */
 	if (qmspi->suspend_reset) {
 		gpiod_set_value_cansleep(qmspi->reset_gpio, 1);
@@ -292,7 +285,15 @@ static int __maybe_unused qm35_pm_runtime_suspend(struct device *dev)
 			     QM35_RESET_DURATION_US + 100);
 	}
 
-error:
+	/* Disable interrupts (counting) */
+	disable_irq(qmspi->spi->irq);
+
+	/* Power-down device */
+	rc = qm35_spi_power_supply(qmspi, false);
+	if (rc < 0) {
+		dev_warn(dev, "Failure to power-off the QM35! (%d)\n", rc);
+	}
+
 	trace_qm35_pm_runtime_suspend_return(qmspi, rc);
 	return rc;
 }

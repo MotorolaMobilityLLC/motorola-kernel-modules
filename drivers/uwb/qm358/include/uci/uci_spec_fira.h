@@ -735,8 +735,8 @@ enum uci_device_configuration_parameters {
  *     Number of bursts in radar session.
  * @UCI_APPLICATION_PARAMETER_RADAR_DATA_TYPE:
  *     Type of radar data to be reported in RADAR_DATA_MESSAGE.
- * @UCI_APPLICATION_PARAMETER_ANTENNA_GROUP_NB:
- *     TX antenna group index
+ * @UCI_APPLICATION_PARAMETER_RADAR_ANTENNA_SET_ID:
+ *     Antenna set id used.
  * @UCI_APPLICATION_PARAMETER_TX_PROFILE_IDX:
  *     Index of TX profile composed of three values: level of TX_power,
  *     PLL_common and TX_ctrl
@@ -761,8 +761,8 @@ enum uci_device_configuration_parameters {
  *     Enable or disable encryption of payload data.
  * @UCI_APPLICATION_PARAMETER_ENABLE_PSDU_DUMP:
  *     Enable or disable PSDU dump.
- * @UCI_APPLICATION_PARAMETER_DL_TDOA_INTER_CLUSTER_TIME_SYNC:
- * 	   Enable/Disable the Dl-Tdoa inter-cluster time synchronization feature; An 8 bit field,
+ * @UCI_APPLICATION_PARAMETER_DL_TDOA_CROSS_CLUSTER_TIME_SYNC:
+ * 	   Enable/Disable the Dl-Tdoa cross-cluster time synchronization feature; An 8 bit field,
  *     where only bit0 is used, the rest is RFU and need to be set to 0.
  */
 enum uci_application_configuration_parameters {
@@ -876,7 +876,7 @@ enum uci_application_configuration_parameters {
 	UCI_APPLICATION_PARAMETER_RADAR_BITS_PER_SAMPLE = 0xb3,
 	UCI_APPLICATION_PARAMETER_RADAR_NUMBER_OF_BURSTS = 0xb4,
 	UCI_APPLICATION_PARAMETER_RADAR_DATA_TYPE = 0xb5,
-	UCI_APPLICATION_PARAMETER_ANTENNA_GROUP_NB = 0xb6,
+	UCI_APPLICATION_PARAMETER_RADAR_ANTENNA_SET_ID = 0xb6,
 	UCI_APPLICATION_PARAMETER_TX_PROFILE_IDX = 0xb7,
 	/* Proprietary 0xe3 - 0xff */
 	UCI_APPLICATION_PARAMETER_NB_OF_RANGE_MEASUREMENTS = 0xe3,
@@ -891,7 +891,7 @@ enum uci_application_configuration_parameters {
 	/* PSDU dump */
 	UCI_APPLICATION_PARAMETER_ENABLE_PSDU_DUMP = 0xeb,
 	/* DL-TDOA specific*/
-	UCI_APPLICATION_PARAMETER_DL_TDOA_INTER_CLUSTER_TIME_SYNC = 0xec,
+	UCI_APPLICATION_PARAMETER_DL_TDOA_CROSS_CLUSTER_TIME_SYNC = 0xec,
 };
 
 /* FIXME => To remove later */

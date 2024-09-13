@@ -76,7 +76,7 @@ TRACE_DEFINE_ENUM(HSSPI_SOC_RDY);
 TRACE_DEFINE_ENUM(HSSPI_SOC_OA);
 TRACE_DEFINE_ENUM(HSSPI_SOC_ODW);
 #define HSSPI_SOC_FLAGS_PR_ARG \
-	__print_flags(__entry->socflags & 0xF0, "|", HSSPI_SOC_FLAGS)
+	__print_flags(__entry->socflags, "|", HSSPI_SOC_FLAGS)
 
 #define HSSPI_HOST_FLAGS_ENTRY __field(u8, hostflags)
 #define HSSPI_HOST_FLAGS_ASSIGN(x) entry->hostflags = (x)

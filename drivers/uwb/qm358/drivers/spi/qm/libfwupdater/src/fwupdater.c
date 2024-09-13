@@ -8,8 +8,8 @@
 #include <stddef.h>
 #endif
 
-#include <qmrom_spi.h>
 #include <qmrom_log.h>
+#include <qmrom_spi.h>
 #include <qmrom_utils.h>
 #include <spi_rom_protocol.h>
 
@@ -33,19 +33,21 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 #ifndef __KERNEL__
-_Static_assert(MAX_CHUNK_SIZE >= CRYPTO_IMAGES_CERT_PKG_SIZE);
-_Static_assert(TRANPORT_HEADER_SIZE + MAX_CERTIFICATE_SIZE < MAX_CHUNK_SIZE);
+_Static_assert(MAX_CHUNK_SIZE >= CRYPTO_IMAGES_CERT_PKG_SIZE,
+	       "MAX_CHUNK_SIZE too small for CRYPTO_IMAGES_CERT_PKG_SIZE");
+_Static_assert(TRANPORT_HEADER_SIZE + MAX_CERTIFICATE_SIZE < MAX_CHUNK_SIZE,
+	       "MAX_CHUNK_SIZE too small for MAX_CERTIFICATE_SIZE");
 #endif
 
-#ifdef WRITE_STATS
+#ifdef CONFIG_FLASHING_STATS
 static uint64_t total_time_ns;
 static uint32_t total_bytes, total_chunks;
 static uint32_t max_write_time_ns, min_write_time_ns = ~0U;
 
-static void update_write_stats(ktime_t start_time, uint32_t chunk_size)
+static void update_write_stats(qmrom_time start_time, uint32_t chunk_size)
 {
 	uint64_t elapsed_time_ns =
-		ktime_to_ns(ktime_sub(ktime_get(), start_time));
+		qmrom_time_to_ns(qmrom_time_sub(qmrom_time_get(), start_time));
 
 	total_time_ns += elapsed_time_ns;
 	total_bytes += MAX_CHUNK_SIZE;
@@ -59,12 +61,14 @@ static void update_write_stats(ktime_t start_time, uint32_t chunk_size)
 
 static void dump_stats(void)
 {
-	LOG_WARN(
-		"Updater flashing time stats: %u bytes over %llu us (max chunk size %u, "
-		"%u chunks, write timings: mean %llu us, min %u us, max %u us)\n",
-		total_bytes, div_u64(total_time_ns, 1000), MAX_CHUNK_SIZE,
-		total_chunks, div_u64(total_time_ns, total_chunks * 1000),
-		min_write_time_ns / 1000, max_write_time_ns / 1000);
+	LOG_WARN("Updater flashing time stats: %u bytes over %" PRIu64
+		 " us (max chunk size %u, "
+		 "%u chunks, write timings: mean %" PRIu64
+		 " us, min %u us, max %u us)\n",
+		 total_bytes, qmrom_time_div(total_time_ns, 1000),
+		 MAX_CHUNK_SIZE, total_chunks,
+		 qmrom_time_div(total_time_ns, total_chunks * 1000),
+		 min_write_time_ns / 1000, max_write_time_ns / 1000);
 
 	/* Reset stats */
 	total_time_ns = 0;
@@ -245,8 +249,8 @@ static int xfer_payload_prep_next(struct qmrom_handle *handle,
 {
 	int rc = 0, nb_retry = CONFIG_NB_RETRIES;
 	CKSUM_TYPE *cksum = (CKSUM_TYPE *)(hstc + 1);
-#ifdef WRITE_STATS
-	ktime_t start_time;
+#ifdef CONFIG_FLASHING_STATS
+	qmrom_time start_time;
 #endif
 
 	do {
@@ -264,8 +268,8 @@ static int xfer_payload_prep_next(struct qmrom_handle *handle,
 
 		/* Send the payload */
 		sstc->all = 0;
-#ifdef WRITE_STATS
-		start_time = ktime_get();
+#ifdef CONFIG_FLASHING_STATS
+		start_time = qmrom_time_get();
 #endif
 		rc = qmrom_spi_transfer_delay(handle->spi_handle, (char *)sstc,
 					      (const char *)hstc,
@@ -282,7 +286,7 @@ static int xfer_payload_prep_next(struct qmrom_handle *handle,
 		/* Wait for the QM to be ready before sending the poll */
 		ss_irq_rc = qmrom_spi_wait_for_irq_line(
 			handle->ss_irq_handle, WAIT_SS_IRQ_CHUNK_TIMEOUT);
-#ifdef WRITE_STATS
+#ifdef CONFIG_FLASHING_STATS
 		update_write_stats(start_time, hstc->len - CKSUM_SIZE);
 #endif
 		if (ss_irq_rc) {
@@ -394,7 +398,7 @@ static int send_data_chunks(struct qmrom_handle *handle, const char *data,
 	rc = xfer_payload(handle, "data chunk", hstc_current, sstc);
 
 exit:
-#ifdef WRITE_STATS
+#ifdef CONFIG_FLASHING_STATS
 	dump_stats();
 #endif
 

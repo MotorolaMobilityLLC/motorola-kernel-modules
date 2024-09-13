@@ -4,10 +4,10 @@
  *
  */
 
-#include <qmrom_utils.h>
+#include <qmrom.h>
 #include <qmrom_log.h>
 #include <qmrom_spi.h>
-#include <qmrom.h>
+#include <qmrom_utils.h>
 #include <spi_rom_protocol.h>
 
 #include <qm357xx_fwpkg.h>
@@ -15,22 +15,22 @@
 int qm357xx_rom_flash_dbg_cert(struct qmrom_handle *handle,
 			       struct firmware *dbg_cert)
 {
-	if (!handle->qm35xxx_rom_ops.flash_debug_cert) {
-		LOG_ERR("%s: flash debug certificate not support on this device\n",
+	if (!handle->rom_ops.flash_debug_cert) {
+		LOG_ERR("%s: flash debug certificate not supported on this device\n",
 			__func__);
 		return -EINVAL;
 	}
-	return handle->qm35xxx_rom_ops.flash_debug_cert(handle, dbg_cert);
+	return handle->rom_ops.flash_debug_cert(handle, dbg_cert);
 }
 
 int qm357xx_rom_erase_dbg_cert(struct qmrom_handle *handle)
 {
-	if (!handle->qm35xxx_rom_ops.erase_debug_cert) {
-		LOG_ERR("%s: erase debug certificate not support on this device\n",
+	if (!handle->rom_ops.erase_debug_cert) {
+		LOG_ERR("%s: erase debug certificate not supported on this device\n",
 			__func__);
 		return -EINVAL;
 	}
-	return handle->qm35xxx_rom_ops.erase_debug_cert(handle);
+	return handle->rom_ops.erase_debug_cert(handle);
 }
 
 int qm357xx_rom_flash_fw(struct qmrom_handle *handle, const struct firmware *fw,
@@ -65,12 +65,12 @@ int qm357xx_rom_flash_fw(struct qmrom_handle *handle, const struct firmware *fw,
 int qm357xx_rom_flash_unstitched_fw(struct qmrom_handle *handle,
 				    const struct unstitched_firmware *fw)
 {
-	if (!handle->qm35xxx_rom_ops.flash_unstitched_fw) {
+	if (!handle->rom_ops.flash_unstitched_fw) {
 		LOG_ERR("%s: flash un-stitched firmware not supported on this device\n",
 			__func__);
 		return -EINVAL;
 	}
-	return handle->qm35xxx_rom_ops.flash_unstitched_fw(handle, fw);
+	return handle->rom_ops.flash_unstitched_fw(handle, fw);
 }
 
 int qm357xx_rom_unstitch_fw(const struct firmware *fw,

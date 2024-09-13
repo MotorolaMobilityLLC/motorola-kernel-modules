@@ -25,12 +25,13 @@
 
 #include <linux/types.h>
 #include <linux/spinlock_types.h>
+#include <linux/kernel.h>
 
 #include "qm35_transport.h"
 
 /**
  * enum qm35_bypass_events - Bypass event types.
- * @QM35_BYPASS_IRQ: A QM35 interruption occured.
+ * @QM35_BYPASS_IRQ: A QM35 interruption occurred.
  * @QM35_BYPASS_NOTIFICATION: Notification event from the low level device.
  * @QM35_BYPASS_RESPONSE: Response event from the low level device.
  * @QM35_BYPASS_MAX: Count of event types.
@@ -70,6 +71,8 @@ typedef int (*qm35_bypass_listener_cb)(void *data,
 
 /**
  * struct qm35_bypass_channel - Bypass channel structure.
+ * @bypass: Back-pointer to associated struct qm35_bypass.
+ * @list: List of opened bypass channels.
  * @listener: Callback function called on bypass event.
  * @listener_data: Argument passed to @listener.
  * @expected_type: Type of received packet to forward to bypass channel.
@@ -77,6 +80,8 @@ typedef int (*qm35_bypass_listener_cb)(void *data,
  * @lock: Lock to protect packets list.
  */
 struct qm35_bypass_channel {
+	struct qm35_bypass *bypass;
+	struct list_head list;
 	qm35_bypass_listener_cb listener;
 	void *listener_data;
 	enum qm35_transport_msg_type expected_type;
@@ -94,16 +99,33 @@ typedef struct qm35_bypass_channel *qm35_bypass_handle;
 /**
  * struct qm35_bypass - Bypass data structure.
  * @lock: Lock to protect open and close operations.
- * @opened: Bypass opened flag.
- * @owner: The thread group that opened the bypass channel.
- * @chan: Single bypass channel instance.
+ * @channels: List of opened channels.
+ * @opened: Number of opened channels.
  */
 struct qm35_bypass {
 	spinlock_t lock;
-	bool opened;
-	pid_t owner;
-	struct qm35_bypass_channel chan;
+	struct list_head channels;
+	atomic_t opened;
 };
+
+/**
+ * qm35_bypass_bound() - Check bound status of the bypass channel.
+ * @hnd: The bypass channel handle to check.
+ * @out: Optional pointer to buffer to write current expected packet type.
+ *
+ * Return: True if the bypass channel is bound to a transport packet type,
+ *  else false.
+ */
+static inline int qm35_bypass_bound(qm35_bypass_handle hnd,
+				    enum qm35_transport_msg_type *out)
+{
+	if (hnd->expected_type != QM35_TRANSPORT_MSG_MAX) {
+		if (out)
+			*out = hnd->expected_type;
+		return true;
+	}
+	return false;
+}
 
 qm35_bypass_handle qm35_bypass_open(struct qm35 *qm35,
 				    qm35_bypass_listener_cb cb,
@@ -119,13 +141,14 @@ int qm35_bypass_control(qm35_bypass_handle hnd, enum qm35_bypass_actions action,
 
 #ifdef QM35_BYPASS_TESTS
 #include "mocks/ku_base.h"
+#define KU_NO_KZALLOC_MOCK
+#include "mocks/ku_alloc_free.h"
 #define KU_NO_ALLOC_SKB_MOCK
 #include "mocks/ku_alloc_free_skb.h"
 #define KU_NO_COPY_FROM_USER_MOCK
 #include "mocks/ku_copy_user.h"
 #include "mocks/ku_module_get_put.h"
 #define KU_NO_SEND_MOCK
-#define KU_NO_PROBE_MOCK
 #include "mocks/ku_transport.h"
 
 /* Ensure modified functions aren't exported! */

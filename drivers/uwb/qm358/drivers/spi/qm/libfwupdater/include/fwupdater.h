@@ -8,14 +8,14 @@
 #define __FWUPDATER_H__
 
 #ifndef __KERNEL__
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 #else
 #include <linux/types.h>
 #endif
 
-#include <qmrom.h>
 #include <qm357xx_fwpkg.h>
+#include <qmrom.h>
 
 #ifndef CONFIG_NB_RETRIES
 #define CONFIG_NB_RETRIES 10

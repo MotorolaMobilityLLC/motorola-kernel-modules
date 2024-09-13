@@ -5,8 +5,8 @@
  */
 
 #include <qmrom.h>
-#include <qmrom_spi.h>
 #include <qmrom_log.h>
+#include <qmrom_spi.h>
 #include <qmrom_utils.h>
 #include <spi_rom_protocol.h>
 
@@ -19,10 +19,6 @@
 
 #ifndef CONFIG_CHUNK_FLASHING_RETRIES
 #define CONFIG_CHUNK_FLASHING_RETRIES 10
-#endif
-
-#ifdef C0_WRITE_STATS
-#include <linux/ktime.h>
 #endif
 
 enum C0_CMD {
@@ -105,9 +101,10 @@ int qm357xx_rom_c0_probe_device(struct qmrom_handle *handle)
 		return rc;
 
 	handle->chip_rev =
-		SSTC2UINT16(handle, CHIP_VERSION_CHIP_REV_PAYLOAD_OFFSET) &
-		0xFF;
-	handle->device_version = bswap_16(
+		be16toh(SSTC2UINT16(handle,
+				    CHIP_VERSION_CHIP_REV_PAYLOAD_OFFSET)) >>
+		8;
+	handle->device_version = be16toh(
 		SSTC2UINT16(handle, CHIP_VERSION_DEV_REV_PAYLOAD_OFFSET));
 	if ((handle->chip_rev != CHIP_REVISION_C0) &&
 	    ((handle->chip_rev != CHIP_REVISION_C2))) {
@@ -147,25 +144,23 @@ int qm357xx_rom_c0_probe_device(struct qmrom_handle *handle)
 	/* Set device type */
 	handle->dev_gen = DEVICE_GEN_QM357XX;
 	/* Set rom ops */
-	handle->qm35xxx_rom_ops.flash_unstitched_fw =
+	handle->rom_ops.flash_unstitched_fw =
 		qm357xx_rom_c0_flash_unstitched_fw;
-	handle->qm35xxx_rom_ops.flash_debug_cert =
-		qm357xx_rom_c0_flash_debug_cert;
-	handle->qm35xxx_rom_ops.erase_debug_cert =
-		qm357xx_rom_c0_erase_debug_cert;
+	handle->rom_ops.flash_debug_cert = qm357xx_rom_c0_flash_debug_cert;
+	handle->rom_ops.erase_debug_cert = qm357xx_rom_c0_erase_debug_cert;
 
 	return 0;
 }
 
-#ifdef C0_WRITE_STATS
+#ifdef CONFIG_FLASHING_STATS
 static uint64_t total_time_ns;
 static uint32_t total_bytes, total_chunks;
 static uint32_t max_write_time_ns, min_write_time_ns = ~0U;
 
-static void update_write_stats(ktime_t start_time, uint32_t chunk_size)
+static void update_write_stats(qmrom_time start_time, uint32_t chunk_size)
 {
 	uint64_t elapsed_time_ns =
-		ktime_to_ns(ktime_sub(ktime_get(), start_time));
+		qmrom_time_to_ns(qmrom_time_sub(qmrom_time_get(), start_time));
 
 	total_time_ns += elapsed_time_ns;
 	total_bytes += CHUNK_SIZE_C0;
@@ -179,12 +174,14 @@ static void update_write_stats(ktime_t start_time, uint32_t chunk_size)
 
 static void dump_stats(void)
 {
-	LOG_WARN(
-		"Flashing time stats: %u bytes over %llu us (max chunk size %u, "
-		"%u chunks, write timings: mean %llu us, min %u us, max %u us)\n",
-		total_bytes, div_u64(total_time_ns, 1000), CHUNK_SIZE_C0,
-		total_chunks, div_u64(total_time_ns, total_chunks * 1000),
-		min_write_time_ns / 1000, max_write_time_ns / 1000);
+	LOG_WARN("Flashing time stats: %u bytes over %" PRIu64
+		 " us (max chunk size %u, "
+		 "%u chunks, write timings: mean %" PRIu64
+		 " us, min %u us, max %u us)\n",
+		 total_bytes, qmrom_time_div(total_time_ns, 1000),
+		 CHUNK_SIZE_C0, total_chunks,
+		 qmrom_time_div(total_time_ns, total_chunks * 1000),
+		 min_write_time_ns / 1000, max_write_time_ns / 1000);
 
 	/* Reset stats */
 	total_time_ns = 0;
@@ -199,10 +196,11 @@ static int qm357xx_rom_c0_flash_data(struct qmrom_handle *handle,
 				     struct firmware *fw, uint8_t cmd,
 				     uint8_t resp, bool skip_last_check)
 {
-	int rc, sent = 0, nb_poll_retry, chunk = 0;
+	int rc, nb_poll_retry, chunk = 0;
+	size_t sent = 0;
 	const char *bin_data = (const char *)fw->data;
-#ifdef C0_WRITE_STATS
-	ktime_t start_time;
+#ifdef CONFIG_FLASHING_STATS
+	qmrom_time start_time;
 #endif
 
 	while (sent < fw->size) {
@@ -212,8 +210,8 @@ static int qm357xx_rom_c0_flash_data(struct qmrom_handle *handle,
 
 		LOG_DBG("%s: sending command %#x with %" PRIu32 " bytes\n",
 			__func__, cmd, tx_bytes);
-#ifdef C0_WRITE_STATS
-		start_time = ktime_get();
+#ifdef CONFIG_FLASHING_STATS
+		start_time = qmrom_time_get();
 #endif
 		rc = qmrom_write_size_cmd32(handle, cmd, tx_bytes, bin_data);
 		if (rc)
@@ -237,7 +235,7 @@ static int qm357xx_rom_c0_flash_data(struct qmrom_handle *handle,
 						    bin_data - tx_bytes);
 			qmrom_poll_cmd_resp(handle);
 		}
-#ifdef C0_WRITE_STATS
+#ifdef CONFIG_FLASHING_STATS
 		update_write_stats(start_time, tx_bytes);
 #endif
 		if (handle->sstc->payload[0] != resp) {
@@ -339,7 +337,7 @@ qm357xx_rom_c0_flash_unstitched_fw(struct qmrom_handle *handle,
 				       ROM_CMD_C0_SEC_IMAGE_DATA,
 				       WAITING_FOR_SEC_FILE_DATA, true);
 
-#ifdef C0_WRITE_STATS
+#ifdef CONFIG_FLASHING_STATS
 	dump_stats();
 #endif
 

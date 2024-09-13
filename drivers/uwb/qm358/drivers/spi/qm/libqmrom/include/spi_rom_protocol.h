@@ -10,8 +10,8 @@
 #ifndef __SPI_ROM_PROTOCOL_H__
 #define __SPI_ROM_PROTOCOL_H__
 
-#include <qmrom_error.h>
 #include <qmrom.h>
+#include <qmrom_error.h>
 
 #ifndef __KERNEL__
 #include <stdint.h>
@@ -20,7 +20,7 @@
 #endif
 
 #ifndef CONFIG_SPI_RST_LOW_DELAY_MS
-#define CONFIG_SPI_RST_LOW_DELAY_MS 80
+#define CONFIG_SPI_RST_LOW_DELAY_MS 120
 #endif
 
 #define SPI_PROTO_WRONG_RESP SPI_PROTO_ERR_BASE - 1
