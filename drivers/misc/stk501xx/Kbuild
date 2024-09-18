@@ -19,7 +19,7 @@ ifneq (,$(filter river%,$(TARGET_PRODUCT)))
     EXTRA_CFLAGS += -DCONFIG_CAPSENSE_USB_CAL
 endif
 
-KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 
 obj-m := stk501xx_sar.o
 stk501xx_sar-objs := stk501xx.o stk501xx_qualcomm.o stk_common.o
