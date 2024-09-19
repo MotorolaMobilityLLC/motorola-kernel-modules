@@ -464,6 +464,7 @@ static int fts_mmi_pre_resume(struct device *dev)
 	GET_TS_DATA(dev);
 	FTS_FUNC_ENTER();
 
+	ts_data->suspended = false;
 	fts_release_all_finger();
 
 	FTS_FUNC_EXIT();
@@ -528,7 +529,6 @@ static int fts_mmi_post_resume(struct device *dev)
 	mutex_unlock(&ts_data->mode_lock);
 
 	FTS_FUNC_EXIT();
-	ts_data->suspended = false;
 
 	return 0;
 }
@@ -540,6 +540,7 @@ static int fts_mmi_pre_suspend(struct device *dev)
 	GET_TS_DATA(dev);
 
 	FTS_FUNC_ENTER();
+	ts_data->suspended = true;
 
 #if FTS_ESDCHECK_EN
 	FTS_INFO("fts_esdcheck_suspend");
@@ -564,7 +565,6 @@ static int fts_mmi_post_suspend(struct device *dev)
 
 	fts_release_all_finger();
 
-	ts_data->suspended = true;
 
 	if (pdata->stowed_mode_ctrl && ts_data->get_mode.stowed && (ts_data->power_disabled == false)) {
 		mutex_lock(&ts_data->mode_lock);
