@@ -93,6 +93,8 @@
 #define FTS_TOUCH_OFF_YL                    6
 #define FTS_TOUCH_OFF_PRE                   7
 #define FTS_TOUCH_OFF_AREA                  8
+#define FTS_TOUCH_HIRES_X                   4
+#define FTS_HI_RES_X_MAX                    16
 #endif
 #define FTS_TOUCH_X_H_POS                   3
 #define FTS_TOUCH_X_L_POS                   4
