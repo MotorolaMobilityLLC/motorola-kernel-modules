@@ -1090,6 +1090,7 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 			atomic_read(&core_data->pm_resume), msecs_to_jiffies(700));
 		if (!ret) {
 			ts_err("system can't finish resuming procedure.");
+			enable_irq(core_data->irq);
 			return IRQ_HANDLED;
 		}
 	}
