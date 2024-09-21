@@ -566,6 +566,7 @@ extern unsigned long fetch_nr_zram_total(void);
 extern int swapd_init(struct zram *zram);
 extern void swapd_exit(void);
 extern bool hybridswap_swapd_enabled(void);
+extern unsigned long fetch_totalreserve_pages(void);
 #else
 static inline bool hybridswap_swapd_enabled(void) { return false; }
 #endif
