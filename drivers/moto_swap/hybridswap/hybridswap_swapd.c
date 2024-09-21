@@ -208,6 +208,8 @@ static ssize_t usable_mem_params_write(struct kernfs_open_file *of,
 	else
 		atomic_set(&refresh_daemoninit_flag, 1);
 
+	fetch_totalreserve_pages(); // update totalreserve_pages
+
 	wake_all_swapd();
 
 	return nbytes;
@@ -679,7 +681,7 @@ static int memcg_active_app_info_list_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-static unsigned long fetch_totalreserve_pages(void)
+unsigned long fetch_totalreserve_pages(void)
 {
 	int nid;
 	unsigned long val = 0;
@@ -690,6 +692,10 @@ static unsigned long fetch_totalreserve_pages(void)
 		if (pgdat)
 			val += pgdat->totalreserve_pages;
 	}
+
+	// limit the totalreserve_pages.
+	if (val > 25000)
+		val = 25000;
 
 	return val;
 }
