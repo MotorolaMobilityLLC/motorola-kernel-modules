@@ -49,6 +49,10 @@
 #define ENTRY_DATA_BIT		(ENTRY_PTR_SHIFT + ENTRY_MCG_SHIFT_HALF + \
 		ENTRY_MCG_SHIFT_HALF + 1)
 
+#if IS_ENABLED(CONFIG_SPRD_UNISOC_MANUFACTURER_MODULE)
+#define MAX_FAULT_OUT_TIMEOUT 60*1000 //60s
+#endif
+
 struct zs_eswap_para {
 	struct hybridswap_page_pool *pool;
 	size_t alloc_size;
@@ -774,8 +778,13 @@ static void hybridswap_wait_io_finish(struct hybridswap_io_req *req)
 
 	if (req->io_para.class == HYB_FAULT_OUT) {
 		hybp(HYB_DEBUG, "fault out wait finish start\n");
-		wait_for_completion_io_timeout(&req->io_end_flag,
-				MAX_SCHEDULE_TIMEOUT);
+		if (!wait_for_completion_io_timeout(&req->io_end_flag,
+#if IS_ENABLED(CONFIG_SPRD_UNISOC_MANUFACTURER_MODULE)
+				msecs_to_jiffies(MAX_FAULT_OUT_TIMEOUT)))
+#else
+				MAX_SCHEDULE_TIMEOUT))
+#endif
+			hybp(HYB_ERR, "fault out io submit timeout");
 
 		return;
 	}
