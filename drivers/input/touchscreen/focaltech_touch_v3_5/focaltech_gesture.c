@@ -405,9 +405,9 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *touch_buf)
     /* save point data,max:6 */
     for (i = 0; i < FTS_GESTURE_POINTS_MAX; i++) {
         index = 4 * i + 4;
-        gesture->coordinate_x[i] = (u16)(((buf[0 + index] & 0x0F) << 8)
+        gesture->coordinate_x[i] = (u16)(((buf[0 + index] & 0xFF) << 8)
                                          + buf[1 + index]);
-        gesture->coordinate_y[i] = (u16)(((buf[2 + index] & 0x0F) << 8)
+        gesture->coordinate_y[i] = (u16)(((buf[2 + index] & 0xFF) << 8)
                                          + buf[3 + index]);
     }
 

@@ -19,7 +19,7 @@
 #define MAX_ATTRS_ENTRIES 10
 
 #define FTS_CMD_SAMPLE_SWITCH             0x8A
-#define FTS_REG_POCKET_MODE_EN            0x8B
+#define FTS_REG_POCKET_MODE_EN            0x9A
 #define FTS_CMD_REPORT_RATE_ADDR          0x8E
 
 #define FTS_ACTIVE_LAST_TIME              10
@@ -160,7 +160,7 @@ static ssize_t fts_stowed_store(struct device *dev,
 		goto exit;
 	}
 
-	if ((ts_data->power_disabled == false) && (ts_data->suspended == true)) {
+	if ((ts_data->power_disabled == false) && (atomic_read(&ts_data->post_suspended) == 1)) {
 		if (mode)
 			ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_STANDBY);
 		else
@@ -170,7 +170,8 @@ static ssize_t fts_stowed_store(struct device *dev,
 			goto exit;
 		}
 	} else {
-		FTS_INFO("Skip stowed mode setting suspended:%d, power_disabled:%d.\n", ts_data->suspended, ts_data->power_disabled);
+		FTS_INFO("Skip stowed mode setting post_suspended:%d, power_disabled:%d.\n",
+				atomic_read(&ts_data->post_suspended), ts_data->power_disabled);
 		ret = size;
 		goto exit;
 	}
@@ -362,40 +363,19 @@ static int fts_mmi_charger_mode(struct device *dev, int mode)
 {
 	struct fts_ts_data *ts_data;
 	int ret = 0;
-	uint8_t read_data = 0;
 
 	GET_TS_DATA(dev);
 	mutex_lock(&ts_data->mode_lock);
 
-	ret = fts_read_reg(FTS_REG_CHARGER_MODE_EN, &read_data);
-	if (ret < 0) {
-		FTS_ERROR("read 8b register fail, ret=%d", ret);
+	ret = fts_write_reg(FTS_REG_CHARGER_MODE_EN, mode);
+	if(ret < 0){
+		FTS_ERROR("Failed to set charger mode\n");
 		mutex_unlock(&ts_data->mode_lock);
 		return -EINVAL;
 	}
 
-	if (ts_data->pdata->pocket_mode_ctrl) {
-		read_data |= (!!mode);
-		ret = fts_write_reg(FTS_REG_CHARGER_MODE_EN, read_data);
-		if(ret < 0){
-			FTS_ERROR("Failed to set charger mode\n");
-			mutex_unlock(&ts_data->mode_lock);
-			return -EINVAL;
-		}
-
-		FTS_INFO("Success to %s charger mode, 0x8B = 0x%02x\n", mode ? "Enable" : "Disable",
-			read_data);
-	} else {
-		ret = fts_write_reg(FTS_REG_CHARGER_MODE_EN, mode);
-		if(ret < 0){
-			FTS_ERROR("Failed to set charger mode\n");
-			mutex_unlock(&ts_data->mode_lock);
-			return -EINVAL;
-		}
-
-		FTS_INFO("Success to %s charger mode, 0x8B = 0x%02x\n", mode ? "Enable" : "Disable",
-			mode);
-	}
+	FTS_INFO("Success to %s charger mode, 0x8B = 0x%02x\n", mode ? "Enable" : "Disable",
+		mode);
 
 	mutex_unlock(&ts_data->mode_lock);
 	return 0;
@@ -465,6 +445,7 @@ static int fts_mmi_pre_resume(struct device *dev)
 	FTS_FUNC_ENTER();
 
 	ts_data->suspended = false;
+	atomic_set(&ts_data->post_suspended, 0);
 	fts_release_all_finger();
 
 	FTS_FUNC_EXIT();
@@ -476,7 +457,6 @@ static int fts_mmi_post_resume(struct device *dev)
 	struct fts_ts_data *ts_data;
 	struct fts_ts_platform_data *pdata;
 	int ret = 0;
-	uint8_t read_data = 0;
 
 	GET_TS_DATA(dev);
 	pdata = ts_data->pdata;
@@ -499,17 +479,12 @@ static int fts_mmi_post_resume(struct device *dev)
 	memset(&ts_data->set_mode, 0 , sizeof(ts_data->set_mode));
 	/* restore data */
 	if (ts_data->pdata->pocket_mode_ctrl && ts_data->get_mode.pocket_mode) {
-		if(fts_read_reg(FTS_REG_POCKET_MODE_EN, &read_data) >= 0) {
-			read_data |= (1 << 7);
-			ret = fts_write_reg(FTS_REG_POCKET_MODE_EN, read_data);
-			if(ret < 0){
-				FTS_ERROR("Failed to set pocket mode\n");
-			} else {
-				ts_data->set_mode.pocket_mode = ts_data->get_mode.pocket_mode;
-				FTS_INFO("Success enable pocket mode, 0x8B = 0x%02x\n", read_data);
-			}
+		ret = fts_write_reg(FTS_REG_POCKET_MODE_EN, ts_data->get_mode.pocket_mode);
+		if (ret < 0) {
+			FTS_ERROR("Failed to set pocket mode\n");
 		} else {
-			FTS_ERROR("read 0x8B register fail, ret=%d", ret);
+			ts_data->set_mode.pocket_mode = ts_data->get_mode.pocket_mode;
+			FTS_INFO("Success to %s pocket mode", ts_data->get_mode.pocket_mode ? "Enable" : "Disable");
 		}
 	}
 
@@ -564,7 +539,7 @@ static int fts_mmi_post_suspend(struct device *dev)
 	FTS_FUNC_ENTER();
 
 	fts_release_all_finger();
-
+	atomic_set(&ts_data->post_suspended, 1);
 
 	if (pdata->stowed_mode_ctrl && ts_data->get_mode.stowed && (ts_data->power_disabled == false)) {
 		mutex_lock(&ts_data->mode_lock);
@@ -619,7 +594,6 @@ static ssize_t fts_mmi_pocket_mode_store(struct device *dev,
 	unsigned long value = 0;
 	int ret = 0;
 	struct fts_ts_data *ts_data;
-	uint8_t read_data = 0;
 
 	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_TS_DATA(dev);
@@ -643,7 +617,7 @@ static ssize_t fts_mmi_pocket_mode_store(struct device *dev,
 		case 0x11:
 		case 0x21:
 			dev_info(dev, "%s: touch pocket mode enable\n", __func__);
-			ts_data->get_mode.pocket_mode = 1;
+			ts_data->get_mode.pocket_mode = 2;
 			break;
 		default:
 			dev_info(dev, "%s: unsupport pocket mode type, value = %lu\n", __func__, value);
@@ -662,19 +636,7 @@ static ssize_t fts_mmi_pocket_mode_store(struct device *dev,
 		goto exit;
 	}
 
-	ret = fts_read_reg(FTS_REG_POCKET_MODE_EN, &read_data);
-	if (ret < 0) {
-		FTS_ERROR("read 8b register fail, ret=%d", ret);
-		goto exit;
-	}
-
-	if(ts_data->get_mode.pocket_mode) {
-		read_data |= (1 << 7);
-	} else {
-		read_data &= ~(1 << 7);
-	}
-
-	ret = fts_write_reg(FTS_REG_POCKET_MODE_EN, read_data);
+	ret = fts_write_reg(FTS_REG_POCKET_MODE_EN, ts_data->get_mode.pocket_mode);
 	if(ret < 0){
 		FTS_ERROR("Failed to set pocket mode\n");
 		goto exit;
@@ -683,8 +645,7 @@ static ssize_t fts_mmi_pocket_mode_store(struct device *dev,
 	ts_data->set_mode.pocket_mode = ts_data->get_mode.pocket_mode;
 	msleep(20);
 
-	FTS_INFO("Success set %d to pocket mode, 0x8B = 0x%02x\n", ts_data->set_mode.pocket_mode,
-		read_data);
+	FTS_INFO("Success set %d to pocket mode\n", ts_data->set_mode.pocket_mode);
 exit:
 	mutex_unlock(&ts_data->mode_lock);
 	FTS_FUNC_EXIT();

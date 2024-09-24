@@ -321,6 +321,7 @@ struct fts_ts_data {
 #endif
     u8 gsx_cmd;
     ktime_t last_event_time;
+    atomic_t post_suspended;
 };
 
 enum _FTS_BUS_TYPE {
