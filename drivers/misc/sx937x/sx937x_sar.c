@@ -411,10 +411,15 @@ static void read_rawData(psx93XX_t this)
 		read_dbg_raw(this);
 	}
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t capsense_reset_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t capsense_reset_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	u32 temp = 0;
 	sx937x_i2c_read_16bit(global_sx937x, SX937X_GENERAL_SETUP, &temp);
@@ -432,9 +437,15 @@ static ssize_t capsense_reset_store(struct class *class,
 }
 
 #ifdef CONFIG_CAPSENSE_HEADSET_STATE
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t capsense_headset_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t capsense_headset_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	u32 reg_temp = 0;
 	int i;
@@ -477,10 +488,15 @@ static ssize_t capsense_headset_store(struct class *class,
 	return count;
 }
 #endif
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t capsense_raw_data_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t capsense_raw_data_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	char *p = buf;
 	int csx;
@@ -505,10 +521,15 @@ static ssize_t capsense_raw_data_show(struct class *class,
 	}
 	return (p-buf);
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t sx937x_register_write_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t sx937x_register_write_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	u32 reg_address = 0, val = 0;
 	psx93XX_t this = global_sx937x;
@@ -527,9 +548,15 @@ static ssize_t sx937x_register_write_store(struct class *class,
 
 static int sx937x_temp_regist = 0;
 static u32 sx937x_temp_val = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t sx937x_register_read_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t sx937x_register_read_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	int nirq_state = 0;
 	psx93XX_t this = global_sx937x;
@@ -546,17 +573,27 @@ static ssize_t sx937x_register_read_store(struct class *class,
 	LOG_DBG("Register(0x%2x) data(0x%4x) nirq_state(%d)\n", sx937x_temp_regist, sx937x_temp_val, nirq_state);
 	return count;
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t sx937x_register_read_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t sx937x_register_read_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	return sprintf(buf, "Register(0x%2x) data(0x%4x)\n", sx937x_temp_regist, sx937x_temp_val);
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t reg_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t reg_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	u32 *p = (u32*)buf;
 #ifdef CONFIG_CAPSENSE_POWER_CONTROL_SUPPORT
@@ -585,9 +622,15 @@ static ssize_t reg_show(struct class *class,
 	0-real write,
 	1-just transfer the reg value want to be readed
 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t reg_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t reg_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	psx93XX_t this = global_sx937x;
 	u16 regaddr = 0;
@@ -621,10 +664,15 @@ static ssize_t reg_store(struct class *class,
 	}
 	return count;
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t manual_offset_calibration_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t manual_offset_calibration_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	u32 reg_value = 0;
 	psx93XX_t this = global_sx937x;
@@ -634,10 +682,15 @@ static ssize_t manual_offset_calibration_show(struct class *class,
 	return sprintf(buf, "%d\n", reg_value);
 }
 
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t manual_offset_calibration_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t manual_offset_calibration_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	unsigned long val;
 	psx93XX_t this = global_sx937x;
@@ -653,19 +706,29 @@ static ssize_t manual_offset_calibration_store(struct class *class,
 
 	return count;
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t sx937x_int_state_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t sx937x_int_state_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	psx93XX_t this = global_sx937x;
 	LOG_DBG("Reading INT line state\n");
 	return sprintf(buf, "%d\n", this->int_state);
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t sx937x_reinitialize_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t sx937x_reinitialize_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	psx93XX_t this = global_sx937x;
 
@@ -728,7 +791,9 @@ static struct class_attribute capsense_class_attributes[] = {
 
 struct class capsense_class = {
 	.name                   = "capsense",
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	.owner                  = THIS_MODULE,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
 	.class_groups           = capsense_class_groups,
 #else
@@ -1024,7 +1089,9 @@ static bool parse_flip_dt_params(struct sx937x_platform_data *pdata, struct devi
 static int sx937x_parse_dt(struct sx937x_platform_data *pdata, struct device *dev)
 {
 	struct device_node *dNode = dev->of_node;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	enum of_gpio_flags flags;
+#endif
 	int i, rc, support_panel_num;
 	const char *panel_name, *current_dsi;
 	const char *reg_group_name = "Semtech,reg-init";
@@ -1047,17 +1114,26 @@ static int sx937x_parse_dt(struct sx937x_platform_data *pdata, struct device *de
 			break;
 		case SX937X_POWER_SUPPLY_TYPE_EXTERNAL_LDO:
 			/* parse the gpio number for external LDO enable pin*/
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 			pdata->eldo_gpio = of_get_named_gpio_flags(dNode,
 					"Semtech,eldo-gpio",0,&flags);
+#else
+			pdata->eldo_gpio = of_get_named_gpio(dNode,
+					"Semtech,eldo-gpio",0);
+#endif
 			LOG_INFO("used eLDO_gpio 0x%x \n", pdata->eldo_gpio);
 			break;
 		default:
 			LOG_INFO("Error power_supply_type: 0x%x \n", pdata->power_supply_type);
 			break;
 	}
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	pdata->irq_gpio= of_get_named_gpio_flags(dNode,
 			"Semtech,nirq-gpio", 0, &flags);
+#else
+	pdata->irq_gpio= of_get_named_gpio(dNode,
+			"Semtech,nirq-gpio", 0);
+#endif
 	irq_gpio_num = pdata->irq_gpio;
 	if (pdata->irq_gpio < 0){
 		LOG_ERR("get irq_gpio error\n");
@@ -1444,7 +1520,11 @@ static void sx937x_i2c_watchdog_work(struct work_struct *work);
  * \param id pointer to i2c_device_id
  * \return Whether probe was successful
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *id)
+#else
+static int sx937x_probe(struct i2c_client *client)
+#endif
 {
 	int i = 0;
 	int err = 0;
@@ -1603,10 +1683,10 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 				LOG_ERR("Create fsys class failed (%d)\n", err);
 				return err;
 			}
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 			/*restore sys/class/capsense label*/
 			kobject_uevent(&capsense_class.p->subsys.kobj, KOBJ_CHANGE);
-
+#endif
 			/* Add Pointer to main platform data struct */
 			pDevice->hw = pplatData;
 
