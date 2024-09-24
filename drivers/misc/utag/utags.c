@@ -464,6 +464,9 @@ static int open_utags(struct blkdev *cb)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(CONFIG_MMI_UTAG_RW_BIO)
 	struct block_device *bdev = NULL;
 
+	if (cb->bdev != NULL)
+		return 0;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	bdev = blkdev_get_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb, NULL);
 #else
@@ -2079,7 +2082,7 @@ need_no_expansion:
 static int utags_dt_init(struct platform_device *pdev)
 {
 	int rc;
-	const char *path_ptr;
+	const char *path_ptr = NULL;
 	struct device_node *node = pdev->dev.of_node;
 	struct ctrl *ctrl;
 
@@ -2094,7 +2097,8 @@ static int utags_dt_init(struct platform_device *pdev)
 	rc = of_property_read_string(node, "mmi,backup-utags", &path_ptr);
 	if (rc)
 		pr_info("backup storage path not provided\n");
-	utags_bootdevice_expand(&ctrl->backup.name, path_ptr);
+	else
+		utags_bootdevice_expand(&ctrl->backup.name, path_ptr);
 
 	ctrl->dir_name = DEFAULT_ROOT;
 	rc = of_property_read_string(node, "mmi,dir-name", &ctrl->dir_name);
