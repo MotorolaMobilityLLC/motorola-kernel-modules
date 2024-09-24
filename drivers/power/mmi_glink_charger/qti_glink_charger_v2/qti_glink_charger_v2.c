@@ -101,12 +101,24 @@ struct oem_write_buf_resp_msg {
 	u32			ret_code;
 };
 
-struct lpd_info {
-	int lpd_present;
+struct usb_info {
+	int cid_st;
+	unsigned int vbus_st;
+	bool otg_st;
+	bool cc_st;
+	int partner_type;
+	int pd_active;
+	int legacy_cable;
+	int lpd_st;
 	int lpd_rsbu1;
 	int lpd_rsbu2;
-	int lpd_cid;
+	int lpd_cc1;
+	int lpd_cc2;
+	int lpd_dp;
+	int lpd_dm;
 };
+
+
 
 struct qti_charger {
 	char				*name;
@@ -128,7 +140,7 @@ struct qti_charger {
 	bool factory_mode;
 	bool factory_version;
 
-	struct lpd_info			lpd_info;
+	struct usb_info			usb_info;
 	void				*ipc_log;
 	bool				*debug_enabled;
 };
@@ -818,14 +830,23 @@ static ssize_t cid_status_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
+	int rc;
 	struct qti_charger *chg = this_chip;
+	struct usb_info usb_info = {0};
 
 	if (!chg) {
 		pr_err("QTI: chip not valid\n");
 		return -ENODEV;
 	}
+	chg->usb_info.cid_st = -1;
 
-	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", chg->lpd_info.lpd_cid);
+	rc = qti_charger_read(chg, OEM_PROP_USB_INFO,
+			&usb_info, sizeof(usb_info));
+	if (!rc) {
+		chg->usb_info = usb_info;
+	}
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", chg->usb_info.cid_st);
 }
 static DEVICE_ATTR(cid_status, S_IRUGO, cid_status_show, NULL);
 
@@ -1137,7 +1158,7 @@ static int qti_charger_init(struct qti_charger *chg)
 		mmi_err(chg, "Fail to get HW revision\n");
 	}
 
-	chg->lpd_info.lpd_cid = -1;
+	chg->usb_info.cid_st = -1;
 
 	rc = device_create_file(chg->dev,
 				&dev_attr_tcmd);

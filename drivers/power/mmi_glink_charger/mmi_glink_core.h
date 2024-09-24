@@ -92,13 +92,6 @@ struct mmi_charger_info {
 	int icm_sm_st;
 };
 
-struct mmi_lpd_info {
-	int lpd_present;
-	int lpd_rsbu1;
-	int lpd_rsbu2;
-	int lpd_cid;
-};
-
 #define MMI_VOTE_NUM_MAX 32
 struct mmi_vote {
 	const char *name;
