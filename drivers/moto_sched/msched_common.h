@@ -25,13 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#if IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
-#include <linux/sched/cputime.h>
-#include <kernel/sched/sched.h>
-#include <drivers/misc/mediatek/sched/common.h>
-#endif
-
-#define VERION 1010
+#define VERION 1011
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -127,6 +121,7 @@ struct moto_task_struct {
 
 	u64				boost_kernel_start;
 	int				boost_kernel_lock_depth;
+	char			cgr_type;
 };
 
 /* global vars and functions */
@@ -141,6 +136,7 @@ extern pid_t __read_mostly global_sysui_tgid;
 extern pid_t __read_mostly global_sf_tgid;
 extern pid_t __read_mostly global_audioapp_tgid;
 extern pid_t __read_mostly global_camera_tgid;
+extern atomic_t __read_mostly global_boost_pid;
 
 extern int task_get_origin_mvp_prio(struct task_struct *p, bool with_inherit);
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
