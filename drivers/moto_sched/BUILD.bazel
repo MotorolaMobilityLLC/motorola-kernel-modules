@@ -17,3 +17,10 @@ define_mgk_ko(
         "//kernel_device_modules-6.1:mtk_public_headers",
     ],
 )
+
+filegroup(
+    name = "sched_headers",
+    srcs = glob([
+        "*.h",
+    ]),
+)
