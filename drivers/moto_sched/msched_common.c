@@ -112,7 +112,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER|UX_TYPE_GESTURE_MONITOR))
 		prio = UX_PRIO_ANIMATOR;
 	// main & render thread of top app, launcher and top UI.
-	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI))
+	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI) || p->tgid == atomic_read(&global_boost_pid))
 		prio = UX_PRIO_TOPAPP;
 	// system lock & service mgr
 	else if (ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER))
@@ -147,6 +147,7 @@ static inline bool task_in_top_related_group(struct task_struct *p) {
 	return p->tgid == global_launcher_tgid
 			|| p->tgid == global_sysui_tgid
 			|| p->tgid == global_systemserver_tgid
+			|| p->tgid == atomic_read(&global_boost_pid)
 			|| task_in_top_app_group(p);
 }
 
