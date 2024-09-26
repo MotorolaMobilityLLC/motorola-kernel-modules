@@ -1078,7 +1078,9 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 	struct goodix_ts_esd *ts_esd = &core_data->ts_esd;
 	int ret;
 
-	disable_irq_nosync(core_data->irq);
+	if (atomic_cmpxchg(&core_data->irq_enabled, 1, 0)) {
+		disable_irq_nosync(core_data->irq);
+	}
 	ts_esd->irq_status = true;
 	core_data->irq_trig_cnt++;
 
@@ -1090,7 +1092,9 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 			atomic_read(&core_data->pm_resume), msecs_to_jiffies(700));
 		if (!ret) {
 			ts_err("system can't finish resuming procedure.");
-			enable_irq(core_data->irq);
+			if (!atomic_cmpxchg(&core_data->irq_enabled, 0, 1)) {
+				enable_irq(core_data->irq);
+			}
 			return IRQ_HANDLED;
 		}
 	}
@@ -1114,7 +1118,9 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 			goodix_ts_report_gesture(core_data, ts_event);
 	}
 
-	enable_irq(core_data->irq);
+	if (!atomic_cmpxchg(&core_data->irq_enabled, 0, 1)) {
+		enable_irq(core_data->irq);
+	}
 	return IRQ_HANDLED;
 }
 
