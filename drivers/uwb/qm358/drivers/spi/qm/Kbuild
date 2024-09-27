@@ -26,7 +26,7 @@ qm35_spi-y := \
 # Uncomment to change default debug_flags to 18 (AUTO_TRACE|NO_RESET_ON_SUSPEND)
 #CFLAGS_qm35_spi_main.o := -DDEFAULT_DEBUG_FLAGS=18
 # Uncomment to change default auto suspend delay value to 250 MS
-#CFLAGS_qm35_spi_pm.o := -DAUTOSUSPEND_DELAY_MS=250
+CFLAGS_qm35_spi_pm.o := -DAUTOSUSPEND_DELAY_MS=0
 
 CFLAGS_libqmrom/src/qm357xx_rom_c0.o := -DCONFIG_FLASHING_STATS
 CFLAGS_libqmrom/src/qm358xx_rom.o := -DCONFIG_FLASHING_STATS
