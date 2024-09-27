@@ -4541,12 +4541,10 @@ static int batt_get_prop(struct power_supply *psy,
 			val->intval = chip->last_reported_soc;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,25)
-		rc = power_supply_get_property(chip->qcom_psy,
-						       psp, val);
-#else
-		val->intval = chip->cycles / 100;
-#endif
+		if (chip->max_main_psy && chip->max_flip_psy)
+			val->intval = chip->cycles / 100;
+		else
+			rc = power_supply_get_property(chip->qcom_psy, psp, val);
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		if (chip->max_main_psy && chip->max_flip_psy)
