@@ -250,7 +250,7 @@ void moto_binder_write_status(int call_type, int caller_uid, int caller_pid, int
 	e->arg2 = arg2;
 
 #if ASYNC_REPORT_DISABLE
-	if (call_type == ASYNC_BINDER || call_type == ASYNC_ALLOC_FULL)
+	if (call_type == ASYNC_BINDER)
 		return;
 #endif
 
