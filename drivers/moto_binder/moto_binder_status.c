@@ -449,6 +449,9 @@ int proc_binder_check_status_show(struct seq_file *m, void *unused)
 {
 	struct binder_proc *proc;
 
+	if (binder_procs_lock == NULL || binder_procs == NULL)
+		return 0;
+
 	if (moto_binder_check_uid <= MIN_USERAPP_UID)
 		return 0;
 
