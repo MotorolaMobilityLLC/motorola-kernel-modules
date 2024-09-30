@@ -877,7 +877,7 @@ static void mmi_configure_charger(struct mmi_glink_chip *chip)
 		value = chip->charger_suspend;
 		if(qti_charger_set_property(OEM_PROP_CHG_SUSPEND,
 					&value,
-					sizeof(value) < 0)) {
+					sizeof(value)) < 0) {
 		    chip->charger_suspend = pre_charger_suspend;
         }
 	}
