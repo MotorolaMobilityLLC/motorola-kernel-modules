@@ -4613,7 +4613,13 @@ static int batt_set_prop(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		chip->cycles += val->intval * 100;
+		if (chip->max_main_psy && chip->max_flip_psy) {
+			chip->cycles += val->intval * 100;
+		} else {
+			rc = power_supply_set_property(chip->qcom_psy, prop, val);
+			if (rc < 0)
+				mmi_err(chip, "set cycle_count failed, rc=%d\n", rc);
+		}
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 		if (val->intval < 0) {
