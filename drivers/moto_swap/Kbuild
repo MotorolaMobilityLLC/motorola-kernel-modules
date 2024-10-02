@@ -1,16 +1,8 @@
-ifeq ($(shell expr $(KERNELVERSION) \>= 6.6), 1)
-ZRAM_SRC = zram-6.6
-else ifeq ($(shell expr $(KERNELVERSION) \>= 6.1), 1)
-ZRAM_SRC = zram-6.1
-else ifeq ($(shell expr $(KERNELVERSION) \>= 5.15), 1)
-ZRAM_SRC = zram-5.15
-else ifeq ($(shell expr $(KERNELVERSION) \>= 5.10), 1)
-ZRAM_SRC = zram-5.10
-else ifeq ($(shell expr $(KERNELVERSION) \>= 5.4), 1)
-ZRAM_SRC = zram-5.4
-endif
+ZRAM_SRC = zram-$(VERSION).$(PATCHLEVEL)
 
-ifeq ($(shell expr $(KERNELVERSION) \>= 6.1), 1)
+$(warning moto_swap - zram src folder = $(ZRAM_SRC))
+
+ifeq ($(VERSION), 6)
 EXTRA_CFLAGS += -Wframe-larger-than=4096
 endif
 
