@@ -23,8 +23,6 @@
 #include <linux/uaccess.h>
 #include "moto_binder.h"
 
-#define ASYNC_REPORT_DISABLE 1
-
 
 struct hlist_head *binder_procs = NULL;
 struct mutex *binder_procs_lock = NULL;
@@ -249,10 +247,8 @@ void moto_binder_write_status(int call_type, int caller_uid, int caller_pid, int
 	e->arg1 = arg1;
 	e->arg2 = arg2;
 
-#if ASYNC_REPORT_DISABLE
 	if (call_type == ASYNC_BINDER)
 		return;
-#endif
 
 	moto_binder_send_uevent(call_type, caller_uid, caller_pid, target_uid, target_pid, arg1, arg2);
 }
@@ -272,6 +268,9 @@ static char* binder_type_to_string(int type)
 
 	case ASYNC_ALLOC_FULL:
 		return "async_buf_full";
+
+	case PACKET_AFTER_WAKEUP:
+		return "pkt_after_wakeup";
 
 	default:
 		return "unknown";
