@@ -11,5 +11,5 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/moto_bind
 
 obj-m += moto_binder.o
 
-moto_binder-y := moto_binder_status.o moto_binder_sysfs.o moto_binder_main.o
+moto_binder-y := moto_binder_status.o moto_binder_sysfs.o moto_binder_main.o moto_binder_netfilter.o
 
