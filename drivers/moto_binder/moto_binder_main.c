@@ -191,11 +191,17 @@ int moto_binder_init(void)
 	if (ret != 0)
 		goto __uevent_err;
 
+	ret = moto_netfilter_init();
+	if (ret != 0)
+		goto __netfilter_err;
+
 	pr_info("moto binder init succeed!\n");
 	moto_binder_initialized = true;
 
 	return ret;
 
+__netfilter_err:
+	moto_binder_uevent_exit();
 __uevent_err:
 	moto_binder_status_exit();
 __status_err:
@@ -211,6 +217,7 @@ void moto_binder_exit(void)
 
 	moto_binder_status_exit();
 	moto_binder_uevent_exit();
+	moto_netfilter_deinit();
 
 	moto_binder_initialized = false;
 	pr_info("moto binder exit succeed!\n");
