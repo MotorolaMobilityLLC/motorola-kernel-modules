@@ -500,7 +500,7 @@ static void read_rawData(psx93XX_t this)
 			sx937x_i2c_read_16bit(this->bus, SX937X_OFFSET_PH0 + index*3, &uData);
 			offset = (u16)(uData & 0x3FFF);
 
-			LOG_INFO("SMTC_DBG PH= %d DIFF= %d STATE= %d PH%d_USE= %d PH%d_USE= %d PH%d_USE= %d USE= %d AVG= %d OFF= %d SMTC_END\n",
+			LOG_INFO("SMTC_DAT PH= %d DIFF= %d STATE= %d PH%d_USE= %d PH%d_USE= %d PH%d_USE= %d USE= %d AVG= %d OFF= %d SMTC_END\n",
 					csx, diff, prox_state[csx], ref_ph_a, ref_a_use,  ref_ph_b, ref_b_use, ref_ph_c, ref_c_use, useful, average, offset);
 
 			LOG_DBG("SMTC_HEX PH= %d USE= 0x%X AVG= 0x%X DIF= 0x%X PH%d_DLT= 0x%X SMTC_END\n",
