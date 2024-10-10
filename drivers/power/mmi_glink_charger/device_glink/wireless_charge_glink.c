@@ -681,7 +681,7 @@ static int wireless_charger_notify_callback(struct notifier_block *nb,
 		unsigned long event, void *data)
 {
 	struct qti_charger_notify_data *notify_data = data;
-	struct wireless_glink_dev *chg = container_of(nb, struct wireless_glink_dev, wls_nb);
+	struct wireless_glink_dev *chg = container_of(nb, struct wireless_glink_dev, wls_glink_nb);
 
 	if (notify_data->receiver != OEM_NOTIFY_RECEIVER_WLS_CHG) {
 		pr_err("Skip mis-matched receiver: %#x\n", notify_data->receiver);
@@ -765,7 +765,7 @@ static int wireless_charger_notify_callback(struct notifier_block *nb,
 
 	chip->wls_dev_psy = power_supply_get_by_name("wireless");
 	if (!chip->wls_dev_psy) {
-		pr_err("No pen power supply found\n");
+		pr_err("No wireless power supply found\n");
 		return;
 	}
 	pr_info("wireless power supply is found\n");
