@@ -544,6 +544,7 @@ static void mmi_update_charger_event(struct mmi_glink_chip *chip)
 
 	charger_rate = mmi_get_battery_charger_rate(chip);
 	power_watt = chip->charger_info.chrg_pmax_mw;
+	real_charger_type =  chip->charger_info.chrg_type;
 
 	if (max_charger_rate < charger_rate || charger_rate == MMI_POWER_SUPPLY_CHARGE_RATE_NONE)
 		max_charger_rate = charger_rate;
@@ -579,8 +580,10 @@ static void mmi_update_charger_event(struct mmi_glink_chip *chip)
 		mmi_info(chip, "charger real type is %d\n", real_charger_type);
 	}
 
-	mmi_info(chip, "mmi_changed %d, charger_rate %d\n", mmi_changed, charger_rate);
-
+	if (mmi_changed) {
+		mmi_info(chip, "charger_rate %s, vbus %d, power_watt %d, charger real type %d\n",
+			charge_rate[chip->max_charger_rate], chip->vbus_present, chip->power_watt, chip->real_charger_type);
+	}
 }
 
 #define VBUS_MIN_MV			4000
@@ -602,6 +605,11 @@ static void mmi_update_battery_status(struct mmi_glink_chip *chip)
 
 	batt_info->batt_soh = qti_batt_info.batt_soh;
 	batt_host->state_of_health = qti_batt_info.batt_soh;
+	if (chip->state_of_health != qti_batt_info.batt_soh) {
+		chip->state_of_health = qti_batt_info.batt_soh;
+		mmi_notify_charger_event(chip, NOTIFY_EVENT_TYPE_BATTERY_SOH);
+		mmi_info(chip, "state_of_health %d\n", chip->state_of_health);
+	}
 
 	ret = power_supply_get_property(batt_host->batt_psy,
 		POWER_SUPPLY_PROP_STATUS, &prop);
