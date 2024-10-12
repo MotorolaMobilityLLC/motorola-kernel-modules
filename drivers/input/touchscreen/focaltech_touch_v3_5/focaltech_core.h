@@ -322,6 +322,9 @@ struct fts_ts_data {
     u8 gsx_cmd;
     ktime_t last_event_time;
     atomic_t post_suspended;
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    bool palm_on;
+#endif
 };
 
 enum _FTS_BUS_TYPE {
