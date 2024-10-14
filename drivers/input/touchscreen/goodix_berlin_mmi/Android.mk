@@ -41,6 +41,10 @@ ifeq ($(findstring factory, $(TARGET_PRODUCT)), factory)
 	KBUILD_OPTIONS += CONFIG_TARGET_BUILD_FACROTY=y
 endif
 
+ifeq ($(BUILD_FOR_PERF_MODE),true)
+	KBUILD_OPTIONS += CONFIG_BUILD_FOR_PERF_MODE=y
+endif
+
 ifeq ($(TOUCHSCREEN_FOD),true)
 	KBUILD_OPTIONS += CONFIG_GTP_FOD=y
 	ifeq ($(ENABLE_GTP_VIRTUAL_FOD_UP),true)
