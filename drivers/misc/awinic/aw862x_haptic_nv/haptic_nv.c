@@ -35,11 +35,19 @@
 #include <sound/control.h>
 #include <sound/soc.h>
 
+#ifdef AW_UEFI_F0_CALIBRATION
+#include <linux/soc/qcom/smem.h>
+#endif
+
 #include "haptic_nv.h"
 #include "haptic_nv_reg.h"
 #include "haptic_nv_dts.h"
 
 #define HAPTIC_NV_DRIVER_VERSION	"v1.9.0"
+
+#ifdef AW_UEFI_F0_CALIBRATION
+#define	SMEM_AWINIC_PARAMS				(499)
+#endif
 
 static char aw_ram_name[][AW_NAME_MAX] = {
 	{"aw8624_haptic.bin"},
@@ -67,6 +75,29 @@ struct transient_trig_data {
 #ifdef FCNT_VIBRATION
 static unsigned int short_vib_gain = 0x80;
 static unsigned int long_vib_gain = 0x80;
+#endif
+
+#ifdef AW_UEFI_F0_CALIBRATION
+/*
+ * get uefi params data include f0 f0_cali_data and bemf_peak
+ */
+static int aw86224x_get_uefi_params_data(struct aw_haptic *aw_haptic)
+{
+	uint32_t *param_data = NULL;
+	size_t buf_size = 0;
+
+	param_data = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_AWINIC_PARAMS, &buf_size);
+	if (IS_ERR(param_data) || !buf_size) {
+		aw_err("smem_get_entry failed!!");
+		return -ERANGE;
+	}
+
+	aw_haptic->f0_cali_data = param_data[0];
+
+	aw_info("f0_cali_data = 0x%04x", aw_haptic->f0_cali_data);
+
+	return 0;
+}
 #endif
 
 /*********************************************************
@@ -3016,7 +3047,12 @@ static void haptic_init(struct aw_haptic *aw_haptic)
 		aw_haptic->f0_cali_data = aw_haptic->info.lk_f0_cali;
 		upload_lra(aw_haptic, AW_F0_CALI_LRA);
 	} else {
+#ifdef AW_UEFI_F0_CALIBRATION
+		aw86224x_get_uefi_params_data(aw_haptic);
+		upload_lra(aw_haptic, AW_F0_CALI_LRA);
+#else
 		f0_cali(aw_haptic);
+#endif
 	}
 	mutex_unlock(&aw_haptic->lock);
 

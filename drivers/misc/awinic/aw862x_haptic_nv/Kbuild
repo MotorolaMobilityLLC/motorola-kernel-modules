@@ -5,6 +5,7 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 
 ifneq (,$(filter kobe%, $(TARGET_PRODUCT)))
        EXTRA_CFLAGS += -DFCNT_VIBRATION
+       EXTRA_CFLAGS += -DAW_UEFI_F0_CALIBRATION
 endif
 
 ifneq (,$(filter kobe, $(TARGET_PRODUCT)))
