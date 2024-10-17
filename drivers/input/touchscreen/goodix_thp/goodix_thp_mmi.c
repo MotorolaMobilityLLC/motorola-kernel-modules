@@ -222,6 +222,10 @@ static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 	return 0;
 }
 
+static int goodix_ts_mmi_methods_get_vendor(struct device *dev, void *cdata) {
+	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "goodix");
+}
+
 static ssize_t goodix_ts_log_trigger_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
@@ -520,6 +524,7 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 }
 
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
+	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.charger_mode = goodix_ts_mmi_charger_mode,
 	/* vendor specific attribute group */
 	.extend_attribute_group = goodix_ts_mmi_extend_attribute_group,
