@@ -43,7 +43,7 @@ int gh_get_gpio_dts_info(struct gh_device *gh_dev)
 	  return -1;
     }
     gpio_direction_output(gh_dev->gh_vdd, 1);
-
+    msleep(500);
     /*get io resource*/
     gh_dev->gh_vdd_id = of_get_named_gpio(np,GH_POWER_VDD_IO,0);
     if(!gpio_is_valid(gh_dev->gh_vdd_id)) {
