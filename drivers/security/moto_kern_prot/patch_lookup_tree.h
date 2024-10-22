@@ -93,7 +93,7 @@ int add_branch(unsigned long *cur_code_ptr, union jump_tree_node *cur_node,
 	bool bit;
 
 	if (!cur_code_ptr || !cur_node)
-		return -EACCES;
+		return -EINVAL;
 
 	bit = JUMP_TREE_BRANCH(*cur_code_ptr);
 	*cur_code_ptr <<= 1;
@@ -117,11 +117,11 @@ int add_trunk(union jump_tree_node *cur_node, struct jump_entry *je,
 	       unsigned long cur_code_ptr, int i)
 {
 	if (!cur_node || !je)
-		return -EACCES;
+		return -EINVAL;
 
 	for (; i < sizeof(cur_code_ptr) * 8; i++) {
 		if (add_branch(&cur_code_ptr, cur_node, jet_ind))
-			return -EACCES;
+			return -EINVAL;
 		jet_extend();
 		cur_node = jet + jet_ind;
 		jet_ind++;

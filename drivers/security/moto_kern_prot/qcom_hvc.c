@@ -54,26 +54,26 @@ static void mrkp_smc(uint64_t id, uint64_t arg0, uint64_t arg1) {
 
 void mark_range_ro_smc(uint64_t start, uint64_t end, uint64_t type)
 {
-	mrkp_smc(MARK_RANGE_RO, start, end);
+	mrkp_smc(KERN_MARK_RANGE_RO_SMC_ID, start, end);
 }
 
 void add_jump_entry_lookup(uint64_t paddr, uint64_t size)
 {
-	mrkp_smc(ADD_JUMP_LABEL_LOOKUP, paddr, size);
+	mrkp_smc(KERN_ADD_JUMP_ENTRY_LOOKUP_SMC_ID, paddr, size);
 }
 
 void lock_rkp(void)
 {
-	mrkp_smc(LOCK_RKP, 0, 0);
+	mrkp_smc(KERN_LOCK_RKP_SMC_ID, 0, 0);
 }
 
 void amem_register(uint64_t paddr, uint64_t size)
 {
-	mrkp_smc(REGISTER_AMEM, paddr, size);
+	mrkp_smc(KERN_REGISTER_AMEM_SMC_ID, paddr, size);
 }
 
-
-void comm_el1_pt(uint64_t pgd) {
-	mrkp_smc(REGISTER_AMEM, __virt_to_phys(pgd), PHYS_OFFSET);
+void comm_el1_pt(uint64_t pgd)
+{
+    /* TODO: Register the contiguous memory for EL1 PT usage.*/
+	//mrkp_smc(KERN_REGISTER_AMEM_SMC_ID, __virt_to_phys(pgd), PHYS_OFFSET);
 }
-
