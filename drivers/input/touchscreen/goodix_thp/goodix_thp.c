@@ -113,9 +113,8 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
 	mutex_lock(&core_data->frame_mutex);
 	/* check for max limit */
 	if ((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head) {
-		ts_err("frame mmap buffer is full");
-		mutex_unlock(&core_data->frame_mutex);
-		return;
+		ts_err("frame mmap buffer is overlay");
+		list->head = (list->head + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT;
 	}
 
 	req_pkg = (struct driver_request_pkg *)&list->buf[list->tail * GOODIX_THP_MAX_FRAME_LEN];
@@ -619,6 +618,10 @@ static long goodix_thp_ioctl_recv_tsc_msg(unsigned long arg)
 		break;
 	case SVC_CMD_GAME_FILTER:
 		ts_info("recv game filter:%*ph", tsc_msg.len, tsc_msg.value);
+		break;
+	case SVC_CMD_UPDATE_VERSION:
+		memcpy(gdix_thp_core->ts_dev->board_data.thp_ver, tsc_msg.value, tsc_msg.len);
+		ts_info("thp_ver:%s", tsc_msg.value);
 		break;
 	default:
 		ts_err("not support svc msg:0x%02x", tsc_msg.cmd);
@@ -1756,6 +1759,162 @@ static ssize_t save_moto_data_store(struct device *dev,
 	return count;
 }
 
+static ssize_t goodix_thp_version_info(struct device *dev,
+					struct device_attribute *attr, char *buf)
+{
+	struct goodix_thp_core *cd = gdix_thp_core;
+
+	return snprintf(buf, PAGE_SIZE, "%s\n", cd->ts_dev->board_data.thp_ver);
+}
+
+/* reg read/write */
+static u32 rw_addr;
+static u32 rw_len;
+static u8 rw_flag;
+static u8 store_buf[32];
+static u8 show_buf[PAGE_SIZE];
+static ssize_t goodix_thp_reg_rw_show(struct device *dev,
+					struct device_attribute *attr, char *buf)
+{
+	struct thp_ts_device *ts_dev = gdix_thp_core->ts_dev;
+	int ret;
+
+	if (!rw_addr || !rw_len) {
+		ts_err("address(0x%x) and length(%d) can't be null",
+			rw_addr, rw_len);
+		return -EINVAL;
+	}
+
+	if (rw_flag != 1) {
+		ts_err("invalid rw flag %d, only support [1/2]", rw_flag);
+		return -EINVAL;
+	}
+
+	ret = ts_dev->hw_ops->read(ts_dev, rw_addr, show_buf, rw_len);
+	if (ret < 0) {
+		ts_err("failed read addr(%x) length(%d)", rw_addr, rw_len);
+		return snprintf(buf, PAGE_SIZE,
+			"failed read addr(%x), len(%d)\n",
+			rw_addr, rw_len);
+	}
+
+	return snprintf(buf, PAGE_SIZE, "0x%x,%d {%*ph}\n",
+		rw_addr, rw_len, rw_len, show_buf);
+}
+
+static ssize_t goodix_thp_reg_rw_store(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
+{
+    struct thp_ts_device *ts_dev = gdix_thp_core->ts_dev;
+	char *pos = NULL;
+	char *token = NULL;
+	long result = 0;
+	int i;
+
+	if (!buf || !count) {
+		ts_err("invalid parame");
+		goto err_out;
+	}
+
+	if (buf[0] == 'r') {
+		rw_flag = 1;
+	} else if (buf[0] == 'w') {
+		rw_flag = 2;
+	} else {
+		ts_err("string must start with 'r/w'");
+		goto err_out;
+	}
+
+	/* get addr */
+	pos = (char *)buf;
+	pos += 2;
+	token = strsep(&pos, ":");
+	if (!token) {
+		ts_err("invalid address info");
+		goto err_out;
+	} else {
+		if (kstrtol(token, 16, &result)) {
+			ts_err("failed get addr info");
+			goto err_out;
+		}
+		rw_addr = (u32)result;
+		ts_info("rw addr is 0x%x", rw_addr);
+	}
+
+	/* get length */
+	token = strsep(&pos, ":");
+	if (!token) {
+		ts_err("invalid length info");
+		goto err_out;
+	} else {
+		if (kstrtol(token, 0, &result)) {
+			ts_err("failed get length info");
+			goto err_out;
+		}
+		rw_len = (u32)result;
+		if (rw_len > sizeof(store_buf)) {
+			ts_err("data len > %lu", sizeof(store_buf));
+			goto err_out;
+		}
+	}
+
+	if (rw_flag == 1)
+		return count;
+
+	for (i = 0; i < rw_len; i++) {
+		token = strsep(&pos, ":");
+		if (!token) {
+			ts_err("invalid data info");
+			goto err_out;
+		} else {
+			if (kstrtol(token, 16, &result)) {
+				ts_err("failed get data[%d] info", i);
+				goto err_out;
+			}
+			store_buf[i] = (u8)result;
+		}
+	}
+
+	if (rw_addr == goodix_cmd_reg) {
+		put_frame_list(gdix_thp_core, REQUEST_TYPE_CMD, store_buf, rw_len);
+	} else {
+		ts_dev->hw_ops->write(ts_dev, rw_addr, store_buf, rw_len);
+	}
+
+	return count;
+err_out:
+	snprintf(show_buf, PAGE_SIZE, "%s\n",
+		"invalid params, format{r/w:4100:length:[41:21:31]}");
+	return -EINVAL;
+}
+
+static ssize_t goodix_thp_logtofile_show(struct device *dev,
+					struct device_attribute *attr, char *buf)
+{
+	struct goodix_thp_core *cd = gdix_thp_core;
+
+	return sprintf(buf, "%s\n", cd->logtofile_on ? "on" : "off");
+}
+
+static ssize_t goodix_thp_logtofile_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf,
+					size_t count)
+{
+	struct goodix_thp_core *cd = gdix_thp_core;
+	u8 val[2] = {NOTIFY_TYPE_LOGTOFILE, 0};
+
+	cd->logtofile_on = 0;
+	if (buf[0] == 1 || buf[0] == '1') {
+		val[1] = 1;
+		cd->logtofile_on = 1;
+	}
+
+	put_frame_list(cd, REQUEST_TYPE_NOTIFY, val, 2);
+	return count;
+}
+
 static DEVICE_ATTR(scan_rate, S_IWUSR | S_IWGRP, NULL,
 				goodix_thp_scan_rate_store);
 static DEVICE_ATTR(driver_info, S_IRUGO, goodix_thp_driver_info_show, NULL);
@@ -1775,6 +1934,11 @@ static DEVICE_ATTR(rawdata_ctrl, S_IWUSR | S_IWGRP, NULL,
 				goodix_thp_rawdata_ctrl_store);
 static DEVICE_ATTR(save_moto_data, S_IWUSR | S_IWGRP, NULL,
                                 save_moto_data_store);
+static DEVICE_ATTR(version_info, S_IRUGO, goodix_thp_version_info, NULL);
+static DEVICE_ATTR(reg_rw, S_IRUGO | S_IWUSR | S_IWGRP,
+		                goodix_thp_reg_rw_show, goodix_thp_reg_rw_store);
+static DEVICE_ATTR(logtofile, S_IRUGO | S_IWUSR | S_IWGRP,
+                                goodix_thp_logtofile_show, goodix_thp_logtofile_store);
 static struct attribute *sysfs_attrs[] = {
 	&dev_attr_scan_rate.attr,
 	&dev_attr_driver_info.attr,
@@ -1786,6 +1950,9 @@ static struct attribute *sysfs_attrs[] = {
 	&dev_attr_stylus_ctrl.attr,
 	&dev_attr_rawdata_ctrl.attr,
 	&dev_attr_save_moto_data.attr,
+	&dev_attr_version_info.attr,
+	&dev_attr_reg_rw.attr,
+	&dev_attr_logtofile.attr,
 	NULL,
 };
 

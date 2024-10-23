@@ -45,7 +45,7 @@
 #endif
 
 /* macros definition */
-#define GOODIX_THP_DRIVER_VERSION                       "1.1.1.4"
+#define GOODIX_THP_DRIVER_VERSION                       "1.1.1.5"
 #define GOODIX_THP_DRIVER_NAME				"goodix_thp,gt9916"
 #define GOODIX_CORE_DRIVER_NAME				"goodix_thp"
 #define GOODIX_THP_SUSPEND_INPUT_DEVICE_NAME	        "goodix_suspend_input"
@@ -189,7 +189,8 @@ enum {
 #define NOTIFY_TYPE_DUMP_REP 5
 #define NOTIFY_TYPE_STYLUS_CTRL 6
 #define NOTIFY_TYPE_RAWDATA 7
-#define NOTIFY_TYPE_SAVE_MOTO_DATA 8
+#define NOTIFY_TYPE_LOGTOFILE 8
+#define NOTIFY_TYPE_SAVE_MOTO_DATA 9
 
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
@@ -248,12 +249,13 @@ enum {
 	SVC_CMD_MMAP_DEQUEUE = 31,
 	SVC_CMD_BLE_MAC,
 	SVC_CMD_GAME_FILTER,
+	SVC_CMD_UPDATE_VERSION
 };
 
 struct thp_ioctl_tsc_msg {
 	u32 cmd;
 	u16 len;
-	u8 value[10];
+	u8 value[64];
 };
 
 struct thp_ioctl_update_info {
@@ -290,6 +292,7 @@ struct goodix_thp_board_data {
 	bool interpolation_ctrl;
 	bool sample_ctrl;
 	bool stowed_mode_ctrl;
+	char thp_ver[64];
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -390,6 +393,7 @@ struct goodix_thp_core {
 #if IS_ENABLED(CONFIG_FB) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
 	struct notifier_block pm_notif;
 #endif
+	bool logtofile_on;
 	bool irq_state;
 	u32 suspended;
 	u16 gesture_enable;
