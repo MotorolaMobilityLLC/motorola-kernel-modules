@@ -40,6 +40,9 @@ endif
 ifneq ($(filter m y, $(PICOLEAF_DATA_FOR_TOUCH)),)
 	EXTRA_CFLAGS += -DPICOLEAF_DATA_EN
 endif
+ifneq ($(filter m y, $(NDT_DATA_FOR_TOUCH)),)
+	EXTRA_CFLAGS += -DNDT_DATA_EN
+endif
 ifneq ($(filter m y,$(CONFIG_INPUT_FOCALTECH_MMI_PEN_NOTIFIER)),)
 	KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../misc/pen/Module.symvers
 	EXTRA_CFLAGS += -DFOCALTECH_PEN_NOTIFIER

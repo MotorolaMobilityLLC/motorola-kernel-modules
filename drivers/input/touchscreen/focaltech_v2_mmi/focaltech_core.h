@@ -72,6 +72,9 @@
 #ifdef PICOLEAF_DATA_EN
 #include "../pt/cypsoc_picoleaf.h"
 #endif
+#ifdef NDT_DATA_EN
+#include "../AW8680X/aw8680x.h"
+#endif
 
 /*****************************************************************************
 * Private constant and macro definitions using #define

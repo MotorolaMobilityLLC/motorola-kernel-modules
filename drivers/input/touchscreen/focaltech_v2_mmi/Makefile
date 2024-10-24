@@ -19,3 +19,6 @@ KBUILD_EXTRA_SYMBOLS += $(M)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.sym
 ifneq ($(filter m y, $(PICOLEAF_DATA_FOR_TOUCH)),)
 KBUILD_EXTRA_SYMBOLS += $(M)/../pt/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 endif
+ifneq ($(filter m y, $(NDT_DATA_FOR_TOUCH)),)
+KBUILD_EXTRA_SYMBOLS += $(M)/../AW8680X/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+endif
