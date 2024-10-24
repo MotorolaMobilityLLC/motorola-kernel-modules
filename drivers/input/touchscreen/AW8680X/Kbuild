@@ -1,0 +1,8 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/AW8680X
+
+
+obj-m += AW8680X.o
+AW8680X-y := aw8680x.o aw8680x_bin_parse.o aw_com_protocol.o aw_protocol_fun.o aw_protocol_map.o aw_soc_protocol_interface.o

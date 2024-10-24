@@ -1,0 +1,21 @@
+&qupv3_se0_i2c {
+	status = "ok";
+	qcom,clk-freq-out = <400000>; /*先不注释，后续如有问题再找*/
+	#address-cells = <1>;
+	#size-cells = <0>;
+	aw8680x@5c {
+		compatible = "awinic,aw8680x";
+		reg = <0x5c>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <56 0>;
+
+		irq-gpio = <&tlmm 56 0x00>;
+		reset-gpio = <&tlmm 30 0x00>;
+		wake-gpio = <&tlmm 55 0x00>;
+		state-gpio = <&tlmm 17 0x00>;
+		input_function_used;
+		flash_boot_function_used;
+		status = "okay";
+	};
+};
