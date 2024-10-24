@@ -34,6 +34,9 @@ struct buck_glink_dev {
 	struct power_supply *buck_dev_psy;
 	struct buck_dev_info 	buck_info;
 	struct notifier_block	buck_nb;
+
+	struct timespec64 glink_access_time;
+	uint32_t elapsed_ms;
 };
 
 struct glink_device *switch_buck_device_register(struct mmi_glink_chip *chip, struct mmi_glink_dev_dts_info *dev_dts);

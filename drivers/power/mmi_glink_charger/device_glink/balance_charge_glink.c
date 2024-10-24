@@ -253,20 +253,40 @@ static int balance_psy_get_prop(struct power_supply *psy,
 			 union power_supply_propval *pval)
 {
 	struct balance_glink_dev *balance_chip = power_supply_get_drvdata(psy);
-	struct balance_dev_info balance_info;
-	int rc = -1;
+	struct timespec64 glink_access_time_now;
+	int rc = 0;
 
 	pval->intval = -ENODATA;
 
-	if (balance_chip->dev_role == DEV_MASTER) {
-		rc = qti_charger_get_property(OEM_PROP_MBC_MASTER_DEV_INFO,
-				&balance_info, sizeof(balance_info));
-	} else if (balance_chip->dev_role == DEV_SLAVE) {
-		rc = qti_charger_get_property(OEM_PROP_MBC_SLAVE_DEV_INFO,
-				&balance_info, sizeof(balance_info));
-	} else {
+	switch (balance_chip->dev_role) {
+	case DEV_MASTER:
+		ktime_get_real_ts64(&glink_access_time_now);
+		balance_chip->elapsed_ms = (glink_access_time_now.tv_sec - balance_chip->glink_access_time.tv_sec) * 1000;
+		balance_chip->elapsed_ms += (glink_access_time_now.tv_nsec - balance_chip->glink_access_time.tv_nsec) / 1000000;
+		if (balance_chip->elapsed_ms > 1000) {
+			ktime_get_real_ts64(&balance_chip->glink_access_time);
+			balance_chip->elapsed_ms = 0;
+			rc = qti_charger_get_property(OEM_PROP_MBC_MASTER_DEV_INFO,
+				&balance_chip->balance_dev_info, sizeof(struct balance_dev_info));
+			mmi_err(this_root_chip, "balance_get_prop[%d], DEV_INFO", balance_chip->dev_role);
+		}
+		break;
+	case DEV_SLAVE:
+		ktime_get_real_ts64(&glink_access_time_now);
+		balance_chip->elapsed_ms = (glink_access_time_now.tv_sec - balance_chip->glink_access_time.tv_sec) * 1000;
+		balance_chip->elapsed_ms += (glink_access_time_now.tv_nsec - balance_chip->glink_access_time.tv_nsec) / 1000000;
+		if (balance_chip->elapsed_ms > 1000) {
+			ktime_get_real_ts64(&balance_chip->glink_access_time);
+			balance_chip->elapsed_ms = 0;
+			rc = qti_charger_get_property(OEM_PROP_MBC_SLAVE_DEV_INFO,
+				&balance_chip->balance_dev_info, sizeof(struct balance_dev_info));
+			mmi_err(this_root_chip, "balance_get_prop[%d], DEV_INFO", balance_chip->dev_role);
+		}
+		break;
+	default:
 		mmi_err(this_root_chip, "balance_get_prop, Can not find correct balance role %d", balance_chip->dev_role);
 		return rc;
+		break;
 	}
 
 	if (rc) {
@@ -276,25 +296,25 @@ static int balance_psy_get_prop(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		pval->intval = balance_info.work_mode;
+		pval->intval = balance_chip->balance_dev_info.work_mode;
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
-		pval->intval = balance_info.ls_off;
+		pval->intval = balance_chip->balance_dev_info.ls_off;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		pval->intval = balance_info.vbat_mv;
+		pval->intval = balance_chip->balance_dev_info.vbat_mv;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-		pval->intval = balance_info.vchg_mv;
+		pval->intval = balance_chip->balance_dev_info.vchg_mv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		pval->intval = balance_info.ibat_ma;
+		pval->intval = balance_chip->balance_dev_info.ibat_ma;
 		break;
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
-		pval->intval = balance_info.ibat_limit;
+		pval->intval = balance_chip->balance_dev_info.ibat_limit;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		pval->intval = balance_info.die_temp;
+		pval->intval = balance_chip->balance_dev_info.die_temp;
 		break;
 	default:
 		break;

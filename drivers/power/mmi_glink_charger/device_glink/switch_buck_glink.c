@@ -159,13 +159,22 @@ static int buck_psy_get_prop(struct power_supply *psy,
 			 enum power_supply_property prop,
 			 union power_supply_propval *pval)
 {
-	struct buck_dev_info buck_info = {0};
-	int rc = -1;
+	struct buck_glink_dev *buck_chip = power_supply_get_drvdata(psy);
+	struct timespec64 glink_access_time_now;
+	int rc = 0;
 
 	pval->intval = -ENODATA;
 
-	rc = qti_charger_get_property(OEM_PROP_MSB_DEV_INFO,
-			&buck_info, sizeof(buck_info));
+	ktime_get_real_ts64(&glink_access_time_now);
+	buck_chip->elapsed_ms = (glink_access_time_now.tv_sec - buck_chip->glink_access_time.tv_sec) * 1000;
+	buck_chip->elapsed_ms += (glink_access_time_now.tv_nsec - buck_chip->glink_access_time.tv_nsec) / 1000000;
+	if (buck_chip->elapsed_ms > 1000) {
+		ktime_get_real_ts64(&buck_chip->glink_access_time);
+		buck_chip->elapsed_ms = 0;
+		rc = qti_charger_get_property(OEM_PROP_MSB_DEV_INFO,
+			&buck_chip->buck_info, sizeof(struct buck_dev_info));
+		mmi_err(this_root_chip, "charge_pump_get_prop, DEV_INFO");
+	}
 
 	if (rc) {
 		mmi_err(this_root_chip, "Get BUCK_INFO property failed");
@@ -174,19 +183,19 @@ static int buck_psy_get_prop(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		pval->intval = buck_info.chg_st;
+		pval->intval = buck_chip->buck_info.chg_st;
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
-		pval->intval = buck_info.chg_en;
+		pval->intval = buck_chip->buck_info.chg_en;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-		pval->intval = buck_info.batt_fv;
+		pval->intval = buck_chip->buck_info.batt_fv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
-		pval->intval = buck_info.batt_fcc;
+		pval->intval = buck_chip->buck_info.batt_fcc;
 		break;
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
-		pval->intval = buck_info.usb_iin;
+		pval->intval = buck_chip->buck_info.usb_iin;
 		break;
 	default:
 		break;

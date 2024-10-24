@@ -15,6 +15,8 @@
 #define __MMI_DEVICE_CLASS_H__
 #include <linux/notifier.h>
 #include <linux/device.h>
+#include <linux/time64.h>
+
 typedef enum dev_type {
 	DEV_NONE,
 	DEV_BATT,

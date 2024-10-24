@@ -44,6 +44,9 @@ struct balance_glink_dev {
 	struct power_supply	*balance_dev_psy;
 	struct balance_dev_info 	balance_dev_info;
 	struct notifier_block	balance_nb;
+
+	struct timespec64 glink_access_time;
+	uint32_t elapsed_ms;
 };
 
 struct glink_device *balance_glink_device_register(struct mmi_glink_chip *chip, struct mmi_glink_dev_dts_info *dev_dts);

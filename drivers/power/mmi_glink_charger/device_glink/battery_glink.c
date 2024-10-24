@@ -40,20 +40,41 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			 union power_supply_propval *pval)
 {
 	struct battery_glink_dev *batt_chip = power_supply_get_drvdata(psy);
-	struct battery_info batt_info;
-	int rc = -1;
+	struct timespec64 glink_access_time_now;
+	int rc = 0;
 
 	pval->intval = -ENODATA;
 
-	if (batt_chip->batt_role == BATT_MAIN) {
-		rc = qti_charger_get_property(OEM_PROP_MAIN_BATT_INFO,
-				&batt_info, sizeof(batt_info));
-	} else if (batt_chip->batt_role == BATT_FLIP) {
-		rc = qti_charger_get_property(OEM_PROP_FLIP_BATT_INFO,
-				&batt_info, sizeof(batt_info));
-	} else {
-		mmi_err(this_root_chip, "batt_get_prop, Can not find correct batt role %d", batt_chip->batt_role);
+
+	switch (batt_chip->batt_role ) {
+	case BATT_MAIN:
+		ktime_get_real_ts64(&glink_access_time_now);
+		batt_chip->elapsed_ms = (glink_access_time_now.tv_sec - batt_chip->glink_access_time.tv_sec) * 1000;
+		batt_chip->elapsed_ms += (glink_access_time_now.tv_nsec - batt_chip->glink_access_time.tv_nsec) / 1000000;
+		if (batt_chip->elapsed_ms > 1000) {
+			ktime_get_real_ts64(&batt_chip->glink_access_time);
+			batt_chip->elapsed_ms = 0;
+			rc = qti_charger_get_property(OEM_PROP_MAIN_BATT_INFO,
+				&batt_chip->batt_dev_info, sizeof(struct battery_info));
+			mmi_err(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
+		}
+		break;
+	case BATT_FLIP:
+		ktime_get_real_ts64(&glink_access_time_now);
+		batt_chip->elapsed_ms = (glink_access_time_now.tv_sec - batt_chip->glink_access_time.tv_sec) * 1000;
+		batt_chip->elapsed_ms += (glink_access_time_now.tv_nsec - batt_chip->glink_access_time.tv_nsec) / 1000000;
+		if (batt_chip->elapsed_ms > 1000) {
+			ktime_get_real_ts64(&batt_chip->glink_access_time);
+			batt_chip->elapsed_ms = 0;
+			rc = qti_charger_get_property(OEM_PROP_FLIP_BATT_INFO,
+				&batt_chip->batt_dev_info, sizeof(struct battery_info));
+			mmi_err(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
+		}
+		break;
+	default:
+		mmi_err(this_root_chip, "battery_get_prop, Can not find correct balance role %d", batt_chip->batt_role);
 		return rc;
+		break;
 	}
 
 	if (rc) {
@@ -63,37 +84,37 @@ static int batt_psy_get_prop(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		pval->intval = batt_info.batt_status;
+		pval->intval = batt_chip->batt_dev_info.batt_status;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-		pval->intval = batt_info.present;
+		pval->intval = batt_chip->batt_dev_info.present;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		pval->intval = batt_info.batt_uv;
+		pval->intval = batt_chip->batt_dev_info.batt_uv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		pval->intval = batt_info.batt_ua;
+		pval->intval = batt_chip->batt_dev_info.batt_ua;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		pval->intval = batt_info.batt_soc / 100;
+		pval->intval = batt_chip->batt_dev_info.batt_soc / 100;
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		pval->intval= POWER_SUPPLY_HEALTH_GOOD;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		pval->intval = batt_info.batt_temp / 10;
+		pval->intval = batt_chip->batt_dev_info.batt_temp / 10;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		pval->intval = batt_info.batt_full_uah;
+		pval->intval = batt_chip->batt_dev_info.batt_full_uah;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		pval->intval = batt_info.batt_design_uah;
+		pval->intval = batt_chip->batt_dev_info.batt_design_uah;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-		pval->intval = batt_info.batt_chg_counter;
+		pval->intval = batt_chip->batt_dev_info.batt_chg_counter;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		pval->intval = batt_info.batt_cycle;
+		pval->intval = batt_chip->batt_dev_info.batt_cycle;
 		break;
 	default:
 		break;

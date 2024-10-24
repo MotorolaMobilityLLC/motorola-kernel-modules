@@ -44,6 +44,9 @@ struct charge_pump_glink_dev {
 	struct power_supply	*charge_pump_dev_psy;
 	struct charge_pump_dev_info 	charge_pump_dev_info;
 	struct notifier_block	charge_pump_nb;
+
+	struct timespec64 glink_access_time;
+	uint32_t elapsed_ms;
 };
 
 struct glink_device *charge_pump_glink_device_register(struct mmi_glink_chip *chip, struct mmi_glink_dev_dts_info *dev_dts);
