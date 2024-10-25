@@ -64,6 +64,7 @@ struct aw35615_chip {
 	struct hrtimer bist_timer;
 	struct hrtimer sm_timer;
 	struct alarm alarmtimer;
+	struct hrtimer int_timer;
 	AW_U32 sink_timer;
 	AW_U32 source_timer;
 	AW_U32 source_end_timer;
