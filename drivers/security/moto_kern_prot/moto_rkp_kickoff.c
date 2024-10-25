@@ -116,7 +116,7 @@ uint64_t jel_init(uint64_t start_jump_table, uint64_t stop_jump_table,
 	memcpy((uint64_t *)contig_vaddr, (void *)jel_start,
 	       jel_sz * sizeof(union jump_tree_node));
 
-	*jel_end = jel_start + jel_sz;
+	*jel_end = jel_start + (jel_sz * sizeof(union jump_tree_node));
 
 	return jel_start;
 }
