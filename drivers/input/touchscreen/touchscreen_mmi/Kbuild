@@ -48,3 +48,6 @@ KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_relay/$(GKI_OBJ_
 ifeq ($(filter m y,$(CONFIG_BUILD_FOR_ANDROID_V)),)
     KBUILD_EXTRA_SYMBOLS += $(CURDIR)/../../kernel/msm-$(MODULE_KERNEL_VERSION)/Module.symvers
 endif
+ifneq ($(filter m y, $(CONFIG_DRM_DYNAMIC_REFRESH_RATE)),)
+KBUILD_EXTRA_SYMBOLS += $(OUT_DIR)/../../vendor/qcom/opensource/display-drivers/msm/Module.symvers
+endif

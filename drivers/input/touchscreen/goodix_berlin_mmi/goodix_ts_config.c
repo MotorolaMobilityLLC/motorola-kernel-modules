@@ -18,7 +18,7 @@ struct goodix_ic_report_rate_config report_rate_config_info = {
 	|| defined(PRODUCT_ZEEKR) || defined(PRODUCT_LYNKCO) || defined(PRODUCT_BANGKK) \
 	|| defined(PRODUCT_EQE) || defined(PRODUCT_CTWO) || defined(PRODUCT_BOSTON) \
 	|| defined(PRODUCT_AVATRN) || defined(PRODUCT_CUSCO) || defined(PRODUCT_MONA) \
-	|| defined(PRODUCT_MALMO) || defined(PRODUCT_TANK) || defined(PRODUCT_LEAP)
+	|| defined(PRODUCT_MALMO) || defined(PRODUCT_TANK)
 	.rate_config_count = 3,
 	.refresh_rate_ctrl = 0,
 	.interpolation_ctrl = 1,
@@ -100,6 +100,30 @@ struct goodix_ic_report_rate_config report_rate_config_info = {
 			.interpolation_flag = 1,
 			.refresh_rate = {1, 165},
 			.report_rate = 360,
+			.command = 0x9D02,
+		},
+	}
+#elif defined(PRODUCT_LEAP)
+	.rate_config_count = 3,
+	.refresh_rate_ctrl = 1,
+	.interpolation_ctrl = 1,
+	{
+		{
+			.interpolation_flag = 0,
+			.refresh_rate = {1, 120},
+			.report_rate = 130,
+			.command = 0x9D03,
+		},
+		{
+			.interpolation_flag = 0,
+			.refresh_rate = {144, 165},
+			.report_rate = 220,
+			.command = 0x9D01,
+		},
+		{
+			.interpolation_flag = 1,
+			.refresh_rate = {1, 165},
+			.report_rate = 300,
 			.command = 0x9D02,
 		},
 	}

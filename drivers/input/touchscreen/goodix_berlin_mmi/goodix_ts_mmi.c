@@ -518,12 +518,12 @@ static int goodix_ts_mmi_set_report_rate(struct goodix_ts_core *core_data)
 
 	core_data->set_mode.report_rate_mode = mode;
 
-	ts_info("Success to set %s\n", mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
-				(mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_360HZ" :
+	ts_info("Success to set %s\n", mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_220/240HZ" :
+				(mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
 				(mode == REPORT_RATE_CMD_480HZ ? "REPORT_RATE_480HZ" :
 				(mode == REPORT_RATE_CMD_576HZ ? "REPORT_RATE_576HZ" :
 				(mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
-				(mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120HZ" :
+				(mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
 				"Unsupported"))))));
 
 	return ret;
