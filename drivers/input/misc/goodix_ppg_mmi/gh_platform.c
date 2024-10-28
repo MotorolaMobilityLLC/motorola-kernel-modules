@@ -31,6 +31,20 @@ int gh_get_gpio_dts_info(struct gh_device *gh_dev)
 		return -1;
 	}
 */
+
+    /*get leds pwr resource*/
+    gh_dev->gh_vdd_leds = of_get_named_gpio(np,GH_POWER_VDD_LEDS,0);
+    if(!gpio_is_valid(gh_dev->gh_vdd_leds)) {
+	  gh_debug(ERR_LOG, "%s, gh_vdd_leds GPIO is invalid.\n", __func__);
+	  return -1;
+    }
+    rc = gpio_request(gh_dev->gh_vdd_leds, "gh_vdd_leds");
+    if(rc) {
+	  gh_debug(ERR_LOG, "%s, Failed to request gh_vdd_leds GPIO. rc = %d\n", __func__, rc);
+	  return -1;
+    }
+    gpio_direction_output(gh_dev->gh_vdd_leds, 1);
+
     /*get pwr resource*/
     gh_dev->gh_vdd = of_get_named_gpio(np,GH_POWER_VDD,0);
     if(!gpio_is_valid(gh_dev->gh_vdd)) {

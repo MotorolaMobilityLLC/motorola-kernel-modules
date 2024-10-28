@@ -168,6 +168,7 @@ struct gh_device {
 
 	u32 cs_gpio;
 	u32 reset_gpio;
+	u32 gh_vdd_leds;
 	u32 gh_vdd;
 	u32 gh_vdd_id;
 	u32 irq_gpio;

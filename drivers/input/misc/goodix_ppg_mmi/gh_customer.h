@@ -11,11 +11,12 @@ typedef struct power_cofing {
 /*
 * for dts config
 */
-#define GH_COMPATILBE    "goodix,health"
-#define GH_GPIO_RESET    "goodix,gpio_reset"
-#define GH_GPIO_IRQ      "goodix,gpio_irq"
-#define GH_POWER_VDD     "goodix,gh_vdd"     //3.3V g_vdd_cfg
-#define GH_POWER_VDD_IO  "goodix,gh_vdd_io"  //1.8V g_vdd_io_cfg
+#define GH_COMPATILBE        "goodix,health"
+#define GH_GPIO_RESET        "goodix,gpio_reset"
+#define GH_GPIO_IRQ          "goodix,gpio_irq"
+#define GH_POWER_VDD_LEDS    "goodix,gh_vdd_leds" //5V leds power
+#define GH_POWER_VDD         "goodix,gh_vdd"     //3.3V g_vdd_cfg
+#define GH_POWER_VDD_IO      "goodix,gh_vdd_io"  //1.8V g_vdd_io_cfg
 
 /*
 * need defined in include/uapi/linux/netlink.h
