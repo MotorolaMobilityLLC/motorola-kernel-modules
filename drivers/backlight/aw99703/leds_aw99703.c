@@ -345,6 +345,13 @@ static int aw99703_backlight_enable(struct aw99703_data *drvdata)
 
 int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 {
+	int tmp_val = brt_val;
+
+	if (brt_val < 0) {
+		pr_info("%s invalid brt_val:%d, skip\n", __func__, brt_val);
+		return 0;
+	}
+
 	pr_info("%s brt_val is %d\n", __func__, brt_val);
 
 	if (drvdata->enable == false) {
@@ -366,6 +373,10 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 	}
 
 	brt_val = aw99703_brightness_map(brt_val);
+	if (MAX_BRIGHTNESS < brt_val) {
+		pr_err("%s:warn: brt_val:%d exceed max:%d, tmp_val: %d\n", __func__, brt_val, MAX_BRIGHTNESS, tmp_val);
+		return 0;
+	}
 
 	if(0 == drvdata->map_type) {
 		if(ALIGN_BL_MAPPING_450 == drvdata->led_current_align) {
@@ -374,6 +385,11 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 		}
 		else if(ALIGN_BL_MAPPING_1000_GAMMA15 == drvdata->led_current_align) {
 			brt_val = bl_mapping_1000_gamma15[brt_val];
+			if (MAX_BRIGHTNESS < brt_val) {
+				pr_err("%s:warn: base val:%d, gamma15 brt_val:%d exceed max:%d,\n", __func__, tmp_val, brt_val, MAX_BRIGHTNESS);
+				return 0;
+			}
+
 			pr_info("%s bl_mapping_1000_gamma15 brt_val: %d\n", __func__, brt_val);
 		}
 		else if(ALIGN_BL_MAPPING_1000 == drvdata->led_current_align) {
