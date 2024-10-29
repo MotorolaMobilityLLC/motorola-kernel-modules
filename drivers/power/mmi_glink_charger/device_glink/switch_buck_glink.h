@@ -23,6 +23,10 @@ struct buck_dev_info
     u32  chg_en;
     u32  chg_st;
     u32  chg_fault;
+    u32  vbus_ctrl;
+    u32  ce_en;
+    u32  battfet_dis;
+    u32  jeita_en;
 };
 
 struct buck_glink_dev {

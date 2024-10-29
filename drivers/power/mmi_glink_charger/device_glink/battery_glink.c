@@ -56,7 +56,7 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			batt_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_MAIN_BATT_INFO,
 				&batt_chip->batt_dev_info, sizeof(struct battery_info));
-			mmi_err(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
+			mmi_dbg(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
 		}
 		break;
 	case BATT_FLIP:
@@ -68,7 +68,7 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			batt_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_FLIP_BATT_INFO,
 				&batt_chip->batt_dev_info, sizeof(struct battery_info));
-			mmi_err(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
+			mmi_dbg(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
 		}
 		break;
 	default:

@@ -38,7 +38,7 @@ static struct buck_glink_dev *this_buck_chip = NULL;
 		}
 
 		mmi_info(this_root_chip, "msb dev info : usb_iin: %dma, usb_vout: %dmv, usb_suspend: %d, "
-			"batt_fcc: %dma, batt_fv: %dmv, chg_en: %d,  chg_fault: 0x%x, chg_st: 0x%x",
+			"batt_fcc: %dma, batt_fv: %dmv, chg_en: %d,  chg_fault: 0x%x, chg_st: 0x%x, vbus_ctrl %d, ce_en %d, battfet_dis %d, jeita_en %d",
 			buck_info.usb_iin,
 			buck_info.usb_vout,
 			buck_info.usb_suspend,
@@ -46,8 +46,11 @@ static struct buck_glink_dev *this_buck_chip = NULL;
 			buck_info.batt_fv,
 			buck_info.chg_en,
 			buck_info.chg_fault,
-			buck_info.chg_st);
-
+			buck_info.chg_st,
+			buck_info.vbus_ctrl,
+			buck_info.ce_en,
+			buck_info.battfet_dis,
+			buck_info.jeita_en);
 	}
 	return NOTIFY_DONE;
 }
@@ -173,7 +176,7 @@ static int buck_psy_get_prop(struct power_supply *psy,
 		buck_chip->elapsed_ms = 0;
 		rc = qti_charger_get_property(OEM_PROP_MSB_DEV_INFO,
 			&buck_chip->buck_info, sizeof(struct buck_dev_info));
-		mmi_err(this_root_chip, "charge_pump_get_prop, DEV_INFO");
+		mmi_dbg(this_root_chip, "charge_pump_get_prop, DEV_INFO");
 	}
 
 	if (rc) {

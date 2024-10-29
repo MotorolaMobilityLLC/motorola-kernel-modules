@@ -268,7 +268,7 @@ static int balance_psy_get_prop(struct power_supply *psy,
 			balance_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_MBC_MASTER_DEV_INFO,
 				&balance_chip->balance_dev_info, sizeof(struct balance_dev_info));
-			mmi_err(this_root_chip, "balance_get_prop[%d], DEV_INFO", balance_chip->dev_role);
+			mmi_dbg(this_root_chip, "balance_get_prop[%d], DEV_INFO", balance_chip->dev_role);
 		}
 		break;
 	case DEV_SLAVE:
@@ -280,7 +280,7 @@ static int balance_psy_get_prop(struct power_supply *psy,
 			balance_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_MBC_SLAVE_DEV_INFO,
 				&balance_chip->balance_dev_info, sizeof(struct balance_dev_info));
-			mmi_err(this_root_chip, "balance_get_prop[%d], DEV_INFO", balance_chip->dev_role);
+			mmi_dbg(this_root_chip, "balance_get_prop[%d], DEV_INFO", balance_chip->dev_role);
 		}
 		break;
 	default:

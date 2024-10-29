@@ -187,7 +187,7 @@ static int charge_pump_psy_get_prop(struct power_supply *psy,
 			charge_pump_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_MASTER_SWITCHEDCAP_INFO,
 				&charge_pump_chip->charge_pump_dev_info, sizeof(struct charge_pump_dev_info));
-			mmi_err(this_root_chip, "charge_pump_get_prop[%d], DEV_INFO", charge_pump_chip->dev_role);
+			mmi_dbg(this_root_chip, "charge_pump_get_prop[%d], DEV_INFO", charge_pump_chip->dev_role);
 		}
 		break;
 	case DEV_SLAVE:
@@ -199,7 +199,7 @@ static int charge_pump_psy_get_prop(struct power_supply *psy,
 			charge_pump_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_SLAVE_SWITCHEDCAP_INFO,
 				&charge_pump_chip->charge_pump_dev_info, sizeof(struct charge_pump_dev_info));
-			mmi_err(this_root_chip, "charge_pump_get_prop[%d], DEV_INFO", charge_pump_chip->dev_role);
+			mmi_dbg(this_root_chip, "charge_pump_get_prop[%d], DEV_INFO", charge_pump_chip->dev_role);
 		}
 		break;
 	default:
