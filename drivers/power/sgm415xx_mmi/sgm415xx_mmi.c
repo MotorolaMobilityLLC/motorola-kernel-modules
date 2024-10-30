@@ -2585,7 +2585,6 @@ static int sgm4154x_suspend(struct device *dev)
 	dev_info(dev, "%s\n", __func__);
 	if (device_may_wakeup(dev))
 		enable_irq_wake(sgm->client->irq);
-	disable_irq(sgm->client->irq);
 
 	return 0;
 }
@@ -2595,7 +2594,6 @@ static int sgm4154x_resume(struct device *dev)
 	struct sgm4154x_device *sgm = dev_get_drvdata(dev);
 
 	dev_info(dev, "%s\n", __func__);
-	enable_irq(sgm->client->irq);
 	if (device_may_wakeup(dev))
 		disable_irq_wake(sgm->client->irq);
 

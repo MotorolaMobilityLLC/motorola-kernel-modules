@@ -2536,7 +2536,6 @@ static int sc8989x_suspend(struct device *dev)
 	dev_info(dev, "%s\n", __func__);
 	if (device_may_wakeup(dev))
 		enable_irq_wake(sc->irq);
-	disable_irq(sc->irq);
 
 	return 0;
 }
@@ -2546,7 +2545,6 @@ static int sc8989x_resume(struct device *dev)
 	struct sc8989x_chip *sc = dev_get_drvdata(dev);
 
 	dev_info(dev, "%s\n", __func__);
-	enable_irq(sc->irq);
 	if (device_may_wakeup(dev))
 		disable_irq_wake(sc->irq);
 
