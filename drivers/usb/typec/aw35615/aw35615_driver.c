@@ -356,23 +356,6 @@ static enum hrtimer_restart aw35615_bist_timer_func(struct hrtimer *p_hrtimer)
 	return HRTIMER_NORESTART;
 }
 
- static enum hrtimer_restart aw35615_int_timer_func(struct hrtimer *p_hrtimer)
- {
-	struct aw35615_chip *chip = container_of(p_hrtimer, struct aw35615_chip, int_timer);
-
-	if (platform_get_device_irq_state(chip->port.PortID)) {
-		/* Plug-in typec power-on interrupt detection */
-		AW_LOG("timer interrupt detection\n");
-	}
-
-	if (!chip->queued) {
-		chip->queued = AW_TRUE;
-		queue_work(chip->highpri_wq, &chip->sm_worker);
-	}
-	hrtimer_forward(p_hrtimer, p_hrtimer->base->get_time(), ktime_set(5,0));
-	return HRTIMER_RESTART;
-}
-
 static int aw35615_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	struct aw35615_chip *chip;
@@ -467,10 +450,6 @@ static int aw35615_probe(struct i2c_client *client, const struct i2c_device_id *
 	INIT_WORK(&chip->bist_work, aw35615_bist_work);
 	hrtimer_init(&chip->bist_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	chip->bist_timer.function = aw35615_bist_timer_func;
-
-	hrtimer_init(&chip->int_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	chip->int_timer.function = aw35615_int_timer_func;
-	hrtimer_start(&chip->int_timer, ktime_set(3, 500*1000000), HRTIMER_MODE_REL);
 
 	/* delay init */
 	INIT_DELAYED_WORK(&chip->init_delay_work, aw35615_init_delay_work);
