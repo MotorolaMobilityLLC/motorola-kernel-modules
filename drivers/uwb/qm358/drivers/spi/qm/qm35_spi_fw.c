@@ -45,7 +45,7 @@
 static int qm35_fw_init_qmrom(struct qm35_spi *qmspi)
 {
 	if (!qmspi->irq_gpio) {
-		dev_err(&qmspi->spi->dev, "irq-gpios not defined, "
+		dev_err(&qmspi->spi->dev, "IRQ GPIO not defined, "
 					  "cannot use boot ROM command mode\n");
 		return -EFAULT;
 	}
@@ -60,6 +60,11 @@ static int qm35_fw_init_qmrom(struct qm35_spi *qmspi)
 			dev_err(&qmspi->spi->dev, "qmrom_init failed\n");
 			return -EFAULT;
 		}
+		dev_info(
+			&qmspi->spi->dev,
+			"QM35 boot ROM found: Device ID %#06x, Chip revision %#04x\n",
+			qmspi->fw.handle->device_version,
+			qmspi->fw.handle->chip_rev);
 	}
 	return 0;
 }

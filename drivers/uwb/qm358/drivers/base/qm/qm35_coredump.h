@@ -23,8 +23,10 @@
 #ifndef __QM35_COREDUMP_H
 #define __QM35_COREDUMP_H
 
+#include <linux/ratelimit.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
+#include <linux/workqueue.h>
 
 #include "qm35_transport.h"
 
@@ -34,7 +36,7 @@
  * struct qm35_coredump_data - QM35 Coredump data structure.
  * @list: List of coredumps.
  * @bin_attr: Binary attribute in sysfs.
- * @wq: Wait queue for poll() support.
+ * @rfw: Async remove file work struct.
  * @size: Size of the received coredump.
  * @remain: Remaining space in the receive buffer.
  * @offset: Current position in the receive buffer.
@@ -50,7 +52,7 @@
 struct qm35_coredump_data {
 	struct list_head list;
 	struct bin_attribute bin_attr;
-	wait_queue_head_t wq;
+	struct work_struct rfw;
 	size_t size;
 	size_t remain;
 	size_t offset;
@@ -67,9 +69,11 @@ struct qm35_coredump_data {
  * @dev: Backpointer to underlying device instance.
  * @bin_attr: Write-only coredump attribute for commands.
  * @dwork: Delayed work to check timeout receiving coredump.
+ * @dump_rls: Rate limit state for received coredumps.
  * @dump_list: List of all received coredumps.
  * @dump_lock: Lock to protect @dump_list.
- * @dump_num: Coredump counter.
+ * @dump_num: Last coredump index number.
+ * @dump_cnt: Currently stored coredumps counter.
  */
 struct qm35_coredump {
 	struct list_head dev_list;
@@ -77,9 +81,11 @@ struct qm35_coredump {
 	struct device *dev;
 	struct delayed_work dwork;
 	struct bin_attribute bin_attr;
+	struct ratelimit_state dump_rls;
 	struct list_head dump_list;
 	spinlock_t dump_lock;
 	atomic_t dump_num;
+	unsigned dump_cnt;
 };
 
 /* No exported functions. */
@@ -99,10 +105,14 @@ struct qm35_coredump {
 #define KU_NO_FW_UPD_MOCK
 #define KU_NO_PROBE_MOCK
 #include "mocks/ku_transport.h"
+#include "mocks/ku_schedule_work.h"
 
 int ku_sysfs_create_bin_file(struct kobject *kobj,
 			     struct bin_attribute *bin_attr);
 #define sysfs_create_bin_file ku_sysfs_create_bin_file
+
+int ku_work_busy(struct work_struct *work);
+#define work_busy ku_work_busy
 
 #endif /* QM35_COREDUMP_TESTS */
 #endif /* __QM35_COREDUMP_H */

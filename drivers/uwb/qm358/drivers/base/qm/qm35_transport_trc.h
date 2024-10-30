@@ -35,13 +35,17 @@
 	transport_msg_type_name(BOOTLOADER),		\
 	transport_msg_type_name(UCI),			\
 	transport_msg_type_name(COREDUMP),		\
-	transport_msg_type_name(LOG)
+	transport_msg_type_name(LOG),			\
+	transport_msg_type_name(QTRACE),		\
+	transport_msg_type_name(AWAKE)
 /* clang-format on */
 TRACE_DEFINE_ENUM(QM35_TRANSPORT_MSG_RESERVED_HSSPI);
 TRACE_DEFINE_ENUM(QM35_TRANSPORT_MSG_BOOTLOADER);
 TRACE_DEFINE_ENUM(QM35_TRANSPORT_MSG_UCI);
 TRACE_DEFINE_ENUM(QM35_TRANSPORT_MSG_COREDUMP);
 TRACE_DEFINE_ENUM(QM35_TRANSPORT_MSG_LOG);
+TRACE_DEFINE_ENUM(QM35_TRANSPORT_MSG_QTRACE);
+TRACE_DEFINE_ENUM(QM35_TRANSPORT_MSG_AWAKE);
 #define TRANSPORT_MSG_TYPE_PR_ARG \
 	__print_symbolic(__entry->type, TRANSPORT_MSG_TYPE_SYMBOLS)
 

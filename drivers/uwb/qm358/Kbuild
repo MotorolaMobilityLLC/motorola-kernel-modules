@@ -58,6 +58,7 @@ obj-m += qm35_coredump.o
 # Allow include external library files.
 subdir-ccflags-y += -I$(src)/drivers/spi/qm/libqmrom/include -I$(src)/drivers/spi/qm/libfwupdater/include\
  -I$(srctree)/$(src)/drivers/spi/qm/libqmrom/include -I$(srctree)/$(src)/drivers/spi/qm/libfwupdater/include
+subdir-ccflags-y += -DCONFIG_QM35_FLASHING
 
 # QM35 transport modules
 # Build qm35_spi.ko only if SPI supported on target kernel.

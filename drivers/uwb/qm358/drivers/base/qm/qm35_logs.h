@@ -116,6 +116,7 @@ struct qm35_logs {
 #define KU_NO_FW_UPD_MOCK
 #define KU_NO_PROBE_MOCK
 #include "mocks/ku_transport.h"
+#include "mocks/ku_schedule_work.h"
 
 struct dentry *ku_debugfs_create_dir(const char *name, struct dentry *parent);
 struct dentry *ku_debugfs_create_file(const char *name, umode_t mode,
@@ -127,9 +128,6 @@ struct dentry *ku_debugfs_create_file(const char *name, umode_t mode,
 int ku_sysfs_create_bin_file(struct kobject *kobj,
 			     struct bin_attribute *bin_attr);
 #define sysfs_create_bin_file ku_sysfs_create_bin_file
-
-bool ku_schedule_work(struct work_struct *work);
-#define schedule_work ku_schedule_work
 
 int __must_check ku_kstrtou8_from_user(const char *s, size_t count,
 				       unsigned int base, u8 *res);

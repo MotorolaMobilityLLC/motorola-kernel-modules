@@ -152,7 +152,9 @@ int qm35_hsspi_wakeup(struct qm35_spi *qmspi, bool force)
 		/* Wakeup using an SPI transaction */
 		struct qm35_hsspi_message xfer;
 		struct spi_transfer *tr = &xfer.tr[0];
-		const int delay_gpioless = QM35_WAKEUP_DELAY_US * 3 / 2;
+		/* Use a longer wake-up SPI transaction to ensure CS is low when QM FW
+		 * has started, which guaranteed QM stay alive for 10ms more. */
+		const unsigned delay_gpioless = QM35_WAKEUP_DELAY_US * 3 / 2;
 		/* Setup a no-data transfer! */
 		qm35_hsspi_setup(&xfer, NULL, NULL, false);
 		/* Add a delay after transfer. See spi_transfer_delay_exec() called by

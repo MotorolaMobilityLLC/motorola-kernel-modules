@@ -27,7 +27,7 @@
 
 struct qm35_spi;
 
-#define QM35_HSSPI_RETRY_COUNT 10
+#define QM35_HSSPI_RETRY_COUNT 3
 #define QM35_HSSPI_RETRY_DELAY_US 50
 
 /* See peg_spi_driver/HSSPI.{c,h} at
@@ -56,7 +56,9 @@ enum hsspi_ul_value {
 	UL_BOOT_FLASH,
 	UL_UCI_APP,
 	UL_COREDUMP,
-	UL_LOG
+	UL_LOG,
+	UL_QTRACE,
+	UL_AWAKE
 };
 
 /**

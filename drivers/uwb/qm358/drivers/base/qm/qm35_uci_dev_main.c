@@ -296,7 +296,7 @@ error:
  * according the IOCTL.
  *
  * Context: User context.
- * Return: 0 on success, else a negative error code.
+ * Return: Zero or positive value on success, else a negative error code.
  */
 static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 			       unsigned long args)
@@ -326,8 +326,10 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 		bypass_param = param;
 		rc = qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_RESET,
 					 &bypass_param);
+		if (rc)
+			return rc;
 		qm35_uci_dev_set_state(uci_dev, QM35_UCI_DEV_CTRL_STATE_RESET);
-		return rc;
+		return 0;
 
 	case QM35_CTRL_GET_STATE:
 		param = qm35_uci_dev_get_state(uci_dev);
@@ -340,7 +342,7 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 					 NULL);
 		param = QM35_UCI_DEV_CTRL_STATE_RESET;
 		qm35_uci_dev_set_state(uci_dev, param);
-		return copy_to_user(argp, &param, sizeof(param)) ? -EFAULT : 0;
+		return copy_to_user(argp, &param, sizeof(param)) ? -EFAULT : rc;
 
 	case QM35_CTRL_FW_UPLOAD_EXT:
 		if (copy_from_user(&ext_params, argp, sizeof(ext_params)))
@@ -361,10 +363,12 @@ static long qm35_uci_dev_ioctl(struct file *file, unsigned int cmd,
 		bypass_param = param;
 		rc = qm35_bypass_control(udh->bypass, QM35_BYPASS_ACTION_POWER,
 					 &bypass_param);
+		if (rc)
+			return rc;
 		qm35_uci_dev_set_state(uci_dev,
 				       param ? QM35_UCI_DEV_CTRL_STATE_RESET :
 					       QM35_UCI_DEV_CTRL_STATE_OFF);
-		return rc;
+		return 0;
 
 	case QM35_CTRL_SET_STATE:
 		if (copy_from_user(&param, argp, sizeof(param)))

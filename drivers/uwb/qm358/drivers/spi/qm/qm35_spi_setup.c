@@ -245,33 +245,42 @@ int qm35_setup_irq(struct qm35_spi *qmspi)
 {
 	struct device *dev = qmspi->base.dev;
 	struct gpio_desc *gpio;
-	int irq_flags, irq, ret;
+	int irq = 0;
+	int irq_flags, ret;
 
-	/* If the IRQ has already been configured by spi_probe() using the
-	 * "interrupt-parent" or "interrupts-extended" properties, do nothing.
-	 * Otherwise, check the presence of "irq-gpios" in DT and use it as IRQ.
-	 */
-	if (qmspi->spi->irq) {
-		irq = qmspi->spi->irq;
-	} else {
-		gpio = devm_gpiod_get(dev, "irq", GPIOD_IN);
-		if (IS_ERR(gpio)) {
-			ret = PTR_ERR(gpio);
-			dev_err(dev, "Device does not support GPIO IRQ (%d)\n",
-				ret);
-			return ret;
-		}
+	/* First, check the presence of "irq-gpios" in DT. */
+	gpio = devm_gpiod_get(dev, "irq", GPIOD_IN);
+	if (IS_ERR(gpio)) {
+		dev_warn(dev,
+			 "Device does not support IRQ GPIO, "
+			 "firmware update will not be possible (%ld)\n",
+			 PTR_ERR(gpio));
+		gpio = NULL;
+	}
+	/* Save IRQ GPIO. */
+	qmspi->irq_gpio = gpio;
+
+	/* Then, if "irq-gpios" was found, try to use it as IRQ. */
+	if (gpio) {
 		irq = gpiod_to_irq(gpio);
-		if (irq < 0) {
-			dev_err(dev,
+		if (irq > 0)
+			/* Save IRQ. */
+			qmspi->spi->irq = irq;
+		else
+			dev_warn(
+				dev,
 				"Could not get IRQ corresponding to GPIO (%d)\n",
 				irq);
-			return irq;
-		}
+	}
 
-		/* Save IRQ GPIO and SPI IRQ. */
-		qmspi->irq_gpio = gpio;
-		qmspi->spi->irq = irq;
+	/* Otherwise, fall back to IRQ configured by spi_probe() using the
+	 * "interrupt-parent" or "interrupts-extended" properties, if available.
+	 */
+	if (irq <= 0)
+		irq = qmspi->spi->irq;
+	if (irq <= 0) {
+		dev_err(dev, "Device does not support IRQ\n");
+		return -ENXIO;
 	}
 
 	/* Set required IRQ trigger mode in IRQ flags */

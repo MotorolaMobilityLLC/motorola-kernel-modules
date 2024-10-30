@@ -251,8 +251,10 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 	if (rc != 0)
 		goto err_setup_pm;
 
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 	/* Initialize firmware update mutex. */
 	mutex_init(&qmspi->fw.update_lock);
+#endif
 
 	/* Initialize info file mutex. */
 	mutex_init(&qmspi->info_mutex);
@@ -281,7 +283,14 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 	return 0;
 
 err_register_hw:
+	mutex_lock(&qmspi->info_mutex);
+	if (qmspi->info_bin_attr.attr.name)
+		sysfs_remove_bin_file(&spi->dev.kobj, &qmspi->info_bin_attr);
+	mutex_unlock(&qmspi->info_mutex);
+	mutex_destroy(&qmspi->info_mutex);
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 	mutex_destroy(&qmspi->fw.update_lock);
+#endif
 	qm35_spi_pm_remove(qmspi);
 err_setup_pm:
 	qm35_thread_stop(qmspi);
@@ -327,8 +336,10 @@ static int qm35_spi_driver_remove(struct spi_device *spi)
 	mutex_destroy(&qmspi->info_mutex);
 	/* Unregister subsystems. */
 	qm35_unregister_device(qm);
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 	/* Mark the firmware update mutex uninitialized. */
 	mutex_destroy(&qmspi->fw.update_lock);
+#endif
 	/* Disable PM runtime subsystem. */
 	qm35_spi_pm_remove(qmspi);
 	/* Stop event processing thread. */

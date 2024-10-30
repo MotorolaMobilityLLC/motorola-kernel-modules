@@ -14,7 +14,7 @@
  * According to Table 35 - Fira Consortium UWB Command Interface Generic
  * Technical Specification 2.0.0
  */
-#define UCI_FIRA_TWR_MEASUREMENT_DISTANCE_INVALID 0xFFFF
+#define UCI_FIRA_TWR_MEASUREMENT_DISTANCE_INVALID 0xffff
 
 /**
  * enum uci_common_packet_header - Common Packet Header layout description
@@ -764,6 +764,22 @@ enum uci_device_configuration_parameters {
  * @UCI_APPLICATION_PARAMETER_DL_TDOA_CROSS_CLUSTER_TIME_SYNC:
  * 	   Enable/Disable the Dl-Tdoa cross-cluster time synchronization feature; An 8 bit field,
  *     where only bit0 is used, the rest is RFU and need to be set to 0.
+ * @UCI_APPLICATION_PARAMETER_PAN_ID: The identifier of the PAN which the device belongs to.
+ * @UCI_APPLICATION_PARAMETER_OMLOX_RANGING_ROUND_SET: The combination of ranging round types
+ *     (GTSW vs LTW) to use in the session.
+ * @UCI_APPLICATION_PARAMETER_OMLOX_PRIMARY_SATELLITE: True if this device will act as the
+ *     Primary Satellite, false otherwise.
+ * @UCI_APPLICATION_PARAMETER_OMLOX_SATELLITE_POSITION: The position of this satellite.
+ * @UCI_APPLICATION_PARAMETER_OMLOX_RCP_INIT_TX_SLOT: Slot indexes on which the satellite
+ *     should transmit during the xRCP and/or INIT phases.
+ * @UCI_APPLICATION_PARAMETER_OMLOX_RCP_INIT_RX_SLOTS: Slot indexes on which the satellite
+ *     should receive during the xRCP and/or INIT phases.
+ * @UCI_APPLICATION_PARAMETER_OMLOX_RANGING_MODE: The ranging mode (type of measurement) this device
+ *     should use.
+ * @UCI_APPLICATION_PARAMETER_OMLOX_RSP_PREAMBLE_CODE_INDEX: The preamble code index for this
+ *     session for RSP phase, BPRF (9-24), HPRF (25-32) (default: 10)
+ * @UCI_APPLICATION_PARAMETER_OMLOX_TAG_MOVING: True if the nearby OMLOX tag is currently moving,
+ *     false otherwise.
  */
 enum uci_application_configuration_parameters {
 	UCI_APPLICATION_PARAMETER_DEVICE_TYPE = 0x00,
@@ -892,6 +908,16 @@ enum uci_application_configuration_parameters {
 	UCI_APPLICATION_PARAMETER_ENABLE_PSDU_DUMP = 0xeb,
 	/* DL-TDOA specific*/
 	UCI_APPLICATION_PARAMETER_DL_TDOA_CROSS_CLUSTER_TIME_SYNC = 0xec,
+	/* OMLOX specific*/
+	UCI_APPLICATION_PARAMETER_PAN_ID = 0xed,
+	UCI_APPLICATION_PARAMETER_OMLOX_RANGING_ROUND_SET = 0xef,
+	UCI_APPLICATION_PARAMETER_OMLOX_PRIMARY_SATELLITE = 0xf0,
+	UCI_APPLICATION_PARAMETER_OMLOX_SATELLITE_POSITION = 0xf1,
+	UCI_APPLICATION_PARAMETER_OMLOX_RCP_INIT_TX_SLOT = 0xf2,
+	UCI_APPLICATION_PARAMETER_OMLOX_RCP_INIT_RX_SLOTS = 0xf3,
+	UCI_APPLICATION_PARAMETER_OMLOX_RANGING_MODE = 0xf4,
+	UCI_APPLICATION_PARAMETER_OMLOX_RSP_PREAMBLE_CODE_INDEX = 0xf5,
+	UCI_APPLICATION_PARAMETER_OMLOX_TAG_MOVING = 0xf6,
 };
 
 /* FIXME => To remove later */
@@ -988,7 +1014,7 @@ enum uci_ranging_round_usage {
 	UCI_OWR_AOA = 0x06,
 	UCI_ESS_TWR_NON_DEFERRED_CONTENTION_BASED = 0x07,
 	UCI_ADS_TWR_CONTENTION_BASED = 0x08,
-	/* RFU 0x09 - 0xFF */
+	/* RFU 0x09 - 0xff */
 };
 
 /**
@@ -1127,10 +1153,10 @@ enum uci_device_capability_parameters {
 	UCI_CAP_DT_ANCHOR_MAX_ACTIVE_RR = 0x17,
 	UCI_CAP_DT_TAG_MAX_ACTIVE_RR = 0x18,
 	UCI_CAP_DT_TAG_BLOCK_SKIPPING = 0x19,
-	UCI_CAP_PSDU_LENGTH_SUPPORT = 0x1A,
-	UCI_CAP_LL_CAPABILITY_PARAM = 0x1B,
-	UCI_CAP_BYPASS_MODE_SUPPORT = 0x1C,
-	/* RFU 0x1D - 0x9f */
+	UCI_CAP_PSDU_LENGTH_SUPPORT = 0x1a,
+	UCI_CAP_LL_CAPABILITY_PARAM = 0x1b,
+	UCI_CAP_BYPASS_MODE_SUPPORT = 0x1c,
+	/* RFU 0x1d - 0x9f */
 	/* VENDOR SPECIFIC 0xa0 - 0xdf */
 	/* RESERVED FOR EXTENSION OF IDS 0xe0 - 0xe2 */
 	/* VENDOR SPECIFIC APP CONFIG 0xe3 - 0xff */
@@ -1162,7 +1188,7 @@ enum uci_device_capability_aosp {
 	 * 0x40 = “24”,
 	 * 0x80 is reserved.
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_CHAPS_PER_SLOT = 0xA0,
+	AOSP_CAPS_CCC_SUPPORTED_CHAPS_PER_SLOT = 0xa0,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_SYNC_CODES: 4 byte bitmask with a list of
 	 *		supported sync codes.
@@ -1181,7 +1207,7 @@ enum uci_device_capability_aosp {
 	 * Refer to IEEE 802.15.4-2015 and CCC
 	 * Specification for SYNC code index definition
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_SYNC_CODES = 0xA1,
+	AOSP_CAPS_CCC_SUPPORTED_SYNC_CODES = 0xa1,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES: 1 byte
 	 * bitmask with a list of supported hopping config modes
@@ -1200,7 +1226,7 @@ enum uci_device_capability_aosp {
 	 * b3=1 is set when the optional AES based
 	 * hopping sequence is supported.
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES = 0xA2,
+	AOSP_CAPS_CCC_SUPPORTED_HOPPING_CONFIG_MODES_AND_SEQUENCES = 0xa2,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_CHANNELS: 1 byte bitmask with list of
 	 *supported channels.
@@ -1211,14 +1237,14 @@ enum uci_device_capability_aosp {
 	 * 0x01 = "Channel 5"
 	 * 0x02 = "Channel 9"
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_CHANNELS = 0xA3,
+	AOSP_CAPS_CCC_SUPPORTED_CHANNELS = 0xa3,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_VERSIONS: Supported CCC version.
 	 *
 	 * 2 byte tuple {major_version (1 byte), minor_version (1 byte)} array
 	 * with list of supported CCC versions
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_VERSIONS = 0xA4,
+	AOSP_CAPS_CCC_SUPPORTED_VERSIONS = 0xa4,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_UWB_CONFIGS: byte array with a list of
 	 *supported UWB configs.
@@ -1230,36 +1256,36 @@ enum uci_device_capability_aosp {
 	 * 0x0001 is mandatory for the device, optional for
 	 * the vehicle.
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_UWB_CONFIGS = 0xA5,
+	AOSP_CAPS_CCC_SUPPORTED_UWB_CONFIGS = 0xa5,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_PULSE_SHAPE_COMBOS: supported CCC pulse
 	 *shape combo.
 	 *
-	 * 1 byte tuple {initiator_tx (4 bits), responder_tx (4 bits)} array
+	 * 1 byte tuple {initiator_tx (4 left-most bits), responder_tx (4 right-most bits)} array
 	 *with list of supported pulse shape combos
 	 *
 	 * Values:
-	 *  PULSE_SHAPE_SYMMETRICAL_ROOT_RAISED_COSINE = 1
-	 *  PULSE_SHAPE_PRECURSOR_FREE = 2
-	 *  PULSE_SHAPE_PRECURSOR_FREE_SPECIAL = 3
+	 *  PULSE_SHAPE_SYMMETRICAL_ROOT_RAISED_COSINE = 0
+	 *  PULSE_SHAPE_PRECURSOR_FREE = 1
+	 *  PULSE_SHAPE_PRECURSOR_FREE_SPECIAL = 2
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_PULSE_SHAPE_COMBOS = 0xA6,
+	AOSP_CAPS_CCC_SUPPORTED_PULSE_SHAPE_COMBOS = 0xa6,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_RAN_MULTIPLIER: Int value for indicating
 	 *		supported ran multiplier.
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_RAN_MULTIPLIER = 0xA7,
+	AOSP_CAPS_CCC_SUPPORTED_RAN_MULTIPLIER = 0xa7,
 	/**
 	 * @AOSP_CAPS_CCC_SUPPORTED_MAX_RANGING_SESSION_NUMBER: 4 byte value to
 	 * 		indicate the maximum number of CCC ranging sessions
 	 * 		supported.
 	 */
-	AOSP_CAPS_CCC_SUPPORTED_MAX_RANGING_SESSION_NUMBER = 0xA8,
+	AOSP_CAPS_CCC_SUPPORTED_MAX_RANGING_SESSION_NUMBER = 0xa8,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_POWER_STATS_QUERY: byte value for indicating
 	 *		supported (1 == supported)
 	 */
-	AOSP_CAPS_SUPPORTED_POWER_STATS_QUERY = 0xC0,
+	AOSP_CAPS_SUPPORTED_POWER_STATS_QUERY = 0xc0,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_AOA_RESULT_REQ_ANTENNA_INTERLEAVING: 1 byte
 	 *value to indicate support for antenna interleaving feature.
@@ -1268,17 +1294,17 @@ enum uci_device_capability_aosp {
 	 *  1 - Feature supported.
 	 *  0 - Feature not supported.
 	 */
-	AOSP_CAPS_SUPPORTED_AOA_RESULT_REQ_ANTENNA_INTERLEAVING = 0xE3,
+	AOSP_CAPS_SUPPORTED_AOA_RESULT_REQ_ANTENNA_INTERLEAVING = 0xe3,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_SESSION_INFO_NTF_CONFIG: 4 bytes bitmask to
 	 *		indicate the supported SESSION_INFO_NTF_CONFIG values.
 	 */
-	AOSP_CAPS_SUPPORTED_SESSION_INFO_NTF_CONFIG = 0xE5,
+	AOSP_CAPS_SUPPORTED_SESSION_INFO_NTF_CONFIG = 0xe5,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_MIN_RANGING_INTERVAL_MS: 4 byte value to
 	 * 		indicate the min ranging interval supported in ms .
 	 */
-	AOSP_CAPS_SUPPORTED_MIN_RANGING_INTERVAL_MS = 0xE4,
+	AOSP_CAPS_SUPPORTED_MIN_RANGING_INTERVAL_MS = 0xe4,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_RSSI_REPORTING: 1 byte bitmask to
 	 *		indicate the supported RSSI_REPORTING values.
@@ -1287,7 +1313,7 @@ enum uci_device_capability_aosp {
 	 *  1 - Feature supported.
 	 *  0 - Feature not supported.
 	 */
-	AOSP_CAPS_SUPPORTED_RSSI_REPORTING = 0xE6,
+	AOSP_CAPS_SUPPORTED_RSSI_REPORTING = 0xe6,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_DIAGNOSTICS: 1 byte value to indicate support
 	 *		for diagnostics feature.
@@ -1295,18 +1321,18 @@ enum uci_device_capability_aosp {
 	 *  1 - Feature supported.
 	 *  0 - Feature not supported.
 	 */
-	AOSP_CAPS_SUPPORTED_DIAGNOSTICS = 0xE7,
+	AOSP_CAPS_SUPPORTED_DIAGNOSTICS = 0xe7,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_MIN_SLOT_DURATION_RSTU: 4 byte value to indicate
 	 * 		the min slot duration supported in RSTU.
 	 */
-	AOSP_CAPS_SUPPORTED_MIN_SLOT_DURATION_RSTU = 0xE8,
+	AOSP_CAPS_SUPPORTED_MIN_SLOT_DURATION_RSTU = 0xe8,
 	/**
 	 * @AOSP_CAPS_SUPPORTED_MAX_RANGING_SESSION_NUMBER: 4 byte value to
 	 * 		indicate the maximum number of FiRa ranging sessions
 	 * 		supported.
 	 */
-	AOSP_CAPS_SUPPORTED_MAX_RANGING_SESSION_NUMBER = 0xE9,
+	AOSP_CAPS_SUPPORTED_MAX_RANGING_SESSION_NUMBER = 0xe9,
 };
 
 /**

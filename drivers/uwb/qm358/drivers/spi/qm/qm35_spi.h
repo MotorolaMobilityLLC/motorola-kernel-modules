@@ -31,11 +31,14 @@
 #include "qm35.h"
 #include "qm35_spi_setup.h"
 #include "qm35_spi_thread.h"
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 #include "qm35_spi_fw.h"
+#endif
 #include "qm35_uci_probe.h"
 
 #define QM35_RESET_DURATION_US 2000
 #define QM35_RESET_BACKOFF_DURATION_US 25000
+#define QM35_BOOTROM_RESET_BACKOFF_DURATION_US 120000
 
 /**
  * enum qm35_spi_debug_flags - QM35 SPI debug_flags bit-field definition.
@@ -114,7 +117,9 @@ struct qm35_spi {
 	struct gpio_desc *wakeup_gpio;
 	struct gpio_desc *exton_gpio;
 	struct qm35_worker worker;
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 	struct qm35_firmware fw;
+#endif
 	struct qm35_work work_recv;
 	struct qm35_work work_send;
 	struct qm35_spi_work_params send_params;

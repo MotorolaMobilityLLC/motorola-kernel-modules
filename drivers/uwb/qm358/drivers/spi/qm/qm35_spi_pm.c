@@ -20,9 +20,10 @@
  * software for any purpose without first obtaining a commercial license from
  * Qorvo. Please contact Qorvo to inquire about licensing terms.
  */
-#include <linux/kernel.h>
 #include <linux/delay.h>
+#include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
+#include <linux/kernel.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
 

@@ -38,12 +38,16 @@
  * * %QM35_CTRL_GET_STATE (2): Retrieve current state of device.
  *
  *   This IOCTL is deprecated and is here to maintain compatibility with other
- *   UCI char dev drivers. This driver will always return %READY state by default.
- * * %QM35_CTRL_FW_UPLOAD (3): Start FW update process and return device state.
- * * %QM35_CTRL_FW_UPLOAD_EXT (3): Start FW update process and return device
- *   state.
+ *   UCI char dev drivers.
+ * * %QM35_CTRL_FW_UPLOAD (3): Run FW update process and return device state.
+ * * %QM35_CTRL_FW_UPLOAD_EXT (3): Run FW update process. The name of the
+ *   firmware file to be loaded can optionally be passed as a parameter.
  *
- *   The name of the firmware file to be loaded is passed as a parameter.
+ *   Both %QM35_CTRL_FW_UPLOAD and %QM35_CTRL_FW_UPLOAD_EXT are synchronous.
+ *
+ *   In case of success of %QM35_CTRL_FW_UPLOAD and %QM35_CTRL_FW_UPLOAD_EXT,
+ *   the return value of the ioctl() call will be the value returned by
+ *   qm35_transport_fw_update().
  * * %QM35_CTRL_POWER (4): Manual power management of the device.
  *
  *   This IOCTL is deprecated and is here to maintain compatibility with other

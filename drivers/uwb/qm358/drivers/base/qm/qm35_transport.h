@@ -42,6 +42,7 @@ struct sk_buff;
  * @QM35_TRANSPORT_MSG_COREDUMP: Coredump message
  * @QM35_TRANSPORT_MSG_LOG: Log message
  * @QM35_TRANSPORT_MSG_QTRACE: Qtrace message
+ * @QM35_TRANSPORT_MSG_AWAKE: Awake message
  * @QM35_TRANSPORT_MSG_MAX: Number of message types
  *
  * Values of this enum match the ul_value of HSSPI protocol used by QM35
@@ -54,6 +55,7 @@ enum qm35_transport_msg_type {
 	QM35_TRANSPORT_MSG_COREDUMP,
 	QM35_TRANSPORT_MSG_LOG,
 	QM35_TRANSPORT_MSG_QTRACE,
+	QM35_TRANSPORT_MSG_AWAKE,
 	QM35_TRANSPORT_MSG_MAX
 };
 

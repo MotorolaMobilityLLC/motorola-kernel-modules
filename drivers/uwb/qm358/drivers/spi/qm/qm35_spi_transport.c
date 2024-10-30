@@ -21,6 +21,7 @@
  * Qorvo. Please contact Qorvo to inquire about licensing terms.
  */
 #include <linux/delay.h>
+#include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -33,6 +34,8 @@
 #include "qm35_transport.h"
 
 #define QM35_COREDUMP_IN_PROGRESS 100
+
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 
 #ifndef CONFIG_QM35_FIRMWARE_DIR
 #define CONFIG_QM35_FIRMWARE_DIR "qorvo/"
@@ -58,6 +61,8 @@ static const char *const qm35_default_fw_list[] = {
 	CONFIG_QM35_FIRMWARE_DIR "qm35.bin",
 	NULL
 };
+
+#endif
 
 /**
  * info_read() - Read received device info.
@@ -262,13 +267,23 @@ int qm35_spi_reset_wait_ready(struct qm35_spi *qmspi, bool bootrom, bool wait)
 		usleep_range(QM35_RESET_DURATION_US,
 			     QM35_RESET_DURATION_US + 100);
 		gpiod_set_value_cansleep(qmspi->reset_gpio, 0);
-		/* Ensure minimum reset backoff duration, as the chip takes some
-		 * time to exit reset state. */
-		usleep_range(QM35_RESET_BACKOFF_DURATION_US,
-			     2 * QM35_RESET_BACKOFF_DURATION_US);
-		if (bootrom)
+		if (!bootrom) {
+			/* Ensure minimum reset backoff duration, as the chip
+			 * takes some time to exit reset state. */
+			usleep_range(QM35_RESET_BACKOFF_DURATION_US,
+				     2 * QM35_RESET_BACKOFF_DURATION_US);
+		} else {
+			/* Ensure bootrom-specific minimum reset backoff
+			 * duration, as the chip takes some time to exit reset
+			 * state and initialize its crypto IP, and only reads
+			 * the boot selection pins afterwards. */
+			usleep_range(
+				QM35_BOOTROM_RESET_BACKOFF_DURATION_US,
+				2 * QM35_BOOTROM_RESET_BACKOFF_DURATION_US);
+
 			/* Reset CS level after reset to bootrom. */
 			qm35_spi_set_cs_level(qmspi, 1);
+		}
 		/* Reset qm35_state. */
 		qmspi->base.state = QM35_STATE_UNKNOWN;
 	}
@@ -309,6 +324,8 @@ static int qm35_spi_reset(struct qm35 *qm35, bool bootrom)
 	/* If bootrom reset is requested, do not wait. */
 	return qm35_spi_reset_wait_ready(qmspi, bootrom, !bootrom);
 }
+
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 
 /**
  * qm35_spi_fw_update_single() - Attempt flashing a single firmware file.
@@ -387,6 +404,8 @@ error:
 	return rc;
 }
 
+#endif
+
 /**
  * qm35_spi_fw_update() - QM35 transport firmware update callback.
  * @qm35: QM35 core instance to update.
@@ -407,6 +426,7 @@ static int qm35_spi_fw_update(struct qm35 *qm35,
 			      struct qm35_fw_version *current_ver,
 			      u16 device_id, const char *fw_name)
 {
+#if IS_ENABLED(CONFIG_QM35_FLASHING)
 	struct qm35_spi *qmspi = qm35_to_qm35_spi(qm35);
 	bool force = false;
 	int rc = 1;
@@ -439,12 +459,12 @@ static int qm35_spi_fw_update(struct qm35 *qm35,
 			 force_cause);
 	}
 
-	if (fw_name) {
+	if (fw_name && fw_name[0]) {
 		/* If fw_name was passed as an argument, use it. */
 		rc = qm35_spi_fw_update_single(qm35, current_ver, fw_name,
 					       force);
 	} else if (!sysfs_streq(qm35_fw_name, "")) {
-		/* Else, use qm35_fw_name is set to a non-empty string. */
+		/* Else, use qm35_fw_name if set to a non-empty string. */
 		rc = qm35_spi_fw_update_single(qm35, current_ver, qm35_fw_name,
 					       force);
 	} else {
@@ -491,6 +511,11 @@ error:
 	mutex_unlock(&qmspi->fw.update_lock);
 	trace_qm35_spi_fw_update_return(qmspi, rc);
 	return rc;
+#else
+	dev_warn(qm35->dev, "Firmware upgrade disabled at built time. "
+			    "Use qm-flashing tool.\n");
+	return 0;
+#endif
 }
 
 /**

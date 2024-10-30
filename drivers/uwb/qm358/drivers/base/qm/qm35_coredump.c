@@ -22,6 +22,7 @@
  */
 #include <linux/bitfield.h>
 #include <linux/device.h>
+#include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/export.h>
 #include <linux/fsnotify.h>
@@ -29,6 +30,7 @@
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/poll.h>
+#include <linux/ratelimit.h>
 #include <linux/seq_file.h>
 #include <linux/skbuff.h>
 #include <linux/slab.h>
@@ -42,6 +44,17 @@
 #include "qm35_coredump.h"
 #include "qm35_notifier.h"
 #include "qm35_transport.h"
+
+static u32 qm35_coredumps_max = 32;
+module_param_named(coredumps_max, qm35_coredumps_max, uint, 0644);
+MODULE_PARM_DESC(coredumps_max,
+		 "Maximum number of simultaneously saved coredumps");
+
+static u32 qm35_coredumps_burst = DEFAULT_RATELIMIT_BURST;
+module_param_named(coredumps_burst, qm35_coredumps_burst, uint, 0444);
+MODULE_PARM_DESC(coredumps_burst, "Maximum number of saved coredumps for 30s");
+
+#define COREDUMPS_RATELIMIT_INTERVAL (30 * HZ)
 
 static LIST_HEAD(coredumps_list);
 
@@ -79,41 +92,7 @@ struct __packed coredump_pkt {
 	};
 };
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 5, 0) && \
-	!defined(CONFIG_SYSFS_HAS_REMOVE_SELF)) || IS_ENABLED(CONFIG_SYSFS_IMPORT_REMOVE_SELF)
-
-#include <linux/completion.h>
-
-struct remove_file_work {
-	struct work_struct work;
-	struct completion cmpl;
-	struct kobject *kobp;
-	const struct attribute *attr;
-};
-
-static void sysfs_remove_file_work(struct work_struct *work)
-{
-	struct remove_file_work *rfw =
-		container_of(work, struct remove_file_work, work);
-	sysfs_remove_file(rfw->kobp, rfw->attr);
-	complete(&rfw->cmpl);
-}
-
-/* This function isn't exported by default on kernel 5.4. */
-bool sysfs_remove_file_self(struct kobject *kobp, const struct attribute *attr)
-{
-	struct remove_file_work rfw;
-	INIT_WORK(&rfw.work, sysfs_remove_file_work);
-	init_completion(&rfw.cmpl);
-	rfw.kobp = kobp;
-	rfw.attr = attr;
-	schedule_work(&rfw.work);
-	wait_for_completion(&rfw.cmpl);
-	return true;
-}
-
-#endif
-
+static void qm35_coredumpx_remove(struct work_struct *work);
 static ssize_t qm35_coredumpx_read(struct file *filp, struct kobject *kobp,
 				   struct bin_attribute *bin_attr, char *buf,
 				   loff_t pos, size_t count);
@@ -215,7 +194,6 @@ static int qm35_coredump_handle_header(struct qm35_coredump *cd,
 
 	/* Fully initialize structure */
 	INIT_LIST_HEAD(&cdd->list);
-	init_waitqueue_head(&cdd->wq);
 	cdd->size = chn.size;
 	cdd->remain = chn.size;
 	cdd->csum = chn.csum;
@@ -237,9 +215,11 @@ static int qm35_coredump_handle_header(struct qm35_coredump *cd,
 			 * will never be completed. Delete it. */
 			dev_warn(dev, fmt, cdd->size, cdd->remain);
 			qm35_coredump_free_data(prev);
+			cd->dump_cnt--;
 		}
 	}
 	list_add(&cdd->list, &cd->dump_list);
+	cd->dump_cnt++;
 	spin_unlock(&cd->dump_lock);
 
 	schedule_delayed_work(&cd->dwork, HZ * 10);
@@ -285,6 +265,20 @@ static int qm35_coredump_handle_body(struct qm35_coredump *cd,
 		cdd->status |= COREDUMP_RCV_ACK;
 	qm35_coredump_send_rcv_status(cd, cdd->status & COREDUMP_RCV_ACK);
 
+	/* Rate-limit the number of stored coredumps. */
+	if (!__ratelimit(&cd->dump_rls)) {
+		dev_warn(dev, "File %s dropped because rate limit\n",
+			 cdd->name);
+		goto freedump;
+	}
+	/* Check number of stored coredumps. */
+	spin_lock(&cd->dump_lock);
+	if (cd->dump_cnt > qm35_coredumps_max) {
+		dev_warn(dev, "File %s dropped because max limit\n", cdd->name);
+		goto freedump_locked;
+	}
+	spin_unlock(&cd->dump_lock);
+
 	/* Create sysfs bin attr file to present this coredump. */
 	memset(&cdd->bin_attr, 0, sizeof(cdd->bin_attr));
 	sysfs_bin_attr_init(&cdd->bin_attr);
@@ -299,17 +293,24 @@ static int qm35_coredump_handle_body(struct qm35_coredump *cd,
 			 cdd->name, ret);
 		/* Error sysfs to expose this coredump. Delete it. */
 		cdd->bin_attr.attr.name = NULL;
-		spin_lock(&cd->dump_lock);
-		qm35_coredump_free_data(cdd);
-		spin_unlock(&cd->dump_lock);
+		goto freedump;
 	} else {
 		dev_info(dev, "File %s created\n", cdd->name);
+		INIT_WORK(&cdd->rfw, qm35_coredumpx_remove);
 		/* Notify coredump file to wakeup application. */
 		if (cd->bin_attr.attr.name) {
 			sysfs_notify(&cd->dev->kobj, NULL,
 				     cd->bin_attr.attr.name);
 		}
 	}
+	return 0;
+
+freedump:
+	spin_lock(&cd->dump_lock);
+freedump_locked:
+	qm35_coredump_free_data(cdd);
+	cd->dump_cnt--;
+	spin_unlock(&cd->dump_lock);
 	return 0;
 }
 
@@ -364,6 +365,32 @@ static void qm35_coredump_event_cb(void *data, struct sk_buff *skb)
 }
 
 /**
+ * qm35_coredumpx_remove() - Async remove coredumpX buffer and sysfs file.
+ * @work: Pointer to rfw field inside struct qm35_coredump_data.
+ *
+ * As kernel 5.4 and below don't export sysfs_remove_file_self() we need to use
+ * another mechanism based on sysfs_remove_bin_file() which cannot be called
+ * from a sysfs file callbacks.
+ *
+ * So all is made asynchronously by this work function.
+ */
+static void qm35_coredumpx_remove(struct work_struct *work)
+{
+	struct qm35_coredump_data *cdd =
+		container_of(work, struct qm35_coredump_data, rfw);
+	struct qm35_coredump *cd = cdd->bin_attr.private;
+	struct device *dev = cd->dev;
+
+	/* Take mutex and remove file. */
+	sysfs_remove_bin_file(&dev->kobj, &cdd->bin_attr);
+	/* Remove from list and free coredump */
+	spin_lock(&cd->dump_lock);
+	qm35_coredump_free_data(cdd);
+	cd->dump_cnt--;
+	spin_unlock(&cd->dump_lock);
+}
+
+/**
  * qm35_coredumpx_read() - Read coredumpX buffer.
  * @filp: The struct file instance.
  * @kobp: Device kernel object associated.
@@ -376,6 +403,10 @@ static void qm35_coredump_event_cb(void *data, struct sk_buff *skb)
  * Since file is created after coredump was fully received, no blocking mode
  * management is required.
  *
+ * Since inode size is known, the caller function, sysfs_kf_bin_read(), won't
+ * call this function when all contents were already read. So the returned
+ * value won't be 0.
+ *
  * Returns: read size on success, else a negative error code.
  */
 static ssize_t qm35_coredumpx_read(struct file *filp, struct kobject *kobp,
@@ -384,17 +415,12 @@ static ssize_t qm35_coredumpx_read(struct file *filp, struct kobject *kobp,
 {
 	struct qm35_coredump_data *cdd =
 		container_of(bin_attr, struct qm35_coredump_data, bin_attr);
-	struct qm35_coredump *cd = (struct qm35_coredump *)bin_attr->private;
 	int ret;
 	ret = memory_read_from_buffer(buf, count, &pos, cdd->buffer,
 				      cdd->offset);
-	if (pos == cdd->offset) {
-		/* This call has completed the read. */
-		sysfs_remove_file_self(kobp, &bin_attr->attr);
-		spin_lock(&cd->dump_lock);
-		qm35_coredump_free_data(cdd);
-		spin_unlock(&cd->dump_lock);
-	}
+	if (pos == cdd->offset)
+		/* This call has completed the read. Start async deletion work. */
+		schedule_work(&cdd->rfw);
 	return ret;
 }
 
@@ -503,6 +529,10 @@ static int qm35_coredump_register(struct qm35 *qm35)
 	spin_lock_init(&coredump->dump_lock);
 	INIT_LIST_HEAD(&coredump->dump_list);
 	INIT_DELAYED_WORK(&coredump->dwork, qm35_coredump_check);
+	ratelimit_state_init(&coredump->dump_rls, COREDUMPS_RATELIMIT_INTERVAL,
+			     qm35_coredumps_burst);
+	/* Avoid generic message in __ratelimit(). */
+	ratelimit_set_flags(&coredump->dump_rls, RATELIMIT_MSG_ON_RELEASE);
 
 	/* Override default handler by our handler. */
 	rc = qm35_transport_register(qm35, QM35_TRANSPORT_MSG_COREDUMP,
@@ -576,17 +606,29 @@ static void qm35_coredump_deregister(struct qm35 *qm35)
 				  qm35_coredump_event_cb);
 	cancel_delayed_work_sync(&coredump->dwork);
 
+retry:
 	/* Free un-read received coredump (and remove sysfs file too). */
 	spin_lock(&coredump->dump_lock);
 	list_for_each_entry_safe (cdd, n, &coredump->dump_list, list) {
 		const char msg[] = "Coredump unread data remain "
 				   "(%lu bytes, %lu missing).\n";
+		if (work_busy(&cdd->rfw)) {
+			/* Work is pending or busy. Since work needs to take
+			 * dump_lock to finish, we just need to retry later. */
+			spin_unlock(&coredump->dump_lock);
+			msleep(10);
+			goto retry;
+		}
 		dev_warn(dev, msg, cdd->offset, cdd->remain);
 		if (!cdd->remain)
 			sysfs_remove_bin_file(&dev->kobj, &cdd->bin_attr);
 		qm35_coredump_free_data(cdd);
+		coredump->dump_cnt--;
 	}
 	spin_unlock(&coredump->dump_lock);
+	/* Avoid generic message in ratelimit_state_exit(). */
+	ratelimit_set_flags(&coredump->dump_rls, 0);
+	ratelimit_state_exit(&coredump->dump_rls);
 
 	/* Remove sysfs control file. */
 	if (coredump->bin_attr.attr.name)
