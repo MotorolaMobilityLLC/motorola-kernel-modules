@@ -550,6 +550,9 @@ static int fts_input_report_b(struct fts_ts_data *data)
             if (data->log_level >= 1) {
                 FTS_DEBUG("[B]Points All Up!");
             }
+#ifdef NDT_DATA_EN
+            ndt_tp_transfer(0,0);
+#endif
             input_report_key(data->input_dev, BTN_TOUCH, 0);
         } else {
             input_report_key(data->input_dev, BTN_TOUCH, 1);
@@ -777,8 +780,8 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
         events[i].id = buf[FTS_TOUCH_ID_POS + base] >> 4;
         events[i].area = buf[FTS_TOUCH_AREA_POS + base] >> 4;
 #ifdef NDT_DATA_EN
-        FTS_DEBUG("finger num : %d,x = (%d),y = (%d)", i,events[i].x,events[i].y);
-        ndt_tp_transfer(events[i].x,events[i].y);
+        FTS_DEBUG("finger num : %d,x = (%d),y = (%d)", i,events[i].x/2,events[i].y);
+        ndt_tp_transfer(events[i].x/2,events[i].y);
 #endif
 
 #ifdef CONFIG_ENABLE_RESOLITION_BOOST
