@@ -123,7 +123,9 @@ void binder_trans_handler(void *data, struct binder_proc *target_proc,
 				}
 				if (i == INTERFACETOKEN_BUFF_SIZE) buf[i-1] = '\0';
 			}
-			moto_binder_write_status(ASYNC_BINDER, task_uid(proc->tsk).val, task_tgid_nr(proc->tsk), task_uid(target_proc->tsk).val, task_tgid_nr(target_proc->tsk), 0, tr->code);
+			if (target_proc->tsk->signal->oom_score_adj <= 250) {
+				moto_binder_write_status(ASYNC_BINDER, task_uid(proc->tsk).val, task_tgid_nr(proc->tsk), task_uid(target_proc->tsk).val, task_tgid_nr(target_proc->tsk), 0, tr->code);
+			}
 		}
 	}
 }
@@ -246,9 +248,6 @@ void moto_binder_write_status(int call_type, int caller_uid, int caller_pid, int
 	e->target_pid = target_pid;
 	e->arg1 = arg1;
 	e->arg2 = arg2;
-
-	if (call_type == ASYNC_BINDER)
-		return;
 
 	moto_binder_send_uevent(call_type, caller_uid, caller_pid, target_uid, target_pid, arg1, arg2);
 }
