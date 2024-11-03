@@ -1,0 +1,12 @@
+# NOTE: v2.0 is still dependent on QC. Gerrits are in progress for using
+# the same code for MTK, and this comment will be removed once this is
+# done.
+ccflags-y += -Wall
+ccflags-y += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/mrkp_test/
+ccflags-y += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include/
+ccflags-y += -I$(ANDROID_BUILD_TOP)/kernel_platform/msm-kernel/include/
+ccflags-y += -I$(ANDROID_BUILD_TOP)/kernel_platform/msm-kernel/
+
+mrkp_test-objs := mrkp_test_main.o symbol.o
+
+obj-m += mrkp_test.o

@@ -1,0 +1,5 @@
+config MOTO_MRKP_TEST
+	tristate "Test MOTO MRKP feature"
+	default m
+	help
+	Test MRKP
