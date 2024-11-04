@@ -106,7 +106,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 					|| (is_heavy_scene() && is_scene(UX_SCENE_AUDIO) && p->prio <=120)))))
 		prio = UX_PRIO_AUDIO;
 	// input & animation & low latency binder
-	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER))
+	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER|UX_TYPE_GESTURE_MONITOR))
 		prio = UX_PRIO_ANIMATOR;
 	// main & render thread of top app, launcher and top UI.
 	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI) || p->tgid == atomic_read(&global_boost_pid))
@@ -218,7 +218,8 @@ void binder_ux_type_set(struct task_struct *task) {
 	// Base feature: low latency binder
 	if (task && ((task_in_top_related_group(current) && task->group_leader->prio < MAX_RT_PRIO)
 					|| (current->group_leader->prio < MAX_RT_PRIO && task_in_top_related_group(task))
-					|| (task_is_animator(current) && task_in_top_related_group(task))))
+					|| (current->group_leader->prio < MAX_RT_PRIO && task->group_leader->prio < MAX_RT_PRIO)
+					|| (task_in_top_related_group(current) && task_in_top_related_group(task))))
 		task_add_ux_type(task, UX_TYPE_LOW_LATENCY_BINDER);
 	else
 		task_clr_ux_type(task, UX_TYPE_LOW_LATENCY_BINDER);
@@ -341,12 +342,16 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 	}
 }
 
+#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_SERVICEMANAGER|UX_TYPE_ANIMATOR)
 static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
 {
 	// Base feature: inherit task ux_type during fork for some native services.
-	int ux_type = task_get_ux_type(orig);
-	if (ux_type & (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_SERVICEMANAGER)) {
+	int ux_type = task_get_ux_type(orig) & UX_TYPE_TO_DUP;
+	if (ux_type != 0) {
 		task_add_ux_type(task, ux_type);
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"copy ux_type %d from %d to %d\n", ux_type, orig->pid, task->pid);
+
 	}
 }
 
