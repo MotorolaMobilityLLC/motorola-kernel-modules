@@ -77,6 +77,8 @@ do {										\
 #define UX_TYPE_INHERIT_LOCK		(1 << 19)
 #define UX_TYPE_CAMERAAPP			(1 << 20)
 #define UX_TYPE_KERNEL				(1 << 21)
+#define UX_TYPE_IO_PRIO_1			(1 << 22)
+#define UX_TYPE_IO_PRIO_2			(1 << 23)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)

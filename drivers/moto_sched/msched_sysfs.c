@@ -11,6 +11,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/ioprio.h>
 #include <linux/sched.h>
 #include <linux/sched/task.h>
 #include <linux/proc_fs.h>
@@ -296,9 +297,15 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_audioapp_tgid = ux_task->tgid;
 			} else if (ux_type & UX_TYPE_CAMERAAPP) {
 				global_camera_tgid = ux_task->tgid;
+			} else if (ux_type & UX_TYPE_IO_PRIO_1) {
+				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_RT, IOPRIO_NORM)); // use rt-4 for UX_TYPE_IO_PRIO_1
+			} else if (ux_type & UX_TYPE_IO_PRIO_2) {
+				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, 0)); // use be-0 for UX_TYPE_IO_PRIO_2
 			}
 			task_add_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
+			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE) && ux_type != UX_TYPE_SYSTEM_LOCK),
+					"set ux_type %d to %d\n", ux_type, ux_task->pid);
 		}
 		mutex_unlock(&ux_mutex);
 
@@ -320,9 +327,13 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_audioapp_tgid = -1;
 			} else if (ux_type & UX_TYPE_CAMERAAPP) {
 				global_camera_tgid = -1;
+			} else if (ux_type & (UX_TYPE_IO_PRIO_1|UX_TYPE_IO_PRIO_2)) {
+				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_BE_NORM));
 			}
 			task_clr_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
+			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE) && ux_type != UX_TYPE_SYSTEM_LOCK),
+					"clr ux_type %d from %d\n", ux_type, ux_task->pid);
 		}
 		mutex_unlock(&ux_mutex);
 	} else {
