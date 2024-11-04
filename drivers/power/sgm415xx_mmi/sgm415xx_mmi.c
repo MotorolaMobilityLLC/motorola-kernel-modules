@@ -631,6 +631,26 @@ __maybe_unused static int sgm4154x_get_input_minvolt_lim(struct charger_device *
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
+static int mmi_is_wireless_online(void) {
+	static struct mtk_charger *info = NULL;
+	struct power_supply *chg_psy = NULL;
+
+	if (info == NULL || IS_ERR(info)) {
+		chg_psy = power_supply_get_by_name("mtk-master-charger");
+		if (chg_psy == NULL || IS_ERR(chg_psy)) {
+			pr_err("%s: get chg_psy failed\n", __func__);
+			return 0;
+		} else {
+			info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
+		}
+
+	}
+
+	return info->wireless_online;
+}
+#endif //get wireless online
+
 static int sgm4154x_set_input_curr_lim(struct charger_device *chg_dev, unsigned int iindpm)
 {
 	int ret;
@@ -644,9 +664,13 @@ static int sgm4154x_set_input_curr_lim(struct charger_device *chg_dev, unsigned 
 #if (defined(__SGM41513_CHIP_ID__) || defined(__SGM41513A_CHIP_ID__) || defined(__SGM41513D_CHIP_ID__))
 	reg_val = (iindpm - SGM4154x_IINDPM_I_MIN_uA) / SGM4154x_IINDPM_STEP_uA;
 #else
-	if (iindpm >= SGM4154x_IINDPM_I_MIN_uA && iindpm <= 3100000) //default
+	if (iindpm >= SGM4154x_IINDPM_I_MIN_uA && iindpm <= 3100000) {//default
+#if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
+		if (mmi_is_wireless_online() && iindpm >= 1150000)
+			iindpm -= 100000;
+#endif
 		reg_val = (iindpm - SGM4154x_IINDPM_I_MIN_uA) / SGM4154x_IINDPM_STEP_uA;
-	else if (iindpm > 3100000 && iindpm < SGM4154x_IINDPM_I_MAX_uA)
+	} else if (iindpm > 3100000 && iindpm < SGM4154x_IINDPM_I_MAX_uA)
 		reg_val = 0x1E;
 	else
 		reg_val = SGM4154x_IINDPM_I_MASK;
@@ -1222,26 +1246,6 @@ static int sgm4154x_charger_set_property(struct power_supply *psy,
 
 	return ret;
 }
-
-#if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
-static int mmi_is_wireless_online(void) {
-	static struct mtk_charger *info = NULL;
-	struct power_supply *chg_psy = NULL;
-
-	if (info == NULL || IS_ERR(info)) {
-		chg_psy = power_supply_get_by_name("mtk-master-charger");
-		if (chg_psy == NULL || IS_ERR(chg_psy)) {
-			pr_err("%s: get chg_psy failed\n", __func__);
-			return 0;
-		} else {
-			info = (struct mtk_charger *)power_supply_get_drvdata(chg_psy);
-		}
-
-	}
-
-	return info->wireless_online;
-}
-#endif //get wireless online
 
 static bool is_pd_rdy(struct sgm4154x_device *sgm) {
 	int type = 0;
