@@ -741,6 +741,7 @@ enum smb_mmi_ext_iio_channels {
 	SMB5_QG_CHARGE_FULL,
 	SMB5_QG_CHARGE_FULL_DESIGN,
 	SMB5_QG_BATT_FULL_CURRENT,
+	SMB5_QG_SOH,
 };
 
 static const char * const smb_mmi_ext_iio_chan_name[] = {
@@ -764,6 +765,7 @@ static const char * const smb_mmi_ext_iio_chan_name[] = {
 	[SMB5_QG_CHARGE_FULL] = "charge_full",
 	[SMB5_QG_CHARGE_FULL_DESIGN] = "charge_full_design",
 	[SMB5_QG_BATT_FULL_CURRENT] = "batt_full_current",
+	[SMB5_QG_SOH] = "soh",
 };
 
 bool is_chan_valid(struct smb_mmi_charger *chip,
@@ -4261,29 +4263,40 @@ static void mmi_heartbeat_work(struct work_struct *work)
 		}
 
 	} else if (!chip->factory_mode) {
-		cap_err = 0;
-		rc = smb_mmi_read_iio_chan(chip,
-					       SMB5_QG_CHARGE_FULL,
-					       &pval.intval);
+		//Get soh from qcom gauge,  or soh=age=fcc/fcc_designed
+		rc = smb_mmi_read_iio_chan(chip, SMB5_QG_SOH, &pval.intval);
 		if (rc < 0) {
-			mmi_err(chip, "Couldn't get charge full\n");
-			cap_err = rc;
-		} else
-			main_cap = pval.intval;
+			mmi_err(chip, "Couldn't get qcom battery soh\n");
+			//chip->age = 100;
+			cap_err = 0;
+			rc = smb_mmi_read_iio_chan(chip,
+						       SMB5_QG_CHARGE_FULL,
+						       &pval.intval);
+			if (rc < 0) {
+				mmi_err(chip, "Couldn't get charge full\n");
+				cap_err = rc;
+			} else
+				main_cap = pval.intval;
 
-		rc = smb_mmi_read_iio_chan(chip,
-					SMB5_QG_CHARGE_FULL_DESIGN,
-					&pval.intval);
-		if (rc < 0) {
-			mmi_err(chip, "Couldn't get charge full design\n");
-			cap_err = rc;
-		} else
-			main_cap_full = pval.intval;
+			rc = smb_mmi_read_iio_chan(chip,
+						SMB5_QG_CHARGE_FULL_DESIGN,
+						&pval.intval);
+			if (rc < 0) {
+				mmi_err(chip, "Couldn't get charge full design\n");
+				cap_err = rc;
+			} else
+				main_cap_full = pval.intval;
 
-		if (cap_err == 0)
-			chip->age = ((main_cap / 10) / (main_cap_full / 1000));
+			if (cap_err == 0)
+				chip->age = ((main_cap / 10) / (main_cap_full / 1000));
 
-		mmi_dbg(chip, "Age %d\n", chip->age);
+			mmi_dbg(chip, "mmi_age %d\n", chip->age);
+		} else {
+			chip->age = pval.intval;
+			mmi_dbg(chip, "get qg soh=%d\n", chip->age);
+			if (chip->cycles < 50)
+				chip->age = 100;
+		}
 
 		/* Fall here for Basic Step and Thermal Charging */
 		mmi_basic_charge_sm(chip, &chg_stat);
@@ -4543,8 +4556,11 @@ static int batt_get_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		if (chip->max_main_psy && chip->max_flip_psy)
 			val->intval = chip->cycles / 100;
-		else
+		else {
 			rc = power_supply_get_property(chip->qcom_psy, psp, val);
+			if (rc >= 0)
+				chip->cycles = val->intval;
+		}
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		if (chip->max_main_psy && chip->max_flip_psy)
