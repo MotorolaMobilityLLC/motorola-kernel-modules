@@ -2225,6 +2225,11 @@ static int sc8989x_chg_get_property(struct power_supply *psy,
 			val->intval = 1;
 		else
 			val->intval = 0;
+#if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
+		if (sc->mmi_charging_full && mmi_is_wireless_online()) {
+			break;
+		}
+#endif
 		if (!sc->vbus_good)
 			sc->mmi_charging_full = false;
 		break;

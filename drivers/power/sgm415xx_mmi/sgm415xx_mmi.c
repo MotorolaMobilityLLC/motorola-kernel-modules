@@ -1325,6 +1325,11 @@ static int sgm4154x_charger_get_property(struct power_supply *psy,
 			val->intval = 1;
 		else
 			val->intval = 0;
+#if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
+		if (sgm->mmi_charging_full && mmi_is_wireless_online()) {
+			break;
+		}
+#endif
 		if (!state.online)
 			sgm->mmi_charging_full = false;
 		break;
