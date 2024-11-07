@@ -5509,7 +5509,7 @@ void hybridswap_force_reclaim(struct mem_cgroup *mcg)
 		return;
 
 	mutex_lock(&hybs->swap_lock);
-	require_size = atomic64_read(&hybs->zram_stored_size);
+	require_size = atomic64_read(&hybs->zram_stored_size) / 2;
 	hybs->force_swapout = true;
 	hybridswap_permcg_reclaim(mcg, require_size, &mcg_reclaimed_size);
 	hybs->force_swapout = false;
