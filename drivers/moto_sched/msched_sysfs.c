@@ -11,7 +11,6 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/ioprio.h>
 #include <linux/sched.h>
 #include <linux/sched/task.h>
 #include <linux/proc_fs.h>
@@ -30,6 +29,10 @@
 #else
 #include <drivers/misc/mediatek/sched/sched_mtk.h>
 #endif
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+#include <linux/ioprio.h>
 #endif
 
 #define MOTO_SCHED_PROC_DIR		"moto_sched"
@@ -297,10 +300,12 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_audioapp_tgid = ux_task->tgid;
 			} else if (ux_type & UX_TYPE_CAMERAAPP) {
 				global_camera_tgid = ux_task->tgid;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 			} else if (ux_type & UX_TYPE_IO_PRIO_1) {
 				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_RT, IOPRIO_NORM)); // use rt-4 for UX_TYPE_IO_PRIO_1
 			} else if (ux_type & UX_TYPE_IO_PRIO_2) {
 				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, 0)); // use be-0 for UX_TYPE_IO_PRIO_2
+#endif
 			}
 			task_add_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
@@ -327,8 +332,10 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 				global_audioapp_tgid = -1;
 			} else if (ux_type & UX_TYPE_CAMERAAPP) {
 				global_camera_tgid = -1;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 			} else if (ux_type & (UX_TYPE_IO_PRIO_1|UX_TYPE_IO_PRIO_2)) {
 				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_BE_NORM));
+#endif
 			}
 			task_clr_ux_type(ux_task, ux_type);
 			put_task_struct(ux_task);
