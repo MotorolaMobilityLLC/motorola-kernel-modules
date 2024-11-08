@@ -2436,7 +2436,9 @@ err_bus_init:
 #else
     wakeup_source_unregister(ts_data->p_ws);
 #endif
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
     cancel_work_sync(&ts_data->resume_work);
+#endif
     if (ts_data->ts_workqueue) destroy_workqueue(ts_data->ts_workqueue);
     kfree_safe(ts_data->bus_tx_buf);
     kfree_safe(ts_data->bus_rx_buf);
@@ -2449,7 +2451,9 @@ err_bus_init:
 int fts_ts_remove_entry(struct fts_ts_data *ts_data)
 {
     FTS_FUNC_ENTER();
+#ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
     cancel_work_sync(&ts_data->resume_work);
+#endif
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
     fts_mmi_dev_unregister(ts_data);
 #endif
