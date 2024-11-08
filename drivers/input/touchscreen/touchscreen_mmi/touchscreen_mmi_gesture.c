@@ -569,7 +569,7 @@ int ts_mmi_gesture_init(struct ts_mmi_dev *touch_cdev)
 		goto exit;
 	}
 
-	sensor_pdata = devm_kzalloc(&sensor_input_dev->dev,
+	sensor_pdata = devm_kzalloc(DEV_TS,
 			sizeof(struct ts_mmi_sensor_platform_data), GFP_KERNEL);
 	if (!sensor_pdata) {
 		dev_err(DEV_TS, "%s: Failed to allocate memory", __func__);
@@ -627,7 +627,7 @@ free_touch_events_data:
 		devm_kfree(DEV_TS, events_data);
 free_sensor_pdata:
 	if (sensor_input_dev && sensor_pdata)
-		devm_kfree(&sensor_input_dev->dev, sensor_pdata);
+		devm_kfree(DEV_TS, sensor_pdata);
 free_sensor_input_dev:
 	if (sensor_input_dev)
 		input_free_device(sensor_input_dev);
@@ -638,11 +638,21 @@ exit:
 int ts_mmi_gesture_remove(struct ts_mmi_dev *touch_cdev)
 {
 	sensors_classdev_unregister(&sensor_pdata->ps_cdev);
-	input_unregister_device(sensor_pdata->input_sensor_dev);
-	devm_kfree(&sensor_pdata->input_sensor_dev->dev, sensor_pdata);
-	devm_kfree(DEV_TS, events_data);
-	sensor_pdata = NULL;
-	events_data = NULL;
+	if (sensor_pdata->input_sensor_dev) {
+		input_unregister_device(sensor_pdata->input_sensor_dev);
+		input_free_device(sensor_pdata->input_sensor_dev);
+		sensor_pdata->input_sensor_dev = NULL;
+	}
+
+	if (sensor_pdata) {
+		devm_kfree(DEV_TS, sensor_pdata);
+		sensor_pdata = NULL;
+	}
+
+	if (events_data) {
+		devm_kfree(DEV_TS, events_data);
+		events_data = NULL;
+	}
 
 	return 0;
 }
@@ -658,7 +668,7 @@ int ts_mmi_cli_gesture_init(struct ts_mmi_dev *touch_cdev)
 		goto exit;
 	}
 
-	cli_sensor_pdata = devm_kzalloc(&sensor_input_dev->dev,
+	cli_sensor_pdata = devm_kzalloc(DEV_TS,
 			sizeof(struct ts_mmi_sensor_platform_data), GFP_KERNEL);
 	if (!cli_sensor_pdata) {
 		dev_err(DEV_TS, "%s: Failed to allocate memory", __func__);
@@ -704,7 +714,7 @@ unregister_sensor_input_device:
 	sensor_input_dev = NULL;
 free_sensor_pdata:
 	if (sensor_input_dev && cli_sensor_pdata)
-		devm_kfree(&sensor_input_dev->dev, cli_sensor_pdata);
+		devm_kfree(DEV_TS, cli_sensor_pdata);
 free_sensor_input_dev:
 	if (sensor_input_dev)
 		input_free_device(sensor_input_dev);
@@ -715,10 +725,16 @@ exit:
 int ts_mmi_cli_gesture_remove(struct ts_mmi_dev *touch_cdev)
 {
 	sensors_classdev_unregister(&cli_sensor_pdata->ps_cdev);
-	input_unregister_device(cli_sensor_pdata->input_sensor_dev);
-	devm_kfree(&cli_sensor_pdata->input_sensor_dev->dev, cli_sensor_pdata);
-	cli_sensor_pdata = NULL;
+	if (cli_sensor_pdata->input_sensor_dev) {
+		input_unregister_device(cli_sensor_pdata->input_sensor_dev);
+		input_free_device(cli_sensor_pdata->input_sensor_dev);
+		cli_sensor_pdata->input_sensor_dev = NULL;
+	}
 
+	if (cli_sensor_pdata) {
+		devm_kfree(DEV_TS, cli_sensor_pdata);
+		cli_sensor_pdata = NULL;
+	}
 	return 0;
 }
 
