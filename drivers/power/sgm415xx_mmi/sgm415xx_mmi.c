@@ -1293,6 +1293,8 @@ static int sgm4154x_charger_get_property(struct power_supply *psy,
 	struct sgm4154x_device *sgm = power_supply_get_drvdata(psy);
 	struct sgm4154x_state state;
 	int ret = 0;
+	int data = 0;
+	int icl = 0;
 	int tcpc_attach = 0;
 
 	mutex_lock(&sgm->lock);
@@ -1413,7 +1415,11 @@ static int sgm4154x_charger_get_property(struct power_supply *psy,
 		val->intval = sgm->batt_vol * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
-		if (is_pd_rdy(sgm)) {
+		sgm4154x_get_input_curr_lim(sgm->chg_dev, &data);
+		icl = data / 1000;
+		if (is_pd_rdy(sgm) && (icl > 500)
+			&& !(sgm->chg_type == POWER_SUPPLY_TYPE_USB))
+		{
 			val->intval = 3225000;
 			break;
 		}
@@ -1428,7 +1434,10 @@ static int sgm4154x_charger_get_property(struct power_supply *psy,
 			val->intval = 500000;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-		if (is_pd_rdy(sgm))
+		sgm4154x_get_input_curr_lim(sgm->chg_dev, &data);
+		icl = data / 1000;
+		if (is_pd_rdy(sgm) && (icl > 500)
+			&& !(sgm->chg_type == POWER_SUPPLY_TYPE_USB))
 			val->intval = 9000000;
 		else
 			val->intval = 5000000;
