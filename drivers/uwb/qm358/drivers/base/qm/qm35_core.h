@@ -71,6 +71,7 @@ int qm35_state_wait(struct qm35 *qm35, enum qm35_state device_state);
 #define KU_NO_UNREGISTER_MOCK
 #define KU_NO_SEND_MOCK
 #include "mocks/ku_transport.h"
+#include "mocks/ku_wait_event.h"
 
 /* The following wrapper MUST be set to ensure the core API don't use
  * functions that have their own tests suite. This will result in
@@ -84,18 +85,6 @@ int qm35_state_wait(struct qm35 *qm35, enum qm35_state device_state);
 /* This one will be declared in qm35_notifier.h, included AFTER qm35_core.h
    in qm35_core.c */
 #define qm35_notifier_notify ku_qm35_notifier_notify
-
-/* wait queue implementation */
-int ku_wait_event_interruptible_timeout(wait_queue_head_t wq_head,
-					unsigned long timeout);
-void ku_wake_up(struct wait_queue_head *wq_head, unsigned int mode, int nr,
-		void *key);
-/* wait_event_interruptible_timeout is a macro,
-   so we need to undefine it before redefine */
-#undef wait_event_interruptible_timeout
-#define wait_event_interruptible_timeout(a, b, c) \
-	ku_wait_event_interruptible_timeout(a, b)
-#define __wake_up ku_wake_up
 
 /* Ensure modified functions aren't exported! */
 #undef EXPORT_SYMBOL

@@ -86,6 +86,7 @@ struct qm35_uci_dev {
 #include "mocks/ku_get_dev_id.h"
 #include "mocks/ku_get_device.h"
 #include "mocks/ku_notifier.h"
+#include "mocks/ku_wait_event.h"
 
 /* Declare our wrapper functions */
 qm35_bypass_handle ku_qm35_bypass_open(struct qm35 *qm35,
@@ -102,7 +103,6 @@ int ku_qm35_bypass_control(qm35_bypass_handle hnd,
 int ku_misc_register(struct miscdevice *misc);
 void ku_misc_deregister(struct miscdevice *misc);
 
-int ku_wait_event_interruptible(wait_queue_head_t wq_head, bool condition);
 void ku_poll_wait(struct file *filp, wait_queue_head_t *wait_address,
 		  poll_table *p);
 
@@ -113,10 +113,10 @@ void ku_poll_wait(struct file *filp, wait_queue_head_t *wait_address,
 #define qm35_bypass_send ku_qm35_bypass_send
 #define qm35_bypass_recv ku_qm35_bypass_recv
 #define qm35_bypass_control ku_qm35_bypass_control
+
 #define misc_register ku_misc_register
 #define misc_deregister ku_misc_deregister
-#undef wait_event_interruptible
-#define wait_event_interruptible ku_wait_event_interruptible
+
 #define poll_wait ku_poll_wait
 
 /* Ensure modified functions aren't exported! */

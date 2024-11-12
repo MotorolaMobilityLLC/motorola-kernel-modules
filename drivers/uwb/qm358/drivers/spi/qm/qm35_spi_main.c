@@ -20,17 +20,19 @@
  * software for any purpose without first obtaining a commercial license from
  * Qorvo. Please contact Qorvo to inquire about licensing terms.
  */
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/of.h>
-#include <linux/version.h>
+#include <linux/skbuff.h>
 #ifdef CONFIG_EVENT_TRACING
 #include <linux/trace_events.h> /* for trace_set_clr_event() */
 #endif
 #include <linux/mmi_device.h>
+#include <linux/version.h>
+#include <linux/wait.h>
 
 #include "qm35_core.h"
 #include "qm35_hsspi.h"
@@ -127,6 +129,29 @@ int qm35_spi_isr(struct qm35_spi *qmspi)
 	qm35_transport_event(&qmspi->base, event);
 	trace_qm35_spi_isr_return(qmspi);
 	return 0;
+}
+
+/**
+ * qm35_spi_awake_handle() - QM35 transport handler for AWAKE packets.
+ * @data: Pointer to qm35_spi structure.
+ * @skb: AWAKE packet received.
+ *
+ * Context: Always called from qm35_transport_event().
+ */
+static void qm35_spi_awake_handle(void *data, struct sk_buff *skb)
+{
+	struct qm35_spi *qmspi = data;
+
+	trace_qm35_spi_awake_handle(qmspi);
+	/* If FW send an AWAKE packet, we can use async wakeup. */
+	qmspi->async_wakeup = true;
+	/* Receiving an AWAKE packet is condition to wake-up qm35_spi_send(). */
+	qmspi->wakeup_event = true;
+	/* Starting with kernel version 6.1, wake_up return an int. But to
+	 * remain compatible with version 5.19 and less, assume it is void. */
+	wake_up(&qmspi->wakeup_wait);
+	/* Free the received skb. */
+	consume_skb(skb);
 }
 
 /**
@@ -258,6 +283,12 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 
 	/* Initialize info file mutex. */
 	mutex_init(&qmspi->info_mutex);
+
+	/* Init async wakeup support and packet handler. */
+	init_waitqueue_head(&qmspi->wakeup_wait);
+	qm35_transport_register(qm, QM35_TRANSPORT_MSG_AWAKE,
+				QM35_TRANSPORT_PRIO_NORMAL,
+				qm35_spi_awake_handle, qmspi);
 
 	/* Register MCPS 802.15.4 device */
 	rc = qm35_register_device(qm);

@@ -21,10 +21,12 @@
  * Qorvo. Please contact Qorvo to inquire about licensing terms.
  */
 #include <linux/delay.h>
+#include <linux/errno.h>
 #include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/wait.h>
 
 #include "qm35_hsspi.h"
 #include "qm35_spi.h"
@@ -61,6 +63,7 @@ static const char *const qm35_default_fw_list[] = {
 	CONFIG_QM35_FIRMWARE_DIR "qm35.bin",
 	NULL
 };
+/* clang-format on */
 
 #endif
 
@@ -76,19 +79,20 @@ static const char *const qm35_default_fw_list[] = {
  * Returns: Written size.
  */
 static ssize_t info_read(struct file *filp, struct kobject *kobp,
-			       struct bin_attribute *bin_attr, char *buf,
-			       loff_t pos, size_t count)
+			 struct bin_attribute *bin_attr, char *buf, loff_t pos,
+			 size_t count)
 {
-	struct qm35_spi *qmspi = container_of(bin_attr, struct qm35_spi, info_bin_attr);
+	struct qm35_spi *qmspi =
+		container_of(bin_attr, struct qm35_spi, info_bin_attr);
 	int ret;
 
 	mutex_lock(&qmspi->info_mutex);
-	ret = memory_read_from_buffer(buf, count, &pos, &qmspi->infobuf, qmspi->len_infobuf);
+	ret = memory_read_from_buffer(buf, count, &pos, &qmspi->infobuf,
+				      qmspi->len_infobuf);
 	mutex_unlock(&qmspi->info_mutex);
 
 	return ret;
 }
-/* clang-format on */
 
 /*
  * QM35 SPI transport implementation
@@ -357,12 +361,11 @@ static int qm35_spi_fw_update_single(struct qm35 *qm35,
 
 	/* Get the version of qm35 firmware on the filesystem. */
 	if (!qm35_fw_get_vendor_version(qmspi, &fw_ver)) {
-		qm35_fw_version_print(dev_info, &qmspi->spi->dev,
+		qm35_fw_version_print(dev_info, qm35->dev,
 				      "Loaded firmware version", &fw_ver);
 		fw_version_found = true;
 	} else {
-		dev_info(&qmspi->spi->dev,
-			 "Loaded firmware version not found%s\n",
+		dev_info(qm35->dev, "Loaded firmware version not found%s\n",
 			 force ? "" : ", no firmware upgrade");
 	}
 
@@ -374,7 +377,7 @@ static int qm35_spi_fw_update_single(struct qm35 *qm35,
 			run_fw_upgrade = true;
 		} else {
 			dev_info(
-				&qmspi->spi->dev,
+				qm35->dev,
 				"Currently running firmware version and loaded firmware "
 				"version are identical, no firmware upgrade\n");
 			/* In this case, returning without flashing is considered a success
@@ -441,7 +444,7 @@ static int qm35_spi_fw_update(struct qm35 *qm35,
 
 	if (qm35_debug_flags & QMSPI_NO_FW_UPDATE) {
 		dev_info(
-			&qmspi->spi->dev,
+			qm35->dev,
 			"Firmware upgrade disabled by debug_flags module parameter\n");
 		goto error;
 	}
@@ -455,7 +458,7 @@ static int qm35_spi_fw_update(struct qm35 *qm35,
 		else
 			force_cause = "firmware version not available";
 
-		dev_warn(&qmspi->spi->dev, "Firmware upgrade triggered by %s\n",
+		dev_warn(qm35->dev, "Firmware upgrade triggered by %s\n",
 			 force_cause);
 	}
 
@@ -563,7 +566,9 @@ static int qm35_send_work(struct qm35_spi *qmspi, const void *in, void *out)
 	int ret;
 
 	/* Ensure the device is wake-up. */
-	qm35_hsspi_wakeup(qmspi, params->wakeup);
+	ret = qm35_hsspi_wakeup(qmspi, params->wakeup);
+	if (ret == -EINPROGRESS)
+		return ret; /* Async wakeup activated. */
 	/* If queued send already made by qm35_recv_job(), return known result. */
 	if ((qm35_debug_flags & QMSPI_COMBINED_WRITE) &&
 	    !atomic_read(&qmspi->should_write))
@@ -636,11 +641,26 @@ static int qm35_spi_send(struct qm35 *qm35, enum qm35_transport_msg_type type,
 			if (ret == -EBUSY && !wakeup_forced) {
 				qmspi->send_params.wakeup = true;
 				wakeup_forced = true;
-				/* If the chip is sleeping on last retry, retry once more. */
+				/* If the chip is sleeping on last retry, retry
+				 * once more. */
 				retry_count = !retry_count ? 1 : retry_count;
 			}
 		}
 		ret = qm35_enqueue(qmspi, &qmspi->work_send);
+		if (ret == -EINPROGRESS) {
+			/* Async wakeup in progress, wait IRQ from outside
+			 * high-prio thread. If QMSPI_COMBINED_WRITE is set,
+			 * the packet will be sent while reading the AWAKE
+			 * packet. */
+			ret = wait_event_interruptible_hrtimeout(
+				qmspi->wakeup_wait, qmspi->wakeup_event,
+				ns_to_ktime(QM35_WAKEUP_DELAY_US * 2000));
+			trace_qm35_spi_send_awake(qmspi, ret);
+			/* If async wakeup used, don't count last try as a try. */
+			retry_count++;
+			/* Ensure no forced wakeup for next call. */
+			ret = -EAGAIN;
+		}
 	}
 	if (ret && (qm35_debug_flags & QMSPI_COMBINED_WRITE))
 		atomic_set(&qmspi->should_write, false);
@@ -779,7 +799,7 @@ error:
 static int qm35_spi_probe(struct qm35 *qm35, char *infobuf, size_t len)
 {
 	struct qm35_spi *qmspi = qm35_to_qm35_spi(qm35);
-	struct device *dev = &qmspi->spi->dev;
+	struct device *dev = qm35->dev;
 	bool soft_reset_sent = false;
 	int rc;
 

@@ -242,14 +242,13 @@ static int qm35_coredump_handle_body(struct qm35_coredump *cd,
 		return -EINVAL;
 	}
 	cdd = list_first_entry(&cd->dump_list, struct qm35_coredump_data, list);
+	spin_unlock(&cd->dump_lock);
 	if (length > cdd->remain) {
-		spin_unlock(&cd->dump_lock);
 		dev_err(dev,
 			"Coredump overflow: max size: %ld, wr_idx: %ld, cd size: %ld\n",
 			cdd->size, cdd->offset, length);
 		return -ENOMEM;
 	}
-	spin_unlock(&cd->dump_lock);
 	memcpy(cdd->buffer + cdd->offset, skb->data, length);
 	cdd->offset += length;
 	cdd->remain -= length;

@@ -33,9 +33,6 @@
 #include "qm35_spi.h"
 #include "qm35_spi_trc.h"
 
-#define QM35_WAKEUP_DURATION_US 500
-#define QM35_WAKEUP_DELAY_US 3000
-
 /**
  * struct qm35_hsspi_message - SPI message with two transfers.
  * @msg: SPI message.
@@ -145,16 +142,23 @@ int qm35_hsspi_wakeup(struct qm35_spi *qmspi, bool force)
 		usleep_range(QM35_WAKEUP_DURATION_US,
 			     QM35_WAKEUP_DURATION_US + 100);
 		gpiod_set_value(qmspi->wakeup_gpio, 0);
-		/* After wake-up the FW need little time to restore it's context. */
-		usleep_range(QM35_WAKEUP_DELAY_US,
-			     QM35_WAKEUP_DELAY_US * 3 / 2);
+		if (!qmspi->async_wakeup) {
+			/* After wake-up the FW need little time to restore it's context. */
+			usleep_range(QM35_WAKEUP_DELAY_US,
+				     QM35_WAKEUP_DELAY_US * 3 / 2);
+		}
 	} else {
 		/* Wakeup using an SPI transaction */
 		struct qm35_hsspi_message xfer;
 		struct spi_transfer *tr = &xfer.tr[0];
-		/* Use a longer wake-up SPI transaction to ensure CS is low when QM FW
-		 * has started, which guaranteed QM stay alive for 10ms more. */
-		const unsigned delay_gpioless = QM35_WAKEUP_DELAY_US * 3 / 2;
+		unsigned delay_gpioless;
+		if (qmspi->async_wakeup) {
+			delay_gpioless = QM35_WAKEUP_DURATION_US;
+		} else {
+			/* Use a longer wake-up SPI transaction to ensure CS is low when QM FW
+			 * has started, which guaranteed QM stay alive for 10ms more. */
+			delay_gpioless = QM35_WAKEUP_DELAY_US * 3 / 2;
+		}
 		/* Setup a no-data transfer! */
 		qm35_hsspi_setup(&xfer, NULL, NULL, false);
 		/* Add a delay after transfer. See spi_transfer_delay_exec() called by
@@ -166,6 +170,10 @@ int qm35_hsspi_wakeup(struct qm35_spi *qmspi, bool force)
 		tr->delay.value = delay_gpioless;
 #endif
 		rc = spi_sync(qmspi->spi, &xfer.msg);
+	}
+	if (!rc && qmspi->async_wakeup) {
+		qmspi->wakeup_event = false;
+		rc = -EINPROGRESS;
 	}
 	return rc;
 }

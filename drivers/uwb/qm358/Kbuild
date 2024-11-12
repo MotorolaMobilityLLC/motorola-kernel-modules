@@ -4,6 +4,7 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 
 GITVERSION := unknown
 
+# Add defines in subdir-ccflags
 subdir-ccflags-y := -I$(src) -I$(src)/include \
  -I$(srctree)/$(src) -I$(srctree)/$(src)/include -Werror -Wall
 subdir-ccflags-y += -DGITVERSION="\"$(GITVERSION)\""

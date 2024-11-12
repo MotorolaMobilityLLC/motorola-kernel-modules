@@ -27,10 +27,10 @@
 #define __QM35_SPI_TRACE
 
 #if !defined(QM35_HSSPI_TRACES) && !defined(QM35_SPI_FW_TRACES) && \
-	!defined(QM35_SPI_PM_TRACES)
+	!defined(QM35_SPI_PM_TRACES) && !defined(QM35_SPI_TRANSPORT_TRACES)
 /* Activate all traces if not included from tests. */
 #define QM35_SPI_MAIN_TRACES
-/*#define QM35_SPI_TRANSPORT_TRACES to uncomment when implementing qm35_spi_transport test suite */
+#define QM35_SPI_TRANSPORT_TRACES
 #define QM35_SPI_FW_TRACES
 #define QM35_SPI_PM_TRACES
 #define QM35_HSSPI_TRACES
@@ -149,7 +149,7 @@ DECLARE_EVENT_CLASS(qms_evt_with_fwname_force,
 /************************************************
  *	qm35_spi transport functions traces	*
  ************************************************/
-#ifdef QM35_SPI_MAIN_TRACES
+#ifdef QM35_SPI_TRANSPORT_TRACES
 
 DEFINE_EVENT(qms_only_evt, qm35_spi_start,
 	TP_PROTO(struct qm35_spi *qms),
@@ -240,6 +240,20 @@ DEFINE_EVENT(qms_evt_with_return, qm35_spi_send_return,
 	TP_ARGS(qms, ret)
 );
 
+TRACE_EVENT(qm35_spi_send_awake,
+	TP_PROTO(struct qm35_spi *qms, int ret),
+	TP_ARGS(qms, ret),
+	TP_STRUCT__entry(
+		QMS_ENTRY
+		__field(int, ret)
+	),
+	TP_fast_assign(
+		QMS_ASSIGN;
+		__entry->ret = ret;
+	),
+	TP_printk(QMS_PR_FMT ", ret: %d", QMS_PR_ARG, __entry->ret)
+);
+
 DEFINE_EVENT(qms_only_evt, qm35_spi_recv,
 	TP_PROTO(struct qm35_spi *qms),
 	TP_ARGS(qms)
@@ -258,6 +272,18 @@ DEFINE_EVENT(qms_only_evt, qm35_spi_probe,
 DEFINE_EVENT(qms_evt_with_return, qm35_spi_probe_return,
 	TP_PROTO(struct qm35_spi *qms, int ret),
 	TP_ARGS(qms, ret)
+);
+
+#endif /* QM35_SPI_TRANSPORT_TRACES */
+
+/****************************************
+ *	qm35_spi_main functions traces	*
+ ****************************************/
+#ifdef QM35_SPI_MAIN_TRACES
+
+DEFINE_EVENT(qms_only_evt, qm35_spi_awake_handle,
+	TP_PROTO(struct qm35_spi *qms),
+	TP_ARGS(qms)
 );
 
 DEFINE_EVENT(qms_only_evt, qm35_spi_isr,

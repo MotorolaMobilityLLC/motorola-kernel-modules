@@ -59,7 +59,7 @@ struct qm35_coredump_data {
 	uint16_t csum;
 	uint8_t status;
 	char name[16];
-	char buffer[0];
+	char buffer[];
 };
 
 /**

@@ -191,6 +191,7 @@ struct qm35 *qm35_alloc_device(struct device *dev, size_t priv_size,
 	 * - mutexes,
 	 * - spinlock,
 	 * - list nodes... */
+	spin_lock_init(&qm35->lock);
 	spin_lock_init(&qm35->bypass_data.lock);
 	INIT_LIST_HEAD(&qm35->bypass_data.channels);
 	init_waitqueue_head(&qm35->wait_state);
