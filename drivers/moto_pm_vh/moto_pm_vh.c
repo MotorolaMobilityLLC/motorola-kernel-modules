@@ -39,7 +39,6 @@
 
 static char freeze_mode_stat[MAX_FREE_MODE_LEN];
 static struct proc_dir_entry *procfs_file;
-static DEFINE_MUTEX(mem_lock);
 
 static bool frozen_moto(struct task_struct *p)
 {
@@ -48,9 +47,7 @@ static bool frozen_moto(struct task_struct *p)
 
 static int moto_pm_vh_seq_show(struct seq_file *f, void *ptr)
 {
-	mutex_lock(&mem_lock);
 	seq_printf(f, "%s", freeze_mode_stat);
-	mutex_unlock(&mem_lock);
 
 	return 0;
 }
@@ -70,7 +67,6 @@ static ssize_t moto_pm_vh_write(struct file *file, const char __user *buf,
 	if (copy_from_user(buffer, buf, count > maxlen ? maxlen : count))
 		return -EFAULT;
 
-	mutex_lock(&mem_lock);
 	if (!memcmp(buffer, "panic", 5)) {
 		memset(freeze_mode_stat, 0x0, MAX_FREE_MODE_LEN);
 		memcpy(freeze_mode_stat, "panic", 5);
@@ -81,7 +77,6 @@ static ssize_t moto_pm_vh_write(struct file *file, const char __user *buf,
 		memcpy(freeze_mode_stat, "normal", 6);
 	}
 	pr_info("%s: freeze_mode_stat [%s]\n", __func__, freeze_mode_stat);
-	mutex_unlock(&mem_lock);
 
 	return count;
 }
@@ -104,14 +99,11 @@ static void try_to_freeze_todo_hook(void *unused, unsigned int todo, unsigned in
 	}
 	read_unlock(&tasklist_lock);
 
-	mutex_lock(&mem_lock);
 	pr_info("%s: freeze_mode_stat [%s]\n", __func__, freeze_mode_stat);
 	if (!memcmp(freeze_mode_stat, "panic", 5)) {
-		mutex_unlock(&mem_lock);
 		/* Trigger a real panic on debug setting */
 		BUG();
 	}
-	mutex_unlock(&mem_lock);
 
 	pr_err("moto_pm_vh: try_to_freeze_todo exit");
 	return;
