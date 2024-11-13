@@ -64,7 +64,7 @@ struct cypsoc_picoleaf_data *cpd_global;
 /// dirver have to turn on Cypress PSoC in order ///
 /// to use I2C connection.                       ///
 
-static int cypsoc_picoleaf_power_off_hw(struct cypsoc_picoleaf_data *cpd)
+int cypsoc_picoleaf_power_off_hw(struct cypsoc_picoleaf_data *cpd)
 {
 	int rc = 0;
 
@@ -2547,15 +2547,13 @@ static void cypsoc_picoleaf_release_device_data(struct cypsoc_picoleaf_data *cpd
 int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
 {
 	int rc=0;
-	
-	printk("%s: lsy0\n", __func__);
+
+	pr_info("cypsoc_picoleaf_probe_cont() starts\n");
 
 	if (!cpd){
 		printk("%s: Error: cypsoc_picoleaf_data is NULL\n", __func__);
 		return CYPSOC_PICOLEAF_RET_NG;
 	}
-
-	printk("%s: lsy1\n", __func__);
 
 	cpd->sysfs_class = class_create(THIS_MODULE, "rakuraku_touch");
 	if(!cpd->sysfs_class){
@@ -2563,11 +2561,9 @@ int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
 		rc = CYPSOC_PICOLEAF_RET_NG;
 	}
 
-	printk("%s: lsy02\n", __func__);
 
 	if(!rc){
 
-		printk("%s: lsy03\n", __func__);
 		cpd->sysfs_dev = device_create(cpd->sysfs_class, NULL, 0, cpd, "psoc_dev");
 		if(!cpd->sysfs_dev){
 			printk("sysfs_dev could not be created\n");
@@ -2577,10 +2573,8 @@ int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
 		}
 	}
 	if(!rc){
-		printk("%s: lsy04\n", __func__);
 		rc = sysfs_create_group(&(cpd->sysfs_dev->kobj), &cypsoc_picoleaf_attr_group);
 		if(rc) {
-			printk("%s: lsy05\n", __func__);
 			rc = CYPSOC_PICOLEAF_RET_NG;
 			device_destroy(cpd->sysfs_class, 0);
 			cpd->sysfs_dev = NULL;
@@ -2589,8 +2583,6 @@ int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
 		}
 	}
 
-	printk("%s: lsy06\n", __func__);
-
 	rc = cypsoc_picoleaf_initialize_driver_data(cpd);
 	if(rc) goto err_probe;
 	dev_set_drvdata(cpd->dev, cpd);
@@ -2598,6 +2590,7 @@ int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
 	cpd_global = cpd;
 
 	printk("cypsoc_picoleaf_probe() reached normal END\n");
+	pr_info("cypsoc_picoleaf_probe_cont() end\n");
 
 	return rc;
 

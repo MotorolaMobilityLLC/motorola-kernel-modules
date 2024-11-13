@@ -163,5 +163,6 @@ int  cypsoc_picoleaf_notification_enabled(void);
 int  cypsoc_picoleaf_firmware_update(struct cypsoc_picoleaf_data *cpd);
 void cypsoc_picoleaf_suspend(void);
 void cypsoc_picoleaf_resume(void);
+int cypsoc_picoleaf_force_power_on_hw(struct cypsoc_picoleaf_data *cpd);
 
 #endif /* _CYPSOC_PICOLEAF_H */
