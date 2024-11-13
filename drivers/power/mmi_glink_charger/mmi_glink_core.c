@@ -546,6 +546,7 @@ static void mmi_update_charger_event(struct mmi_glink_chip *chip)
 	charger_rate = mmi_get_battery_charger_rate(chip);
 	power_watt = chip->charger_info.chrg_pmax_mw;
 	real_charger_type =  chip->charger_info.chrg_type;
+	vbus_present = chip->charger_info.usb_online;
 
 	if (max_charger_rate < charger_rate || charger_rate == MMI_POWER_SUPPLY_CHARGE_RATE_NONE)
 		max_charger_rate = charger_rate;
@@ -689,8 +690,8 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	if (rc)
 		return;
 
-	charger_info->chrg_mv = charger_info_update.chrg_mv;
-	charger_info->chrg_ma = charger_info_update.chrg_mv;
+	charger_info->chrg_uv = charger_info_update.chrg_uv;
+	charger_info->chrg_ua = charger_info_update.chrg_ua;
 	charger_info->chrg_type = charger_info_update.chrg_type;
 	charger_info->chrg_pmax_mw = charger_info_update.chrg_pmax_mw;
 	charger_info->usb_online = charger_info_update.usb_online;
@@ -713,12 +714,12 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	}
 
 	mmi_info(chip, "chrg_present %d, chrg_type %d, chrg_pmax_mw %d,"
-		" chrg_mv %d, chrg_ma %d, usb_in %d, wls_in %d, wls_tx %d, icm_sm_st %d, chrg_otg_enabled %d, thermal_level %d\n",
+		" chrg_uv %d, chrg_ua %d, usb_in %d, wls_in %d, wls_tx %d, icm_sm_st %d, chrg_otg_enabled %d, thermal_level %d\n",
 		charger_info->chrg_present,
 		charger_info->chrg_type,
 		charger_info->chrg_pmax_mw,
-		charger_info->chrg_mv,
-		charger_info->chrg_ma,
+		charger_info->chrg_uv,
+		charger_info->chrg_ua,
 		charger_info->usb_online,
 		charger_info->wls_online,
 		charger_info->wls_tx_enabled,

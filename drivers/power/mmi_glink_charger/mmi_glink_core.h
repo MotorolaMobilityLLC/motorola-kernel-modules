@@ -80,12 +80,12 @@ struct mmi_glink_dev_dts_info {
 };
 
 struct mmi_charger_info {
-	int chrg_mv;
-	int chrg_ma;
+	int chrg_uv;
+	int chrg_ua;
 	int chrg_type;
 	int chrg_pmax_mw;
 	int chrg_present;
-	bool	chrg_otg_enabled;
+	bool chrg_otg_enabled;
 	int usb_online;
 	int wls_online;
 	int wls_tx_enabled;
