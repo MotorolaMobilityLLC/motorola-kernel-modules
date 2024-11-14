@@ -61,7 +61,7 @@ void moto_binder_send_uevent(int type, int caller_uid, int caller_pid, int targe
 		return;
 	}
 
-	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
+	ctx = kzalloc(sizeof(*ctx), GFP_ATOMIC);
 	if (!ctx) {
 		pr_err("no memory\n");
 		return;
