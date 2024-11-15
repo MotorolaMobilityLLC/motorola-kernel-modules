@@ -121,6 +121,11 @@ enum charging_limit_modes {
 	CHARGING_LIMIT_UNKNOWN,
 };
 
+enum mmi_charger_notify_event {
+  NOTIFY_EVENT_MMI_GLINK_STATE_DOWN,
+  NOTIFY_EVENT_MMI_GLINK_STATE_UP,
+};
+
 struct mmi_charger_status {
 	int demo_full_soc;
 	bool demo_chrg_suspend;
@@ -197,6 +202,7 @@ struct mmi_glink_chip {
 	int			heartbeat_factory_interval;
 	struct notifier_block	mmi_reboot;
 	struct notifier_block	mmi_psy_notifier;
+	struct notifier_block	mmi_glink_nb;
 	struct delayed_work	heartbeat_work;
 
 	bool			*debug_enabled;

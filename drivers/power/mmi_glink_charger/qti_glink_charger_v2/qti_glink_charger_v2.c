@@ -1110,7 +1110,7 @@ static bool mmi_is_factory_version(void)
 	return factory_version;
 }
 
-static int qti_charger_init(struct qti_charger *chg)
+static int qti_charger_parameters_init(struct qti_charger *chg)
 {
 	int rc;
 	u32 value;
@@ -1159,6 +1159,19 @@ static int qti_charger_init(struct qti_charger *chg)
 	}
 
 	chg->usb_info.cid_st = -1;
+
+	return rc;
+}
+
+static int qti_charger_init(struct qti_charger *chg)
+{
+	int rc;
+
+	rc = qti_charger_parameters_init(chg);
+	if (rc) {
+		mmi_err(chg,
+			   "qti_charger_parameters_init failed\n");
+	}
 
 	rc = device_create_file(chg->dev,
 				&dev_attr_tcmd);
@@ -1287,10 +1300,18 @@ static void qti_charger_setup_work(struct work_struct *work)
 	struct qti_charger *chg = container_of(work,
 				struct qti_charger, setup_work);
 	enum pmic_glink_state state;
+	unsigned long notification;
+	struct qti_charger_notify_data notify_data;
 
 	state = atomic_read(&chg->state);
 	if (state == PMIC_GLINK_STATE_UP) {
 		mmi_info(chg, "ADSP glink state is up\n");
+		qti_charger_parameters_init(chg);
+		notification = PMIC_GLINK_STATE_UP;
+		notify_data.receiver = OEM_NOTIFY_RECEIVER_MMI_CHG;
+		blocking_notifier_call_chain(&qti_chg_notifier_list,
+				notification,
+				&notify_data);
 	} else if (state == PMIC_GLINK_STATE_DOWN) {
 		mmi_err(chg, "ADSP glink state is down\n");
 	}

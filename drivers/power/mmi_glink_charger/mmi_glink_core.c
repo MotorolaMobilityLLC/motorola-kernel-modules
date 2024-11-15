@@ -1458,6 +1458,30 @@ cleanup:
 	return 0;
 }
 
+static int mmi_glink_charger_notify_callback(struct notifier_block *nb,
+		unsigned long event, void *data)
+{
+	struct qti_charger_notify_data *notify_data = data;
+	struct mmi_glink_chip *chip = container_of(nb, struct mmi_glink_chip, mmi_glink_nb);
+
+	if (notify_data->receiver != OEM_NOTIFY_RECEIVER_MMI_CHG) {
+		mmi_err(chip, "Skip mis-matched receiver: %#x\n", notify_data->receiver);
+		return 0;
+	}
+
+	switch (event) {
+	case NOTIFY_EVENT_MMI_GLINK_STATE_UP:
+		memset(&chip->charger_constraint, 0, sizeof(chip->charger_constraint));
+		mmi_info(chip, "receive GLINK_STATE_UP, clear mmi_charger constraint\n");
+		break;
+	default:
+		mmi_err(chip, "Unknown mmi_glink event: %#lx\n", event);
+		break;
+	}
+
+	return 0;
+}
+
 static int mmi_charger_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -1547,6 +1571,11 @@ static int mmi_charger_probe(struct platform_device *pdev)
 	if (rc) {
 		mmi_err(chip, "couldn't create wls_pmax\n");
 	}
+
+	chip->mmi_glink_nb.notifier_call = mmi_glink_charger_notify_callback;
+	rc = qti_charger_register_notifier(&chip->mmi_glink_nb);
+	if (rc)
+		pr_err("Failed to register mmi_glink notifier, rc=%d\n", rc);
 
 	/* Register the notifier for the psy updates*/
 	chip->mmi_psy_notifier.notifier_call = mmi_psy_notifier_call;
