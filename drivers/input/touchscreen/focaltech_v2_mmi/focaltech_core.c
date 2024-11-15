@@ -693,10 +693,10 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
 #ifdef PICOLEAF_DATA_EN
 	int press = 0;
 	int press_notify = cypsoc_picoleaf_notification_enabled();
-        FTS_INFO("focal from pico press_notify data%d!", press_notify);
+        FTS_DEBUG("focal from pico press_notify data%d!", press_notify);
 	if (press_notify) {
 		cypsoc_picoleaf_get_press_z(&press);
-        FTS_INFO("focal from pico press data%d!", press);
+        FTS_DEBUG("focal from pico press data%d!", press);
 	}
 #endif
     ret = fts_read_touchdata(data);
