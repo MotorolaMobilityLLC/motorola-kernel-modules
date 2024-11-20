@@ -505,7 +505,7 @@ static int ts_test_send_cmd(struct goodix_ts_test *ts_test,
 static int ts_test_irq_enable(struct goodix_ts_test *ts_test,
 	bool flag)
 {
-	return ts_test->ts->hw_ops->irq_enable(ts_test->ts, flag);
+	return ts_test->ts->hw_ops->irq_enable(ts_test->ts, flag, true);
 }
 
 static int ts_test_send_config(struct goodix_ts_test *ts_test,
