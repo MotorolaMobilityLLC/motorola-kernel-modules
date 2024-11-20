@@ -1109,7 +1109,7 @@ static int goodix_fw_update_thread(void *data)
 	mutex_lock(&fwu_ctrl->mutex);
 	ts_debug("notify update start");
 	if (cd->init_stage >= CORE_INIT_STAGE2) {
-		cd->hw_ops->irq_enable(cd, 0);
+		cd->hw_ops->irq_enable(cd, 0, true);
 		goodix_ts_esd_off(cd);
 	}
 
@@ -1174,7 +1174,7 @@ out:
 	end = ktime_get();
 	fwu_ctrl->spend_time = ktime_to_ms(ktime_sub(end, start));
 	if (cd->init_stage >= CORE_INIT_STAGE2) {
-		cd->hw_ops->irq_enable(cd, 1);
+		cd->hw_ops->irq_enable(cd, 1, true);
 		goodix_ts_esd_on(cd);
 	}
 

@@ -310,20 +310,37 @@ static int brl_reset(struct goodix_ts_core *cd, int delay)
 	return brl_select_spi_mode(cd);
 }
 
-static int brl_irq_enbale(struct goodix_ts_core *cd, bool enable)
+static int brl_irq_enbale(struct goodix_ts_core *cd, bool enable, bool en_log)
 {
+	unsigned long irqflags;
+	struct irq_desc *desc;
+
+	spin_lock_irqsave(&cd->irq_lock, irqflags);
 	if (enable && !atomic_cmpxchg(&cd->irq_enabled, 0, 1)) {
 		enable_irq(cd->irq);
-		ts_info("Irq enabled");
+		if (unlikely(en_log)) {
+			ts_info("Irq enabled");
+		}
+		spin_unlock_irqrestore(&cd->irq_lock, irqflags);
 		return 0;
 	}
 
 	if (!enable && atomic_cmpxchg(&cd->irq_enabled, 1, 0)) {
-		disable_irq(cd->irq);
-		ts_info("Irq disabled");
+		disable_irq_nosync(cd->irq);
+		if (unlikely(en_log)) {
+			ts_info("Irq disabled");
+		}
+		spin_unlock_irqrestore(&cd->irq_lock, irqflags);
 		return 0;
 	}
-	ts_debug("warnning: irq deepth inbalance!");
+
+	dump_stack();
+	ts_err("warnning: irq depth inbalance!");
+	desc = irq_to_desc(cd->irq);
+	ts_info("irq state: %s", atomic_read(&cd->irq_enabled) ? "enabled" : "disabled");
+	ts_info("disable-depth: %d", desc->depth);
+	spin_unlock_irqrestore(&cd->irq_lock, irqflags);
+
 	return 0;
 }
 
@@ -1519,7 +1536,7 @@ static int brld_get_cap_data(struct goodix_ts_core *cd,
 	int ret;
 
 	/* disable irq & close esd */
-	brl_irq_enbale(cd, false);
+	brl_irq_enbale(cd, false, true);
 	goodix_ts_esd_off(cd);
 
 	info->buff[0] = rx;
@@ -1566,7 +1583,7 @@ exit:
 	temp_cmd.len = 5;
 	brl_send_cmd(cd, &temp_cmd);
 	/* enable irq & esd */
-	brl_irq_enbale(cd, true);
+	brl_irq_enbale(cd, true, true);
 	goodix_ts_esd_on(cd);
 	return ret;
 }
@@ -1598,7 +1615,7 @@ static int brl_get_capacitance_data(struct goodix_ts_core *cd,
 		return brld_get_cap_data(cd, info);
 
 	/* disable irq & close esd */
-	brl_irq_enbale(cd, false);
+	brl_irq_enbale(cd, false, true);
 	goodix_ts_esd_off(cd);
 
 	/* switch rawdata mode */
@@ -1661,7 +1678,7 @@ exit:
 	val = 0;
 	brl_write(cd, flag_addr, &val, 1);
 	/* enable irq & esd */
-	brl_irq_enbale(cd, true);
+	brl_irq_enbale(cd, true, true);
 	goodix_ts_esd_on(cd);
 	return ret;
 }

@@ -214,7 +214,7 @@ static int goodix_ts_mmi_methods_drv_irq(struct device *dev, int state) {
 	GET_GOODIX_DATA(dev);
 
 	if (core_data->hw_ops->irq_enable)
-		ret = core_data->hw_ops->irq_enable(core_data, !(!state));
+		ret = core_data->hw_ops->irq_enable(core_data, !(!state), true);
 
 	return ret;
 }
@@ -360,10 +360,10 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 
 	switch (to) {
 	case TS_MMI_PM_GESTURE:
-		hw_ops->irq_enable(core_data, false);
+		hw_ops->irq_enable(core_data, false, true);
 		goodix_berlin_gesture_setup(core_data);
 		msleep(16);
-		hw_ops->irq_enable(core_data, true);
+		hw_ops->irq_enable(core_data, true, true);
 		enable_irq_wake(core_data->irq);
 		core_data->gesture_enabled = true;
 		break;
@@ -375,7 +375,7 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 			hw_ops->resume(core_data);
 		if (core_data->gesture_enabled) {
 			core_data->gesture_enabled = false;
-			hw_ops->irq_enable(core_data, true);
+			hw_ops->irq_enable(core_data, true, true);
 		}
 		break;
 	default:
@@ -422,7 +422,7 @@ static int goodix_ts_mmi_pre_resume(struct device *dev) {
 	atomic_set(&core_data->suspended, 0);
 	atomic_set(&core_data->post_suspended, 0);
 	if (core_data->gesture_enabled) {
-		core_data->hw_ops->irq_enable(core_data, false);
+		core_data->hw_ops->irq_enable(core_data, false, true);
 		disable_irq_wake(core_data->irq);
 	}
 

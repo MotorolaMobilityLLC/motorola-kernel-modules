@@ -254,10 +254,10 @@ static long goodix_tools_ioctl(struct file *filp, unsigned int cmd,
 	switch (cmd & NEGLECT_SIZE_MASK) {
 	case GTP_IRQ_ENABLE:
 		if (arg == 1) {
-			hw_ops->irq_enable(ts_core, true);
+			hw_ops->irq_enable(ts_core, true, true);
 			ts_info("IRQ enabled");
 		} else if (arg == 0) {
-			hw_ops->irq_enable(ts_core, false);
+			hw_ops->irq_enable(ts_core, false, true);
 			ts_info("IRQ disabled");
 		} else {
 			ts_info("Irq aready set with, arg = %ld", arg);
