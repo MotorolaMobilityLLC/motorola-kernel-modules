@@ -4629,6 +4629,14 @@ void hybridswap_record(struct zram *zram, u32 index,
 	if (!hybridswap_core_enabled())
 		return;
 
+#if IS_ENABLED(CONFIG_SPRD_UNISOC_MANUFACTURER_MODULE)
+	if ((zram_test_flag(zram, index, ZRAM_UNDER_WB) || zram_test_flag(zram, index, ZRAM_BATCHING_OUT))
+		&& current && (current->flags & PF_KTHREAD ) && strstr(current->comm, "f2fs_ckpt-")) {
+			hybp(HYB_INFO, "Skip f2fs_ckpt record id=%u, comm=%s\n", index, current->comm);
+			return;
+	}
+#endif
+
 	if (!memcg || !memcg->id.id) {
 		stat = hybridswap_fetch_stat_obj();
 		if (stat)
@@ -4679,6 +4687,12 @@ void hybridswap_untrack(struct zram *zram, u32 index)
 
 	while (zram_test_flag(zram, index, ZRAM_UNDER_WB) ||
 			zram_test_flag(zram, index, ZRAM_BATCHING_OUT)) {
+#if IS_ENABLED(CONFIG_SPRD_UNISOC_MANUFACTURER_MODULE)
+		if (current && (current->flags & PF_KTHREAD ) && strstr(current->comm, "f2fs_ckpt-")) {
+			hybp(HYB_INFO, "Skip f2fs_ckpt untrack id=%u, comm=%s\n", index, current->comm);
+			break;
+		}
+#endif
 		zram_slot_unlock(zram, index);
 		udelay(50);
 		zram_slot_lock(zram, index);
