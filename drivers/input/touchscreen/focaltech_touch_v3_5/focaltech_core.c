@@ -1305,10 +1305,12 @@ static irqreturn_t fts_irq_handler(int irq, void *data)
     if (ts_data->suspended)
         __pm_wakeup_event(ts_data->p_ws, jiffies_to_msecs(FTS_WAKELOCK_TIMEOUT));
 
+#if FTS_THP_EN
     if (ts_data->fhp_mode) {
         fts_fhp_irq_handler(ts_data);
         return IRQ_HANDLED;
     }
+#endif
 
     ts_data->intr_jiffies = jiffies;
     fts_prc_queue_work(ts_data);
@@ -2332,10 +2334,12 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
         FTS_ERROR("FwDebug init fail");
     }
 
+#if FTS_THP_EN
     ret = fts_fhp_init(ts_data);
     if (ret) {
         FTS_ERROR("fhp init fail");
     }
+#endif
 
     ret = fts_point_report_check_init(ts_data);
     if (ret) {
@@ -2402,7 +2406,9 @@ err_irq_req:
     fts_gesture_exit(ts_data);
     fts_ex_mode_exit(ts_data);
     fts_point_report_check_exit(ts_data);
+#if FTS_THP_EN
     fts_fhp_exit(ts_data);
+#endif
     fts_fwdbg_exit(ts_data);
     fts_remove_sysfs(ts_data);
     fts_release_apk_debug_channel(ts_data);
@@ -2473,7 +2479,9 @@ int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     fts_remove_sysfs(ts_data);
     fts_release_apk_debug_channel(ts_data);
     fts_fwdbg_exit(ts_data);
+#if FTS_THP_EN
     fts_fhp_exit(ts_data);
+#endif
     input_unregister_device(ts_data->input_dev);
 #if FTS_PEN_EN
     input_unregister_device(ts_data->pen_dev);
