@@ -146,7 +146,33 @@ void binder_reply_handler(void *data, struct binder_proc *target_proc,
 	}
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+void binder_alloc_handler(void *data, size_t size, size_t *free_async_space, int is_async, bool *should_fail)
+{
+	struct task_struct *p = NULL;
+	struct binder_alloc *alloc = NULL;
+
+	alloc = container_of(free_async_space, struct binder_alloc, free_async_space);
+	if (alloc == NULL) {
+		*should_fail = true;
+		return;
+	}
+
+	/*
+	* async buffer free space bigger 1/3 buffer or buffer free lower 100K
+	*/
+	if (is_async
+		&& (alloc->free_async_space < 3 * (size + sizeof(struct binder_buffer))
+		|| (alloc->free_async_space < 100*1024))) {
+		rcu_read_lock();
+		p = find_task_by_vpid(alloc->pid);
+		rcu_read_unlock();
+		if (p != NULL && is_frozen_tg(p)) {
+			moto_binder_write_status(ASYNC_ALLOC_FULL, task_uid(current).val, task_tgid_nr(current), task_uid(p).val, task_tgid_nr(p), 0, 0);
+		}
+	}
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
 void binder_alloc_handler(void *data, size_t size, size_t *free_async_space, int is_async)
 {
 	struct task_struct *p = NULL;
@@ -192,6 +218,16 @@ void binder_alloc_handler(void *data, size_t size, struct binder_alloc *alloc, i
 }
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock, struct binder_proc *proc)
+{
+	if (binder_procs == NULL)
+		binder_procs = hhead;
+
+	if (binder_procs_lock == NULL)
+		binder_procs_lock = lock;
+}
+#else
 void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock)
 {
 	if (binder_procs == NULL)
@@ -200,6 +236,7 @@ void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *l
 	if (binder_procs_lock == NULL)
 		binder_procs_lock = lock;
 }
+#endif
 
 struct moto_binder_transaction_log_entry {
 	int seq_id;
