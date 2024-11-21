@@ -691,7 +691,6 @@ static int gh_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	struct device *dev;
 	int retval = 0;
 	int status = -EINVAL;
-	int conunt = 10;
 	unsigned short val = 0;
 
 	FUNC_ENTRY();
@@ -751,6 +750,13 @@ static int gh_probe(struct i2c_client *client, const struct i2c_device_id *id)
 
 	/*hard reset sensor*/
 	gh_hw_reset(gh_dev, 0);
+
+	//read chip id
+	gh_class_sendcmd(WAKE_UP_CMD);
+	gh_class_read(0x0034, &val);
+	gh_debug(ERR_LOG, "%s, chipid reg:0x0034=0x%04X\n", __func__,val);
+	if(0 == val)
+		return -EPROBE_DEFER;
 
 	/* create class */
 	gh_dev->class = class_create(THIS_MODULE, GH_CLASS_NAME);
@@ -826,15 +832,6 @@ static int gh_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		mutex_unlock(&gh_dev->release_lock);
 		goto err_input;
 	}
-	//read chip id
-	do {
-		gh_class_sendcmd(WAKE_UP_CMD);
-		gh_class_read(0x0034, &val);
-		msleep(50);
-		gh_debug(ERR_LOG, "%s, chipid reg:0x0034=0x%04X\n", __func__,val);
-		if(0x0012 == val)
-		    break;
-	}while (conunt--);
 
 	gh_dev->probe_finish = 1;
 	gh_dev->is_sleep_mode = 0;
