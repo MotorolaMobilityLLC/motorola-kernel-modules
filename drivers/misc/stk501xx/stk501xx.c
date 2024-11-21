@@ -388,7 +388,7 @@ void temperature_compensation(struct stk_data *stk, uint32_t int_flag, uint16_t 
             }
             else //reset descent
             {
-                if(stk->decent_cnt_a)
+                if(stk->decent_cnt_a == 0)
                 {
                     val = 0;
                     STK_REG_WRITE(stk, STK_ADDR_DELTADES_A_CTRL, (uint8_t*)&val);
@@ -431,7 +431,7 @@ void temperature_compensation(struct stk_data *stk, uint32_t int_flag, uint16_t 
             }
             else //reset descent
             {
-                if(stk->decent_cnt_b)
+                if(stk->decent_cnt_b == 0)
                 {
                     val = 0;
                     STK_REG_WRITE(stk, STK_ADDR_DELTADES_B_CTRL, (uint8_t*)&val);
@@ -468,7 +468,7 @@ void temperature_compensation(struct stk_data *stk, uint32_t int_flag, uint16_t 
             }
             else //reset descent
             {
-                if(stk->decent_cnt_c)
+                if(stk->decent_cnt_c == 0)
                 {
                     val = 0;
                     STK_REG_WRITE(stk, STK_ADDR_DELTADES_C_CTRL, (uint8_t*)&val);
