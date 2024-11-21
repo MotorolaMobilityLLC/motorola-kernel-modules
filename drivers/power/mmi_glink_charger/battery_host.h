@@ -45,6 +45,7 @@ struct battery_host {
 	int			first_usage_date;
 	int 			max_fcc_ua;
 	int 			demo_fv_mv;
+	int 			chrg_iterm_ma;
 //	char			batt_sn[MMI_BATT_SN_LEN];
 
 	u32 *thermal_primary_levels;

@@ -887,6 +887,11 @@ static int battery_host_parse_dt(struct mmi_glink_chip *chip, struct battery_hos
 		batt_host->max_fcc_ua = 4000;
 	batt_host->max_fcc_ua *= 1000;
 
+	rc = of_property_read_u32(node, "mmi,chrg-iterm-ma",
+				  &batt_host->chrg_iterm_ma);
+	if (rc)
+		batt_host->chrg_iterm_ma = 300;
+
 	rc = of_property_read_u32(node, "mmi,demo-fv-mv",
 				  &batt_host->demo_fv_mv);
 	if (rc)

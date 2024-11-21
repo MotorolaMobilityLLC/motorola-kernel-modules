@@ -730,6 +730,25 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
 }
 
+#define TAPER_COUNT 2
+static bool mmi_charger_is_charge_tapered(struct mmi_glink_chip *chip, int tapered_ma)
+{
+	bool is_tapered = false;
+	struct battery_info *batt_info = &chip->battery_info;
+	static int chrg_taper_cnt = 0;
+
+	if (abs(batt_info->batt_ua / 1000) <= tapered_ma) {
+		if (chrg_taper_cnt >= TAPER_COUNT) {
+			is_tapered = true;
+			chrg_taper_cnt = 0;
+		} else
+			chrg_taper_cnt++;
+	} else
+		chrg_taper_cnt = 0;
+
+	return is_tapered;
+}
+
 static void mmi_update_charger_status(struct mmi_glink_chip *chip)
 {
 	enum charging_limit_modes charging_limit_modes;
@@ -738,9 +757,10 @@ static void mmi_update_charger_status(struct mmi_glink_chip *chip)
 	struct battery_info *batt_info = &chip->battery_info;
 	struct battery_host *batt_host = chip->batt_host;
 	bool voltage_full;
-	int demo_fv_mv = 0, batt_mv = 0;
+	int demo_fv_mv = 0, batt_mv = 0, chrg_iterm_ma = 0;
 
 	demo_fv_mv = batt_host->demo_fv_mv;
+	chrg_iterm_ma = batt_host->chrg_iterm_ma;
 	batt_mv = batt_info->batt_uv / 1000;
 
 	if (chip->enable_charging_limit && chip->factory_version) {
@@ -770,7 +790,8 @@ static void mmi_update_charger_status(struct mmi_glink_chip *chip)
 	} else if (chip->demo_mode) { /* Demo Mode */
 		status->pres_chrg_step = STEP_DEMO;
 		voltage_full = ((status->demo_chrg_suspend == false) &&
-		    ((batt_mv + HYST_STEP_MV) >= demo_fv_mv));
+		    ((batt_mv + HYST_STEP_MV) >= demo_fv_mv) &&
+			mmi_charger_is_charge_tapered(chip, chrg_iterm_ma));
 
 		if ((status->demo_chrg_suspend == false) &&
 		    ((batt_info->batt_soc >= chip->demo_mode) || voltage_full)) {
@@ -780,7 +801,8 @@ static void mmi_update_charger_status(struct mmi_glink_chip *chip)
 		    (batt_info->batt_soc <= (status->demo_full_soc - DEMO_MODE_HYS_SOC))) {
 			status->demo_chrg_suspend = false;
 		}
-
+		mmi_info(chip, "voltage_full %d, batt_mv %d, demo_mode %d, demo_full_soc %d, batt_soc %d",
+			voltage_full, batt_mv, chip->demo_mode, status->demo_full_soc, batt_info->batt_soc);
 	} else {
 		status->pres_chrg_step = STEP_NORM;
 	}
@@ -796,6 +818,15 @@ static void mmi_charger_set_constraint(struct mmi_glink_chip *chip)
 {
 	int rc;
 	u32 value;
+
+	if (chip->demo_mode != chip->charger_constraint.demo_mode) {
+		value = chip->demo_mode;
+		rc = qti_charger_set_property(OEM_PROP_DEMO_MODE,
+					&value,
+					sizeof(value));
+		if (!rc)
+			chip->charger_constraint.demo_mode = chip->demo_mode;
+	}
 
 	if (chip->dcp_pmax != chip->charger_constraint.dcp_pmax) {
 		value = chip->dcp_pmax;
