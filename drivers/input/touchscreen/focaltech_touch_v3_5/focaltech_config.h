@@ -294,6 +294,10 @@
  */
 #define FTS_POWER_SUSPEND_OFF_EN                0
 
+/*
+ * THP: touch host process
+*/
+#define FTS_THP_EN                              0
 
 /****************************************************/
 
