@@ -489,6 +489,7 @@ static void aw35615_shutdown(struct i2c_client *client)
 		return;
 	}
 
+	core_enable_typec(&chip->port, AW_FALSE);
 	if (chip->gpio_IntN_irq)
 		disable_irq(chip->gpio_IntN_irq);
 	cancel_work_sync(&chip->sm_worker);
@@ -496,7 +497,6 @@ static void aw35615_shutdown(struct i2c_client *client)
 	alarm_cancel(&chip->alarmtimer);
 	aw_GPIO_Cleanup();
 
-	core_enable_typec(&chip->port, AW_FALSE);
 	ret = DeviceWrite(&chip->port, regControl3, length, &data);
 	if (ret < 0)
 		pr_err("send hardreset failed, ret = %d\n", ret);
