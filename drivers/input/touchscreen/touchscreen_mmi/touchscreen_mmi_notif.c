@@ -316,8 +316,10 @@ static void ts_mmi_queued_resume(struct ts_mmi_dev *touch_cdev)
 			TRY_TO_CALL(drv_irq, TS_MMI_IRQ_ON);
 	}
 
+#ifndef CONFIG_TOUCHCLASS_MMI_IRQ_ON_ONCE
 	if (IS_DEEPSLEEP_MODE)
 		TRY_TO_CALL(drv_irq, TS_MMI_IRQ_ON);
+#endif
 
 	TRY_TO_CALL(post_resume);
 

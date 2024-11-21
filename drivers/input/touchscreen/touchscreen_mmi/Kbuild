@@ -40,6 +40,10 @@ ifneq ($(filter m y,$(CONFIG_TOUCHSCREEN_EARLY_RESET_ON_RESUME)),)
 	EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_EARLY_RESET_ON_RESUME
 endif
 
+ifneq ($(filter m y,$(CONFIG_TOUCHCLASS_MMI_IRQ_ON_ONCE)),)
+	EXTRA_CFLAGS += -DCONFIG_TOUCHCLASS_MMI_IRQ_ON_ONCE
+endif
+
 obj-m := touchscreen_mmi.o
 touchscreen_mmi-objs := touchscreen_mmi_class.o touchscreen_mmi_panel.o touchscreen_mmi_notif.o touchscreen_mmi_gesture.o
 
