@@ -430,58 +430,7 @@ static u8 val2reg(enum sc8989x_reg_range id, u32 val)
 	return reg;
 }
 
-#if IS_ENABLED(CONFIG_WLC_WO_BOOST)
-static bool is_atm_mode(void)
-{
-        const char *bootargs_ptr = NULL;
-        char *bootargs_str = NULL;
-        char *idx = NULL;
-        char *kvpair = NULL;
-        struct device_node *n = of_find_node_by_path("/chosen");
-        size_t bootargs_ptr_len = 0;
-        char *value = NULL;
-        bool factory_mode = false;
 
-        if (n == NULL)
-                goto err_putnode;
-
-        bootargs_ptr = (char *)of_get_property(n, "mmi,bootconfig", NULL);
-
-        if (!bootargs_ptr) {
-                goto err_putnode;
-        }
-
-        bootargs_ptr_len = strlen(bootargs_ptr);
-        if (!bootargs_str) {
-                /* Following operations need a non-const version of bootargs */
-                bootargs_str = kzalloc(bootargs_ptr_len + 1, GFP_KERNEL);
-                if (!bootargs_str)
-                        goto err_putnode;
-        }
-        strlcpy(bootargs_str, bootargs_ptr, bootargs_ptr_len + 1);
-
-        idx = strnstr(bootargs_str, "androidboot.atm=", strlen(bootargs_str));
-        if (idx) {
-                kvpair = strsep(&idx, " ");
-                if (kvpair)
-                        if (strsep(&kvpair, "=")) {
-                                value = strsep(&kvpair, "\n");
-                        }
-        }
-        if (value) {
-                if (!strncmp(value, "enable", strlen("enable"))) {
-                        factory_mode = true;
-                }
-        }
-        kfree(bootargs_str);
-
-err_putnode:
-        if (n)
-                of_node_put(n);
-
-        return factory_mode;
-}
-#endif
 
 static bool is_factory_build(void)
 {
@@ -530,6 +479,10 @@ err_putnode1:
         return factory;
 }
 
+#if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
+static int mmi_is_wireless_online(void);
+#endif
+
 static u32 reg2val(enum sc8989x_reg_range id, u8 reg)
 {
 	const struct reg_range *range = &sc8989x_reg_range_ary[id];
@@ -570,6 +523,12 @@ int Charger_Detect_Init(struct sc8989x_chip *sc)
 {
 	struct phy *phy;
 	int ret;
+
+#if IS_ENABLED(CONFIG_WLC_WO_BOOST)
+	if (is_factory_build() && mmi_is_wireless_online())
+		return 0;
+#endif
+
 	phy = phy_get(sc->dev, "usb2-phy");
 	if (IS_ERR_OR_NULL(phy)) {
 		dev_err(sc->dev, "failed to get usb2-phy\n");
@@ -1821,17 +1780,12 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 	if (!prev_vbus_gd && sc->vbus_good) {
 		sc->force_detect_count = 0;
 		type = sc8989x_get_vbus_stat(sc);
-#if IS_ENABLED(CONFIG_WLC_WO_BOOST)
-		if((!is_atm_mode()) || (!is_factory_build()))
-#endif
-		{
-			Charger_Detect_Init(sc);
-			sc->retry_count = 0;
-			dev_info(sc->dev, "%s: adapter/usb inserted\n", __func__);
-			if ((type == VBUS_STAT_NO_INPUT) && (sc->retry_count <  SPECIAL_TYPE_MAX_RETRY)) {
-				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(500));
-				++(sc->retry_count);
-			}
+		Charger_Detect_Init(sc);
+		sc->retry_count = 0;
+		dev_info(sc->dev, "%s: adapter/usb inserted\n", __func__);
+		if ((type == VBUS_STAT_NO_INPUT) && (sc->retry_count <  SPECIAL_TYPE_MAX_RETRY)) {
+			schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(500));
+			++(sc->retry_count);
 		}
 #if IS_ENABLED(CONFIG_WLC_WO_BOOST)
 		sc8989x_set_vindpm_track(sc, SC8989X_TRACK_250);

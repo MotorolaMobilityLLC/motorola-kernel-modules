@@ -217,10 +217,22 @@ out:
  *   [Internal Function]
  *
  *********************************************************/
+static bool is_factory_build(void);
+
+#if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
+static int mmi_is_wireless_online(void);
+#endif
+
  int Charger_Detect_Init(struct sgm4154x_device *sgm)
 {
 	struct phy *phy;
 	int ret;
+
+#if IS_ENABLED(CONFIG_WLC_WO_BOOST)
+	if (is_factory_build() && mmi_is_wireless_online())
+		return 0;
+#endif
+
 	phy = phy_get(sgm->dev, "usb2-phy");
 	if (IS_ERR_OR_NULL(phy)) {
 		dev_err(sgm->dev, "failed to get usb2-phy\n");

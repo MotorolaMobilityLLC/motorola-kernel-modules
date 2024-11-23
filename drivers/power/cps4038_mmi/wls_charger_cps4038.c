@@ -3194,7 +3194,7 @@ static int wireless_fw_update(bool force)
 	const struct firmware *fw;
 	int cfg_buf_size;
 	int addr,ret = CPS_WLS_SUCCESS;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0) || IS_ENABLED(CONFIG_WLC_WO_BOOST))
 	bool boost_enable = false;
 	int sys_mode = 0x00;
 #endif
@@ -3205,7 +3205,7 @@ static int wireless_fw_update(bool force)
 		return CPS_WLS_FAIL;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0) || IS_ENABLED(CONFIG_WLC_WO_BOOST))
 	sys_mode = cps_wls_get_sys_mode();
 	if (chip->rx_ldo_on || sys_mode == SYS_MODE_RX) {
 		cps_wls_log(CPS_LOG_ERR,"%s skip fw update when in wireles charging\n", __func__);
@@ -3225,7 +3225,7 @@ static int wireless_fw_update(bool force)
 	chip->fw_uploading = true;
 	//cps_wls_fw_set_boost(false);
 	//msleep(20);//20mss
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0) || IS_ENABLED(CONFIG_WLC_WO_BOOST))
 	if (boost_enable) {
 		cps_wls_fw_set_boost(true);
 		msleep(100);//100ms
@@ -3252,7 +3252,7 @@ static int wireless_fw_update(bool force)
 
 	cps_wls_log(CPS_LOG_DEBG,"FW size: %zu version: %#x force update: %d\n", fw->size, version, force);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0) || IS_ENABLED(CONFIG_WLC_WO_BOOST))
     chip->chip_id = cps_wls_get_chip_id();
 	if (cps_get_vbus() < VBUS_VALID_MV || chip->chip_id == CPS_WLS_FAIL) {
 		cps_wls_log(CPS_LOG_ERR,
@@ -3448,7 +3448,7 @@ free_bug:
         chip->chip_id = cps_wls_get_chip_id();
 #endif
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0) || IS_ENABLED(CONFIG_WLC_WO_BOOST))
 	if (boost_enable)
 		cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
 #else
@@ -3463,7 +3463,7 @@ free_bug:
 	return ret;
 
 update_fail:
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0) || IS_ENABLED(CONFIG_WLC_WO_BOOST))
 	if (boost_enable)
 		cps_wls_fw_set_boost(false);//disable power, after FW updating, need a power reset
 	msleep(20);//20ms
