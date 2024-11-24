@@ -1,5 +1,9 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
+ifneq ($(filter m y, $(PICOLEAF_DATA_FOR_TOUCH)),)
+	EXTRA_CFLAGS += -DPICOLEAF_DATA_EN
+endif
+
 et5904-objs += et5904-regulator.o
 obj-m	+= et5904.o
