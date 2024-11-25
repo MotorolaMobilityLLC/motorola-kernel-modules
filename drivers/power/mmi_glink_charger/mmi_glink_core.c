@@ -699,6 +699,12 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	charger_info->wls_tx_enabled = charger_info_update.wls_tx_enabled;
 	charger_info->icm_sm_st = charger_info_update.icm_sm_st;
 	charger_info->chrg_otg_enabled = charger_info_update.chrg_otg_enabled;
+	charger_info->pmic_vbatt_uv = charger_info_update.pmic_vbatt_uv;
+	charger_info->pmic_ibatt_ua = charger_info_update.pmic_ibatt_ua;;
+	charger_info->aicl_result_ma = charger_info_update.aicl_result_ma;
+	charger_info->vfloat_mv = charger_info_update.vfloat_mv;
+	charger_info->chrg_stat = charger_info_update.chrg_stat;
+
 
 	if (charger_info->chrg_present != charger_info_update.chrg_present && !charger_info_update.chrg_present) {
 		qti_encrypt_authentication(chip);
@@ -714,7 +720,7 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	}
 
 	mmi_info(chip, "chrg_present %d, chrg_type %d, chrg_pmax_mw %d,"
-		" chrg_uv %d, chrg_ua %d, usb_in %d, wls_in %d, wls_tx %d, icm_sm_st %d, chrg_otg_enabled %d, thermal_level %d\n",
+		" chrg_uv %d, chrg_ua %d, usb_in %d, wls_in %d, wls_tx %d, chrg_otg_enabled %d, thermal_level %d\n",
 		charger_info->chrg_present,
 		charger_info->chrg_type,
 		charger_info->chrg_pmax_mw,
@@ -723,9 +729,16 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 		charger_info->usb_online,
 		charger_info->wls_online,
 		charger_info->wls_tx_enabled,
-		charger_info->icm_sm_st,
 		charger_info->chrg_otg_enabled,
 		thermal_level);
+
+	mmi_info(chip, "pmic_vbatt_mv %d, pmic_ibatt_ma %d, vfloat_mv %d, aicl_result_ma %d, chrg_stat %d, icm_sm_st %d\n",
+		charger_info->pmic_vbatt_uv / 1000,
+		charger_info->pmic_ibatt_ua / 1000,
+		charger_info->vfloat_mv,
+		charger_info->aicl_result_ma,
+		charger_info->chrg_stat,
+		charger_info->icm_sm_st);
 
 	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
 }

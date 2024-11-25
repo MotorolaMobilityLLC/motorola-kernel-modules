@@ -90,6 +90,11 @@ struct mmi_charger_info {
 	int wls_online;
 	int wls_tx_enabled;
 	int icm_sm_st;
+	int pmic_vbatt_uv;
+	int pmic_ibatt_ua;
+	int aicl_result_ma;
+	int vfloat_mv;
+	int chrg_stat;
 };
 
 #define MMI_VOTE_NUM_MAX 32
