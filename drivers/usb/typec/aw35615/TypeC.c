@@ -57,7 +57,7 @@ void StateMachineTypeC(Port_t *port)
 		if (TimerExpired(&port->WaterDetectTimer)) {
 			TimerDisable(&port->WaterDetectTimer);
 
-			if(port->WaterCounter >= 5){
+			if(port->WaterCounter > 6){
 				AW_LOG("waterproof function trigger event\n");
 				port->water_check_set = false;
 				aw35615_set_cc_st(port->water_check_set);
