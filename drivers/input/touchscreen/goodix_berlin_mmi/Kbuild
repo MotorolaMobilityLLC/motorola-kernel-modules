@@ -60,10 +60,6 @@ ifeq ($(filter m y,$(CONFIG_BUILD_KERNEL_VARIANT_PERF)),)
 endif
 endif
 
-ifneq ($(filter m y,$(CONFIG_BUILD_FOR_PERF_MODE)),)
-    EXTRA_CFLAGS += -DCONFIG_BUILD_FOR_PERF_MODE
-endif
-
 ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
 endif

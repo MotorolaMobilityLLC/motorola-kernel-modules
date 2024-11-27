@@ -2005,7 +2005,7 @@ static void goodix_data_statistics(s16 *data, size_t data_size,
 	return;
 }
 
-#if defined(GTP_SAVE_IN_CSV)  && !defined(CONFIG_BUILD_FOR_PERF_MODE)
+#ifdef GTP_SAVE_IN_CSV
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
 static ssize_t fs_write(const void* buf, size_t size, struct file* fp)
 {
@@ -2864,7 +2864,7 @@ static void goodix_put_test_result(struct goodix_ts_test *ts_test,
 		TS_RAWDATA_RESULT_MAX);
 	strncpy(info->result, ts_test->test_info, TS_RAWDATA_RESULT_MAX - 1);
 
-#if defined(GTP_SAVE_IN_CSV)  && !defined(CONFIG_BUILD_FOR_PERF_MODE)
+#ifdef GTP_SAVE_IN_CSV
 	/* save result to file */
 	goodix_save_result_data(ts_test);
 #endif
