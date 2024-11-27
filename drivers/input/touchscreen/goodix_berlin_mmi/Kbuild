@@ -55,7 +55,9 @@ ifneq ($(filter m y,$(CONFIG_GOODIX_ESD_ENABLE)),)
 endif
 
 ifneq ($(filter m y,$(CONFIG_TARGET_BUILD_FACROTY)),)
+ifeq ($(filter m y,$(CONFIG_BUILD_KERNEL_VARIANT_PERF)),)
     EXTRA_CFLAGS += -DGTP_SAVE_IN_CSV
+endif
 endif
 
 ifneq ($(filter m y,$(CONFIG_BUILD_FOR_PERF_MODE)),)
