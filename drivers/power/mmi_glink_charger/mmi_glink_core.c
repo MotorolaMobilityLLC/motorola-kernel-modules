@@ -659,6 +659,14 @@ static void mmi_update_battery_status(struct mmi_glink_chip *chip)
 	if (!ret)
 		batt_info->batt_cycle = prop.intval;
 
+	if (batt_info->batt_soh > 0) {
+		batt_host->age = batt_info->batt_soh;
+	} else if (batt_info->batt_full_uah > 0 && batt_info->batt_design_uah > 0) {
+		batt_host->age = batt_info->batt_full_uah * 100 / batt_info->batt_design_uah;
+	} else if (batt_host->age == 0) {
+		batt_host->age = -1;
+	}
+
 	mmi_info(chip, "batt_mv %d, batt_ma %d, batt_soc %d, batt_temp %d, batt_status %d, batt_soh %d "
 		"batt_full_mah %d, batt_design_mah %d, batt_chg_counter %d, batt_cycle %d, init_cycles %d, batt_num %d",
 		batt_info->batt_uv / 1000, batt_info->batt_ua / 1000, batt_info->batt_soc, batt_info->batt_temp, batt_info->batt_status, batt_info->batt_soh,
