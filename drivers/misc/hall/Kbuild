@@ -17,3 +17,4 @@ KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../sensors/$(GKI_OBJ_MODUL
 
 obj-m += hall_pen.o
 obj-m += hall_folio.o
+obj-m += hall_phone_case.o
