@@ -91,13 +91,18 @@ static void detect_packet_owner(struct sk_buff *skb)
 		goto release_sock;
 	}
 
-	for_each_process(task)
-	{
-		if (task->cred->uid.val == uid) {
+	rcu_read_lock();
+	for_each_process(task) {
+		const struct cred *cred = get_task_cred(task);
+		if (cred && (task->cred->uid.val == uid)) {
 			pr_info("Packet Info: UID: %d, name: %s\n", uid, task->comm);
+			put_cred(cred);
 			break;
 		}
+		put_cred(cred);
 	}
+	rcu_read_unlock();
+
 release_sock:
 	sock_put(sk);
 }
