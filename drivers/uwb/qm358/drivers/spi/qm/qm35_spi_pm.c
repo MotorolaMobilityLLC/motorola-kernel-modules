@@ -26,6 +26,7 @@
 #include <linux/kernel.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_wakeirq.h>
+#include <linux/clk.h>
 
 #include "qm35_spi.h"
 #include "qm35_spi_pm.h"
@@ -100,6 +101,36 @@ static int qm35_spi_power_supply(struct qm35_spi *qmspi, bool on)
 	/* Add some delay to wait regulator stable */
 	usleep_range(qm35_regulator_delay_us, qm35_regulator_delay_us + 100);
 	return rc;
+}
+
+/**
+ * qm35_spi_clock_control() - enable/disable clock.
+ * @qmspi: QM35 SPI instance.
+ * @enable: Requested clock state.
+ */
+static void qm35_spi_clock_control(struct qm35_spi *qmspi, bool enable)
+{
+	struct device *dev = qmspi->base.dev;
+
+	if (qmspi->clk) {
+		if (enable) {
+			if (!qmspi->clk_enabled) {
+				int rc = clk_prepare_enable(qmspi->clk);
+				if(rc)
+					dev_err(dev, "%s: uwb clock enable failed", __func__);
+				else {
+					qmspi->clk_enabled = true;
+					dev_info(dev, "%s: uwb clock enabled\n", __func__);
+				}
+			}
+		} else {
+			if (qmspi->clk_enabled) {
+				clk_disable_unprepare(qmspi->clk);
+				qmspi->clk_enabled = false;
+				dev_info(dev, "%s: uwb clock disabled\n", __func__);
+			}
+		}
+	}
 }
 
 /*
@@ -295,6 +326,8 @@ static int __maybe_unused qm35_pm_runtime_suspend(struct device *dev)
 		dev_warn(dev, "Failure to power-off the QM35! (%d)\n", rc);
 	}
 
+	qm35_spi_clock_control(qmspi, false);
+
 	trace_qm35_pm_runtime_suspend_return(qmspi, rc);
 	return rc;
 }
@@ -314,6 +347,8 @@ static int __maybe_unused qm35_pm_runtime_resume(struct device *dev)
 	int rc;
 
 	trace_qm35_pm_runtime_resume(qmspi);
+
+	qm35_spi_clock_control(qmspi, true);
 
 	rc = qm35_spi_power_supply(qmspi, true);
 	if (rc < 0) {
