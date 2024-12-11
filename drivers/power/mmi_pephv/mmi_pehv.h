@@ -267,6 +267,7 @@ extern int pehv_hal_get_adc(struct chg_alg_device *alg, enum chg_idx chgidx,
 			    enum pehv_adc_channel chan, int *val);
 extern int pehv_hal_get_soc(struct chg_alg_device *alg, u32 *soc);
 extern int pehv_hal_is_hv_adapter_ready(struct chg_alg_device *alg);
+extern int pehv_hal_set_cv(struct chg_alg_device *alg, enum chg_idx chgidx, u32 uv);
 extern int pehv_hal_set_ichg(struct chg_alg_device *alg, enum chg_idx chgidx,
 			     u32 mA);
 extern int pehv_hal_set_aicr(struct chg_alg_device *alg, enum chg_idx chgidx,

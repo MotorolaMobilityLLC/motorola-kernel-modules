@@ -753,6 +753,9 @@ static int pehv_stop(struct pehv_algo_info *info, struct pehv_stop_info *sinfo)
 		}
 	}
 
+	if (data->cv_limit > 0)
+		pehv_hal_set_cv(info->alg, CHG1, data->cv_limit * 1000);
+
 	pehv_enable_swchg_charging(info, true);
 	pehv_hal_enable_sw_vbusovp(info->alg, true);
 	pehv_send_notification(info, EVT_ALGO_STOP, &notify);

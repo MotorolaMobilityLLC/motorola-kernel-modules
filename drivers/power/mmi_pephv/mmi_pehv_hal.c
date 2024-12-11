@@ -485,6 +485,18 @@ int pehv_hal_is_hv_adapter_ready(struct chg_alg_device *alg)
 	return ALG_TA_NOT_SUPPORT;
 }
 
+int pehv_hal_set_cv(struct chg_alg_device *alg, enum chg_idx chgidx, u32 uv)
+{
+	int chgtyp = to_chgtyp(chgidx);
+	struct pehv_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
+
+	if (chgtyp < 0)
+		return chgtyp;
+	return charger_dev_set_constant_voltage(hal->chgdevs[chgtyp],
+						uv);
+}
+
+
 int pehv_hal_set_ichg(struct chg_alg_device *alg, enum chg_idx chgidx, u32 mA)
 {
 	int chgtyp = to_chgtyp(chgidx);
