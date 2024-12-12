@@ -37,7 +37,7 @@
 #include <linux/proc_fs.h>
 #include <linux/suspend.h>
 #include <trace/events/power.h>
-
+#include <linux/cred.h>
 
 #define PROC_NUMBUF 13
 
