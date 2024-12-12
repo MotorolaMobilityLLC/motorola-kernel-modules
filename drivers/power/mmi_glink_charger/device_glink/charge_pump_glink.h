@@ -20,7 +20,7 @@ struct charge_pump_dev_info
 	bool ovpgate;
 	bool manual;
 	bool otg_en;
-	u16 chip_id;
+	s32 chip_id;
 	u8 chg_role;
 	u8 work_mode;
 	u8 int_stat;

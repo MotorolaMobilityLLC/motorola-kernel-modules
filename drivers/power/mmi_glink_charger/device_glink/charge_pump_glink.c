@@ -274,12 +274,12 @@ static int charge_pump_notify_handler(struct notifier_block *nb, unsigned long e
 			mmi_err(this_root_chip, "charge_pump_get_prop, Can not find correct charge_pump role %d", charge_pump_chip->dev_role);
 			return rc;
 		}
-		mmi_info(this_root_chip, "charge_pump_dev[0x%02x]-[%d]: chg_en %d, work_mode %d, ovpgate %d, manual_mode %d, otg_en %d,"
+		mmi_info(this_root_chip, "charge_pump_dev[0x%04x]-[%d]: chg_en %d, work_mode %d, ovpgate %d, manual_mode %d, otg_en %d,"
 									"int_stat %d, ibus_ma %d, ibat_ma %d",
 							charge_pump_info.chip_id, charge_pump_chip->dev_role, charge_pump_info.chg_en, charge_pump_info.work_mode,
 							charge_pump_info.ovpgate, charge_pump_info.manual, charge_pump_info.otg_en, charge_pump_info.int_stat,
 							charge_pump_info.ibus_ma, charge_pump_info.ibat_ma);
-		mmi_info(this_root_chip, "charge_pump_dev[0x%02x]-[%d]: vbus_mv %d, vout_mv %d, vac_mv %d, vbat_mv %d, vusb_mv %d, vwpc_mv %d, die_temp %d",
+		mmi_info(this_root_chip, "charge_pump_dev[0x%04x]-[%d]: vbus_mv %d, vout_mv %d, vac_mv %d, vbat_mv %d, vusb_mv %d, vwpc_mv %d, die_temp %d",
 							charge_pump_info.chip_id, charge_pump_chip->dev_role,charge_pump_info.vbus_mv, charge_pump_info.vout_mv, charge_pump_info.vac_mv,
 							charge_pump_info.vbat_mv, charge_pump_info.vusb_mv, charge_pump_info.vwpc_mv, charge_pump_info.die_temp);
 	}
