@@ -112,6 +112,16 @@ enum mmi_chrg_step {
 	STEP_STOP,
 };
 
+#define MAX_NUM_TEMP_ZONE 10
+enum mmi_temp_zones {
+	ZONE_FIRST = 0,
+	/* states 0-9 are reserved for zones */
+	ZONE_LAST = MAX_NUM_TEMP_ZONE + ZONE_FIRST - 1,
+	ZONE_HOT,
+	ZONE_COLD,
+	ZONE_NONE,
+};
+
 static char *stepchg_str[] = {
 	[STEP_NONE]		= "NONE",
 	[STEP_NORM]		= "NORMAL",
@@ -134,6 +144,7 @@ enum mmi_charger_notify_event {
 struct mmi_charger_status {
 	int demo_full_soc;
 	bool demo_chrg_suspend;
+	enum mmi_temp_zones pres_temp_zone;
 	enum mmi_chrg_step pres_chrg_step;
 	enum charging_limit_modes charging_limit_modes;
 };

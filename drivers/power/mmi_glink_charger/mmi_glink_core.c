@@ -595,6 +595,7 @@ static void mmi_update_battery_status(struct mmi_glink_chip *chip)
 	struct battery_host *batt_host = chip->batt_host;
 	struct battery_info *batt_info = &chip->battery_info;
 	struct battery_info qti_batt_info;
+	struct mmi_charger_status *chrg_status = &chip->charger_status;
 	union power_supply_propval prop;
 	int ret = 0;
 	if (!batt_host->batt_psy) {
@@ -667,11 +668,16 @@ static void mmi_update_battery_status(struct mmi_glink_chip *chip)
 		batt_host->age = -1;
 	}
 
+	if (chip->max_chrg_temp > 0 && batt_info->batt_temp >= (chip->max_chrg_temp * 10))
+		chrg_status->pres_temp_zone = ZONE_HOT;
+	else
+		chrg_status->pres_temp_zone = ZONE_FIRST;
+
 	mmi_info(chip, "batt_mv %d, batt_ma %d, batt_soc %d, batt_temp %d, batt_status %d, batt_soh %d "
-		"batt_full_mah %d, batt_design_mah %d, batt_chg_counter %d, batt_cycle %d, init_cycles %d, batt_num %d",
+		"batt_full_mah %d, batt_design_mah %d, batt_chg_counter %d, batt_cycle %d, init_cycles %d, batt_num %d, max_chrg_temp %d",
 		batt_info->batt_uv / 1000, batt_info->batt_ua / 1000, batt_info->batt_soc, batt_info->batt_temp, batt_info->batt_status, batt_info->batt_soh,
 		batt_info->batt_full_uah / 1000, batt_info->batt_design_uah / 1000, batt_info->batt_chg_counter,
-		batt_info->batt_cycle, batt_host->init_cycles, batt_host->batt_dev_num);
+		batt_info->batt_cycle, batt_host->init_cycles, batt_host->batt_dev_num, chip->max_chrg_temp);
 
 	return;
 }
@@ -805,7 +811,9 @@ static void mmi_update_charger_status(struct mmi_glink_chip *chip)
 		status->pres_chrg_step = STEP_NONE;
 	} else if (batt_info->batt_status == POWER_SUPPLY_STATUS_FULL) {
 		status->pres_chrg_step = STEP_FULL;
-	} else if (status->charging_limit_modes == CHARGING_LIMIT_RUN) {
+	} else if (status->charging_limit_modes == CHARGING_LIMIT_RUN ||
+			status->pres_temp_zone == ZONE_HOT ||
+			status->pres_temp_zone == ZONE_COLD) {
 		status->pres_chrg_step = STEP_STOP;
 
 	} else if (chip->demo_mode) { /* Demo Mode */
@@ -828,8 +836,9 @@ static void mmi_update_charger_status(struct mmi_glink_chip *chip)
 		status->pres_chrg_step = STEP_NORM;
 	}
 
-	mmi_info(chip, "StepChg: %s, LimitMode: %d, DemoSuspend: %d\n",
+	mmi_info(chip, "StepChg: %s, TempZone: %d, LimitMode: %d, DemoSuspend: %d\n",
 		stepchg_str[(int)status->pres_chrg_step],
+		status->pres_temp_zone,
 		status->charging_limit_modes,
 		status->demo_chrg_suspend);
 
