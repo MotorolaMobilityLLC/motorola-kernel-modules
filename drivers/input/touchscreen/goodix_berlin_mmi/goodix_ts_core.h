@@ -132,8 +132,13 @@ enum CHECKSUM_MODE {
 	CHECKSUM_MODE_U16_LE,
 };
 
+#ifdef CONFIG_GTP_STYLUS_VSYNC
+#define MAX_SCAN_FREQ_NUM            8
+#define MAX_SCAN_RATE_NUM            8
+#else
 #define MAX_SCAN_FREQ_NUM            5
 #define MAX_SCAN_RATE_NUM            5
+#endif
 #define MAX_FREQ_NUM_STYLUS          8
 #define MAX_STYLUS_SCAN_FREQ_NUM     6
 #pragma pack(1)
@@ -513,6 +518,9 @@ struct goodix_mode_info {
 	int report_rate_mode;
 	int edge_mode[2];
 	int pitch_mode;
+#ifdef CONFIG_GTP_STYLUS_VSYNC
+	int vsync_mode;
+#endif
 	int liquid_detection;
 #ifdef GOODIX_PALM_SENSOR_EN
 	int palm_detection;

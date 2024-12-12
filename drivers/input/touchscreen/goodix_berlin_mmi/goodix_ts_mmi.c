@@ -73,6 +73,12 @@ static ssize_t goodix_ts_pitch_show(struct device *dev,
 static ssize_t goodix_ts_pitch_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size);
 
+#ifdef CONFIG_GTP_STYLUS_VSYNC
+static ssize_t goodix_ts_vsync_show(struct device *dev,
+	struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_vsync_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t size);
+#endif
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
 static ssize_t goodix_ts_fp_event_show(struct device *dev,
 	struct device_attribute *attr, char *buf);
@@ -104,6 +110,10 @@ static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(pitch, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_pitch_show, goodix_ts_pitch_store);
 
+#ifdef CONFIG_GTP_STYLUS_VSYNC
+static DEVICE_ATTR(vsync, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_vsync_show, goodix_ts_vsync_store);
+#endif
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
 static DEVICE_ATTR(fp_event, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fp_event_show, NULL);
@@ -169,6 +179,10 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->board_data.pitch_ctrl)
 		ADD_ATTR(pitch);
+
+#ifdef CONFIG_GTP_STYLUS_VSYNC
+	ADD_ATTR(vsync);
+#endif
 
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
 		ADD_ATTR(fp_event);
@@ -852,6 +866,80 @@ exit:
 	return size;
 }
 
+#ifdef CONFIG_GTP_STYLUS_VSYNC
+static ssize_t goodix_ts_vsync_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info("Vsync mode state = 0x%02x.\n", core_data->set_mode.vsync_mode);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x\n", core_data->set_mode.vsync_mode);
+}
+
+static ssize_t goodix_ts_vsync_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long value = 0;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		ts_err("pitch mode: Failed to convert value\n");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+	switch (value) {
+		case 30:
+			ts_info("touch default cfg value\n");
+			core_data->get_mode.vsync_mode = 0x00;
+			break;
+		case 31:
+			ts_info("touch enter vsync mode\n");
+			core_data->get_mode.vsync_mode = 0x01;
+			break;
+		default:
+			ts_info("unsupport vsync mode type, value = %lu\n", value);
+			mutex_unlock(&core_data->mode_lock);
+			return -EINVAL;
+	}
+
+	if (core_data->set_mode.vsync_mode == core_data->get_mode.vsync_mode) {
+		ts_info("The value = 0x%02x is same, so not to write", core_data->get_mode.vsync_mode);
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	ret = goodix_ts_send_cmd(core_data, VSYNC_SWITCH_CMD, 5,
+		core_data->get_mode.vsync_mode , 0x00);
+	if (ret < 0) {
+		ts_err("failed to send vsync mode cmd");
+		goto exit;
+	}
+
+	core_data->set_mode.vsync_mode = core_data->get_mode.vsync_mode;
+	msleep(20);
+
+	ts_info("Success to set vsync mode = 0x%02x", core_data->get_mode.vsync_mode);
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return size;
+}
+#endif
+
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
 static ssize_t goodix_ts_fp_event_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -1486,6 +1574,17 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 			ts_info("Success to set pitch mode = 0x%02x", core_data->get_mode.pitch_mode);
 		}
 	}
+
+#ifdef CONFIG_GTP_STYLUS_VSYNC
+	if (core_data->get_mode.vsync_mode) {
+		ret = goodix_ts_send_cmd(core_data, VSYNC_SWITCH_CMD, 5, core_data->get_mode.vsync_mode, 0);
+		if (!ret) {
+			core_data->set_mode.vsync_mode = core_data->get_mode.vsync_mode;
+			msleep(20);
+			ts_info("Success to set vsync mode = 0x%02x", core_data->get_mode.vsync_mode);
+		}
+	}
+#endif
 
 	if (core_data->get_mode.liquid_detection) {
 		ret = goodix_ts_send_cmd(core_data, LIQUID_DETECTION_SWITCH_CMD, 5,

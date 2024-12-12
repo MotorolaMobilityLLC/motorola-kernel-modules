@@ -62,4 +62,5 @@ int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
 #define ENTER_STOWED_MODE_CMD   0x97
 #define ENTER_POCKET_MODE_CMD   0x63
 #define PITCH_SWITCH_CMD   0x29
+#define VSYNC_SWITCH_CMD   0x11
 #endif

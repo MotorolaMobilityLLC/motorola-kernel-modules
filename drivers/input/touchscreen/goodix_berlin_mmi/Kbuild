@@ -64,6 +64,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_STYLUS_VSYNC)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_STYLUS_VSYNC
+endif
+
 ifneq ($(filter m y,$(CONFIG_GTP_DDA_STYLUS)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_DDA_STYLUS
     goodix_brl_mmi-objs += goodix_ts_dda.o
