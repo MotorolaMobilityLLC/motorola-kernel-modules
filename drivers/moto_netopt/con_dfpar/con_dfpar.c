@@ -37,7 +37,9 @@
 #include <linux/proc_fs.h>
 #include <linux/suspend.h>
 #include <trace/events/power.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94))
 #include <linux/cred.h>
+#endif
 
 #define PROC_NUMBUF 13
 
@@ -91,6 +93,7 @@ static void detect_packet_owner(struct sk_buff *skb)
 		goto release_sock;
 	}
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 94))
 	rcu_read_lock();
 	for_each_process(task) {
 		const struct cred *cred = get_task_cred(task);
@@ -102,6 +105,14 @@ static void detect_packet_owner(struct sk_buff *skb)
 		put_cred(cred);
 	}
 	rcu_read_unlock();
+#else
+	for_each_process(task) {
+		if (task->cred->uid.val == uid) {
+			pr_info("Packet Info: UID: %d, name: %s\n", uid, task->comm);
+			break;
+		}
+	}
+#endif
 
 release_sock:
 	sock_put(sk);
