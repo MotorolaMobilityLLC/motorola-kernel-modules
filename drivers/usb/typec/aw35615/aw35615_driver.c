@@ -496,6 +496,8 @@ static void aw35615_shutdown(struct i2c_client *client)
 	//hrtimer_cancel(&chip->sm_timer);
 	alarm_cancel(&chip->alarmtimer);
 	aw_GPIO_Cleanup();
+	SetTypeCState(&chip->port, Unattached);
+	SetPEState(&chip->port, peDisabled);
 
 	ret = DeviceWrite(&chip->port, regControl3, length, &data);
 	if (ret < 0)
