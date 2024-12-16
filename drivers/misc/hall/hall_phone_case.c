@@ -255,22 +255,12 @@ static irqreturn_t hall_sensor_interrupt_handler(int irq, void *dev_id)
 	PM_WAKEUP_EVENT(hall_sensor_dev->wake_lock,msecs_to_jiffies(100));
 #endif
 
-	int i;
 	/* go on to complete the init process */
 	if (!hall_sensor_dev->init_completed) {
 		hall_sensor_dev->init_completed = true;
 		/* schedule a short time delayed work, it may be canceled if irq
 			triggers immediately after enable */
 		//queue_delayed_work(hall_sensor_wq, &hall_sensor_dev->hall_sensor_work, msecs_to_jiffies(5));
-		for (i = 0; i < hall_sensor_dev->gpio_num; i++)
-		{
-			if (hall_sensor_dev->gpio_list[i].irq) {
-				enable_irq(hall_sensor_dev->gpio_list[i].irq);
-				enable_irq_wake(hall_sensor_dev->gpio_list[i].irq);
-				LOG_INFO("enable irq: %d\r\n", hall_sensor_dev->gpio_list[i].irq);
-			}
-		}
-		LOG_INFO("init completed\r\n");
 	} else {
 		check_and_send();
 	}
@@ -405,7 +395,13 @@ static int hall_sensor_probe(struct platform_device *pdev)
 				hall_sensor_dev->gpio_list[i].irq = 0;
 				goto fail_for_irq;
 			}
-			disable_irq(hall_sensor_dev->gpio_list[i].irq);
+			//disable_irq(hall_sensor_dev->gpio_list[i].irq);
+			if (hall_sensor_dev->gpio_list[i].irq) {
+				enable_irq(hall_sensor_dev->gpio_list[i].irq);
+				enable_irq_wake(hall_sensor_dev->gpio_list[i].irq);
+				LOG_INFO("enable irq: %d\r\n", hall_sensor_dev->gpio_list[i].irq);
+			}
+			LOG_INFO("init irq_%d completed\r\n", i);
 		}
 	}
 
