@@ -542,7 +542,7 @@ static long gh_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	case GH_IOC_RESET:
 		gh_debug(INFO_LOG, "%s: chip reset command\n", __func__);
-		gh_hw_reset(gh_dev, 0);
+		gh_hw_reset(gh_dev, 15);
 		break;
 
 	case GH_IOC_ENABLE_IRQ:
@@ -749,7 +749,7 @@ static int gh_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	gh_hw_power_enable(gh_dev, 1);
 
 	/*hard reset sensor*/
-	gh_hw_reset(gh_dev, 0);
+	gh_hw_reset(gh_dev, 15);
 
 	//read chip id
 	gh_class_sendcmd(WAKE_UP_CMD);

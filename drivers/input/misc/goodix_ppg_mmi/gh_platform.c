@@ -197,7 +197,7 @@ void gh_hw_reset(struct gh_device *gh_dev, u8 delay)
     }
     gpio_direction_output(gh_dev->reset_gpio, 1);
     gpio_set_value(gh_dev->reset_gpio, 0);
-    mdelay(3);
+    mdelay(5);
     gpio_set_value(gh_dev->reset_gpio, 1);
     mdelay(delay);
     return;
