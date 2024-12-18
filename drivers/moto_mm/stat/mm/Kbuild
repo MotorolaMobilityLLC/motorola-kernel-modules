@@ -1,0 +1,8 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+
+# vendor hook for mm
+obj-m += moto_mm_stat_mm.o
+moto_mm_stat_mm-y += init.o page_alloc.o sysfs_node.o filemap.o cma.o meminfo.o vmscan.o compaction.o procfs_node.o
+
