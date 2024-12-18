@@ -61,13 +61,13 @@ static struct hall_sensor_str {
 	#endif
 	struct input_dev *hall_dev;
 	struct sensors_classdev sensors_phone_case_cdev;
-	//struct delayed_work hall_sensor_work;
-	//struct delayed_work hall_sensor_irq_work;
+	struct delayed_work hall_sensor_work;
+	struct delayed_work hall_sensor_irq_work;
 	bool init_completed;
 }* hall_sensor_dev;
 
-//static struct workqueue_struct *hall_sensor_wq;
-//static struct workqueue_struct *hall_sensor_irq_wq;
+static struct workqueue_struct *hall_sensor_wq;
+static struct workqueue_struct *hall_sensor_irq_wq;
 
 static BLOCKING_NOTIFIER_HEAD(phone_case_detection_notifier_list);
 
@@ -246,25 +246,47 @@ struct class hall_class = {
 
 static irqreturn_t hall_sensor_interrupt_handler(int irq, void *dev_id)
 {
-	LOG_DBG("hall_sensor_interrupt_handler = %d\r\n", irq);
-	//queue_delayed_work(hall_sensor_irq_wq, &hall_sensor_dev->hall_sensor_irq_work, msecs_to_jiffies(0));
-
+	LOG_INFO("hall_sensor_interrupt_handler = %d\r\n", irq);
+	queue_delayed_work(hall_sensor_irq_wq, &hall_sensor_dev->hall_sensor_irq_work, msecs_to_jiffies(0));
 #ifdef CONFIG_HAS_WAKELOCK
 	wake_lock_timeout(&hall_sensor_dev->wake_lock, msecs_to_jiffies(100));
 #else
 	PM_WAKEUP_EVENT(hall_sensor_dev->wake_lock,msecs_to_jiffies(100));
 #endif
+	return IRQ_HANDLED;
+}
 
+static void hall_sensor_irq_work_function(struct work_struct *work)
+{
+	LOG_INFO("enter hall_sensor_irq_work_function\r\n");
+	if (hall_sensor_dev->init_completed) {
+		cancel_delayed_work(&hall_sensor_dev->hall_sensor_work);
+		queue_delayed_work(hall_sensor_wq, &hall_sensor_dev->hall_sensor_work, 0);
+	}
+}
+
+static void hall_sensor_work_function(struct work_struct *work)
+{
+	int i;
+	LOG_INFO("enter hall_sensor_work_function\r\n");
 	/* go on to complete the init process */
 	if (!hall_sensor_dev->init_completed) {
 		hall_sensor_dev->init_completed = true;
 		/* schedule a short time delayed work, it may be canceled if irq
 			triggers immediately after enable */
-		//queue_delayed_work(hall_sensor_wq, &hall_sensor_dev->hall_sensor_work, msecs_to_jiffies(5));
+		queue_delayed_work(hall_sensor_wq, &hall_sensor_dev->hall_sensor_work, msecs_to_jiffies(5));
+		for (i = 0; i < hall_sensor_dev->gpio_num; i++)
+		{
+			if (hall_sensor_dev->gpio_list[i].irq) {
+				enable_irq(hall_sensor_dev->gpio_list[i].irq);
+				enable_irq_wake(hall_sensor_dev->gpio_list[i].irq);
+				LOG_INFO("enable irq: %d\r\n", hall_sensor_dev->gpio_list[i].irq);
+			}
+		}
+		LOG_INFO("init completed\r\n");
 	} else {
 		check_and_send();
 	}
-	return IRQ_HANDLED;
 }
 
 static int hall_sensor_probe(struct platform_device *pdev)
@@ -325,17 +347,6 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	input_report_abs(hall_sensor_dev->hall_dev, ABS_DISTANCE, -1);
 	input_sync(hall_sensor_dev->hall_dev);
 
-	//schedule a 1s delayed work to inform other drivers with initial state.
-	//suppose 1s is enough for other drivers to get ready and register callback
-	//to this notifier chain.
-	/*
-	hall_sensor_wq = create_singlethread_workqueue("hall_sensor_wq");
-	hall_sensor_irq_wq = create_singlethread_workqueue("hall_sensor_irq_wq");
-	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_work, hall_sensor_work_function);
-	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_irq_work, hall_sensor_irq_work_function);
-	queue_delayed_work(hall_sensor_wq, &hall_sensor_dev->hall_sensor_work, HZ);
-	*/
-
 	hall_sensor_dev->sensors_phone_case_cdev.sensors_enable = hallphone_case_enable;
 	hall_sensor_dev->sensors_phone_case_cdev.sensors_poll_delay = NULL;
 	hall_sensor_dev->sensors_phone_case_cdev.name = hall_sensor_dev->hall_dev->name;
@@ -354,6 +365,21 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	err = sensors_classdev_register(&hall_sensor_dev->hall_dev->dev, &hall_sensor_dev->sensors_phone_case_cdev);
 	if (err < 0)
 		LOG_ERR("create cap sensor_class  file failed (%d)\r\n", err);
+
+	//schedule a 1s delayed work to inform other drivers with initial state.
+	//suppose 1s is enough for other drivers to get ready and register callback
+	//to this notifier chain.
+	//To avoid potential crash issues, init workqueues before request irqs.
+	hall_sensor_wq = create_singlethread_workqueue("hall_sensor_wq");
+	hall_sensor_irq_wq = create_singlethread_workqueue("hall_sensor_irq_wq");
+	if (!hall_sensor_wq || !hall_sensor_irq_wq) {
+		LOG_ERR("workqueue init failed.\r\n");
+		goto fail_for_wq;
+	}
+	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_work, hall_sensor_work_function);
+	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_irq_work, hall_sensor_irq_work_function);
+	queue_delayed_work(hall_sensor_wq, &hall_sensor_dev->hall_sensor_work, HZ);
+	LOG_INFO("workqueue init done\r\n");
 
 	hall_sensor_dev->gpio_list = kzalloc(sizeof (struct hall_gpio) * hall_sensor_dev->gpio_num, GFP_KERNEL);
 	if (!hall_sensor_dev->gpio_list) {
@@ -395,13 +421,7 @@ static int hall_sensor_probe(struct platform_device *pdev)
 				hall_sensor_dev->gpio_list[i].irq = 0;
 				goto fail_for_irq;
 			}
-			//disable_irq(hall_sensor_dev->gpio_list[i].irq);
-			if (hall_sensor_dev->gpio_list[i].irq) {
-				enable_irq(hall_sensor_dev->gpio_list[i].irq);
-				enable_irq_wake(hall_sensor_dev->gpio_list[i].irq);
-				LOG_INFO("enable irq: %d\r\n", hall_sensor_dev->gpio_list[i].irq);
-			}
-			LOG_INFO("init irq_%d completed\r\n", i);
+			disable_irq(hall_sensor_dev->gpio_list[i].irq);
 		}
 	}
 
@@ -424,9 +444,6 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	LOG_INFO("hall_sensor_probe Done\r\n");
 	return 0;
 
-	kfree(hall_sensor_dev);
-	hall_sensor_dev=NULL;
-
 fail_for_irq:
 	for (i = 0; i < hall_sensor_dev->gpio_num; i++)
 	{
@@ -436,6 +453,14 @@ fail_for_irq:
 			gpio_free(hall_sensor_dev->gpio_list[i].gpio);
 	}
 	class_unregister(&hall_class);
+fail_for_wq:
+	if (hall_sensor_irq_wq)
+		destroy_workqueue(hall_sensor_irq_wq);
+	if (hall_sensor_wq)
+		destroy_workqueue(hall_sensor_wq);
+	if (hall_sensor_dev)
+		kfree(hall_sensor_dev);
+	hall_sensor_dev=NULL;
 fail_for_mem:
 	if (hall_sensor_dev->gpio_list)
 		kfree(hall_sensor_dev->gpio_list);
@@ -459,11 +484,11 @@ static int hall_sensor_remove(struct platform_device *pdev)
 
 	LOG_INFO("clean up hall workqueue\r\n");
 	/* wait for all works being finished */
-	//cancel_delayed_work_sync(&hall_sensor_dev->hall_sensor_irq_work);
-	//cancel_delayed_work_sync(&hall_sensor_dev->hall_sensor_work);
+	cancel_delayed_work_sync(&hall_sensor_dev->hall_sensor_irq_work);
+	cancel_delayed_work_sync(&hall_sensor_dev->hall_sensor_work);
 	/* destroy work queue */
-	//destroy_workqueue(hall_sensor_irq_wq);
-	//destroy_workqueue(hall_sensor_wq);
+	destroy_workqueue(hall_sensor_irq_wq);
+	destroy_workqueue(hall_sensor_wq);
 
 	LOG_INFO("release hall vdd\r\n");
 	if (hall_sensor_dev->hall_vdd) {
