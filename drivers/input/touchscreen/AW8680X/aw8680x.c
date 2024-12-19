@@ -60,6 +60,7 @@ struct aw8680x *g_aw8680x;
 static char *aw8680x_flash_app_bin = "aw8680x_flash_app.bin";
 static char *aw8680x_flash_boot_bin = "aw8680x_flash_boot.bin";
 static char *aw8680x_sram_bin = "aw8680x_sram.bin";
+static uint8_t use_ndt_aw8680x = 1;
 
 static int32_t aw8680x_file_open(struct inode *inode, struct file *filp);
 /*
@@ -4600,20 +4601,17 @@ void ndt_tp_transfer(unsigned int x,unsigned int y)
 {
 	uint8_t write_data[4] = { 0 };
 
-	AWLOGE("X = %d, Y = %d\n",x,y);
+	AWLOGE("X = %d, Y = %d, use_ndt_aw8680x = %d\n", x, y, use_ndt_aw8680x);
 	write_data[0] = x & 0xFF;
 	write_data[1] = (x >> 8) & 0xFF;
 	write_data[2] = y & 0xFF;
 	write_data[3] = (y >> 8) & 0xFF;
 
-	AWLOGE("NDT_flag = %d\n",g_aw8680x->NDT_flag);
-	if(g_aw8680x->NDT_flag == 1){
-
+	if ((g_aw8680x != NULL) && (use_ndt_aw8680x == 1)) {
 		aw8680x_wake_state_pin_judge(g_aw8680x);
 		aw8680x_register_i2c_writes(g_aw8680x, 0xB8, write_data, sizeof(write_data));
 		AWLOGE("write_data[0] = 0x%x, write_data[1] = 0x%x, write_data[2] = 0x%x, write_data[3] = 0x%x \n",
 		write_data[0],write_data[1],write_data[2],write_data[3]);
-
 	}
 }
 
@@ -4649,10 +4647,10 @@ aw8680x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	ret = aw8680x_read_chipid(p_aw8680x);
 	if (ret != DATA_INIT) {
 		AWLOGE("the ic not AW8680X");
+		use_ndt_aw8680x = 0;
 		goto err_chipid;
 	}
 
-	g_aw8680x->NDT_flag = 1;
 	ret = aw8680x_input_init(p_aw8680x);
 	if (ret == -INPUT_ALLOC_ERR)
 		goto err_alloc_input;

@@ -263,7 +263,6 @@ struct aw8680x {
 	uint8_t irq_gpio_valid;
 	int8_t ack_flag;
 	uint8_t ic_flag;
-	uint8_t NDT_flag;
 	uint8_t timer_wake_state;
 	uint8_t update_mutex_flag;
 	uint8_t flash_app_update_flag;
