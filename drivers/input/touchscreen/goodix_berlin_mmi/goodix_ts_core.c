@@ -1229,15 +1229,15 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 
 	mutex_lock(&dev->mutex);
 
-#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
-	tool_type = touch_data->palm_on ? MT_TOOL_PALM : MT_TOOL_FINGER;
-#endif
 	for (i = 0; i < GOODIX_MAX_TOUCH; i++) {
+#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
+		tool_type = touch_data->palm_on ? MT_TOOL_PALM : MT_TOOL_FINGER;
+#endif
 		if (touch_data->coords[i].status == TS_TOUCH) {
 #if defined(CONFIG_MOTO_DDA_PASSIVESTYLUS) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
-			ts_debug("report: id %d, x %d, y %d, w %d, palm %d", i,
+			ts_debug("report: id %d, x %d, y %d, w %d, palm %d, tool_type %d", i,
 				touch_data->coords[i].x, touch_data->coords[i].y,
-				touch_data->coords[i].w, touch_data->coords[i].plam_status);
+				touch_data->coords[i].w, touch_data->coords[i].plam_status, tool_type);
 #else
 			ts_debug("report: id %d, x %d, y %d, w %d", i,
 				touch_data->coords[i].x, touch_data->coords[i].y,
