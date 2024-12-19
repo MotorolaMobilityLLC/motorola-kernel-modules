@@ -47,7 +47,7 @@
  */
 #define AW8680X_I2C_NAME "aw8680x_sensor"
 #define AW8680X_NAME "ndt"
-#define AW8680X_DRIVER_VERSION "v1.4.0.6"
+#define AW8680X_DRIVER_VERSION "v1.6.2.0"
 #define AW8680X_I2C_RETRIES 3
 #define AW8680X_BIN_INIT_DELAY 5000
 #define AW8680X_ADB_BIN_INIT_DELAY 20
@@ -60,7 +60,8 @@ struct aw8680x *g_aw8680x;
 static char *aw8680x_flash_app_bin = "aw8680x_flash_app.bin";
 static char *aw8680x_flash_boot_bin = "aw8680x_flash_boot.bin";
 static char *aw8680x_sram_bin = "aw8680x_sram.bin";
-static uint8_t use_ndt_aw8680x = 1;
+uint8_t use_ndt_aw8680x = 1;
+EXPORT_SYMBOL_GPL(use_ndt_aw8680x);
 
 static int32_t aw8680x_file_open(struct inode *inode, struct file *filp);
 /*
@@ -1943,7 +1944,6 @@ static void aw8680x_sram_bin_loaded(const struct firmware *cont, void *context)
 	aw8680x_flash_app_bin_update_to_soc(p_aw8680x,
 						AW8680X_FLASH_APP_UPDATE);
 	devm_kfree(p_aw8680x->dev, p_aw8680x->flash_app_bin);
-	p_aw8680x->flash_app_states = true;
 	p_aw8680x->update_mutex_flag = true;
 	aw8680x_hw_reset(p_aw8680x);
 	mdelay(GO_FLASH_APP_TIME);
@@ -1951,8 +1951,17 @@ static void aw8680x_sram_bin_loaded(const struct firmware *cont, void *context)
 	p_aw8680x->pc_point_flash_app = p_aw8680x->pc_location;
 	AWLOGI("updating flash app completed pc point %x", p_aw8680x->pc_location);
 
-	if (p_aw8680x->irq_gpio_valid == true)
+	if(p_aw8680x->flash_app_version_in_bin != p_aw8680x->pc_location) {
+		AWLOGE("flash app update and jump app fail because of version in bin is != app version in soc!");
+		p_aw8680x->flash_app_states = false;
+	} else {
+		AWLOGI("flash app update and jump app succese because of flash app version in bin equal to flash app version in soc.");
+		p_aw8680x->flash_app_states = true;
+	}
+
+	if (p_aw8680x->irq_gpio_valid == true) {
 		enable_irq(gpio_to_irq(p_aw8680x->irq_gpio));
+	}
 }
 
 static int32_t aw8680x_sram_bin_get(struct aw8680x *p_aw8680x)
@@ -1973,6 +1982,7 @@ static void aw8680x_flash_app_bin_update_judge(struct aw8680x *p_aw8680x)
 				AWLOGI("flash app version in bin is higher flash app version in soc!");
 				p_aw8680x->flash_app_update_flag = true;
 			} else {
+				AWLOGI("flash app version in bin equal to flash app version in soc.");
 				p_aw8680x->flash_app_update_flag = false;
 				p_aw8680x->pc_point_flash_app = p_aw8680x->flash_app_version_in_soc;
 			}
@@ -1985,13 +1995,15 @@ static void aw8680x_flash_app_bin_update_judge(struct aw8680x *p_aw8680x)
 		AWLOGI("flash app need to update!!!");
 		aw8680x_sram_bin_get(p_aw8680x);
 	} else {
+		AWLOGI("flash app not need to update!");
 		devm_kfree(p_aw8680x->dev, p_aw8680x->flash_app_bin);
 		p_aw8680x->update_mutex_flag = true;
+		AWLOGI("flash app jump succese because of flash app version in bin equal to flash app version in soc.");
 		p_aw8680x->flash_app_states = true;
-		AWLOGI("flash app not need to update!");
 
-		if (p_aw8680x->irq_gpio_valid == true)
+		if (p_aw8680x->irq_gpio_valid == true) {
 			enable_irq(gpio_to_irq(p_aw8680x->irq_gpio));
+		}
 	}
 }
 
@@ -2106,13 +2118,14 @@ static void aw8680x_bin_work_routine(struct work_struct *work)
 		mdelay(FLASH_APP_VERSION_GET_TIME);
 		ret = aw8680x_flash_app_version_in_soc_get(p_aw8680x);
 		if (ret != AW_SUCCESS) {
-			p_aw8680x->update_mutex_flag = true;
-			return;
-		}
-		p_aw8680x->flash_app_version_get_flag = true;
-
-		AWLOGI("flash app version in soc is : V%x",
+			// p_aw8680x->update_mutex_flag = true;
+			// return;
+			p_aw8680x->flash_app_version_get_flag = false;
+		} else {
+			p_aw8680x->flash_app_version_get_flag = true;
+			AWLOGI("flash app version in soc is : V%x",
 					p_aw8680x->flash_app_version_in_soc);
+		}
 	}
 	ret_fir = aw8680x_flash_app_bin_get(p_aw8680x);
 	if (ret_fir != AW_SUCCESS)
@@ -2975,6 +2988,114 @@ static ssize_t aw8680x_ndt_1hz_store(struct device *dev,
 	return count;
 }
 
+#if 0
+/******************************************************
+ *
+ * attribute : Used when debugging adb
+ *
+ ******************************************************/
+static ssize_t ndt_tp_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+    uint32_t data_buf[2] = { 0 };
+    uint8_t write_data[4] = { 0 };
+
+    if (sscanf(buf, "%x %x", &data_buf[0], &data_buf[1]) == 2) {
+        return count;
+    } else {
+        AWLOGE("please confirm param num!");
+        return count;
+    }
+
+    write_data[0] = data_buf[0] & 0xFF;
+    write_data[1] = (data_buf[0] >> 8) & 0xFF;
+
+    write_data[2] = data_buf[1] & 0xFF;
+    write_data[3] = (data_buf[1] >> 8) & 0xFF;
+
+    aw8680x_wake_state_pin_judge(g_aw8680x);
+    aw8680x_register_i2c_writes(g_aw8680x, 0xB8, write_data, sizeof(write_data));
+    AWLOGD("write_data[0] = %d, write_data[1] = %d, write_data[2] = %d, write_data[3] = %d \n",
+    write_data[0],write_data[1],write_data[2],write_data[3]);
+
+	return count;
+}
+#endif
+
+/******************************************************
+ *
+ * attribute : Used when debugging adb
+ *
+ ******************************************************/
+static ssize_t force_mode_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	uint32_t data_buf = 0;
+    int32_t jump_count = 3;
+	int ret = -1;
+
+	ret = kstrtouint(buf, 0, &data_buf);
+	if (ret < 0) {
+		return ret;
+	}
+
+	AWLOGI("mode = %d", data_buf);
+
+	if (g_aw8680x->update_mutex_flag == false) {
+		AWLOGE("update flash is not ok, please wait!");
+		return count;
+	}
+
+	if (data_buf == 0) {
+	    AWLOGI("Disable force work mode");
+	    g_aw8680x->flash_app_states = false;
+	    gpio_set_value_cansleep(g_aw8680x->reset_gpio, HIGH_LEVEL);
+	    udelay(150);
+	    //platform close ldo power and delay sometime until power stability
+	    msleep(2);
+	} else if (data_buf == 1) {
+		AWLOGI("Enable force work mode and jump flash app");
+		//platform open ldo power and delay sometime until power stability
+		msleep(2);
+		aw8680x_hw_reset(g_aw8680x);
+		aw8680x_stay_boot(g_aw8680x);
+		while (jump_count--) {
+				mdelay(FLASH_BOOT_INIT_TIME);
+				ret = aw8680x_jump_flash_app(g_aw8680x, FLASH_APP_BASE_ADDR);
+				if (ret == AW_SUCCESS) {
+					AWLOGI("jump flash app OK!!");
+					mdelay(FLASH_APP_VERSION_GET_TIME);
+					ret = aw8680x_flash_app_version_in_soc_get(g_aw8680x);
+					if (ret != AW_SUCCESS) {
+                        g_aw8680x->flash_app_states = false;
+						AWLOGI("flash app version readback Fail!!");
+					} else {
+						if (g_aw8680x->flash_app_version_in_bin == g_aw8680x->flash_app_version_in_soc) {
+					        g_aw8680x->flash_app_states = true;
+							AWLOGI("flash app version readback OK!!");
+							return count;
+						}
+					}
+					break;
+				}
+		}
+		return ret;
+	} else if(data_buf == 2) {
+		AWLOGI("Enable force work mode and Determine whether to update the flash app");
+		//platform open ldo power and delay sometime until power stability
+		msleep(2);
+		aw8680x_hw_reset(g_aw8680x);
+		aw8680x_stay_boot(g_aw8680x);
+		aw8680x_connect(g_aw8680x);
+		aw8680x_bin_init(g_aw8680x, AW8680X_ADB_BIN_INIT_DELAY);
+    } else {
+		AWLOGE("unsupported!");
+	}
+
+	return count;
+}
 
 static DEVICE_ATTR_RW(reg);
 static DEVICE_ATTR_RO(connect);
@@ -3005,6 +3126,7 @@ static DEVICE_ATTR_WO(FTC_cali);
 static DEVICE_ATTR_RW(FTC_coef);
 static DEVICE_ATTR_RO(FTC_noise);
 static DEVICE_ATTR_RO(FTC_no_press);
+static DEVICE_ATTR_WO(force_mode);
 
 static struct attribute *aw8680x_attributes[] = {
 	&dev_attr_reg.attr,
@@ -3036,6 +3158,7 @@ static struct attribute *aw8680x_attributes[] = {
 	&dev_attr_sw_algo_version.attr,
 	&dev_attr_flash_app_status.attr,
 	&dev_attr_flash_boot_status.attr,
+	&dev_attr_force_mode.attr,
 	NULL
 };
 
@@ -4324,9 +4447,9 @@ static int32_t aw8680x_read_chipid_once(struct aw8680x *p_aw8680x)
 			return AW_SUCCESS;
 		}
 
-		AWLOGE("pc location is  0x%08x", p_aw8680x->pc_location);
-	}
 
+	}
+	AWLOGE("pc location is  0x%08x", p_aw8680x->pc_location);
 	return -CHIPID_ERR;
 }
 
@@ -4597,22 +4720,40 @@ static int32_t aw8680x_input_init(struct aw8680x *p_aw8680x)
 	return AW_SUCCESS;
 }
 
-void ndt_tp_transfer(unsigned int x,unsigned int y)
+unsigned int ndt_tp_transfer(unsigned int x,unsigned int y)
 {
 	uint8_t write_data[4] = { 0 };
+	int32_t ret = DATA_INIT;
+	int32_t i = DATA_INIT;
+	unsigned int pressure = 0;
 
-	AWLOGE("X = %d, Y = %d, use_ndt_aw8680x = %d\n", x, y, use_ndt_aw8680x);
+	AWLOGI("X = %d, Y = %d, use_ndt_aw8680x = %d\n", x, y, use_ndt_aw8680x);
 	write_data[0] = x & 0xFF;
 	write_data[1] = (x >> 8) & 0xFF;
 	write_data[2] = y & 0xFF;
 	write_data[3] = (y >> 8) & 0xFF;
 
-	if ((g_aw8680x != NULL) && (use_ndt_aw8680x == 1)) {
+	if ((g_aw8680x != NULL) && (use_ndt_aw8680x == 1) && (g_aw8680x->flash_app_states == true)) {
 		aw8680x_wake_state_pin_judge(g_aw8680x);
-		aw8680x_register_i2c_writes(g_aw8680x, 0xB8, write_data, sizeof(write_data));
-		AWLOGE("write_data[0] = 0x%x, write_data[1] = 0x%x, write_data[2] = 0x%x, write_data[3] = 0x%x \n",
-		write_data[0],write_data[1],write_data[2],write_data[3]);
+		ret = aw8680x_register_i2c_writes(g_aw8680x, 0xB8, write_data, sizeof(write_data));
+		if (ret < DATA_INIT) {
+			AWLOGE("failed to write 0xB8, ret is : %d", ret);
+			return 0;
+		}
+
+		ret = aw8680x_register_i2c_reads(g_aw8680x, AW_PRESSURE_ADDR,  AW_PRESSURE_DATA_LEN);
+		if (ret < DATA_INIT) {
+			AWLOGE("failed to read pressure data, ret is : %d", ret);
+			return 0;
+		}
+		for (i = DATA_INIT; i < AW_PRESSURE_DATA_LEN; i++) {
+			AWLOGI("read data[%d] = 0x%x", i,
+							g_aw8680x->read_data[i]);
+			pressure = g_aw8680x->read_data[i];
+		}
 	}
+
+	return pressure;
 }
 
 EXPORT_SYMBOL_GPL(ndt_tp_transfer);

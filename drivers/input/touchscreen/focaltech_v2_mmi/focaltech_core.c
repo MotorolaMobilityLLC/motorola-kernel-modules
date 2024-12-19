@@ -53,6 +53,12 @@
 #include "focaltech_core.h"
 #include <linux/mmi_device.h>
 
+#ifdef NDT_DATA_EN
+#include <linux/kernel.h>
+#include <linux/random.h>
+extern uint8_t use_ndt_aw8680x;
+#endif
+
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
 extern int fts_mmi_dev_register(struct fts_ts_data *ts_data);
 extern void fts_mmi_dev_unregister(struct fts_ts_data *ts_data);
@@ -550,9 +556,13 @@ static int fts_input_report_b(struct fts_ts_data *data)
             if (data->log_level >= 1) {
                 FTS_DEBUG("[B]Points All Up!");
             }
+
 #ifdef NDT_DATA_EN
-            ndt_tp_transfer(0,0);
+            if (use_ndt_aw8680x == 1) {
+                ndt_tp_transfer(0,0);
+            }
 #endif
+
             input_report_key(data->input_dev, BTN_TOUCH, 0);
         } else {
             input_report_key(data->input_dev, BTN_TOUCH, 1);
@@ -690,6 +700,11 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
 #ifdef FOCALTECH_PALM_SENSOR_EN
     int pd_state = 0;
 #endif
+#ifdef NDT_DATA_EN
+    unsigned int pressure_ndt = 0;
+    unsigned int random_ndt = 0;
+    unsigned int random_number = 0;
+#endif
 #ifdef PICOLEAF_DATA_EN
 	int press = 0;
 	int press_notify = cypsoc_picoleaf_notification_enabled();
@@ -779,10 +794,6 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
         events[i].flag = buf[FTS_TOUCH_EVENT_POS + base] >> 6;
         events[i].id = buf[FTS_TOUCH_ID_POS + base] >> 4;
         events[i].area = buf[FTS_TOUCH_AREA_POS + base] >> 4;
-#ifdef NDT_DATA_EN
-        FTS_DEBUG("finger num : %d,x = (%d),y = (%d)", i,events[i].x/2,events[i].y);
-        ndt_tp_transfer(events[i].x/2,events[i].y);
-#endif
 
 #ifdef CONFIG_ENABLE_RESOLITION_BOOST
         events[i].x = ((buf[FTS_TOUCH_OFF_E_XH + base] & 0x0F) << 11) \
@@ -811,6 +822,28 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
 #else
         events[i].p =  buf[FTS_TOUCH_PRE_POS + base];
 #endif
+
+#ifdef NDT_DATA_EN
+    if (use_ndt_aw8680x == 1) {
+        pressure_ndt = ndt_tp_transfer(events[i].x/4, events[i].y/4);
+
+        random_ndt = get_random_u32();
+        random_number = random_ndt % 1000;
+        if (pressure_ndt == 0) {
+            pressure_ndt = pressure_ndt + random_number;
+        } else if (pressure_ndt == 1) {
+            pressure_ndt = pressure_ndt + (random_number + 1000);
+        }
+
+        events[i].p = pressure_ndt;
+
+        FTS_DEBUG("finger num : %d,x = (%d),y = (%d), pressure_ndt = 0x%x, random_number = 0x%x, use_ndt_aw8680x =%d",
+                i, events[i].x/4, events[i].y/4, events[i].p, random_number, use_ndt_aw8680x);
+    }
+#else
+        events[i].p =  buf[FTS_TOUCH_PRE_POS + base];
+#endif
+
         if (EVENT_DOWN(events[i].flag) && (data->point_num == 0)) {
             FTS_INFO("abnormal touch data from fw");
             return -EIO;

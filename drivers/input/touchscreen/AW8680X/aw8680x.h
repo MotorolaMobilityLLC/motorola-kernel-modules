@@ -29,7 +29,7 @@
  * struct
  *
  ********************************************************/
-#define NUM_NODES				(29)
+#define NUM_NODES				(30)
 #define AW_CHANNEL_NUM				(6)
 #define AW_CHANNEL_MAX_NUM			(12)
 #define SOC_APP_DATA_TYPE			0x21
@@ -92,6 +92,7 @@
 #define AW_WRITE_COEF_ADDR			(0xE1)
 #define AW_READ_COEF_ADDR			(0xE2)
 #define FORCE_DATA_ADDR				(0xE3)
+#define AW_PRESSURE_ADDR			(0xAB)
 #define AW_TEMPERA_DATA_LEN			(0x4)
 #define AW_PGA_DATA_LEN				(0x4)
 #define AW_CALI_DATA_LEN			(0x3)
@@ -105,6 +106,7 @@
 #define SW_ALGO_VERS_LEN			(0x6)
 #define AW_ADC_VOLTAGE_LEN			(0x4)
 #define AW_DAC_VOLTAGE_LEN			(0x4)
+#define AW_PRESSURE_DATA_LEN		(0x1)
 #define DATA_INIT				(0)
 
 /* about i2c msg */
@@ -305,4 +307,4 @@ static char aw8680x_proc_node_name[][AW8680X_NAME_MAX] = {
 };
 #endif
 
-void ndt_tp_transfer(unsigned int x,unsigned int y);
+unsigned int ndt_tp_transfer(unsigned int x,unsigned int y);
