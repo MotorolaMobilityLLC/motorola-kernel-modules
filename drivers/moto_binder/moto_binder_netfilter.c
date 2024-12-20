@@ -64,7 +64,7 @@ static void report_first_packet_after_wakeup(struct sk_buff *skb, const struct n
 		sock_put(sk);
 		return;
 	}
-
+	sock_put(sk);
 	moto_binder_write_status(PACKET_AFTER_WAKEUP, 0, 0, uid, 0, 0, 0);
 }
 
