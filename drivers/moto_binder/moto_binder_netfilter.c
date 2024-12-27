@@ -29,43 +29,30 @@
 #include "moto_binder.h"
 
 atomic_t __read_mostly global_dump_first_pkg = ATOMIC_INIT(0);
+spinlock_t skb_lock;
 
-
-static void report_first_packet_after_wakeup(struct sk_buff *skb, const struct nf_hook_state *state)
+static void report_first_packet_after_wakeup(struct sk_buff *skb)
 {
-	struct sock *sk;
-	uid_t uid;
-	uint hook;
-	struct net_device *dev = NULL;
+	struct sock *sk = NULL;
+	uid_t uid = 0;
 
-	/* skb protection code */
-	if (!skb || !skb->len || !state) {
+	if (!skb)
 		return;
-	}
 
-	hook = state->hook;
-	if (NF_INET_LOCAL_IN == hook) {
-		dev = state->in;
-	}
-	if (NULL == dev) {
+	if (!spin_trylock(&skb_lock))
 		return;
-	}
-	/* skb protection code end */
 
 	sk = skb_to_full_sk(skb);
-	if (!sk) {
-		return;
-	}
-	if (sk && !refcount_inc_not_zero(&sk->sk_refcnt)) {
+	if (!sk || !refcount_inc_not_zero(&sk->sk_refcnt)) {
+		spin_unlock(&skb_lock);
 		return;
 	}
 	uid = sk->sk_uid.val;
-	if (uid < MIN_USERAPP_UID) {
-		sock_put(sk);
-		return;
-	}
 	sock_put(sk);
-	moto_binder_write_status(PACKET_AFTER_WAKEUP, 0, 0, uid, 0, 0, 0);
+	spin_unlock(&skb_lock);
+
+	if (uid >= MIN_USERAPP_UID)
+		moto_binder_write_status(PACKET_AFTER_WAKEUP, 0, 0, uid, 0, 0, 0);
 }
 
 static unsigned int moto_nf_ipv4_in(void *priv,
@@ -74,7 +61,7 @@ static unsigned int moto_nf_ipv4_in(void *priv,
 {
 	if (atomic_read(&global_dump_first_pkg) != 0) {
 		atomic_set(&global_dump_first_pkg, 0);
-		report_first_packet_after_wakeup(skb, state);
+		report_first_packet_after_wakeup(skb);
 	}
 
 	return NF_ACCEPT;
@@ -86,7 +73,7 @@ static unsigned int moto_nf_ipv6_in(void *priv,
 {
 	if (atomic_read(&global_dump_first_pkg) != 0) {
 		atomic_set(&global_dump_first_pkg, 0);
-		report_first_packet_after_wakeup(skb, state);
+		report_first_packet_after_wakeup(skb);
 	}
 
 	return NF_ACCEPT;
@@ -155,7 +142,7 @@ int moto_netfilter_init(void)
 		moto_netfilter_deinit();
 		return -1;
 	}
-
+	spin_lock_init(&skb_lock);
 	pr_info("%s: register netfilter successfuly!\n", __func__);
 	return 0;
 }
