@@ -29,7 +29,7 @@
  * struct
  *
  ********************************************************/
-#define NUM_NODES				(30)
+#define NUM_NODES				(32)
 #define AW_CHANNEL_NUM				(6)
 #define AW_CHANNEL_MAX_NUM			(12)
 #define SOC_APP_DATA_TYPE			0x21
@@ -108,6 +108,13 @@
 #define AW_DAC_VOLTAGE_LEN			(0x4)
 #define AW_PRESSURE_DATA_LEN		(0x1)
 #define DATA_INIT				(0)
+
+
+/* ndt register */
+#define NDT_DEBUG_DUMP_ADDR			(0x20)
+#define NDT_DEBUG_DUMP_LEN			(17)
+#define NDT_RESTORE_COEFF_ADDR		(0xB5)
+#define NDT_RESTORE_COEFF_LEN		(1)
 
 /* about i2c msg */
 #define ONE_MSG_NUM				1
@@ -234,6 +241,8 @@ struct aw8680x {
 	bool flash_boot_func;
 	bool input_func;
 	bool flash_app_version_get_flag;
+	struct class *sysfs_class;
+	struct device *sysfs_dev;
 
 	struct gui_to_soc_struct p_gui_data_s;
 	struct mutex aw8680x_i2c_mutex;
@@ -273,8 +282,7 @@ struct aw8680x {
 	uint8_t flash_boot_states;
 };
 
-#define AW8680X_NAME_MAX				(30)
-static char aw8680x_proc_node_name[][AW8680X_NAME_MAX] = {
+static char aw8680x_proc_node_name[][NUM_NODES] = {
 	/* 0 */		{"reg"},
 	/* 1 */		{"connect"},
 	/* 2 */		{"update"},
@@ -304,6 +312,9 @@ static char aw8680x_proc_node_name[][AW8680X_NAME_MAX] = {
 	/* 26 */	{"FTC_coef"},
 	/* 27 */	{"FTC_noise"},
 	/* 28 */	{"FTC_no_press"},
+	/* 29 */	{"force_mode"},
+	/* 30 */	{"ndt_restore_coeff"},
+	/* 31 */	{"ndt_reg_dump"},
 };
 #endif
 

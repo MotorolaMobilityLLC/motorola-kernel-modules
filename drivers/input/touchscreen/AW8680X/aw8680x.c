@@ -47,7 +47,7 @@
  */
 #define AW8680X_I2C_NAME "aw8680x_sensor"
 #define AW8680X_NAME "ndt"
-#define AW8680X_DRIVER_VERSION "v1.6.2.0"
+#define AW8680X_DRIVER_VERSION "v1.6.2.2"
 #define AW8680X_I2C_RETRIES 3
 #define AW8680X_BIN_INIT_DELAY 5000
 #define AW8680X_ADB_BIN_INIT_DELAY 20
@@ -2988,7 +2988,6 @@ static ssize_t aw8680x_ndt_1hz_store(struct device *dev,
 	return count;
 }
 
-#if 0
 /******************************************************
  *
  * attribute : Used when debugging adb
@@ -3019,9 +3018,88 @@ static ssize_t ndt_tp_store(struct device *dev,
     AWLOGD("write_data[0] = %d, write_data[1] = %d, write_data[2] = %d, write_data[3] = %d \n",
     write_data[0],write_data[1],write_data[2],write_data[3]);
 
+    return count;
+}
+
+/******************************************************
+ *
+ * attribute : Used when debugging adb
+ *
+ ******************************************************/
+static ssize_t ndt_restore_coeff_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	uint32_t data_buf = 0;
+	int32_t times = 3;
+	int ret = -1;
+	unsigned char restore_coeff_val = 0x01;
+	struct aw8680x *p_aw8680x = dev_get_drvdata(dev);
+
+	ret = kstrtouint(buf, 0, &data_buf);
+	if (ret < 0) {
+		return ret;
+	}
+
+	AWLOGI("data_buf = %d", data_buf);
+
+	if (data_buf == 1) {
+		AWLOGI("start restore coeff!");
+		aw8680x_wake_state_pin_judge(g_aw8680x);
+		ret = aw8680x_register_i2c_writes(p_aw8680x, NDT_RESTORE_COEFF_ADDR, &restore_coeff_val, sizeof(restore_coeff_val));
+		if (ret < DATA_INIT) {
+			AWLOGE("failed to write data to NDT_RESTORE_COEFF_ADDR, ret is : %d", ret);
+			return EIO;
+		}
+
+		mdelay(100);
+
+		while(times--) {
+			ret = aw8680x_register_i2c_reads(p_aw8680x, NDT_RESTORE_COEFF_ADDR, NDT_RESTORE_COEFF_LEN);
+			if (ret < DATA_INIT) {
+				AWLOGE("failed to read data from NDT_RESTORE_COEFF_ADDR, ret is : %d", ret);
+				return -EIO;
+			} else {
+				if (p_aw8680x->read_data[0] == 0x00) {
+					AWLOGI("restore_coeff successfully");
+					return count;
+				} else {
+					AWLOGI("restore_coeff retry times = %d, readback NDT_RESTORE_COEFF_ADDR vlaue = 0x%x", times, p_aw8680x->read_data[0]);
+				}
+			}
+			mdelay(10);
+		}
+		AWLOGI("restore_coeff failed times = %d, readback NDT_RESTORE_COEFF_ADDR vlaue = 0x%x", times, p_aw8680x->read_data[0]);
+		return -EFAULT;
+	} else {
+		AWLOGE("unsupported!");
+	}
+
 	return count;
 }
-#endif
+
+
+static ssize_t ndt_restore_coeff_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t len = 0;
+	int ret = -1;
+	unsigned char restore_coeff_val = 0x01;
+	struct aw8680x *p_aw8680x = dev_get_drvdata(dev);
+
+	aw8680x_wake_state_pin_judge(g_aw8680x);
+
+	ret = aw8680x_register_i2c_reads(p_aw8680x, NDT_RESTORE_COEFF_ADDR, NDT_RESTORE_COEFF_LEN);
+	if (ret < DATA_INIT) {
+		len += snprintf(buf + len, PAGE_SIZE - len, "restore_coeff_val get err\n");
+	} else {
+		restore_coeff_val = p_aw8680x->read_data[0];
+		len += snprintf(buf + len, PAGE_SIZE - len,
+				"restore_coeff_val = 0x%x\n", restore_coeff_val);
+	}
+
+	return len;
+}
 
 /******************************************************
  *
@@ -3045,18 +3123,19 @@ static ssize_t force_mode_store(struct device *dev,
 
 	if (g_aw8680x->update_mutex_flag == false) {
 		AWLOGE("update flash is not ok, please wait!");
-		return count;
+		return -EFAULT;
 	}
 
 	if (data_buf == 0) {
-	    AWLOGI("Disable force work mode");
-	    g_aw8680x->flash_app_states = false;
-	    gpio_set_value_cansleep(g_aw8680x->reset_gpio, HIGH_LEVEL);
-	    udelay(150);
-	    //platform close ldo power and delay sometime until power stability
-	    msleep(2);
+		AWLOGI("Disable force work mode");
+		g_aw8680x->flash_app_states = false;
+		gpio_set_value_cansleep(g_aw8680x->reset_gpio, HIGH_LEVEL);
+		udelay(150);
+		//platform close ldo power and delay sometime until power stability
+		msleep(2);
 	} else if (data_buf == 1) {
 		AWLOGI("Enable force work mode and jump flash app");
+		g_aw8680x->flash_app_states = false;
 		//platform open ldo power and delay sometime until power stability
 		msleep(2);
 		aw8680x_hw_reset(g_aw8680x);
@@ -3069,19 +3148,20 @@ static ssize_t force_mode_store(struct device *dev,
 					mdelay(FLASH_APP_VERSION_GET_TIME);
 					ret = aw8680x_flash_app_version_in_soc_get(g_aw8680x);
 					if (ret != AW_SUCCESS) {
-                        g_aw8680x->flash_app_states = false;
-						AWLOGI("flash app version readback Fail!!");
+						AWLOGI("flash app version readback retry jump_count = %d", jump_count);
 					} else {
 						if (g_aw8680x->flash_app_version_in_bin == g_aw8680x->flash_app_version_in_soc) {
 					        g_aw8680x->flash_app_states = true;
-							AWLOGI("flash app version readback OK!!");
+							AWLOGI("flash app version readback  check PASS!!");
 							return count;
+						} else {
+							AWLOGI("flash app version check retry jump_count = %d", jump_count);
 						}
 					}
-					break;
 				}
 		}
-		return ret;
+		AWLOGE("flash app version readback or check Failed, so jump flash app failed!!");
+		return -EFAULT;
 	} else if(data_buf == 2) {
 		AWLOGI("Enable force work mode and Determine whether to update the flash app");
 		//platform open ldo power and delay sometime until power stability
@@ -3097,6 +3177,41 @@ static ssize_t force_mode_store(struct device *dev,
 	return count;
 }
 
+static ssize_t ndt_reg_dump_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t len = 0;
+	int ret = -1;
+	struct aw8680x *p_aw8680x = dev_get_drvdata(dev);
+	uint32_t i = 0;
+	int16_t reg_dump_value[NDT_DEBUG_DUMP_LEN] = {0};
+
+	aw8680x_wake_state_pin_judge(g_aw8680x);
+
+	ret = aw8680x_register_i2c_reads(p_aw8680x, NDT_DEBUG_DUMP_ADDR, NDT_DEBUG_DUMP_LEN * 2);
+	if (ret < DATA_INIT) {
+		len += snprintf(buf + len, PAGE_SIZE - len, "ndt_reg_dump get err\n");
+	} else {
+		memcpy(reg_dump_value, &p_aw8680x->read_data[0], NDT_DEBUG_DUMP_LEN * 2);
+		for (i = 0; i < NDT_DEBUG_DUMP_LEN; i++) {
+			if (i == 13) {
+				len += snprintf(buf + len, PAGE_SIZE - len,
+						"reg_dump_value[%d] = 0x%04x\n",
+						i,  reg_dump_value[i]);
+			}
+			len += snprintf(buf + len, PAGE_SIZE - len,
+					"reg_dump_value[%d] = %hd\n",
+					i,  reg_dump_value[i]);
+		}
+	}
+
+	return len;
+}
+
+static DEVICE_ATTR_RO(ndt_reg_dump);
+static DEVICE_ATTR_RW(ndt_restore_coeff);
+static DEVICE_ATTR_WO(ndt_tp);
+static DEVICE_ATTR_WO(force_mode);
 static DEVICE_ATTR_RW(reg);
 static DEVICE_ATTR_RO(connect);
 static DEVICE_ATTR_WO(update);
@@ -3126,9 +3241,12 @@ static DEVICE_ATTR_WO(FTC_cali);
 static DEVICE_ATTR_RW(FTC_coef);
 static DEVICE_ATTR_RO(FTC_noise);
 static DEVICE_ATTR_RO(FTC_no_press);
-static DEVICE_ATTR_WO(force_mode);
 
 static struct attribute *aw8680x_attributes[] = {
+	&dev_attr_ndt_reg_dump.attr,
+	&dev_attr_ndt_restore_coeff.attr,
+	&dev_attr_ndt_tp.attr,
+	&dev_attr_force_mode.attr,
 	&dev_attr_reg.attr,
 	&dev_attr_connect.attr,
 	&dev_attr_update.attr,
@@ -3158,7 +3276,6 @@ static struct attribute *aw8680x_attributes[] = {
 	&dev_attr_sw_algo_version.attr,
 	&dev_attr_flash_app_status.attr,
 	&dev_attr_flash_boot_status.attr,
-	&dev_attr_force_mode.attr,
 	NULL
 };
 
@@ -4116,8 +4233,209 @@ static ssize_t proc_FTC_no_press_read(struct file *filp, char __user *buf,
 	return ret;
 }
 
+/******************************************************
+ *
+ * attribute : Used when debugging adb
+ *
+ ******************************************************/
+static ssize_t proc_force_mode_write(struct file *filp, const char __user *buf,
+				      size_t count, loff_t *lo)
+{
+	char buffer[5] = { 0 };
+	uint32_t data_buf = 0;
+	int32_t jump_count = 3;
+	int ret = -EFAULT;
+
+	if (count > 5)
+		return count;
+	if (copy_from_user(buffer, buf, count)) {
+		AWLOGE("error");
+		return -EFAULT;
+	}
+
+	ret = kstrtouint(buffer, 0, &data_buf);
+	if (ret < 0) {
+		return ret;
+	}
+	AWLOGI("mode = %d", data_buf);
+
+	if (g_aw8680x->update_mutex_flag == false) {
+		AWLOGE("update flash is not ok, please wait!");
+		return -EFAULT;
+	}
+
+	if (data_buf == 0) {
+		AWLOGI("Disable force work mode");
+		g_aw8680x->flash_app_states = false;
+		gpio_set_value_cansleep(g_aw8680x->reset_gpio, HIGH_LEVEL);
+		udelay(150);
+		//platform close ldo power and delay sometime until power stability
+		msleep(2);
+	} else if (data_buf == 1) {
+		AWLOGI("Enable force work mode and jump flash app");
+		//platform open ldo power and delay sometime until power stability
+		msleep(2);
+		aw8680x_hw_reset(g_aw8680x);
+		aw8680x_stay_boot(g_aw8680x);
+		while (jump_count--) {
+				mdelay(FLASH_BOOT_INIT_TIME);
+				ret = aw8680x_jump_flash_app(g_aw8680x, FLASH_APP_BASE_ADDR);
+				if (ret == AW_SUCCESS) {
+					AWLOGI("jump flash app OK!!");
+					mdelay(FLASH_APP_VERSION_GET_TIME);
+					ret = aw8680x_flash_app_version_in_soc_get(g_aw8680x);
+					if (ret != AW_SUCCESS) {
+						AWLOGI("flash app version readback retry jump_count = %d", jump_count);
+					} else {
+						if (g_aw8680x->flash_app_version_in_bin == g_aw8680x->flash_app_version_in_soc) {
+							g_aw8680x->flash_app_states = true;
+							AWLOGI("flash app version readback  check PASS!!");
+							return count;
+						} else {
+							AWLOGI("flash app version check retry jump_count = %d", jump_count);
+						}
+					}
+				}
+		}
+		AWLOGE("flash app version readback or check Failed, so jump flash app failed!!");
+		return -EFAULT;
+	} else if(data_buf == 2) {
+		AWLOGI("Enable force work mode and Determine whether to update the flash app");
+		//platform open ldo power and delay sometime until power stability
+		msleep(2);
+		aw8680x_hw_reset(g_aw8680x);
+		aw8680x_stay_boot(g_aw8680x);
+		aw8680x_connect(g_aw8680x);
+		aw8680x_bin_init(g_aw8680x, AW8680X_ADB_BIN_INIT_DELAY);
+	} else {
+		AWLOGE("unsupported!");
+	}
+
+	return count;
+}
+
+/******************************************************
+ *
+ * attribute : Used when debugging adb
+ *
+ ******************************************************/
+static ssize_t proc_ndt_restore_coeff_write(struct file *filp, const char __user *buf,
+				      size_t count, loff_t *lo)
+{
+	uint32_t data_buf = 0;
+	char buffer[5] = { 0 };
+	int32_t times = 3;
+	int ret = -EFAULT;
+	unsigned char restore_coeff_val = 0x01;
+
+	if (count > 5)
+		return count;
+	if (copy_from_user(buffer, buf, count)) {
+		AWLOGE("error");
+		return -EFAULT;
+	}
+
+	ret = kstrtouint(buffer, 0, &data_buf);
+	if (ret < 0) {
+		return ret;
+	}
+
+	AWLOGI("data_buf = %d", data_buf);
+
+	if (data_buf == 1) {
+		AWLOGI("start restore coeff!");
+		aw8680x_wake_state_pin_judge(g_aw8680x);
+		ret = aw8680x_register_i2c_writes(g_aw8680x, NDT_RESTORE_COEFF_ADDR, &restore_coeff_val, sizeof(restore_coeff_val));
+		if (ret < DATA_INIT) {
+			AWLOGE("failed to write data to NDT_RESTORE_COEFF_ADDR, ret is : %d", ret);
+			return EIO;
+		}
+
+		mdelay(100);
+
+		while(times--) {
+			ret = aw8680x_register_i2c_reads(g_aw8680x, NDT_RESTORE_COEFF_ADDR, NDT_RESTORE_COEFF_LEN);
+			if (ret < DATA_INIT) {
+				AWLOGE("failed to read data from NDT_RESTORE_COEFF_ADDR, ret is : %d", ret);
+				return -EIO;
+			} else {
+				if (g_aw8680x->read_data[0] == 0x00) {
+					AWLOGI("restore_coeff successfully");
+					return count;
+				} else {
+					AWLOGI("restore_coeff retry times = %d, readback NDT_RESTORE_COEFF_ADDR vlaue = 0x%x", times, g_aw8680x->read_data[0]);
+				}
+			}
+			mdelay(10);
+		}
+		AWLOGI("restore_coeff failed times = %d, readback NDT_RESTORE_COEFF_ADDR vlaue = 0x%x", times, g_aw8680x->read_data[0]);
+		return -EFAULT;
+	} else {
+		AWLOGE("unsupported!");
+	}
+
+	return count;
+}
+
+static ssize_t proc_ndt_restore_coeff_read(struct file *filp, char __user *buf,
+				     size_t count, loff_t *ppos)
+{
+	ssize_t len = 0;
+	char page[1024];
+	int ret = -1;
+	unsigned char restore_coeff_val = 0x01;
+
+	aw8680x_wake_state_pin_judge(g_aw8680x);
+
+		ret = aw8680x_register_i2c_reads(g_aw8680x, NDT_RESTORE_COEFF_ADDR, NDT_RESTORE_COEFF_LEN);
+	if (ret < DATA_INIT) {
+		len += snprintf(page + len, PAGE_SIZE - len, "restore_coeff_val get err\n");
+	} else {
+		restore_coeff_val = g_aw8680x->read_data[0];
+		len += snprintf(page + len, PAGE_SIZE - len,
+				"restore_coeff_val = 0x%x\n", restore_coeff_val);
+	}
+
+	ret = simple_read_from_buffer(buf, count, ppos, page, strlen(page));
+
+	return ret;
+}
+
+static ssize_t proc_ndt_reg_dump_read(struct file *filp, char __user *buf,
+				     size_t count, loff_t *ppos)
+{
+	ssize_t len = 0;
+	int ret = -1;
+	char page[1024];
+	uint32_t i = 0;
+	int16_t reg_dump_value[NDT_DEBUG_DUMP_LEN] = {0};
+
+	aw8680x_wake_state_pin_judge(g_aw8680x);
+
+	ret = aw8680x_register_i2c_reads(g_aw8680x, NDT_DEBUG_DUMP_ADDR, NDT_DEBUG_DUMP_LEN * 2);
+	if (ret < DATA_INIT) {
+		len += snprintf(page + len, PAGE_SIZE - len, "ndt_reg_dump get err\n");
+	} else {
+		memcpy(reg_dump_value, &g_aw8680x->read_data[0], NDT_DEBUG_DUMP_LEN * 2);
+		for (i = 0; i < NDT_DEBUG_DUMP_LEN; i++) {
+			if (i == 13) {
+				len += snprintf(page + len, PAGE_SIZE - len,
+						"reg_dump_value[%d] = 0x%04x\n",
+						i,  reg_dump_value[i]);
+			}
+			len += snprintf(page + len, PAGE_SIZE - len,
+					"reg_dump_value[%d] = %hd\n",
+					i,  reg_dump_value[i]);
+		}
+	}
+
+	ret = simple_read_from_buffer(buf, count, ppos, page, strlen(page));
+
+	return ret;
+}
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
-static struct file_operations proc_ops[NUM_NODES] = {
+static struct file_operations proc_ops[] = {
 	{ .read = proc_reg_read, .write = proc_reg_write, .open = aw8680x_file_open, .owner = THIS_MODULE, },
 	{ .read = proc_connect_read, .open = aw8680x_file_open, .owner = THIS_MODULE, },
 	{ .write = proc_update_write, .open = aw8680x_file_open, .owner = THIS_MODULE, },
@@ -4147,9 +4465,12 @@ static struct file_operations proc_ops[NUM_NODES] = {
 	{ .read = proc_FTC_coef_read, .write = proc_FTC_coef_write, .open = aw8680x_file_open, .owner = THIS_MODULE, },
 	{ .read = proc_FTC_noise_read, .open = aw8680x_file_open, .owner = THIS_MODULE, },
 	{ .read = proc_FTC_no_press_read, .open = aw8680x_file_open, .owner = THIS_MODULE, },
+	{ .write = proc_force_mode_write, .open = aw8680x_file_open, .owner = THIS_MODULE, },
+	{ .read = proc_ndt_restore_coeff_read, .write = proc_ndt_restore_coeff_write, .open = aw8680x_file_open, .owner = THIS_MODULE, },
+	{ .read = proc_ndt_reg_dump_read, .open = aw8680x_file_open, .owner = THIS_MODULE, },
 };
 #else
-static struct proc_ops proc_ops[NUM_NODES] = {
+static struct proc_ops proc_ops[] = {
 	{ .proc_read = proc_reg_read, .proc_write = proc_reg_write, .proc_open = aw8680x_file_open, },
 	{ .proc_read = proc_connect_read, .proc_open = aw8680x_file_open, },
 	{ .proc_write = proc_update_write, .proc_open = aw8680x_file_open, },
@@ -4179,6 +4500,9 @@ static struct proc_ops proc_ops[NUM_NODES] = {
 	{ .proc_read = proc_FTC_coef_read, .proc_write = proc_FTC_coef_write, .proc_open = aw8680x_file_open, },
 	{ .proc_read = proc_FTC_noise_read, .proc_open = aw8680x_file_open, },
 	{ .proc_read = proc_FTC_no_press_read, .proc_open = aw8680x_file_open, },
+	{ .proc_write = proc_force_mode_write, .proc_open = aw8680x_file_open, },
+	{ .proc_read = proc_ndt_restore_coeff_read, .proc_write = proc_ndt_restore_coeff_write, .proc_open = aw8680x_file_open, },
+	{ .proc_read = proc_ndt_reg_dump_read, .proc_open = aw8680x_file_open, },
 };
 #endif
 
@@ -4186,7 +4510,6 @@ static int init_vibrator_proc(struct aw8680x *p_aw8680x)
 {
 	int ret = 0;
 	int i = 0;
-	//char buf[AW8680X_NAME_MAX + 10];
 	// ssize_t len = 0;
 
 	p_aw8680x->prEntry_da = proc_mkdir("aw_press", NULL);
@@ -4209,6 +4532,52 @@ static int init_vibrator_proc(struct aw8680x *p_aw8680x)
 	return 0;
 }
 
+
+static int sysclass_group_register(struct aw8680x *p_aw8680x)
+{
+	int ret = DATA_INIT;
+
+	if (!p_aw8680x){
+		AWLOGE("Error: p_aw8680x is NULL\n");
+		return -ENOMEM;
+	}
+
+	p_aw8680x->sysfs_class = class_create(THIS_MODULE, "aw_press");
+	if(!p_aw8680x->sysfs_class){
+		AWLOGE("sysfs_class could not be created\n");
+		ret = -ENOMEM;
+	} else {
+		AWLOGI("sysfs_class have be created");
+	}
+
+	if(!ret){
+		p_aw8680x->sysfs_dev = device_create(p_aw8680x->sysfs_class, NULL, 0, p_aw8680x, "force_dev");
+		if(!p_aw8680x->sysfs_dev){
+			AWLOGE("sysfs_dev could not be created\n");
+			ret = -ENOMEM;
+			class_destroy(p_aw8680x->sysfs_class);
+			p_aw8680x->sysfs_class = NULL;
+		} else {
+			AWLOGI("sysfs_dev have be created");
+		}
+	}
+	if(!ret){
+		ret = sysfs_create_group(&(p_aw8680x->sysfs_dev->kobj), &aw8680x_attribute_group);
+		if(ret) {
+			AWLOGE("sysfs group could not be created\n");
+			ret = -ENOMEM;
+			device_destroy(p_aw8680x->sysfs_class, 0);
+			p_aw8680x->sysfs_dev = NULL;
+			class_destroy(p_aw8680x->sysfs_class);
+			p_aw8680x->sysfs_class = NULL;
+		}else {
+			AWLOGI("sysfs_create have be created");
+		}
+	}
+
+	return DATA_INIT;
+}
+
 static int32_t aw8680x_sys_create(struct aw8680x *p_aw8680x)
 {
 	int32_t ret = DATA_INIT;
@@ -4222,6 +4591,12 @@ static int32_t aw8680x_sys_create(struct aw8680x *p_aw8680x)
 	ret = init_vibrator_proc(p_aw8680x);
 	if (ret != DATA_INIT) {
 		AWLOGE("create proc obj failed!");
+		return -ERR_CREAT_PROC_OBJ;
+	}
+
+	ret = sysclass_group_register(p_aw8680x);
+	if (ret != DATA_INIT) {
+		AWLOGE("create sysclass obj attr failed!");
 		return -ERR_CREAT_PROC_OBJ;
 	}
 
@@ -4515,7 +4890,7 @@ static void aw8680x_irq_gpio_set(struct aw8680x *p_aw8680x, struct device_node *
 						GPIOF_DIR_IN, "aw8680x_int");
 		if (ret) {
 			AWLOGE("irq request failed!");
-			//p_aw8680x->rst_gpio_valid = 0;
+			//p_aw8680x->irq_gpio_valid = 0;
 			return;
 		}
 		irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
