@@ -11,6 +11,8 @@
  * GNU General Public License for more details.
  */
 
+#define pr_fmt(fmt) "moto_sched: " fmt
+
 #include <linux/sched.h>
 #include <linux/sched/task.h>
 #include <linux/proc_fs.h>
@@ -482,6 +484,31 @@ static ssize_t proc_boost_pid_read(struct file *file, char __user *buf,
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
 
+static ssize_t all_ux_tasks_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[32];
+    struct task_struct *p, *t;
+	int ux_type = 0;
+	int ux_count = 0;
+	size_t len = 0;
+
+    rcu_read_lock();
+    for_each_process(p) {
+        for_each_thread(p, t) {
+			ux_type = task_get_ux_type(t);
+			if (ux_type > 0) {
+				pr_info("%d:%d %s prio=%d ux_type=0x%x\n", t->tgid, t->pid, t->comm, t->prio, ux_type);
+				ux_count++;
+			}
+        }
+    }
+	rcu_read_unlock();
+
+	len = snprintf(buffer, sizeof(buffer), "total: %d\n", ux_count);
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+
 static ssize_t proc_version_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
@@ -526,6 +553,10 @@ static const struct proc_ops proc_boost_task_util_fops = {
 static const struct proc_ops proc_boost_pid_fops = {
 	.proc_write		= proc_boost_pid_write,
 	.proc_read		= proc_boost_pid_read,
+};
+
+static const struct proc_ops all_ux_tasks_fops = {
+	.proc_read		= all_ux_tasks_read,
 };
 
 static const struct proc_ops proc_version_fops = {
@@ -590,8 +621,16 @@ int moto_sched_proc_init(void)
 		goto err_creat_boost_pid;
 	}
 
+	proc_node = proc_create("all_ux_tasks", 0444, d_moto_sched, &all_ux_tasks_fops);
+	if (!proc_node) {
+		sched_err("failed to create proc node all_ux_tasks\n");
+		goto err_create_all_ux_tasks;
+	}
 
 	return 0;
+
+err_create_all_ux_tasks:
+	remove_proc_entry("boost_pid", d_moto_sched);
 
 err_creat_boost_pid:
 	remove_proc_entry("debug", d_moto_sched);
@@ -623,6 +662,7 @@ err_creat_d_moto_sched:
 
 void moto_sched_proc_deinit(void)
 {
+	remove_proc_entry("all_ux_tasks", d_moto_sched);
 	remove_proc_entry("boost_pid", d_moto_sched);
 	remove_proc_entry("debug", d_moto_sched);
 	remove_proc_entry("version", d_moto_sched);
