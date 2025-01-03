@@ -11,6 +11,8 @@
  * GNU General Public License for more details.
  */
 
+#define pr_fmt(fmt) "moto_sched: " fmt
+
 #include <linux/atomic.h>
 #include <linux/sched.h>
 #include <linux/sched/task.h>
@@ -342,7 +344,8 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 	}
 }
 
-#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_SERVICEMANAGER|UX_TYPE_ANIMATOR)
+// don't dup ux_type for UX_TYPE_SERVICEMANAGER as init was labeled.
+#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR)
 static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
 {
 	// Base feature: inherit task ux_type during fork for some native services.
