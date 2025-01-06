@@ -29,7 +29,6 @@
 #include "moto_binder.h"
 
 atomic_t __read_mostly global_dump_first_pkg = ATOMIC_INIT(0);
-spinlock_t skb_lock;
 
 static void report_first_packet_after_wakeup(struct sk_buff *skb)
 {
@@ -39,17 +38,12 @@ static void report_first_packet_after_wakeup(struct sk_buff *skb)
 	if (!skb)
 		return;
 
-	if (!spin_trylock(&skb_lock))
-		return;
-
 	sk = skb_to_full_sk(skb);
-	if (!sk || !refcount_inc_not_zero(&sk->sk_refcnt)) {
-		spin_unlock(&skb_lock);
+	if (!sk || !sk_fullsock(sk) || !refcount_inc_not_zero(&sk->sk_refcnt)) {
 		return;
 	}
 	uid = sk->sk_uid.val;
 	sock_put(sk);
-	spin_unlock(&skb_lock);
 
 	if (uid >= MIN_USERAPP_UID)
 		moto_binder_write_status(PACKET_AFTER_WAKEUP, 0, 0, uid, 0, 0, 0);
@@ -142,7 +136,6 @@ int moto_netfilter_init(void)
 		moto_netfilter_deinit();
 		return -1;
 	}
-	spin_lock_init(&skb_lock);
 	pr_info("%s: register netfilter successfuly!\n", __func__);
 	return 0;
 }
