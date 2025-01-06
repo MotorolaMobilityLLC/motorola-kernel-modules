@@ -176,7 +176,6 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 	struct device_node *node = spi->dev.of_node;
 	struct qm35_transport transport = qm35_spi_transport;
 	struct clk *uwb_clk;
-	bool uwb_clk_enabled = false;
 
 	int rc;
 
@@ -194,10 +193,8 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 		dev_err(&spi->dev, "%s: uwb_clk not found", __func__);
 	} else {
 		rc = clk_prepare_enable(uwb_clk);
-		if(rc)
-			dev_err(&spi->dev, "%s: uwb_clk enable failed", __func__);
-		else
-			uwb_clk_enabled = true;
+	if(rc)
+		dev_err(&spi->dev, "%s: uwb_clk enable failed", __func__);
 	}
 
 
@@ -314,11 +311,6 @@ static int qm35_spi_driver_probe(struct spi_device *spi)
 #else
 	qm->transport_pid = spi->master->kworker.task->pid;
 #endif
-
-	if (uwb_clk_enabled) {
-		qmspi->clk_enabled = true;
-		qmspi->clk = uwb_clk;
-	}
 	return 0;
 
 err_register_hw:

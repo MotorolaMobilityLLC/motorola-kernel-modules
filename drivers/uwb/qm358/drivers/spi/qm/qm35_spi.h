@@ -143,8 +143,6 @@ struct qm35_spi {
 	} infobuf;
 	size_t len_infobuf;
 	struct mutex info_mutex;
-	struct clk *clk;
-	bool clk_enabled;
 };
 
 static inline struct qm35_spi *qm35_to_qm35_spi(const struct qm35 *qm35)
