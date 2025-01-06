@@ -81,17 +81,12 @@ static void detect_packet_owner(struct sk_buff *skb)
 	}
 
 	sk = skb_to_full_sk(skb);
-	if (!sk) {
-		pr_info("sock is null\n");
+	if (!sk || !sk_fullsock(sk) || !refcount_inc_not_zero(&sk->sk_refcnt)) {
 		return;
 	}
-	if (sk && !refcount_inc_not_zero(&sk->sk_refcnt)) {
-		pr_info("sock refcnt is zero\n");
-		return;
-	}
+
 	uid = sk->sk_uid.val;
 	if (!uid) {
-		pr_info("uid is null\n");
 		goto release_sock;
 	}
 
