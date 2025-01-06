@@ -150,10 +150,10 @@ static DEVICE_ATTR(manufacturing_date, 0644, manufacturing_date_show, manufactur
 
 static struct attribute * mmi_g[] = {
 	&dev_attr_charge_rate.attr,
-	&dev_attr_age.attr,
 	&dev_attr_state_of_health.attr,
 	&dev_attr_manufacturing_date.attr,
 	&dev_attr_first_usage_date.attr,
+	&dev_attr_age.attr,
 	NULL,
 };
 
