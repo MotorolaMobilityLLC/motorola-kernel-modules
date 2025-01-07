@@ -39,6 +39,11 @@
 #include "eswin_eph861x_types.h"
 #include "eswin_eph861x_eswin.h"
 #include "eswin_eph861x_comms.h"
+#include "eswin_eph861x.h"
+#include "eswin_eph861x_tlv_command.h"
+
+#define TRIGGER_FRAME_CNT 80
+#define MAX_FRAME_LENGTH 2500
 
 int eph_check_firmware_format(struct device *dev, const struct firmware *fw)
 {
@@ -560,3 +565,135 @@ int eph_irq_enable(struct eph_data *ephdata, bool enable)
     ts_info("warnning: irq deepth inbalance!");
     return 0;
 }
+
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+static struct frame_log_t {
+    u8 *buf;
+    int used;
+} frame_log;
+
+static int discard_frames;
+static int frame_cnt;
+static int freq_index;
+static int process;
+static size_t total_cnt;
+#define CMD_LEN          11
+#define CMD_VAL_IDX      7
+static int eph_output_debug_data(struct eph_data *ephdata, bool enable)
+{
+    int ret_val;
+    u8 cfg_signal[CMD_LEN] = {TLV_CONTROL_DATA_WRITE, 0x08, 0x00, 0x8c, 0x00, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00};
+    u8 cfg_delta[CMD_LEN] = {TLV_CONTROL_DATA_WRITE, 0x08, 0x00, 0x0e, 0x01, 0x0d, 0x00, 0x00, 0x00, 0x00, 0x00};
+    u8 cfg_sys[8] = {TLV_CONTROL_DATA_WRITE, 0x05, 0x00, 0x00, 0x00, 0x15, 0x00, 0x00};
+    u16 length = CMD_LEN;
+    if(enable)
+    {
+        cfg_signal[CMD_VAL_IDX] = 0x03; //mct + sct signal
+        cfg_delta[CMD_VAL_IDX] = 0x03;  //mct + sct delta
+        cfg_sys[CMD_VAL_IDX] = 0x01;  //system active
+    }
+    mutex_lock(&ephdata->comms_mutex);
+    ret_val = eph_write_control_config(ephdata, length, &cfg_signal[0]);
+    if(ret_val)
+    {
+        ts_err("cfg_signal %s failed", enable ? "enable" : "disable");
+    }
+    ret_val = eph_write_control_config(ephdata, length, &cfg_delta[0]);
+    if(ret_val)
+    {
+        ts_err("cfg_delta %s failed", enable ? "enable" : "disable");
+    }
+    ret_val = eph_write_control_config(ephdata, 8, &cfg_sys[0]);
+    if(ret_val)
+    {
+        ts_err("cfg_sys %s failed", enable ? "enable" : "disable");
+    }
+    mutex_unlock(&ephdata->comms_mutex);
+
+    return ret_val;
+}
+
+void eph_cache_debug_log(struct eph_data *ephdata)
+{
+    u8 *frame_ptr = ephdata->trigger_buf;
+    int frame_len = le16_to_cpup((__le16 *)(frame_ptr + 1));
+    ts_info("[log %d] - %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", frame_cnt, frame_ptr[0], frame_ptr[1], frame_ptr[2], frame_ptr[3], frame_ptr[4], frame_ptr[5], frame_ptr[6], frame_ptr[7], frame_ptr[8]);
+
+    if (discard_frames > 0) {
+        discard_frames--;
+        return;
+    }
+    if (0x81 != frame_ptr[0]) {
+        ts_info("[log %d] - type %02x, discard!\n", frame_cnt, frame_ptr[0]);
+        return;
+    }
+    frame_len = frame_len + 3;
+    //judge if frame_len is within limit
+    if (frame_len > MAX_FRAME_LENGTH) {
+        ts_info("frame_len is too long, %d", frame_len);
+        frame_len = MAX_FRAME_LENGTH;
+        ephdata->data_valid = 0;
+    }
+
+    memcpy(frame_log.buf + frame_log.used, frame_ptr, frame_len);
+    frame_log.used += frame_len;
+
+    total_cnt += frame_log.used;
+    ts_info("frame log used:%d, total cnt:%zu", frame_log.used, total_cnt);
+    put_fifo_with_discard(frame_log.buf, frame_log.used);
+    memset(frame_log.buf, 0x0, sizeof(frame_log.used));
+    frame_log.used = 0;
+
+    frame_cnt++;
+    if (frame_cnt >= TRIGGER_FRAME_CNT) {
+        frame_cnt = 0;
+        process = 0;
+        freq_index = 0;
+        eph_reset_device(ephdata);
+        atomic_set(&ephdata->trigger_enable, 0);
+        total_cnt = 0;
+        vfree(frame_log.buf);
+        ts_info("Notify raw data capture down, data_valid:%d", ephdata->data_valid);
+        if (ephdata->data_valid == 1)
+            sysfs_notify(ephdata->imports->kobj_notify, NULL, "log_trigger");
+    }
+}
+
+int frame_log_capture_stop(struct eph_data *ephdata)
+{
+    eph_output_debug_data(ephdata, false);
+    vfree(frame_log.buf);
+    ts_info("stop ghost log capture, trigger_enable state change to 0\n");
+    return 0;
+}
+
+int frame_log_capture_start(struct eph_data *ephdata)
+{
+
+    if (atomic_read(&ephdata->allow_capture) == 0) {
+        ts_info("Touch not active, not allow ghost log capture\n");
+        return 0;
+    }
+
+    if (atomic_read(&ephdata->trigger_enable) != 0)
+        return 0;
+
+    frame_log.buf = vmalloc(4 * 1024);
+    if (!frame_log.buf)
+        return -ENOMEM;
+
+    //init parameters
+    frame_log.used = 0;
+    ephdata->data_valid = 1;
+    discard_frames = 4;
+    frame_cnt = 0;
+    freq_index = 0;
+    process = 0;
+    total_cnt = 0;
+
+    eph_output_debug_data(ephdata, true);
+    atomic_set(&ephdata->trigger_enable, 1);
+    ts_info("start ghost log capture\n");
+    return 0;
+}
+#endif

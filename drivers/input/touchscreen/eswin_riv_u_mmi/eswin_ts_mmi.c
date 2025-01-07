@@ -617,11 +617,9 @@ static ssize_t eswin_ts_log_trigger_store(struct device *dev,
 
     if (!buf || count <= 0)
         return 0;
-#if 0
+
     clear_kfifo();
-    /* TODO: implement eswin log capture function interface */
     frame_log_capture_start(ephdata);
-#endif
     return count;
 }
 
@@ -1242,7 +1240,7 @@ static int eswin_ts_mmi_post_resume(struct device *dev)
 #endif
 
 #ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
-    //atomic_set(&ephdata->allow_capture, 1);
+    atomic_set(&ephdata->allow_capture, 1);
     ts_info("Resume end, enable ghost log capture");
 #endif
 #endif//ESWIN_EXTRA_MMI
@@ -1260,6 +1258,20 @@ static int eswin_ts_mmi_pre_suspend(struct device *dev)
     GET_ESWIN_DATA(dev);
 
     ts_info("Suspend start");
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+	//disable/stop ghost log capture
+	atomic_set(&ephdata->allow_capture, 0);
+	ts_info("Suspend start, disable ghost log capture\n");
+
+	mutex_lock(&ephdata->frame_log_lock);
+	if(atomic_read(&ephdata->trigger_enable) == 1) {
+		atomic_set(&ephdata->trigger_enable, 0);
+		ephdata->data_valid = 0;
+		frame_log_capture_stop(ephdata);
+	}
+	mutex_unlock(&ephdata->frame_log_lock);
+#endif
+
     ret = eph_screen_on_reporting(&ephdata->commsdevice->dev, 0);
     if (ret)
         ts_err("set screen off reporting fail %d.\n", ret);

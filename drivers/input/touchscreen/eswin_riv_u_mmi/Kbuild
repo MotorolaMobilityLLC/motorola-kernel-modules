@@ -109,19 +109,23 @@ endif
 #    EXTRA_CFLAGS += -DGOODIX_PALM_SENSOR_EN
 #endif
 
-# ifeq ($(TARGET_BUILD_VARIANT), userdebug)
-# ifneq ($(filter m y, $(CONFIG_GTP_GHOST_LOG_CAPTURE)),)
-# 	EXTRA_CFLAGS += -DCONFIG_GTP_GHOST_LOG_CAPTURE
-# 	eswin_riv_u_mmi-objs += goodix_ts_log_capture.o
-# endif
-# endif
+ifneq ($(filter m y, $(CONFIG_TARGET_BUILD_FACTORY)),)
+	EXTRA_CFLAGS += -DCONFIG_TARGET_BUILD_FACTORY
+endif
 
-# ifeq ($(TARGET_BUILD_VARIANT),)
-# ifneq ($(filter m y, $(CONFIG_GTP_GHOST_LOG_CAPTURE)),)
-# 	EXTRA_CFLAGS += -DCONFIG_GTP_GHOST_LOG_CAPTURE
-# 	eswin_riv_u_mmi-objs += goodix_ts_log_capture.o
-# endif
-# endif
+ifeq ($(TARGET_BUILD_VARIANT), userdebug)
+ifneq ($(filter m y, $(CONFIG_ESWIN_GHOST_LOG_CAPTURE)),)
+	EXTRA_CFLAGS += -DCONFIG_ESWIN_GHOST_LOG_CAPTURE
+	eswin_riv_u_mmi-objs += eswin_ts_log_capture.o
+endif
+endif
+
+ifeq ($(TARGET_BUILD_VARIANT),)
+ifneq ($(filter m y, $(CONFIG_ESWIN_GHOST_LOG_CAPTURE)),)
+	EXTRA_CFLAGS += -DCONFIG_ESWIN_GHOST_LOG_CAPTURE
+	eswin_riv_u_mmi-objs += eswin_ts_log_capture.o
+endif
+endif
 
 ifneq ($(filter m y,$(CONFIG_ENABLE_ESWIN_PALM_CANCEL)),)
     EXTRA_CFLAGS += -DCONFIG_ENABLE_ESWIN_PALM_CANCEL

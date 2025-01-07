@@ -30,4 +30,14 @@ extern void eph_recovery_device(struct eph_data *ephdata);
 extern bool eph_is_fod_resume(struct eph_data *ephdata);
 extern int eph_irq_enable(struct eph_data *ephdata, bool enable);
 
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+void eph_cache_debug_log(struct eph_data *ephdata);
+int frame_log_capture_start(struct eph_data *ephdata);
+int frame_log_capture_stop(struct eph_data *ephdata);
+void put_fifo_with_discard(char *log_buf, int len);
+void clear_kfifo(void);
+int eswin_log_capture_register_misc(struct eph_data *ephdata);
+int eswin_log_capture_unregister_misc(struct eph_data *ephdata);
+#endif
+
 #endif /* __LINUX_PLATFORM_DATA_ESWIN_EPH_ESWIN_ */

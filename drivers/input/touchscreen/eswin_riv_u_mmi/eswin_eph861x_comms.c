@@ -15,7 +15,7 @@
 //#define INPUT_DEVICE_ALWAYS_OPEN
 #include <linux/types.h>
 
-bool debug_log_flag = false;
+bool debug_log_flag = true;
 
 #include <uapi/asm-generic/errno-base.h>
 #include <linux/kernel.h>

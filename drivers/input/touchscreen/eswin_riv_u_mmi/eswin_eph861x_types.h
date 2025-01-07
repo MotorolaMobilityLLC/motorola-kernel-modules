@@ -316,6 +316,14 @@ struct eph_data
     bool pm_suspend;
 #endif
 
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+	atomic_t trigger_enable;
+	u8 trigger_buf[2500];
+	atomic_t allow_capture;
+	bool data_valid;
+	struct mutex frame_log_lock;
+#endif
+
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
     struct ts_mmi_class_methods *imports;
     struct mutex mmi_lock;

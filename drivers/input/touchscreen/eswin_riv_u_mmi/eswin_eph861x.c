@@ -144,6 +144,29 @@ static int eph_probe_bootloader(struct eph_data *ephdata)
     return 0;
 }
 
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+static int eph_read_engineering_messages(struct eph_data *ephdata)
+{
+    struct device *dev = &ephdata->commsdevice->dev;
+    int ret_val;
+
+    mutex_lock(&ephdata->frame_log_lock);
+    /* Read report */
+    ret_val = eph_read_report(ephdata, ephdata->trigger_buf);
+    eph_cache_debug_log(ephdata);
+    mutex_unlock(&ephdata->frame_log_lock);
+
+    if (0 > ret_val)
+    {
+        dev_err(dev, "Failed to read engineering message (%d)\n", ret_val);
+        return ret_val;
+    }
+
+    /* return 0 is success */
+    return ret_val;
+}
+#endif
+
 static int eph_read_and_process_messages(struct eph_data *ephdata)
 {
     struct device *dev = &ephdata->commsdevice->dev;
@@ -188,9 +211,15 @@ static irqreturn_t eph_interrupt(int irq, void *dev_id)
         return IRQ_HANDLED;
 
     pm_stay_awake(dev);
-
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+	if (atomic_read(&ephdata->trigger_enable) == 1) {
+        eph_read_engineering_messages(ephdata);
+	} else {
+	    eph_read_and_process_messages(ephdata);
+	}
+#else
     eph_read_and_process_messages(ephdata);
-
+#endif
     /* will not unblock any other threads until message has been read */
     complete(&ephdata->chg_completion);
 
@@ -2006,7 +2035,12 @@ static void heartbeat_work_handler(struct work_struct *work)
         ts_info("ic heartbeat off\n");
         return;
     }
-
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+    if (atomic_read(&ephdata->trigger_enable)) {
+        ts_info("log triggered, heartbeat off\n");
+        return;
+    }
+#endif
     if (ephdata->suspended)
     {
         if (ephdata->power_on)
@@ -2414,6 +2448,15 @@ static int eph_probe(struct comms_device *commsdevice, const struct comms_device
         ts_err("eswin create proc fail\n");
     }
 
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+    ret_val = eswin_log_capture_register_misc(ephdata);
+    if (ret_val)
+        ts_err("Failed register log device, %d\n", ret_val);
+
+    atomic_set(&ephdata->allow_capture, 1);
+    ts_info("Enable ghost log capture after probe\n");
+#endif
+    debug_log_flag = false;
     dev_info(&commsdevice->dev, "%s <\n", __func__);
     return 0;
 
@@ -2447,6 +2490,11 @@ static void eph_remove(struct comms_device *commsdevice)
 #if defined EPH_ESD_RECOVERY
     cancel_delayed_work_sync(&ephdata->heartbeat_work);
 #endif
+
+#ifdef CONFIG_ESWIN_GHOST_LOG_CAPTURE
+    eswin_log_capture_unregister_misc(ephdata);
+#endif
+
     sysfs_remove_group(&commsdevice->dev.kobj, &eph_fw_attr_group);
     eph_sysfs_mem_access_remove(ephdata);
     remove_proc_entry("eph_ts/eph_debug", NULL);
