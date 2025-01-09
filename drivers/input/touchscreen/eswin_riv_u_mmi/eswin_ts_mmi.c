@@ -116,11 +116,14 @@ static DEVICE_ATTR(fp_event, (S_IRUGO | S_IWUSR | S_IWGRP),
 #define REPORT_RATE_CMD_720HZ   0x5
 
 #define CMD_HOST_DISCRETE               12u
-#define CMD_OFFSET_ARMED_RATE           4u
+#define CMD_OFFSET_CHARGER              2u
+#define CMD_OFFSET_STOWED               3u
+#define CMD_OFFSET_ARMED_RATE           5u
+#define CMD_OFFSET_FOD                  7u
+#define CMD_OFFSET_SENSITIVITY          8u
 #define CMD_OFFSET_ORIENTATION          9u
 #define CMD_OFFSET_EDGE_GRIP            10u
 #define CMD_OFFSET_ACTIVE_RATE          11u
-#define CMD_OFFSET_STOWED               13u
 #define CMD_OFFSET_POCKET               14u
 
 #define CMD_BIT_ORIENTATION_0           0u
@@ -213,8 +216,9 @@ static int eswin_ts_send_cmd(struct eph_data *ephdata,
     cmd[TLV_PAYLOAD_FIELD + TLV_WRITE_OFFSET_FIELD + 1] = (cmd_offset >> 8) & 0xFF;
     cmd[TLV_PAYLOAD_FIELD + TLV_WRITE_HEADER_SIZE] = cmd_value_1;
     cmd[TLV_PAYLOAD_FIELD + TLV_WRITE_HEADER_SIZE + 1] = cmd_value_2;
-
+    mutex_lock(&ephdata->comms_mutex);
     ret = eph_write_control_config(ephdata, cmd_length , cmd);
+    mutex_unlock(&ephdata->comms_mutex);
     if (ret)
     {
         ts_err("eph_ts_send_cmd failed offset[%d]\n", cmd_offset);
@@ -311,7 +315,7 @@ static ssize_t eswin_ts_interpolation_store(struct device *dev,
         return -EINVAL;
     }
 
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     ephdata->get_mode.interpolation = mode;
     /* TODO: implement set report rate */
     ret = eswin_ts_mmi_set_report_rate(ephdata);
@@ -321,7 +325,7 @@ static ssize_t eswin_ts_interpolation_store(struct device *dev,
     ret = size;
     ephdata->set_mode.interpolation = mode;
 exit:
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
     return ret;
 }
 
@@ -353,7 +357,7 @@ static ssize_t eswin_ts_sample_store(struct device *dev,
         return -EINVAL;
     }
 
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     ephdata->get_mode.sample= mode;
     if (ephdata->set_mode.sample == mode) {
         ts_info("The value = %lu is same, so not to write", mode);
@@ -380,7 +384,7 @@ static ssize_t eswin_ts_sample_store(struct device *dev,
 
     ret = size;
 exit:
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
     return ret;
 }
 
@@ -412,7 +416,7 @@ static ssize_t eswin_ts_stowed_store(struct device *dev,
         return -EINVAL;
     }
 
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     ephdata->get_mode.stowed = mode;
     if (ephdata->set_mode.stowed == mode) {
         ts_info("The value = %lu is same, so not to write", mode);
@@ -437,7 +441,7 @@ static ssize_t eswin_ts_stowed_store(struct device *dev,
 
     ret = size;
 exit:
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
     return ret;
 }
 
@@ -473,10 +477,10 @@ static int eswin_ts_mmi_refresh_rate(struct device *dev, int freq)
 
     GET_ESWIN_DATA(dev);
     ts_info("eswin_ts_mmi_refresh_rate %d\n", freq);
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     ephdata->refresh_rate = freq;
     eswin_ts_mmi_set_report_rate(ephdata);
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
 
     return 0;
 }
@@ -539,7 +543,7 @@ static ssize_t eswin_ts_edge_store(struct device *dev,
         return -EINVAL;
     }
 
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     memcpy(ephdata->get_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
     if (!memcmp(ephdata->set_mode.edge_mode, edge_cmd, sizeof(edge_cmd))) {
         ts_info("The value (%02x %02x) is same,so not write.\n",
@@ -565,7 +569,7 @@ static ssize_t eswin_ts_edge_store(struct device *dev,
     ret = size;
     ts_info("Success to set edge = %02x, rotation = %02x", edge_cmd[1], edge_cmd[0]);
 exit:
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
     return ret;
 }
 
@@ -594,10 +598,10 @@ static ssize_t eswin_ts_timestamp_show(struct device *dev,
     dev = MMI_DEV_TO_TS_DEV(dev);
     GET_ESWIN_DATA(dev);
 
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     last_ktime = ephdata->last_event_time;
     ephdata->last_event_time = 0;
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
 
     last_ts = ktime_to_timespec64(last_ktime);
 
@@ -658,11 +662,11 @@ static ssize_t eswin_ts_pocket_mode_store(struct device *dev,
     dev = MMI_DEV_TO_TS_DEV(dev);
     GET_ESWIN_DATA(dev);
 
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     ret = kstrtoul(buf, 0, &value);
     if (ret < 0) {
         ts_err("pocket_mode: Failed to convert value\n");
-        mutex_unlock(&ephdata->comms_mutex);
+        mutex_unlock(&ephdata->mode_lock);
         return -EINVAL;
     }
     ts_err("Set pocket_mode: %d\n", value);
@@ -679,7 +683,7 @@ static ssize_t eswin_ts_pocket_mode_store(struct device *dev,
             break;
         default:
             ts_info("unsupport pocket mode type, value = %lu\n", value);
-            mutex_unlock(&ephdata->comms_mutex);
+            mutex_unlock(&ephdata->mode_lock);
             return -EINVAL;
     }
 
@@ -705,7 +709,7 @@ static ssize_t eswin_ts_pocket_mode_store(struct device *dev,
 
     ts_info("Success to %s pocket mode", ephdata->get_mode.pocket_mode ? "Enable" : "Disable");
 exit:
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
     return size;
 }
 #endif
@@ -866,69 +870,24 @@ static int eswin_ts_mmi_methods_power(struct device *dev, int on)
 static int eswin_ts_mmi_charger_mode(struct device *dev, int mode)
 {
     int ret = 0;
-    uint8_t cmd[] = {0x08, 0x05, 0x00, 0x0C, 0x00, 0x02, 0x00, 0x01};
     struct eph_data *ephdata;
 
     GET_ESWIN_DATA(dev);
 
-    if(mode == 0)
-    {
-        /* disable charger mode. */
-        cmd[7] = 0x0;
-    }
+    mutex_lock(&ephdata->mode_lock);
 
-    mutex_lock(&ephdata->comms_mutex);
-    ret = eph_write_control_config(ephdata, 8 , cmd);
+    ret = eswin_ts_send_cmd(ephdata, CMD_HOST_DISCRETE, CMD_OFFSET_CHARGER, !!mode, 0xff);
     if (ret)
     {
         ts_err("failed to set charge mode\n");
     }
-    msleep(10);
     ts_err("Success to %s charge mode\n", mode ? "Enable" : "Disable");
-    mutex_unlock(&ephdata->comms_mutex);
+
+    mutex_unlock(&ephdata->mode_lock);
 
     return ret;
 }
-#ifndef ESWIN_EXTRA_MMI
-static int eswin_ts_mmi_refresh_rate(struct device *dev, int freq)
-{
-    struct eph_data *ephdata;
-    int ret = 0;
-    uint8_t cmd[] = {0x08, 0x05, 0x00, 0x0C, 0x00, 0x0a, 0x00, 0x00};
-    GET_ESWIN_DATA(dev);
 
-    /* set report rate */
-    ephdata->refresh_rate = freq;
-    switch(freq)
-    {
-        case 240:
-            cmd[7] = 0x1;
-            break;
-        case 300:
-            cmd[7] = 0x2;
-            break;
-        case 360:
-            cmd[7] = 0x3;
-            break;
-        case 480:
-            cmd[7] = 0x4;
-            break;
-        default:
-            break;
-    }
-
-    mutex_lock(&ephdata->comms_mutex);
-    ret = eph_write_control_config(ephdata, 8 , cmd);
-    if (ret)
-    {
-        ts_err("failed to set refresh rate\n");
-    }
-    ts_err("Success to set refresh rate %dHz\n", freq);
-    mutex_unlock(&ephdata->comms_mutex);
-
-    return 0;
-}
-#endif
 #define Y_MIN_ID 2
 #define Y_MAX_ID 3
 #define SCREEN_X_MAX 1080
@@ -1021,7 +980,7 @@ int eswin_ts_mmi_palm_set_enable(struct device *dev, unsigned int enable)
 
     GET_ESWIN_DATA(dev);
 
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     ephdata->get_mode.palm_detection= enable;
     if (ephdata->set_mode.palm_detection == enable) {
         ts_info("The value = %d is same, so not to write", enable);
@@ -1056,7 +1015,7 @@ int eswin_ts_mmi_palm_set_enable(struct device *dev, unsigned int enable)
     ts_info("Success set palm detection to %d\n", enable);
 
 exit:
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
     return ret;
 }
 #endif
@@ -1155,7 +1114,7 @@ static int eswin_ts_mmi_post_resume(struct device *dev)
         schedule_work(&ephdata->force_baseline_work);
     }
 #ifdef ESWIN_EXTRA_MMI
-    mutex_lock(&ephdata->comms_mutex);
+    mutex_lock(&ephdata->mode_lock);
     /* All IC status are cleared after reset */
     memset(&ephdata->set_mode, 0 , sizeof(ephdata->set_mode));
     /* restore data */
@@ -1231,7 +1190,7 @@ static int eswin_ts_mmi_post_resume(struct device *dev)
     }
 #endif
 
-    mutex_unlock(&ephdata->comms_mutex);
+    mutex_unlock(&ephdata->mode_lock);
 #ifdef CONFIG_ESWIN_FOD
     if(ephdata->zerotap_data[0]) {
         ts_info("FOD is down during PM resume  fod_enable=%d",ephdata->fod_enable);
@@ -1295,7 +1254,7 @@ static int eswin_ts_mmi_post_suspend(struct device *dev)
     ephdata->suspended = true;
 
     if (ephdata->ephplatform->stowed_mode_ctrl && ephdata->get_mode.stowed && (ephdata->power_on == 1)) {
-        ret = eswin_ts_send_cmd(ephdata, CMD_HOST_DISCRETE, CMD_OFFSET_STOWED, ephdata->get_mode.stowed, 0xff);
+        //ret = eswin_ts_send_cmd(ephdata, CMD_HOST_DISCRETE, CMD_OFFSET_STOWED, ephdata->get_mode.stowed, 0xff);
         if (ret < 0) {
             ts_err("Failed to set stowed mode %d", ephdata->get_mode.stowed);
         } else {
@@ -1367,12 +1326,12 @@ int eswin_ts_mmi_dev_register(struct comms_device *commsdevice)
     int ret;
     struct eph_data *ephdata = eph_comms_driver_data_get(commsdevice);
 
-    mutex_init(&ephdata->comms_mutex);
+    mutex_init(&ephdata->mode_lock);
     ret = ts_mmi_dev_register(&ephdata->commsdevice->dev, &eswin_ts_mmi_methods);
     if (ret)
     {
         dev_err(&commsdevice->dev, "Failed to register ts mmi\n");
-        mutex_destroy(&ephdata->comms_mutex);
+        mutex_destroy(&ephdata->mode_lock);
         return ret;
     }
     ephdata->imports = &eswin_ts_mmi_methods.exports;
@@ -1388,7 +1347,7 @@ void eswin_ts_mmi_dev_unregister(struct comms_device *commsdevice)
     {
         dev_err(&commsdevice->dev,"Failed to get driver data");
     }
-    mutex_destroy(&ephdata->comms_mutex);
+    mutex_destroy(&ephdata->mode_lock);
     ts_mmi_dev_unregister(&ephdata->commsdevice->dev);
 
     return;

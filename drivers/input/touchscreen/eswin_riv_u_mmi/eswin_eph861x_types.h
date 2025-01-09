@@ -240,6 +240,7 @@ struct eph_data
 {
     struct mutex comms_mutex;
     struct mutex sysfs_report_buffer_lock;
+    struct mutex fw_upgrade_mutex;
     struct comms_device *commsdevice;
     struct input_dev *inputdev;
     char phys[64];      /* device physical location */
@@ -326,7 +327,7 @@ struct eph_data
 
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
     struct ts_mmi_class_methods *imports;
-    struct mutex mmi_lock;
+    struct mutex mode_lock;
     bool syspended;
     bool charger_mode;
     struct eswin_ts_mode get_mode;

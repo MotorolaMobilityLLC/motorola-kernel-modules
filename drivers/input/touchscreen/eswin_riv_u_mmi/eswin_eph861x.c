@@ -666,6 +666,7 @@ static int burn_2_ic(struct eph_data *ephdata, const struct firmware *ic_fw)
     struct device *dev = (struct device *)&ephdata->commsdevice->dev;
 
     ephdata->updating_firmware = true;
+    mutex_lock(&ephdata->fw_upgrade_mutex);
     ret_val = eph_enter_bootloader(ephdata);
     if (ret_val)
     {
@@ -685,6 +686,7 @@ static int burn_2_ic(struct eph_data *ephdata, const struct firmware *ic_fw)
 err:
     flash.ephdata = NULL;
     flash.fw = NULL;
+    mutex_unlock(&ephdata->fw_upgrade_mutex);
     ephdata->updating_firmware = false;
     return ret_val;
 }
@@ -1527,7 +1529,7 @@ int eph_deepsleep_enable(struct device *dev, int enable)
 {
     int ret = 0;
     struct eph_data *ephdata = (struct eph_data*)dev_get_drvdata(dev);
-    u8 cfg[] = { 0x8, 0x5, 0x0, 0x0, 0x0, 0x16, 0x0, 0x0 };
+    u8 cfg[] = { 0x8, 0x5, 0x0, 0x0, 0x0, 0x15, 0x0, 0x0 };
     u16 length = sizeof(cfg)/sizeof(cfg[0]);
 
     if (enable == 1)
@@ -1555,7 +1557,10 @@ int eph_screen_on_reporting(struct device *dev, int enable)
         cfg[7] = 0x1;
         cfg[8] = EPH_HOST_REPORTING_TOUCH;
 #if defined EPH_ESD_RECOVERY
-        heartbeat_work_start(ephdata);
+        if(ephdata->power_on)
+        {
+            heartbeat_work_start(ephdata);
+        }
 #endif
     }
     else
@@ -1563,7 +1568,10 @@ int eph_screen_on_reporting(struct device *dev, int enable)
         cfg[7] = 0x0;
         cfg[8] = EPH_HOST_REPORTING_GESTURE;
 #if defined EPH_ESD_RECOVERY
-        heartbeat_work_stop(ephdata);
+        if(ephdata->power_on)
+        {
+            heartbeat_work_stop(ephdata);
+        }
 #endif
     }
 
@@ -2343,6 +2351,7 @@ static int eph_probe(struct comms_device *commsdevice, const struct comms_device
 
     mutex_init(&ephdata->comms_mutex);
     mutex_init(&ephdata->sysfs_report_buffer_lock);
+    mutex_init(&ephdata->fw_upgrade_mutex);
 
     device_init_wakeup(&commsdevice->dev, true);
 

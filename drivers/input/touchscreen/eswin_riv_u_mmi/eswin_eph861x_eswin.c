@@ -192,12 +192,12 @@ const struct eph_platform_data *eph_platform_data_get_from_device_tree(struct co
 
     ephplatform->sensitivity_ctrl = of_property_read_bool(devnode,
                     "eswin,sensitivity-ctrl");
-    if (ephplatform->stowed_mode_ctrl)
+    if (ephplatform->sensitivity_ctrl)
         ts_info("Support eswin touch sensitivity control mode");
 
     ephplatform->stylus_mode_ctrl = of_property_read_bool(devnode,
                     "eswin,stylus-mode-ctrl");
-    if (ephplatform->stowed_mode_ctrl)
+    if (ephplatform->stylus_mode_ctrl)
         ts_info("Support eswin stylus mode");
 
     of_property_read_string(devnode, "eswin,input_name", &ephplatform->input_name);
@@ -500,6 +500,7 @@ int eph_power_on(struct eph_data *ephdata)
         dev_dbg(&ephdata->commsdevice->dev, "power on execute");
         eph_regulator_enable(ephdata);
         ephdata->power_on = 1;
+        atomic_set(&ephdata->heartbeat_on, 1);
     }
 
     return ret;
@@ -523,9 +524,11 @@ int eph_power_off(struct eph_data *ephdata)
         dev_dbg(&ephdata->commsdevice->dev, "power off execute");
         eph_regulator_disable(ephdata);
         ephdata->power_on = 0;
+        atomic_set(&ephdata->heartbeat_on, 0);
     }
     return ret;
 }
+
 #define POWER_DELAY_US 1000*500
 void eph_recovery_device(struct eph_data *ephdata)
 {

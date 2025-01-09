@@ -339,7 +339,7 @@ int eph_app_force_bootloader_mode(struct eph_data *ephdata)
                     0x05, 0x00,                                                                  /* Length */
                     (0x00 & 0xFF), ((0x00>>8) & 0xFF),                                           /* Component ID */
                     0x00,0x00,                                                                   /* Offset */
-                    0x01};                                                                       /* Value */
+                    0x20};                                                                       /* Value */
     u16 length = (sizeof(cfg)/sizeof(cfg[0]));
     mutex_lock(&ephdata->comms_mutex);
     ret_val = eph_write_control_config_no_response(ephdata, length, &cfg[0]);

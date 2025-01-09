@@ -146,37 +146,16 @@ USE_TARGET_PRODUCT := $(CONFIG_MTK_PROJECT_NAME)
 $(warning "USE_TARGET_PRODUCT = $(USE_TARGET_PRODUCT)")
 endif
 
-ifneq ($(filter oneli, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_ONELI
-else ifneq ($(filter hiphi, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_HIPHI
-else ifneq ($(filter hiphic, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_HIPHIC
-else ifneq ($(filter li, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_LI
-else ifneq ($(filter eqs, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_EQS
-else ifneq ($(filter lyriq%, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_LYRIQ
-else ifneq ($(filter miami%, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_MIAMI
-else ifneq ($(filter rtwo%, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_RTWO
-else ifneq ($(filter bronco, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_BRONCO
-# else ifneq ($(filter felix, $(USE_TARGET_PRODUCT)), )
-#         EXTRA_CFLAGS += -DCONFIG_GTP_DISP_MODE
-else ifneq ($(filter zeekr%, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_ZEEKR
-else ifneq ($(filter aion%, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_AION
-else ifneq ($(filter manaus%, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_MANAUS
-else ifneq ($(filter aito, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_AITO
-else ifneq ($(filter vienna, $(USE_TARGET_PRODUCT)), )
-        EXTRA_CFLAGS += -DPRODUCT_VIENNA
+ifneq ($(filter bangkk%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_BANGKK
+else ifneq ($(filter avatrn%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_AVATRN
+else ifneq ($(filter scout%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_SCOUT
+else ifneq ($(filter cybert%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_CYBERT
 endif
+
 $(warning "eswin river EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
 
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
