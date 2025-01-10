@@ -196,6 +196,7 @@ struct fts_ts_platform_data {
     bool pocket_mode_ctrl;
     bool sample_ctrl;
     bool stowed_mode_ctrl;
+    bool tcmd_test_ctrl;
 };
 
 struct ts_event {
@@ -236,6 +237,8 @@ struct fts_ts_data {
     struct device *dev;
     struct input_dev *input_dev;
     struct input_dev *pen_dev;
+    struct device *class_dev;
+    dev_t class_dev_no;
     struct fts_ts_platform_data *pdata;
     struct ts_ic_info ic_info;
     struct workqueue_struct *ts_workqueue;
@@ -417,6 +420,8 @@ bool fts_esdcheck_is_running(struct fts_ts_data *ts_data);
 
 
 /* Host test */
+int fts_test_init(struct fts_ts_data *ts_data);
+int fts_test_exit(struct fts_ts_data *ts_data);
 
 /* Point Report Check*/
 int fts_point_report_check_init(struct fts_ts_data *ts_data);
