@@ -2008,6 +2008,11 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     if (pdata->stowed_mode_ctrl)
         FTS_INFO("Support focaltech touch stowed mode");
 
+    pdata->tcmd_test_ctrl = of_property_read_bool(np,
+        "fts,tcmd-test-ctrl");
+    if (pdata->tcmd_test_ctrl)
+        FTS_INFO("Support focaltech touch tcmd test");
+
     FTS_FUNC_EXIT();
     return 0;
 }
@@ -2396,6 +2401,12 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     }
 #endif
 
+    if (ts_data->pdata->tcmd_test_ctrl) {
+        ret = fts_test_init(ts_data);
+        if (ret) {
+            FTS_ERROR("init host test fail");
+        }
+    }
 
     ret = fts_esdcheck_init(ts_data);
     if (ret) {
@@ -2433,6 +2444,9 @@ int fts_ts_probe_entry(struct fts_ts_data *ts_data)
 
 err_irq_req:
     fts_esdcheck_exit(ts_data);
+    if (ts_data->pdata->tcmd_test_ctrl) {
+        fts_test_exit(ts_data);
+    }
 #if FTS_PSENSOR_EN
     fts_proximity_exit(ts_data);
 #endif
@@ -2507,6 +2521,9 @@ int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     free_irq(ts_data->irq, ts_data);
     fts_fwupg_exit(ts_data);
     fts_esdcheck_exit(ts_data);
+    if (ts_data->pdata->tcmd_test_ctrl) {
+        fts_test_exit(ts_data);
+    }
 #if FTS_PSENSOR_EN
     fts_proximity_exit(ts_data);
 #endif
