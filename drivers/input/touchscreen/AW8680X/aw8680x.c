@@ -4542,7 +4542,7 @@ static int sysclass_group_register(struct aw8680x *p_aw8680x)
 		return -ENOMEM;
 	}
 
-	p_aw8680x->sysfs_class = class_create(THIS_MODULE, "aw_press");
+	p_aw8680x->sysfs_class = class_create(THIS_MODULE, "press");
 	if(!p_aw8680x->sysfs_class){
 		AWLOGE("sysfs_class could not be created\n");
 		ret = -ENOMEM;
