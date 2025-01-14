@@ -162,6 +162,25 @@ void check_and_send(void)
 	}
 }
 
+/**
+ * phone_case_get_hall_state - get hall state
+ * return value 1: PHONE_CASE_DETECTION_MOUNTED
+ * return value 0: PHONE_CASE_DETECTION_UNMOUNTED
+ * return value -1: hall not enabled
+ */
+int phone_case_detection_get_hall_state(void)
+{
+	int ret = -1;
+
+	if (hall_sensor_dev) {
+		check_and_send();
+		ret = hall_sensor_dev->report_val;
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(phone_case_detection_get_hall_state);
+
 void hall_enable(bool enable)
 {
 	unsigned long flags;

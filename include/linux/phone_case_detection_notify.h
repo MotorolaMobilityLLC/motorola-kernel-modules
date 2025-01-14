@@ -20,7 +20,8 @@
 /* The event of phone case being unmounted */
 #define PHONE_CASE_DETECTION_UNMOUNTED		0x00
 
-int phone_case_detection_register_client(struct notifier_block *nb);
-int phone_case_detection_unregister_client(struct notifier_block *nb);
+extern int phone_case_detection_register_client(struct notifier_block *nb);
+extern int phone_case_detection_unregister_client(struct notifier_block *nb);
+extern int phone_case_detection_get_hall_state(void);
 #endif
 
