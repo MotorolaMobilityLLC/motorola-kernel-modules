@@ -61,8 +61,8 @@ atomic_t __read_mostly global_boost_pid = ATOMIC_INIT(-1);
 EXPORT_SYMBOL(moto_sched_scene);
 EXPORT_SYMBOL(global_launcher_tgid);
 EXPORT_SYMBOL(global_sysui_tgid);
-
-
+EXPORT_SYMBOL(global_sf_tgid);
+EXPORT_SYMBOL(global_systemserver_tgid);
 
 struct proc_dir_entry *d_moto_sched;
 
