@@ -1542,7 +1542,8 @@ static bool pehv_check_eoc(struct pehv_algo_info *info,
 	if (ret < 0)
 		PEHV_ERR("get ibat fail(%d)\n", ret);
 
-	if (vbat > (data->vbat_cv - desc->vbat_max_gap) &&
+	if (soc >= desc->stop_soc_max &&
+	    vbat > (data->vbat_cv - desc->vbat_max_gap) &&
 	    ibat < (data->idvchg_term * 2)) {
 		if (algo_running)
 			data->start_soc_max = desc->start_soc_max -
