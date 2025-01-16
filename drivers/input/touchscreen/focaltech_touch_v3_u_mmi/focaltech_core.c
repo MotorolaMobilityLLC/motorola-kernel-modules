@@ -544,20 +544,19 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
     unsigned int tool_type;
 #endif
 
-#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
-    tool_type = ts_data->palm_on ? MT_TOOL_PALM : MT_TOOL_FINGER;
-#endif
-
     for (i = 0; i < ts_data->touch_event_num; i++) {
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+        tool_type = ts_data->palm_on ? MT_TOOL_PALM : MT_TOOL_FINGER;
+#endif
         if (fts_input_report_key(ts_data, &events[i]) == 0) {
             continue;
         }
 
 #if defined(CONFIG_ENABLE_FTS_PALM_CANCEL_BY_ID)
         if(events[i].palm_status) {
-            FTS_DEBUG("[B]P%d(%d, %d)[p:%d,tm:%d][palm_status:%d]",
+            FTS_DEBUG("[B]P%d(%d, %d)[p:%d,tm:%d][palm_status:%d][tool_type:%d]",
                       events[i].id, events[i].x, events[i].y,
-                      events[i].p, events[i].area, events[i].palm_status);
+                      events[i].p, events[i].area, events[i].palm_status,tool_type);
         }
 #endif
         touch_event_coordinate = true;
