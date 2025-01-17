@@ -13,7 +13,11 @@
 #include <linux/sched.h>
 #include <linux/jiffies.h>
 #include <linux/pagemap.h>
-#include "sched.h"
+#include <linux/sched/cputime.h>
+#include <trace/hooks/sched.h>
+#include <trace/hooks/cgroup.h>
+#include <kernel/sched/sched.h>
+#include "drivers/misc/mediatek/sched/common.h"
 
 #define OOM_SCORE_ADJ_NATIVE -1
 #define OOM_SCORE_ADJ_TOP 0
@@ -54,9 +58,9 @@ static struct direct_reclaim_moto_stat *stats[OOM_SCORE_ADJ_NUM_LEVELS];
 
 void vh_direct_reclaim_begin(void *data, int order, gfp_t gfp_mask)
 {
-	struct vendor_task_struct *tsk;
+	struct moto_stats_task_struct *tsk;
 
-	tsk = get_vendor_task_struct(current);
+	tsk = get_moto_stats_task_struct(current);
 	tsk->direct_reclaim_ts = jiffies;
 }
 
@@ -66,10 +70,10 @@ void vh_direct_reclaim_end(void *data, unsigned long nr_reclaimed)
 	struct direct_reclaim_moto_stat *stat;
 	int oom_score_adj;
 	int adj_lvl;
-	struct vendor_task_struct *tsk;
+	struct moto_stats_task_struct *tsk;
 	unsigned long old_ts;
 
-	tsk = get_vendor_task_struct(current);
+	tsk = get_moto_stats_task_struct(current);
 	old_ts = tsk->direct_reclaim_ts;
 	oom_score_adj = current->signal->oom_score_adj;
 

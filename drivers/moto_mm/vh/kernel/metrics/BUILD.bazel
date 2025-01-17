@@ -8,4 +8,11 @@ package(
 
 define_mgk_ko(
     name = "moto_metrics",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+    ]) ,
+    outs = ["moto_metrics.ko"],
 )

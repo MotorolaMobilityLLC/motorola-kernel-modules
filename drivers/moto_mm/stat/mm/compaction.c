@@ -13,7 +13,6 @@
 #include <linux/types.h>
 #include <linux/jiffies.h>
 #include <linux/sched.h>
-#include "sched.h"
 #include "compaction.h"
 
 #define COMPACTION_ATTR_RW(_name) \

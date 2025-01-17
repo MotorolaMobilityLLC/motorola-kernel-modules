@@ -10,7 +10,12 @@
 #include <linux/cma.h>
 #include <linux/kobject.h>
 #include <linux/slab.h>
-#include "sched.h"
+#include <linux/sched.h>
+#include <linux/sched/cputime.h>
+#include <trace/hooks/sched.h>
+#include <trace/hooks/cgroup.h>
+#include <kernel/sched/sched.h>
+#include "drivers/misc/mediatek/sched/common.h"
 
 #define DEF_LATENCY_MID_BOUND_MS 1500
 #define DEF_LATENCY_LOW_BOUND_MS 500
@@ -47,10 +52,10 @@ static struct cma_moto_stat *stats[MAX_CMA_AREAS];
 void vh_cma_alloc_start(void *data, const char *name, unsigned long count,
 			unsigned int align)
 {
-	struct vendor_task_struct *tsk;
+	struct moto_stats_task_struct *tsk;
 
-	tsk = get_vendor_task_struct(current);
-	set_vendor_task_struct_private(tsk, jiffies);
+	tsk = get_moto_stats_task_struct(current);
+	tsk->stats_private_ts = jiffies;
 }
 
 struct cma *cma;
@@ -79,11 +84,12 @@ void vh_cma_alloc_finish(void *data, const char *name, unsigned long pfn,
 	};
 
 	s64 delta;
-	struct vendor_task_struct *tsk;
+	struct moto_stats_task_struct *tsk;
 	unsigned long old_ts;
 
-	tsk = get_vendor_task_struct(current);
-	old_ts = get_and_reset_vendor_task_struct_private(tsk);
+	tsk = get_moto_stats_task_struct(current);
+	old_ts = tsk->stats_private_ts;
+	tsk->stats_private_ts = 0;
 
 	delta = jiffies_to_msecs(jiffies - old_ts);
 	WARN_ON_ONCE(delta < 0);

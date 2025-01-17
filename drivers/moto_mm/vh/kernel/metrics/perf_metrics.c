@@ -20,14 +20,16 @@
 #include <linux/device.h>
 #include <linux/sched/clock.h>
 #include <linux/sched/cputime.h>
+#include <linux/sched.h>
 #include <trace/events/power.h>
 #include <trace/events/irq.h>
 #include <trace/hooks/suspend.h>
 #include <trace/hooks/sched.h>
+#include <trace/hooks/cgroup.h>
+#include <kernel/sched/sched.h>
 #include "perf_metrics.h"
 #include "systrace.h"
-#include "sched.h"
-#include <kernel/sched/sched.h>
+#include "drivers/misc/mediatek/sched/common.h"
 
 struct irq_storm_data {
 	atomic64_t storm_count;
@@ -342,11 +344,11 @@ static void hook_irq_end(void *data, int irq, struct irqaction *action, int ret)
 
 void vh_sched_wakeup_moto_mod(void *data, struct task_struct *p)
 {
-	struct vendor_task_struct *vp;
+	struct moto_stats_task_struct *vp;
 
 	if (!rt_task(p))
 		return;
-	vp = get_vendor_task_struct(p);
+	vp = get_moto_stats_task_struct(current);
 	vp->runnable_start_ns = sched_clock();
 }
 
@@ -355,11 +357,11 @@ void vh_sched_switch_moto_mod(void *data, bool preempt,
 		struct task_struct *next,
 		unsigned int prev_state)
 {
-	struct vendor_task_struct *vnext, *vprev;
+	struct moto_stats_task_struct *vnext, *vprev;
 	u64 now, runnable_delta;
 
 	now = sched_clock();
-	vprev = get_vendor_task_struct(prev);
+	vprev = get_moto_stats_task_struct(prev);
 
 	/*
 	 * Update previous task's runnable_start_ns if it is in TASK_RUNNING state,
@@ -371,7 +373,7 @@ void vh_sched_switch_moto_mod(void *data, bool preempt,
 	else
 		vprev->runnable_start_ns = -1;
 
-	vnext = get_vendor_task_struct(next);
+	vnext = get_moto_stats_task_struct(next);
 	if (!rt_task(next) || vnext->runnable_start_ns > now)
 		return;
 
