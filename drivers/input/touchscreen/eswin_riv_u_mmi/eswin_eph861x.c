@@ -2283,7 +2283,7 @@ static int eph_probe(struct comms_device *commsdevice, const struct comms_device
     if (commsdevice->dev.of_node && !mmi_device_is_available(commsdevice->dev.of_node))
     {
         dev_err(&commsdevice->dev, "mmi: device not supported\n");
-        //return -ENODEV;
+        return -ENODEV;
     }
 
     ephplatform = eph_platform_data_get(commsdevice);
