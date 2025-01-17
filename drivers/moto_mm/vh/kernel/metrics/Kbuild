@@ -1,7 +1,19 @@
 # add -Wall to try to catch everything we can.
+
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 EXTRA_CFLAGS += -I$(srctree)
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
+
+ifneq ($(filter m y,$(CONFIG_MTK_SCHED_VIP_TASK)),)
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-6.1
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1
+endif
 
 # vendor hook for mm
 obj-m += moto_metrics.o
