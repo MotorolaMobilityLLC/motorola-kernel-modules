@@ -10,6 +10,10 @@ ifeq ($(ENABLE_GTP_PALM_CANCEL),true)
     KBUILD_OPTIONS += CONFIG_ENABLE_FTS_PALM_CANCEL=y
 endif
 
+ifeq ($(ENABLE_FTS_MANUAL_CS),true)
+    KBUILD_OPTIONS += CONFIG_ENABLE_FTS_MANUAL_CS=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := focaltech_v3_5.ko
 LOCAL_MODULE_TAGS := optional
