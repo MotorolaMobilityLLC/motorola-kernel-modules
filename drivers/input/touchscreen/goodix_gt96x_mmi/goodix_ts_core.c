@@ -33,6 +33,10 @@ struct goodix_device_manager goodix_devices;
 #define PINCTRL_STATE_ACTIVE    "cli_pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND   "cli_pmx_ts_suspend"
 
+#ifdef CONFIG_GTP_MANUAL_CS
+int cs_gpio;
+#endif
+
 static void goodix_device_manager_init(void)
 {
 	if (goodix_devices.initilized)
@@ -818,6 +822,16 @@ static int goodix_parse_dt(struct device_node *node,
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_GTP_MANUAL_CS
+	r = of_get_named_gpio(node, "cs,gpio", 0);
+	if (r < 0) {
+		ts_err("invalid cs-gpio in dt: %d", r);
+		return -EINVAL;
+	}
+	ts_info("get cs-gpio[%d] from dt", r);
+	cs_gpio = r;
+#endif
+
 	memset(board_data->avdd_name, 0, sizeof(board_data->avdd_name));
 	r = of_property_read_string(node, "goodix,avdd-name", &name_tmp);
 	if (!r) {
@@ -1332,6 +1346,18 @@ static int goodix_ts_gpio_setup(struct goodix_ts_core *core_data)
 			return r;
 		}
 	}
+
+#ifdef CONFIG_GTP_MANUAL_CS
+	if (cs_gpio > 0) {
+		r = devm_gpio_request_one(&core_data->pdev->dev,
+				cs_gpio,
+				GPIOF_OUT_INIT_HIGH, "ts_cs_gpio");
+		if (r < 0) {
+			ts_err("Failed to request cs-gpio, r:%d", r);
+			return r;
+		}
+	}
+#endif
 
 	return 0;
 }

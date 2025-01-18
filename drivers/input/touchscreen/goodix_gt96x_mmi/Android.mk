@@ -25,6 +25,10 @@ ifeq ($(ENABLE_GTP_PALM_CANCEL),true)
     KBUILD_OPTIONS += CONFIG_ENABLE_GTP_PALM_CANCEL=y
 endif
 
+ifeq ($(ENABLE_GTP_MANUAL_CS),true)
+    KBUILD_OPTIONS += CONFIG_GTP_MANUAL_CS=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_gt96x_mmi.ko
 LOCAL_MODULE_TAGS := optional
