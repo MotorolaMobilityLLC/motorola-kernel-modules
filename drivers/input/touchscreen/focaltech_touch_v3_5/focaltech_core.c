@@ -1817,12 +1817,36 @@ static int fts_gpio_configure(struct fts_ts_data *ts_data)
         }
     }
 
+#ifdef CONFIG_FTS_MANUAL_CS
+    if (gpio_is_valid(ts_data->pdata->cs_gpio)) {
+        ret = gpio_request(ts_data->pdata->cs_gpio, "fts_cs_gpio");
+        if (ret) {
+            FTS_ERROR("[GPIO]cs gpio request failed");
+            goto err_irq_gpio_dir;
+        }
+    }
+
+    ret = gpio_direction_output(ts_data->pdata->cs_gpio, 1);
+    if (ret) {
+        FTS_ERROR("[GPIO]set cs gpio to high failed");
+        goto err_irq_gpio_dir;
+    } else {
+        FTS_INFO("[GPIO]set cs gpio to high success");
+    }
+#endif
+
     FTS_FUNC_EXIT();
     return 0;
 
 err_irq_gpio_dir:
     if (gpio_is_valid(ts_data->pdata->irq_gpio))
         gpio_free(ts_data->pdata->irq_gpio);
+    if (gpio_is_valid(ts_data->pdata->reset_gpio))
+        gpio_free(ts_data->pdata->reset_gpio);
+#ifdef CONFIG_FTS_MANUAL_CS
+    if (gpio_is_valid(ts_data->pdata->cs_gpio))
+        gpio_free(ts_data->pdata->cs_gpio);
+#endif
 err_irq_gpio_req:
     FTS_FUNC_EXIT();
     return ret;
@@ -1949,6 +1973,15 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
                       0);
     if (pdata->irq_gpio < 0)
         FTS_ERROR("Unable to get irq_gpio");
+
+#ifdef CONFIG_FTS_MANUAL_CS
+    pdata->cs_gpio = of_get_named_gpio(np, "cs,gpio", 0);
+    if (pdata->cs_gpio < 0) {
+        FTS_ERROR("Unable to get cs_gpio");
+    } else {
+        FTS_INFO("cs_gpio:%d", pdata->cs_gpio);
+    }
+#endif
 
     ret = of_property_read_u32(np, "focaltech,max-touch-number", &temp_val);
     if (ret < 0) {
@@ -2433,6 +2466,10 @@ err_power_init:
         gpio_free(ts_data->pdata->reset_gpio);
     if (gpio_is_valid(ts_data->pdata->irq_gpio))
         gpio_free(ts_data->pdata->irq_gpio);
+#ifdef CONFIG_FTS_MANUAL_CS
+    if (gpio_is_valid(ts_data->pdata->cs_gpio))
+        gpio_free(ts_data->pdata->cs_gpio);
+#endif
 err_gpio_config:
     kfree_safe(ts_data->touch_buf);
 err_bus_init:
@@ -2491,6 +2528,10 @@ int fts_ts_remove_entry(struct fts_ts_data *ts_data)
         gpio_free(ts_data->pdata->reset_gpio);
     if (gpio_is_valid(ts_data->pdata->irq_gpio))
         gpio_free(ts_data->pdata->irq_gpio);
+#ifdef CONFIG_FTS_MANUAL_CS
+    if (gpio_is_valid(ts_data->pdata->cs_gpio))
+        gpio_free(ts_data->pdata->cs_gpio);
+#endif
 
 #if FTS_PINCTRL_EN
     if (ts_data->pinctrl) {

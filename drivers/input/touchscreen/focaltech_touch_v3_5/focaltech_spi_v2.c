@@ -82,7 +82,15 @@ static int fts_spi_transfer(u8 *tx_buf, u8 *rx_buf, u32 len)
     spi_message_init(&msg);
     spi_message_add_tail(&xfer, &msg);
 
+#ifdef CONFIG_FTS_MANUAL_CS
+    gpio_set_value(fts_data->pdata->cs_gpio, 0);
+#endif
     ret = spi_sync(spi, &msg);
+
+#ifdef CONFIG_FTS_MANUAL_CS
+    gpio_set_value(fts_data->pdata->cs_gpio, 1);
+#endif
+
     if (ret) {
         FTS_ERROR("spi_sync fail,ret:%d", ret);
         return ret;
