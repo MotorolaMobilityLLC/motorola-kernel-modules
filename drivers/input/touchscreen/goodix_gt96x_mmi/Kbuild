@@ -37,6 +37,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_MANUAL_CS)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_MANUAL_CS
+endif
+
 ifneq ($(filter m y,$(CONFIG_ENABLE_GTP_PALM_CANCEL)),)
     EXTRA_CFLAGS += -DCONFIG_ENABLE_GTP_PALM_CANCEL
 endif

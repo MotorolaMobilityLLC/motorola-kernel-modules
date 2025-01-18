@@ -810,6 +810,9 @@ struct goodix_device_manager {
 
 extern struct goodix_device_manager goodix_devices;
 extern int goodix_device_register(struct goodix_device_resource *device);
+#ifdef CONFIG_GTP_MANUAL_CS
+extern int cs_gpio;
+#endif
 
 /* log macro */
 extern bool debug_log_flag;

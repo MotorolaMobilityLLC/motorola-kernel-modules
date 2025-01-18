@@ -76,7 +76,17 @@ static int goodix_spi_read_bra(struct device *dev, unsigned int addr,
 	xfers.len = SPI_READ_PREFIX_LEN + len;
 	xfers.cs_change = 0;
 	spi_message_add_tail(&xfers, &spi_msg);
+
+#ifdef CONFIG_GTP_MANUAL_CS
+	gpio_set_value(cs_gpio, 0);
+#endif
+
 	ret = spi_sync(spi, &spi_msg);
+
+#ifdef CONFIG_GTP_MANUAL_CS
+	gpio_set_value(cs_gpio, 1);
+#endif
+
 	if (ret < 0) {
 		ts_err("spi transfer error:%d", ret);
 		goto exit;
@@ -125,7 +135,17 @@ static int goodix_spi_read(struct device *dev, unsigned int addr,
 	xfers.len = SPI_READ_PREFIX_LEN - 1 + len;
 	xfers.cs_change = 0;
 	spi_message_add_tail(&xfers, &spi_msg);
+
+#ifdef CONFIG_GTP_MANUAL_CS
+	gpio_set_value(cs_gpio, 0);
+#endif
+
 	ret = spi_sync(spi, &spi_msg);
+
+#ifdef CONFIG_GTP_MANUAL_CS
+	gpio_set_value(cs_gpio, 1);
+#endif
+
 	if (ret < 0) {
 		ts_err("spi transfer error:%d", ret);
 		goto exit;
@@ -172,7 +192,17 @@ static int goodix_spi_write(struct device *dev, unsigned int addr,
 	xfers.len = SPI_WRITE_PREFIX_LEN + len;
 	xfers.cs_change = 0;
 	spi_message_add_tail(&xfers, &spi_msg);
+
+#ifdef CONFIG_GTP_MANUAL_CS
+	gpio_set_value(cs_gpio, 0);
+#endif
+
 	ret = spi_sync(spi, &spi_msg);
+
+#ifdef CONFIG_GTP_MANUAL_CS
+	gpio_set_value(cs_gpio, 1);
+#endif
+
 	if (ret < 0)
 		ts_err("spi transfer error:%d", ret);
 
