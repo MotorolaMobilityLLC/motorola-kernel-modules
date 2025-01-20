@@ -64,6 +64,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/miscdevice.h>
 #include <linux/poll.h>
+#include <linux/mmi_device.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
 #include <linux/ktime.h>
 #include <linux/timekeeping.h>

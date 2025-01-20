@@ -468,6 +468,12 @@ static int fts_ts_probe(struct spi_device *spi)
     struct fts_ts_data *ts_data = NULL;
 
     FTS_INFO("Touch Screen(SPI-2 BUS) driver prboe...");
+
+    if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+        FTS_ERROR("mmi: device not supported");
+        return -ENODEV;
+    }
+
     spi->mode = SPI_MODE_0;
     spi->bits_per_word = 8;
     ret = spi_setup(spi);
