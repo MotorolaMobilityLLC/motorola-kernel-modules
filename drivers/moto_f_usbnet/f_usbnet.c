@@ -377,6 +377,8 @@ static int ether_queue_out(struct usb_request *req ,
 	int ret;
 	unsigned int size;
 
+	if (!context->bulk_out)
+		return -EINVAL;
 	size = ALIGN(USB_MTU + NET_IP_ALIGN, context->bulk_out->maxpacket);
 	skb = alloc_skb(size, GFP_ATOMIC);
 	if (!skb) {
