@@ -1737,8 +1737,10 @@ int goodix_ts_power_on(struct goodix_ts_core *cd)
 		return 0;
 
 	ret = cd->hw_ops->power_on(cd, true);
-	if (!ret)
+	if (!ret) {
 		cd->power_on = 1;
+		cd->start_time = ktime_get();
+	}
 	else
 		ts_err("failed power on, %d", ret);
 	return ret;

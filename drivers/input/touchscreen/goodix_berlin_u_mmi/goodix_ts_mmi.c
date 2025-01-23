@@ -1235,6 +1235,7 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 static int goodix_ts_mmi_pre_resume(struct device *dev) {
 	struct platform_device *pdev;
 	struct goodix_ts_core *core_data;
+	int spend_time;
 
 	ts_info("Resume start");
 	GET_GOODIX_DATA(dev);
@@ -1244,6 +1245,15 @@ static int goodix_ts_mmi_pre_resume(struct device *dev) {
 	if (core_data->gesture_enabled) {
 		core_data->hw_ops->irq_enable(core_data, false);
 		disable_irq_wake(core_data->irq);
+	} else {
+		core_data->end_time = ktime_get();
+		spend_time = ktime_to_ms(ktime_sub(core_data->end_time, core_data->start_time));
+		ts_info("spend_time after power on: %dms", spend_time);
+		if ((spend_time > 0) && (spend_time < GOODIX_NORMAL_RESET_DELAY_MS)) {
+			msleep(GOODIX_NORMAL_RESET_DELAY_MS - spend_time);
+			core_data->end_time = 0;
+			core_data->start_time = 0;
+		}
 	}
 #ifdef CONFIG_GTP_DELAY_RELEASE
 	goodix_start_delay_work(true, 350);

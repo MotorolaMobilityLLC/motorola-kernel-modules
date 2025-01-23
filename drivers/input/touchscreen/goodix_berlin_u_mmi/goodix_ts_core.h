@@ -562,6 +562,7 @@ struct goodix_ts_core {
 	struct pinctrl_state *stylus_clk_suspend;
 
 	int power_on;
+	ktime_t start_time, end_time;
 	int irq;
 	size_t irq_trig_cnt;
 #ifdef GOODIX_PALM_SENSOR_EN
