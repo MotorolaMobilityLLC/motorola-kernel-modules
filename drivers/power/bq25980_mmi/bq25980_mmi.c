@@ -169,6 +169,8 @@ struct bq25980_device {
 
 	bool mmi_disable_mux;
 	bool otg_delay_mos_config;
+
+	bool mmi_cp_standalone;
 };
 
 static struct reg_default bq25980_reg_init_val[] = {
@@ -885,6 +887,11 @@ static int bq25980_get_state(struct bq25980_device *bq,
 	unsigned int stat4;
 	unsigned int ibat_adc_msb;
 	int ret;
+	unsigned int flag1;
+	unsigned int flag2;
+	unsigned int flag3;
+	unsigned int flag4;
+	unsigned int flag5;
 
 	ret = regmap_read(bq->regmap, BQ25980_STAT1, &stat1);
 	if (ret)
@@ -909,6 +916,30 @@ static int bq25980_get_state(struct bq25980_device *bq,
 	ret = regmap_read(bq->regmap, BQ25980_IBAT_ADC_MSB, &ibat_adc_msb);
 	if (ret)
 		return ret;
+
+
+
+	ret = regmap_read(bq->regmap, BQ25980_FLAG1, &flag1);
+	if (ret)
+		return ret;
+
+	ret = regmap_read(bq->regmap, BQ25980_FLAG2, &flag2);
+	if (ret)
+		return ret;
+
+	ret = regmap_read(bq->regmap, BQ25980_FLAG3, &flag3);
+	if (ret)
+		return ret;
+
+	ret = regmap_read(bq->regmap, BQ25980_FLAG4, &flag4);
+	if (ret)
+		return ret;
+
+	ret = regmap_read(bq->regmap, BQ25980_FLAG5, &flag5);
+	if (ret)
+		return ret;
+
+	dev_info(bq->dev, "reg0x18=0x%x, reg0x19=0x%x, reg0x1A=0x%x, reg0x1B=0x%x, reg0x1C=0x%x\n",flag1,flag2,flag3,flag4,flag5);
 
 	state->dischg = ibat_adc_msb & BQ25980_ADC_POLARITY_BIT;
 	state->vac_ovp = stat3 & BQ25980_STAT3_OVP_MASK;
@@ -1589,6 +1620,9 @@ static int bq25980_parse_dt(struct bq25980_device *bq)
 
 	bq->mmi_disable_mux = device_property_read_bool(bq->dev,
 						      "mmi,disable_mux");
+
+	bq->mmi_cp_standalone = device_property_read_bool(bq->dev,
+						      "mmi,cp_standalone");
 	return 0;
 }
 
@@ -1604,6 +1638,15 @@ static int bq25980_check_work_mode(struct bq25980_device *bq)
 	}
 
 	val = (val & BQ25980_MS_MASK);
+
+	if (bq->mmi_cp_standalone &&
+		((bq->mode == BQ_MASTER && val == BQ_STANDALONE) ||
+		(bq->mode == BQ_SLAVE && val == BQ_STANDALONE))) {
+		dev_info(bq->dev, "mode %s, but work mode:%s\n",
+			bq->mode == BQ_SLAVE ? "Slave" : "Master", "Standalone");
+		return 0;
+	}
+
 	if (bq->mode != val) {
 		dev_err(bq->dev, "dts mode %d mismatch with hardware mode %d\n", bq->mode, val);
 		return -EINVAL;
@@ -2486,15 +2529,15 @@ static int bq25980_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, bq);
 
-	ret = bq25980_check_work_mode(bq);
-	if (ret)
-		goto free_mem;
-
 	ret = bq25980_parse_dt(bq);
 	if (ret) {
 		dev_err(dev, "Failed to read device tree properties%d\n", ret);
 		goto free_mem;
 	}
+
+	ret = bq25980_check_work_mode(bq);
+	if (ret)
+		goto free_mem;
 
 #ifdef CONFIG_INTERRUPT_AS_GPIO
 	irq_gpio = of_get_named_gpio(client->dev.of_node, "ti,irq-gpio", 0);
