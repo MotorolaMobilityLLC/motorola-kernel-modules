@@ -209,6 +209,7 @@ static int32_t aw8680x_register_i2c_writes(struct aw8680x *p_aw8680x,
 	int32_t ret = DATA_INIT;
 	uint8_t *data = NULL;
 	int32_t cnt = 0;
+	int status = 0;
 
 	mutex_lock(&(p_aw8680x->aw8680x_i2c_mutex));
 	data = kmalloc(len + 1, GFP_KERNEL);
@@ -220,14 +221,17 @@ static int32_t aw8680x_register_i2c_writes(struct aw8680x *p_aw8680x,
 	data[0] = reg_addr;
 	memcpy(&data[1], buf, len);
 
-	while (cnt < 3) {
+	while (cnt < 5) {
 		ret = i2c_master_send(p_aw8680x->i2c, data, len + 1);
-		if (ret < 0)
-			AWLOGE("register i2c write error cnt: %d", cnt);
-		else
+		if (ret < 0) {
+			status = gpio_get_value_cansleep(p_aw8680x->state_gpio);
+			AWLOGE("register i2c write error cnt: %d, state_gpio = %d", cnt, status);
+		}
+		else {
 			break;
-
+		}
 		cnt++;
+		mdelay(5);
 	}
 
 	mutex_unlock(&(p_aw8680x->aw8680x_i2c_mutex));
