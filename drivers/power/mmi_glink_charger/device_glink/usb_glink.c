@@ -106,24 +106,6 @@ static void glink_usb_notify_uevent(struct usb_glink_dev *chip, int event)
 	kobject_uevent_env(&chip->batt_psy->dev.kobj, KOBJ_CHANGE, chip->uenvp);
 }
 
-static bool glink_usb_check_usb_info(struct usb_glink_dev *chip, struct usb_info *usb_info)
-{
-	if (!chip || !usb_info) {
-		pr_err("Invalid usb info\n");
-		return false;
-	}
-
-	if ((abs(usb_info->cid_st) > 1)
-		|| (abs(usb_info->lpd_st) > 1)
-		|| (abs(usb_info->pd_active) > 1)
-		|| (abs(usb_info->legacy_cable) > 1)) {
-		mmi_err(chip->mmi_chip, "usb_info data illegal!\n");
-		return false;
-	}
-
-	return true;
-}
-
 #define VBUS_MIN_MV			4000
 static void glink_usb_work(struct work_struct *work)
 {
@@ -150,7 +132,7 @@ static void glink_usb_work(struct work_struct *work)
 	usb_info = chip->usb_info;
 	rc = qti_charger_get_property(OEM_PROP_USB_INFO,
 			&usb_info, sizeof(usb_info));
-	if (rc || !glink_usb_check_usb_info(chip, &usb_info)) {
+	if (rc) {
 		mmi_err(chip->mmi_chip, "Failed to read usb info, rc=%d\n", rc);
 		return;
 	}
