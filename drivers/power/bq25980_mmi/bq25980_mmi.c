@@ -887,11 +887,6 @@ static int bq25980_get_state(struct bq25980_device *bq,
 	unsigned int stat4;
 	unsigned int ibat_adc_msb;
 	int ret;
-	unsigned int flag1;
-	unsigned int flag2;
-	unsigned int flag3;
-	unsigned int flag4;
-	unsigned int flag5;
 
 	ret = regmap_read(bq->regmap, BQ25980_STAT1, &stat1);
 	if (ret)
@@ -916,30 +911,6 @@ static int bq25980_get_state(struct bq25980_device *bq,
 	ret = regmap_read(bq->regmap, BQ25980_IBAT_ADC_MSB, &ibat_adc_msb);
 	if (ret)
 		return ret;
-
-
-
-	ret = regmap_read(bq->regmap, BQ25980_FLAG1, &flag1);
-	if (ret)
-		return ret;
-
-	ret = regmap_read(bq->regmap, BQ25980_FLAG2, &flag2);
-	if (ret)
-		return ret;
-
-	ret = regmap_read(bq->regmap, BQ25980_FLAG3, &flag3);
-	if (ret)
-		return ret;
-
-	ret = regmap_read(bq->regmap, BQ25980_FLAG4, &flag4);
-	if (ret)
-		return ret;
-
-	ret = regmap_read(bq->regmap, BQ25980_FLAG5, &flag5);
-	if (ret)
-		return ret;
-
-	dev_info(bq->dev, "reg0x18=0x%x, reg0x19=0x%x, reg0x1A=0x%x, reg0x1B=0x%x, reg0x1C=0x%x\n",flag1,flag2,flag3,flag4,flag5);
 
 	state->dischg = ibat_adc_msb & BQ25980_ADC_POLARITY_BIT;
 	state->vac_ovp = stat3 & BQ25980_STAT3_OVP_MASK;
@@ -1145,10 +1116,10 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
         else {
                 val = val & BQ25980_WATCHDOG_DIS;
 
-                pr_err("[wdt-debug]watch dog dis_en = %d", val);
-
-                if (!val)
-                        bq25980_reg_init(bq);
+                if (!val) {
+			dev_err(bq->dev, "[wdt-debug]watch dog dis_en = %d", val);
+			bq25980_reg_init(bq);
+                }
         }
 #endif
 		mutex_unlock(&bq->irq_complete);
@@ -1161,10 +1132,10 @@ static irqreturn_t bq25980_irq_handler_thread(int irq, void *private)
         else {
                 val = val & BQ25980_WATCHDOG_DIS;
 
-                pr_err("[wdt-debug]watch dog dis_en = %d", val);
-
-                if (!val)
-                        bq25980_reg_init(bq);
+                if (!val) {
+			dev_err(bq->dev, "[wdt-debug]watch dog dis_en = %d", val);
+			bq25980_reg_init(bq);
+                }
         }
 #endif
 	//dump_all_reg(bq);
