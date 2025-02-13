@@ -153,9 +153,12 @@ static ssize_t class_stk_phase_cali(struct class *class,
                                     struct class_attribute *attr, char *buf)
 {
     int result = 0;
-    uint32_t val = STK_TRIGGER_REG_INIT_ALL(global_stk->phase_en);
+#ifdef STK_FIX_CADC
+    stk501xx_disable_fix_cadc(global_stk, global_stk->phase_en);
+    global_stk->is_cali = true;
+#endif
     STK_LOG("class_stk_phase_cali , reset all phase\n");
-    stk501xx_phase_reset(global_stk, val);
+    stk501xx_phase_reset(global_stk, STK_TRIGGER_REG_INIT_ALL(global_stk->phase_en));
     return (ssize_t)result;
 }
 
@@ -164,6 +167,10 @@ static ssize_t class_stk_phase_cali_store(struct class *class,
 {
     uint32_t val = STK_TRIGGER_REG_INIT_ALL(global_stk->phase_en);
     STK_LOG("class_stk_phase_cali_store , reset all phase\n");
+#ifdef STK_FIX_CADC
+    stk501xx_disable_fix_cadc(global_stk, global_stk->phase_en);
+    global_stk->is_cali = true;
+#endif
     stk501xx_phase_reset(global_stk, val);
 
     return count;
@@ -782,6 +789,12 @@ static ssize_t stk_phase_cali(struct device *dev,
     int32_t result = 0;
     stk_data *stk = &stk_wrapper->stk;
     uint32_t val = STK_TRIGGER_REG_INIT_ALL(stk->phase_en);
+
+#ifdef STK_FIX_CADC
+    stk501xx_disable_fix_cadc(stk, stk->phase_en);
+    stk->is_cali = true;
+#endif
+
     stk501xx_phase_reset(stk, val);
     return (ssize_t)result;
 }
@@ -1661,7 +1674,6 @@ int32_t stk_i2c_probe(struct i2c_client *client, struct common_function *common_
     }
 
     stk = &stk_wrapper->stk;
-    global_stk = stk;
 
     if (!stk)
     {
@@ -1686,6 +1698,7 @@ int32_t stk_i2c_probe(struct i2c_client *client, struct common_function *common_
     }
 
     stk501xx_data_initialize(stk);
+    global_stk = stk;
     stk501xx_parse_dt(stk, &client->dev);
     err = stk501xx_init_client(stk);
 

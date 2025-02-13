@@ -248,19 +248,19 @@ stk501xx_register_table stk501xx_default_register_table[] =
     //CADC DEGLITCH
     {STK_ADDR_FAIL_STAT_DET_2, STK_FAIL_STAT_DET_2_VALUE}, //update when CADC change more than 5 times
 
-    //IRQ
-    {
-        STK_ADDR_IRQ_SOURCE_ENABLE_REG, (1 << STK_IRQ_SOURCE_ENABLE_REG_CLOSE_ANY_IRQ_EN_SHIFT) |
-        (1 << STK_IRQ_SOURCE_ENABLE_REG_FAR_ANY_IRQ_EN_SHIFT) | (1 << STK_IRQ_SOURCE_ENABLE_REG_PHRST_IRQ_EN_SHIFT)
-        | (1 << STK_IRQ_SOURCE_ENABLE_REG_SATURATION_IRQ_EN_SHIFT)
+        // IRQ
+        {
+            STK_ADDR_IRQ_SOURCE_ENABLE_REG, (1 << STK_IRQ_SOURCE_ENABLE_REG_CLOSE_ANY_IRQ_EN_SHIFT) |
+                                                (1 << STK_IRQ_SOURCE_ENABLE_REG_FAR_ANY_IRQ_EN_SHIFT) | (1 << STK_IRQ_SOURCE_ENABLE_REG_PHRST_IRQ_EN_SHIFT) | (1 << STK_IRQ_SOURCE_ENABLE_REG_SATURATION_IRQ_EN_SHIFT)
 #if defined STK_STARTUP_CALI || defined STK_FIX_CADC
-        | (1 << STK_IRQ_SOURCE_ENABLE_REG_CONVDONE_IRQ_EN_SHIFT)
+                                                | (1 << STK_IRQ_SOURCE_ENABLE_REG_CONVDONE_IRQ_EN_SHIFT) | (1 << STK_IRQ_SOURCE_ENABLE_REG_PHRST_IRQ_EN_SHIFT)
 #endif
 #ifdef TEMP_COMPENSATION
-        | (1 << STK_IRQ_SOURCE_ENABLE_REG_DELTA_DES_IRQ_EN_SHIFT)
+                                                | (1 << STK_IRQ_SOURCE_ENABLE_REG_DELTA_DES_IRQ_EN_SHIFT)
 #endif
-    },
-    {0x1100,               0x00000015},
+        },
+        {STK_ADDR_IRQ_CONFIG, 0x0},
+        {0x1100, 0x00000015},
 };
 
 /****************************************************************************************************
@@ -332,6 +332,25 @@ void force_phase_en(struct stk_data *stk, uint32_t assign_val)
     STK_REG_READ(stk, reg, (uint8_t*)&val);
 }
 
+void stk501xx_disable_fix_cadc(struct stk_data *stk, uint8_t fix_ph)
+{
+    uint8_t i = 0;
+    uint16_t reg;
+    uint32_t val;
+    STK_LOG("disable fix CADC check ph=0%x", fix_ph);
+
+    for (i = 0; i < 8; i++)
+    {
+        if ((fix_ph >> i) & 0x01)
+        {
+            reg = STK_ADDR_CADC_OPT0_PH0 + (i * 0x40);
+            STK_REG_READ(stk, reg, (uint8_t *)&val);
+            val = ~((~val) | 0x01);
+            STK_REG_WRITE(stk, reg, (uint8_t *)&val);
+        }
+    }
+}
+
 static void stk501xx_fix_cadc(struct stk_data* stk, bool conv_done, uint8_t fix_ph)
 {
     uint8_t i = 0;
@@ -378,6 +397,7 @@ static void stk501xx_saturation(struct stk_data* stk, uint8_t prox_flag)
     {
         if (sat_state & (0x01 << i))
         {
+#ifdef STK_FIX_CADC
             if (stk->fix_cadc[i] > stk->last_cadc[i])
             {
                 reset_ph |= (0x01 << i);
@@ -387,9 +407,14 @@ static void stk501xx_saturation(struct stk_data* stk, uint8_t prox_flag)
             else
             {
                 STK_LOG("stk501xx_saturation:: saturation ph[%d]=%u(%u)", i,
-                                     stk->fix_cadc[i],
-                                     stk->last_cadc[i]);
+                        stk->fix_cadc[i],
+                        stk->last_cadc[i]);
             }
+#else
+            {
+                reset_ph |= (0x01 << i);
+            }
+#endif
         }
     }
 
@@ -941,10 +966,6 @@ void stk501xx_set_enable(struct stk_data* stk, char enable, bool pause_mode)
 
     if (enable)
     {
-#ifdef STK_POLLING_MODE
-        STK_TIMER_START(stk, &stk->stk_timer_info);
-#endif
-
         if (pause_mode)
         {
             reg = STK_ADDR_TRIGGER_REG;
@@ -957,9 +978,6 @@ void stk501xx_set_enable(struct stk_data* stk, char enable, bool pause_mode)
                 force_phase_en(stk, STK_TRIGGER_CMD_REG_INIT_ALL);
             }
 
-            reg = STK_ADDR_IRQ_CONFIG;
-            val = 0x0;
-            STK_REG_WRITE(stk, reg, (uint8_t*)&val);
             reg = STK_ADDR_TRIM_LOCK;
             val = 0xA5;
             STK_REG_WRITE(stk, reg, (uint8_t*)&val);
@@ -986,9 +1004,22 @@ void stk501xx_set_enable(struct stk_data* stk, char enable, bool pause_mode)
             force_phase_en(stk, STK_TRIGGER_CMD_REG_INIT_ALL);
         }
 
+#ifndef STK_INTERRUPT_MODE
+        // sensing resume
+        STK_TIMER_START(stk, &stk->stk_timer_info);
+        reg = STK_ADDR_SCAN_PERIOD;
+        val = 0x0;
+        STK_REG_WRITE(stk, reg, (uint8_t *)&val);
+#else
+        reg = STK_ADDR_IRQ_CONFIG;
+        val = 0x0;
+        STK_REG_WRITE(stk, reg, (uint8_t *)&val);
+#endif //! STK_INTERRUPT_MODE
+
 #ifdef TEMP_COMPENSATION
         stk->last_prox_a_state = 0;
         stk->last_prox_b_state = 0;
+        stk->last_prox_c_state = 0;
 #endif
     }
     else
@@ -1017,6 +1048,7 @@ void stk501xx_set_enable(struct stk_data* stk, char enable, bool pause_mode)
             reg = STK_ADDR_TRIM_LOCK;
             val = 0x5A;
             STK_REG_WRITE(stk, reg, (uint8_t*)&val);
+            // sensing pause
             reg = STK_ADDR_IRQ_CONFIG;
             val = (1 << STK_IRQ_CONFIG_SENS_RATE_OPT_SHIFT);
             STK_REG_WRITE(stk, reg, (uint8_t *)&val);
@@ -1179,14 +1211,13 @@ void stk501xx_read_sar_data(struct stk_data* stk, uint32_t prox_flag)
             if ((dist_idx == 0) ||
                 ((dist_idx == 1) && (stk->dist1_en & (1 << i))) ||
                 ((dist_idx == 2) && (STK_DIST_2_EN & (1 << i))) ||
-                ((dist_idx == 3) && (STK_DIST_3_EN & (1 << i)))
-               )
-               {
-                    dist_state |= dist_flag & (uint32_t) (1 << (i + (8 * dist_idx))) ? (1 << dist_idx) : 0;
-               }
+                ((dist_idx == 3) && (STK_DIST_3_EN & (1 << i))))
+            {
+                dist_state |= dist_flag & (uint32_t)(1 << (i + (8 * dist_idx))) ? (1 << dist_idx) : 0;
+            }
         }
 
-        if(stk->last_nearby[i] != dist_state)
+        if (stk->last_nearby[i] != dist_state)
         {
             stk->state_change[i] = 1;
             stk->last_nearby[i] = dist_state;
@@ -1237,6 +1268,8 @@ void stk501xx_data_initialize(struct stk_data* stk)
     stk->enabled = 0;
     stk->dis_conv_done_chk = 0;
     memset(stk->last_data, 0, sizeof(stk->last_data));
+    memset(stk->last_cadc, 0, sizeof(stk->last_cadc));
+    memset(stk->fix_cadc, 0, sizeof(stk->fix_cadc));
 
     for (i = 0; i < num; i++)
     {
@@ -1368,12 +1401,13 @@ int32_t stk501xx_show_all_reg(struct stk_data* stk)
         STK_ADDR_FILT_CFG_PH2,
         STK_ADDR_FILT_CFG_PH3,
         STK_ADDR_FILT_CFG_PH4,
-        STK_ADDR_FILT_CFG_PH4,
         STK_ADDR_FILT_CFG_PH5,
+        STK_ADDR_FILT_CFG_PH6,
         STK_ADDR_CORRECTION_PH1,
-        STK_ADDR_CORRECTION_PH3,
-        STK_ADDR_CORRECTION_PH5,
+        STK_ADDR_CORRECTION_PH2,
+        STK_ADDR_CORRECTION_PH4,
         STK_ADDR_CORRECTION_PH6,
+        STK_ADDR_SCAN_PERIOD,
     };
     reg_num = sizeof(reg_array) / sizeof(uint16_t);
 
@@ -1413,6 +1447,10 @@ static int32_t stk_reg_init(struct stk_data* stk)
 
         if ( reg == STK_ADDR_CADC_SMOOTH && stk->chip_index >= 0x1)
             val = 0xFF;
+#ifndef STK_INTERRUPT_MODE
+        if (reg == STK_ADDR_IRQ_CONFIG)
+            val |= (1 << STK_IRQ_CONFIG_SENS_RATE_OPT_SHIFT);
+#endif
 
 #ifdef STK_STARTUP_CALI
 
@@ -1616,7 +1654,7 @@ static void stk_alg_work_queue(void *stkdata)
 void  stk_work_queue(void *stkdata)
 {
     struct stk_data *stk = (struct stk_data*)stkdata;
-    uint32_t flag = 0, prox_flag = 0;
+    uint32_t flag = 0, prox_flag = 0, val = 0;
 #ifdef STK_INTERRUPT_MODE
     STK_DBG("stk_work_queue:: Interrupt mode");
 #elif defined STK_POLLING_MODE
@@ -1655,9 +1693,28 @@ void  stk_work_queue(void *stkdata)
 
 #ifdef STK_FIX_CADC
             stk501xx_fix_cadc(stk, true, stk->phase_en);
-#endif
+            if (stk->is_cali)
+                stk->is_cali = false;
+#endif // STK_FIX_CADC
         }
     }
+
+#ifdef STK_FIX_CADC
+    if (flag & STK_IRQ_SOURCE_ENABLE_REG_PHRST_IRQ_EN_MASK)
+    {
+        if (stk->is_cali)
+        {
+            STK_REG_READ(stk, STK_ADDR_IRQ_SOURCE_ENABLE_REG, (uint8_t *)&val);
+
+            if ((val & STK_IRQ_SOURCE_ENABLE_REG_CONVDONE_IRQ_EN_MASK) == 0)
+            {
+                val |= STK_IRQ_SOURCE_ENABLE_REG_CONVDONE_IRQ_EN_MASK;
+                STK_REG_WRITE(stk, STK_ADDR_IRQ_SOURCE_ENABLE_REG, (uint8_t *)&val);
+            }
+            stk->first_init = true;
+        }
+    }
+#endif
 
     if ((flag & STK_IRQ_SOURCE_ENABLE_REG_SATURATION_IRQ_EN_MASK) && !stk->first_init)
     {
@@ -1667,14 +1724,19 @@ void  stk_work_queue(void *stkdata)
     if(flag & STK_IRQ_SOURCE_CONVDONE_IRQ_MASK)
         disable_conv_check(stk);
 
+#ifdef STK_FIX_CADC
+    if (stk->is_cali == false)
+        stk->first_init = false;
+#else
     stk->first_init = false;
-
+#endif
 #ifdef STK_INTERRUPT_MODE
     if (flag & STK_IRQ_SOURCE_FAR_IRQ_MASK ||
         flag & STK_IRQ_SOURCE_CLOSE_IRQ_MASK ||
         flag & STK_IRQ_SOURCE_CUST_A_IRQ_MASK ||
-        flag & STK_IRQ_SOURCE_CUST_B_IRQ_MASK
-        )
+        flag & STK_IRQ_SOURCE_CUST_B_IRQ_MASK ||
+        flag & STK_IRQ_SOURCE_CUST_C_IRQ_MASK ||
+        flag & STK_IRQ_SOURCE_CUST_D_IRQ_MASK)
 #endif
     {
         STK501XX_SAR_REPORT(stk);

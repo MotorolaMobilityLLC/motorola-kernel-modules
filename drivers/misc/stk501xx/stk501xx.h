@@ -261,6 +261,7 @@ enum
 #define STK_IRQ_SOURCE_CUST_A_IRQ_MASK           0x20
 #define STK_IRQ_SOURCE_CUST_B_IRQ_MASK           0x40
 #define STK_IRQ_SOURCE_CUST_C_IRQ_MASK           0x80
+#define STK_IRQ_SOURCE_CUST_D_IRQ_MASK           0x100
 #define STK_IRQ_SOURCE_SENSING_WDT_IRQ_MASK      0x00100000
 #define STK_IRQ_SOURCE_I2C_WDT_IRQ_MASK          0x00200000
 
@@ -828,6 +829,9 @@ struct stk_data
     uint8_t                         gs_idle_count;
 #endif
     bool                            dis_conv_done_chk;
+#ifdef STK_FIX_CADC
+    bool                            is_cali;
+#endif
 };
 
 
@@ -848,6 +852,7 @@ void stk501xx_phase_reset(struct stk_data* stk, uint32_t phase_reset_reg);
 void stk_work_queue(void *stkdata);
 void stk_clr_intr(struct stk_data* stk, uint32_t* flag);
 void clr_temp(struct stk_data* stk);
+void stk501xx_disable_fix_cadc(struct stk_data* stk, uint8_t fix_ph);
 /* Algorithm loading in the last*/
 #ifdef MCU_GESTURE
     #include "stk_gesture_lib.h"
