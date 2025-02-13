@@ -62,6 +62,8 @@
 
 #define RADIO_MAX_LEN 33
 
+#define ULOG_DURATION_MS		60000
+
 static bool debug_enabled;
 module_param(debug_enabled, bool, 0600);
 MODULE_PARM_DESC(debug_enabled, "Enable debug for qti glink charger driver");
@@ -877,7 +879,7 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	if ((prev_cid != -1 && chg->lpd_info.lpd_cid == -1) ||
             (!prev_lpd && chg->lpd_info.lpd_present)) {
 		if (!lpd_ulog_triggered && !otg_ulog_triggered)
-			bm_ulog_enable_log(true);
+			bm_ulog_enable_log(true, ULOG_DURATION_MS);
 		lpd_ulog_triggered = true;
 		mmi_err(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
 			chg->lpd_info.lpd_present,
@@ -887,7 +889,7 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	} else if ((chg->lpd_info.lpd_cid != -1 && prev_cid == -1) ||
 		   (!chg->lpd_info.lpd_present && prev_lpd)) {
 		if (lpd_ulog_triggered && !otg_ulog_triggered)
-			bm_ulog_enable_log(false);
+			bm_ulog_enable_log(false, 0);
 		lpd_ulog_triggered = false;
 		mmi_warn(chg, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cid=%d\n",
 			chg->lpd_info.lpd_present,
@@ -904,12 +906,12 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 
 	if (info.chrg_otg_enabled && (info.chrg_uv < VBUS_MIN_MV * 1000)) {
 		if (!otg_ulog_triggered && !lpd_ulog_triggered)
-			bm_ulog_enable_log(true);
+			bm_ulog_enable_log(true, ULOG_DURATION_MS);
 		otg_ulog_triggered = true;
 		mmi_err(chg, "OTG: vbus collapse, vbus=%duV\n", info.chrg_uv);
 	} else if (info.chrg_otg_enabled) {
 		if (otg_ulog_triggered && !lpd_ulog_triggered)
-			bm_ulog_enable_log(false);
+			bm_ulog_enable_log(false, 0);
 		otg_ulog_triggered = false;
 	}
 
