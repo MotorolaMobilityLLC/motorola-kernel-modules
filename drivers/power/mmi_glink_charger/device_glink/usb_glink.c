@@ -24,6 +24,8 @@
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 
+#define ULOG_DURATION_MS	60000
+
 static struct usb_glink_dev *this_chip = NULL;
 static int glink_usb_init(struct usb_glink_dev *chip);
 static int glink_usb_lpd_init(struct usb_glink_dev *chip);
@@ -158,7 +160,7 @@ static void glink_usb_work(struct work_struct *work)
 	if ((chip->usb_info.cid_st != -1 && usb_info.cid_st == -1) ||
 			(!chip->usb_info.lpd_st && usb_info.lpd_st)) {
 		if (!lpd_ulog_triggered && !otg_ulog_triggered)
-			bm_ulog_enable_log(true);
+			bm_ulog_enable_log(true, ULOG_DURATION_MS);
 		lpd_ulog_triggered = true;
 		mmi_err(chip->mmi_chip, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cc1=%d, cc2=%d,"
 				" dp=%d, dm=%d\n",
@@ -181,7 +183,7 @@ static void glink_usb_work(struct work_struct *work)
 	} else if ((usb_info.cid_st != -1 && chip->usb_info.cid_st == -1) ||
 			(!usb_info.lpd_st && chip->usb_info.lpd_st)) {
 		if (lpd_ulog_triggered && !otg_ulog_triggered)
-			bm_ulog_enable_log(false);
+			bm_ulog_enable_log(false, 0);
 		lpd_ulog_triggered = false;
 		mmi_warn(chip->mmi_chip, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cc1=%d, cc2=%d,"
 				" dp=%d, dm=%d\n",
@@ -224,12 +226,12 @@ static void glink_usb_work(struct work_struct *work)
 
 	if (usb_info.otg_st && usb_info.vbus_st < VBUS_MIN_MV) {
 		if (!otg_ulog_triggered && !lpd_ulog_triggered)
-			bm_ulog_enable_log(true);
+			bm_ulog_enable_log(true, ULOG_DURATION_MS);
 		otg_ulog_triggered = true;
 		mmi_err(chip->mmi_chip, "OTG: vbus collapse\n");
 	} else if (usb_info.otg_st) {
 		if (otg_ulog_triggered && !lpd_ulog_triggered)
-			bm_ulog_enable_log(false);
+			bm_ulog_enable_log(false, 0);
 		otg_ulog_triggered = false;
 	}
 
