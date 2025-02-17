@@ -51,6 +51,7 @@ struct wls_dump
     u16  wls_boost;
     u16  wls_icl_ma;
     u16  wls_icl_therm_ma;
+    u16  wls_mc_st;
 };
 
 struct wireless_glink_dev {
@@ -61,6 +62,7 @@ struct wireless_glink_dev {
 
 	struct notifier_block	wls_nb;
 	struct notifier_block	wls_glink_nb;
+	struct notifier_block	mc_nb;
 	struct dentry		*wls_debug_root;
 	u32				tx_mode;
 	u32				folio_mode;
@@ -77,6 +79,7 @@ struct wireless_glink_dev {
 	u32				rx_dev_mfg;
 	u32				rx_dev_type;
 	u32				rx_dev_id;
+	u32				mc_status;
 	struct dentry		*debug_root;
 };
 

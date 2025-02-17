@@ -17,7 +17,9 @@
 #include "qti_glink_charger_v2.h"
 #include "device_class.h"
 #include "wireless_charge_glink.h"
-
+#ifdef CONFIG_MMI_PHONE_CASE_SUPPORT
+#include <linux/phone_case_detection_notify.h>
+#endif
 static struct mmi_glink_chip *this_root_chip =  NULL;
 static struct wireless_glink_dev *this_chip = NULL;
 
@@ -46,6 +48,23 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 			return rc;
 		}
 
+#ifdef CONFIG_MMI_PHONE_CASE_SUPPORT
+		rc = phone_case_detection_get_hall_state();
+		if (rc == PHONE_CASE_DETECTION_MOUNTED) {
+			wls_chip->mc_status = 1;
+		} else if (rc == PHONE_CASE_DETECTION_UNMOUNTED) {
+			wls_chip->mc_status = 0;
+		} else {
+			pr_err("hall not enabled rc=%d\n", rc);
+		}
+
+	if (wls_info.wls_mc_st != wls_chip->mc_status) {
+		mmi_err(this_root_chip, "qti_glink: Update new mc_status %d", wls_chip->mc_status);
+		qti_charger_set_property(OEM_PROP_WLS_MC_EN,
+					&wls_chip->mc_status,
+					sizeof(wls_chip->mc_status));
+	}
+#endif
 		mmi_info(this_root_chip, "Wireless dump info -1: CHIP_ID: 0x%04x, MTP_FW_VER: 0x%04x, IRQ STATUS: 0x%04x, "
 			"SYS_MODE:  RX/TX %d, OP_MODE:  BPP/EPP 0x%x, RX_FOP: %dkHz, RX_VOUT: %dmV, "
 			"RX_VRECT: %dmV, RX_IRECT: %dmV, RX_NEG_POWER: %dw ",
@@ -77,7 +96,7 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 			wls_info.tx_ept);
 
 		mmi_info(this_root_chip, "Wireless dump info -3: rx_ept: %d, rx_ce: %d, "
-			"rx_rp: %d, rx_dietemp: %d, USB_OTG: %d, WLS_BOOST: %d, WLS_ICL_MA: %dmA, WLS_ICL_THERM_MA: %dmA",
+			"rx_rp: %d, rx_dietemp: %d, USB_OTG: %d, WLS_BOOST: %d, WLS_ICL_MA: %dmA, WLS_ICL_THERM_MA: %dmA, mc_st: %d",
 			wls_info.rx_ept,
 			wls_info.rx_ce,
 			wls_info.rx_rp,
@@ -85,7 +104,8 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 			wls_info.usb_otg,
 			wls_info.wls_boost,
 			wls_info.wls_icl_ma,
-			wls_info.wls_icl_therm_ma);
+			wls_info.wls_icl_therm_ma,
+			wls_info.wls_mc_st);
 
 
 		mmi_info(this_root_chip, "Wireless dump info -4: WLC Stand: tx_type %d, tx_power: %d, "
@@ -756,6 +776,41 @@ static int wireless_charger_notify_callback(struct notifier_block *nb,
         return 0;
 }
 
+#ifdef CONFIG_MMI_PHONE_CASE_SUPPORT
+static int phone_case_detection_notifier_call(struct notifier_block *nb,
+					unsigned long event, void *data)
+{
+	struct wireless_glink_dev *chg = container_of(nb, struct wireless_glink_dev, mc_nb);
+	u32 mc_st = 0;
+
+	if (IS_ERR_OR_NULL(chg)) {
+		pr_err("wlc is err or null\n");
+		return NOTIFY_BAD;
+	}
+
+	mc_st = chg->mc_status;
+	switch (event) {
+		case PHONE_CASE_DETECTION_MOUNTED:
+			chg->mc_status = 1;
+			break;
+		case PHONE_CASE_DETECTION_UNMOUNTED:
+			chg->mc_status = 0;
+			break;
+		default:
+			break;
+	}
+
+	if (mc_st != chg->mc_status) {
+		qti_charger_set_property(OEM_PROP_WLS_MC_EN,
+					&chg->mc_status,
+					sizeof(chg->mc_status));
+	}
+	pr_info("mc_status=%d event=%ld\n", chg->mc_status, event);
+
+	return NOTIFY_OK;
+}
+#endif
+
  static void wireless_psy_init(struct wireless_glink_dev *chip)
 {
 	int rc;
@@ -854,6 +909,24 @@ static int wireless_charger_notify_callback(struct notifier_block *nb,
 	rc = qti_charger_register_notifier(&chip->wls_glink_nb);
 	if (rc)
 		pr_err("Failed to register notifier, rc=%d\n", rc);
+
+#ifdef CONFIG_MMI_PHONE_CASE_SUPPORT
+		rc = phone_case_detection_get_hall_state();
+		if (rc == PHONE_CASE_DETECTION_MOUNTED) {
+			chip->mc_status = 1;
+			qti_charger_set_property(OEM_PROP_WLS_MC_EN,
+					&chip->mc_status,
+					sizeof(chip->mc_status));
+		} else if (rc == PHONE_CASE_DETECTION_UNMOUNTED) {
+			chip->mc_status = 0;
+		} else {
+			pr_err("hall not enabled rc=%d\n", rc);
+		}
+		chip->mc_nb.notifier_call = phone_case_detection_notifier_call;
+		rc = phone_case_detection_register_client(&chip->mc_nb);
+		pr_info("phone_case_detection_register_client rc=%d\n", rc);
+#endif
+
 }
 
 static void wireless_psy_deinit(struct wireless_glink_dev *chip)
