@@ -968,6 +968,16 @@ static int rx_nego_power_irq_handler(struct sc9624 *sc)
     return 0;
 }
 
+static int rx_backpower_mode_irq_handler(struct sc9624 *sc)
+{
+    struct wls_event_msg msg = {0x00};
+
+    sc_info(":trigger\n");
+    msg.event = WLS_EVENT_RX_BACKPOWER_MODE;
+    sc9624_send_event(sc, &msg);
+    return 0;
+}
+
 //tx
 static int tx_ask_recv_irq_handler(struct sc9624 *sc)
 {
@@ -1078,6 +1088,7 @@ static const struct interrupt_handler rx_irq_handlers[] = {
     DECL_INTERRUPT_HANDLER(26, rx_hs_ok_irq_handler),
     DECL_INTERRUPT_HANDLER(27, rx_hs_fail_irq_handler),
     DECL_INTERRUPT_HANDLER(28, rx_nego_power_irq_handler),
+    DECL_INTERRUPT_HANDLER(29, rx_backpower_mode_irq_handler),
 };
 
 static const struct interrupt_handler tx_irq_handlers[] = {
@@ -1564,6 +1575,24 @@ bool sc9624_dump_info(struct wireless_device *wls_dev)
 	return (ret == 0);
 }
 
+int sc9624_set_lowpower_mode(struct wireless_device *wls_dev, bool on)
+{
+	int ret = -1;
+	struct sc9624 *sc = NULL;
+
+	sc = dev_get_drvdata(&wls_dev->dev);
+
+	if (on) {
+		ret = sc9624_rx_set_cmd(sc, RX_LOWPOWER_MODE);
+		if (ret) {
+			sc_err("sc9624 set low power mode fail\n");
+		}
+	}
+	sc_info(" %d ret:%d\n", on, ret);
+
+	return ret;
+}
+
 int sc9624_send_event(struct sc9624 *sc, struct wls_event_msg *msg)
 {
 	int rt = -1;
@@ -1606,6 +1635,7 @@ static int sc9624_wlc2_init(struct sc9624 *sc)
 	sc->rx_ops.get_ce = sc9624_get_ce;
 	sc->rx_ops.get_mcode = sc9624_get_txinfo_mcode;
 	sc->rx_ops.check_dump_info = sc9624_dump_info;
+    sc->rx_ops.set_lowpower_mode = sc9624_set_lowpower_mode;
 
 	sc->wls_dev = wireless_device_register("moto_wlc2",
 							&sc->client->dev, (void*)sc,
@@ -1830,9 +1860,12 @@ static void sc9624_irq_work_handler(struct kthread_work *work)
         up(&sc->suspend_lock);
         return;
     }
-    sc_info("irq trigger mode RX:%d TX:%d\n", sc->sys_mode.RECEIVER, sc->sys_mode.TRANSMITTER);
+    sc_info("irq trigger mode RX:%d TX:%d STANDBY:%d\n",
+            sc->sys_mode.RECEIVER,
+            sc->sys_mode.TRANSMITTER,
+            sc->sys_mode.STANDBY);
 
-    if (sc->sys_mode.RECEIVER) {
+    if (sc->sys_mode.RECEIVER || sc->sys_mode.STANDBY) {
         ret = sc9624_rx_get_int(sc, &regval);
         if (ret < 0) {
             sc_err("get rx int flag fail\n");

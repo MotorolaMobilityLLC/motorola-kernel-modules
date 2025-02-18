@@ -37,6 +37,7 @@ typedef enum {
     RX_RPP_8BIT            = BIT(17),
     RX_RPP_24BIT           = BIT(18),
     //Reserved
+    RX_LOWPOWER_MODE       = BIT(30),
     RX_REFRESH             = BIT(31),
 } RX_CMD;
 

@@ -437,6 +437,7 @@ int wls_chg_event_handler(struct wireless_device* wls_dev, struct wls_event_msg 
 	struct moto_wlc *wlc = NULL;
 	int op_mode = 0;
 	int rt = 0;
+	bool otg_en = false;
 
 	wlc = (struct moto_wlc *)wls_dev->driver_data;
 
@@ -513,6 +514,23 @@ int wls_chg_event_handler(struct wireless_device* wls_dev, struct wls_event_msg 
 			break;
 		case WLS_EVENT_RX_FSK_PKT:
 			wls_auth_decode_fsk_packet(wlc, msg->data, msg->len);
+			break;
+		case WLS_EVENT_RX_BACKPOWER_MODE:
+			if (wlc->ctl.tx_mode) {
+				wlc_info("%s Skip when tx_mode\n", __func__);
+			} else {
+				if (!IS_ERR_OR_NULL(wlc->chg1_dev)) {
+					rt = charger_dev_is_otg_enabled(wlc->chg1_dev, &otg_en);
+					if (rt) {
+						wlc_err("%s get otg status failed, rt:%d\n", __func__, rt);
+					}
+				}
+				wlc_info("%s otg_en:%d ret:%d\n", __func__, otg_en, rt);
+				if (otg_en) {
+					rt = wls_rx_set_lowpower_mode(wlc->wls_dev, true);
+					wlc_info("%s set_lowpower_mode ret:%d\n", __func__, rt);
+				}
+			}
 			break;
 		default:
 			break;

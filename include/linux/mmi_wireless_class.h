@@ -21,6 +21,7 @@ typedef enum
 	WLS_EVENT_HS_FAIL,
 	WLS_EVENT_RX_FSK_PKT,
 	WLS_EVENT_TX_DETECTED,//tx_detected
+	WLS_EVENT_RX_BACKPOWER_MODE,
 	WLS_EVENT_MAX
 } WLS_EVENT_T;
 
@@ -90,6 +91,7 @@ struct wls_rx_ops {
 	int (*set_mode_select)(struct wireless_device *wls_dev, bool on);
 	int (*set_fw_update)(struct wireless_device *wls_dev, bool force);
 	int (*set_mc_det)(struct wireless_device *wls_dev, bool on);
+	int (*set_lowpower_mode)(struct wireless_device *wls_dev, bool on);
 
 	bool (*check_ldo_on)(struct wireless_device *wls_dev);
 	bool (*check_rx_power_on)(struct wireless_device *wls_dev);
@@ -178,6 +180,7 @@ extern int wls_rx_set_irq_enable(struct wireless_device *wls_dev, bool en);
 extern int wls_rx_set_mode_select(struct wireless_device *wls_dev, bool on);
 extern int wls_rx_set_fw_update(struct wireless_device *wls_dev, bool force);
 extern int wls_rx_set_mc_det(struct wireless_device *wls_dev, bool on);
+extern int wls_rx_set_lowpower_mode(struct wireless_device *wls_dev, bool on);
 
 extern bool wls_rx_check_ldo_on(struct wireless_device *wls_dev);
 extern bool wls_rx_check_dump_info(struct wireless_device *wls_dev);
