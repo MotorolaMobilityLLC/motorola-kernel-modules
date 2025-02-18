@@ -451,6 +451,7 @@ static int batt_set_prop(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_ENERGY_EMPTY:
 		if(chip->uisoc == 1 && val->intval == 1) {
 			chip->vbat0_flag = val->intval;
+			mmi_info(chip, "power energy and request Force UISOC to 0\n");
 			power_supply_changed(chip->batt_psy);
 		}
 		break;
@@ -653,7 +654,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 		vbatt_empty_count ++;
 		if (vbatt_empty_count >= 2) {
 			rsoc = 0;
-			mmi_info(chip, "Low temperautre & vbat reach to empty, Force UISOC=0\n");
+			mmi_info(chip, "vbat reach to empty, Force UISOC=0\n");
 		}
 	}
 	else
