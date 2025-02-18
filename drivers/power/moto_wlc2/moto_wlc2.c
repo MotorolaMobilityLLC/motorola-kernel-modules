@@ -805,6 +805,11 @@ static int moto_wlc_probe(struct platform_device *pdev)
 	mutex_init(&wlc->cable_out_lock);
 	mutex_init(&wlc->data_lock);
 
+	wlc->chg1_dev = get_charger_by_name("primary_chg");
+	if (IS_ERR_OR_NULL(wlc->chg1_dev)) {
+		wlc_err("%s: Error : can't find primary charger\n", __func__);
+	}
+
 	wlc->state = WLC_HW_UNINIT;
 	wls_config_parse_dts(wlc, &pdev->dev);
 
