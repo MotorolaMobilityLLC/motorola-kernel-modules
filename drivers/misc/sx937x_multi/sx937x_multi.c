@@ -140,13 +140,13 @@ static void sx93XX_worker_func(struct work_struct *work)
 		status = this->refreshStatus(this);
 		counter = -1;
 		if(status != 0){
-			LOG_INFO("Worker_func - Refresh Status %d, use_timer_in_irq:%d\n", status, this->useIrqTimer);
+			LOG_DBG("Worker_func - Refresh Status %d, use_timer_in_irq:%d\n", status, this->useIrqTimer);
 		}
 		while((++counter) < MAX_NUM_STATUS_BITS)   /* counter start from MSB */
 		{
 			if (((status>>counter) & 0x01) && (this->statusFunc[counter]))
 			{
-				LOG_INFO("SX937x Function Pointer Found. Calling counter==%d\n",counter);
+				LOG_DBG("SX937x Function Pointer Found. Calling counter==%d\n",counter);
 				this->statusFunc[counter](this);
 			}
 		}
