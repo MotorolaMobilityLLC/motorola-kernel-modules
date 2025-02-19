@@ -87,6 +87,7 @@ struct bm_ulog_dev {
 	void				*ipc_log;
 	struct task_struct		*bm_ulog_task;
 	char				ulog_buffer[MAX_ULOG_READ_BUFFER_SIZE];
+	bool				disable_dynamic_open_ulog;
 	bool				ulog_enabled;
 	struct delayed_work		ulog_complete_work;
 };
@@ -463,6 +464,8 @@ int bm_ulog_enable_log(bool enable, unsigned int duration_ms)
 		pr_err("BM ulog has not initialized yet\n");
 		return -ENODEV;
 	}
+	if (bmdev->disable_dynamic_open_ulog)
+		return 0;
 
 	if (bmdev->ulog_enabled != enable) {
 		bmdev->ulog_enabled = enable;
@@ -655,6 +658,8 @@ static int bm_ulog_probe(struct platform_device *pdev)
 		bmdev->level = BM_LOG_LEVEL_INFO;
 
 	init_log_enabled = of_property_read_bool(node, "init-log-enabled");
+	bmdev->disable_dynamic_open_ulog = of_property_read_bool(node, "disable-dynamic-open-log");
+	bm_info(bmdev, "disable_dynamic_open_ulog=%d\n", bmdev->disable_dynamic_open_ulog);
 
 	bmdev->dev = &pdev->dev;
 	client_data.id = MSG_OWNER_BC;
