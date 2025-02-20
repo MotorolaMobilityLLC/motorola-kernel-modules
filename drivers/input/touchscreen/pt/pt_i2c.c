@@ -154,9 +154,14 @@ static int pt_cypsoc_picoleaf_i2c_probe(struct i2c_client *client, const struct 
 	struct cypsoc_picoleaf_data *cpd;
 	int rc = 0;
 
-	pr_info("%s: probe enter\n", __func__);
+	pr_info("%s: probe enter, use_ndt_aw8680x = %d\n", __func__, use_ndt_aw8680x);
 
 #ifdef NDT_DATA_EN
+	if (use_ndt_aw8680x == 0) { //0 means second pressure sensor read id not compleated.
+		usleep_range(50000, 60000);
+		return -EPROBE_DEFER;
+	}
+
 	if (use_ndt_aw8680x == 1) {
 		pr_info("%s: use_ndt_aw8680x is 1, picoleaf probe direct exit\n", __func__);
 		return 0;
@@ -183,7 +188,14 @@ static int pt_cypsoc_picoleaf_i2c_probe(struct i2c_client *client, const struct 
 			//cpd->vdd_gpio = cd->cpdata->pico_vdd_gpio;
 			//cpd->vref_gpio = cd->cpdata->pico_vref_gpio;
 			//if(cd->core_probe_complete == 1) {
-			cypsoc_picoleaf_i2c_readied(cpd);
+			rc = cypsoc_picoleaf_i2c_readied(cpd);
+			if (rc < 0) {
+				return -EPROBE_DEFER;
+			}
+
+			cpd->probe_readid_not_esd_reset = 0;
+			//create sys node
+			cypsoc_picoleaf_sysclass_group_register(cpd);
 
 			i2c_clients_pt_cypsoc[1] = client;
 			cypsoc_picoleaf_firmware_update(cpd);

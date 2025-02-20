@@ -120,6 +120,7 @@ struct cypsoc_picoleaf_data {
 	uint8_t i2c_pull_up;
 	int     psoc_status;
 	int     prev_status;
+	int     probe_readid_not_esd_reset;
 
 	struct class  *sysfs_class;
 	struct device *sysfs_dev;
@@ -154,10 +155,11 @@ struct cypsoc_fw_parsed_row {
 /////////////////////////////////////////////////
 ////    Interfaces For touchscreen driver    ////
 int  cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd);
+int  cypsoc_picoleaf_sysclass_group_register(struct cypsoc_picoleaf_data *cpd);
 void cypsoc_picoleaf_shutdown_cont(struct cypsoc_picoleaf_data *cpd);
 void cypsoc_picoleaf_i2c_power_turned_on(struct cypsoc_picoleaf_data *cpd);
 void cypsoc_picoleaf_i2c_power_turned_off(struct cypsoc_picoleaf_data *cpd);
-void cypsoc_picoleaf_i2c_readied(struct cypsoc_picoleaf_data *cpd);
+int cypsoc_picoleaf_i2c_readied(struct cypsoc_picoleaf_data *cpd);
 int  cypsoc_picoleaf_get_press_z(int *press);
 int  cypsoc_picoleaf_notification_enabled(void);
 int  cypsoc_picoleaf_firmware_update(struct cypsoc_picoleaf_data *cpd);

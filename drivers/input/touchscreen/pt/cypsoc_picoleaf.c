@@ -274,7 +274,9 @@ static int cypsoc_picoleaf_i2c_access_hw(struct cypsoc_picoleaf_data *cpd,
 				"%s: Failed I2C transfer rc=%d\n",
 				__func__,
 				rc);
-		schedule_work(&cpd->i2c_retry_work);
+		if (cpd->probe_readid_not_esd_reset != 1) {
+			schedule_work(&cpd->i2c_retry_work);
+		}
 		return CYPSOC_PICOLEAF_RET_NG;
 	}
 }
@@ -2524,6 +2526,7 @@ static int cypsoc_picoleaf_initialize_driver_data(struct cypsoc_picoleaf_data *c
 	cpd->rst_gpio = 0;
 	cpd->vdd_gpio = 0;
 	cpd->vref_gpio = 0;
+	cpd->probe_readid_not_esd_reset = 1;
 
 	return 0;
 }
@@ -2541,14 +2544,11 @@ static void cypsoc_picoleaf_release_device_data(struct cypsoc_picoleaf_data *cpd
 	if(cpd) kfree(cpd);
 }
 
-/////////////////////////////////////////////////
-////    Interfaces For touchscreen driver    ////
-
-int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
+int cypsoc_picoleaf_sysclass_group_register(struct cypsoc_picoleaf_data *cpd)
 {
 	int rc=0;
 
-	pr_info("cypsoc_picoleaf_probe_cont() starts\n");
+	pr_info("cypsoc_picoleaf_sysclass_group_register() starts\n");
 
 	if (!cpd){
 		printk("%s: Error: cypsoc_picoleaf_data is NULL\n", __func__);
@@ -2581,6 +2581,25 @@ int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
 			class_destroy(cpd->sysfs_class);
 			cpd->sysfs_class = NULL;
 		}
+	}
+
+	pr_info("cypsoc_picoleaf_sysclass_group_register() end\n");
+	return rc;
+}
+EXPORT_SYMBOL_GPL(cypsoc_picoleaf_sysclass_group_register);
+
+/////////////////////////////////////////////////
+////    Interfaces For touchscreen driver    ////
+
+int cypsoc_picoleaf_probe_cont(struct cypsoc_picoleaf_data *cpd)
+{
+	int rc=0;
+
+	pr_info("cypsoc_picoleaf_probe_cont() starts\n");
+
+	if (!cpd){
+		printk("%s: Error: cypsoc_picoleaf_data is NULL\n", __func__);
+		return CYPSOC_PICOLEAF_RET_NG;
 	}
 
 	rc = cypsoc_picoleaf_initialize_driver_data(cpd);
@@ -2660,7 +2679,7 @@ EXPORT_SYMBOL_GPL(cypsoc_picoleaf_shutdown_cont);
  * PARAMETERS:
  *	*cpd   - pointer to cypress PSoC core data
  ******************************************************************************/
-void cypsoc_picoleaf_i2c_readied(struct cypsoc_picoleaf_data *cpd)
+int cypsoc_picoleaf_i2c_readied(struct cypsoc_picoleaf_data *cpd)
 {
 	uint8_t firmware_ver = 0;
 	int     rc;
@@ -2668,7 +2687,7 @@ void cypsoc_picoleaf_i2c_readied(struct cypsoc_picoleaf_data *cpd)
 
 	if(cpd == NULL){
 		pr_err("%s: cypsoc_picoleaf_data is still NULL\n", __func__);
-		return;
+		return -1;
 	}
 	client = (struct i2c_client *)to_i2c_client(cpd->dev);
 
@@ -2677,13 +2696,15 @@ void cypsoc_picoleaf_i2c_readied(struct cypsoc_picoleaf_data *cpd)
 	rc = cypsoc_picoleaf_i2c_read(cpd, client, CYPSOC_PICOLEAF_REG_FIRMWARE_VER, 1, &firmware_ver);
 	if (rc) {
 		cyp_debug(cpd->dev, CDL_ERROR,
-				"%s: PSoC (Picoleaf) first I2C access ERROR\n", __func__);
+				"%s: PSoC (Picoleaf) first I2C access ERROR, read id fail\n", __func__);
+		return CYPSOC_PICOLEAF_RET_NG;
 	}
 	else {
 		cyp_debug(cpd->dev, CDL_INFO,
-				"%s: PSoC (Picoleaf) firmware version = %d\n",
+				"%s: PSoC (Picoleaf) firmware version = %d, read id success\n",
 				__func__,
 				firmware_ver);
+		return CYPSOC_PICOLEAF_RET_OK;
 	}
 }
 EXPORT_SYMBOL_GPL(cypsoc_picoleaf_i2c_readied);
@@ -2778,7 +2799,7 @@ int cypsoc_picoleaf_firmware_update(struct cypsoc_picoleaf_data *cpd){
 EXPORT_SYMBOL_GPL(cypsoc_picoleaf_firmware_update);
 
 void cypsoc_picoleaf_suspend(void){
-	if (!cpd_global){
+	if ((!cpd_global) || (!cpd_global->dev)) {
 		pr_err("%s: Error: cypsoc_picoleaf_data is NULL\n", __func__);
 		return;
 	}
@@ -2795,7 +2816,7 @@ void cypsoc_picoleaf_suspend(void){
 EXPORT_SYMBOL_GPL(cypsoc_picoleaf_suspend);
 
 void cypsoc_picoleaf_resume(void){
-	if (!cpd_global){
+	if ((!cpd_global) || (!cpd_global->dev)) {
 		pr_err("%s: Error: cypsoc_picoleaf_data is NULL\n", __func__);
 		return;
 	}
