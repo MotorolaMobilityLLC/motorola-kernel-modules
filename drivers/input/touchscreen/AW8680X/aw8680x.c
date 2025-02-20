@@ -60,7 +60,7 @@ struct aw8680x *g_aw8680x;
 static char *aw8680x_flash_app_bin = "aw8680x_flash_app.bin";
 static char *aw8680x_flash_boot_bin = "aw8680x_flash_boot.bin";
 static char *aw8680x_sram_bin = "aw8680x_sram.bin";
-uint8_t use_ndt_aw8680x = 1;
+int use_ndt_aw8680x = 0;
 EXPORT_SYMBOL_GPL(use_ndt_aw8680x);
 
 static int32_t aw8680x_file_open(struct inode *inode, struct file *filp);
@@ -3212,6 +3212,24 @@ static ssize_t ndt_reg_dump_show(struct device *dev,
 	return len;
 }
 
+static ssize_t vendor_name_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t len = 0;
+	int ret = -1;
+
+	if (use_ndt_aw8680x == 1) {
+		ret = snprintf(buf + len, PAGE_SIZE - len, "%s\n", "ndt_aw8680x");
+	} else if (use_ndt_aw8680x == 2) {
+		ret = snprintf(buf + len, PAGE_SIZE - len, "%s\n", "rakuraku_cypsoc");
+	} else {
+		ret = snprintf(buf + len, PAGE_SIZE - len, "%s\n", "press_sensor_null");
+	}
+
+	return ret;
+}
+
+static DEVICE_ATTR_RO(vendor_name);
 static DEVICE_ATTR_RO(ndt_reg_dump);
 static DEVICE_ATTR_RW(ndt_restore_coeff);
 static DEVICE_ATTR_WO(ndt_tp);
@@ -3285,6 +3303,15 @@ static struct attribute *aw8680x_attributes[] = {
 
 static struct attribute_group aw8680x_attribute_group = {
 	.attrs = aw8680x_attributes
+};
+
+static struct attribute *aw8680x_attributes_first[] = {
+	&dev_attr_vendor_name.attr,
+	NULL
+};
+
+static struct attribute_group aw8680x_attribute_group_first = {
+	.attrs = aw8680x_attributes_first
 };
 
 static ssize_t proc_reg_read(struct file *filp, char __user *buf,
@@ -4537,7 +4564,7 @@ static int init_vibrator_proc(struct aw8680x *p_aw8680x)
 }
 
 
-static int sysclass_group_register(struct aw8680x *p_aw8680x)
+static int sysclass_group_register_first(struct aw8680x *p_aw8680x)
 {
 	int ret = DATA_INIT;
 
@@ -4565,6 +4592,55 @@ static int sysclass_group_register(struct aw8680x *p_aw8680x)
 			AWLOGI("sysfs_dev have be created");
 		}
 	}
+	if(!ret){
+		ret = sysfs_create_group(&(p_aw8680x->sysfs_dev->kobj), &aw8680x_attribute_group_first);
+		if(ret) {
+			AWLOGE("sysfs group first could not be created\n");
+			ret = -ENOMEM;
+			device_destroy(p_aw8680x->sysfs_class, 0);
+			p_aw8680x->sysfs_dev = NULL;
+			class_destroy(p_aw8680x->sysfs_class);
+			p_aw8680x->sysfs_class = NULL;
+		}else {
+			AWLOGI("sysfs_create first have be created");
+			p_aw8680x->sysclass_register = true;
+		}
+	}
+
+	return DATA_INIT;
+}
+
+static int sysclass_group_register(struct aw8680x *p_aw8680x)
+{
+	int ret = DATA_INIT;
+
+	if (!p_aw8680x){
+		AWLOGE("Error: p_aw8680x is NULL\n");
+		return -ENOMEM;
+	}
+
+	if (p_aw8680x->sysclass_register != true) {
+		p_aw8680x->sysfs_class = class_create(THIS_MODULE, "press");
+		if(!p_aw8680x->sysfs_class){
+			AWLOGE("sysfs_class could not be created\n");
+			ret = -ENOMEM;
+		} else {
+			AWLOGI("sysfs_class have be created");
+		}
+
+		if(!ret){
+			p_aw8680x->sysfs_dev = device_create(p_aw8680x->sysfs_class, NULL, 0, p_aw8680x, "force_dev");
+			if(!p_aw8680x->sysfs_dev){
+				AWLOGE("sysfs_dev could not be created\n");
+				ret = -ENOMEM;
+				class_destroy(p_aw8680x->sysfs_class);
+				p_aw8680x->sysfs_class = NULL;
+			} else {
+				AWLOGI("sysfs_dev have be created");
+			}
+		}
+	}
+
 	if(!ret){
 		ret = sysfs_create_group(&(p_aw8680x->sysfs_dev->kobj), &aw8680x_attribute_group);
 		if(ret) {
@@ -5062,6 +5138,7 @@ static void aw8680x_struct_init(struct aw8680x *p_aw8680x, struct i2c_client *i2
 	p_aw8680x->update_mutex_flag = true;
 	p_aw8680x->flash_app_states = false;
 	p_aw8680x->flash_boot_states = false;
+	p_aw8680x->sysclass_register = false;
 }
 
 static int32_t aw8680x_input_init(struct aw8680x *p_aw8680x)
@@ -5164,12 +5241,20 @@ aw8680x_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 	}
 	mutex_init(&(p_aw8680x->aw8680x_i2c_mutex));
 
+	ret = sysclass_group_register_first(p_aw8680x);
+	if (ret != DATA_INIT) {
+		AWLOGE("sysclass register first fail");
+		goto err_chipid;
+	}
+
 	ret = aw8680x_read_chipid(p_aw8680x);
 	if (ret != DATA_INIT) {
 		AWLOGE("the ic not AW8680X");
-		use_ndt_aw8680x = 0;
+		use_ndt_aw8680x = -1;
 		goto err_chipid;
 	}
+
+	use_ndt_aw8680x = 1;
 
 	ret = aw8680x_input_init(p_aw8680x);
 	if (ret == -INPUT_ALLOC_ERR)

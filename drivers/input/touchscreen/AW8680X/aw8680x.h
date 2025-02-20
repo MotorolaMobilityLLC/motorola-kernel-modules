@@ -280,6 +280,7 @@ struct aw8680x {
 	uint8_t adb_update_flash_app;
 	uint8_t flash_app_states;
 	uint8_t flash_boot_states;
+	uint8_t sysclass_register;
 };
 
 static char aw8680x_proc_node_name[][NUM_NODES] = {
