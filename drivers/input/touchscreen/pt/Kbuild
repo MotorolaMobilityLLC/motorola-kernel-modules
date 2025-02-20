@@ -17,6 +17,8 @@ pt-y += pt_i2c.o
 #pt-objs += pt_spi.o
 obj-m += cypsoc_picoleaf.o
 
-
+ifneq ($(filter m y, $(NDT_DATA_FOR_TOUCH)),)
+	EXTRA_CFLAGS += -DNDT_DATA_EN
+endif
 
 

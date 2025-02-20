@@ -1,6 +1,9 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
+ifneq ($(NDT_FOR_TOUCH),)
+	KBUILD_OPTIONS += NDT_DATA_FOR_TOUCH=y
+endif
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := pt.ko

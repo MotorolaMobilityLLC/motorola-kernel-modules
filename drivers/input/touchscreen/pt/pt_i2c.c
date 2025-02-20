@@ -35,6 +35,9 @@
 #include <linux/i2c.h>
 #include <linux/version.h>
 
+#ifdef NDT_DATA_EN
+extern int use_ndt_aw8680x;
+#endif
 
 #define CONFIG_TOUCHSCREEN_PARADE_DEVICETREE_SUPPORT
 
@@ -151,6 +154,15 @@ static int pt_cypsoc_picoleaf_i2c_probe(struct i2c_client *client, const struct 
 	struct cypsoc_picoleaf_data *cpd;
 	int rc = 0;
 
+	pr_info("%s: probe enter\n", __func__);
+
+#ifdef NDT_DATA_EN
+	if (use_ndt_aw8680x == 1) {
+		pr_info("%s: use_ndt_aw8680x is 1, picoleaf probe direct exit\n", __func__);
+		return 0;
+	}
+#endif
+
 	if (!strncmp(i2c_id->name, CYPSOC_PICOLEAF_NAME, strlen(CYPSOC_PICOLEAF_NAME))){
 		rc = cypsoc_picoleaf_probe(client, i2c_id);
 		if(rc) {
@@ -175,6 +187,10 @@ static int pt_cypsoc_picoleaf_i2c_probe(struct i2c_client *client, const struct 
 
 			i2c_clients_pt_cypsoc[1] = client;
 			cypsoc_picoleaf_firmware_update(cpd);
+#ifdef NDT_DATA_EN
+			use_ndt_aw8680x = 2;
+#endif
+			pr_info("%s: probe completed\n", __func__);
 	}else{
 		pr_err("%s: NAME ERROR!!\n", __func__);
 	}
