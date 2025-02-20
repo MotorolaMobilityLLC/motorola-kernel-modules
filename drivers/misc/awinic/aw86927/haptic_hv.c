@@ -77,6 +77,7 @@ char aw_rtp_name[][AW_RTP_NAME_MAX] = {
 	{"aw8693x_rtp_New_Hello_Moto.bin"},
 	{"aw8693x_rtp_CRICKET_RING.bin"},
 	{"aw8693x_rtp_Metro_Default.bin"},
+	{"aw8693x_rtp_Balinese_Camelan.bin"},
 };
 
 #ifdef AW_TIKTAP
