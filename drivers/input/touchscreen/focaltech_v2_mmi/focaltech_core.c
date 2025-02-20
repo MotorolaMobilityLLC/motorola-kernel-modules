@@ -56,7 +56,7 @@
 #ifdef NDT_DATA_EN
 #include <linux/kernel.h>
 #include <linux/random.h>
-extern uint8_t use_ndt_aw8680x;
+extern int use_ndt_aw8680x;
 #endif
 
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
@@ -706,13 +706,19 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
     unsigned int random_number = 0;
 #endif
 #ifdef PICOLEAF_DATA_EN
-	int press = 0;
-	int press_notify = cypsoc_picoleaf_notification_enabled();
-        FTS_DEBUG("focal from pico press_notify data%d!", press_notify);
-	if (press_notify) {
-		cypsoc_picoleaf_get_press_z(&press);
-        FTS_DEBUG("focal from pico press data%d!", press);
-	}
+    int press = 0;
+#ifdef NDT_DATA_EN
+    if (use_ndt_aw8680x == 2) {
+#endif
+        int press_notify = cypsoc_picoleaf_notification_enabled();
+            FTS_DEBUG("focal from pico press_notify data%d!", press_notify);
+        if (press_notify) {
+            cypsoc_picoleaf_get_press_z(&press);
+            FTS_DEBUG("focal from pico press data%d!", press);
+        }
+#ifdef NDT_DATA_EN
+    }
+#endif
 #endif
     ret = fts_read_touchdata(data);
     if (ret) {
@@ -813,12 +819,18 @@ static int fts_read_parse_touchdata(struct fts_ts_data *data)
 #endif
 
 #ifdef PICOLEAF_DATA_EN
-        if(press == 0){
-            FTS_DEBUG("RKRK 0ff events[0].p = (%d)", events[0].p);
-        } else {
-            FTS_DEBUG("RKRK on events[0].p = (%d)", events[0].p);
-            events[i].p = press;//buf[FTS_TOUCH_PRE_POS + base];
+#ifdef NDT_DATA_EN
+        if (use_ndt_aw8680x == 2) {
+#endif
+            if(press == 0){
+                FTS_DEBUG("RKRK 0ff events[0].p = (%d)", events[0].p);
+            } else {
+                FTS_DEBUG("RKRK on events[0].p = (%d)", events[0].p);
+                events[i].p = press;//buf[FTS_TOUCH_PRE_POS + base];
+            }
+#ifdef NDT_DATA_EN
         }
+#endif
 #else
         events[i].p =  buf[FTS_TOUCH_PRE_POS + base];
 #endif

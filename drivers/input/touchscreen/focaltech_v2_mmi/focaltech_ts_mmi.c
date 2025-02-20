@@ -16,6 +16,10 @@
 #include <linux/regulator/consumer.h>
 #include "focaltech_core.h"
 
+#ifdef NDT_DATA_EN
+extern int use_ndt_aw8680x;
+#endif
+
 #define GET_TS_DATA(dev) { \
 	ts_data = dev_get_drvdata(dev); \
 	if (!ts_data) { \
@@ -134,13 +138,25 @@ static int fts_mmi_methods_drv_irq(struct device *dev, int state)
 
 	if (state == 1) {
 #ifdef PICOLEAF_DATA_EN
-		cypsoc_picoleaf_resume();
+#ifdef NDT_DATA_EN
+		if (use_ndt_aw8680x == 2) {   //use cypsoc_picoleaf pressure sensor
+#endif
+			cypsoc_picoleaf_resume();
+#ifdef NDT_DATA_EN
+		}
+#endif
 #endif
 		FTS_INFO("enable irq");
 		fts_irq_enable();
 	} else if (state == 0) {
 #ifdef PICOLEAF_DATA_EN
-		cypsoc_picoleaf_suspend();
+#ifdef NDT_DATA_EN
+		if (use_ndt_aw8680x == 2) {   //use cypsoc_picoleaf pressure sensor
+#endif
+			cypsoc_picoleaf_suspend();
+#ifdef NDT_DATA_EN
+		}
+#endif
 #endif
 		FTS_INFO("disable irq");
 		fts_irq_disable();
