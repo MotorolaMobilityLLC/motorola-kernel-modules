@@ -238,7 +238,7 @@ static struct reg_default sc8541_reg_init_val[] = {
 	{BQ25980_MASK2,		0x00},
 	{BQ25980_MASK3,		0x00},
 	{BQ25980_MASK4,		0x00},
-	{BQ25980_MASK5,		0x00},
+	{BQ25980_MASK5,		0x18},
 
 	{BQ25980_ADC_CONTROL1,	0x00},
 	{BQ25980_ADC_CONTROL2,	0x06}, //0x26: enable vac1 vac2 adc and vout adc
@@ -320,7 +320,7 @@ static struct reg_default bq25960_reg_init_val[] = {
 	{BQ25980_MASK2,		0x00},
 	{BQ25980_MASK3,		0x00},
 	{BQ25980_MASK4,		0x00},
-	{BQ25980_MASK5,		0x80},
+	{BQ25980_MASK5,		0x90},
 
 	{BQ25980_ADC_CONTROL1,	0x04},//sample 14 bit
 	{BQ25980_ADC_CONTROL2,	0x06}, //0x26: enable vac1 vac2 adc and vout adc
