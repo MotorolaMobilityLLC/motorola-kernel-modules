@@ -451,7 +451,7 @@ int wls_chg_event_handler(struct wireless_device* wls_dev, struct wls_event_msg 
 	switch(msg->event) {
 		case WLS_EVENT_TX_DETECTED:
 			if (msg->len == 1) {
-				if (msg->data[0] == 0) {
+				if (msg->data[0] == 0 && wlc->ctl.rx_power_on) {
 					wlc->ctl.bpp_icl_done = false;
 					wlc->ctl.mc_icl_state = MC_ICL_IDLE;
 					wlc->ctl.ce_det_count = 0;
@@ -469,7 +469,8 @@ int wls_chg_event_handler(struct wireless_device* wls_dev, struct wls_event_msg 
 		case WLS_EVENT_RX_POWER_ON:
 			if (!wlc->config.secure_hardware)
 				queue_delayed_work(wlc->wls_wq, &wlc->dump_info_work, msecs_to_jiffies(10));
-			wls_chg_power_on(wlc);
+			if (!wlc->ctl.rx_power_on)
+				wls_chg_power_on(wlc);
 			break;
 		case WLS_EVENT_RX_NEGO_POWER_READY:
 			rt = wls_rx_get_rx_neg_power(wlc->wls_dev, &wlc->data.wlc_power);
