@@ -34,12 +34,22 @@ static enum power_supply_property batt_psy_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_COUNTER,
 };
 
+enum {
+	NOTIFY_EVENT_TYPE_FLIP_CAPACITY = 0,
+	NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW,
+	NOTIFY_EVENT_TYPE_FLIP_TEMP,
+	NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT,
+	NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL,
+	NOTIFY_EVENT_TYPE_FLIP_SOH,
+};
+
 #define BPD_TEMP_THRE -3000
 static int batt_psy_get_prop(struct power_supply *psy,
 			 enum power_supply_property prop,
 			 union power_supply_propval *pval)
 {
 	struct battery_glink_dev *batt_chip = power_supply_get_drvdata(psy);
+	struct battery_info batt_info = { 0 };
 	struct timespec64 glink_access_time_now;
 	int rc = 0;
 
@@ -55,7 +65,7 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			ktime_get_real_ts64(&batt_chip->glink_access_time);
 			batt_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_MAIN_BATT_INFO,
-				&batt_chip->batt_dev_info, sizeof(struct battery_info));
+				&batt_info, sizeof(struct battery_info));
 			mmi_dbg(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
 		}
 		break;
@@ -67,7 +77,7 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			ktime_get_real_ts64(&batt_chip->glink_access_time);
 			batt_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_FLIP_BATT_INFO,
-				&batt_chip->batt_dev_info, sizeof(struct battery_info));
+				&batt_info, sizeof(struct battery_info));
 			mmi_dbg(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
 		}
 		break;
@@ -84,37 +94,37 @@ static int batt_psy_get_prop(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		pval->intval = batt_chip->batt_dev_info.batt_status;
+		pval->intval = batt_info.batt_status;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-		pval->intval = batt_chip->batt_dev_info.present;
+		pval->intval = batt_info.present;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		pval->intval = batt_chip->batt_dev_info.batt_uv;
+		pval->intval = batt_info.batt_uv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		pval->intval = batt_chip->batt_dev_info.batt_ua;
+		pval->intval = batt_info.batt_ua;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		pval->intval = batt_chip->batt_dev_info.batt_soc / 100;
+		pval->intval = batt_info.batt_soc / 100;
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		pval->intval= POWER_SUPPLY_HEALTH_GOOD;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		pval->intval = batt_chip->batt_dev_info.batt_temp / 10;
+		pval->intval = batt_info.batt_temp / 10;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		pval->intval = batt_chip->batt_dev_info.batt_full_uah;
+		pval->intval = batt_info.batt_full_uah;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		pval->intval = batt_chip->batt_dev_info.batt_design_uah;
+		pval->intval = batt_info.batt_design_uah;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-		pval->intval = batt_chip->batt_dev_info.batt_chg_counter;
+		pval->intval = batt_info.batt_chg_counter;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		pval->intval = batt_chip->batt_dev_info.batt_cycle;
+		pval->intval = batt_info.batt_cycle;
 		break;
 	default:
 		break;
@@ -338,6 +348,101 @@ free_map:
 	return rc;
 }
 
+static void battery_notify_flip_uevent(struct battery_info *batt_info, int type)
+{
+	char *event_string = NULL;
+	struct battery_host *batt_host = NULL;
+	struct power_supply *batt_psy = NULL;
+	struct battery_glink_dev *batt_chip = NULL;
+
+	if (!this_root_chip || !batt_info) {
+		mmi_err(this_root_chip, "The data is illegal\n");
+		return;
+	}
+
+	batt_chip = this_batt_chip[BATT_FLIP];
+	batt_host = this_root_chip->batt_host;
+	if (batt_host == NULL || batt_chip == NULL)
+		return;
+
+	batt_psy = batt_host->batt_psy;
+	if (!batt_psy) {
+		mmi_err(this_root_chip, "No battery supply found\n");
+		return;
+	}
+
+	event_string = kmalloc(CHG_SHOW_MAX_SIZE, GFP_KERNEL);
+	if (!event_string) {
+		mmi_err(this_root_chip, "Failed to kmalloc the event_string");
+		return;
+	}
+
+	switch (type) {
+	case NOTIFY_EVENT_TYPE_FLIP_CAPACITY:
+		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
+			"POWER_SUPPLY_FLIP_BATT_SOC=%d",
+			batt_info->batt_soc);
+		break;
+	case NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW:
+		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
+			"POWER_SUPPLY_FLIP_VOLTAGE_NOW=%d",
+			batt_info->batt_uv);
+		break;
+	case NOTIFY_EVENT_TYPE_FLIP_TEMP:
+		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
+			"POWER_SUPPLY_FLIP_TEMP=%d",
+			batt_info->batt_temp);
+		break;
+	case NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT:
+		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
+			"POWER_SUPPLY_FLIP_CYCLE_COUNT=%d",
+			batt_info->batt_cycle);
+		break;
+	case NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL:
+		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
+			"POWER_SUPPLY_FLIP_CHARGE_FULL=%d",
+			batt_info->batt_full_uah);
+		break;
+	case NOTIFY_EVENT_TYPE_FLIP_SOH:
+		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
+			"POWER_SUPPLY_FLIP_STATE_OF_HEALTH=%d",
+			batt_info->batt_soh);
+		break;
+	default:
+		mmi_err(this_root_chip, "Invalid notify event type %d\n", type);
+		kfree(event_string);
+		return;
+	}
+
+	if (batt_chip->batt_uenvp[0])
+		kfree(batt_chip->batt_uenvp[0]);
+	batt_chip->batt_uenvp[0] = event_string;
+	batt_chip->batt_uenvp[1] = NULL;
+	kobject_uevent_env(&batt_psy->dev.kobj,
+				KOBJ_CHANGE,
+				batt_chip->batt_uenvp);
+	return;
+}
+
+static void battery_notify_charger_uevent(BATT_ROLE batt_role, struct battery_info *batt_info)
+{
+	struct battery_info batt_info_save = this_batt_chip[batt_role]->batt_dev_info;
+
+	if (batt_role == BATT_MAIN)
+		return;
+
+	if (batt_info->batt_soc != batt_info_save.batt_soc) {
+		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_CAPACITY);
+		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW);
+		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_TEMP);
+		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL);
+		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_SOH);
+		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT);
+	}
+
+	return;
+}
+
 static int battery_notify_handler(struct notifier_block *nb, unsigned long event, void *data)
 {
 	int rc = -1;
@@ -352,9 +457,20 @@ static int battery_notify_handler(struct notifier_block *nb, unsigned long event
 		if (batt_chip->batt_role == BATT_MAIN) {
 			rc = qti_charger_get_property(OEM_PROP_MAIN_BATT_INFO,
 					&batt_info, sizeof(batt_info));
+			if (rc) {
+				mmi_err(this_root_chip, "Failed to read main_batt info, rc=%d\n", rc);
+				return rc;
+			}
+			memcpy(&this_batt_chip[BATT_MAIN]->batt_dev_info, &batt_info, sizeof(batt_info));
 		} else if (batt_chip->batt_role == BATT_FLIP) {
 			rc = qti_charger_get_property(OEM_PROP_FLIP_BATT_INFO,
 					&batt_info, sizeof(batt_info));
+			if (rc) {
+				mmi_err(this_root_chip, "Failed to read flip_batt info, rc=%d\n", rc);
+				return rc;
+			}
+			battery_notify_charger_uevent(BATT_FLIP, &batt_info);
+			memcpy(&this_batt_chip[BATT_FLIP]->batt_dev_info, &batt_info, sizeof(batt_info));
 		} else {
 			mmi_err(this_root_chip, "batt_get_prop, Can not find correct batt role %d", batt_chip->batt_role);
 			return rc;
