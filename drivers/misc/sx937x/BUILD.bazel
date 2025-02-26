@@ -18,5 +18,6 @@ define_mgk_ko(
     ],
     deps = [
         "//motorola/kernel/modules/drivers/sensors:sensors_class",
+        "//motorola/kernel/modules/drivers/misc/hall:moto_hall",
     ],
 )

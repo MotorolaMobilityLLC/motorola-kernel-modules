@@ -30,6 +30,9 @@ ifneq ($(filter m y,$(CONFIG_AW96XX_MTK_KERNEL5XX_CHARGER_TYPE)),)
 endif
 
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+ifneq ((filter m y,$(CONFIG_CAPSENSE_HALL_CAL)),)
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../misc/hall/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+endif
 
 obj-m := awinic_sar.o
 awinic_sar-objs := ./comm/aw_sar_comm_interface.o aw_sar.o ./aw9610x/aw9610x.o ./aw9620x/aw9620x.o ./aw9620x/aw_update_fw.o ./aw963xx/aw963xx.o

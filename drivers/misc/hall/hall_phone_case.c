@@ -28,6 +28,7 @@
 #include <linux/mmi_wake_lock.h>
 #endif
 #include <linux/phone_case_detection_notify.h>
+#include <linux/version.h>
 
 #define DRIVER_NAME "hall_phone_case_detect"
 #define LOG_DBG(fmt, args...)    pr_debug(DRIVER_NAME " [DBG]" "<%s:%d>"fmt, __func__, __LINE__, ##args)
@@ -216,9 +217,16 @@ static int hallphone_case_enable(struct sensors_classdev *sensors_cdev,
 	}
 	return 0;
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t hall_enable_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t hall_enable_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	if (!strncmp(buf, "1", 1))
 	{
@@ -231,15 +239,28 @@ static ssize_t hall_enable_store(struct class *class,
 	return count;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t hall_enable_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t hall_enable_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	return sprintf(buf, "phone_case:%d\n", hall_sensor_dev->enable);
 }
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t hall_rawdata_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t hall_rawdata_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	return sprintf(buf, "%d\n", hall_sensor_dev->report_val);
 }
@@ -258,7 +279,9 @@ ATTRIBUTE_GROUPS(hall_class);
 
 struct class hall_class = {
 	.name                   = "hall",
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	.owner                  = THIS_MODULE,
+#endif
 	.class_groups           = hall_class_groups,
 };
 
@@ -310,7 +333,9 @@ static void hall_sensor_work_function(struct work_struct *work)
 static int hall_sensor_probe(struct platform_device *pdev)
 {
 	int ret = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	enum of_gpio_flags flags;
+#endif
 	struct device_node *np = pdev->dev.of_node;
 	int i;
 	int err ;
@@ -399,7 +424,11 @@ static int hall_sensor_probe(struct platform_device *pdev)
 		sprintf(gpio_name, "hall,nirq-gpio-low-val_%d", i);
 		ret =  of_property_read_u32(np, gpio_name, &hall_sensor_dev->gpio_list[i].gpio_low_report_val);
 		sprintf(gpio_name, "hall,nirq-gpio_%d", i);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 		hall_sensor_dev->gpio_list[i].gpio = of_get_named_gpio_flags(np, gpio_name, 0, &flags);
+#else
+        hall_sensor_dev->gpio_list[i].gpio = of_get_named_gpio(np, gpio_name, 0);
+#endif
 		LOG_INFO("hall_sensor %s gpio = %d val = %d:%d\r\n", gpio_name, hall_sensor_dev->gpio_list[i].gpio,
 						hall_sensor_dev->gpio_list[i].gpio_high_report_val,
 						hall_sensor_dev->gpio_list[i].gpio_low_report_val);
