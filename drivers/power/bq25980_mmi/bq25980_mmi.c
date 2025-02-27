@@ -2663,7 +2663,7 @@ static int bq25980_resume(struct device *dev)
 		mutex_unlock(&bq->irq_complete);
 	}
 
-	power_supply_changed(bq->charger);
+	//power_supply_changed(bq->charger);
 	dev_err(bq->dev,"Resume successfully!");
 
 	return 0;
