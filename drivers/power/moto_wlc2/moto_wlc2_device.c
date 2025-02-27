@@ -134,8 +134,13 @@ void wls_device_fw_update_work(struct work_struct *work)
 	rt = wls_rx_get_chip_id(wlc->wls_dev, &chip_id);
 	wlc_info("%s chip_id=%d, rt=%d\n", __func__, chip_id, rt);
 
-	if (rt) //if iic err, need boost
-		boost_flag = true;
+	if (rt) {
+		if (vbus >= VBUS_VALID_MV/2) {
+			wlc_err("%s vbus exists but iic err, Skip\n", __func__);
+			return;
+		} else
+			boost_flag = true; //no vbus and iic err, need boost
+	}
 
 	wlc->ctl.fw_uploading = true;
 	wls_device_pm_set_awake(wlc, true);
