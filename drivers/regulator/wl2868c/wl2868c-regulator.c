@@ -22,6 +22,12 @@
 #include <linux/version.h>
 #include "wl2868c-regulator.h"
 static int ldo_chipid = -1;
+
+#ifdef WL2868C_THEN_ET5904_ORDER
+int wl2868c_probe_completed = 0;
+EXPORT_SYMBOL_GPL(wl2868c_probe_completed);
+#endif
+
 enum slg51000_regulators {
 	WL2868C_REGULATOR_LDO1 = 0,
 	WL2868C_REGULATOR_LDO2,
@@ -424,6 +430,9 @@ static int wl2868c_i2c_probe(struct i2c_client *client, const struct i2c_device_
 		dev_err(chip->dev, "Failed to init regulator(%d)\n", ret);
 		return ret;
 	}
+#ifdef WL2868C_THEN_ET5904_ORDER
+	wl2868c_probe_completed = 1;
+#endif
 	dev_info(chip->dev, "wl2868c_i2c_probe Exit...\n");
 
 	return ret;

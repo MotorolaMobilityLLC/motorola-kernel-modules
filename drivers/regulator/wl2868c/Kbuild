@@ -3,3 +3,8 @@ EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
 wl2868c-objs += wl2868c-regulator.o
 obj-m	+= wl2868c.o
+
+ifneq ($(filter m y, $(WL2868C_ET5904_ORDER_EN)),)
+	EXTRA_CFLAGS += -DWL2868C_THEN_ET5904_ORDER
+endif
+
