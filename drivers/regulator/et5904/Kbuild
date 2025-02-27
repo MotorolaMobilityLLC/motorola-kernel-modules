@@ -5,5 +5,9 @@ ifneq ($(filter m y, $(PICOLEAF_DATA_FOR_TOUCH)),)
 	EXTRA_CFLAGS += -DPICOLEAF_DATA_EN
 endif
 
+ifneq ($(filter m y, $(WL2868C_ET5904_ORDER_EN)),)
+	EXTRA_CFLAGS += -DWL2868C_THEN_ET5904_ORDER
+endif
+
 et5904-objs += et5904-regulator.o
 obj-m	+= et5904.o

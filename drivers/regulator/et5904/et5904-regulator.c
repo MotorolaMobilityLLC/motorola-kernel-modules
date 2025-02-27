@@ -21,6 +21,10 @@
 #include <linux/regulator/of_regulator.h>
 #include "et5904-regulator.h"
 
+#ifdef WL2868C_THEN_ET5904_ORDER
+extern int wl2868c_probe_completed;
+#endif
+
 enum slg51000_regulators {
 	ET5904_REGULATOR_LDO1 = 0,
 	ET5904_REGULATOR_LDO2,
@@ -304,13 +308,22 @@ static int et5904_i2c_probe(struct i2c_client *client,
 		{ET5904_LDO3_LDO4_SEQ, 	0x00},
 		{ET5904_SEQ_STATUS, 		0x00},
 	};
+
+#ifdef WL2868C_THEN_ET5904_ORDER
+	pr_info("et5904_i2c_probe Enter, wl2868c_probe_completed = %d\n", wl2868c_probe_completed);
+	if (wl2868c_probe_completed == 0) { //0 means wl2868c probe not compleated.
+		usleep_range(50000, 60000);
+		return -EPROBE_DEFER;
+	}
+#else
+	pr_info("et5904_i2c_probe Enter...\n");
+#endif
+
 	chip = devm_kzalloc(dev, sizeof(struct et5904), GFP_KERNEL);
 	if (!chip) {
 		dev_err(chip->dev, "et5904_i2c_probe Memory error...\n");
 		return -ENOMEM;
 	}
-
-	dev_info(chip->dev, "et5904_i2c_probe Enter...\n");
 
 	if (of_property_read_u32(dev->of_node, "etek,init-value", &value) < 0) {
 		dev_info(chip->dev, "et5904_i2c_probe no init_value, use default 0x0\n");
