@@ -1222,6 +1222,8 @@ static enum power_supply_property mm8118g01_props[] = {
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	POWER_SUPPLY_PROP_AGE,
+#else
+	POWER_SUPPLY_PROP_SCOPE,
 #endif
 	POWER_SUPPLY_PROP_POWER_AVG,
 	POWER_SUPPLY_PROP_HEALTH,
@@ -1245,6 +1247,8 @@ static enum power_supply_property mm8013c10_props[] = {
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	POWER_SUPPLY_PROP_AGE,
+#else
+	POWER_SUPPLY_PROP_SCOPE,
 #endif
 	POWER_SUPPLY_PROP_HEALTH,
 	POWER_SUPPLY_PROP_TYPE,
@@ -2047,8 +2051,11 @@ static int mm8xxx_battery_get_property(struct power_supply *psy,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	case POWER_SUPPLY_PROP_AGE:
 		ret = mm8xxx_simple_value(di->cache.age_factor, val);
-		break;
+#else
+	case POWER_SUPPLY_PROP_SCOPE:
+		ret = mm8xxx_simple_value(di->cache.age_factor, val);
 #endif
+		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		ret = mm8xxx_simple_value(di->cache.health, val);
 		break;
@@ -2223,8 +2230,11 @@ static int mm8xxx_fake_battery_get_property(struct power_supply *psy,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	case POWER_SUPPLY_PROP_AGE:
 		ret = mm8xxx_simple_value(di->cache.age_factor, val);
-		break;
+#else
+	case POWER_SUPPLY_PROP_SCOPE:
+		ret = mm8xxx_simple_value(di->cache.age_factor, val);
 #endif
+		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		ret = mm8xxx_simple_value(di->cache.health, val);
 		break;
