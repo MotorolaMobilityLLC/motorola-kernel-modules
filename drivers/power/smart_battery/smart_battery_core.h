@@ -85,6 +85,9 @@ struct mmi_smart_battery {
 	int				flip_batt_soc;
 	int				flip_batt_temp;
 	int				flip_batt_voltage;
+	int				flip_batt_cycle_count;
+	int				flip_batt_charge_full;
+	int				flip_batt_soh;
 	int				batt_tte;
 	int				combo_voltage_now;
 	int				combo_current_now;
@@ -135,6 +138,14 @@ struct mmi_smart_battery {
 #define DEFAULT_BATT_COLD_THRESHOLD	0
 #define DEFAULT_SOH_GAP			4
 
+enum {
+	NOTIFY_EVENT_TYPE_FLIP_CAPACITY = 0,
+	NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW,
+	NOTIFY_EVENT_TYPE_FLIP_TEMP,
+	NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT,
+	NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL,
+	NOTIFY_EVENT_TYPE_FLIP_SOH,
+};
 extern int mmi_batt_health_check(void);
 
 extern int mmi_charger_update_batt_status(void);

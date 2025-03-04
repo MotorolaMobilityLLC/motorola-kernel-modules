@@ -75,6 +75,9 @@ static int smart_batt_get_charge_full(struct mmi_smart_battery *chip)
 	list_for_each_entry(battery, &chip->battery_list, list) {
 		gauge_dev_get_charge_full(battery->gauge_dev, &battery->charge_full);
 		charge_full_total +=  battery->charge_full;
+		if (strcmp(battery->gauge_dev->dev.kobj.name, "flip_battery") == 0) {
+			chip->flip_batt_charge_full = battery->charge_full;
+		}
 	}
 	chip->combo_charge_full= charge_full_total;
 
@@ -112,13 +115,18 @@ static int smart_batt_get_charge_counter(struct mmi_smart_battery *chip)
 static int smart_batt_get_cycle_count(struct mmi_smart_battery *chip)
 {
 	struct mmi_battery_pack *battery = NULL;
-	int counter = 0;
 
 	list_for_each_entry(battery, &chip->battery_list, list) {
 		gauge_dev_get_cycle_count(battery->gauge_dev, &battery->cycle_count);
-		counter = MAX(counter, battery->cycle_count);
+		//counter = MAX(counter, battery->cycle_count);
+		if (strcmp(battery->gauge_dev->dev.kobj.name, "main_battery") == 0 ||
+		     strcmp(battery->gauge_dev->dev.kobj.name,"bms") == 0) {
+			chip->combo_cycle_count  = battery->cycle_count;
+		}
+		else if (strcmp(battery->gauge_dev->dev.kobj.name, "flip_battery") == 0) {
+			chip->flip_batt_cycle_count= battery->cycle_count;
+		}
 	}
-	chip->combo_cycle_count = counter;
 
 	return chip->combo_cycle_count;
 }
@@ -163,6 +171,9 @@ static int smart_batt_get_soh(struct mmi_smart_battery *chip)
 		if (strcmp(battery->gauge_dev->dev.kobj.name, "main_battery") == 0 ||
 		     strcmp(battery->gauge_dev->dev.kobj.name,"bms") == 0) {
 			batt_soh = battery->soh;
+		}
+		else if (strcmp(battery->gauge_dev->dev.kobj.name, "flip_battery") == 0) {
+			chip->flip_batt_soh= battery->soh;
 		}
 	}
 	batt_soh += chip->soh_gap;
@@ -615,6 +626,59 @@ static void smart_batt_check_gauge_dev(struct mmi_smart_battery *chip)
 
 }
 
+#define MMI_FLIP_BATT_UEVENT_NUM 6
+static void smart_batt_notify_flip_uevent(struct mmi_smart_battery *chip)
+{
+	char *flip_event_string = NULL;
+	char *flip_soc_string = NULL;
+	char *flip_voltage_string = NULL;
+	char *flip_temp_string = NULL;
+	char *flip_cycleCount_string = NULL;
+	char *flip_chargeFull_string = NULL;
+	char *flip_soh_string = NULL;
+	char *envp[MMI_FLIP_BATT_UEVENT_NUM + 1];
+
+	if (chip->gauge_count < 2) {
+		return;
+	}
+	flip_event_string = kmalloc(SMART_BATT_SHOW_MAX_SIZE*MMI_FLIP_BATT_UEVENT_NUM, GFP_KERNEL);
+	if (!flip_event_string) {
+		mmi_info(chip, "Failed to kmalloc the event_string");
+		return;
+	}
+	flip_soc_string = flip_event_string;
+	flip_voltage_string = &flip_event_string[SMART_BATT_SHOW_MAX_SIZE];
+	flip_temp_string = &flip_event_string[SMART_BATT_SHOW_MAX_SIZE * 2];
+	flip_cycleCount_string = &flip_event_string[SMART_BATT_SHOW_MAX_SIZE * 3];
+	flip_chargeFull_string = &flip_event_string[SMART_BATT_SHOW_MAX_SIZE * 4];
+	flip_soh_string = &flip_event_string[SMART_BATT_SHOW_MAX_SIZE * 5];
+
+	scnprintf(flip_soc_string, SMART_BATT_SHOW_MAX_SIZE,
+		"POWER_SUPPLY_FLIP_BATT_SOC=%d", chip->flip_batt_soc);
+	scnprintf(flip_voltage_string, SMART_BATT_SHOW_MAX_SIZE,
+		"POWER_SUPPLY_FLIP_VOLTAGE_NOW=%d", chip->flip_batt_voltage);
+	scnprintf(flip_temp_string, SMART_BATT_SHOW_MAX_SIZE,
+		"POWER_SUPPLY_FLIP_TEMP=%d", chip->flip_batt_temp);
+	scnprintf(flip_cycleCount_string, SMART_BATT_SHOW_MAX_SIZE,
+		"POWER_SUPPLY_FLIP_CYCLE_COUNT=%d", chip->flip_batt_cycle_count);
+	scnprintf(flip_chargeFull_string, SMART_BATT_SHOW_MAX_SIZE,
+		"POWER_SUPPLY_FLIP_CHARGE_FULL=%d", chip->flip_batt_charge_full);
+	scnprintf(flip_soh_string, SMART_BATT_SHOW_MAX_SIZE,
+		"POWER_SUPPLY_FLIP_STATE_OF_HEALTH=%d", chip->flip_batt_soh);
+
+	envp[0] = flip_soc_string;
+	envp[1] = flip_voltage_string;
+	envp[2] = flip_temp_string;
+	envp[3] = flip_cycleCount_string;
+	envp[4] = flip_chargeFull_string;
+	envp[5] = flip_soh_string;
+	envp[MMI_FLIP_BATT_UEVENT_NUM] = NULL;
+	kobject_uevent_env(&chip->dev->kobj,  KOBJ_CHANGE, envp);
+	kfree(flip_event_string);
+
+	return;
+}
+
 static void smart_batt_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
@@ -667,6 +731,8 @@ static void smart_batt_update_thread(struct work_struct *work)
 		if (rsoc != chip->uisoc) {
 			chip->uisoc = rsoc;
 			power_supply_changed(chip->batt_psy);
+			//Report the flip battery info by uevent
+			smart_batt_notify_flip_uevent(chip);
 		} else if (chip->combo_batt_temp >= 650) {
 			power_supply_changed(chip->batt_psy);
 		}
