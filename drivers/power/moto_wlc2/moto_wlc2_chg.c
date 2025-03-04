@@ -519,6 +519,10 @@ int wls_chg_event_handler(struct wireless_device* wls_dev, struct wls_event_msg 
 		case WLS_EVENT_RX_BACKPOWER_MODE:
 			if (wlc->ctl.tx_mode) {
 				wlc_info("%s Skip when tx_mode\n", __func__);
+			} else if(wlc->ctl.fw_uploading) {
+				wlc_info("%s Skip when fw_uploading\n", __func__);
+			} else if (wlc->ctl.otg_boost_on) {
+				wlc_info("%s Skip when otg or boost on\n", __func__);
 			} else {
 				if (!IS_ERR_OR_NULL(wlc->chg1_dev)) {
 					rt = charger_dev_is_otg_enabled(wlc->chg1_dev, &otg_en);
