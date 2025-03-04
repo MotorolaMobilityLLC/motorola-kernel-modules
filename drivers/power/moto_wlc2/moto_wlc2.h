@@ -196,6 +196,7 @@ struct wireless_ctl
 	bool rx_ldo_on;
 	bool mc_status;
 	bool factory_wls_en;
+	bool otg_boost_on;
 	bool fw_update_force;
 	bool fw_uploading;
 	int fw_update_retry_cnt;

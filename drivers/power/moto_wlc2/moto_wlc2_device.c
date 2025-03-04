@@ -61,32 +61,40 @@ bool wls_device_fw_set_boost(struct moto_wlc *wlc, bool en)
 	int vbus = 0;
 	struct charger_device *chg_psy = NULL;
 
+	if (en)
+		wlc->ctl.otg_boost_on = true;
 	wls_chg_mmi_mux_chan_set(MMI_MUX_CHANNEL_WLC_FW_UPDATE, en);
 
 	if (!wlc->config.wls_boost_support) {
 		chg_psy = get_charger_by_name("primary_chg");
 		if (IS_ERR_OR_NULL(chg_psy)) {
 			wlc_err("%s Couldn't get chg_psy\n", __func__);
-			return false;
+			goto boost_err_out;
 		}
 		ret = charger_dev_enable_otg(chg_psy, en);
 		if(ret < 0){
 			wlc_err("%s set otg fail\n", __func__);
-			return false;
+			goto boost_err_out;
 		}
 		msleep(100);
 		vbus = wlc_hal_get_vbus(wlc->alg) / 1000;
 		wlc_info("%s vbus:%dmV\n", __func__, vbus);
 		if (en && vbus < VBUS_VALID_MV) {
 			wlc_err("%s enable otg fail\n", __func__);
-			return false;
+			goto boost_err_out;
 		} else if(!en && vbus >= VBUS_VALID_MV) {
 			wlc_err("%s disable otg fail\n", __func__);
-			return false;
+			goto boost_err_out;
 		}
 	}
 
+	if (!en)
+		wlc->ctl.otg_boost_on = false;
+
 	return true;
+boost_err_out:
+	wlc->ctl.otg_boost_on = false;
+	return false;
 }
 
 void wls_device_fw_update_work(struct work_struct *work)
@@ -100,6 +108,7 @@ void wls_device_fw_update_work(struct work_struct *work)
 	int soc = 0;
 	bool boost_flag = false;
 	int status = WLS_FW_UPDATE_IDLE;
+	bool otg_en = false;
 
 	if (IS_ERR_OR_NULL(wlc)) {
 		wlc_err("can't get wlc\n");
@@ -128,6 +137,18 @@ void wls_device_fw_update_work(struct work_struct *work)
 		wlc_info("%s Wireless fw update failed. Battery SOC should be at least %d%%\n",
 				__func__, wlc->config.fw_update_soc_limit);
 		return;
+	} else {
+		if (!IS_ERR_OR_NULL(wlc->chg1_dev)) {
+			rt = charger_dev_is_otg_enabled(wlc->chg1_dev, &otg_en);
+			if (rt) {
+				wlc_err("%s get otg status failed, rt:%d\n", __func__, rt);
+				return;
+			}
+			if (otg_en) {
+				wlc_info("%s Skip FW update when otg plug-in\n", __func__);
+				return;
+			}
+		}
 	}
 
 	//read chip
