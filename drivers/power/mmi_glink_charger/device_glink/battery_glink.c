@@ -49,7 +49,6 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			 union power_supply_propval *pval)
 {
 	struct battery_glink_dev *batt_chip = power_supply_get_drvdata(psy);
-	struct battery_info batt_info = { 0 };
 	struct timespec64 glink_access_time_now;
 	int rc = 0;
 
@@ -65,7 +64,7 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			ktime_get_real_ts64(&batt_chip->glink_access_time);
 			batt_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_MAIN_BATT_INFO,
-				&batt_info, sizeof(struct battery_info));
+				&batt_chip->batt_prop_info, sizeof(struct battery_info));
 			mmi_dbg(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
 		}
 		break;
@@ -77,7 +76,7 @@ static int batt_psy_get_prop(struct power_supply *psy,
 			ktime_get_real_ts64(&batt_chip->glink_access_time);
 			batt_chip->elapsed_ms = 0;
 			rc = qti_charger_get_property(OEM_PROP_FLIP_BATT_INFO,
-				&batt_info, sizeof(struct battery_info));
+				&batt_chip->batt_prop_info, sizeof(struct battery_info));
 			mmi_dbg(this_root_chip, "battery_get_prop[%d], DEV_INFO", batt_chip->batt_role);
 		}
 		break;
@@ -94,37 +93,37 @@ static int batt_psy_get_prop(struct power_supply *psy,
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_STATUS:
-		pval->intval = batt_info.batt_status;
+		pval->intval = batt_chip->batt_prop_info.batt_status;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-		pval->intval = batt_info.present;
+		pval->intval = batt_chip->batt_prop_info.present;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		pval->intval = batt_info.batt_uv;
+		pval->intval = batt_chip->batt_prop_info.batt_uv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		pval->intval = batt_info.batt_ua;
+		pval->intval = batt_chip->batt_prop_info.batt_ua;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		pval->intval = batt_info.batt_soc / 100;
+		pval->intval = batt_chip->batt_prop_info.batt_soc / 100;
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		pval->intval= POWER_SUPPLY_HEALTH_GOOD;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		pval->intval = batt_info.batt_temp / 10;
+		pval->intval = batt_chip->batt_prop_info.batt_temp / 10;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
-		pval->intval = batt_info.batt_full_uah;
+		pval->intval = batt_chip->batt_prop_info.batt_full_uah;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
-		pval->intval = batt_info.batt_design_uah;
+		pval->intval = batt_chip->batt_prop_info.batt_design_uah;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
-		pval->intval = batt_info.batt_chg_counter;
+		pval->intval = batt_chip->batt_prop_info.batt_chg_counter;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		pval->intval = batt_info.batt_cycle;
+		pval->intval = batt_chip->batt_prop_info.batt_cycle;
 		break;
 	default:
 		break;
