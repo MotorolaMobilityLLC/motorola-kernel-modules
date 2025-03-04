@@ -29,6 +29,7 @@ struct battery_glink_dev {
 	struct glink_device *glink_dev;
 	struct power_supply	*batt_dev_psy;
 	struct battery_info 	batt_dev_info;
+	struct battery_info 	batt_prop_info;
 	int			state_of_health;
 	int			manufacturing_date;
 	int			first_usage_date;
