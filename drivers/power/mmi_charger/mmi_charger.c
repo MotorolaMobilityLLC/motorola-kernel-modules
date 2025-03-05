@@ -1044,13 +1044,70 @@ static void mmi_battery_supply_init(struct mmi_charger_chip *chip)
 	mmi_info(chip, "battery supply is initialized\n");
 }
 
+static struct device_node *mmi_get_profile_by_serialnum(
+		const struct device_node *np)
+{
+	struct device_node *node, *df_node, *sn_node;
+	const char *sn_buf, *df_sn, *dev_sn;
+	int rc;
+
+	if (!np)
+		return NULL;
+
+	dev_sn = NULL;
+	df_sn = NULL;
+	sn_buf = NULL;
+	df_node = NULL;
+	sn_node = NULL;
+
+	dev_sn = mmi_get_battery_serialnumber();
+
+	rc = of_property_read_string(np, "mmi,df-serialnum",
+				     &df_sn);
+	if (rc)
+		mmi_err(this_chip, "No Default Serial Number defined\n");
+	else if (df_sn)
+		mmi_info(this_chip, "Default Serial Number %s\n", df_sn);
+
+	for_each_child_of_node(np, node) {
+		rc = of_property_read_string(node, "serialnum",
+					     &sn_buf);
+		if (!rc && sn_buf) {
+			if (dev_sn)
+				if (strnstr(dev_sn, sn_buf, 32))
+					sn_node = node;
+			if (df_sn)
+				if (strnstr(df_sn, sn_buf, 32))
+					df_node = node;
+		}
+	}
+
+	if (sn_node) {
+		node = sn_node;
+		df_node = NULL;
+		mmi_info(this_chip, "Battery Match Found using %s\n", sn_node->name);
+	} else if (df_node) {
+		node = df_node;
+		sn_node = NULL;
+		mmi_info(this_chip, "Battery Match Found using default %s\n",
+				df_node->name);
+	} else {
+		mmi_err(this_chip, "No Battery Match Found!\n");
+		return NULL;
+	}
+
+	return node;
+}
+
 static int mmi_get_charger_profile(struct mmi_charger_chip *chip,
 				struct mmi_charger *charger)
 {
 	int rc;
 	int i;
 	int byte_len;
+	int chrg_profile_num = 1;
 	struct device_node *node;
+	struct device_node *chrg_profile_node = NULL;
 
 	if (!charger->driver || !charger->driver->dev) {
 		mmi_err(chip, "mmi charger driver is invalid\n");
@@ -1058,6 +1115,17 @@ static int mmi_get_charger_profile(struct mmi_charger_chip *chip,
 	}
 
 	node = charger->driver->dev->of_node;
+	rc = of_property_read_u32(node, "mmi,chrg-profile-num",
+                  &chrg_profile_num);
+	if (!rc) {
+		chrg_profile_node = mmi_get_profile_by_serialnum(node);
+		if (chrg_profile_node) {
+			node = chrg_profile_node;
+		}
+	}
+
+	mmi_err(chip, "Match charger profile node %s\n", node->name);
+
 	rc = of_property_read_u32(node, "mmi,shutdown-empty-vbat-mv",
 				  &charger->profile.shutdown_empty_vbat_mv);
 	if (rc)
@@ -2452,12 +2520,12 @@ const char *mmi_get_battery_serialnumber(void)
                 return NULL;
 
         if ((retval == -EINVAL) || !battsn_buf) {
-                pr_err("Battsn unused\n");
+                pr_err("%s: Battsn unused\n", __func__);
                 of_node_put(np);
                 return NULL;
 
         } else
-                pr_err("Battsn = %s\n", battsn_buf);
+                pr_err("%s: Battsn = %s\n", __func__, battsn_buf);
 
         of_node_put(np);
 
