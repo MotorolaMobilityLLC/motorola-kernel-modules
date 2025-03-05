@@ -485,7 +485,7 @@ static int sc8541d_field_write(struct sc8541d_chip *sc,
 
     ret = regmap_field_write(sc->rmap_fields[field_id], val);
     if (ret < 0) {
-        dev_err(sc->dev, "sc8541d read field %d fail: %d\n", field_id, ret);
+        dev_err(sc->dev, "sc8541d write field %d fail: %d\n", field_id, ret);
     }
 
     return ret;
@@ -625,9 +625,6 @@ static int sc8541d_get_adc_data(struct sc8541d_chip *sc,
     if (channel >= ADC_MAX_NUM)
         return -EINVAL;
 
-    sc8541d_enable_adc(sc, true);
-    msleep(50);
-
     ret = sc8541d_read_bulk(sc, reg, reg_val, 2);
 
     if (ret < 0)
@@ -635,8 +632,6 @@ static int sc8541d_get_adc_data(struct sc8541d_chip *sc,
 
     *result = ((reg_val[0] << 8) | reg_val[1]) *
         sc8541d_adc_m[channel] / sc8541d_adc_l[channel];
-
-    sc8541d_enable_adc(sc, false);
 
     return ret;
 }
@@ -954,7 +949,9 @@ static int mtk_sc8541d_init_chip(struct charger_device *chg_dev)
 {
     struct sc8541d_chip *sc = charger_get_data(chg_dev);
 
-    return sc8541d_init_device(sc);
+    sc8541d_init_device(sc);
+
+    return sc8541d_enable_adc(sc,true);
 }
 
 static const struct charger_ops sc8541d_chg_ops = {
@@ -1528,6 +1525,9 @@ static int sc8541d_init_device(struct sc8541d_chip *sc)
 
     for (i = 0; i < ARRAY_SIZE(props); i++) {
         ret = sc8541d_field_write(sc, props[i].field_id, props[i].conv_data);
+        if (ret < 0) {
+            dev_err(sc->dev, "%s Failed to init index %d registers(%d)\n", __func__, i, ret);
+        }
     }
 
     return sc8541d_dump_reg(sc);
