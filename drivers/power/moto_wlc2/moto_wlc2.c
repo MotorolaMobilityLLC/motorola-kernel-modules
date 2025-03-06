@@ -550,6 +550,7 @@ static int _wlc_stop_algo(struct chg_alg_device *alg)
 
 	wlc_dbg("%s %d\n", __func__, wlc->state);
 	if (wlc->state == WLC_RUN) {
+		wls_device_start_mode_switch(wlc, "_wlc_stop_algo", Sys_Op_Mode_BPP);
 		wlc_reset_ta_vchr(alg);
 		wlc->state = WLC_HW_READY;
 	}

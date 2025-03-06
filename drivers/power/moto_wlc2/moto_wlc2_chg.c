@@ -604,6 +604,12 @@ int wls_chg_get_property(struct power_supply *psy,
 		return -EINVAL;
 	}
 
+	if (wlc->ctl.mode_switch == WLC_SWITCH_RUN &&
+		(psp == POWER_SUPPLY_PROP_PRESENT || psp == POWER_SUPPLY_PROP_ONLINE)) {
+		pr_info("%s mode switch hook online:1\n", __func__);
+		val->intval = 1;
+		return 0;
+	}
 	val->intval = 0;
 	if (wlc->ctl.fw_uploading) {
 		wlc_dbg("%s Unable to read registers when fw_uploading\n", __func__);
@@ -628,11 +634,6 @@ int wls_chg_get_property(struct power_supply *psy,
 				else {
 					val->intval = 0;
 				}
-			}
-			if (wlc->ctl.mode_switch == WLC_SWITCH_RUN) {
-				pr_info("%s mode switch hook online:1\n", __func__);
-				val->intval = 1;
-				ret = 0;
 			}
 			break;
 
