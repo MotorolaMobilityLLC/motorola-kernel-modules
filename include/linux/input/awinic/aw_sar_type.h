@@ -323,6 +323,7 @@ struct aw_sar {
 	struct work_struct ps_notify_work;
 	struct notifier_block ps_notif;
 #ifdef CONFIG_CAPSENSE_HALL_CAL
+	struct delayed_work hall_notify_work;
 	struct notifier_block hall_notif;
 	int hall_is_present;
 #endif

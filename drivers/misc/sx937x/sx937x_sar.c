@@ -1447,6 +1447,16 @@ static int ps_notify_callback(struct notifier_block *self,
 }
 
 #ifdef CONFIG_CAPSENSE_HALL_CAL
+static void hall_detection_notify_callback_work(struct work_struct *work)
+{
+	u32 temp = 0;
+	sx937x_i2c_read_16bit(global_sx937x, SX937X_GENERAL_SETUP, &temp);
+	if (temp & 0x000000FF) {
+		LOG_DBG("Hall state change, Going to force calibrate\n");
+		manual_offset_calibration(global_sx937x);
+	}
+}
+
 static int hall_detection_notifier_callback(struct notifier_block *self,
 					unsigned long event, void *p)
 {
@@ -1460,7 +1470,7 @@ static int hall_detection_notifier_callback(struct notifier_block *self,
 	if (data->hall_is_present != present) {
 		data->hall_is_present = present;
 		LOG_INFO("hall_is_present=%d\n",data->hall_is_present);
-		schedule_work(&data->ps_notify_work);
+		schedule_delayed_work(&data->hall_notify_work, HZ);
 	} else {
 		LOG_DBG("hall present state not change\n");
 	}
@@ -1541,9 +1551,9 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 	psx937x_platform_data_t pplatData = 0;
 #ifdef CONFIG_CAPSENSE_USB_CAL
 	struct power_supply *psy = NULL;
+#endif
 #ifdef CONFIG_CAPSENSE_HALL_CAL
 	int rc;
-#endif
 #endif
 	struct totalButtonInformation *pButtonInformationData = NULL;
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
@@ -1771,22 +1781,6 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 			}
 		}
 
-#ifdef CONFIG_CAPSENSE_HALL_CAL
-		pplatData->hall_nb.notifier_call = hall_detection_notifier_callback;
-		err = phone_case_detection_register_client(&pplatData->hall_nb);
-		if (err)
-			LOG_ERR("Unable to register hall_nb: %d\n", err);
-
-		rc = phone_case_detection_get_hall_state();
-		if (rc < 0) {
-			LOG_ERR("hall not enabled rc=%d\n", rc);
-			phone_case_detection_unregister_client(&pplatData->hall_nb);
-		} else {
-			pplatData->hall_is_present = rc;
-			LOG_INFO("weimh1 add:hall_is_present=%d\n",pplatData->hall_is_present);
-		}
-#endif
-
 #ifdef CONFIG_CAPSENSE_FLIP_CAL
 		if (of_property_read_bool(client->dev.of_node, "extcon")) {
 			pplatData->flip_notif.notifier_call = flip_notify_callback;
@@ -1809,6 +1803,23 @@ static int sx937x_probe(struct i2c_client *client, const struct i2c_device_id *i
 		} else
 			LOG_ERR("extcon not in dev tree!\n");
 #endif
+#endif
+
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+		INIT_DELAYED_WORK(&pplatData->hall_notify_work, hall_detection_notify_callback_work);
+		pplatData->hall_nb.notifier_call = hall_detection_notifier_callback;
+		err = phone_case_detection_register_client(&pplatData->hall_nb);
+		if (err)
+			LOG_ERR("Unable to register hall_nb: %d\n", err);
+
+		rc = phone_case_detection_get_hall_state();
+		if (rc < 0) {
+			LOG_ERR("hall not enabled rc=%d\n", rc);
+			phone_case_detection_unregister_client(&pplatData->hall_nb);
+		} else {
+			pplatData->hall_is_present = rc;
+			LOG_INFO("weimh1 add:hall_is_present=%d\n",pplatData->hall_is_present);
+		}
 #endif
 
 		sx93XX_IRQ_init(this);

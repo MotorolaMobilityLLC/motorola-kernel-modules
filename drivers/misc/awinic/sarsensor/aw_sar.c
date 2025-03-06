@@ -1811,6 +1811,15 @@ free_ps_notifier:
 // AW_SAR_USB_PLUG_CAIL end
 
 #ifdef CONFIG_CAPSENSE_HALL_CAL
+static void aw_sar_hall_notify_callback_work(struct work_struct *work)
+{
+	struct aw_sar *p_sar = container_of(work, struct aw_sar, hall_notify_work.work);
+
+	AWLOGD(p_sar->dev, "enter");
+
+	aw_sar_aot(p_sar);
+}
+
 static int aw_sar_hall_notify_callback(struct notifier_block *self,
 		unsigned long event, void *p)
 {
@@ -1822,7 +1831,7 @@ static int aw_sar_hall_notify_callback(struct notifier_block *self,
 	if (p_sar->hall_is_present != present) {
 		p_sar->hall_is_present = present;
 		AWLOGI(p_sar->dev,"hall_is_present=%d\n",p_sar->hall_is_present);
-		schedule_work(&p_sar->ps_notify_work);
+		schedule_delayed_work(&p_sar->hall_notify_work, HZ);
 	} else {
 		AWLOGD(p_sar->dev,"hall present state not change\n");
 	}
@@ -1834,7 +1843,7 @@ static int aw_sar_hall_notify_init(struct aw_sar *p_sar)
 {
 	int ret = 0;
 
-	//INIT_WORK(&p_sar->ps_notify_work, aw_sar_ps_notify_callback_work);
+	INIT_DELAYED_WORK(&p_sar->hall_notify_work, aw_sar_hall_notify_callback_work);
 	p_sar->hall_notif.notifier_call = (notifier_fn_t)aw_sar_hall_notify_callback;
 	ret = phone_case_detection_register_client(&p_sar->hall_notif);
 	if (ret)

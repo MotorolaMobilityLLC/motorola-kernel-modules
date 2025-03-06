@@ -463,10 +463,11 @@ struct sx937x_platform_data
 	struct smtc_reg_data *flip_open_regs;
 	struct smtc_reg_data *flip_closed_regs;
 #endif
+#endif
 #ifdef CONFIG_CAPSENSE_HALL_CAL
+	struct delayed_work hall_notify_work;
 	struct notifier_block hall_nb;
 	int hall_is_present;
-#endif
 #endif
 	pbuttonInformation_t pbuttonInformation;
 
