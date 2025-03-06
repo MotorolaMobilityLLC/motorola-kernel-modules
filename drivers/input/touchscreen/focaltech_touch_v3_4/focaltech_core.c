@@ -537,6 +537,14 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
     bool touch_event_coordinate = false;
     struct input_dev *input_dev = ts_data->input_dev;
 
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    unsigned int tool_type;
+#endif
+
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    tool_type = ts_data->palm_on ? MT_TOOL_PALM : MT_TOOL_FINGER;
+#endif
+
     for (i = 0; i < ts_data->touch_event_num; i++) {
         if (fts_input_report_key(ts_data, &events[i]) == 0) {
             continue;
@@ -545,7 +553,12 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
         touch_event_coordinate = true;
         if (EVENT_DOWN(events[i].flag)) {
             input_mt_slot(input_dev, events[i].id);
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+            input_mt_report_slot_state(input_dev, tool_type, true);
+#else
             input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, true);
+#endif
+
 #if FTS_REPORT_PRESSURE_EN
             input_report_abs(input_dev, ABS_MT_PRESSURE, events[i].p);
 #endif
@@ -570,7 +583,11 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
 #endif
         } else {
             input_mt_slot(input_dev, events[i].id);
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+            input_mt_report_slot_state(input_dev, tool_type, false);
+#else
             input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, false);
+#endif
             touch_point_pre &= ~(1 << events[i].id);
             if (ts_data->log_level >= 1) FTS_DEBUG("[B]P%d UP!", events[i].id);
         }
@@ -581,7 +598,11 @@ static int fts_input_report_b(struct fts_ts_data *ts_data, struct ts_event *even
             if ((1 << i) & (touch_point_pre ^ touch_down_point_cur)) {
                 if (ts_data->log_level >= 1) FTS_DEBUG("[B]P%d UP!", i);
                 input_mt_slot(input_dev, i);
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+                input_mt_report_slot_state(input_dev, tool_type, false);
+#else
                 input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, false);
+#endif
             }
         }
     }
@@ -826,6 +847,13 @@ static int fts_read_parse_touchdata(struct fts_ts_data *ts_data, u8 *touch_buf)
         FTS_INFO("touch buff is 0xff, need recovery state");
         return TOUCH_FW_INIT;
     }
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    if ((touch_buf[0] & 0x02) == 0x02) {
+        ts_data->palm_on = true;
+        FTS_INFO("touch palm on %d", touch_buf[0] & 0x02);
+    } else
+        ts_data->palm_on = false;
+#endif
 
     return ((touch_buf[FTS_TOUCH_E_NUM] >> 4) & 0x0F);
 }
@@ -1360,6 +1388,11 @@ static int fts_input_init(struct fts_ts_data *ts_data)
     input_set_abs_params(input_dev, ABS_MT_TOUCH_MAJOR, 0, 0xFF, 0, 0);
 #if FTS_REPORT_PRESSURE_EN
     input_set_abs_params(input_dev, ABS_MT_PRESSURE, 0, 0xFF, 0, 0);
+#endif
+
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    input_set_abs_params(input_dev, ABS_MT_TOOL_TYPE,
+            MT_TOOL_FINGER, MT_TOOL_PALM, 0, 0);
 #endif
 
     ret = input_register_device(input_dev);
