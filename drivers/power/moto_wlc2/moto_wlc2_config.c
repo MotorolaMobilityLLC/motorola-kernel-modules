@@ -234,7 +234,7 @@ int wls_get_bpp_config(struct moto_wlc *wlc, struct device *dev)
 	wlc->config.bpp_icl_max_uA = 1000000;//1000mA
 	wlc->config.bpp_icl_step_uA = 100000;//100mA
 	wlc->config.bpp_step_delay_ms = 100; //100ms
-	wlc->config.bpp_switch_time_ms = 3000; //3000ms
+	wlc->config.bpp_switch_time_ms = 5000; //5000ms
 
 	of_property_read_u32(node, "bpp-icl-min-uA", &wlc->config.bpp_icl_min_uA);
 	of_property_read_u32(node, "bpp-icl-max-uA", &wlc->config.bpp_icl_max_uA);
@@ -259,7 +259,7 @@ int wls_get_epp_config(struct moto_wlc *wlc, struct device *dev)
 	wlc->config.epp_icl_max_uA = 1250000;//1250mA
 	wlc->config.epp_icl_step_uA = 100000;//100mA
 	wlc->config.epp_step_delay_ms = 100; //100ms
-	wlc->config.epp_switch_time_ms = 3000; //3000ms
+	wlc->config.epp_switch_time_ms = 5000; //5000ms
 
 	of_property_read_u32(node, "epp-icl-min-uA", &wlc->config.epp_icl_min_uA);
 	of_property_read_u32(node, "epp-icl-max-uA", &wlc->config.epp_icl_max_uA);
