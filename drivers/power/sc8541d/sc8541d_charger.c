@@ -1698,6 +1698,16 @@ static void sc8541d_charger_remove(struct i2c_client *client)
 
 }
 
+static void sc8541d_charger_shutdown(struct i2c_client *client)
+{
+	struct sc8541d_chip *sc = i2c_get_clientdata(client);
+
+	/*reg reset*/
+	sc8541d_reg_reset(sc);
+
+	dev_info(sc->dev,"Shutdown Successfully\n");
+}
+
 #ifdef CONFIG_PM_SLEEP
 static int sc8541d_suspend(struct device *dev)
 {
@@ -1739,6 +1749,7 @@ static struct i2c_driver sc8541d_charger_driver = {
     },
     .probe      = sc8541d_charger_probe,
     .remove     = sc8541d_charger_remove,
+    .shutdown	= sc8541d_charger_shutdown,
 };
 
 module_i2c_driver(sc8541d_charger_driver);
