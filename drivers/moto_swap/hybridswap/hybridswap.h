@@ -48,6 +48,17 @@ extern ssize_t hybridswap_zram_increase_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len);
 extern ssize_t hybridswap_zram_increase_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static inline bool skip_zram_write(struct zram *zram, u32 index)
+{
+	zram_slot_lock(zram, index);
+	if (zram_test_flag(zram, index, ZRAM_UNDER_WB) || zram_test_flag(zram, index, ZRAM_BATCHING_OUT)) {
+		zram_slot_unlock(zram, index);
+		pr_info("zram is under wb or batching out index=%d\n", index);
+		return true;
+	}
+	zram_slot_unlock(zram, index);
+	return false;
+}
 #endif
 
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
