@@ -325,6 +325,9 @@ struct fts_ts_data {
 #endif
     u8 gsx_cmd;
 
+#ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
+    bool palm_on;
+#endif
 #ifdef FOCALTECH_PALM_SENSOR_EN
     bool palm_detection_enabled;
     enum palm_sensor_lazy_set palm_detection_lazy_set;
