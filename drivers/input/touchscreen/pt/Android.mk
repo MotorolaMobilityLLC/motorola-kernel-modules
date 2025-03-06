@@ -8,6 +8,9 @@ endif
 include $(CLEAR_VARS)
 LOCAL_MODULE := pt.ko
 LOCAL_MODULE_TAGS := optional
+ifneq ($(NDT_FOR_TOUCH),)
+	LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/AW8680X.ko
+endif
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
