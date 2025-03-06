@@ -12,6 +12,9 @@ endif
 include $(CLEAR_VARS)
 LOCAL_MODULE := et5904.ko
 LOCAL_MODULE_TAGS := optional
+ifneq ($(WL2868C_ET5904_ORDER),)
+	LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/wl2868c.ko
+endif
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
