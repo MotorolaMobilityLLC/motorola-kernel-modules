@@ -442,6 +442,8 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 
                 FTS_INFO("invoke imported report double tap gesture function\n");
                 event.evcode = 4;
+		event.evdata.x = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_x);
+                event.evdata.y = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_y);
                 /* call class method */
                 ret = fts_data->imports->report_gesture(&event);
                 ++report_cnt;
@@ -453,6 +455,8 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
 
                 FTS_INFO("invoke imported report single tap gesture function\n");
                 event.evcode = 1;
+		event.evdata.x = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_x);
+                event.evdata.y = le16_to_cpup((__le16 *)fts_gesture_data.coordinate_y);
                 /* call class method */
                 ret = fts_data->imports->report_gesture(&event);
                 ++report_cnt;
@@ -543,9 +547,9 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *touch_buf)
     /* save point data,max:6 */
     for (i = 0; i < FTS_GESTURE_POINTS_MAX; i++) {
         index = 4 * i + 4;
-        gesture->coordinate_x[i] = (u16)(((buf[0 + index] & 0x0F) << 8)
+        gesture->coordinate_x[i] = (u16)(((buf[0 + index] & 0xFF) << 8)
                                          + buf[1 + index]);
-        gesture->coordinate_y[i] = (u16)(((buf[2 + index] & 0x0F) << 8)
+        gesture->coordinate_y[i] = (u16)(((buf[2 + index] & 0xFF) << 8)
                                          + buf[3 + index]);
     }
 
