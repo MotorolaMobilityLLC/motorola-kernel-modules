@@ -1427,6 +1427,11 @@ static int zram_write_page(struct zram *zram, struct page *page, u32 index)
 	unsigned long element = 0;
 	enum zram_pageflags flags = 0;
 
+#ifdef CONFIG_HYBRIDSWAP_CORE
+	if (skip_zram_write(zram, index))
+		return -EBUSY;
+#endif
+
 	mem = kmap_atomic(page);
 	if (page_same_filled(mem, &element)) {
 		kunmap_atomic(mem);
