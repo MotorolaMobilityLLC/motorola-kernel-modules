@@ -165,6 +165,8 @@ static int smart_batt_get_soh(struct mmi_smart_battery *chip)
 			batt_soh = battery->soh;
 		}
 	}
+	batt_soh += chip->soh_gap;
+	batt_soh = MIN(batt_soh, 100);
 	if (chip->combo_cycle_count < 50)
 		batt_soh = 100;
 	if (batt_soh < chip->combo_soh)
@@ -800,6 +802,10 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 
 	if (of_property_read_u32(np, "mmi,ui_full_soc", &chip ->ui_full_soc) < 0) {
 		chip ->ui_full_soc = 100;
+	}
+
+	if (of_property_read_u32(np, "mmi,soh_gap", &chip ->soh_gap) < 0) {
+		chip ->soh_gap = DEFAULT_SOH_GAP;
 	}
 
 	of_property_read_u32(np , "mmi,shutdown_vol_threshold", &chip->shutdown_threshold);
