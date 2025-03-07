@@ -94,6 +94,7 @@ struct mmi_smart_battery {
 	int				combo_charge_counter;
 	int				combo_soh;
 	int				combo_cycle_count;
+	int				soh_gap;
 	int				shutdown_threshold;
 	int				soc100_curr_threshod;
 	int				taper_count;
@@ -131,6 +132,7 @@ struct mmi_smart_battery {
 #define DEFAULT_VBATT_LOW_MV		3000
 #define DEFAULT_VBATT_LOW_COLD_MV	3000
 #define DEFAULT_BATT_COLD_THRESHOLD	0
+#define DEFAULT_SOH_GAP			4
 
 extern int mmi_batt_health_check(void);
 
