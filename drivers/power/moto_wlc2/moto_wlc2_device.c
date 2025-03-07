@@ -61,9 +61,11 @@ bool wls_device_fw_set_boost(struct moto_wlc *wlc, bool en)
 	int vbus = 0;
 	struct charger_device *chg_psy = NULL;
 
-	if (en)
+	wlc_info("%s en=%d\n", __func__, en);
+	if (en) {
 		wlc->ctl.otg_boost_on = true;
-	wls_chg_mmi_mux_chan_set(MMI_MUX_CHANNEL_WLC_FW_UPDATE, en);
+		wls_chg_mmi_mux_chan_set(MMI_MUX_CHANNEL_WLC_FW_UPDATE, true);
+	}
 
 	if (!wlc->config.wls_boost_support) {
 		chg_psy = get_charger_by_name("primary_chg");
@@ -79,17 +81,12 @@ bool wls_device_fw_set_boost(struct moto_wlc *wlc, bool en)
 		msleep(100);
 		vbus = wlc_hal_get_vbus(wlc->alg) / 1000;
 		wlc_info("%s vbus:%dmV\n", __func__, vbus);
-		if (en && vbus < VBUS_VALID_MV) {
-			wlc_err("%s enable otg fail\n", __func__);
-			goto boost_err_out;
-		} else if(!en && vbus >= VBUS_VALID_MV) {
-			wlc_err("%s disable otg fail\n", __func__);
-			goto boost_err_out;
-		}
 	}
 
-	if (!en)
+	if (!en) {
 		wlc->ctl.otg_boost_on = false;
+		wls_chg_mmi_mux_chan_set(MMI_MUX_CHANNEL_WLC_FW_UPDATE, false);
+	}
 
 	return true;
 boost_err_out:
@@ -128,8 +125,8 @@ void wls_device_fw_update_work(struct work_struct *work)
 	soc = prop.intval;
 	vbus = wlc_hal_get_vbus(wlc->alg) / 1000;
 
-	if ((vbus > VBUS_VALID_MV/2) && wlc->config.secure_hardware) {
-		wlc_info("%s Skip FW update when secure phone has charger plug-in\n", __func__);
+	if (wlc->config.secure_hardware) {
+		wlc_info("%s Skip FW update when secure phone\n", __func__);
 		return;
 	} else if ((vbus < VBUS_VALID_MV/2) &&
 			soc < wlc->config.fw_update_soc_limit &&
