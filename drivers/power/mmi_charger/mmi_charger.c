@@ -1062,12 +1062,12 @@ static struct device_node *mmi_get_profile_by_serialnum(
 
 	dev_sn = mmi_get_battery_serialnumber();
 
-	rc = of_property_read_string(np, "mmi,df-serialnum",
+	rc = of_property_read_string(np, "mmi,main-df-serialnum",
 				     &df_sn);
 	if (rc)
-		mmi_err(this_chip, "No Default Serial Number defined\n");
+		mmi_err(this_chip, "No Main default Serial Number defined\n");
 	else if (df_sn)
-		mmi_info(this_chip, "Default Serial Number %s\n", df_sn);
+		mmi_info(this_chip, "Main default Serial Number %s\n", df_sn);
 
 	for_each_child_of_node(np, node) {
 		rc = of_property_read_string(node, "serialnum",
