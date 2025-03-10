@@ -151,7 +151,6 @@ struct cw_battery {
 	long stb_current;
 #endif
 	int ibat_polority;
-	char *batt_uenvp[2];
 	const char *bms_name;
 	struct regulator *vdd_i2c_vreg;
 };
@@ -890,10 +889,22 @@ static int cw_init(struct cw_battery *cw_bat)
 	return 0;
 }
 
-static void battery_notify_flip_uevent(struct cw_battery *cw_bat, int type)
+typedef struct {
+	const char *name;
+	int value;
+} uEnvpVar;
+
+static void battery_notify_flip_uevent(struct cw_battery *cw_bat)
 {
-	char *event_string = NULL;
 	struct power_supply *batt_psy = NULL;
+	int num_vars = 0, i = 0;
+	char **uenvp_ext = NULL;
+	char *uenvp_strings = NULL;
+
+	if (!cw_bat) {
+		cw_info("cw_bat is illegal\n");
+		return;
+	}
 
 	batt_psy = cw_bat->batt_psy;
 	if (!batt_psy) {
@@ -901,56 +912,45 @@ static void battery_notify_flip_uevent(struct cw_battery *cw_bat, int type)
 		return;
 	}
 
-	event_string = kmalloc(CHG_SHOW_MAX_SIZE, GFP_KERNEL);
-	if (!event_string) {
-		cw_info("Failed to kmalloc the event_string");
+	uEnvpVar uenvp_vars[] = {
+		{"POWER_SUPPLY_FLIP_BATT_SOC", cw_bat->ui_soc},
+		{"POWER_SUPPLY_FLIP_VOLTAGE_NOW", cw_bat->voltage},
+		{"POWER_SUPPLY_FLIP_TEMP", cw_bat->temp},
+		{"POWER_SUPPLY_FLIP_CYCLE_COUNT", cw_bat->cycle},
+		{"POWER_SUPPLY_FLIP_CHARGE_FULL", cw_bat->fcc_uah},
+		{"POWER_SUPPLY_FLIP_STATE_OF_HEALTH", cw_bat->soh}
+	};
+
+	num_vars = sizeof(uenvp_vars) / sizeof(uenvp_vars[0]);
+
+	uenvp_ext = kmalloc((num_vars + 1) * sizeof(char *), GFP_KERNEL);
+	if (!uenvp_ext) {
+		cw_info("Failed to kmalloc the uenvp_ext\n");
 		return;
 	}
 
-	switch (type) {
-	case NOTIFY_EVENT_TYPE_FLIP_CAPACITY:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_BATT_SOC=%d",
-			cw_bat->raw_soc);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_VOLTAGE_NOW=%d",
-			cw_bat->voltage);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_TEMP:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_TEMP=%d",
-			cw_bat->temp);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_CYCLE_COUNT=%d",
-			cw_bat->cycle);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_CHARGE_FULL=%d",
-			cw_bat->fcc_uah);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_SOH:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_STATE_OF_HEALTH=%d",
-			cw_bat->soh);
-		break;
-	default:
-		cw_info("Invalid notify event type %d\n", type);
-		kfree(event_string);
+	uenvp_strings = kmalloc(CHG_SHOW_MAX_SIZE * num_vars, GFP_KERNEL);
+	if (!uenvp_strings) {
+		cw_info("Failed to kmalloc the event string\n");
+		kfree(uenvp_ext);
 		return;
 	}
 
-	if (cw_bat->batt_uenvp[0])
-		kfree(cw_bat->batt_uenvp[0]);
-	cw_bat->batt_uenvp[0] = event_string;
-	cw_bat->batt_uenvp[1] = NULL;
-	kobject_uevent_env(&batt_psy->dev.kobj,
-				KOBJ_CHANGE,
-				cw_bat->batt_uenvp);
+	for (i = 0; i < num_vars; i++) {
+		uenvp_ext[i] = uenvp_strings + i * CHG_SHOW_MAX_SIZE;
+		scnprintf(uenvp_ext[i], CHG_SHOW_MAX_SIZE, "%s=%d", uenvp_vars[i].name, uenvp_vars[i].value);
+	}
+	uenvp_ext[num_vars] = NULL;
+	kobject_uevent_env(&batt_psy->dev.kobj, KOBJ_CHANGE, uenvp_ext);
+
+	if (uenvp_strings) {
+		kfree(uenvp_strings);
+	}
+
+	if (uenvp_ext) {
+		kfree(uenvp_ext);
+	}
+
 	return;
 }
 
@@ -972,12 +972,7 @@ static void battery_notify_charger_uevent(struct cw_battery *cw_bat)
 		}
 	}
 	if (cw_bat->batt_psy && ui_soc != cw_bat->ui_soc) {
-		battery_notify_flip_uevent(cw_bat, NOTIFY_EVENT_TYPE_FLIP_CAPACITY);
-		battery_notify_flip_uevent(cw_bat, NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW);
-		battery_notify_flip_uevent(cw_bat, NOTIFY_EVENT_TYPE_FLIP_TEMP);
-		battery_notify_flip_uevent(cw_bat, NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL);
-		battery_notify_flip_uevent(cw_bat, NOTIFY_EVENT_TYPE_FLIP_SOH);
-		battery_notify_flip_uevent(cw_bat, NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT);
+		battery_notify_flip_uevent(cw_bat);
 	}
 
 	return;
