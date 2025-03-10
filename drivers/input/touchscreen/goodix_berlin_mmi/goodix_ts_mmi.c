@@ -1174,8 +1174,11 @@ static int goodix_ts_firmware_update(struct device *dev, char *fwname) {
 	if (core_data->set_fw_name)
 		core_data->set_fw_name(fwname);
 
-	ret = goodix_do_fw_update(core_data->ic_configs[CONFIG_TYPE_NORMAL],
-				UPDATE_MODE_SRC_REQUEST | UPDATE_MODE_BLOCK | UPDATE_MODE_FORCE);
+	if (false == core_data->board_data.fw_upgrade_drv) {
+		ts_info("upgrade fw by sh");
+		ret = goodix_do_fw_update(core_data->ic_configs[CONFIG_TYPE_NORMAL],
+					UPDATE_MODE_SRC_REQUEST | UPDATE_MODE_BLOCK | UPDATE_MODE_FORCE);
+	}
 	if (ret)
 		ts_err("failed do fw update");
 

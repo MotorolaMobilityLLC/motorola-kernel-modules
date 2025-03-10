@@ -1162,6 +1162,12 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->gesture_wait_pm = false;
 	}
 
+	if (of_property_read_bool(node, "goodix,fw-upgrade-drv")) {
+		ts_info("fw_upgrade_drv");
+		board_data->fw_upgrade_drv = true;
+	} else {
+		board_data->fw_upgrade_drv = false;
+	}
 	return 0;
 }
 #endif
@@ -2445,6 +2451,14 @@ static int goodix_later_init_thread(void *data)
 			UPDATE_MODE_BLOCK | UPDATE_MODE_SRC_REQUEST);
 	if (ret)
 		ts_err("failed do fw update");
+#else
+	if (cd->board_data.fw_upgrade_drv) {
+		ts_info("upgrade fw by drv");
+		ret = goodix_do_fw_update(cd->ic_configs[CONFIG_TYPE_NORMAL],
+				UPDATE_MODE_BLOCK | UPDATE_MODE_SRC_REQUEST);
+		if (ret)
+			ts_err("failed do fw update");
+	}
 #endif
 	/* setp3: get fw version and ic_info
 	 * at this step we believe that the ic is in normal mode,
