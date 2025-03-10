@@ -331,6 +331,11 @@ static int aw_check_data_version(struct aw_bin *bin, int bin_num)
 	return -4;
 }
 
+static void aw_check_data_version_new(struct aw_bin *bin, int bin_num)
+{
+	DBG("aw_bin_parse bin data version is 0x%x\n", bin->header_info[bin_num].bin_data_ver);
+}
+
 static int aw_check_register_num_v1(struct aw_bin *bin, int bin_num)
 {
 	unsigned int check_register_num = 0;
@@ -713,6 +718,76 @@ int aw_sar_parsing_bin_file(struct aw_bin *bin)
 				bin->header_info[i].valid_data_len =
 				    bin->header_info[i].bin_data_len;
 			}
+		}
+	}
+	DBG("aw_bin_parse parsing success\n");
+
+	return 0;
+}
+
+/**
+ * @brief Parse bin file for new fw formate
+ *
+ * @param bin: Store the contents of the parsed bin file
+ * @return 0 if init successed, other if error
+ */
+int aw_sar_parsing_bin_file_new(struct aw_bin *bin)
+{
+	int i = 0;
+	int ret = 0;
+
+	DBG("aw_bin_parse code version:%s\n", AWINIC_CODE_VERSION);
+	if (!bin) {
+		DBG_ERR("aw_bin_parse bin is NULL\n");
+		return -8;
+	}
+	bin->p_addr = bin->info.data;
+	bin->all_bin_parse_num = 0;
+	bin->multi_bin_parse_num = 0;
+	bin->single_bin_parse_num = 0;
+
+	/* filling bins header info */
+	ret = aw_check_bin_header_version(bin);
+	if (ret < 0) {
+		DBG_ERR("aw_bin_parse check bin header version error\n");
+		return ret;
+	}
+	bin->p_addr = NULL;
+
+	/* check bin header info */
+	for (i = 0; i < bin->all_bin_parse_num; i++) {
+		/* check sum */
+		ret = aw_check_sum(bin, i);
+		if (ret < 0) {
+			DBG_ERR("aw_bin_parse check sum data error\n");
+			return ret;
+		}
+		/* check bin data version */
+		aw_check_data_version_new(bin, i);
+
+		/* check register num */
+		if (bin->header_info[i].bin_data_type == DATA_TYPE_REGISTER) {
+			ret = aw_check_register_num_v1(bin, i);
+			if (ret < 0) {
+				DBG_ERR("aw_bin_parse check register num error\n");
+				return ret;
+			}
+			/* check dsp reg num */
+		} else if (bin->header_info[i].bin_data_type == DATA_TYPE_DSP_REG) {
+			ret = aw_check_dsp_reg_num_v1(bin, i);
+			if (ret < 0) {
+				DBG_ERR("aw_bin_parse check dsp reg num error\n");
+				return ret;
+			}
+			/* check soc app num */
+		} else if (bin->header_info[i].bin_data_type == DATA_TYPE_SOC_APP) {
+			ret = aw_check_soc_app_num_v1(bin, i);
+			if (ret < 0) {
+				DBG_ERR("aw_bin_parse check soc app num error\n");
+				return ret;
+			}
+		} else {
+			bin->header_info[i].valid_data_len = bin->header_info[i].bin_data_len;
 		}
 	}
 	DBG("aw_bin_parse parsing success\n");
