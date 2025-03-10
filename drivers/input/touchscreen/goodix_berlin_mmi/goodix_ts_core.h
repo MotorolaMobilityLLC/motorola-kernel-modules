@@ -330,6 +330,7 @@ struct goodix_ts_board_data {
 	bool stowed_mode_ctrl;
 	bool gesture_wait_pm;
 	bool pocket_mode_ctrl;
+	bool fw_upgrade_drv;
 };
 
 enum goodix_fw_update_mode {
