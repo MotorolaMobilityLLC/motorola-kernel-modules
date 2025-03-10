@@ -171,7 +171,11 @@ static int32_t aw_sar_parse_bin(const struct firmware *cont, struct aw_sar *p_sa
 		release_firmware(cont);
 	}
 
-	ret = aw_sar_parsing_bin_file(aw_bin);
+	if (p_sar->dts_info.new_fw_format_flag == true)
+		ret = aw_sar_parsing_bin_file_new(aw_bin);
+	else
+		ret = aw_sar_parsing_bin_file(aw_bin);
+
 	if (ret < 0) {
 		AWLOGE(p_sar->dev, "parse bin fail! ret = %d", ret);
 		goto err;
@@ -291,6 +295,13 @@ int32_t aw_sar_parse_dts_comm(struct device *dev, struct device_node *np, struct
 
 	p_dts_info->use_plug_cail_flag = of_property_read_bool(np, "aw_sar,use_plug_cail");
 	AWLOGI(dev, "aw_sar,use_plug_cail_flag = <%d>", p_dts_info->use_plug_cail_flag);
+
+	p_dts_info->new_fw_format_flag = of_property_read_bool(np, "aw_sar,new_fw_format");
+	AWLOGI(dev, "aw_sar,new_fw_format_flag = <%d>", p_dts_info->new_fw_format_flag);
+
+	of_property_read_string_array(np, "platform_state", p_dts_info->plat_state, 1);
+	if (p_dts_info->plat_state[0] != NULL)
+		AWLOGI(dev, "platform_state = <%s>", p_dts_info->plat_state[0]);
 
 	return AW_OK;
 }
@@ -599,8 +610,14 @@ int32_t aw_sar_load_def_reg_bin(struct aw_sar *p_sar)
 		return AW_INVALID_PARA;
 	}
 
-	snprintf(p_sar->load_bin.bin_name, sizeof(p_sar->load_bin.bin_name),
+	if (p_sar->dts_info.plat_state[0] != NULL)
+		snprintf(p_sar->load_bin.bin_name, sizeof(p_sar->load_bin.bin_name),
+			"%s_%s_%d.bin", p_sar->p_sar_para->p_reg_bin->bin_name, p_sar->dts_info.plat_state[0], p_sar->dts_info.sar_num);
+	else
+		snprintf(p_sar->load_bin.bin_name, sizeof(p_sar->load_bin.bin_name),
 			"%s_%d.bin", p_sar->p_sar_para->p_reg_bin->bin_name, p_sar->dts_info.sar_num);
+
+	AWLOGI(p_sar->dev, "reg_name:%s", p_sar->load_bin.bin_name);
 
 	p_sar->load_bin.bin_opera_func = p_sar->p_sar_para->p_reg_bin->bin_opera_func;
 

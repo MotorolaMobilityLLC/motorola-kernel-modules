@@ -121,6 +121,8 @@ struct aw_sar_dts_info {
 	bool use_pm;
 	bool update_fw_flag;
 	bool use_plug_cail_flag;
+	bool new_fw_format_flag;
+	const char *plat_state[1];
 	/*wxm modify start by 2023/12/5*/
 	uint32_t monitor_esd_flag;
 	/*wxm modify end by 2023/12/5*/

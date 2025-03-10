@@ -215,6 +215,7 @@ extern int32_t aw_sar_i2c_read_seq(struct i2c_client *i2c, uint8_t *addr, uint8_
 extern void aw_sar_delay_ms(uint32_t ms);
 
 extern int aw_sar_parsing_bin_file(struct aw_bin *bin);
+extern int aw_sar_parsing_bin_file_new(struct aw_bin *bin);
 extern uint32_t aw_sar_pow2(uint32_t cnt);
 extern int32_t aw_sar_load_reg(struct aw_bin *aw_bin, struct i2c_client *i2c);
 
