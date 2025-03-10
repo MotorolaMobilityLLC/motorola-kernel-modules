@@ -35,7 +35,6 @@ struct battery_glink_dev {
 	int			first_usage_date;
 	char batt_sn[MMI_BATT_SN_LEN];
 	struct notifier_block	batt_nb;
-	char			*batt_uenvp[2];
 
 	struct timespec64 glink_access_time;
 	uint32_t elapsed_ms;

@@ -347,9 +347,16 @@ free_map:
 	return rc;
 }
 
-static void battery_notify_flip_uevent(struct battery_info *batt_info, int type)
+typedef struct {
+	const char *name;
+	int value;
+} uEnvpVar;
+
+static void battery_notify_flip_uevent(struct battery_info *batt_info)
 {
-	char *event_string = NULL;
+	int num_vars = 0, i = 0;
+	char **uenvp_ext = NULL;
+	char *uenvp_strings = NULL;
 	struct battery_host *batt_host = NULL;
 	struct power_supply *batt_psy = NULL;
 	struct battery_glink_dev *batt_chip = NULL;
@@ -370,56 +377,45 @@ static void battery_notify_flip_uevent(struct battery_info *batt_info, int type)
 		return;
 	}
 
-	event_string = kmalloc(CHG_SHOW_MAX_SIZE, GFP_KERNEL);
-	if (!event_string) {
+	uEnvpVar uenvp_vars[] = {
+		{"POWER_SUPPLY_FLIP_BATT_SOC", batt_info->batt_soc},
+		{"POWER_SUPPLY_FLIP_VOLTAGE_NOW", batt_info->batt_uv},
+		{"POWER_SUPPLY_FLIP_TEMP", batt_info->batt_temp},
+		{"POWER_SUPPLY_FLIP_CYCLE_COUNT", batt_info->batt_cycle},
+		{"POWER_SUPPLY_FLIP_CHARGE_FULL", batt_info->batt_full_uah},
+		{"POWER_SUPPLY_FLIP_STATE_OF_HEALTH", batt_info->batt_soh}
+	};
+
+	num_vars = sizeof(uenvp_vars) / sizeof(uenvp_vars[0]);
+
+	uenvp_ext = kmalloc((num_vars + 1) * sizeof(char *), GFP_KERNEL);
+	if (!uenvp_ext) {
+		mmi_err(this_root_chip, "Failed to kmalloc the uenvp_ext");
+		return;
+	}
+
+	uenvp_strings = kmalloc(CHG_SHOW_MAX_SIZE * num_vars, GFP_KERNEL);
+	if (!uenvp_strings) {
 		mmi_err(this_root_chip, "Failed to kmalloc the event_string");
+		kfree(uenvp_ext);
 		return;
 	}
 
-	switch (type) {
-	case NOTIFY_EVENT_TYPE_FLIP_CAPACITY:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_BATT_SOC=%d",
-			batt_info->batt_soc);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_VOLTAGE_NOW=%d",
-			batt_info->batt_uv);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_TEMP:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_TEMP=%d",
-			batt_info->batt_temp);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_CYCLE_COUNT=%d",
-			batt_info->batt_cycle);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_CHARGE_FULL=%d",
-			batt_info->batt_full_uah);
-		break;
-	case NOTIFY_EVENT_TYPE_FLIP_SOH:
-		scnprintf(event_string, CHG_SHOW_MAX_SIZE,
-			"POWER_SUPPLY_FLIP_STATE_OF_HEALTH=%d",
-			batt_info->batt_soh);
-		break;
-	default:
-		mmi_err(this_root_chip, "Invalid notify event type %d\n", type);
-		kfree(event_string);
-		return;
+	for (i = 0; i < num_vars; i++) {
+		uenvp_ext[i] = uenvp_strings + i * CHG_SHOW_MAX_SIZE;
+		scnprintf(uenvp_ext[i], CHG_SHOW_MAX_SIZE, "%s=%d", uenvp_vars[i].name, uenvp_vars[i].value);
+	}
+	uenvp_ext[num_vars] = NULL;
+	kobject_uevent_env(&batt_psy->dev.kobj, KOBJ_CHANGE, uenvp_ext);
+
+	if (uenvp_strings) {
+		kfree(uenvp_strings);
 	}
 
-	if (batt_chip->batt_uenvp[0])
-		kfree(batt_chip->batt_uenvp[0]);
-	batt_chip->batt_uenvp[0] = event_string;
-	batt_chip->batt_uenvp[1] = NULL;
-	kobject_uevent_env(&batt_psy->dev.kobj,
-				KOBJ_CHANGE,
-				batt_chip->batt_uenvp);
+	if (uenvp_ext) {
+		kfree(uenvp_ext);
+	}
+
 	return;
 }
 
@@ -431,12 +427,7 @@ static void battery_notify_charger_uevent(BATT_ROLE batt_role, struct battery_in
 		return;
 
 	if (batt_info->batt_soc != batt_info_save.batt_soc) {
-		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_CAPACITY);
-		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_VOLTAGE_NOW);
-		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_TEMP);
-		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_CHARGE_FULL);
-		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_SOH);
-		battery_notify_flip_uevent(batt_info, NOTIFY_EVENT_TYPE_FLIP_CYCLE_COUNT);
+		battery_notify_flip_uevent(batt_info);
 	}
 
 	return;
