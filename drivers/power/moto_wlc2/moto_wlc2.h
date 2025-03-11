@@ -123,9 +123,6 @@ typedef enum {
 #define WLC_DEBUG_LEVEL	3
 
 #define CHARGER_STATE_NUM 8
-static int wlc_state_to_current_limit[CHARGER_STATE_NUM] = {
-	-1, 2500000, 2000000, 1500000, 1200000, 1000000, 700000, 500000
-};
 
 extern int wlc_get_debug_level(void);
 #define wlc_err(fmt, args...)					\
