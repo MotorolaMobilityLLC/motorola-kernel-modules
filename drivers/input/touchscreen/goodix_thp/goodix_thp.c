@@ -1010,6 +1010,9 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
 	case 0xCC: //double tap
 		ts_info("get gesture event: Double tap");
 		mmi_event.evcode =4;
+		mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
+		mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
+
 		core_data->imports->report_gesture(&mmi_event);
 		break;
 	case 0x63: // C
@@ -1083,6 +1086,8 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
 	case 0x4C: // single tap
 		ts_info("get gesture event: single tap");
 		mmi_event.evcode =1;
+		mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
+		mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
 		core_data->imports->report_gesture(&mmi_event);
 		break;
 	default:
@@ -1090,6 +1095,7 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
 		break;
 	}
 
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
 	for (i = 0; i < ges_num; i++) {
 		coor_x = le16_to_cpup((__le16 *)&temp_data[8 + i * 4]);
 		coor_y = le16_to_cpup((__le16 *)&temp_data[10 + i * 4]);
@@ -1108,6 +1114,7 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
 		input_report_key(g_thp_input_agent->input_dev, BTN_TOUCH, 0);
 		input_sync(g_thp_input_agent->input_dev);
 	}
+#endif
 
 	goto exit;
 
