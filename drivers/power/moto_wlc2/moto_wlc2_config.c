@@ -40,6 +40,7 @@
 #include <linux/mmi_wireless_class.h>
 #include "moto_wlc2.h"
 
+extern int wlc_state_to_current_limit[];
 
 struct tags_bootmode {
 	uint32_t size;

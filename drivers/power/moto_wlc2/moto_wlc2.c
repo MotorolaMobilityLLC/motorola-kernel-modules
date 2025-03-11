@@ -40,6 +40,9 @@
 #include <linux/thermal.h>
 
 static int wlc_dbg_level = WLC_DEBUG_LEVEL;
+int wlc_state_to_current_limit[CHARGER_STATE_NUM] = {
+	-1, 2500000, 2000000, 1500000, 1200000, 1000000, 700000, 500000
+};
 
 int wlc_get_debug_level(void)
 {
