@@ -1899,7 +1899,7 @@ static int mm8xxx_battery_capacity_level(struct mm8xxx_device_info *di,
 		level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 
 	val->intval = level;
-
+	dev_err(di->dev, "jiacq---mm8013c--capacity_level = %d\n",val->intval);
 	return 0;
 }
 
