@@ -1544,7 +1544,10 @@ int ovt_gesture_suspend(struct ovt_tcm_hcd *tcm_hcd)
 
 	OVT_FUNC_ENTER();
 	if (tcm_hcd->wakeup_gesture_enabled) {
+
+#ifndef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
 		unsigned short gesture_cmd = 0;
+#endif
 
 		if (!touch_hcd->irq_wake) {
 			enable_irq_wake(tcm_hcd->irq);
@@ -1553,6 +1556,7 @@ int ovt_gesture_suspend(struct ovt_tcm_hcd *tcm_hcd)
 
 		touch_hcd->suspend_touch = false;
 
+#ifndef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
 		retval = tcm_hcd->set_dynamic_config(tcm_hcd, DC_IN_WAKEUP_GESTURE_MODE, 1);
 		if (retval < 0) {
 			OVT_ERROR("Failed to enable wakeup gesture mode\n");
@@ -1573,8 +1577,11 @@ int ovt_gesture_suspend(struct ovt_tcm_hcd *tcm_hcd)
 			OVT_ERROR("Failed to set gesture_cmd: 0x%hx\n", gesture_cmd);
 		else
 			OVT_INFO("set gesture_cmd: 0x%hx for mode:%d\n", gesture_cmd, tcm_hcd->wakeup_gesture_enabled);
+#endif
 
 		touch_set_state(TOUCH_LOW_POWER_STATE, TOUCH_PANEL_IDX_PRIMARY);
+
+#ifndef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
 #ifdef OVT_STOWED_MODE_SUPPORT
 		if (g_tcm_hcd->get_stowed) {
 			retval = ovt_tcm_sleep(tcm_hcd, 1);
@@ -1586,6 +1593,8 @@ int ovt_gesture_suspend(struct ovt_tcm_hcd *tcm_hcd)
 			}
 		}
 #endif
+#endif
+
 		//OVT_INFO("gesture enable mode:%d\n", tcm_hcd->wakeup_gesture_enabled);
 	}
 	else {

@@ -124,6 +124,10 @@ EXPORT_SYMBOL(ovt_tcm_set_func_roate_horizontal_level_en_state);
 
 int ovt_tcm_sleep(struct ovt_tcm_hcd *tcm_hcd, bool en);
 
+#ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
+static int ovt_disp_gesture_notifier_callback(struct notifier_block *nb, unsigned long value, void *v);
+#endif
+
 #define dynamic_config_sysfs(c_name, id) \
 static ssize_t ovt_tcm_sysfs_##c_name##_show(struct device *dev, \
 		struct device_attribute *attr, char *buf) \
@@ -4989,6 +4993,59 @@ void ovt_apply_gesture_mode(void)
 	}
 }
 
+#ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
+static int ovt_disp_gesture_notifier_callback(struct notifier_block *nb, unsigned long value, void *v)
+{
+	int retval = 0;
+	unsigned short gesture_cmd = 0;
+
+	OVT_INFO("gesture event is %lu, wakeup_gesture_enabled is %d\n", value, g_tcm_hcd->wakeup_gesture_enabled);
+
+	if (0x01 == value) {
+		if (g_tcm_hcd->wakeup_gesture_enabled) {
+			LOGE(g_tcm_hcd->pdev->dev.parent,
+					"set gesture mode\n");
+			retval = g_tcm_hcd->set_dynamic_config(g_tcm_hcd,
+				DC_IN_WAKEUP_GESTURE_MODE,
+				1);
+			if(g_tcm_hcd->wakeup_gesture_enabled == 1) {
+				gesture_cmd = 0x8000;//single tap
+			} else if(g_tcm_hcd->wakeup_gesture_enabled == 2) {
+				gesture_cmd = 0x0001;//double
+			} else if(g_tcm_hcd->wakeup_gesture_enabled == 3) {
+				gesture_cmd = 0x8001;//all
+			} else
+				LOGE(g_tcm_hcd->pdev->dev.parent,
+					"invalid gesture mode\n");
+
+			retval = g_tcm_hcd->set_dynamic_config(g_tcm_hcd,
+				0xFE,
+				gesture_cmd);
+			if (retval < 0) {
+				LOGE(g_tcm_hcd->pdev->dev.parent,
+					"Failed to enable wakeup gesture mode %hu\n", gesture_cmd);
+			}
+			else
+				OVT_INFO("set gesture_cmd: 0x%hx for mode:%d\n", gesture_cmd, g_tcm_hcd->wakeup_gesture_enabled);
+#ifdef OVT_STOWED_MODE_SUPPORT
+			if (g_tcm_hcd->get_stowed) {
+				retval = ovt_tcm_sleep(g_tcm_hcd, 1);
+				if (retval < 0)
+					OVT_INFO("fail to enable stowed mode when supsend\n");
+				else {
+					g_tcm_hcd->set_stowed = g_tcm_hcd->get_stowed;
+					OVT_INFO("Enable stowed mode when suspend\n");
+				}
+			}
+#endif
+		}
+		else
+			OVT_INFO("gesture disable, touch deep sleep state\n");
+	}
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_OVT_SELFTEST_ENABLE
 static void touch_info_node_init(void)
 {
@@ -5263,6 +5320,16 @@ static int ovt_tcm_probe(struct platform_device *pdev)
 #endif
 #endif
 
+#ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
+	tcm_hcd->disp_gesture_notifier.notifier_call = ovt_disp_gesture_notifier_callback;
+	retval = panel_gesture_register_client("OVT gesture Touch", &tcm_hcd->disp_gesture_notifier);
+	if (retval < 0) {
+		LOGE(tcm_hcd->pdev->dev.parent, "Failed to register disp notifier client\n");
+		if (panel_gesture_unregister_client(&tcm_hcd->disp_gesture_notifier))
+			LOGE(tcm_hcd->pdev->dev.parent, "Error occurred while unregistering disp_gesture_notifier\n");
+}
+#endif
+
 #ifdef REPORT_NOTIFIER
 	tcm_hcd->notifier_thread = kthread_run(ovt_tcm_report_notifier,
 			tcm_hcd, "ovt_tcm_report_notifier");
@@ -5383,6 +5450,10 @@ err_create_run_kthread:
 #elif CONFIG_FB
 	fb_unregister_client(&tcm_hcd->fb_notifier);
 #endif
+#endif
+
+#ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
+	panel_gesture_unregister_client(&tcm_hcd->disp_gesture_notifier);
 #endif
 
 err_sysfs_create_dynamic_config_file:
@@ -5516,6 +5587,10 @@ static int ovt_tcm_remove(struct platform_device *pdev)
 #elif CONFIG_FB
 	fb_unregister_client(&tcm_hcd->fb_notifier);
 #endif
+#endif
+
+#ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
+	panel_gesture_unregister_client(&tcm_hcd->disp_gesture_notifier);
 #endif
 
 	for (idx = 0; idx < ARRAY_SIZE(dynamic_config_attrs); idx++) {

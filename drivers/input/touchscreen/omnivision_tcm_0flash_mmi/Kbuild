@@ -53,6 +53,12 @@ ifneq ($(filter m y, $(CONFIG_OMN_LOG_CAPTURE)),)
         EXTRA_CFLAGS += -DCONFIG_OVT_LOG_CAPTURE
 endif
 
+ifneq ($(filter m y,$(CONFIG_OVT_PANEL_GESTURE_NOTIFY_SUPPORT)),)
+	EXTRA_CFLAGS += \
+		-I$(DEVICE_MODULES_PATH)/kernel-5.10/drivers/gpu/drm/panel/include
+	EXTRA_CFLAGS += -DOVT_PANEL_GESTURE_NOTIFY_SUPPORT
+endif
+
 ifneq ($(filter m y,$(CONFIG_SUPPORT_MULTI_FIRMWARE)),)
         EXTRA_CFLAGS += -DCONFIG_SUPPORT_MULTI_FIRMWARE
 endif

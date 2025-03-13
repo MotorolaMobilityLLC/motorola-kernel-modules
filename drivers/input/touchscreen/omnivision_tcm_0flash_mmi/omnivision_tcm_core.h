@@ -636,6 +636,9 @@ struct ovt_tcm_hcd {
 	struct notifier_block notifier_charger;
 	bool charger_plugin;
 #endif
+#ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
+	struct notifier_block disp_gesture_notifier;
+#endif
 	struct ovt_tcm_buffer in;
 	struct ovt_tcm_buffer out;
 	struct ovt_tcm_buffer resp;
@@ -944,6 +947,13 @@ extern int ovt_tcm_request_gpio(struct ovt_tcm_hcd *tcm_hcd, int gpio, bool conf
 // extern int ovt_start_charger_detect(struct ovt_tcm_hcd *tcm_hcd);
 // extern int ovt_stop_charger_detect(struct ovt_tcm_hcd *tcm_hcd);
 int  charger_module_init(void);
+
+#ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
+extern int __attribute__ ((weak)) panel_gesture_register_client(const char *source, struct notifier_block *nb);
+extern int __attribute__ ((weak)) panel_gesture_unregister_client(struct notifier_block *nb);
+extern int __attribute__ ((weak)) panel_gesture_notifier_call_chain(unsigned long val, void *v);
+#endif
+
 #endif
 
 #endif
