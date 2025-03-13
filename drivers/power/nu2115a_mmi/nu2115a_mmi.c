@@ -652,6 +652,12 @@ static int __nu2115_set_irqmask(struct nu2115 *chip, u8 addr, u8 mask)
 	return ret;
 }
 
+static int __nu2115_reg_reset(struct nu2115 *chip)
+{
+	return __nu2115_update_bits(chip, NU2115_REG_0D,
+			NU2115_REG_RST_MASK, NU2115_REG_RST_MASK);
+}
+
 /*
  * check stat and flag regs for IC status
  */
@@ -811,6 +817,28 @@ static void nu2115_check_status_flags(struct nu2115 *chip)
 
 }
 
+/*
+ * check ACDRV bit
+ */
+static int __nu2115_check_acdrv_bit(struct nu2115 *chip)
+{
+	int ret;
+	u8 val = 0;
+
+	ret = __nu2115_read(chip, NU2115_REG_2F, &val);
+
+	if (ret >= 0) {
+		val = val & NU2115_DIS_ACDRV_MASK;
+		if (val) {
+			ret = __nu2115_update_bits(chip, NU2115_REG_2F,	NU2115_DIS_ACDRV_MASK, 0);
+			dev_err(chip->dev, "%s:set dis_acdrv = %d\n", __func__, val);
+			if (ret)
+				dev_err(chip->dev, "%s: disable dis_acdrv fail ret=%d", __func__, ret);
+		}
+	}
+
+	return ret;
+}
 
 static irqreturn_t nu2115_irq_handler(int irq, void *data)
 {
@@ -819,6 +847,7 @@ static irqreturn_t nu2115_irq_handler(int irq, void *data)
 	dev_err(chip->dev, "nu2115_irq_handler do\n");
 	mutex_lock(&chip->irq_lock);
 	nu2115_check_status_flags(chip);
+	__nu2115_check_acdrv_bit(chip);
 	mutex_unlock(&chip->irq_lock);
 
 	return IRQ_HANDLED;
@@ -1150,6 +1179,19 @@ static int nu2115_reset_vbusovp_alarm(struct charger_device *chg_dev)
 	return 0;
 }
 
+static int nu2115_init_device(struct nu2115 *chip)
+{
+	int ret = 0;
+
+	ret = __nu2115_reg_reset(chip);
+	if (ret < 0) {
+		dev_err(chip->dev, "Failed to reset registers(%d)\n", ret);
+	}
+	msleep(10);
+
+	return ret;
+}
+
 static int nu2115_init_chip(struct charger_device *chg_dev)
 {
 	return 0;
@@ -1210,6 +1252,7 @@ static int nu2115_enable_otg(struct charger_device *chg_dev, bool enable)
 	struct nu2115 *chip = charger_get_data(chg_dev);
 	int ret = 0;
 	u8 val;
+	u8 val1;
 
 	dev_err(chip->dev, "%s enter\n", __func__);
 
@@ -1218,10 +1261,23 @@ static int nu2115_enable_otg(struct charger_device *chg_dev, bool enable)
 	else
 		val = NU2115_OTG_DISABLE;
 
+
+	ret = __nu2115_read(chip, NU2115_REG_2F, &val1);
+	if (ret >= 0) {
+		val1 = val1 & NU2115_EN_OTG_MASK;
+		if (val == val1) {
+			dev_err(chip->dev, "%s find otg bit no change, return.\n", __func__);
+			__nu2115_check_acdrv_bit(chip);
+			return ret;
+		}
+	}
+
 	val <<= NU2115_EN_OTG_SHIFT;
 
 	ret = __nu2115_update_bits(chip, NU2115_REG_2F,
 				NU2115_EN_OTG_MASK, val);
+
+	__nu2115_check_acdrv_bit(chip);
 
 	return ret;
 }
@@ -1399,8 +1455,11 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 	}
 
 	ret = __nu2115_read(bq, NU2115_REG_2F, &val);
-	if (ret >= 0)
+	if (ret >= 0) {
 		dev_err(bq->dev, "%s:mmi_mux [Reg NU2115_REG_2F] = 0x%02X\n", __func__,val);
+	}
+	__nu2115_check_acdrv_bit(bq);
+
 	ret = __nu2115_read(bq, NU2115_REG_30, &val);
 	if (ret >= 0)
 		dev_err(bq->dev, "%s:mmi_mux [Reg NU2115_REG_30] = 0x%02X\n", __func__, val);
@@ -1817,11 +1876,14 @@ static int nu2115_hw_init(struct nu2115 *chip)
 	ret = __nu2115_update_bits(chip, NU2115_REG_32,
 		NU2115_PMID2VOUT_UVP_MASK|NU2115_PMID2VOUT_OVP_MASK, 0xF0);
 
-	ret =  __nu2115_write(chip, NU2115_REG_02, 0xB2);
-	ret =  __nu2115_write(chip, NU2115_REG_03, 0xBE);
-	ret =  __nu2115_write(chip, NU2115_REG_04, 0x80);
+	ret =  __nu2115_write(chip, NU2115_REG_00, 0x80);//BATOVP 0x80:disable
+	ret =  __nu2115_write(chip, NU2115_REG_01, 0x80);//BATOVP_ALM 0x80:disable
+	ret =  __nu2115_write(chip, NU2115_REG_02, 0x80);//BATOCP 0x80:disable
+	ret =  __nu2115_write(chip, NU2115_REG_03, 0x80);//BATOCP_ALM 0x80:disable
+	ret =  __nu2115_write(chip, NU2115_REG_04, 0x80);//BATUCP_ALM 0x80:disable
+	ret =  __nu2115_write(chip, NU2115_REG_0A, 0x80);//BUSOCP_ALM 0x80:disable
 	ret =  __nu2115_write(chip, NU2115_REG_0E, 0x06);
-
+	ret =  __nu2115_write(chip, NU2115_REG_2F, 0x00);
 	ret =  __nu2115_write(chip, NU2115_REG_35, 0xC0);
 	/* clear irqs */
 	nu2115_check_status_flags(chip);
@@ -1918,6 +1980,12 @@ static int nu2115_probe(struct i2c_client *client,
 		return ret;
 	}
 
+	ret = nu2115_init_device(chip);
+	if (ret < 0) {
+		dev_err(&client->dev, "nu2115_init_device failed\n");
+		return ret;
+	}
+
 	ret = nu2115_hw_init(chip);
 	if (ret) {
 		dev_err(&client->dev, "nu2115_hw_init failed.\n");
@@ -1953,6 +2021,7 @@ static int nu2115_probe(struct i2c_client *client,
 
 	g_dev = chip;
 	dev_err(&client->dev, "nu2115_charger probe OK.\n");
+	__nu2115_dump_register(chip);
 
 	return ret;
 }
@@ -1964,6 +2033,16 @@ static int nu2115_remove(struct i2c_client *client)
 	charger_device_unregister(chip->chg_dev);
 
 	return 0;
+}
+
+static void nu2115_shutdown(struct i2c_client *client)
+{
+	struct nu2115 *chip = i2c_get_clientdata(client);
+
+	/*reg reset*/
+	__nu2115_reg_reset(chip);
+
+	dev_err(chip->dev,"Shutdown Successfully\n");
 }
 
 static const struct of_device_id nu2115_of_match[] = {
@@ -1979,6 +2058,7 @@ static const struct i2c_device_id nu2115_i2c_id[] = {
 static struct i2c_driver nu2115_driver = {
 	.probe = nu2115_probe,
 	.remove = nu2115_remove,
+	.shutdown = nu2115_shutdown,
 	.driver = {
 		.name = "nu2115",
 		.of_match_table = nu2115_of_match,
