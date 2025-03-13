@@ -42,6 +42,8 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_fw_version_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -54,6 +56,7 @@ static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	goodix_ts_stowed_show, goodix_ts_stowed_store);
 static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
+static DEVICE_ATTR(fw_version, S_IRUGO, goodix_ts_fw_version_show, NULL);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -101,6 +104,8 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 		ADD_ATTR(stowed);
 
 	ADD_ATTR(timestamp);
+
+	ADD_ATTR(fw_version);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -460,6 +465,34 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 	mutex_unlock(&core_data->mode_lock);
 
 	return scnprintf(buf, PAGE_SIZE, "%lld.%lld\n", last_ts.tv_sec, last_ts.tv_usec);
+}
+
+static ssize_t goodix_ts_fw_version_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct thp_ts_device *ts_dev = core_data->ts_dev;
+	u32 cfg_id;
+	int ret;
+	char version[32] = {0};
+
+	/* minor firmware version */
+    snprintf(&version[0], sizeof(version),
+				"%02X.%02X.%02X.%02X",
+				version_info.patch_vid[0], version_info.patch_vid[1],
+				version_info.patch_vid[2], version_info.patch_vid[3]);
+	ts_info("fw version data %s", version);
+
+	ret = ts_dev->hw_ops->read(ts_dev, TOUCH_CFG_VERSION_ADDR,
+	        (u8*)&cfg_id, sizeof(cfg_id));
+	if (ret) {
+	    ts_info("failed get fw config version data, %d", ret);
+	    return -EINVAL;
+	}
+	ts_info("fw config version data %04x", cfg_id);
+
+	return scnprintf(buf, PAGE_SIZE, "%s - %04x",
+            version, cfg_id);
 }
 
 static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)

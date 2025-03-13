@@ -124,18 +124,6 @@ struct goodix_flash_cmd {
 		u8 buf[16];
 	};
 };
-
-struct goodix_version_info {
-	u8 rom_pid[6];               /* rom PID */
-	u8 rom_vid[3];               /* Mask VID */
-	u8 rom_vid_reserved;
-	u8 patch_pid[8];              /* Patch PID */
-	u8 patch_vid[4];              /* Patch VID */
-	u8 patch_vid_reserved;
-	u8 sensor_id;
-	u8 reserved[2];
-	u16 checksum;
-};
 #pragma pack()
 
 

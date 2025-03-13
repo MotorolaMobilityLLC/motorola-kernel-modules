@@ -173,6 +173,8 @@
 #define INPUT_AGENT_IOCTL_GET_DRIVER_STATE \
 	_IOR(INPUT_AGENT_IO_TYPE, 0x06, u32)
 
+#define TOUCH_CFG_VERSION_ADDR 0x10076
+
 enum {
 	REQUEST_TYPE_FRAME = 1,
 	REQUEST_TYPE_CMD,
@@ -215,6 +217,18 @@ struct driver_request_pkg {
 	uint32_t size;
 	struct driver_request_app_pkg request;
 };
+
+struct goodix_version_info {
+    u8 rom_pid[6];               /* rom PID */
+    u8 rom_vid[3];               /* Mask VID */
+    u8 rom_vid_reserved;
+    u8 patch_pid[8];              /* Patch PID */
+    u8 patch_vid[4];              /* Patch VID */
+    u8 patch_vid_reserved;
+    u8 sensor_id;
+    u8 reserved[2];
+    u16 checksum;
+};
 #pragma pack(pop)
 
 struct thp_ioctl_frame {
@@ -255,7 +269,7 @@ enum {
 struct thp_ioctl_tsc_msg {
 	u32 cmd;
 	u16 len;
-	u8 value[64];
+	u8 value[128];
 };
 
 struct thp_ioctl_update_info {
@@ -451,6 +465,7 @@ static inline struct goodix_thp_board_data *board_data(
 extern uint32_t goodix_frame_reg;
 extern uint32_t goodix_cmd_reg;
 extern struct goodix_thp_core *gdix_thp_core;
+extern struct goodix_version_info version_info;
 
 void goodix_thp_reset(struct thp_ts_device *ts_dev, int delay_ms);
 int goodix_thp_set_spi_speed(struct thp_ts_device *dev, u32 speed);
