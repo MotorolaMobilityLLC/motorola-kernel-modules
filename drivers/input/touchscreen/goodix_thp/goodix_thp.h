@@ -45,11 +45,11 @@
 #endif
 
 /* macros definition */
-#define GOODIX_THP_DRIVER_VERSION                       "1.1.1.5"
-#define GOODIX_THP_DRIVER_NAME				"goodix_thp,gt9916"
-#define GOODIX_CORE_DRIVER_NAME				"goodix_thp"
-#define GOODIX_THP_SUSPEND_INPUT_DEVICE_NAME	        "goodix_suspend_input"
-#define GOODIX_THP_INPUT_DEVICE_NAME			"goodix_ts"
+#define GOODIX_THP_DRIVER_VERSION                       "1.0.2.3"
+#define GOODIX_THP_DRIVER_NAME                          "goodix_thp,gt9916"
+#define GOODIX_CORE_DRIVER_NAME                         "goodix_thp"
+#define GOODIX_THP_STYLUS_INPUT_DEVICE_NAME             "goodix_stylus_input"
+#define GOODIX_THP_INPUT_DEVICE_NAME                    "gdix_input_agent"
 
 /*chip_type*/
 #define CHIP_TYPE_9897                                  1
@@ -57,23 +57,23 @@
 #define CHIP_TYPE_9966                                  3
 #define CHIP_TYPE_9615                                  4
 
-#define GOODIX_THP_MAX_FRAME_LEN			(10 * 1024)
-#define GOODIX_THP_MAX_TRANS_DATA_LEN			(4096 * 32)
-#define GOODIX_THP_MAX_FRAME_BUF_COUNT			20
+#define GOODIX_THP_MAX_FRAME_LEN                        (10 * 1024)
+#define GOODIX_THP_MAX_TRANS_DATA_LEN                   (4096 * 32)
+#define GOODIX_THP_MAX_FRAME_BUF_COUNT                  20
 #define GOODIX_THP_CUSTOM_INFO_LEN                      10
 #define GOODIX_MAX_STR_LABLE_LEN                        32
 #define GOODIX_THP_REQUEST_APP_SIZE                     12
 
-#define GOODIX_THP_DEFATULT_WAIT_FRAME_TIME		2500
+#define GOODIX_THP_DEFATULT_WAIT_FRAME_TIME             2500
 
 /* cmd definition */
 //TODO:to confirm
-#define CMD_SLEEP                    			0x84
-#define CMD_GESTURE                  			0xA6
-#define CMD_EXIT_GESTURE             			0xA7
-#define CMD_RAWDATA                  			0x90
-#define CMD_TOUCH_REPORT             			0x91
-#define CMD_ACTIVE_SCAN_RATE         			0x9D
+#define CMD_SLEEP                                       0x84
+#define CMD_GESTURE                                     0xA6
+#define CMD_EXIT_GESTURE                                0xA7
+#define CMD_RAWDATA                                     0x90
+#define CMD_TOUCH_REPORT                                0x91
+#define CMD_ACTIVE_SCAN_RATE                            0x9D
 
 /* 9897 reg definition */
 #define REG_INT_REPORT_TYPE_FLAG_9897                   0x101A0
@@ -115,8 +115,10 @@
 #define INPUT_AGENT_MAX_FINGERS			        10
 #define INPUT_AGENT_MAX_STYLUS			        1
 #define INPUT_AGENT_MAX_POINTS  ((INPUT_AGENT_MAX_FINGERS) + (INPUT_AGENT_MAX_STYLUS))
+#define STYLUS_TRACK_ID                                 10
 #define GOODIX_THP_MAX_TIMEOUT				5000u
 #define GOODIX_SPI_SPEED_WAKEUP				3500
+#define GOODIX_PEN_MAX_TILT				90
 
 #define GESTURE_DATA_HEAD_LEN				8
 #define GESTURE_TYPE_LEN				32
@@ -132,13 +134,13 @@
 /* ioctl cmd for afehal */
 #define IO_TYPE	 (0xB8)
 #define IOCTL_CMD_GET_FRAME \
-		_IOWR(IO_TYPE, 0x01, struct thp_ioctl_frame)
+                _IOWR(IO_TYPE, 0x01, struct thp_ioctl_frame)
 #define IOCTL_CMD_SET_RESET_VALUE			_IOW(IO_TYPE, 0x02, u32)
 #define IOCTL_CMD_SET_WAIT_TIME				_IOW(IO_TYPE, 0x03, u32)
 #define IOCTL_CMD_SPI_TRANS \
-		_IOWR(IO_TYPE, 0x04, struct thp_ioctl_spi_trans_data)
+                _IOWR(IO_TYPE, 0x04, struct thp_ioctl_spi_trans_data)
 #define IOCTL_CMD_NOTIFY_UPDATE \
-		_IOW(IO_TYPE, 0x05, struct thp_ioctl_update_info)
+                _IOW(IO_TYPE, 0x05, struct thp_ioctl_update_info)
 #define IOCTL_CMD_SET_WAIT_MODE				_IOW(IO_TYPE, 0x06, u32)
 
 #define IOCTL_CMD_IRQ_ENABLE				_IOW(IO_TYPE, 0x07, u32)
@@ -149,171 +151,160 @@
 #define IOCTL_CMD_SET_STATE_CHANGE_FLAG		        _IOW(IO_TYPE, 0x0C, u32)
 #define IOCTL_CMD_SET_SPI_SPEED				_IOW(IO_TYPE, 0x0D, u32)
 #define IOCTL_CMD_MUILT_SPI_TRANS \
-		_IOWR(IO_TYPE, 0x0E, struct thp_ioctl_multi_spi_trans_data)
+                _IOWR(IO_TYPE, 0x0E, struct thp_ioctl_multi_spi_trans_data)
 #define IOCTL_CMD_ENTER_SUSPEND				_IOW(IO_TYPE, 0x0F, u32)
 #define IOCTL_CMD_ENTER_RESUME				_IO(IO_TYPE, 0x10)
 #define IOCTL_CMD_RECV_TSC_MSG \
-		_IOW(IO_TYPE, 0x11, struct thp_ioctl_tsc_msg)
+                _IOW(IO_TYPE, 0x11, struct thp_ioctl_tsc_msg)
 #define IOCTL_CMD_GET_CHIP_TYPE                         _IOR(IO_TYPE, 0x12, u32)
 #define IOCTL_CMD_SET_TOOL_OPS                          _IOW(IO_TYPE, 0x14, u32)
 
 /* ioctl cmd for daemon */
 #define INPUT_AGENT_IO_TYPE  (0xB9)
 #define INPUT_AGENT_IOCTL_CMD_SET_COOR \
-	_IOWR(INPUT_AGENT_IO_TYPE, 0x01, \
-		struct thp_input_agent_ioctl_coor_data)
+        _IOWR(INPUT_AGENT_IO_TYPE, 0x01, \
+                struct thp_input_agent_ioctl_coor_data)
 #define INPUT_AGENT_IOCTL_READ_STATUS \
-	_IOR(INPUT_AGENT_IO_TYPE, 0x02, u32)
+        _IOR(INPUT_AGENT_IO_TYPE, 0x02, u32)
 #define INPUT_AGENT_IOCTL_CMD_SET_EVENTS \
-	_IOR(INPUT_AGENT_IO_TYPE, 0x03, u32)
+        _IOR(INPUT_AGENT_IO_TYPE, 0x03, u32)
 #define INPUT_AGENT_IOCTL_CMD_GET_EVENTS \
-	_IOR(INPUT_AGENT_IO_TYPE, 0x04, u32)
+        _IOR(INPUT_AGENT_IO_TYPE, 0x04, u32)
 #define INPUT_AGENT_IOCTL_GET_CUSTOM_INFO \
-	_IOR(INPUT_AGENT_IO_TYPE, 0x05, u32)
+        _IOR(INPUT_AGENT_IO_TYPE, 0x05, u32)
 #define INPUT_AGENT_IOCTL_GET_DRIVER_STATE \
-	_IOR(INPUT_AGENT_IO_TYPE, 0x06, u32)
+        _IOR(INPUT_AGENT_IO_TYPE, 0x06, u32)
 
-#define TOUCH_CFG_VERSION_ADDR 0x10076
+typedef enum {
+        REQUEST_TYPE_FRAME = 1,
+        REQUEST_TYPE_CMD,
+        REQUEST_TYPE_NOTIFY,
+        REQUEST_TYPE_SEND_CFG,
+        REQUEST_TYPE_GET_CFG,
+        REQUEST_TYPE_GET_DATA
+} REQUEST_TYPE_T;
 
-enum {
-	REQUEST_TYPE_FRAME = 1,
-	REQUEST_TYPE_CMD,
-	REQUEST_TYPE_NOTIFY,
-	REQUEST_TYPE_SEND_CFG,
-	REQUEST_TYPE_GET_CFG,
-	REQUEST_TYPE_GET_DATA
-};
-
-#define NOTIFY_TYPE_SCREEN 1
-#define NOTIFY_TYPE_CHARGE 2
-#define NOTIFY_TYPE_GESTURE 3
-#define NOTIFY_TYPE_TSD_CTRL 4
-#define NOTIFY_TYPE_DUMP_REP 5
-#define NOTIFY_TYPE_STYLUS_CTRL 6
-#define NOTIFY_TYPE_RAWDATA 7
-#define NOTIFY_TYPE_LOGTOFILE 8
-#define NOTIFY_TYPE_SAVE_MOTO_DATA 9
+typedef enum {
+        NOTIFY_TYPE_SCREEN = 1,
+        NOTIFY_TYPE_CHARGE,
+        NOTIFY_TYPE_GESTURE,
+        NOTIFY_TYPE_TSD_CTRL,
+        NOTIFY_TYPE_DUMP_REP,
+        NOTIFY_TYPE_STYLUS_CTRL,
+        NOTIFY_TYPE_RAWDATA,
+        NOTIFY_TYPE_LOGTOFILE,
+        NOTIFY_TYPE_SPECIAL_AREA,
+} NOTIFY_TYPE_T;
 
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
-	uint32_t id;
-	uint32_t type;
-	uint32_t status;
-	uint8_t data[0];
+        uint32_t id;
+        uint32_t type;
+        uint32_t status;
+        uint8_t data[0];
 };
 
 struct driver_response_pkg {
-	uint32_t size;
-	struct driver_response_app_pkg response;
+        uint32_t size;
+        struct driver_response_app_pkg response;
 };
 
 struct driver_request_app_pkg {
-	uint32_t id;
-	uint32_t type;
-	uint8_t data[0];
+        uint32_t id;
+        uint32_t type;
+        uint8_t data[0];
 };
 
 struct driver_request_pkg {
-	uint32_t size;
-	struct driver_request_app_pkg request;
-};
-
-struct goodix_version_info {
-    u8 rom_pid[6];               /* rom PID */
-    u8 rom_vid[3];               /* Mask VID */
-    u8 rom_vid_reserved;
-    u8 patch_pid[8];              /* Patch PID */
-    u8 patch_vid[4];              /* Patch VID */
-    u8 patch_vid_reserved;
-    u8 sensor_id;
-    u8 reserved[2];
-    u16 checksum;
+        uint32_t size;
+        struct driver_request_app_pkg request;
 };
 #pragma pack(pop)
 
 struct thp_ioctl_frame {
-	uint32_t pos;
-	uint32_t size;
+        uint32_t pos;
+        uint32_t size;
         uint64_t tv_us; /* tiemstamp us */
 };
 
 struct thp_ioctl_spi_trans_data {
-	char __user *tx;
-	char __user *rx;
-	unsigned int size;
+        char __user *tx;
+        char __user *rx;
+        unsigned int size;
 };
 
 struct thp_ioctl_spi_xfer_data {
-    char __user *tx;
-    char __user *rx;
-    unsigned int len;
-    unsigned short delay_usecs;
-    unsigned char cs_change;
-    unsigned char reserved[3];
+        char __user *tx;
+        char __user *rx;
+        unsigned int len;
+        unsigned short delay_usecs;
+        unsigned char cs_change;
+        unsigned char reserved[3];
 };
 
 struct thp_ioctl_multi_spi_trans_data {
-    unsigned int speed_hz;
-    unsigned int xfer_num;
-    unsigned int reserved[2];
-    struct thp_ioctl_spi_xfer_data __user * xfer_data;
+        unsigned int speed_hz;
+        unsigned int xfer_num;
+        unsigned int reserved[2];
+        struct thp_ioctl_spi_xfer_data __user * xfer_data;
 };
 
 enum {
-	SVC_CMD_MMAP_DEQUEUE = 31,
-	SVC_CMD_BLE_MAC,
-	SVC_CMD_GAME_FILTER,
-	SVC_CMD_UPDATE_VERSION
+        SVC_CMD_MMAP_DEQUEUE = 31,
+        SVC_CMD_BLE_MAC,
+        SVC_CMD_GAME_FILTER,
+        SVC_CMD_UPDATE_VERSION,
+        SVC_CMD_HAL_INIT_FINISH = 36,
 };
 
+#define MAX_TSC_MSG_DATA_LEN 128
 struct thp_ioctl_tsc_msg {
-	u32 cmd;
-	u16 len;
-	u8 value[128];
+        u32 cmd;
+        u16 len;
+        u8 value[MAX_TSC_MSG_DATA_LEN];
 };
 
 struct thp_ioctl_update_info {
-	u32 frame_addr;
-	u32 cmd_addr;
+        u32 frame_addr;
+        u32 cmd_addr;
+        u32 ges_addr;
 };
 
 /* struct definition*/
 struct thp_spi_setting {
-	u32 spi_max_speed;
-	u16 spi_mode;
-	u8 bits_per_word;
+        u32 spi_max_speed;
+        u16 spi_mode;
+        u8 bits_per_word;
 };
 
 struct goodix_thp_board_data {
+        char avdd_name[GOODIX_MAX_STR_LABLE_LEN];
+        char iovdd_name[GOODIX_MAX_STR_LABLE_LEN];
+        unsigned int reset_gpio;
+        unsigned int irq_gpio;
+        int irq;
+        unsigned int irq_flags;
+        int iovdd_gpio;
 
-	char avdd_name[GOODIX_MAX_STR_LABLE_LEN];
-	char iovdd_name[GOODIX_MAX_STR_LABLE_LEN];
-	unsigned int reset_gpio;
-	unsigned int irq_gpio;
-	int irq;
-	unsigned int irq_flags;
-	int iovdd_gpio;
-
-	unsigned int power_on_delay_us;
-	unsigned int power_off_delay_us;
-	unsigned int panel_max_x;
-	unsigned int panel_max_y;
+        unsigned int power_on_delay_us;
+        unsigned int power_off_delay_us;
+        unsigned int panel_max_x;
+        unsigned int panel_max_y;
         unsigned int panel_max_w; /*major and minor*/
         unsigned int panel_max_p; /*pressure*/
-	unsigned int chip_type;
-	struct thp_spi_setting spi_setting;
-	bool report_rate_ctrl;
-	bool interpolation_ctrl;
-	bool sample_ctrl;
-	bool stowed_mode_ctrl;
-	char thp_ver[64];
+        unsigned int chip_type;
+        unsigned int frame_addr;
+        unsigned int cmd_addr;
+        unsigned int ges_addr;
+        char thp_ver[100];
+        struct thp_spi_setting spi_setting;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
 struct thp_frame_mmap_list {
-	char *buf;
-	u32 head;
-	u32 tail;
+        char *buf;
+        u32 head;
+        u32 tail;
 };
 
 #define MAX_SCAN_FREQ_NUM            8
@@ -322,157 +313,133 @@ struct thp_frame_mmap_list {
 #define MAX_STYLUS_SCAN_FREQ_NUM     6
 
 struct thp_ts_device {
-	char *name;
-	char *tx_buff;
-	char *rx_buff;
-	struct mutex spi_mutex;
-	struct device *dev;
-	struct spi_device *spi_dev;
-	const struct goodix_thp_hw_ops *hw_ops;
-	struct goodix_thp_board_data board_data;
-};
-
-/* for report coor */
-struct thp_input_agent_data {
-	struct input_dev *input_dev;
-	wait_queue_head_t wait;
+        char *name;
+        char *tx_buff;
+        char *rx_buff;
+        struct mutex spi_mutex;
+        struct device *dev;
+        struct spi_device *spi_dev;
+        const struct goodix_thp_hw_ops *hw_ops;
+        struct goodix_thp_board_data board_data;
 };
 
 struct input_agent_coor_data {
-	unsigned char down;
+        unsigned char down;
         unsigned char touch_valid; /* 0:invalid !=0:valid */
-	int x;
-	int y;
-	int p;
-	int track_id;
-	int major;
-	int minor;
-	unsigned int touch_type;
+        int x;
+        int y;
+        int p;          // pen only
+        int tilt_x;     // pen only
+        int tilt_y;     // pen only
+        int track_id;
+        int major;
+        int minor;
+        unsigned int touch_type;
 };
 
 struct timeval64 {
-	uint64_t tv_sec;
-	uint64_t tv_usec;
+        uint64_t tv_sec;
+        uint64_t tv_usec;
 };
 
 struct thp_input_agent_ioctl_coor_data {
-	struct input_agent_coor_data touch[INPUT_AGENT_MAX_POINTS];
-	int touch_num;
-	int down_num;
+        struct input_agent_coor_data touch[INPUT_AGENT_MAX_POINTS];
+        int touch_num;
+        int down_num;
         unsigned char fp_mode;				/* 0:normal mode;1:fp mode*/
         unsigned char hover_stat;			/* 0:normal stat;1:hover stat*/
         unsigned char large_touch_stat;		/* 0:normal touch stat;1:large_touch_stat*/
-	struct timeval64 time_stamp;
+        struct timeval64 time_stamp;
 };
 
 struct goodix_thp_hw_ops {
-	int (*read)(struct thp_ts_device *dev, unsigned int addr,
-			 unsigned char *data, unsigned int len);
-	int (*write)(struct thp_ts_device *dev, unsigned int addr,
-			unsigned char *data, unsigned int len);
-	int (*send_cmd)(struct thp_ts_device *tdev, u8 cmd, u16 data);
-	int (*board_init)(struct thp_ts_device *ts_dev);
-	int (*get_custom_info)(struct thp_ts_device *tdev, char *buf, unsigned int len);
-	int (*get_frame)(struct thp_ts_device *dev, char *data, unsigned int len);
-	int (*get_version)(struct thp_ts_device *dev, u64 *version);
-	int (*set_fp_int_pin)(struct thp_ts_device *dev, u8 level);
-};
-
-struct goodix_mode_info {
-	int sample;
-	int report_rate_mode;
-	int edge_mode[2];
-	int interpolation;
-	int stowed;
+        int (*read)(struct thp_ts_device *dev, unsigned int addr,
+                         unsigned char *data, unsigned int len);
+        int (*write)(struct thp_ts_device *dev, unsigned int addr,
+                        unsigned char *data, unsigned int len);
+        int (*send_cmd)(struct thp_ts_device *tdev, u8 cmd, u16 data);
+        int (*board_init)(struct thp_ts_device *ts_dev);
+        int (*get_custom_info)(struct thp_ts_device *tdev, char *buf, unsigned int len);
+        int (*get_frame)(struct thp_ts_device *dev, char *data);
+        int (*get_version)(struct thp_ts_device *dev, u64 *version);
+        int (*set_fp_int_pin)(struct thp_ts_device *dev, u8 level);
+        int (*reset)(struct thp_ts_device *dev, u32 delay_ms);
+        int (*set_spi_speed)(struct thp_ts_device *dev, u32 speed);
 };
 
 struct goodix_thp_core {
-	struct spi_device *sdev;
-	struct thp_ts_device *ts_dev;
-	struct platform_device *pdev;
-	struct input_dev *suspend_dev;
-	struct regulator *avdd;
-	struct regulator *iovdd;
-	struct thp_frame_mmap_list frame_mmap_list;
-	struct mutex frame_mutex;
-	struct mutex ts_mutex;
-	struct mutex irq_mutex;
-	struct mutex mode_lock;
+        char thp_misc_name[32];
+        struct miscdevice thp_misc_dev;
+        char input_misc_name[32];
+        struct miscdevice input_misc_dev;
+        struct spi_device *sdev;
+        struct thp_ts_device *ts_dev;
+        struct platform_device *pdev;
+        char input_dev_name[32];
+        struct input_dev *input_dev;
+        char pen_dev_name[32];
+        struct input_dev *pen_dev;
+        struct regulator *avdd;
+        struct regulator *iovdd;
+        struct thp_frame_mmap_list frame_mmap_list;
+        struct mutex frame_mutex;
+        struct mutex irq_mutex;
 
 #ifdef CONFIG_PINCTRL
-	struct pinctrl *pinctrl;
-	struct pinctrl_state *pin_sta_active;
-	struct pinctrl_state *pin_sta_suspend;
+        struct pinctrl *pinctrl;
+        struct pinctrl_state *pin_sta_active;
+        struct pinctrl_state *pin_sta_suspend;
 #endif
 #if IS_ENABLED(CONFIG_FB) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
-	struct notifier_block pm_notif;
+        struct notifier_block pm_notif;
 #endif
-	bool logtofile_on;
-	bool irq_state;
-	u32 suspended;
-	u16 gesture_enable;
-	u32 state_change_flag;
-	int irq;
-	int power_on;
-	int open_num;
-	int get_frame_wait_mode;
-	unsigned int frame_len;
-	unsigned int frame_wait_time;
-	u8 reset_state;
-	u8 frame_waitq_state;
-	u8 frame_read_data[GOODIX_THP_MAX_FRAME_LEN];
-	char custom_info[GOODIX_THP_CUSTOM_INFO_LEN + 1];
-	wait_queue_head_t frame_wq;
-	u8 gesture_type[GESTURE_TYPE_LEN];
-	u8 gesture_data[GESTURE_KEY_DATA_LEN];
-	u8 gesture_buffer_data[GESTURE_BUFFER_DATA_LEN];
-
-	struct goodix_mode_info set_mode;
-	struct goodix_mode_info get_mode;
-	int refresh_rate;
-	int zerotap_data[1];
-	/* touchscreen_mmi */
-	struct ts_mmi_class_methods *imports;
-	struct timeval64 last_event_time;
+        bool special_area_on;
+        bool logtofile_on;
+        bool irq_state;
+        u32 suspended;
+        u16 gesture_enable;
+        u32 state_change_flag;
+        char irq_name[16];
+        int irq;
+        int power_on;
+        int get_frame_wait_mode;
+        unsigned int frame_len;
+        unsigned int frame_wait_time;
+        u8 reset_state;
+        u8 frame_waitq_state;
+        u8 frame_read_data[GOODIX_THP_MAX_FRAME_LEN];
+        char custom_info[GOODIX_THP_CUSTOM_INFO_LEN + 1];
+        wait_queue_head_t frame_wq;
+        u8 gesture_type[GESTURE_TYPE_LEN];
+        u8 gesture_data[GESTURE_KEY_DATA_LEN];
+        u8 gesture_buffer_data[GESTURE_BUFFER_DATA_LEN];
 };
 
 /* func definition & statement*/
 /* log macro */
-//#define CONFIG_GOODIX_DEBUG
+extern bool debug_log_flag;
 #define ts_info(fmt, arg...)\
-	pr_info("[THP-INF][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
-
+        pr_info("[THP-INF][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
 #define ts_err(fmt, arg...)\
-	pr_err("[THP-ERR][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
-#ifdef CONFIG_GOODIX_DEBUG
+        pr_err("[THP-ERR][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
 #define ts_debug(fmt, arg...)\
-	pr_info("[THP-DBG][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
-#else
-#define ts_debug(fmt, arg...)	do {} while (0)
-#endif
+        if (debug_log_flag) pr_info("[THP-DBG][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
 
 /*
  * get board data pointer
  */
 static inline struct goodix_thp_board_data *board_data(
-		struct goodix_thp_core *core)
+                struct goodix_thp_core *core)
 {
-	if (!core || !core->ts_dev)
-		return NULL;
-	return &(core->ts_dev->board_data);
+        if (!core || !core->ts_dev)
+                return NULL;
+        return &(core->ts_dev->board_data);
 }
 
-extern uint32_t goodix_frame_reg;
-extern uint32_t goodix_cmd_reg;
-extern struct goodix_thp_core *gdix_thp_core;
-extern struct goodix_version_info version_info;
-
-void goodix_thp_reset(struct thp_ts_device *ts_dev, int delay_ms);
-int goodix_thp_set_spi_speed(struct thp_ts_device *dev, u32 speed);
+int goodix_thp_core_init(void);
+int goodix_thp_core_deinit(void);
 u16 checksum16_cmp(u8 *data, u32 size, int mode);
 u8 checksum_u8(u8 *data, u32 size);
 u8 checksum8_u16(const u8 *data, u32 size);
-
-void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len);
 
 #endif /* _GOODIX_THP_H_ */
