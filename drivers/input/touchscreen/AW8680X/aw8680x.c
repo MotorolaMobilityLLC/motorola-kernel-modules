@@ -3115,7 +3115,7 @@ static ssize_t force_mode_store(struct device *dev,
 					const char *buf, size_t count)
 {
 	uint32_t data_buf = 0;
-    int32_t jump_count = 3;
+	int32_t jump_count = 3;
 	int ret = -1;
 
 	ret = kstrtouint(buf, 0, &data_buf);
@@ -3133,7 +3133,7 @@ static ssize_t force_mode_store(struct device *dev,
 	if (data_buf == 0) {
 		AWLOGI("Disable force work mode");
 		g_aw8680x->flash_app_states = false;
-		gpio_set_value_cansleep(g_aw8680x->reset_gpio, HIGH_LEVEL);
+		gpio_set_value_cansleep(g_aw8680x->reset_gpio, HIGH_LEVEL);  //disable
 		udelay(150);
 		//platform close ldo power and delay sometime until power stability
 		msleep(2);
@@ -3142,28 +3142,48 @@ static ssize_t force_mode_store(struct device *dev,
 		g_aw8680x->flash_app_states = false;
 		//platform open ldo power and delay sometime until power stability
 		msleep(2);
-		aw8680x_hw_reset(g_aw8680x);
-		aw8680x_stay_boot(g_aw8680x);
-		while (jump_count--) {
-				mdelay(FLASH_BOOT_INIT_TIME);
-				ret = aw8680x_jump_flash_app(g_aw8680x, FLASH_APP_BASE_ADDR);
-				if (ret == AW_SUCCESS) {
-					AWLOGI("jump flash app OK!!");
-					mdelay(FLASH_APP_VERSION_GET_TIME);
-					ret = aw8680x_flash_app_version_in_soc_get(g_aw8680x);
-					if (ret != AW_SUCCESS) {
-						AWLOGI("flash app version readback retry jump_count = %d", jump_count);
+
+		do {
+			ret = aw8680x_jump_boot(g_aw8680x);
+			if (ret == AW_SUCCESS)
+				AWLOGI("jump boot success!!");
+			else
+				AWLOGI("jump boot failed!!");
+			mdelay(FLASH_BOOT_INIT_TIME);
+			ret = aw8680x_jump_flash_app(g_aw8680x, FLASH_APP_BASE_ADDR);
+			if (ret == AW_SUCCESS) {
+				AWLOGI("jump flash app OK!!");
+				mdelay(FLASH_APP_VERSION_GET_TIME);
+				ret = aw8680x_flash_app_version_in_soc_get(g_aw8680x);
+				if (ret != AW_SUCCESS) {
+					AWLOGI("flash app version readback retry jump_count = %d", jump_count);
+				} else {
+					if (g_aw8680x->flash_app_version_in_bin == g_aw8680x->flash_app_version_in_soc) {
+						g_aw8680x->flash_app_states = true;
+						AWLOGI("flash app version readback  check PASS!!");
+						return count;
 					} else {
-						if (g_aw8680x->flash_app_version_in_bin == g_aw8680x->flash_app_version_in_soc) {
-					        g_aw8680x->flash_app_states = true;
-							AWLOGI("flash app version readback  check PASS!!");
-							return count;
-						} else {
-							AWLOGI("flash app version check retry jump_count = %d", jump_count);
-						}
+						AWLOGI("flash app version check retry jump_count = %d", jump_count);
 					}
 				}
-		}
+			} else {
+				ret = aw8680x_connect(g_aw8680x);
+				if (ret != AW_SUCCESS) {
+					AWLOGE("connect failed!!! ret is : %d", ret);
+				} else {
+					AWLOGI("pc location is 0x%08x", g_aw8680x->pc_location);
+					if (g_aw8680x->pc_location == PC_POINT_ROM_BOOT) {
+						AWLOGI("pc location is rom boot!");
+						return count;
+					} else if (g_aw8680x->pc_location == PC_POINT_FLASH_BOOT) {
+						AWLOGI("pc location is flash boot!");
+						return count;
+					}
+				}
+				AWLOGE("pc location is  0x%08x", g_aw8680x->pc_location);
+			}
+			jump_count--;
+		} while ( jump_count>=0);
 		AWLOGE("flash app version readback or check Failed, so jump flash app failed!!");
 		return -EFAULT;
 	} else if(data_buf == 2) {
