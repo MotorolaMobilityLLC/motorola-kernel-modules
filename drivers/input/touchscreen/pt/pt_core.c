@@ -10400,7 +10400,7 @@ static void pt_enum_work_function(struct work_struct *work)
 
 #if defined(CONFIG_PM_RUNTIME) || defined(KERNEL_VER_GT_3_19)
 /* CONFIG_PM_RUNTIME option is removed in 3.19.0 */
-#if defined(CONFIG_PM_SLEEP)
+#if 0
 /*******************************************************************************
  * FUNCTION: pt_core_rt_suspend
  *
@@ -10479,7 +10479,7 @@ static int pt_core_rt_resume(struct device *dev)
 #endif /* CONFIG_PM_SLEEP */
 #endif /* CONFIG_PM_RUNTIME || LINUX_VERSION_CODE */
 
-#if defined(CONFIG_PM_SLEEP)
+#if 0
 /*******************************************************************************
  * FUNCTION: pt_core_suspend_
  *
@@ -10665,14 +10665,14 @@ static int pt_pm_notifier(struct notifier_block *nb,
 	return NOTIFY_DONE;
 }
 #endif
-
+#if 0
 const struct dev_pm_ops pt_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(pt_core_suspend, pt_core_resume)
 	SET_RUNTIME_PM_OPS(pt_core_rt_suspend, pt_core_rt_resume,
 			NULL)
 };
 EXPORT_SYMBOL_GPL(pt_pm_ops);
-
+#endif
 /*******************************************************************************
  * FUNCTION: _pt_request_pip2_enter_bl
  *
@@ -12331,7 +12331,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 		pt_debug(cd->dev, DL_INFO, "%s: UNBLANK!\n", __func__);
 		if (cd->fb_state != FB_ON) {
 			call_atten_cb(cd, PT_ATTEN_RESUME, 0);
-#if defined(CONFIG_PM_SLEEP)
+#if 0
 			if (cd->cpdata->flags & PT_CORE_FLAG_SKIP_RUNTIME)
 				pt_core_resume_(cd->dev);
 #endif
@@ -12340,7 +12340,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 	} else if (*blank == FB_BLANK_POWERDOWN) {
 		pt_debug(cd->dev, DL_INFO, "%s: POWERDOWN!\n", __func__);
 		if (cd->fb_state != FB_OFF) {
-#if defined(CONFIG_PM_SLEEP)
+#if 0
 			if (cd->cpdata->flags & PT_CORE_FLAG_SKIP_RUNTIME)
 				pt_core_suspend_(cd->dev);
 #endif
@@ -12409,7 +12409,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 			cypsoc_picoleaf_resume(cd->cypsoc_picoleaf_data);
 #endif
 			call_atten_cb(cd, PT_ATTEN_RESUME, 0);
-#if defined(CONFIG_PM_SLEEP)
+#if 0
 			if (cd->cpdata->flags & PT_CORE_FLAG_SKIP_RUNTIME)
 				pt_core_resume_(cd->dev);
 #endif
@@ -12427,7 +12427,7 @@ static int fb_notifier_callback(struct notifier_block *self,
 #ifdef CYPSOC_PICOLEAF_ENABLE
 			cypsoc_picoleaf_suspend(cd->cypsoc_picoleaf_data);
 #endif
-#if defined(CONFIG_PM_SLEEP)
+#if 0
 			if (cd->cpdata->flags & PT_CORE_FLAG_SKIP_RUNTIME)
 				pt_core_suspend_(cd->dev);
 #endif

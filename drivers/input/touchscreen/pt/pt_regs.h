@@ -1712,7 +1712,7 @@ int _pt_unsubscribe_attention(struct device *dev,
 	int mode);
 struct pt_sysinfo *_pt_request_sysinfo(struct device *dev);
 
-extern const struct dev_pm_ops pt_pm_ops;
+//extern const struct dev_pm_ops pt_pm_ops;
 
 int pt_register_module(struct pt_module *module);
 void pt_unregister_module(struct pt_module *module);

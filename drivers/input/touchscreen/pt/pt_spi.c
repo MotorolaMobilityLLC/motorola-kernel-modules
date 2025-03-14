@@ -379,7 +379,7 @@ static struct spi_driver pt_spi_driver = {
 		.name = PT_SPI_NAME,
 		.bus = &spi_bus_type,
 		.owner = THIS_MODULE,
-		.pm = &pt_pm_ops,
+		//.pm = &pt_pm_ops,
 #ifdef CONFIG_TOUCHSCREEN_PARADE_DEVICETREE_SUPPORT
 		.of_match_table = pt_spi_of_match,
 #endif

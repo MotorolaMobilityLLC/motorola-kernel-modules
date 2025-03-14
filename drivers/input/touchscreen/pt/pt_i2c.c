@@ -232,7 +232,7 @@ static struct i2c_driver pt_i2c_driver = {
 	.driver = {
 		.name = PT_I2C_NAME,
 		.owner = THIS_MODULE,
-		.pm = &pt_pm_ops,
+		//.pm = &pt_pm_ops,
 #ifdef CONFIG_TOUCHSCREEN_PARADE_DEVICETREE_SUPPORT
 		.of_match_table = pt_i2c_of_match,
 #endif
