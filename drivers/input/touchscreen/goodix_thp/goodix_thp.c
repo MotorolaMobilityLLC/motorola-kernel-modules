@@ -17,11 +17,13 @@
 #include <linux/time64.h>
 
 #include "goodix_thp.h"
+#include "goodix_thp_mmi.h"
 
 #define GOODIX_THP_MISC_DEVICE_NAME	"thp"
 #define PINCTRL_STATE_ACTIVE		"pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND		"pmx_ts_suspend"
 #define DEVICE_NAME			"input_agent"
+#define GOOIDX_INPUT_PHYS		"goodix_ts/input0"
 
 
 bool debug_log_flag;
@@ -88,7 +90,7 @@ static void goodix_thp_reset_frame_list(struct goodix_thp_core *core_data)
         mutex_unlock(&core_data->frame_mutex);
 }
 
-static void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len)
+void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len)
 {
         struct driver_request_pkg *req_pkg;
         struct thp_frame_mmap_list *list = &core_data->frame_mmap_list;
@@ -793,6 +795,16 @@ static int goodix_thp_power_init(struct goodix_thp_core *core_data)
                         core_data->avdd = NULL;
                         return r;
                 }
+                r = regulator_set_load(core_data->avdd, 50000);
+                if (r) {
+                    ts_err("set avdd load fail");
+                    return r;
+                }
+                r = regulator_set_voltage(core_data->avdd, 3000000, 3000000);
+                if (r) {
+                    ts_err("set avdd voltage fail");
+                    return r;
+                }
         } else {
                 ts_info("Avdd name is NULL[skip]");
         }
@@ -945,7 +957,7 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
         u32 ges_addr = core_data->ts_dev->board_data.ges_addr;
         u16 gsx_data = ~core_data->gesture_enable;
         struct thp_ts_device *ts_dev = core_data->ts_dev;
-        struct input_dev *input_dev = core_data->input_dev;
+        struct gesture_event_data mmi_event;
 
         if (ges_addr == 0) {
                 ts_err("gesture addr has not been assigned");
@@ -973,10 +985,10 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
         switch (temp_data[4]) {
         case 0xCC: //double tap
                 ts_info("get gesture event: Double tap");
-                input_report_key(input_dev, KEY_WAKEUP, 1);
-                input_sync(input_dev);
-                input_report_key(input_dev, KEY_WAKEUP, 0);
-                input_sync(input_dev);
+                mmi_event.evcode =4;
+                mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
+                mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
+                core_data->imports->report_gesture(&mmi_event);
                 break;
         case 0x63: // C
                 ts_info("get gesture event: C");
@@ -1019,6 +1031,10 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
                 break;
         case 0x4C: // single tap
                 ts_info("get gesture event: single tap");
+                mmi_event.evcode =1;
+                mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
+                mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
+                core_data->imports->report_gesture(&mmi_event);
                 break;
         default:
                 ts_err("not support gesture type %x", temp_data[4]);
@@ -1143,9 +1159,9 @@ static int goodix_thp_pen_input_dev_init(struct goodix_thp_core *core_data)
                 sprintf(core_data->pen_dev_name, "%s%d", GOODIX_THP_STYLUS_INPUT_DEVICE_NAME, core_data->pdev->id);
         pen_dev->name = core_data->pen_dev_name;
         pen_dev->id.bustype = BUS_SPI;
-        pen_dev->id.product = 0x0200;
-        pen_dev->id.vendor = 0x27C6;
-        pen_dev->id.version = 0x0001;
+        pen_dev->id.product = 0xDEAD;
+        pen_dev->id.vendor = 0xBEEF;
+        pen_dev->id.version = 10427;
 
         /* set input_dev properties */
         set_bit(EV_SYN, pen_dev->evbit);
@@ -2176,6 +2192,15 @@ static int goodix_thp_probe(struct platform_device *pdev)
                 ts_err("[FB]Unable to register fb_notifier, ret:%d", r);
 #endif
 
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+        ts_info("%s:goodix_ts_mmi_dev_register",__func__);
+        r = goodix_ts_mmi_dev_register(pdev);
+        if (r) {
+            ts_info("Failed register touchscreen mmi.");
+            goto out;
+        }
+#endif
+
         return 0;
 
 err_irq_setup:
@@ -2196,6 +2221,10 @@ static int goodix_thp_remove(struct platform_device *pdev)
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
 
         ts_info("IN");
+#ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
+        ts_info("%s:goodix_ts_mmi_dev_unregister",__func__);
+        goodix_ts_mmi_dev_unregister(pdev);
+#endif
         goodix_thp_power_off(core_data);
         goodix_thp_sysfs_exit(core_data);
         goodix_thp_input_agent_exit(core_data);

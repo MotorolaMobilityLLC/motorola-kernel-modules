@@ -7,6 +7,7 @@ obj-m := goodix_brl_thp.o
 goodix_brl_thp-objs := \
 					goodix_thp.o \
 					goodix_thp_spi.o \
+					goodix_thp_config.o
 
 ifneq ($(filter m y, $(CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS)),)
 	EXTRA_CFLAGS += -DCONFIG_DRM_PANEL_EVENT_NOTIFICATIONS
@@ -16,10 +17,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
 	EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
 endif
 
-# ifneq ($(filter m y,$(CONFIG_INPUT_TOUCHSCREEN_MMI)),)
-#	EXTRA_CFLAGS += -DCONFIG_INPUT_TOUCHSCREEN_MMI
-#	goodix_brl_thp-objs += goodix_thp_mmi.o
-# endif
+ifneq ($(filter m y,$(CONFIG_INPUT_TOUCHSCREEN_MMI)),)
+	EXTRA_CFLAGS += -DCONFIG_INPUT_TOUCHSCREEN_MMI
+	goodix_brl_thp-objs += goodix_thp_mmi.o
+endif
 
-# KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
-# KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers

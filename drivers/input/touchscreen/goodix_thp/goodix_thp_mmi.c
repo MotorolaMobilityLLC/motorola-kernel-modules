@@ -42,8 +42,6 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
-static ssize_t goodix_ts_fw_version_show(struct device *dev,
-		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -56,7 +54,6 @@ static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	goodix_ts_stowed_show, goodix_ts_stowed_store);
 static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
-static DEVICE_ATTR(fw_version, S_IRUGO, goodix_ts_fw_version_show, NULL);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -82,6 +79,20 @@ static DEVICE_ATTR(fw_version, S_IRUGO, goodix_ts_fw_version_show, NULL);
 	} \
 }
 
+#define GET_GOODIX_DATA(dev) { \
+	pdev = dev_get_drvdata(dev); \
+	if (!pdev) { \
+		ts_err("Failed to get platform device"); \
+		return -ENODEV; \
+	} \
+	core_data = platform_get_drvdata(pdev); \
+	if (!core_data) { \
+		ts_err("Failed to get driver data"); \
+		return -ENODEV; \
+	} \
+}
+
+
 static struct attribute *ext_attributes[MAX_ATTRS_ENTRIES];
 static struct attribute_group ext_attr_group = {
 	.attrs = ext_attributes,
@@ -90,7 +101,10 @@ static struct attribute_group ext_attr_group = {
 static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
 {
 	int idx = 0;
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	ADD_ATTR(edge);
 	ADD_ATTR(log_trigger);
@@ -104,8 +118,6 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 		ADD_ATTR(stowed);
 
 	ADD_ATTR(timestamp);
-
-	ADD_ATTR(fw_version);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -129,7 +141,10 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 	int i;
 	int edge_cmd[2] = { 0 };
 	unsigned int args[2] = { 0 };
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	ret = sscanf(buf, "%d %d", &args[0], &args[1]);
 	if (ret < 2)
@@ -195,7 +210,10 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 static ssize_t goodix_ts_edge_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	ts_info("edge area = %02x, rotation = %02x\n",
 		core_data->set_mode.edge_mode[1], core_data->set_mode.edge_mode[0]);
@@ -205,10 +223,13 @@ static ssize_t goodix_ts_edge_show(struct device *dev,
 
 static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
 	u8 tmp_cmd[16];
 	u16 checksum = 0;
 	int i;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	tmp_cmd[0] = 0x00; //status
 	tmp_cmd[1] = 0x00; //ack
@@ -235,17 +256,19 @@ static ssize_t goodix_ts_log_trigger_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
-        u8 val[1] = {NOTIFY_TYPE_DUMP_REP};
+	u8 val[1] = {NOTIFY_TYPE_DUMP_REP};
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	if (!buf || count <= 0)
 		return 0;
 
-
-        if (buf[0] == '1' || buf[0] == 1) {
-                ts_info("dump rep log");
-                put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, 1);
-        }
+	if (buf[0] == '1' || buf[0] == 1) {
+		ts_info("dump rep log");
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, 1);
+	}
 
 	return count;
 }
@@ -317,7 +340,11 @@ static ssize_t goodix_ts_interpolation_store(struct device *dev,
 {
 	int ret = 0;
 	unsigned long mode = 0;
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
+
 
 	ret = kstrtoul(buf, 0, &mode);
 	if (ret < 0) {
@@ -341,7 +368,10 @@ exit:
 static ssize_t goodix_ts_interpolation_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	ts_info("interpolation = %d.\n", core_data->set_mode.interpolation);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.interpolation);
@@ -352,8 +382,12 @@ static ssize_t goodix_ts_sample_store(struct device *dev,
 {
 	int ret = 0;
 	unsigned long mode = 0;
-	struct goodix_thp_core *core_data = gdix_thp_core;
-	struct thp_ts_device *tdev = core_data->ts_dev;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
 
 	ret = kstrtoul(buf, 0, &mode);
 	if (ret < 0) {
@@ -395,7 +429,10 @@ exit:
 static ssize_t goodix_ts_sample_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	ts_info("sample = %d.\n", core_data->set_mode.sample);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.sample);
@@ -406,8 +443,12 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 {
 	int ret = 0;
 	unsigned long mode = 0;
-	struct goodix_thp_core *core_data = gdix_thp_core;
-	struct thp_ts_device *tdev = core_data->ts_dev;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
 
 	ret = kstrtoul(buf, 0, &mode);
 	if (ret < 0) {
@@ -448,7 +489,10 @@ exit:
 static ssize_t goodix_ts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	ts_info("Stowed state = %d.\n", core_data->set_mode.stowed);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.stowed);
@@ -457,42 +501,17 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
 	struct timeval64 last_ts;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
 
 	mutex_lock(&core_data->mode_lock);
 	last_ts = core_data->last_event_time;
 	mutex_unlock(&core_data->mode_lock);
 
 	return scnprintf(buf, PAGE_SIZE, "%lld.%lld\n", last_ts.tv_sec, last_ts.tv_usec);
-}
-
-static ssize_t goodix_ts_fw_version_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct goodix_thp_core *core_data = gdix_thp_core;
-	struct thp_ts_device *ts_dev = core_data->ts_dev;
-	u32 cfg_id;
-	int ret;
-	char version[32] = {0};
-
-	/* minor firmware version */
-    snprintf(&version[0], sizeof(version),
-				"%02X.%02X.%02X.%02X",
-				version_info.patch_vid[0], version_info.patch_vid[1],
-				version_info.patch_vid[2], version_info.patch_vid[3]);
-	ts_info("fw version data %s", version);
-
-	ret = ts_dev->hw_ops->read(ts_dev, TOUCH_CFG_VERSION_ADDR,
-	        (u8*)&cfg_id, sizeof(cfg_id));
-	if (ret) {
-	    ts_info("failed get fw config version data, %d", ret);
-	    return -EINVAL;
-	}
-	ts_info("fw config version data %04x", cfg_id);
-
-	return scnprintf(buf, PAGE_SIZE, "%s - %04x",
-            version, cfg_id);
 }
 
 static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)
@@ -529,8 +548,11 @@ static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)
 static int goodix_ts_mmi_panel_state(struct device *dev,
 	enum ts_mmi_pm_mode from, enum ts_mmi_pm_mode to)
 {
-	struct goodix_thp_core *core_data = gdix_thp_core;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
 	u8 val[2];
+
+	GET_GOODIX_DATA(dev);
 
 	val[0] = NOTIFY_TYPE_SCREEN;
 

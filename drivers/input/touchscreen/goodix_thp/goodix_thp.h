@@ -277,6 +277,14 @@ struct thp_spi_setting {
         u8 bits_per_word;
 };
 
+struct goodix_mode_info {
+        int sample;
+        int report_rate_mode;
+        int edge_mode[2];
+        int interpolation;
+        int stowed;
+};
+
 struct goodix_thp_board_data {
         char avdd_name[GOODIX_MAX_STR_LABLE_LEN];
         char iovdd_name[GOODIX_MAX_STR_LABLE_LEN];
@@ -298,6 +306,10 @@ struct goodix_thp_board_data {
         unsigned int ges_addr;
         char thp_ver[100];
         struct thp_spi_setting spi_setting;
+        bool report_rate_ctrl;
+        bool interpolation_ctrl;
+        bool sample_ctrl;
+        bool stowed_mode_ctrl;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -384,6 +396,7 @@ struct goodix_thp_core {
         struct thp_frame_mmap_list frame_mmap_list;
         struct mutex frame_mutex;
         struct mutex irq_mutex;
+        struct mutex mode_lock;
 
 #ifdef CONFIG_PINCTRL
         struct pinctrl *pinctrl;
@@ -413,6 +426,14 @@ struct goodix_thp_core {
         u8 gesture_type[GESTURE_TYPE_LEN];
         u8 gesture_data[GESTURE_KEY_DATA_LEN];
         u8 gesture_buffer_data[GESTURE_BUFFER_DATA_LEN];
+
+        struct goodix_mode_info set_mode;
+        struct goodix_mode_info get_mode;
+        int refresh_rate;
+        int zerotap_data[1];
+        /* touchscreen_mmi */
+        struct ts_mmi_class_methods *imports;
+        struct timeval64 last_event_time;
 };
 
 /* func definition & statement*/
@@ -441,5 +462,7 @@ int goodix_thp_core_deinit(void);
 u16 checksum16_cmp(u8 *data, u32 size, int mode);
 u8 checksum_u8(u8 *data, u32 size);
 u8 checksum8_u16(const u8 *data, u32 size);
+
+void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len);
 
 #endif /* _GOODIX_THP_H_ */
