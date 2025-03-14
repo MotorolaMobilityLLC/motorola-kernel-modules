@@ -17,7 +17,6 @@
 #include <linux/input/mt.h>
 #include "goodix_thp_config.h"
 
-extern struct goodix_thp_core *gdix_thp_core;
 
 static ssize_t goodix_ts_edge_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);

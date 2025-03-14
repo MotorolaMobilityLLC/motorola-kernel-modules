@@ -958,6 +958,9 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
         u16 gsx_data = ~core_data->gesture_enable;
         struct thp_ts_device *ts_dev = core_data->ts_dev;
         struct gesture_event_data mmi_event;
+        static  unsigned  long  start = 0;
+        int fod_down_interval = 0;
+        int fod_down = core_data->zerotap_data[0];
 
         if (ges_addr == 0) {
                 ts_err("gesture addr has not been assigned");
@@ -1024,10 +1027,31 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
                 ts_info("get gesture event: down");
                 break;
         case 0x46: // FP_DOWN
-                ts_info("get gesture event: finger print down");
+                fod_down_interval = (int)jiffies_to_msecs(jiffies-start);
+                //goodix firmware do not send coordinate, need mmi touch to define a vaild coordinate thru dts
+                mmi_event.evcode = 2;
+                mmi_event.evdata.x= 0;
+                mmi_event.evdata.y= 0;
+
+                ts_info("Get FOD-DOWN gesture:%d interval:%d",fod_down,fod_down_interval);
+                if(fod_down_interval > 2000)
+                        fod_down = 0;
+                if(fod_down_interval > 0 && fod_down_interval < 250 && fod_down) {
+                        goto exit;
+                }
+                start = jiffies;
+                //maximum allow send down event 7 times
+                if(fod_down < 6)
+                        core_data->imports->report_gesture(&mmi_event);
+                fod_down++;
                 break;
         case 0x55: // FP_UP
-                ts_info("get gesture event: finger print up");
+                ts_info("Get FOD-UP gesture");
+                mmi_event.evcode = 3;
+                mmi_event.evdata.x= 0;
+                mmi_event.evdata.y= 0;
+                core_data->imports->report_gesture(&mmi_event);
+                fod_down = 0;
                 break;
         case 0x4C: // single tap
                 ts_info("get gesture event: single tap");
@@ -1051,6 +1075,7 @@ re_send_ges_cmd:
 exit:
         clean_data = 0;
         ts_dev->hw_ops->write(ts_dev, ges_addr, &clean_data, 1);
+        core_data->zerotap_data[0] = fod_down;
         return 0;
 }
 
@@ -1234,6 +1259,8 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         struct thp_input_agent_ioctl_coor_data data;
         struct input_agent_coor_data *stylus_data = NULL;
         u8 i;
+        static int pre_flags = 0;
+        struct thp_ts_device *tdev = core_data->ts_dev;
 
         if (arg == 0) {
                 ts_err("%s:arg is null.", __func__);
@@ -1301,6 +1328,26 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 //TODO
         } else {
                 //TODO
+        }
+
+        /* fp touch flag */
+        if (pre_flags != data.fp_mode) {
+                if (data.fp_mode) {
+                        tdev->hw_ops->set_fp_int_pin(tdev, 1);
+                        input_report_key(input_dev, BTN_TRIGGER_HAPPY1, 1);
+                        input_sync(input_dev);
+                        input_report_key(input_dev, BTN_TRIGGER_HAPPY1, 0);
+                        input_sync(input_dev);
+                        ts_info("report BTN_TRIGGER_HAPPY1");
+                } else {
+                        tdev->hw_ops->set_fp_int_pin(tdev, 0);
+                        input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 1);
+                        input_sync(input_dev);
+                        input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 0);
+                        input_sync(input_dev);
+                        ts_info("report BTN_TRIGGER_HAPPY2");
+                }
+                pre_flags = data.fp_mode;
         }
 
         return ret;
@@ -1458,6 +1505,9 @@ static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
         // gesture
         input_set_capability(input_dev, EV_KEY, KEY_WAKEUP);
         input_set_capability(input_dev, EV_KEY, KEY_GOTO);
+
+        input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY1);
+        input_set_capability(input_dev, EV_KEY, BTN_TRIGGER_HAPPY2);
 
         /* register input_dev */
         r = input_register_device(input_dev);
