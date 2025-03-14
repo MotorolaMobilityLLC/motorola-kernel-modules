@@ -672,6 +672,7 @@ static int cw_get_cycle_count(struct cw_battery *cw_bat)
  * by default. Its range is 0x00 to 0x64, indicating 0 to 100%. This register will be clear after enters shutdown
  * mode.
  */
+#define CW2217B_SOH_COMPENSATION_VAL 4
 static int cw_get_soh(struct cw_battery *cw_bat)
 {
 	int ret;
@@ -682,7 +683,8 @@ static int cw_get_soh(struct cw_battery *cw_bat)
 	if (ret < 0)
 		return ret;
 
-	soh = reg_val;
+	soh = min(reg_val + CW2217B_SOH_COMPENSATION_VAL, 100);
+
 	cw_bat->soh = soh;
 
 	return 0;
