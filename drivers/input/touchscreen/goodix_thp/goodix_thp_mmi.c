@@ -544,6 +544,20 @@ static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)
 	return 0;
 }
 
+static int goodix_berlin_gesture_clean(struct goodix_thp_core *core_data)
+{
+	u8 val[3];
+
+	val[0] = NOTIFY_TYPE_GESTURE;
+	val[1] = 0x0;
+	val[2] = 0x0;
+
+	ts_info("Send cmd to clean gesture mode");
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+	return 0;
+}
+
 static int goodix_ts_mmi_panel_state(struct device *dev,
 	enum ts_mmi_pm_mode from, enum ts_mmi_pm_mode to)
 {
@@ -562,6 +576,7 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 		msleep(16);
 		break;
 	case TS_MMI_PM_DEEPSLEEP:
+		goodix_berlin_gesture_clean(core_data);
 		val[1] = 0;
 		break;
 	case TS_MMI_PM_ACTIVE:
