@@ -1184,9 +1184,9 @@ static int goodix_thp_pen_input_dev_init(struct goodix_thp_core *core_data)
                 sprintf(core_data->pen_dev_name, "%s%d", GOODIX_THP_STYLUS_INPUT_DEVICE_NAME, core_data->pdev->id);
         pen_dev->name = core_data->pen_dev_name;
         pen_dev->id.bustype = BUS_SPI;
-        pen_dev->id.product = 0xDEAD;
-        pen_dev->id.vendor = 0xBEEF;
-        pen_dev->id.version = 10427;
+        pen_dev->id.product = 0x0200;
+        pen_dev->id.vendor = 0x27C6;
+        pen_dev->id.version = 0x0001;
 
         /* set input_dev properties */
         set_bit(EV_SYN, pen_dev->evbit);
@@ -1482,9 +1482,9 @@ static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
                 sprintf(core_data->input_dev_name, "%s%d", GOODIX_THP_INPUT_DEVICE_NAME, core_data->pdev->id);
         input_dev->name = core_data->input_dev_name;
         input_dev->id.bustype = BUS_SPI;
-        input_dev->id.product = 0x0201;
-        input_dev->id.vendor = 0x27C6;
-        input_dev->id.version = 0x0001;
+        input_dev->id.product = 0xDEAD;
+        input_dev->id.vendor = 0xBEEF;
+        input_dev->id.version = 10427;
 
         /* set input_dev properties */
         set_bit(EV_SYN, input_dev->evbit);
