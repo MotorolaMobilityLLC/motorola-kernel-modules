@@ -222,27 +222,17 @@ static ssize_t goodix_ts_edge_show(struct device *dev,
 
 static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 {
-	u8 tmp_cmd[16];
-	u16 checksum = 0;
-	int i;
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
+	u8 val[2];
 
 	GET_GOODIX_DATA(dev);
 
-	tmp_cmd[0] = 0x00; //status
-	tmp_cmd[1] = 0x00; //ack
-	tmp_cmd[2] = 0x05; //cmd len
-	tmp_cmd[3] = 0xaf; //cmd id
-	tmp_cmd[4] = (u8)mode; //cmd param 0,1,2
-	for (i = 0; i < 5; i++)
-		checksum += tmp_cmd[i];
-	tmp_cmd[5] = (u8)checksum; //checkum lo
-	tmp_cmd[6] = (u8)(checksum >> 8); //checksum hi
+	val[0] = NOTIFY_TYPE_CHARGE;
+	val[1] = (u8)mode;
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
-	put_frame_list(core_data, REQUEST_TYPE_CMD, tmp_cmd, 7);
-
-	ts_info("Success to %s charger mode\n", mode ? "Enable" : "Disable");
+	ts_info("Success to %s charger mode", mode ? "Enable" : "Disable");
 
 	return 0;
 }
