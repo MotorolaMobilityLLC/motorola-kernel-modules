@@ -4999,6 +4999,9 @@ static int ovt_disp_gesture_notifier_callback(struct notifier_block *nb, unsigne
 	int retval = 0;
 	unsigned short gesture_cmd = 0;
 
+	if (!g_tcm_hcd || g_tcm_hcd->ovt_tcm_driver_removing)
+		return retval;
+
 	OVT_INFO("gesture event is %lu, wakeup_gesture_enabled is %d\n", value, g_tcm_hcd->wakeup_gesture_enabled);
 
 	if (0x01 == value) {
@@ -5522,7 +5525,7 @@ static int ovt_tcm_remove(struct platform_device *pdev)
 #endif
 #endif
 	printk("ovt_tcm_remove enter\n");
-    tcm_hcd->ovt_tcm_driver_removing = 1;
+	tcm_hcd->ovt_tcm_driver_removing = 1;
 
 	cancel_work_sync(&tcm_hcd->helper.work);
 	flush_workqueue(tcm_hcd->helper.workqueue);
