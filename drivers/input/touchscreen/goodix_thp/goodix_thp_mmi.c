@@ -494,10 +494,12 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
 	mutex_lock(&core_data->mode_lock);
-	last_ts = core_data->last_event_time;
+	memcpy(&last_ts, &core_data->last_event_time, sizeof(core_data->last_event_time));
+	memset(&core_data->last_event_time, 0, sizeof(core_data->last_event_time));
 	mutex_unlock(&core_data->mode_lock);
 
 	return scnprintf(buf, PAGE_SIZE, "%lld.%lld\n", last_ts.tv_sec, last_ts.tv_usec);
