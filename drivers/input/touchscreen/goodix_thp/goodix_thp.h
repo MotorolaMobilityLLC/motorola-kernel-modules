@@ -194,6 +194,10 @@ typedef enum {
         NOTIFY_TYPE_RAWDATA,
         NOTIFY_TYPE_LOGTOFILE,
         NOTIFY_TYPE_SPECIAL_AREA,
+        NOTIFY_TYPE_GAME_MODE,
+        NOTIFY_TYPE_STOW_MODE,
+        NOTIFY_TYPE_POCKET_MODE,
+        NOTIFY_TYPE_ROTATION,
 } NOTIFY_TYPE_T;
 
 #pragma pack(push, 1)
@@ -283,6 +287,7 @@ struct goodix_mode_info {
         int edge_mode[2];
         int interpolation;
         int stowed;
+        int pocket_mode;
 };
 
 struct goodix_thp_board_data {
@@ -310,6 +315,7 @@ struct goodix_thp_board_data {
         bool interpolation_ctrl;
         bool sample_ctrl;
         bool stowed_mode_ctrl;
+        bool pocket_mode_ctrl;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)

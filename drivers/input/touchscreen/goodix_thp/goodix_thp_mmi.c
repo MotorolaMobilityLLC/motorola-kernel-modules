@@ -41,6 +41,10 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_pocket_mode_show(struct device *dev,
+    struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
+            struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -53,6 +57,8 @@ static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	goodix_ts_stowed_show, goodix_ts_stowed_store);
 static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
+static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
+    goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -116,6 +122,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 	if (core_data->ts_dev->board_data.stowed_mode_ctrl)
 		ADD_ATTR(stowed);
 
+	if (core_data->ts_dev->board_data.pocket_mode_ctrl)
+		ADD_ATTR(pocket_mode);
+
 	ADD_ATTR(timestamp);
 
 	if (idx) {
@@ -135,14 +144,13 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	int ret = 0;
-	u8 tmp_cmd[16];
-	u16 checksum = 0;
-	int i;
 	int edge_cmd[2] = { 0 };
 	unsigned int args[2] = { 0 };
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
+	u8 val[3];
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
 	ret = sscanf(buf, "%d %d", &args[0], &args[1]);
@@ -184,19 +192,11 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	tmp_cmd[0] = 0x00; //status
-	tmp_cmd[1] = 0x00; //ack
-	tmp_cmd[2] = 0x06; //cmd len
-	tmp_cmd[3] = 0x17; //cmd id
-	tmp_cmd[4] = (u8)edge_cmd[0]; //cmd param 0,1,2
-	tmp_cmd[5] = (u8)edge_cmd[1]; //cmd param 0,1,2
-	for (i = 0; i < 6; i++)
-		checksum += tmp_cmd[i];
-	tmp_cmd[6] = (u8)checksum; //checkum lo
-	tmp_cmd[7] = (u8)(checksum >> 8); //checksum hi
-
 	memcpy(core_data->get_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
-	put_frame_list(core_data, REQUEST_TYPE_CMD, tmp_cmd, 8);
+	val[0] = NOTIFY_TYPE_ROTATION;
+	val[1] = (u8)edge_cmd[0];
+	val[2] = (u8)edge_cmd[1];
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 	memcpy(core_data->set_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
 
 	msleep(20);
@@ -212,6 +212,7 @@ static ssize_t goodix_ts_edge_show(struct device *dev,
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
 	ts_info("edge area = %02x, rotation = %02x\n",
@@ -241,6 +242,16 @@ static int goodix_ts_mmi_methods_get_vendor(struct device *dev, void *cdata) {
 	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "goodix");
 }
 
+static int goodix_ts_mmi_methods_get_productinfo(struct device *dev, void *cdata) {
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+	char *ic_info = "goodix_thp";
+
+	GET_GOODIX_DATA(dev);
+
+	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", ic_info);
+}
+
 static ssize_t goodix_ts_log_trigger_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
@@ -249,6 +260,7 @@ static ssize_t goodix_ts_log_trigger_store(struct device *dev,
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
 	if (!buf || count <= 0)
@@ -332,8 +344,8 @@ static ssize_t goodix_ts_interpolation_store(struct device *dev,
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
-
 
 	ret = kstrtoul(buf, 0, &mode);
 	if (ret < 0) {
@@ -360,6 +372,7 @@ static ssize_t goodix_ts_interpolation_show(struct device *dev,
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
 	ts_info("interpolation = %d.\n", core_data->set_mode.interpolation);
@@ -374,40 +387,39 @@ static ssize_t goodix_ts_sample_store(struct device *dev,
 	struct thp_ts_device *tdev;
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
+	u8 val[2];
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 	tdev = core_data->ts_dev;
 
 	ret = kstrtoul(buf, 0, &mode);
 	if (ret < 0) {
-		pr_info("Failed to convert value.\n");
+		ts_info("Failed to convert value.\n");
 		return -EINVAL;
 	}
 
 	mutex_lock(&core_data->mode_lock);
 	core_data->get_mode.sample= mode;
 	if (core_data->set_mode.sample == mode) {
-		ts_debug("The value = %lu is same, so not to write", mode);
+		ts_info("The value = %lu is same, so not to write", mode);
 		ret = size;
 		goto exit;
 	}
 
 	if (core_data->power_on == 0) {
-		ts_debug("The touch is in sleep state, restore the value when resume\n");
+		ts_info("The touch is in sleep state, restore the value when resume\n");
 		ret = size;
 		goto exit;
 	}
 
-	ret = tdev->hw_ops->send_cmd(tdev, SAMPLE_SWITCH_CMD,
-						core_data->get_mode.sample);
-	if (ret < 0) {
-		ts_err("failed to set sample rate, mode = %lu", mode);
-		goto exit;
-	}
+	val[0] = NOTIFY_TYPE_GAME_MODE;
+	val[1] = mode ? 1 : 0;
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 	core_data->set_mode.sample = mode;
 	msleep(20);
-	ts_info("Success to set %lu\n", mode);
+	ts_info("Success to %s game mode", mode ? "enable" : "disable");
 
 	ret = size;
 exit:
@@ -421,10 +433,83 @@ static ssize_t goodix_ts_sample_show(struct device *dev,
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
 	ts_info("sample = %d.\n", core_data->set_mode.sample);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.sample);
+}
+
+static ssize_t goodix_ts_pocket_mode_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info("Pocket mode state = %d.\n", core_data->set_mode.pocket_mode);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", core_data->set_mode.pocket_mode);
+}
+
+static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long value = 0;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+	u8 val[2];
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		ts_err("pocket_mode: Failed to convert value\n");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+	switch (value) {
+		case 0x10:
+		case 0x20:
+			ts_info("touch pocket mode disable\n");
+			core_data->get_mode.pocket_mode = 0;
+			break;
+		case 0x11:
+		case 0x21:
+			ts_info("touch pocket mode enable\n");
+			core_data->get_mode.pocket_mode = 1;
+			break;
+		default:
+			ts_info("unsupport pocket mode type, value = %lu\n", value);
+			mutex_unlock(&core_data->mode_lock);
+			return -EINVAL;
+	}
+
+	if (core_data->set_mode.pocket_mode == core_data->get_mode.pocket_mode) {
+		ts_info("The value = %d is same, so not to write", core_data->get_mode.pocket_mode);
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info("The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	val[0] = NOTIFY_TYPE_POCKET_MODE;
+	val[1] = core_data->get_mode.pocket_mode;
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+	core_data->set_mode.pocket_mode = core_data->get_mode.pocket_mode;
+	msleep(20);
+
+	ts_info("Success to %s pocket mode", core_data->get_mode.pocket_mode ? "enable" : "disable");
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return size;
 }
 
 static ssize_t goodix_ts_stowed_store(struct device *dev,
@@ -435,7 +520,9 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 	struct thp_ts_device *tdev;
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
+	u8 val[2];
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 	tdev = core_data->ts_dev;
 
@@ -448,18 +535,16 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 	mutex_lock(&core_data->mode_lock);
 	core_data->get_mode.stowed = mode;
 	if (core_data->set_mode.stowed == mode) {
-		ts_debug("The value = %lu is same, so not to write", mode);
+		ts_info("The value = %lu is same, so not to write", mode);
 		ret = size;
 		goto exit;
 	}
 
 	if ( core_data->power_on == 1) {
-		ret = tdev->hw_ops->send_cmd(tdev, ENTER_STOWED_MODE_CMD,
-			core_data->get_mode.stowed);
-		if (ret < 0) {
-			ts_err("Failed to set stowed mode %lu\n", mode);
-			goto exit;
-		}
+		val[0] = NOTIFY_TYPE_STOW_MODE;
+		val[1] = mode ? 1 : 0;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
 	} else {
 		ts_info("Skip stowed mode setting power_on:%d.\n", core_data->power_on);
 		ret = size;
@@ -467,7 +552,7 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 	}
 
 	core_data->set_mode.stowed = mode;
-	ts_info("Success to set stowed mode %lu\n", mode);
+	ts_info("Success to %s stow mode", mode ? "enable" : "disable");
 
 	ret = size;
 exit:
@@ -481,6 +566,7 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
+	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
 	ts_info("Stowed state = %d.\n", core_data->set_mode.stowed);
@@ -586,6 +672,7 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
+	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
 	.charger_mode = goodix_ts_mmi_charger_mode,
 	/* vendor specific attribute group */
 	.extend_attribute_group = goodix_ts_mmi_extend_attribute_group,

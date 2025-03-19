@@ -402,6 +402,26 @@ static int goodix_thp_parse_dt(struct device_node *node,
                 return r;
         }
 
+        board_data->interpolation_ctrl = of_property_read_bool(node,
+                "goodix,interpolation-ctrl");
+        if (board_data->interpolation_ctrl)
+            ts_info("support goodix interpolation mode");
+
+        board_data->sample_ctrl = of_property_read_bool(node,
+                "goodix,sample-ctrl");
+        if (board_data->sample_ctrl)
+            ts_info("support goodix sample mode");
+
+        board_data->stowed_mode_ctrl = of_property_read_bool(node,
+                "goodix,stowed-mode-ctrl");
+        if (board_data->stowed_mode_ctrl)
+            ts_info("Support goodix touch stowed mode");
+
+        board_data->pocket_mode_ctrl = of_property_read_bool(node,
+            "goodix,pocket-mode-ctrl");
+        if (board_data->pocket_mode_ctrl)
+        ts_info("Support goodix touch pocket mode");
+
         return 0;
 }
 #endif

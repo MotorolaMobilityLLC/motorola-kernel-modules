@@ -569,6 +569,9 @@ static long goodix_thp_ioctl_enter_resume(struct goodix_thp_core *core_data)
         if (r)
                 ts_err("%s failed, r %d", __func__, r);
 
+        /* All IC status are cleared after reset */
+        memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
+
         return r;
 }
 
