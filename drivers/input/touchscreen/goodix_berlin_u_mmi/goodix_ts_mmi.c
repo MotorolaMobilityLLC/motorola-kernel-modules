@@ -210,8 +210,15 @@ static int goodix_ts_film_mode(struct goodix_ts_core *core_data, int mode)
 		ts_debug("The touch is in sleep state, restore the value when resume\n");
 		goto exit;
 	}
-
+#ifdef CONFIG_GTP_GLOVE_MODE
+	if (mode == 1) {
+		ret = goodix_ts_send_cmd(core_data, FILM_MODE_SWITCH_CMD, 5, mode, ENTER_GLOVE_MODE);
+	} else if (mode == 0) {
+		ret = goodix_ts_send_cmd(core_data, FILM_MODE_SWITCH_CMD, 5, mode, EXIT_GLOVE_MODE);
+	}
+#else
 	ret = goodix_ts_send_cmd(core_data, FILM_MODE_SWITCH_CMD, 5, mode, 0x00);
+#endif
 	if (ret < 0) {
 		ts_err("failed to send leather mode cmd");
 		goto exit;
@@ -1313,8 +1320,18 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 	}
 
 	if (core_data->board_data.film_mode_ctrl && core_data->get_mode.film_mode) {
+#ifdef CONFIG_GTP_GLOVE_MODE
+		if (core_data->get_mode.film_mode) {
+			ret = goodix_ts_send_cmd(core_data, FILM_MODE_SWITCH_CMD, 5,
+							core_data->get_mode.film_mode, ENTER_GLOVE_MODE);
+		} else {
+			ret = goodix_ts_send_cmd(core_data, FILM_MODE_SWITCH_CMD, 5,
+							core_data->get_mode.film_mode, EXIT_GLOVE_MODE);
+		}
+#else
 		ret = goodix_ts_send_cmd(core_data, FILM_MODE_SWITCH_CMD, 5,
 						core_data->get_mode.film_mode, 0x00);
+#endif
 		if (!ret) {
 			core_data->set_mode.film_mode = core_data->get_mode.film_mode;
 			msleep(20);

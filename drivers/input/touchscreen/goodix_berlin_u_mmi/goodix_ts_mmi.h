@@ -33,7 +33,14 @@ static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device
 #define ENTER_LEATHER_MODE         0x01
 #define EXIT_LEATHER_MODE          0x00
 
+#ifdef CONFIG_GTP_GLOVE_MODE
+#define FILM_MODE_SWITCH_CMD       0x32
+#define ENTER_GLOVE_MODE           0x38
+#define EXIT_GLOVE_MODE            0x37
+#else
 #define FILM_MODE_SWITCH_CMD       0x27
+#endif
+
 #define ENTER_FILM_MODE            0x01
 #define EXIT_FILM_MODE             0x00
 
