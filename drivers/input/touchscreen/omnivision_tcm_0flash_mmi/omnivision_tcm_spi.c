@@ -688,6 +688,56 @@ exit:
 	return retval;
 }
 
+#ifdef OVT_CHECK_DEVICE_BOOTMODE
+static bool is_bootmode_charger(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool charger_mode = false;
+	int ret;
+	const char *bootargs = NULL;
+	char *bootmode = NULL;
+
+	OVT_INFO("is_bootmode_charger enter");
+	if (!np){
+		OVT_ERROR("chosen node NULL\n");
+			return false;
+	}
+
+#ifdef CONFIG_BOOT_CONFIG
+	OVT_INFO("BOOT_CONFIG is define\n");
+	ret = of_property_read_string(np, "mmi,bootconfig", &bootargs);
+#else
+	OVT_INFO("BOOT_CONFIG is not define\n");
+	ret = of_property_read_string(np, "bootargs", &bootargs);
+#endif
+
+	OVT_INFO("ret=%d, bootargs=%s\n", ret, bootargs);
+	if(!ret && bootargs) {
+		bootmode = strstr(bootargs, "androidboot.mode=");
+		if(bootmode) {
+			OVT_INFO("bootmode info: %s\n", bootmode);
+			bootmode = strpbrk(bootmode, "=");
+			if (bootmode && (strlen(bootmode) > 1)) {
+				bootmode++;
+				OVT_INFO("bootmode=%s\n", bootmode);
+				if (bootmode && !strncmp(bootmode, "charger", strlen("charger"))) {
+					charger_mode = true;
+					OVT_INFO("Charger_smode true\n");
+				}
+			}
+		} else
+			OVT_ERROR("bootmode NULL\n");
+	} else
+		OVT_ERROR("get boottargs fail\n");
+
+	of_node_put(np);
+
+	OVT_INFO("Charger mode = %d\n",charger_mode);
+
+	return charger_mode;
+}
+#endif
+
 static int ovt_tcm_spi_probe(struct spi_device *spi)
 {
 	int retval;
@@ -724,6 +774,13 @@ static int ovt_tcm_spi_probe(struct spi_device *spi)
 	retval = ovt_tcm_check_dt(np);
 	if (retval == -EPROBE_DEFER)
 		return retval;
+#endif
+
+#ifdef OVT_CHECK_DEVICE_BOOTMODE
+	if(is_bootmode_charger()){
+		OVT_INFO("Charger mode,ignore insmod ovt modules\n");
+		return -ENODEV;
+	}
 #endif
 
 	parse_dt(&spi->dev, hw_if.bdata);
