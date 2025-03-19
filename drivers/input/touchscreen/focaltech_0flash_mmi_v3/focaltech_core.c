@@ -3011,6 +3011,56 @@ static const struct dev_pm_ops fts_dev_pm_ops = {
 };
 #endif
 
+#ifdef FTS_CHECK_DEVICE_BOOTMODE
+static bool is_bootmode_charger(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool charger_mode = false;
+	int ret;
+	const char *bootargs = NULL;
+	char *bootmode = NULL;
+
+	FTS_INFO("is_bootmode_charger enter");
+	if (!np){
+		FTS_ERROR("chosen node NULL\n");
+			return false;
+	}
+
+#ifdef CONFIG_BOOT_CONFIG
+	FTS_INFO("BOOT_CONFIG is define\n");
+	ret = of_property_read_string(np, "mmi,bootconfig", &bootargs);
+#else
+	FTS_INFO("BOOT_CONFIG is not define\n");
+	ret = of_property_read_string(np, "bootargs", &bootargs);
+#endif
+
+	FTS_INFO("ret=%d, bootargs=%s\n", ret, bootargs);
+	if(!ret && bootargs) {
+		bootmode = strstr(bootargs, "androidboot.mode=");
+		if(bootmode) {
+			FTS_INFO("bootmode info: %s\n", bootmode);
+			bootmode = strpbrk(bootmode, "=");
+			if (bootmode && (strlen(bootmode) > 1)) {
+				bootmode++;
+				FTS_INFO("bootmode=%s\n", bootmode);
+				if (bootmode && !strncmp(bootmode, "charger", strlen("charger"))) {
+					charger_mode = true;
+					FTS_INFO("Charger_smode true\n");
+				}
+			}
+		} else
+			FTS_ERROR("bootmode NULL\n");
+	} else
+		FTS_ERROR("get boottargs fail\n");
+
+	of_node_put(np);
+
+	FTS_INFO("Charger mode = %d\n",charger_mode);
+
+	return charger_mode;
+}
+#endif
+
 /*****************************************************************************
 * TP Driver
 *****************************************************************************/
@@ -3025,6 +3075,13 @@ static int fts_ts_probe(struct spi_device *spi)
 	if (ret) {
 		FTS_INFO("MTK get focaltech panel error");
 		return ret;
+	}
+#endif
+
+#ifdef FTS_CHECK_DEVICE_BOOTMODE
+	if(is_bootmode_charger()){
+		FTS_INFO("Charger mode,ignore insmod fts modules\n");
+		return -ENODEV;
 	}
 #endif
 

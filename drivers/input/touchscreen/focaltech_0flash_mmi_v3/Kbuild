@@ -116,6 +116,10 @@ ifneq ($(filter m y, $(CONFIG_FOCALTECH_LOG_CAPTURE)),)
 	focaltech_0flash_mmi_v3-objs += focaltech_test_ft8725.o
 endif
 
+ifneq ($(filter m y,$(CONFIG_FTS_CHECK_DEVICE_BOOTMODE_SUPPORT)),)
+	EXTRA_CFLAGS += -DFTS_CHECK_DEVICE_BOOTMODE
+endif
+
 ifneq ($(filter m y,$(CONFIG_FTS_LAST_TIME)),)
 	EXTRA_CFLAGS += -DCONFIG_FTS_LAST_TIME
 endif
