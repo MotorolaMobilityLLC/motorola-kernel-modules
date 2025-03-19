@@ -71,6 +71,10 @@ ifneq ($(GTP_ENABLE_TOUCH_PALM),)
 	KBUILD_OPTIONS += CONFIG_INPUT_GOODIX_MMI_ENABLE_PALM=y
 endif
 
+ifeq ($(ENABLE_TP_GLOVE_MODE),true)
+	KERNEL_CFLAGS += CONFIG_GTP_GLOVE_MODE=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_brl_u_mmi.ko
 LOCAL_MODULE_TAGS := optional
