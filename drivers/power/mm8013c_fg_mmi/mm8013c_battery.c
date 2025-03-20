@@ -1889,17 +1889,21 @@ static int mm8xxx_battery_status(struct mm8xxx_device_info *di,
 static int mm8xxx_battery_capacity_level(struct mm8xxx_device_info *di,
 					 union power_supply_propval *val)
 {
-	int level;
+	int uisoc = di->cache.soc;
 
-	if (di->cache.flags & MM8XXX_FLAG_FC)
-		level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-	else if (di->cache.flags & MM8XXX_FLAG_SOCF)
-		level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+	if (uisoc >= 100)
+		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
+	else if (uisoc >= 80 && uisoc < 100)
+		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_HIGH;
+	else if (uisoc >= 20 && uisoc < 80)
+		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+	else if (uisoc > 0 && uisoc < 20)
+		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+	else if (uisoc == 0)
+		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 	else
-		level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
+		val->intval = POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN;
 
-	val->intval = level;
-	dev_err(di->dev, "jiacq---mm8013c--capacity_level = %d\n",val->intval);
 	return 0;
 }
 
