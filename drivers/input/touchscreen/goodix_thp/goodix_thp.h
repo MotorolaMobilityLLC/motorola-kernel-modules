@@ -293,6 +293,7 @@ struct goodix_mode_info {
 struct goodix_thp_board_data {
         char avdd_name[GOODIX_MAX_STR_LABLE_LEN];
         char iovdd_name[GOODIX_MAX_STR_LABLE_LEN];
+        char ic_name[GOODIX_MAX_STR_LABLE_LEN];
         unsigned int reset_gpio;
         unsigned int irq_gpio;
         int irq;

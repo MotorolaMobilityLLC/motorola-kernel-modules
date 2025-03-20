@@ -245,11 +245,19 @@ static int goodix_ts_mmi_methods_get_vendor(struct device *dev, void *cdata) {
 static int goodix_ts_mmi_methods_get_productinfo(struct device *dev, void *cdata) {
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
-	char *ic_info = "goodix_thp";
+	struct thp_ts_device *tdev;
 
 	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
 
-	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", ic_info);
+	if (tdev->board_data.chip_type == CHIP_TYPE_9916)
+		strncpy(tdev->board_data.ic_name, "gt9916P", sizeof(tdev->board_data.ic_name));
+	else if (tdev->board_data.chip_type == CHIP_TYPE_9966)
+		strncpy(tdev->board_data.ic_name, "gt9966", sizeof(tdev->board_data.ic_name));
+	else if (tdev->board_data.chip_type == CHIP_TYPE_9615)
+		strncpy(tdev->board_data.ic_name, "gt9615", sizeof(tdev->board_data.ic_name));
+
+	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", tdev->board_data.ic_name);
 }
 
 static ssize_t goodix_ts_log_trigger_store(struct device *dev,
