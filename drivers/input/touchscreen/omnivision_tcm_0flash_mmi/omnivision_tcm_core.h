@@ -65,8 +65,6 @@
 
 #define CONIFG_OVT_ZEROFLASH
 
-#define CONFIG_OVT_CHARGER_DETECT
-
 #ifdef CONFIG_OVT_CHARGER_DETECT
 #include <linux/power_supply.h>
 #endif
@@ -270,9 +268,6 @@ enum module_type {
 	TCM_TESTING = 3,
 	TCM_RECOVERY = 4,
 	TCM_DIAGNOSTICS = 5,
-#ifdef CONFIG_OVT_CHARGER_DETECT
-	TCM_CHARGER_DETECT = 6,
-#endif
 	TCM_LAST,
 };
 
@@ -624,9 +619,6 @@ struct ovt_tcm_hcd {
 	struct mutex suspend_resume_mutex;
 	struct mutex identify_mutex;
 	struct delayed_work polling_work;
-#ifdef CONFIG_OVT_CHARGER_DETECT
-    struct workqueue_struct *workqueue;
-#endif
 	struct workqueue_struct *polling_workqueue;
 	struct task_struct *notifier_thread;
 #if defined(CONFIG_DRM) || defined(CONFIG_FB)
@@ -658,9 +650,6 @@ struct ovt_tcm_hcd {
 	struct ovt_tcm_watchdog watchdog;
 	struct ovt_tcm_features features;
 	const struct ovt_tcm_hw_interface *hw_if;
-#ifdef CONFIG_OVT_CHARGER_DETECT
-    void *charger_detect_data;
-#endif
 #ifdef OVT_TAP_SENSOR_EN
     //bool wakeable;
     //enum display_state screen_state;
@@ -944,16 +933,13 @@ extern int ovt_tcm_set_gpio(struct ovt_tcm_hcd *tcm_hcd, int gpio,
 		bool config, int dir, int state);
 extern int ovt_tcm_request_gpio(struct ovt_tcm_hcd *tcm_hcd, int gpio, bool config);
 #ifdef CONFIG_OVT_CHARGER_DETECT
-// extern int ovt_start_charger_detect(struct ovt_tcm_hcd *tcm_hcd);
-// extern int ovt_stop_charger_detect(struct ovt_tcm_hcd *tcm_hcd);
 int  charger_module_init(void);
+#endif
 
 #ifdef OVT_PANEL_GESTURE_NOTIFY_SUPPORT
 extern int __attribute__ ((weak)) panel_gesture_register_client(const char *source, struct notifier_block *nb);
 extern int __attribute__ ((weak)) panel_gesture_unregister_client(struct notifier_block *nb);
 extern int __attribute__ ((weak)) panel_gesture_notifier_call_chain(unsigned long val, void *v);
-#endif
-
 #endif
 
 #endif

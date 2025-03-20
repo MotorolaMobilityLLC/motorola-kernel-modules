@@ -4074,9 +4074,6 @@ static int ovt_tcm_disp_resume(struct device *dev)
 	if (!tcm_hcd->in_suspend  || tcm_hcd->ovt_tcm_driver_removing)
 		return 0;
 
-#ifdef CONFIG_OVT_CHARGER_DETECT
-	//ovt_start_charger_detect(tcm_hcd);
-#endif
 	mutex_lock(&tcm_hcd->suspend_resume_mutex);
 	if (tcm_hcd->in_hdl_mode) {
 		tcm_hcd->enable_irq(tcm_hcd, true, NULL);
@@ -4174,9 +4171,7 @@ static int ovt_tcm_disp_suspend(struct device *dev)
 
 	if (tcm_hcd->in_suspend || tcm_hcd->ovt_tcm_driver_removing)
 		return 0;
-#ifdef CONFIG_OVT_CHARGER_DETECT
-	//ovt_stop_charger_detect(tcm_hcd);
-#endif
+
 	mutex_lock(&tcm_hcd->suspend_resume_mutex);
 	touch_suspend(tcm_hcd);
 
@@ -4271,9 +4266,7 @@ static int ovt_tcm_resume(struct device *dev)
 
 	if (!tcm_hcd->in_suspend  || tcm_hcd->ovt_tcm_driver_removing)
 		return 0;
-#ifdef CONFIG_OVT_CHARGER_DETECT
-	//ovt_start_charger_detect(tcm_hcd);
-#endif
+
 	mutex_lock(&tcm_hcd->suspend_resume_mutex);
 	if (tcm_hcd->in_hdl_mode) {
 		tcm_hcd->enable_irq(tcm_hcd, true, NULL);
@@ -4376,9 +4369,7 @@ static void speedup_resume(struct work_struct *work)
 	LOGE(tcm_hcd->pdev->dev.parent,"speed up resume enter\n");
 	if (!tcm_hcd->in_suspend  || tcm_hcd->ovt_tcm_driver_removing)
 		return;
-#ifdef CONFIG_OVT_CHARGER_DETECT
-	//ovt_start_charger_detect(tcm_hcd);
-#endif
+
 	mutex_lock(&tcm_hcd->suspend_resume_mutex);
 	pm_stay_awake(&tcm_hcd->pdev->dev);
 	if (tcm_hcd->in_hdl_mode) {
@@ -4481,9 +4472,7 @@ static int ovt_tcm_suspend(struct device *dev)
 
 	if (tcm_hcd->in_suspend || tcm_hcd->ovt_tcm_driver_removing)
 		return 0;
-#ifdef CONFIG_OVT_CHARGER_DETECT
-	//ovt_stop_charger_detect(tcm_hcd);
-#endif
+
 	mutex_lock(&tcm_hcd->suspend_resume_mutex);
 	touch_suspend(tcm_hcd);
 
@@ -5344,13 +5333,6 @@ static int ovt_tcm_probe(struct platform_device *pdev)
 	}
 #endif
 
-#ifdef CONFIG_OVT_CHARGER_DETECT
-	tcm_hcd->workqueue =
-			create_singlethread_workqueue("ovt_tcm_charger_detect_workqueue");
-	LOGE(tcm_hcd->pdev->dev.parent,
-			"create charger detect workqueue\n");
-#endif
-
 	tcm_hcd->helper.workqueue =
 			create_singlethread_workqueue("ovt_tcm_helper");
 	INIT_WORK(&tcm_hcd->helper.work, ovt_tcm_helper_work);
@@ -5564,8 +5546,6 @@ static int ovt_tcm_remove(struct platform_device *pdev)
 	destroy_workqueue(tcm_hcd->polling_workqueue);
 
 #ifdef CONFIG_OVT_CHARGER_DETECT
-	flush_workqueue(tcm_hcd->workqueue);
-	destroy_workqueue(tcm_hcd->workqueue);
 	if (tcm_hcd->notifier_charger.notifier_call)
 		power_supply_unreg_notifier(&tcm_hcd->notifier_charger);
 #endif
