@@ -198,6 +198,7 @@ typedef enum {
         NOTIFY_TYPE_STOW_MODE,
         NOTIFY_TYPE_POCKET_MODE,
         NOTIFY_TYPE_ROTATION,
+        NOTIFY_TYPE_SWITCH_REPORT_RATE,
 } NOTIFY_TYPE_T;
 
 #pragma pack(push, 1)

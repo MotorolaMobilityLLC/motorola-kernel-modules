@@ -192,7 +192,21 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 		return -EINVAL;
 	}
 
+	mutex_lock(&core_data->mode_lock);
 	memcpy(core_data->get_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
+	if (!memcmp(core_data->set_mode.edge_mode, edge_cmd, sizeof(edge_cmd))) {
+		ts_info("The value (%02x %02x) is same,so not write.",
+                edge_cmd[0], edge_cmd[1]);
+		ret = size;
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info("The touch is in sleep state, restore the value when resume");
+		ret = size;
+		goto exit;
+	}
+
 	val[0] = NOTIFY_TYPE_ROTATION;
 	val[1] = (u8)edge_cmd[0];
 	val[2] = (u8)edge_cmd[1];
@@ -202,8 +216,9 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 	msleep(20);
 	ret = size;
 	ts_info("Success to set edge = %02x, rotation = %02x", edge_cmd[1], edge_cmd[0]);
-
-	return ret;
+exit:
+    mutex_unlock(&core_data->mode_lock);
+    return ret;
 }
 
 static ssize_t goodix_ts_edge_show(struct device *dev,
@@ -292,7 +307,7 @@ static int goodix_thp_mmi_set_report_rate(struct goodix_thp_core *core_data)
 {
 	int ret = 0;
 	int mode = 0;
-	struct thp_ts_device *tdev = core_data->ts_dev;
+	u8 val[3];
 
 	mode = goodix_thp_mmi_get_report_rate(core_data);
 	if (mode == -1) {
@@ -301,44 +316,30 @@ static int goodix_thp_mmi_set_report_rate(struct goodix_thp_core *core_data)
 
 	core_data->get_mode.report_rate_mode = mode;
 	if (core_data->set_mode.report_rate_mode == mode) {
-		ts_debug("The value = %d is same, so not to write", mode);
+		ts_info("The value = %d is same, so not to write", mode);
 		return 0;
 	}
 
 	if (core_data->power_on == 0) {
-		ts_debug("The touch is in sleep state, restore the value when resume\n");
+		ts_info("The touch is in sleep state, restore the value when resume\n");
 		return 0;
 	}
 
-	//if now on high report rate and need switch to low report rate
-	if ((((core_data->set_mode.report_rate_mode >> 8) & 0xFF) == REPORT_RATE_CMD_HIGH) &&
-		(((mode >> 8) & 0xFF) == REPORT_RATE_CMD_LOW)) {
-		ts_info("exit high report rate");
-		ret = tdev->hw_ops->send_cmd(tdev, EXIT_HIGH_REPORT_RATE_CMD >> 8,
-							EXIT_HIGH_REPORT_RATE_CMD & 0xFF);
-		if (ret < 0) {
-			ts_err("failed to exit high report rate");
-			return -EINVAL;
-		}
-		msleep(20);
-	}
-
 	//send switch command
-	ret = tdev->hw_ops->send_cmd(tdev, mode >> 8, mode & 0xFF);
-	if (ret < 0) {
-		ts_err("failed to set report rate, mode = %d", mode);
-		return -EINVAL;
-	}
-	msleep(20);
+	val[0] = NOTIFY_TYPE_SWITCH_REPORT_RATE;
+	val[1] = (mode >> 8) & 0xFF;
+	val[2] = mode & 0xFF;
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
+	msleep(20);
 	core_data->set_mode.report_rate_mode = mode;
 
 	ts_info("Success to set %s\n", mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
-				(mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_360HZ" :
+				(mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
 				(mode == REPORT_RATE_CMD_480HZ ? "REPORT_RATE_480HZ" :
 				(mode == REPORT_RATE_CMD_576HZ ? "REPORT_RATE_576HZ" :
 				(mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
-				(mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120HZ" :
+				(mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
 				"Unsupported"))))));
 
 	return ret;

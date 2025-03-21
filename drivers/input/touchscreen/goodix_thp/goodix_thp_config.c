@@ -15,27 +15,6 @@
 struct goodix_ic_report_rate_config report_rate_config_info = {
 #if 0
 	.rate_config_count = 3,
-	.refresh_rate_ctrl = 0,
-	.interpolation_ctrl = 1,
-	{
-		{
-			.interpolation_flag = 0,
-			.report_rate = 240,
-			.command = 0x9D01,
-		},
-		{
-			.interpolation_flag = 1,
-			.report_rate = 360,
-			.command = 0x9D02,
-		},
-		{
-			.interpolation_flag = 2,
-			.report_rate = 120,
-			.command = 0x9D03,
-		},
-	}
-#endif
-	.rate_config_count = 3,
 	.refresh_rate_ctrl = 1,
 	.interpolation_ctrl = 1,
 	{
@@ -54,6 +33,23 @@ struct goodix_ic_report_rate_config report_rate_config_info = {
 		{
 			.interpolation_flag = 1,
 			.refresh_rate = {1, 165},
+			.report_rate = 300,
+			.command = 0x9D02,
+		},
+	}
+#endif
+
+	.rate_config_count = 2,
+	.refresh_rate_ctrl = 0,
+	.interpolation_ctrl = 1,
+	{
+		{
+			.interpolation_flag = 0,
+			.report_rate = 130,
+			.command = 0x9D03,
+		},
+		{
+			.interpolation_flag = 1,
 			.report_rate = 300,
 			.command = 0x9D02,
 		},
