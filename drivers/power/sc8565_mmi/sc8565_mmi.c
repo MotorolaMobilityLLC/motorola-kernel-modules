@@ -240,6 +240,7 @@ enum sc8565_cp_op_mode {
 #define SC8565_VOUT_OVP_DISABLE        BIT(0)
 
 //SC8565_INT_STAT 0x10
+#define SC8565_VOUT_OK_SW_REGN_STAT  BIT(6)
 #define SC8565_VOUT_OK_REV_STAT        BIT(5)
 #define SC8565_VOUT_OK_CHG_STAT        BIT(4)
 #define SC8565_VOUT_INSERT_STAT        BIT(3)
@@ -727,7 +728,7 @@ static const struct regmap_config sc858x_regmap_config = {
     .reg_bits = 8,
     .val_bits = 8,
 
-    .max_register = SC858X_REGMAX,
+    .max_register = 0xFF,
 };
 
 /************************************************************************/
@@ -923,6 +924,35 @@ __maybe_unused static int sc858x_detect_device(struct sc858x_chip *sc)
 
 __maybe_unused static int sc858x_reg_reset(struct sc858x_chip *sc)
 {
+	int ret = 0;
+	int val = 0;
+	int val_vout = 0;
+
+	//only cps2023 need this. cps's reset operate as hw reset which damage chip, need cp_en disable firstly,then reset.
+	if (sc->device_id == CPS2023H_DEVICE_ID || sc->device_id == CPS2023_DEVICE_ID){
+
+		ret = sc858x_field_read(sc, CP_EN, &val);
+		if (ret < 0) {
+			dev_err(sc->dev, "%s read cp_en fail(%d)\n", __func__, ret);
+		}
+
+		ret = regmap_read(sc->regmap, SC8565_INT_STAT, &val_vout);
+		if(ret){
+			dev_err(sc->dev, "%s read INT STAT fail(%d)\n", __func__, ret);
+		}
+
+		dev_err(sc->dev, "%s read cp_en :%d , and INT_STAT :%d before reset\n", __func__, val, val_vout);
+
+		if(val == 1 || val_vout&SC8565_VOUT_OK_SW_REGN_STAT) {
+			ret = sc858x_field_write(sc, CP_EN, 0);
+			if (ret < 0) {
+				dev_err(sc->dev, "%s write cp_en fail(%d)\n", __func__, ret);
+			}else
+				mdelay(500);
+			dev_err(sc->dev, "%s cp enabled before reset, disable it\n", __func__);
+		}
+	}
+
     return sc858x_field_write(sc, REG_RST, 1);
 }
 
@@ -1204,6 +1234,69 @@ int sc858x_init_cps2023_device(struct sc858x_chip *sc) {
 		dev_err(sc->dev, "%s:mmi_mux dis mxgate fail ret=%d", __func__, ret);
 		return ret;
 	}
+
+	return ret;
+}
+
+int sc858x_init_cps2023_CN2VOUT(struct sc858x_chip *sc) {
+	int ret = 0;
+       int val = 0;
+
+	//only cps2023 need this.
+	if (sc->device_id != CPS2023H_DEVICE_ID && sc->device_id != CPS2023_DEVICE_ID){
+		return 0;
+	}
+
+	//reg_0xc6[7:0] = 0x1
+	ret = regmap_write(sc->regmap, 0xC6, 0x1);
+	if (ret) {
+	    dev_err(sc->dev, "%s: write 0xc6 fail ret=%d", __func__, ret);
+	}
+	//reg_0xff[7:0] = 0x23
+	regmap_write(sc->regmap, 0xFF, 0x23);
+	if (ret) {
+	    dev_err(sc->dev, "%s: write 0xff fail ret=%d", __func__, ret);
+	}
+
+	//reg_0xDC[4]=1
+	ret = regmap_update_bits(sc->regmap, 0xDC,
+					BIT(4), BIT(4));
+	if (ret) {
+	    dev_err(sc->dev, "%s: write 0xdc fail ret=%d", __func__, ret);
+	}
+
+	ret = regmap_read(sc->regmap, 0xDC, &val);
+	if (ret) {
+	    dev_err(sc->dev, "%s: read 0xDC fail ret=%d,val:0x%X", __func__, ret, val);
+	}
+	dev_err(sc->dev, "%s: read 0xDC ret=%d,val:0x%X", __func__, ret, val);
+
+	//reg_0xe7[7]=1
+	ret = regmap_update_bits(sc->regmap, 0xE7,
+					BIT(7), BIT(7));
+	if (ret) {
+	    dev_err(sc->dev, "%s: write 0xe7 fail ret=%d", __func__, ret);
+	}
+
+	ret = regmap_read(sc->regmap, 0xE7, &val);
+	if (ret) {
+	    dev_err(sc->dev, "%s: read 0xE7 fail ret=%d,val:0x%X", __func__, ret, val);
+	}
+	dev_err(sc->dev, "%s: after read 0xE7 ret=%d,val:0x%X", __func__, ret, val);
+
+	//reg_0xFF[7:0] = 0x0
+	regmap_write(sc->regmap, 0xFF, 0x0);
+	if (ret) {
+	    dev_err(sc->dev, "%s: write 0xFF fail ret=%d", __func__, ret);
+	}
+
+	//reg_0xc6[7:0] = 0x0
+	regmap_write(sc->regmap, 0xC6, 0x0);
+	if (ret) {
+	    dev_err(sc->dev, "%s: write 0xc6 fail ret=%d", __func__, ret);
+	}
+
+	dev_err(sc->dev, "%s: write CN2VOUT success\n", __func__);
 
 	return ret;
 }
@@ -2593,6 +2686,8 @@ static int sc858x_charger_probe(struct i2c_client *client,
         dev_err(sc->dev, "%s init device failed(%d)\n", __func__, ret);
         goto err_init_device;
     }
+
+    sc858x_init_cps2023_CN2VOUT(sc);
 
     ret = sc858x_psy_register(sc);
     if (ret < 0) {
