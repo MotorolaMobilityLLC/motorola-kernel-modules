@@ -1121,6 +1121,20 @@ static int sc8989x_get_constant_voltage(struct charger_device *chg_dev, u32 * vo
 	return ret;
 }
 
+static int sc8989x_get_mivr_voltage(struct charger_device *chg_dev, u32 * volt)
+{
+	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
+	int volt_mv;
+	int ret;
+
+	ret = sc8989x_get_vindpm(sc, &volt_mv);
+	if (!ret) {
+		*volt = volt_mv * 1000;
+	}
+
+	return ret;
+}
+
 static int sc8989x_set_constant_voltage(struct charger_device *chg_dev, u32 volt)
 {
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
@@ -1483,6 +1497,7 @@ static struct charger_ops sc8989x_chg_ops = {
 	.set_constant_voltage = sc8989x_set_constant_voltage,
 	.kick_wdt = sc8989x_kick_wdt,
 	.set_mivr = sc8989x_set_ivl,
+	.get_mivr = sc8989x_get_mivr_voltage,
 	.is_charging_done = sc8989x_is_charging_done,
 	.get_min_charging_current = sc8989x_get_min_ichg,
 	.dump_registers = sc8989x_dump_registers,
