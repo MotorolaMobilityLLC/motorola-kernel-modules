@@ -111,8 +111,11 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	GET_GOODIX_DATA(dev);
 
-	ADD_ATTR(edge);
+	if (core_data->ts_dev->board_data.edge_ctrl)
+		ADD_ATTR(edge);
+
 	ADD_ATTR(log_trigger);
+
 	if (core_data->ts_dev->board_data.interpolation_ctrl)
 		ADD_ATTR(interpolation);
 
@@ -135,6 +138,7 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	return 0;
 }
+
 /*
  * HAL: args[0] suppression area, args[1] rotation direction.
  * CMD: [06 17 data0 data1],
@@ -248,7 +252,7 @@ static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 	val[1] = (u8)mode;
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
-	ts_info("Success to %s charger mode", mode ? "Enable" : "Disable");
+	ts_info("Success to %s charger mode", mode ? "enable" : "disable");
 
 	return 0;
 }
@@ -316,7 +320,7 @@ static int goodix_thp_mmi_set_report_rate(struct goodix_thp_core *core_data)
 
 	core_data->get_mode.report_rate_mode = mode;
 	if (core_data->set_mode.report_rate_mode == mode) {
-		ts_info("The value = %d is same, so not to write", mode);
+		ts_info("The value = 0x%02x is same, so not to write", mode);
 		return 0;
 	}
 
@@ -549,11 +553,10 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 		goto exit;
 	}
 
-	if ( core_data->power_on == 1) {
+	if (core_data->power_on == 1) {
 		val[0] = NOTIFY_TYPE_STOW_MODE;
 		val[1] = mode ? 1 : 0;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-
 	} else {
 		ts_info("Skip stowed mode setting power_on:%d.\n", core_data->power_on);
 		ret = size;
@@ -600,6 +603,75 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%lld.%lld\n", last_ts.tv_sec, last_ts.tv_usec);
 }
 
+int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
+	u8 val[3];
+
+	mutex_lock(&core_data->mode_lock);
+	/* All IC status are cleared after reset */
+	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
+	/* restore data */
+
+	if (core_data->ts_dev->board_data.interpolation_ctrl && core_data->get_mode.interpolation) {
+		val[0] = NOTIFY_TYPE_SWITCH_REPORT_RATE;
+		val[1] = ((core_data->get_mode.report_rate_mode) >> 8) & 0xFF;
+		val[2] = (core_data->get_mode.report_rate_mode) & 0xFF;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.interpolation = core_data->get_mode.interpolation;
+		core_data->set_mode.report_rate_mode = core_data->get_mode.report_rate_mode;
+		msleep(20);
+
+		ts_info("Success to %s interpolation mode\n",
+			core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_480HZ ? "REPORT_RATE_480HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_576HZ ? "REPORT_RATE_576HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
+		"Unsupported"))))));
+	}
+
+	if (core_data->ts_dev->board_data.sample_ctrl && core_data->get_mode.sample) {
+		val[0] = NOTIFY_TYPE_GAME_MODE;
+		val[1] = core_data->get_mode.sample;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.sample = core_data->get_mode.sample;
+		msleep(20);
+		ts_info("Success to %d sample mode\n", core_data->get_mode.sample);
+	}
+
+	if (core_data->ts_dev->board_data.edge_ctrl) {
+		val[0] = NOTIFY_TYPE_ROTATION;
+		val[1] = (u8)(core_data->get_mode.edge_mode[0]);
+		val[2] = (u8)(core_data->get_mode.edge_mode[1]);
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		memcpy(core_data->set_mode.edge_mode, core_data->get_mode.edge_mode,
+				sizeof(core_data->get_mode.edge_mode));
+		msleep(20);
+		ts_info("Success to set edge area = %02x, rotation = %02x",
+			core_data->get_mode.edge_mode[1], core_data->get_mode.edge_mode[0]);
+	}
+
+	if (core_data->ts_dev->board_data.stowed_mode_ctrl) {
+		core_data->set_mode.stowed = 0;
+	}
+
+	if (core_data->ts_dev->board_data.pocket_mode_ctrl && core_data->get_mode.pocket_mode) {
+		val[0] = NOTIFY_TYPE_POCKET_MODE;
+		val[1] = core_data->get_mode.pocket_mode;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.pocket_mode = core_data->get_mode.pocket_mode;
+		ts_info("Success to %s pocket mode", core_data->get_mode.pocket_mode ? "Enable" : "Disable");
+	}
+
+	mutex_unlock(&core_data->mode_lock);
+
+	return 0;
+}
+
 static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)
 {
 	int ret = 0;
@@ -623,7 +695,6 @@ static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)
 	if (gesture_type & TS_MMI_GESTURE_DOUBLE) {
 		val[1] = val[1] | 0x80;
 	}
-
 
 	ts_info("Send enable gesture mode 0x%x 0x%x\n", val[1], val[2]);
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
@@ -674,6 +745,12 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 		return -EINVAL;
 	}
 
+	if (val[1]) {
+		ts_info("Send screen on cmd");
+	}
+	else {
+		ts_info("Send screen off cmd");
+	}
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 	return 0;

@@ -318,6 +318,7 @@ struct goodix_thp_board_data {
         bool sample_ctrl;
         bool stowed_mode_ctrl;
         bool pocket_mode_ctrl;
+        bool edge_ctrl;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -472,5 +473,6 @@ u8 checksum_u8(u8 *data, u32 size);
 u8 checksum8_u16(const u8 *data, u32 size);
 
 void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len);
+int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data);
 
 #endif /* _GOODIX_THP_H_ */

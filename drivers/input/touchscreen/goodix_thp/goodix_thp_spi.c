@@ -420,7 +420,13 @@ static int goodix_thp_parse_dt(struct device_node *node,
         board_data->pocket_mode_ctrl = of_property_read_bool(node,
             "goodix,pocket-mode-ctrl");
         if (board_data->pocket_mode_ctrl)
-        ts_info("Support goodix touch pocket mode");
+            ts_info("Support goodix touch pocket mode");
+
+        board_data->edge_ctrl = of_property_read_bool(node,
+                "goodix,edge-ctrl");
+        if (board_data->edge_ctrl)
+            ts_info("support goodix edge mode");
+
 
         return 0;
 }

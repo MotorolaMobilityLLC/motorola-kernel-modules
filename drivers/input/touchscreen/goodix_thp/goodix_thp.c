@@ -569,6 +569,9 @@ static long goodix_thp_ioctl_enter_resume(struct goodix_thp_core *core_data)
         if (r)
                 ts_err("%s failed, r %d", __func__, r);
 
+        //restore param after IC reset
+        goodix_ts_mmi_post_resume(cd);
+
         return r;
 }
 
