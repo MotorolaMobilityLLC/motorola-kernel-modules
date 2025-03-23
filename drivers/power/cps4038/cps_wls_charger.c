@@ -2896,7 +2896,8 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
             return -EINVAL;
             break;
     }
-    cps_wls_log(CPS_LOG_ERR, "[%s] psp = %d val = %d.\n", __func__, psp,val->intval);
+    if(psp != POWER_SUPPLY_PROP_ONLINE)
+        cps_wls_log(CPS_LOG_ERR, "[%s] psp = %d val = %d.\n", __func__, psp,val->intval);
 
     return 0;
 }
