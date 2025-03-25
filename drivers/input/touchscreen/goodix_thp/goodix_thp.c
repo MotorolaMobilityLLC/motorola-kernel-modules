@@ -1264,6 +1264,9 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         u8 i;
         static int pre_flags = 0;
         struct thp_ts_device *tdev = core_data->ts_dev;
+#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
+        unsigned int tool_type;
+#endif
 
         if (arg == 0) {
                 ts_err("%s:arg is null.", __func__);
@@ -1311,7 +1314,12 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 // report fingers
                 for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
                         input_mt_slot(input_dev, i);
+#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
+                        tool_type = data.large_touch_stat ? MT_TOOL_PALM : MT_TOOL_FINGER;
+                        input_mt_report_slot_state(input_dev, tool_type, data.touch[i].touch_valid != 0);
+#else
                         input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, data.touch[i].touch_valid != 0);
+#endif
                         if (data.touch[i].touch_valid != 0) {
                                 ts_debug("[%d] x:%d y:%d w:%d", i, 
                                         data.touch[i].x, data.touch[i].y, data.touch[i].major);
@@ -1328,13 +1336,6 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 input_report_key(input_dev, BTN_TOUCH, (data.touch_num > 0) ? 1 : 0);
                 input_report_key(input_dev, BTN_TOOL_FINGER, (data.touch_num > 0) ? 1 : 0);
                 input_sync(input_dev);
-        }
-
-        /* large touch flag */
-        if (data.large_touch_stat) {
-                //TODO
-        } else {
-                //TODO
         }
 
         /* fp touch flag */
@@ -1508,6 +1509,10 @@ static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
         input_set_abs_params(input_dev, ABS_MT_TOUCH_MAJOR,
                         0, core_data->ts_dev->board_data.panel_max_w - 1, 0, 0);
         input_mt_init_slots(input_dev, INPUT_AGENT_MAX_FINGERS, INPUT_MT_DIRECT);
+#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
+        input_set_abs_params(input_dev, ABS_MT_TOOL_TYPE,
+                        MT_TOOL_FINGER, MT_TOOL_PALM, 0, 0);
+#endif
 
         // gesture
         input_set_capability(input_dev, EV_KEY, KEY_WAKEUP);
