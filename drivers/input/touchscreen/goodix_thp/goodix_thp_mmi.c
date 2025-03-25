@@ -766,17 +766,37 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 };
 
 int goodix_ts_mmi_dev_register(struct platform_device *pdev) {
-	int ret;
+	int ret, i;
 	struct goodix_thp_core *core_data;
 	core_data = platform_get_drvdata(pdev);
 	if (!core_data) {
 		ts_info("Failed to get driver data");
 		return -ENODEV;
 	}
+
+	if (core_data->ts_dev->board_data.interpolation_ctrl) {
+		if (parse_report_rate_config(core_data->ts_dev->dev->of_node)) {
+			ts_err("Failed to parse rate config");
+		} else {
+			ts_info("rate_config_count = %d", report_rate_config_info.rate_config_count);
+			ts_info("refresh_rate_ctrl = %d", report_rate_config_info.refresh_rate_ctrl);
+			ts_info("interpolation_ctrl = %d", report_rate_config_info.interpolation_ctrl);
+			for (i = 0; i < report_rate_config_info.rate_config_count; i++) {
+				ts_info("interpolation_flag = %d",
+						report_rate_config_info.report_rate_info[i].interpolation_flag);
+				ts_info("refresh_rate[0] = %d, refresh_rate[1] = %d",
+						report_rate_config_info.report_rate_info[i].refresh_rate[0],
+						report_rate_config_info.report_rate_info[i].refresh_rate[1]);
+				ts_info("report_rate = %d", report_rate_config_info.report_rate_info[i].report_rate);
+				ts_info("command = 0x%02x\n", report_rate_config_info.report_rate_info[i].command);
+			}
+		}
+	}
+
 	mutex_init(&core_data->mode_lock);
 	ret = ts_mmi_dev_register(core_data->ts_dev->dev, &goodix_ts_mmi_methods);
 	if (ret) {
-		dev_err(&pdev->dev, "Failed to register ts mmi\n");
+		ts_err("Failed to register ts mmi");
 		mutex_destroy(&core_data->mode_lock);
 		return ret;
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 Motorola Mobility LLC
+ * Copyright (C) 2025 Motorola Mobility LLC
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -41,6 +41,9 @@ struct goodix_ic_report_rate_config {
 	struct report_rate_config report_rate_info[MAX_REPORT_RATE_CONFIG];
 };
 
+extern struct goodix_ic_report_rate_config report_rate_config_info;
+
 int goodix_thp_mmi_get_report_rate(struct goodix_thp_core *core_data);
+int parse_report_rate_config(struct device_node *np);
 
 #endif
