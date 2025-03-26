@@ -158,6 +158,7 @@
                 _IOW(IO_TYPE, 0x11, struct thp_ioctl_tsc_msg)
 #define IOCTL_CMD_GET_CHIP_TYPE                         _IOR(IO_TYPE, 0x12, u32)
 #define IOCTL_CMD_SET_TOOL_OPS                          _IOW(IO_TYPE, 0x14, u32)
+#define IOCTL_CMD_DUMP_REP_DONE                         _IOW(IO_TYPE, 0x15, u32)
 
 /* ioctl cmd for daemon */
 #define INPUT_AGENT_IO_TYPE  (0xB9)

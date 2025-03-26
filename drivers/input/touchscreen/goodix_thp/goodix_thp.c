@@ -558,6 +558,17 @@ static long goodix_thp_ioctl_enter_suspend(struct goodix_thp_core *core_data, un
         return r;
 }
 
+static long goodix_thp_ioctl_dump_rep_done(struct goodix_thp_core *core_data, unsigned long arg)
+{
+        struct goodix_thp_core *cd = core_data;
+        int r = 0;
+
+        ts_info("Notify raw data capture down");
+        sysfs_notify(cd->imports->kobj_notify, NULL, "log_trigger");
+
+        return r;
+}
+
 static long goodix_thp_ioctl_enter_resume(struct goodix_thp_core *core_data)
 {
         struct goodix_thp_core *cd = core_data;
@@ -721,6 +732,9 @@ static long goodix_thp_ioctl(struct file *filp, unsigned int cmd,
                 break;
         case IOCTL_CMD_ENTER_SUSPEND:
                 ret = goodix_thp_ioctl_enter_suspend(cd, arg);
+                break;
+        case IOCTL_CMD_DUMP_REP_DONE:
+                ret = goodix_thp_ioctl_dump_rep_done(cd, arg);
                 break;
         case IOCTL_CMD_ENTER_RESUME:
                 ret = goodix_thp_ioctl_enter_resume(cd);
