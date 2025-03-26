@@ -1559,7 +1559,11 @@ static int richtap_file_mmap(struct file *filp, struct vm_area_struct *vma)
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
 	/*only accept PROT_READ, PROT_WRITE and MAP_SHARED from the API of mmap */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,124)
+	vm_flags_t vm_flags = VM_READ | VM_WRITE | VM_SHARED;
+#else
 	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) | calc_vm_flag_bits(MAP_SHARED);
+#endif
 	vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC| VM_SHARED | VM_MAYSHARE;
 	if (vma && (pgprot_val(vma->vm_page_prot) != pgprot_val(vm_get_page_prot(vm_flags))))
 		return -EPERM;
@@ -3634,10 +3638,12 @@ static int tiktap_file_mmap(struct file *file, struct vm_area_struct *vma)
 	struct aw_haptic *aw_haptic = (struct aw_haptic *)file->private_data;
 	int ret = 0;
 
-#if KERNEL_VERSION(4, 7, 0) < LINUX_VERSION_CODE
-	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) |
-			      calc_vm_flag_bits(MAP_SHARED);
-
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4,7,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,124)
+	vm_flags_t vm_flags = VM_READ | VM_WRITE | VM_SHARED;
+#else
+	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) |calc_vm_flag_bits(MAP_SHARED);
+#endif
 	vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE |
 		    VM_MAYEXEC | VM_SHARED | VM_MAYSHARE;
 
