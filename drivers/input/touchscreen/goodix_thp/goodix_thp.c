@@ -1278,7 +1278,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         u8 i;
         static int pre_flags = 0;
         struct thp_ts_device *tdev = core_data->ts_dev;
-#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
+#if defined(CONFIG_ENABLE_GTP_PALM_CANCEL) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
         unsigned int tool_type;
 #endif
 
@@ -1328,15 +1328,30 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 // report fingers
                 for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
                         input_mt_slot(input_dev, i);
+
 #ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
                         tool_type = data.large_touch_stat ? MT_TOOL_PALM : MT_TOOL_FINGER;
+#endif
+#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID
+                        if ((tool_type != MT_TOOL_PALM) && data.touch[i].cancel_flag)
+                            tool_type = MT_TOOL_PALM;
+#endif
+
+#if defined(CONFIG_ENABLE_GTP_PALM_CANCEL) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
                         input_mt_report_slot_state(input_dev, tool_type, data.touch[i].touch_valid != 0);
 #else
                         input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, data.touch[i].touch_valid != 0);
 #endif
+
                         if (data.touch[i].touch_valid != 0) {
+#ifdef CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID
+                                ts_debug("[%d] x:%d y:%d w:%d, id_palm %d, tool_type %d", i,
+                                        data.touch[i].x, data.touch[i].y, data.touch[i].major,
+                                        data.touch[i].cancel_flag, tool_type);
+#else
                                 ts_debug("[%d] x:%d y:%d w:%d", i, 
                                         data.touch[i].x, data.touch[i].y, data.touch[i].major);
+#endif
                                 input_report_abs(input_dev, ABS_MT_POSITION_X,
                                                         data.touch[i].x);
                                 input_report_abs(input_dev, ABS_MT_POSITION_Y,

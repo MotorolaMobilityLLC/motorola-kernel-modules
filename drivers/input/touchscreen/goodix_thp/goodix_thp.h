@@ -356,6 +356,7 @@ struct input_agent_coor_data {
         int track_id;
         int major;
         int minor;
+        int cancel_flag;
         unsigned int touch_type;
 };
 
