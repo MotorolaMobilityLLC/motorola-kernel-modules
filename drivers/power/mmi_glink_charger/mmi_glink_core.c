@@ -718,7 +718,7 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	charger_info->aicl_result_ma = charger_info_update.aicl_result_ma;
 	charger_info->vfloat_mv = charger_info_update.vfloat_mv;
 	charger_info->chrg_stat = charger_info_update.chrg_stat;
-
+	charger_info->pmic_suspend_st = charger_info_update.pmic_suspend_st;
 
 	if (charger_info->chrg_present != charger_info_update.chrg_present && !charger_info_update.chrg_present) {
 		qti_encrypt_authentication(chip);
@@ -746,9 +746,10 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 		charger_info->chrg_otg_enabled,
 		thermal_level);
 
-	mmi_info(chip, "pmic_vbatt_mv %d, pmic_ibatt_ma %d, vfloat_mv %d, aicl_result_ma %d, chrg_stat %d, icm_sm_st %d\n",
+	mmi_info(chip, "pmic_vbatt_mv %d, pmic_ibatt_ma %d, pmic_suspend_st %d, vfloat_mv %d, aicl_result_ma %d, chrg_stat %d, icm_sm_st %d\n",
 		charger_info->pmic_vbatt_uv / 1000,
 		charger_info->pmic_ibatt_ua / 1000,
+		charger_info->pmic_suspend_st,
 		charger_info->vfloat_mv,
 		charger_info->aicl_result_ma,
 		charger_info->chrg_stat,

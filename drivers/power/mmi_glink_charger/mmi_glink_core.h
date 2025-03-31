@@ -95,6 +95,7 @@ struct mmi_charger_info {
 	int aicl_result_ma;
 	int vfloat_mv;
 	int chrg_stat;
+	int pmic_suspend_st;
 };
 
 #define MMI_VOTE_NUM_MAX 32
