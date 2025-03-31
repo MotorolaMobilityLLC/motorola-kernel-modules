@@ -842,7 +842,11 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (gf_dev->early_suspend.suspend)
 			unregister_early_suspend(&gf_dev->early_suspend);
 #else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
+		mtk_disp_notifier_unregister(&gf_dev->notifier);
+#else
 		fb_unregister_client(&gf_dev->notifier);
+#endif
 #endif
         //spi_unregister_driver(&gf_spi_driver);
 		gf_dev->system_status = 0;
@@ -1448,7 +1452,11 @@ static int gf_platform_remove(struct platform_device *pldev)
 	if (gf_dev->early_suspend.suspend)
 		unregister_early_suspend(&gf_dev->early_suspend);
 #else
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
+	mtk_disp_notifier_unregister(&gf_dev->notifier);
+#else
 	fb_unregister_client(&gf_dev->notifier);
+#endif
 #endif
 
 	if (gf_dev->input == NULL) {
