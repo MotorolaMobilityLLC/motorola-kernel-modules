@@ -161,14 +161,14 @@ static void update(struct adap_chg_data *data)
 #ifdef ADAPTIVE_TOLERANCE_OPTIMIZATION
 			if (data->batt_capacity > (upper_limit + 2)) {
 #else
-                        if (data->batt_capacity > (upper_limit + 1)) {
+			if (data->batt_capacity > upper_limit) {
 #endif
 				suspend_charging(true);
 				stop_charging(true);
-			} else if (data->batt_capacity == (upper_limit + 1)) {
+			} else if (data->batt_capacity == upper_limit) {
 				suspend_charging(false);
 				stop_charging(true);
-			} else if (data->batt_capacity < upper_limit) {
+			} else if (data->batt_capacity < (upper_limit - 1)) {
 				suspend_charging(false);
 				stop_charging(false);
 			}
