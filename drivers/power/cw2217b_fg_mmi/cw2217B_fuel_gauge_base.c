@@ -914,7 +914,7 @@ static void battery_notify_flip_uevent(struct cw_battery *cw_bat)
 
 	uEnvpVar uenvp_vars[] = {
 		{"POWER_SUPPLY_FLIP_BATT_SOC", cw_bat->ui_soc},
-		{"POWER_SUPPLY_FLIP_VOLTAGE_NOW", cw_bat->voltage},
+		{"POWER_SUPPLY_FLIP_VOLTAGE_NOW", cw_bat->voltage * CW_VOL_UNIT},
 		{"POWER_SUPPLY_FLIP_TEMP", cw_bat->temp},
 		{"POWER_SUPPLY_FLIP_CYCLE_COUNT", cw_bat->cycle},
 		{"POWER_SUPPLY_FLIP_CHARGE_FULL", cw_bat->fcc_uah},
