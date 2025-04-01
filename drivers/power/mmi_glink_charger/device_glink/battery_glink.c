@@ -378,9 +378,9 @@ static void battery_notify_flip_uevent(struct battery_info *batt_info)
 	}
 
 	uEnvpVar uenvp_vars[] = {
-		{"POWER_SUPPLY_FLIP_BATT_SOC", batt_info->batt_soc},
+		{"POWER_SUPPLY_FLIP_BATT_SOC", batt_info->batt_soc / 100},
 		{"POWER_SUPPLY_FLIP_VOLTAGE_NOW", batt_info->batt_uv},
-		{"POWER_SUPPLY_FLIP_TEMP", batt_info->batt_temp},
+		{"POWER_SUPPLY_FLIP_TEMP", batt_info->batt_temp / 10},
 		{"POWER_SUPPLY_FLIP_CYCLE_COUNT", batt_info->batt_cycle},
 		{"POWER_SUPPLY_FLIP_CHARGE_FULL", batt_info->batt_full_uah},
 		{"POWER_SUPPLY_FLIP_STATE_OF_HEALTH", batt_info->batt_soh}
