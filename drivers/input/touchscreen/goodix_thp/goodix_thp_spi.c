@@ -427,6 +427,12 @@ static int goodix_thp_parse_dt(struct device_node *node,
         if (board_data->edge_ctrl)
             ts_info("support goodix edge mode");
 
+        r = of_property_read_u32(node, "touchpanel,irq_need_dev_resume_time", &board_data->irq_need_dev_resume_time);
+        if (r) {
+            ts_info("board_data->irq_need_dev_resume_time not specified");
+            board_data->irq_need_dev_resume_time = 50;
+        }
+        ts_info("board_data->irq_need_dev_resume_time = %d ms", board_data->irq_need_dev_resume_time);
 
         return 0;
 }
@@ -1132,12 +1138,34 @@ static const struct spi_device_id spi_id_table[] = {
         {},
 };
 
+static int goodix_spi_resume(struct device *dev)
+{
+        struct goodix_thp_core *core_data = dev_get_drvdata(dev);
+
+        core_data->bus_ready = true;
+        return 0;
+}
+
+static int goodix_spi_suspend(struct device *dev)
+{
+        struct goodix_thp_core *core_data = dev_get_drvdata(dev);
+
+        core_data->bus_ready = false;
+        return 0;
+}
+
+static const struct dev_pm_ops goodix_pm_ops = {
+        .suspend = goodix_spi_suspend,
+        .resume = goodix_spi_resume,
+};
+
 static struct spi_driver goodix_spi_driver = {
         .driver = {
                 .name = GOODIX_THP_DRIVER_NAME,
                 .owner = THIS_MODULE,
                 .bus = &spi_bus_type,
                 .of_match_table = spi_matchs,
+                .pm = &goodix_pm_ops,
         },
         .id_table = spi_id_table,
         .probe = goodix_spi_probe,

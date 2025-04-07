@@ -43,6 +43,10 @@
 #include <linux/notifier.h>
 #include <linux/fb.h>
 #endif
+#ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
+#include <linux/pm_qos.h>
+#define PM_QOS_TOUCH_WAKEUP_VALUE 400
+#endif
 
 /* macros definition */
 #define GOODIX_THP_DRIVER_VERSION                       "1.0.2.3"
@@ -320,6 +324,7 @@ struct goodix_thp_board_data {
         bool stowed_mode_ctrl;
         bool pocket_mode_ctrl;
         bool edge_ctrl;
+        int irq_need_dev_resume_time; /*control setting of wait resume time*/
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -445,6 +450,15 @@ struct goodix_thp_core {
         /* touchscreen_mmi */
         struct ts_mmi_class_methods *imports;
         struct timeval64 last_event_time;
+        struct wakeup_source *ws;
+        wait_queue_head_t wait;
+        bool bus_ready; /*spi or i2c resume status*/
+#ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
+        struct pm_qos_request pm_qos_req;
+        int pm_qos_value;
+        int pm_qos_state;
+#endif
+
 };
 
 /* func definition & statement*/

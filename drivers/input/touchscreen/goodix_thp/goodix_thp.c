@@ -1111,18 +1111,53 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         u8 *read_data = (u8 *)core_data->frame_read_data;
         int r;
 
+        disable_irq_nosync(core_data->irq);
+        if (core_data->ws) {
+                __pm_stay_awake(core_data->ws);
+        }
+
+        /*for qaulcomn to stop cpu go to C4 idle state*/
+#ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
+
+        if (core_data->pm_qos_state && !core_data->suspended) {
+                core_data->pm_qos_value = PM_QOS_TOUCH_WAKEUP_VALUE;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
+
+                if (!cpu_latency_qos_request_active(&core_data->pm_qos_req)) {
+                        cpu_latency_qos_add_request(&core_data->pm_qos_req, core_data->pm_qos_value);
+                } else {
+                        cpu_latency_qos_update_request(&core_data->pm_qos_req, core_data->pm_qos_value);
+                }
+#else
+                pm_qos_update_request(&core_data->pm_qos_req, core_data->pm_qos_value);
+#endif
+        }
+
+#endif
+
+        /*for check bus i2c/spi is ready or not*/
+        if (core_data->bus_ready == false) {
+            /*ts_info("Wait device resume!");*/
+            r = wait_event_interruptible_timeout(core_data->wait,
+                     core_data->bus_ready,
+                     msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
+                     if (!r) {
+                         ts_err("system can't finish resuming procedure.");
+                         goto exit;
+                     }
+            /*ts_info("Device maybe resume!");*/
+        }
+
         if (core_data->reset_state) {
                 ts_err("%s: ignore this irq.", __func__);
-                return IRQ_HANDLED;
+                goto exit;
         }
 
         /* suspend irq handler */
         if (core_data->suspended && core_data->gesture_enable) {
                 goodix_thp_gesture_irq_handler(core_data);
-                return IRQ_HANDLED;
+                goto exit;
         }
-
-        disable_irq_nosync(core_data->irq);
 
         /* get frame */
         r = ts_dev->hw_ops->get_frame(ts_dev, read_data);
@@ -1135,6 +1170,25 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         put_frame_list(core_data, REQUEST_TYPE_FRAME, read_data, r);
 exit:
         enable_irq(core_data->irq);
+
+#ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
+
+        if (PM_QOS_TOUCH_WAKEUP_VALUE == core_data->pm_qos_value) {
+                core_data->pm_qos_value = PM_QOS_DEFAULT_VALUE;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
+
+                cpu_latency_qos_remove_request(&core_data->pm_qos_req);
+#else
+                pm_qos_update_request(&core_data->pm_qos_req, core_data->pm_qos_value);
+#endif
+        }
+
+#endif
+
+        if (core_data->ws) {
+                __pm_relax(core_data->ws);
+        }
+
         return IRQ_HANDLED;
 }
 
@@ -2266,12 +2320,40 @@ static int goodix_thp_probe(struct platform_device *pdev)
                 goto err_sysfs_init;
         }
 
+        /* irq wake lock */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
+        core_data->ws = wakeup_source_register(dev_name(tdev->dev));
+#else
+        core_data->ws = wakeup_source_register(tdev->dev, dev_name(tdev->dev));
+#endif
+
+        /* PM QoS */
+#ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
+
+        if (!core_data->pm_qos_state) {
+                core_data->pm_qos_value = PM_QOS_DEFAULT_VALUE;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,10,0)
+                if (!cpu_latency_qos_request_active(&core_data->pm_qos_req)) {
+                        cpu_latency_qos_add_request(&core_data->pm_qos_req, core_data->pm_qos_value);
+                } else {
+                        cpu_latency_qos_update_request(&core_data->pm_qos_req, core_data->pm_qos_value);
+                }
+#else
+                pm_qos_add_request(&core_data->pm_qos_req, PM_QOS_CPU_DMA_LATENCY, core_data->pm_qos_value);
+#endif
+                ts_info("add qos request in touch driver.");
+                core_data->pm_qos_state = 1;
+        }
+
+#endif
+
         /* request irq */
         r = goodix_thp_irq_setup(core_data);
         if (r) {
                 ts_err("goodix setup irq failed, r %d", r);
                 goto err_irq_setup;
         }
+        core_data->bus_ready = true;
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
         core_data->pm_notif.notifier_call = goodix_thp_drm_notifier_callback;
 	if (mtk_disp_notifier_register("Touch", &core_data->pm_notif))
@@ -2328,6 +2410,12 @@ static int goodix_thp_remove(struct platform_device *pdev)
         fb_unregister_client(&core_data->pm_notif);
 #endif
         kfree(core_data->frame_mmap_list.buf);
+
+        /*free wakeup source*/
+        if (core_data->ws) {
+            wakeup_source_unregister(core_data->ws);
+        }
+
         return 0;
 }
 

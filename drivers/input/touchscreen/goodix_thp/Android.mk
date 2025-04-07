@@ -17,6 +17,10 @@ ifneq ($(GTP_ENABLE_TOUCH_PALM_BY_ID),)
 	KBUILD_OPTIONS += CONFIG_GTP_ENABLE_TOUCH_PALM_BY_ID=y
 endif
 
+ifeq ($(GTP_ENABLE_PM_QOS),true)
+	KBUILD_OPTIONS += CONFIG_GTP_ENABLE_PM_QOS=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_brl_thp.ko
 LOCAL_MODULE_TAGS := optional
