@@ -37,20 +37,24 @@ static struct buck_glink_dev *this_buck_chip = NULL;
 			return rc;
 		}
 
-		mmi_info(this_root_chip, "msb dev info : usb_iin: %dma, usb_vout: %dmv, usb_suspend: %d, "
-			"batt_fcc: %dma, batt_fv: %dmv, chg_en: %d,  chg_fault: 0x%x, chg_st: 0x%x, vbus_ctrl %d, ce_en %d, battfet_dis %d, jeita_en %d",
+		mmi_info(this_root_chip, "msb dev info : usb_iin: %dma, usb_vout: %dmv, batt_fcc: %dma, batt_fv: %dmv, jeita_en %d",
 			buck_info.usb_iin,
 			buck_info.usb_vout,
-			buck_info.usb_suspend,
 			buck_info.batt_fcc,
 			buck_info.batt_fv,
+			buck_info.jeita_en);
+
+		 mmi_info(this_root_chip, "msb dev info : chg_en: %d, chg_fault: 0x%x, chg_st: 0x%x, vbus_gd %d, input_det %d,"
+			"usb_suspend %d, vbus_ctrl %d, ce_en %d, battfet_dis %d",
 			buck_info.chg_en,
 			buck_info.chg_fault,
 			buck_info.chg_st,
+			buck_info.vbus_gd,
+			buck_info.input_det,
+			buck_info.usb_suspend,
 			buck_info.vbus_ctrl,
 			buck_info.ce_en,
-			buck_info.battfet_dis,
-			buck_info.jeita_en);
+			buck_info.battfet_dis);
 	}
 	return NOTIFY_DONE;
 }

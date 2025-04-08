@@ -27,6 +27,8 @@ struct buck_dev_info
     u32  ce_en;
     u32  battfet_dis;
     u32  jeita_en;
+    u32  vbus_gd;
+    u32  input_det;
 };
 
 struct buck_glink_dev {
