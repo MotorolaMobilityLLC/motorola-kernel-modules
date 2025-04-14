@@ -2587,7 +2587,7 @@ void wlc_chg_mc_icl_work(struct work_struct *work)
 			}
 			cps_wls_log(CPS_LOG_DEBG,"%s rx_irect:%d mc_icl_max_uA:%d\n",
 						__func__, rx_irect, wlc->mc_icl_max_uA);
-			while (wlc->mc_icl_max_uA < WLS_BPP_ICL_MAX_MA) {
+			while (wlc->mc_icl_max_uA < WLS_BPP_ICL_MAX_MA * 1000) {
 				rt = cps_get_sys_op_mode(&op_mode);
 				if (rt < 0) {
 					cps_wls_log(CPS_LOG_ERR,"%s get op_mode failed, rt:%d\n", __func__, rt);
