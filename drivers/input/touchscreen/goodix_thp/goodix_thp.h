@@ -33,6 +33,8 @@
 #include <linux/platform_device.h>
 #include <linux/firmware.h>
 #include <linux/completion.h>
+#include <uapi/linux/sched/types.h>
+#include <linux/kthread.h>
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
@@ -325,6 +327,8 @@ struct goodix_thp_board_data {
         bool pocket_mode_ctrl;
         bool edge_ctrl;
         int irq_need_dev_resume_time; /*control setting of wait resume time*/
+        u32 sched_priority;
+        u32 cpu_mask;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)

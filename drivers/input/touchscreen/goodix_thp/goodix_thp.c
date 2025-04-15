@@ -1110,6 +1110,20 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         struct thp_ts_device *ts_dev =  core_data->ts_dev;
         u8 *read_data = (u8 *)core_data->frame_read_data;
         int r;
+        static bool affinity_initialized = false;
+        struct cpumask cpumask;
+
+        if (unlikely(!affinity_initialized)) {
+            cpumask_clear(&cpumask);
+            cpumask.bits[0] = core_data->ts_dev->board_data.cpu_mask;
+            set_cpus_allowed_ptr(current, &cpumask);
+            if (set_cpus_allowed_ptr(current, &cpumask) != 0) {
+                ts_err("Failed to set CPU affinity");
+            } else {
+                ts_info("CPU affinity set to mask 0x%lx", cpumask.bits[0]);
+            }
+            affinity_initialized = true;
+        }
 
         disable_irq_nosync(core_data->irq);
         if (core_data->ws) {
@@ -1201,6 +1215,9 @@ static int goodix_thp_irq_setup(struct goodix_thp_core *core_data)
 {
         const struct goodix_thp_board_data *ts_bdata = board_data(core_data);
         int r;
+        struct irq_desc *desc;
+        struct task_struct *task;
+        struct sched_param param = { .sched_priority = 0 };
 
         /* if ts_bdata-> irq is invalid */
         if (ts_bdata->irq <= 0)
@@ -1225,6 +1242,17 @@ static int goodix_thp_irq_setup(struct goodix_thp_core *core_data)
                 ts_err("Failed to requeset threaded irq:%d", r);
                 return r;
         }
+
+        //get irq description
+        desc = irq_to_desc(core_data->irq);
+        if (!desc) {
+            return -EINVAL;
+        }
+        //get task_struct of kernel thread
+        task = desc->action->thread;
+        //set prio
+        param.sched_priority = ts_bdata->sched_priority;
+        sched_setscheduler_nocheck(task, SCHED_FIFO, &param);
 
         mutex_lock(&core_data->irq_mutex);
         disable_irq(core_data->irq);

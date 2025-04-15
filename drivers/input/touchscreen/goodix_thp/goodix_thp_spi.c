@@ -434,6 +434,16 @@ static int goodix_thp_parse_dt(struct device_node *node,
         }
         ts_info("board_data->irq_need_dev_resume_time = %d ms", board_data->irq_need_dev_resume_time);
 
+        if (of_property_read_u32(node, "goodix,sched-priority", &board_data->sched_priority)) {
+            ts_info("Failed to read sched-priority");
+            board_data->sched_priority = 49;
+        }
+
+        if (of_property_read_u32(node, "goodix,cpu-affinity", &board_data->cpu_mask)) {
+            ts_info("Failed to read cpu-affinity");
+            board_data->cpu_mask = 0xff;
+        }
+
         return 0;
 }
 #endif
