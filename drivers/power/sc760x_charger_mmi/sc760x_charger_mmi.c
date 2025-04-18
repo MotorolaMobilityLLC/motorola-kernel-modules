@@ -1627,6 +1627,7 @@ static int sc760x_charger_get_chg_info(void *data, struct mmi_charger_info *chg_
 	return 0;
 }
 
+#define SC760X_FV_JITTER_MV 10
 static int sc760x_charger_config_charge(void *data, struct mmi_charger_cfg *config)
 {
 	int rc = 0, sc760x_ibat_limit_set = 0, ibat_limit_vote = 0, auto_bsm_dis = 0, ls_off = -1;
@@ -1691,7 +1692,8 @@ static int sc760x_charger_config_charge(void *data, struct mmi_charger_cfg *conf
 			sc760x_set_ibat_limit(chg->sc, sc760x_ibat_limit_set);
 			pr_info("Devide to decrease ichg, update new sc760x_ibat_limit_set %d\n",
 				sc760x_ibat_limit_set);
-		} else if (sc760x_ibat_limit_set <= (ibat_limit_vote - IBAT_CHG_LIM_BASE)) {
+		} else if ((sc760x_ibat_limit_set <= (ibat_limit_vote - IBAT_CHG_LIM_BASE)) &&
+			((chg->batt_info.batt_mv + SC760X_FV_JITTER_MV) < chg->chg_cfg.target_fv)) {
 			sc760x_ibat_limit_set += IBAT_CHG_LIM_BASE;
 			sc760x_set_ibat_limit(chg->sc, sc760x_ibat_limit_set);
 			pr_info("Devide to increase ichg, update new sc760x_ibat_limit_set %d\n",
