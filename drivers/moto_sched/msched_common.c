@@ -111,7 +111,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER|UX_TYPE_GESTURE_MONITOR))
 		prio = UX_PRIO_ANIMATOR;
 	// main & render thread of top app, launcher and top UI.
-	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI) || p->tgid == atomic_read(&global_boost_pid))
+	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI) || p->pid == atomic_read(&global_boost_pid))
 		prio = UX_PRIO_TOPAPP;
 	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 		prio = UX_PRIO_KSWAPD;
