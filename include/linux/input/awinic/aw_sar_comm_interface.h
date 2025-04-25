@@ -24,6 +24,7 @@
 #include <linux/decompress/mm.h>
 #include <linux/notifier.h>
 #include <linux/usb.h>
+#include <linux/pinctrl/consumer.h>
 
 enum aw_sar_chip_list_t {
 	AW_SAR_NONE_CHECK_CHIP,
