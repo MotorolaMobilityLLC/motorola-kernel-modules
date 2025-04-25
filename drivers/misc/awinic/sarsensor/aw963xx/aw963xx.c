@@ -956,9 +956,15 @@ static const struct aw_sar_init_over_irq_t g_aw963xx_init_over_irq = {
 	.p_get_err_type_fn = NULL,
 };
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t cali_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#else
 static ssize_t cali_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#endif
 {
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
 	struct aw_sar *p_sar = NULL;
@@ -979,8 +985,13 @@ static ssize_t cali_show(struct class *class,
 
 static CLASS_ATTR_RO(cali);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t
+reset_store(const struct class *class, const struct class_attribute *attr, const char *buf, size_t count)
+#else
 static ssize_t
 reset_store(struct class *class, struct class_attribute *attr, const char *buf, size_t count)
+#endif
 {
 	u32 temp = 0;
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
@@ -1006,9 +1017,15 @@ reset_store(struct class *class, struct class_attribute *attr, const char *buf, 
 
 static CLASS_ATTR_WO(reset);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t mode_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#else
 static ssize_t mode_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#endif
 {
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
 	struct aw_sar *p_sar = NULL;
@@ -1032,10 +1049,15 @@ static ssize_t mode_show(struct class *class,
 	return snprintf(buf, 8, "%d\n", mode);
 }
 
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t mode_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#else
 static ssize_t mode_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#endif
 {
 	int8_t mode = 0;
 	int set_mode = 0;
@@ -1066,9 +1088,15 @@ static ssize_t mode_store(struct class *class,
 
 static CLASS_ATTR_RW(mode);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t reg_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#else
 static ssize_t reg_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#endif
 {
 	u32 *p = (u32*)buf;
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
@@ -1092,9 +1120,15 @@ static ssize_t reg_show(struct class *class,
 	return -1;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t reg_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#else
 static ssize_t reg_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#endif
 {
 	uint16_t regaddr = 0;
 	uint32_t val = 0;
@@ -1132,9 +1166,15 @@ static ssize_t reg_store(struct class *class,
 }
 static CLASS_ATTR_RW(reg);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t int_state_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#else
 static ssize_t int_state_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#endif
 {
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
 	struct aw_sar *p_sar = NULL;
@@ -1153,9 +1193,15 @@ static ssize_t int_state_show(struct class *class,
 }
 static CLASS_ATTR_RO(int_state);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t offset_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#else
 static ssize_t offset_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#endif
 {
 	struct aw963xx *aw963xx = container_of(class, struct aw963xx, capsense_class);
 	struct aw_sar *p_sar = NULL;
@@ -1260,7 +1306,11 @@ static int32_t aw_sar_custom_flie_node_create(void *data)
 	AWLOGD(p_sar->dev, "aw_sar_custom_flie_node");
 
 	aw963xx->capsense_class.name = "capsense";
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#else
 	aw963xx->capsense_class.owner = THIS_MODULE;
+#endif
+
 
 	ret = class_register(&aw963xx->capsense_class);
 	if (ret < 0) {

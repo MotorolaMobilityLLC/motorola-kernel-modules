@@ -2011,7 +2011,11 @@ static int32_t aw_sar_regulator_power(struct aw_sar *p_sar)
  * @brief Drive logic entry
  *
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static int32_t aw_sar_i2c_probe(struct i2c_client *i2c)
+#else
 static int32_t aw_sar_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+#endif
 {
 	int32_t ret = 0;
 	struct aw_sar *p_sar = NULL;
