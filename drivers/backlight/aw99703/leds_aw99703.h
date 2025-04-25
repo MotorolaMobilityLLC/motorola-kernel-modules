@@ -10,6 +10,10 @@
 #define KERNEL_ABOVE_4_14
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#define KERNEL_ABOVE_6_6
+#endif
+
 /********************************************
  * Register List
  *******************************************/
