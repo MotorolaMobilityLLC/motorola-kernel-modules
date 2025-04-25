@@ -705,8 +705,12 @@ static struct attribute_group aw99703_attribute_group = {
 	.attrs = aw99703_attributes
 };
 
+#ifdef KERNEL_ABOVE_6_6
+static int aw99703_probe(struct i2c_client *client)
+#else
 static int aw99703_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
+#endif
 {
 	struct aw99703_data *drvdata;
 #ifdef KERNEL_ABOVE_4_14
@@ -771,6 +775,10 @@ static int aw99703_probe(struct i2c_client *client,
 	props.max_brightness = MAX_BRIGHTNESS;
 	bl_dev = backlight_device_register(AW99703_NAME, &client->dev,
 					drvdata, &aw99703_bl_ops, &props);
+	if (bl_dev ==NULL) {
+		pr_err("%s : bl_dev == NULL\n", __func__);
+		goto err_init;
+	}
 #endif
 
 	g_aw99703_data = drvdata;
@@ -795,14 +803,22 @@ err_out:
 	return err;
 }
 
+#ifdef KERNEL_ABOVE_6_6
+static void aw99703_remove(struct i2c_client *client)
+#else
 static int aw99703_remove(struct i2c_client *client)
+#endif
 {
 	struct aw99703_data *drvdata = i2c_get_clientdata(client);
 
 	led_classdev_unregister(&drvdata->led_dev);
 
 	kfree(drvdata);
+#ifdef KERNEL_ABOVE_6_6
+	return;
+#else
 	return 0;
+#endif
 }
 
 static const struct i2c_device_id aw99703_id[] = {
