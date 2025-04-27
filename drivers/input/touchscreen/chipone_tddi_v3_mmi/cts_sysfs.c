@@ -3297,14 +3297,20 @@ static int cts_fw_class_init(void *_data, bool create)
     static struct class *touchscreen_class;
     static struct device *ts_class_dev;
     dev_t devno;
+    const char* node_name;
 
     cts_info("%s touchscreen class files", create ? "Add" : "Remove");
 
     if (create) {
+#ifdef CFG_CTS_CHIP_PRIMARY
+        node_name = CFG_CTS_CHIP_PRIMARY;
+#else
         if (data->cts_dev.hwdata->name != NULL)
-            error = alloc_chrdev_region(&devno, 0, 1, data->cts_dev.hwdata->name);
+             node_name = data->cts_dev.hwdata->name;
         else
-            error = alloc_chrdev_region(&devno, 0, 1, CFG_CTS_CHIP_NAME);
+            node_name = CFG_CTS_CHIP_NAME;
+#endif
+        error = alloc_chrdev_region(&devno, 0, 1, node_name);
 
         if (error) {
             cts_info("Alloc input devno failed %d", error);
@@ -3321,18 +3327,12 @@ static int cts_fw_class_init(void *_data, bool create)
             return error;
         }
 
-        if (data->cts_dev.hwdata->name != NULL) {
-            ts_class_dev = device_create(touchscreen_class, NULL,
-                    devno, data, "%s", data->cts_dev.hwdata->name);
-            cts_info("Create device for IC: %s", data->cts_dev.hwdata->name);
-        } else {
-            ts_class_dev = device_create(touchscreen_class, NULL,
-                    devno, data, "%s", CFG_CTS_CHIP_NAME);
-            cts_info("Create device '" CFG_CTS_CHIP_NAME "'");
-        }
+        ts_class_dev = device_create(touchscreen_class, NULL,
+                devno, data, "%s", node_name);
+        cts_info("Create device for %s", node_name);
+
         if (IS_ERR(ts_class_dev)) {
-            cts_err("Create device '" CFG_CTS_CHIP_NAME
-                "'failed %ld", PTR_ERR(ts_class_dev));
+            cts_err("Create device %s failed %ld", node_name, PTR_ERR(ts_class_dev));
             error = PTR_ERR(ts_class_dev);
             ts_class_dev = NULL;
             return error;

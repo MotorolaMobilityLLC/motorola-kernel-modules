@@ -128,6 +128,7 @@ static int stop_earjack_detect(struct cts_earjack_detect_data *ed_data)
     return 0;
 }
 
+#ifndef CFG_CTS_FOR_GKI
 static int get_earjack_state(struct cts_earjack_detect_data *ed_data)
 {
     int ret;
@@ -188,6 +189,7 @@ static int get_earjack_state(struct cts_earjack_detect_data *ed_data)
 
     return 0;
 }
+#endif
 
 /* Sysfs */
 #ifdef CONFIG_CTS_SYSFS
@@ -336,17 +338,21 @@ static ssize_t earjack_state_show(struct device *dev,
 {
     struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
     struct cts_earjack_detect_data *ed_data = cts_data->earjack_detect_data;
+#ifndef CFG_CTS_FOR_GKI
     int ret;
+#endif
 
     cts_info("Read sysfs '"EARJACK_DET_SYSFS_GROUP_NAME"/%s'",
         attr->attr.name);
 
+#ifndef CFG_CTS_FOR_GKI
     ret = get_earjack_state(ed_data);
     if (ret) {
         return scnprintf(buf, PAGE_SIZE,
             "Get earjack state failed %d(%s)\n",
             ret, cts_strerror(ret));
     }
+#endif
 
     return scnprintf(buf, PAGE_SIZE,
         "Earjack state: %s\n", earjack_state_str(ed_data->state));
@@ -438,10 +444,12 @@ static void poll_earjack_state_work(struct work_struct *work)
 
     prev_state = ed_data->state;
 
+#ifndef CFG_CTS_FOR_GKI
     ret = get_earjack_state(ed_data);
     if (ret) {
         cts_err("Get state failed %d(%s)", ret, cts_strerror(ret));
     } else {
+#endif
         if (ed_data->state != prev_state) {
             cts_info("State changed: %s -> %s",
                 earjack_state_str(prev_state),
@@ -459,7 +467,9 @@ static void poll_earjack_state_work(struct work_struct *work)
                 ed_data->state = prev_state;
             }
         }
+#ifndef CFG_CTS_FOR_GKI
     }
+#endif
 
     if (!queue_delayed_work(ed_data->cts_data->workqueue,
         &ed_data->poll_work,
@@ -585,7 +595,9 @@ int cts_earjack_detect_deinit(struct chipone_ts_data *cts_data)
 int cts_is_earjack_attached(struct chipone_ts_data *cts_data, bool *attached)
 {
     struct cts_earjack_detect_data *ed_data;
+#ifndef CFG_CTS_FOR_GKI
     int ret;
+#endif
 
     if (cts_data == NULL) {
         cts_err("Get state with cts_data = NULL");
@@ -598,11 +610,13 @@ int cts_is_earjack_attached(struct chipone_ts_data *cts_data, bool *attached)
         return -ENODEV;
     }
 
+#ifndef CFG_CTS_FOR_GKI
     ret = get_earjack_state(ed_data);
     if (ret) {
         cts_err("Get state failed %d(%s)", ret, cts_strerror(ret));
         return ret;
     }
+#endif
 
     cts_info("Get curr state: %s", earjack_state_str(ed_data->state));
 
