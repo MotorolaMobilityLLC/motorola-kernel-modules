@@ -3260,7 +3260,11 @@ static int tiktap_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 #if KERNEL_VERSION(4, 7, 0) < LINUX_VERSION_CODE
 	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) |
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+			      __calc_vm_flag_bits(MAP_SHARED);
+#else
 			      calc_vm_flag_bits(MAP_SHARED);
+#endif
 
 	vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE |
 		    VM_MAYEXEC | VM_SHARED | VM_MAYSHARE;
@@ -3516,8 +3520,11 @@ static void haptic_init(struct aw_haptic *aw_haptic)
 	f0_cali(aw_haptic);
 	mutex_unlock(&aw_haptic->lock);
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static int aw_i2c_probe(struct i2c_client *i2c)
+#else
 static int aw_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+#endif
 {
 	int ret = 0;
 	struct aw_haptic *aw_haptic;
