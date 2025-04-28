@@ -1185,7 +1185,6 @@ static int sx937x_parse_dt(struct sx937x_platform_data *pdata, struct device *de
 			return -ENOMEM;
 		}
 
-		current_dsi = get_dsi_display_name();
 		/*
 		   if three's no "support-panel-num" in dts or
 		   there's no matched panel_name(maybe it is a bare board),
@@ -1194,6 +1193,7 @@ static int sx937x_parse_dt(struct sx937x_platform_data *pdata, struct device *de
 		if(!of_property_read_u32(dNode,"support-panel-num",&support_panel_num))
 		{
 			LOG_INFO("support_panel_num is %d \n", support_panel_num);
+			current_dsi = get_dsi_display_name();
 			for (i = 0; i < support_panel_num; i++) {
 				if(of_property_read_string_index(dNode, "support-panel-names", i, &panel_name))
 				{
@@ -1723,7 +1723,7 @@ static int sx937x_probe(struct i2c_client *client)
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.type = SENSOR_TYPE_MOTO_CAPSENSE;
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.max_range = "5";
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.resolution = "5.0";
-					pButtonInformationData->buttons[i].sensors_capsensor_cdev.sensor_power = "3";
+					pButtonInformationData->buttons[i].sensors_capsensor_cdev.sensor_power = "0.1";
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.min_delay = 0;
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.fifo_reserved_event_count = 0;
 					pButtonInformationData->buttons[i].sensors_capsensor_cdev.fifo_max_event_count = 0;
