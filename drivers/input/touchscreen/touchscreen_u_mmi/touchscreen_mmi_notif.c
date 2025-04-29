@@ -515,7 +515,7 @@ static int ts_mmi_charger_cb(struct notifier_block *self,
 #ifdef CONFIG_TOUCHCLASS_MMI_MTK_CHARGER
 	if (!((event == PSY_EVENT_PROP_CHANGED) && psy &&
 			psy->desc->get_property && psy->desc->name &&
-			!strncmp(psy->desc->name, touch_cdev->pdata.psy_name, sizeof(&touch_cdev->pdata.psy_name))))
+			!strncmp(psy->desc->name, touch_cdev->pdata.psy_name, strlen(touch_cdev->pdata.psy_name) + 1)))
 			return 0;
 
 	touch_cdev->psy = ptr;
