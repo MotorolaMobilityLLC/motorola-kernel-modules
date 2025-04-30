@@ -1803,6 +1803,7 @@ static void mmi_reset_charger_configure(struct mmi_charger_chip *chip,
 				struct mmi_charger *charger)
 {
 	charger->cfg.target_fv = charger->profile.max_fv_mv;
+	charger->cfg.max_fv = charger->profile.max_fv_mv;
 	charger->cfg.target_fcc = -EINVAL;
 	charger->cfg.chrg_iterm = charger->profile.chrg_iterm;
 	charger->cfg.fg_iterm = charger->profile.fg_iterm;
@@ -1907,14 +1908,15 @@ static void mmi_configure_charger(struct mmi_charger_chip *chip,
 	charger->driver->config_charge(charger->driver->data, cfg);
 
 	mmi_info(chip, "[C:%s]: FV=%d, FCC=%d, CDIS=%d,"
-		" CSUS=%d, CRES=%d, CFULL=%d\n",
+		" CSUS=%d, CRES=%d, CFULL=%d, MAX_FV=%d\n",
 		charger->driver->name,
 		cfg->target_fv,
 		cfg->target_fcc,
 		cfg->charging_disable,
 		cfg->charger_suspend,
 		cfg->charging_reset,
-		cfg->full_charged);
+		cfg->full_charged,
+		cfg->max_fv);
 }
 
 static void mmi_notify_charger_event(struct mmi_charger_chip *chip, int type)

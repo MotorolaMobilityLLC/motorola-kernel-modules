@@ -87,6 +87,7 @@ struct mmi_charger_info {
 struct mmi_charger_cfg {
 	int target_fcc;
 	int target_fv;
+	int max_fv;
 	int fg_iterm;
 	int chrg_iterm;
 	bool full_charged;
