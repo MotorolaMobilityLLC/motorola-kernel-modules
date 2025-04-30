@@ -1627,7 +1627,7 @@ static int sc760x_charger_get_chg_info(void *data, struct mmi_charger_info *chg_
 	return 0;
 }
 
-#define SC760X_FV_JITTER_MV 10
+#define SC760X_FV_JITTER_MV 20
 static int sc760x_charger_config_charge(void *data, struct mmi_charger_cfg *config)
 {
 	int rc = 0, sc760x_ibat_limit_set = 0, ibat_limit_vote = 0, auto_bsm_dis = 0, ls_off = -1;
@@ -1693,12 +1693,19 @@ static int sc760x_charger_config_charge(void *data, struct mmi_charger_cfg *conf
 			pr_info("Devide to decrease ichg, update new sc760x_ibat_limit_set %d\n",
 				sc760x_ibat_limit_set);
 		} else if ((sc760x_ibat_limit_set <= (ibat_limit_vote - IBAT_CHG_LIM_BASE)) &&
-			((chg->batt_info.batt_mv + SC760X_FV_JITTER_MV) < chg->chg_cfg.target_fv)) {
+			((chg->batt_info.batt_mv + SC760X_FV_JITTER_MV) < config->max_fv)) {
 			sc760x_ibat_limit_set += IBAT_CHG_LIM_BASE;
 			sc760x_set_ibat_limit(chg->sc, sc760x_ibat_limit_set);
 			pr_info("Devide to increase ichg, update new sc760x_ibat_limit_set %d\n",
 				sc760x_ibat_limit_set);
 		}
+	}
+
+	if (config->max_fv > 0 && (chg->batt_info.batt_mv >= config->max_fv + SC760X_FV_JITTER_MV)) {
+		sc760x_ibat_limit_set = MIN_VAL(sc760x_ibat_limit_set, config->chrg_iterm);
+		sc760x_set_ibat_limit(chg->sc, sc760x_ibat_limit_set);
+		pr_info("update new sc760x_ibat_limit_set %d, batt_mv %d > max_fv %d",
+			sc760x_ibat_limit_set, chg->batt_info.batt_mv, config->max_fv);
 	}
 
 	if (config->charger_suspend != chg->chg_cfg.charger_suspend) {
@@ -1834,8 +1841,9 @@ static int sc760x_charger_config_charge(void *data, struct mmi_charger_cfg *conf
 	pr_info("chg_en:%d, ls_off %d, online %d, chg_st:%d, extmos_en %d, auto_bsm_dis %d\n",
 			chg_en, ls_off, state.online, state.chrg_stat, chg->sc->sc760x_extmos_en, auto_bsm_dis);
 	sc760x_get_ibat_limit(chg->sc, &sc760x_ibat_limit_set);
-	pr_info("sc760x_ibat_limit_set %d, ibat_limit_vote %d, target_fcc %d, target_fv %d, thermal_fcc_ua %d\n",
-			sc760x_ibat_limit_set, ibat_limit_vote, chg->chg_cfg.target_fcc, chg->chg_cfg.target_fv, chg->sc->thermal_fcc_ua);
+	pr_info("sc760x_ibat_limit_set %d, ibat_limit_vote %d, target_fcc %d, target_fv %d, max_fv %d, thermal_fcc_ua %d\n",
+			sc760x_ibat_limit_set, ibat_limit_vote, chg->chg_cfg.target_fcc,
+			chg->chg_cfg.target_fv, config->max_fv, chg->sc->thermal_fcc_ua);
 	pr_info("paired_vbatt %d, vbatt %d, dual_vbatt_diff %d, diff_thre %d\n",
 			chg->paired_batt_info.batt_mv, chg->batt_info.batt_mv, abs(chg->paired_batt_info.batt_mv - chg->batt_info.batt_mv),
 			chg->sc->init_data.dual_vbatt_diff_thre);
