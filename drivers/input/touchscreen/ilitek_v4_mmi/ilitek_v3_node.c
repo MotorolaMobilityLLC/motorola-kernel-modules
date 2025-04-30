@@ -4182,10 +4182,18 @@ static ssize_t gesture_type_dbg_store(struct device *dev,
 }
 #endif //ILI_DOUBLE_TAP_CTRL
 
+static ssize_t productinfo_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%s%x\n",
+			"ili", ilits->chip->product_id);
+}
+
 static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(path),
 	__ATTR_RO(vendor),
 	__ATTR_RO(ic_ver),
+	__ATTR_RO(productinfo),
 #ifdef ILI_TOUCH_LAST_TIME
 	__ATTR_RO(timestamp),
 #endif
