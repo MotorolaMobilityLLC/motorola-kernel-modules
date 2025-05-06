@@ -273,7 +273,7 @@ struct sgm4154x_device {
 	struct delayed_work power_supply_changed_delayed_work;
 	struct notifier_block pm_nb;
 	bool sgm4154x_suspend_flag;
-
+	bool first_boot;
 	struct wakeup_source *charger_wakelock;
 	bool enable_sw_jeita;
 	bool mmi_charging_full;

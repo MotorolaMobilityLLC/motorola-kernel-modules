@@ -1707,6 +1707,10 @@ static void charger_detect_work_func(struct work_struct *work)
 		sgm->chg_type = POWER_SUPPLY_TYPE_USB_DCP;
 		sgm->psy_usb_type = POWER_SUPPLY_USB_TYPE_DCP;
 		sgm4154x_power_supply_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
+		if (sgm-> first_boot) {
+			pr_info("[%s] SGM4154x charger type: dcp, retry bc12 count:%d\n", __func__, sgm-> first_boot);
+			schedule_delayed_work(&sgm->retry_charger_detect_work, 100);
+			}
 		break;
 
 	case SGM4154x_UNKNOWN:
@@ -1748,7 +1752,7 @@ static void charger_detect_work_func(struct work_struct *work)
 	if (sgm->state.chrg_type == SGM4154x_USB_SDP || sgm->state.chrg_type == SGM4154x_USB_CDP) {
 		Charger_Detect_Release(sgm);
 	}
-
+	sgm-> first_boot = false;
 	dev_info(sgm->dev, "%s: Update: chg_type = %d, psy_usb_type = %d\n",
 				__func__, sgm->chg_type, sgm->psy_usb_type);
 #endif
@@ -1993,6 +1997,8 @@ static int sgm4154x_parse_dt(struct sgm4154x_device *sgm)
 		dev_err(sgm->dev, "%s: %d gpio request failed\n", __func__, chg_en_gpio);
 		return ret;
 	}
+
+	sgm->first_boot = device_property_read_bool(sgm->dev, "sgm-first-boot");
 
 	gpio_direction_output(chg_en_gpio, 0); //default enable charge
 
