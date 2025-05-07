@@ -3262,10 +3262,20 @@ static ssize_t ic_ver_show(struct device *dev,
              : ts->pdata->config_id);
 }
 
+static ssize_t productinfo_show (
+    struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+    /* set chip IC type to productinfo */
+    return scnprintf(buf, PAGE_SIZE, "%s\n",
+            cts_data->cts_dev.hwdata->name);
+}
+
 static struct device_attribute touchscreen_attributes[] = {
     __ATTR_RO(path),
     __ATTR_RO(vendor),
     __ATTR_RO(ic_ver),
+    __ATTR_RO(productinfo),
 #ifdef CONFIG_GTP_LAST_TIME
     __ATTR_RO(timestamp),
 #endif

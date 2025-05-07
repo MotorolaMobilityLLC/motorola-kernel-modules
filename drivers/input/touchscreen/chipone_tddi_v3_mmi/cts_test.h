@@ -68,7 +68,6 @@ struct cts_test_param {
     void *priv_param;
     int priv_param_size;
 };
-#pragma pack()
 
 struct cts_rawdata_test_priv_param {
     __u32 frames;
@@ -79,6 +78,7 @@ struct cts_noise_test_priv_param {
     __u32 frames;
     //__u8  work_mode;
 };
+#pragma pack()
 
 extern const char *cts_test_item_str(int test_item);
 extern int cts_write_file(struct file *filp, const void *data, size_t size);
