@@ -1575,6 +1575,9 @@ int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
             fts_set_reset(ts_data, 0);
             fts_msleep(2);
             FTS_INFO("set power to on");
+#ifdef CONFIG_FTS_MANUAL_CS
+            gpio_set_value(ts_data->pdata->cs_gpio, 1);
+#endif
             ret = regulator_enable(ts_data->vdd);
             if (ret) {
                 FTS_ERROR("enable vdd regulator failed,ret=%d", ret);
@@ -1606,6 +1609,9 @@ int fts_power_source_ctrl(struct fts_ts_data *ts_data, int enable)
                 FTS_ERROR("disable vdd regulator failed,ret=%d", ret);
             }
             ts_data->power_disabled = true;
+#ifdef CONFIG_FTS_MANUAL_CS
+            gpio_set_value(ts_data->pdata->cs_gpio, 0);
+#endif
         }
     }
 
