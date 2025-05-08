@@ -869,10 +869,7 @@ static ssize_t typec_reset_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	if (reset)
-		mmi_warn(chg, "typec_reset triggered\n");
-	else
-		return count;
+	mmi_warn(chg, "typec_reset triggered:%d\n", reset);
 
 	r = qti_charger_write(chg, OEM_PROP_TYPEC_RESET,
 			&reset,
