@@ -25,6 +25,7 @@
 #endif
 #include <trace/hooks/sched.h>
 #include <trace/hooks/signal.h>
+#include <trace/hooks/binder.h>
 #include <kernel/sched/sched.h>
 
 #include "msched_common.h"
@@ -358,7 +359,21 @@ static void android_vh_dup_task_struct(void *unused, struct task_struct *task, s
 	}
 }
 
+static void probe_android_vh_binder_priority_skip(void *ignore, struct task_struct *task,
+							bool *skip)
+{
+	int policy = task->policy;
+	if (policy == SCHED_FIFO || policy == SCHED_RR) {
+	    if (task->pid == global_sf_tgid) {
+		*skip = true;
+	    }
+	}
+}
+
 void register_vendor_comm_hooks(void)
 {
 	register_trace_android_vh_dup_task_struct(android_vh_dup_task_struct, NULL);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
+	register_trace_android_vh_binder_priority_skip(probe_android_vh_binder_priority_skip, NULL);
+#endif
 }
