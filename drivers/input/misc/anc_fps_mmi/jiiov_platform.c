@@ -13,6 +13,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
  * Public License for more details.
  **/
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 30)
+#include <linux/pinctrl/consumer.h>
+#endif
+
 #include <linux/atomic.h>
 #include <linux/cdev.h>
 #include <linux/delay.h>
@@ -1658,8 +1663,12 @@ static int anc_create_device(struct anc_data *p_data) {
     struct device *device_ptr = NULL;
 
     CHECK_PTR_PARAM(p_data);
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
     p_data->dev_class = class_create(THIS_MODULE, ANC_DEVICE_NAME);
+#else
+    p_data->dev_class = class_create(ANC_DEVICE_NAME);
+#endif
+
     if (IS_ERR(p_data->dev_class)) {
         ANC_LOGE("class_create failed");
         return -ENODEV;
