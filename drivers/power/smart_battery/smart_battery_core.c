@@ -502,7 +502,7 @@ static const struct power_supply_desc batt_psy_desc = {
 		((min > value) ? min : ((value > max) ? max : value))
 #define CURRENT_10_MA 10000
 
-static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
+static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc, int *work_intervals)
 {
 	int uisoc = rsoc;
 
@@ -514,6 +514,12 @@ static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc)
 	if (mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_FULL)
 		return 100;
 #endif
+
+	if ((chip->uisoc - rsoc) > 1) {
+		/* Discharging SOC dropped and SOC jumps*/
+		*work_intervals = SOC_JUMPS_DELAYED_WORK_TIME;
+		mmi_info(chip, "uisoc:%d jump to %d. change work_intervals to %d", chip->uisoc, rsoc, *work_intervals);
+	}
 
 	if (rsoc > chip->uisoc) {
 		/* SOC increased */
@@ -632,7 +638,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 	rsoc = smart_batt_get_capacity(chip);
 	smart_batt_get_charge_counter(chip);
 	rsoc = smart_batt_soc100_forward(chip, rsoc);
-	rsoc = smart_batt_monotonic_soc(chip, rsoc);
+	rsoc = smart_batt_monotonic_soc(chip, rsoc, &work_intervals);
 
 	if (chip->combo_batt_temp < chip->batt_cold_threshold){
 		vbatt_empty = chip->vbatt_empty_cold_mv * 1000;

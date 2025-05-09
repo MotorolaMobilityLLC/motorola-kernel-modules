@@ -121,6 +121,7 @@ struct mmi_smart_battery {
 #endif
 };
 
+#define SOC_JUMPS_DELAYED_WORK_TIME  60000
 #define QUEUS_DELAYED_WORK_TIME  8000
 #define QUEUS_DELAYED_WORK_TIME_LOW_VOL  4000
 #define QUEUE_START_WORK_TIME    1
