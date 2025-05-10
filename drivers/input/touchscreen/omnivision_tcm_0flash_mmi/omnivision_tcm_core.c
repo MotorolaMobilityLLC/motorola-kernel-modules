@@ -3684,6 +3684,14 @@ int ovt_tcm_sleep(struct ovt_tcm_hcd *tcm_hcd, bool en)
 	unsigned int resp_buf_size;
 	unsigned int resp_length;
 
+        if (IS_NOT_FW_MODE(tcm_hcd->id_info.mode) || atomic_read(&tcm_hcd->host_downloading)) {
+                retval = ovt_tcm_wait_hdl(tcm_hcd);
+                if (retval < 0) {
+                        LOGE(tcm_hcd->pdev->dev.parent, "Failed to wait for completion of host download\n");
+                        return retval;
+                }
+        }
+
 	command = en ? CMD_ENTER_DEEP_SLEEP : CMD_EXIT_DEEP_SLEEP;
 
 	resp_buf = NULL;

@@ -996,6 +996,7 @@ static void zeroflash_download_config_work(struct work_struct *work)
 {
 	int retval;
 	struct ovt_tcm_hcd *tcm_hcd = zeroflash_hcd->tcm_hcd;
+	const struct ovt_tcm_board_data *bdata = tcm_hcd->hw_if->bdata;
 
 	retval = zeroflash_get_fw_image();
 	if (retval < 0) {
@@ -1010,10 +1011,10 @@ static void zeroflash_download_config_work(struct work_struct *work)
 	if (zeroflash_hcd->fw_status.need_app_config) {
 		retval = zeroflash_download_app_config();
 		if (retval < 0) {
-			atomic_set(&tcm_hcd->host_downloading, 0);
+			atomic_set(&tcm_hcd->host_downloading, 1);
 			LOGE(tcm_hcd->pdev->dev.parent,
 					"Failed to download application config, abort\n");
-			return;
+			goto config_download_err;
 		}
 		goto exit;
 	}
@@ -1021,10 +1022,10 @@ static void zeroflash_download_config_work(struct work_struct *work)
 	if (zeroflash_hcd->fw_status.need_disp_config) {
 		retval = zeroflash_download_disp_config();
 		if (retval < 0) {
-			atomic_set(&tcm_hcd->host_downloading, 0);
+			atomic_set(&tcm_hcd->host_downloading, 1);
 			LOGE(tcm_hcd->pdev->dev.parent,
 					"Failed to download display config, abort\n");
-			return;
+			goto config_download_err;
 		}
 		goto exit;
 	}
@@ -1034,10 +1035,10 @@ static void zeroflash_download_config_work(struct work_struct *work)
 
 		retval = zeroflash_download_open_short_config();
 		if (retval < 0) {
-			atomic_set(&tcm_hcd->host_downloading, 0);
+			atomic_set(&tcm_hcd->host_downloading, 1);
 			LOGE(tcm_hcd->pdev->dev.parent,
 					"Failed to download open_short config, abort\n");
-			return;
+			goto config_download_err;
 		}
 		goto exit;
 	}
@@ -1051,7 +1052,16 @@ exit:
 	}
 
 	zeroflash_download_config();
+	return;
 
+config_download_err:
+	LOGN(tcm_hcd->pdev->dev.parent, "config download error, reset the tp\n");
+	ovt_tcm_request_gpio(tcm_hcd, bdata->reset_gpio, true);
+	gpio_set_value(bdata->reset_gpio, 0);
+	msleep(5);
+	gpio_set_value(bdata->reset_gpio, 1);
+	msleep(5);
+	ovt_tcm_request_gpio(tcm_hcd, bdata->reset_gpio, false);
 	return;
 }
 
