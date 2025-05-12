@@ -1,5 +1,0 @@
-EXTRA_CFLAGS += -Wall
-EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
-
-obj-m   += sm5350_bl.o
-

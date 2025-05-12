@@ -1,4 +1,0 @@
-# add -Wall to try to catch everything we can.
-EXTRA_CFLAGS += -Wall
-
-obj-m += fm_ctrl.o
