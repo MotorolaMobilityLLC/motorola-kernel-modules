@@ -1,0 +1,17 @@
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+
+filegroup(
+    name = "moto_modules_public_headers",
+    srcs = glob([
+        "include/**/*.h",
+    ]),
+)
+
+load("//soc-repo:kleaf-scripts/moto/moto_module_list.bzl", "define_moto_modules")
+
+define_moto_modules()
