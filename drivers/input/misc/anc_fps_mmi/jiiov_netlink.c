@@ -53,6 +53,11 @@ static int netlink_send_message(const char *p_buffer, uint16_t length) {
         return -1;
     }
 
+    if (NULL == gp_netlink_sock) {
+        ANC_LOGE("gp_netlink_sock is NULL!");
+        return -1;
+    }
+
     /* 拷贝数据发送 */
     memcpy(nlmsg_data(p_nlmsghdr), p_buffer, length);
     ret = netlink_unicast(gp_netlink_sock, p_sk_buff, USER_PORT, MSG_DONTWAIT);

@@ -815,7 +815,7 @@ static int anc_request_named_gpio(struct anc_data *p_data, const char *label, in
 
 static int anc_irq_init(struct anc_data *p_data) {
     int ret_val = -1;
-    int irqf = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;  // IRQF_TRIGGER_FALLING or IRQF_TRIGGER_RISING
+    int irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;  // IRQF_TRIGGER_FALLING or IRQF_TRIGGER_RISING
 
     CHECK_PTR_PARAM(p_data);
 
