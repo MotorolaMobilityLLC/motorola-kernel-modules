@@ -8,6 +8,17 @@
 #include <linux/sensors.h>
 #endif
 
+enum TP_MODEL {
+	MODEL_DEF = 0,
+	MODEL_CSOT,
+	MODEL_AUO,
+	MODEL_BOE,
+	MODEL_INX,
+	MODEL_DJ,
+	MODEL_TXD,
+	MODEL_TM
+};
+
 enum cts_dev_hw_reg {
 #if defined(CONFIG_CTS_ICTYPE_ICNL9922C) ||\
     defined(CONFIG_CTS_ICTYPE_ICNL9951)
@@ -55,6 +66,16 @@ enum cts_dev_boot_mode {
 #define CTS_DEV_PROGRAM_MODE_ADDR_WIDTH     (3)
 #define CTS_DEV_NORMAL_MODE_SPIADDR         (0xF0)
 #define CTS_DEV_PROGRAM_MODE_SPIADDR        (0x60)
+
+#define BOE_FW_REQUEST_NAME           "boe_chipone_firmware.bin"
+#define DJ_FW_REQUEST_NAME            "dj_chipone_firmware.bin"
+#define TXD_FW_REQUEST_NAME           "txd_chipone_firmware.bin"
+#define TM_FW_REQUEST_NAME            "tm_hCipone_firmware.bin"
+#define INX_FW_REQUEST_NAME           "inx_chipone_firmware.bin"
+#define AUO_FW_REQUEST_NAME           "auo_chipone_firmware.bin"
+#define CSOT_FW_REQUEST_NAME          "csot_chipone_firmware.bin"
+#define FW_REQUEST_NAME               "chipone_firmware.bin"
+
 
 /** Chipone firmware register addresses under normal mode */
 enum cts_device_fw_reg {
@@ -433,6 +454,8 @@ struct chipone_ts_data {
 #ifdef CONFIG_CTS_CHARGER_DETECT
     void *charger_detect_data;
 #endif
+    char *config_fw_name;
+    int tp_module;
 
 #ifdef CONFIG_CTS_EARJACK_DETECT
     void *earjack_detect_data;

@@ -11,6 +11,7 @@
 #include <linux/mount.h>
 #include <linux/namei.h>
 
+extern struct chipone_ts_data *g_cts_data;
 
 #ifdef CFG_CTS_DRIVER_BUILTIN_FIRMWARE
 #include "cts_builtin_firmware.h"
@@ -730,7 +731,7 @@ const struct cts_firmware *cts_request_firmware(const struct cts_device *cts_dev
 #ifdef CFG_CTS_FW_UPDATE_FILE_LOAD
         cts_dev->config_fw_name[0] ? cts_dev->config_fw_name : CFG_CTS_FIRMWARE_FILENAME,
 #else
-        CFG_CTS_FIRMWARE_FILENAME,
+        g_cts_data->config_fw_name,/*CFG_CTS_FIRMWARE_FILENAME,*/
 #endif
         firmware_builtin ? FIRMWARE_VERSION(firmware_builtin) : curr_firmware_ver);
 #endif /* CFG_CTS_FIRMWARE_IN_FS */

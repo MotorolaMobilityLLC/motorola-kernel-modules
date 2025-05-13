@@ -43,6 +43,10 @@ bool cts_show_debug_log;
 static char *active_panel_name;
 #endif
 
+#ifdef CTS_TP_MODULE_EN
+static const char *active_panel_name = NULL;
+#endif
+
 module_param_named(debug_log, cts_show_debug_log, bool, 0660);
 MODULE_PARM_DESC(debug_log, "Show debug log control");
 
@@ -407,8 +411,11 @@ static int check_dt(struct device_node *np)
         panel = of_drm_find_panel(node);
         of_node_put(node);
         if (!IS_ERR(panel)) {
-            cts_info("check active_panel");
+            cts_info("%s check active_panel", node->name);
             active_panel = panel;
+#ifdef CTS_TP_MODULE_EN
+            active_panel_name = node->name;
+#endif
             return 0;
         }
     }
@@ -644,6 +651,89 @@ static bool cts_is_charger_mode(void)
 }
 #endif
 
+static void cts_update_tp_module_info(void)
+{
+	int module;
+
+	module = g_cts_data->tp_module;
+
+	switch (module) {
+	case MODEL_CSOT:
+		g_cts_data->config_fw_name = CSOT_FW_REQUEST_NAME;
+		break;
+	case MODEL_AUO:
+		g_cts_data->config_fw_name = AUO_FW_REQUEST_NAME;
+		break;
+	case MODEL_BOE:
+		g_cts_data->config_fw_name = BOE_FW_REQUEST_NAME;
+		break;
+	case MODEL_INX:
+		g_cts_data->config_fw_name = INX_FW_REQUEST_NAME;
+		break;
+	case MODEL_DJ:
+		g_cts_data->config_fw_name = DJ_FW_REQUEST_NAME;
+		break;
+	case MODEL_TXD:
+		g_cts_data->config_fw_name = TXD_FW_REQUEST_NAME;
+		break;
+	case MODEL_TM:
+		g_cts_data->config_fw_name = TM_FW_REQUEST_NAME;
+		break;
+	default:
+		if(module) {
+			cts_info("No md info for module:%d, use default", module);
+			module = 0;
+		}
+		cts_info("Couldn't find any tp modules, applying default settings");
+		g_cts_data->config_fw_name = FW_REQUEST_NAME;
+		break;
+	}
+
+	cts_info("Found module: ini fw name = %s", g_cts_data->config_fw_name);
+
+	g_cts_data->tp_module = module;
+}
+
+
+
+void cts_parse_tp_module(void)
+{
+	int tp_module = 0;
+
+#ifdef CTS_TP_MODULE_EN
+	if(active_panel_name) {
+		if (strstr(active_panel_name, "tm") || strstr(active_panel_name, "tianma")) {
+			tp_module = MODEL_TM;
+		}
+		else if (strstr(active_panel_name, "djn")) {
+			tp_module = MODEL_DJ;
+		}
+		else if (strstr(active_panel_name, "txd")) {
+			tp_module = MODEL_TXD;
+		}
+		else if (strstr(active_panel_name, "csot")) {
+			tp_module = MODEL_CSOT;
+		}
+		else if (strstr(active_panel_name, "boe")) {
+			tp_module = MODEL_BOE;
+		}
+		else if (strstr(active_panel_name, "auo")) {
+			tp_module = MODEL_AUO;
+		}
+		else
+			cts_info("MODEL for panel:%s to be added!", active_panel_name);
+
+		if (tp_module)
+			cts_info("get tp_module:%d", tp_module);
+	}
+	else
+		cts_info("active_panel NULL");
+#endif
+
+
+	g_cts_data->tp_module = tp_module;
+}
+
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_driver_probe(struct i2c_client *client,
         const struct i2c_device_id *id)
@@ -768,6 +858,10 @@ static int cts_driver_probe(struct spi_device *client)
         goto err_destroy_esd_workqueue;
     }
 #endif
+
+    cts_parse_tp_module();
+
+    cts_update_tp_module_info();
 
     ret = cts_plat_request_resource(cts_data->pdata);
     if (ret < 0) {

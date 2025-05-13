@@ -41,6 +41,10 @@ ifneq ($(filter m y,$(TOUCHSCREEN_PM_BRL_SPI)),)
 	EXTRA_CFLAGS += -DTOUCHSCREEN_PM_BRL_SPI
 endif
 
+ifneq ($(filter m y,$(CTS_MULTI_TP_MODULE_EN)),)
+	EXTRA_CFLAGS += -DCTS_TP_MODULE_EN
+endif
+
 ifneq ($(filter m y,$(CONFIG_CHIPONE_CHECK_DEVICE_BOOTMODE)),)
 	EXTRA_CFLAGS += -DCTS_CHECK_DEVICE_BOOTMODE
 endif
