@@ -24,7 +24,7 @@
 #include "jiiov_netlink.h"
 // clang-format on
 
-#define NETLINK_ANC 30
+#define NETLINK_ANC 29
 #define USER_PORT 100
 
 static struct sock *gp_netlink_sock = NULL;
@@ -50,6 +50,11 @@ static int netlink_send_message(const char *p_buffer, uint16_t length) {
     if (NULL == p_nlmsghdr) {
         ANC_LOGE("nlmsg_put failaure");
         nlmsg_free(p_sk_buff);
+        return -1;
+    }
+
+    if (NULL == gp_netlink_sock) {
+        ANC_LOGE("gp_netlink_sock is NULL!");
         return -1;
     }
 
