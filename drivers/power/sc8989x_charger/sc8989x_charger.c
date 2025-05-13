@@ -686,6 +686,7 @@ err:
 }
 
 static void determine_initial_status(struct sc8989x_chip *sc);
+static int sc8989x_set_vindpm_track(struct sc8989x_chip *sc,enum vindpm_track track);
 __maybe_unused static int sc8989x_set_hiz(struct sc8989x_chip *sc, bool enable)
 {
 	int ret;
@@ -696,6 +697,7 @@ __maybe_unused static int sc8989x_set_hiz(struct sc8989x_chip *sc, bool enable)
 		dev_err(sc->dev, "tcmd cancel  sc8989x_set_hiz");
 		msleep(300);
 		atomic_set(&sc->vbus_good_flag, 0);
+		sc8989x_set_vindpm_track(sc, SC8989X_TRACK_300);
 		determine_initial_status(sc);
 	}
 	return ret;
@@ -1187,6 +1189,21 @@ static int sc8989x_is_charging_done(struct charger_device *chg_dev, bool * done)
 	return ret;
 }
 
+static int sc8989x_get_mivr_state(struct charger_device *chgdev, bool *active)
+{
+	int ret;
+	u32 val;
+	struct sc8989x_chip *sc = dev_get_drvdata(&chgdev->dev);
+
+	*active = false;
+	ret = sc8989x_field_read(sc, VINDPM_STAT, &val);
+	if (ret < 0)
+		return ret;
+	*active = val;
+	dev_info(sc->dev, "%s: charge %s is in vindpm\n", __func__, *active ? "is" : "not");
+	return 0;
+}
+
 static int sc8989x_get_min_ichg(struct charger_device *chg_dev, u32 * curr)
 {
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
@@ -1498,6 +1515,7 @@ static struct charger_ops sc8989x_chg_ops = {
 	.kick_wdt = sc8989x_kick_wdt,
 	.set_mivr = sc8989x_set_ivl,
 	.get_mivr = sc8989x_get_mivr_voltage,
+	.get_mivr_state = sc8989x_get_mivr_state,
 	.is_charging_done = sc8989x_is_charging_done,
 	.get_min_charging_current = sc8989x_get_min_ichg,
 	.dump_registers = sc8989x_dump_registers,

@@ -910,6 +910,22 @@ static int sgm4154x_is_charging(struct charger_device *chg_dev,bool *en)
 	return ret;
 }
 
+static int sgm4154x_get_mivr_state(struct charger_device *chg_dev,bool *en)
+{
+	int ret;
+	u8 val;
+	struct sgm4154x_device *sgm = charger_get_data(chg_dev);
+
+	ret = sgm4154x_read_reg(sgm, SGM4154x_CHRG_CTRL_a, &val);
+	if (ret) {
+		pr_err("%s read SGM4154x_CHRG_CTRL_a fail\n", __func__);
+		return ret;
+	}
+	*en = (val & SGM4154x_IN_VINDPM) ? 1 : 0;
+	dev_info(sgm->dev, "%s: charge %s is in vindpm\n", __func__, *en  ? "is" : "not");
+	return ret;
+}
+
 static int sgm4154x_charging_switch(struct charger_device *chg_dev,bool enable)
 {
 	int ret;
@@ -2271,7 +2287,7 @@ static struct charger_ops sgm4154x_chg_ops = {
 	/* MIVR */
 	.set_mivr = sgm4154x_set_input_volt_lim,
 	.get_mivr = sgm4154x_get_input_volt_lim,
-	//.get_mivr_state = sgm4154x_get_input_minvolt_lim,
+	.get_mivr_state = sgm4154x_get_mivr_state,
 	/* ADC */
 	.get_vbus_adc = sgm4154x_get_vbus,
 	//.get_adc = sgm4154x_get_adc,
