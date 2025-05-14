@@ -63,11 +63,13 @@ static int goodix_thp_spi_trans(struct goodix_thp_core *cd,
 static void goodix_thp_set_irq_enable(struct goodix_thp_core *core_data,
 					int status)
 {
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+
         mutex_lock(&core_data->irq_mutex);
         if (core_data->irq_state != !!status) {
                 status ? enable_irq(core_data->irq) : disable_irq(core_data->irq);
                 core_data->irq_state = !!status;
-                ts_info("%s: %s irq", __func__,
+                ts_info(ts_dev->dev, "%s: %s irq", __func__,
                                 status ? "enable" : "disable");
         }
         mutex_unlock(&core_data->irq_mutex);
@@ -94,12 +96,13 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
 {
         struct driver_request_pkg *req_pkg;
         struct thp_frame_mmap_list *list = &core_data->frame_mmap_list;
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         static uint32_t id;
 
         mutex_lock(&core_data->frame_mutex);
         /* check for max limit */
         if ((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head) {
-                ts_err("frame mmap buffer is full, overwriting oldest data");
+                ts_err(ts_dev->dev, "frame mmap buffer is full, overwriting oldest data");
                 list->head = (list->head + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT; // Overwrite the oldest data
         }
 
@@ -120,7 +123,7 @@ static void goodix_thp_reinit(struct goodix_thp_core *core_data)
 {
         struct thp_ts_device *ts_dev = core_data->ts_dev;
 
-        ts_info("%s: called", __func__);
+        ts_info(ts_dev->dev, "%s: called", __func__);
 
         if (core_data->power_on == 0)
                 goodix_thp_power_on(core_data);
@@ -136,8 +139,9 @@ static int goodix_thp_open(struct inode *inode, struct file *filp)
 {
         struct goodix_thp_core *core_data =
                 container_of(filp->private_data, struct goodix_thp_core, thp_misc_dev);
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
 
-        ts_info("%s: called", __func__);
+        ts_info(ts_dev->dev, "%s: called", __func__);
 
         goodix_thp_reinit(core_data);
         return 0;
@@ -147,8 +151,9 @@ static int goodix_thp_release(struct inode *inode, struct file *filp)
 {
         struct goodix_thp_core *core_data =
                 container_of(filp->private_data, struct goodix_thp_core, thp_misc_dev);
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
 
-        ts_info("%s: called", __func__);
+        ts_info(ts_dev->dev, "%s: called", __func__);
         goodix_thp_frame_wake_up(core_data);
         return 0;
 }
@@ -158,12 +163,13 @@ static long goodix_thp_ioctl_get_frame(struct goodix_thp_core *core_data, unsign
         void __user *user_val = (void *)arg;
         struct thp_frame_mmap_list *list = &core_data->frame_mmap_list;
         struct thp_ioctl_frame hal_frame;
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         long r = 0;
 
         mutex_lock(&core_data->frame_mutex);
         if (list->head == list->tail) {
                 if (core_data->get_frame_wait_mode == GET_FRAME_NONBLOCK_MODE) {
-                        ts_err("no frame");
+                        ts_err(ts_dev->dev, "no frame");
                         r = -ENODATA;
                         goto out;
                 } else {
@@ -174,7 +180,7 @@ static long goodix_thp_ioctl_get_frame(struct goodix_thp_core *core_data, unsign
                                         (core_data->frame_waitq_state == WAKEUP_STATE));
                                 mutex_lock(&core_data->frame_mutex);
                                 if (r < 0) {
-                                        ts_err("Interrupted by a signal");
+                                        ts_err(ts_dev->dev, "Interrupted by a signal");
                                         goto out;
                                 }
                         } else {
@@ -184,10 +190,10 @@ static long goodix_thp_ioctl_get_frame(struct goodix_thp_core *core_data, unsign
                                         msecs_to_jiffies(core_data->frame_wait_time));
                                 mutex_lock(&core_data->frame_mutex);
                                 if (r < 0) {
-                                        ts_err("Interrupted by a signal");
+                                        ts_err(ts_dev->dev, "Interrupted by a signal");
                                         goto out;
                                 } else if (r == 0) {
-                                        ts_err("get frame timeout");
+                                        ts_err(ts_dev->dev, "get frame timeout");
                                         r = -ETIMEDOUT;
                                         goto out;
                                 }
@@ -200,11 +206,11 @@ static long goodix_thp_ioctl_get_frame(struct goodix_thp_core *core_data, unsign
                 hal_frame.pos = list->head * GOODIX_THP_MAX_FRAME_LEN;
                 hal_frame.tv_us = ktime_get_real_ns() / 1000;
                 if(copy_to_user(user_val, &hal_frame, sizeof(hal_frame))) {
-                        ts_err("Failed to copy_to_user().");
+                        ts_err(ts_dev->dev, "Failed to copy_to_user().");
                         r = -EFAULT;
                 }
         } else {
-                ts_err("no frame");
+                ts_err(ts_dev->dev, "no frame");
                 r = -ENODATA;
         }
 
@@ -216,8 +222,9 @@ out:
 static long goodix_thp_ioctl_set_reset_value(struct goodix_thp_core *core_data, unsigned long reset)
 {
         struct goodix_thp_core *ts = core_data;
+        struct thp_ts_device *ts_dev = ts->ts_dev;
 
-        ts_info("%s:set reset status %ld", __func__, reset);
+        ts_info(ts_dev->dev, "%s:set reset status %ld", __func__, reset);
 
         gpio_set_value(ts->ts_dev->board_data.reset_gpio, !!reset);
 
@@ -230,12 +237,13 @@ static long goodix_thp_ioctl_set_reset_value(struct goodix_thp_core *core_data, 
 static long goodix_thp_ioctl_set_wait_time(struct goodix_thp_core *core_data, unsigned long arg)
 {
         struct goodix_thp_core *ts = core_data;
+        struct thp_ts_device *ts_dev = ts->ts_dev;
         unsigned int wait_frame_time = arg;
 
         if (arg > GOODIX_THP_MAX_TIMEOUT)
                 wait_frame_time = GOODIX_THP_MAX_TIMEOUT;
 
-        ts_info("set wait time %d ms.(current %dms)\n",
+        ts_info(ts_dev->dev, "set wait time %d ms.(current %dms)",
                         wait_frame_time, ts->frame_wait_time);
 
         if (wait_frame_time != ts->frame_wait_time) {
@@ -252,6 +260,7 @@ static long goodix_thp_ioctl_set_wait_time(struct goodix_thp_core *core_data, un
 static long goodix_thp_ioctl_spi_trans(struct goodix_thp_core *core_data, void __user *data)
 {
         struct goodix_thp_core *cd = core_data;
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         int r = 0;
         u8 *tx_buf = NULL;
         u8 *rx_buf = NULL;
@@ -263,13 +272,13 @@ static long goodix_thp_ioctl_spi_trans(struct goodix_thp_core *core_data, void _
         /* copy data from hal */
         if (copy_from_user(&trans_data, data,
                         sizeof(struct thp_ioctl_spi_trans_data))) {
-                ts_err("Failed to copy_from_user().");
+                ts_err(ts_dev->dev, "Failed to copy_from_user().");
                 return -EFAULT;
         }
 
         /* check sync data size */
         if (trans_data.size > GOODIX_THP_MAX_TRANS_DATA_LEN) {
-                ts_err("trans_data.size out of range.");
+                ts_err(ts_dev->dev, "trans_data.size out of range.");
                 return -EINVAL;
         }
 
@@ -277,7 +286,7 @@ static long goodix_thp_ioctl_spi_trans(struct goodix_thp_core *core_data, void _
         rx_buf = kzalloc(trans_data.size, GFP_KERNEL);
         tx_buf = kzalloc(trans_data.size, GFP_KERNEL);
         if (!rx_buf || !tx_buf) {
-                ts_err("%s:buf request memory fail,trans_data.size = %d",
+                ts_err(ts_dev->dev, "%s:buf request memory fail,trans_data.size = %d",
                         __func__,trans_data.size);
                 goto exit;
         }
@@ -285,14 +294,14 @@ static long goodix_thp_ioctl_spi_trans(struct goodix_thp_core *core_data, void _
         /* copy hal tx buf to driver tx buf */
         r = copy_from_user(tx_buf, trans_data.tx, trans_data.size);
         if (r) {
-                ts_err("%s:copy in buff fail", __func__);
+                ts_err(ts_dev->dev, "%s:copy in buff fail", __func__);
                 goto exit;
         }
 
         /* spi transfer */
         r =  goodix_thp_spi_trans(cd, tx_buf, rx_buf, trans_data.size);
         if (r) {
-                ts_err("%s: transfer error, ret = %d", __func__, r);
+                ts_err(ts_dev->dev, "%s: transfer error, ret = %d", __func__, r);
                 goto exit;
         }
 
@@ -300,7 +309,7 @@ static long goodix_thp_ioctl_spi_trans(struct goodix_thp_core *core_data, void _
         if (trans_data.rx) {
                 r = copy_to_user(trans_data.rx, rx_buf, trans_data.size);
                 if (r) {
-                        ts_err("%s:copy out buff fail", __func__);
+                        ts_err(ts_dev->dev, "%s:copy out buff fail", __func__);
                         goto exit;
                 }
         }
@@ -322,17 +331,18 @@ static long goodix_thp_ioctl_notify_update(struct goodix_thp_core *core_data, vo
         struct goodix_thp_board_data *board_data =
                         &core_data->ts_dev->board_data;
         struct thp_ioctl_update_info update_info;
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
 
         if (copy_from_user((u8 *)&update_info, data,
                         sizeof(update_info))) {
-                ts_err("Failed to copy_from_user().");
+                ts_err(ts_dev->dev, "Failed to copy_from_user().");
                 return -EFAULT;
         }
 
         board_data->frame_addr = update_info.frame_addr;
         board_data->cmd_addr = update_info.cmd_addr;
         board_data->ges_addr = update_info.ges_addr;
-        ts_info("set frame addr:0x%04X cmd addr:0x%04X ges addr:0x%04X",
+        ts_info(ts_dev->dev, "set frame addr:0x%04X cmd addr:0x%04X ges addr:0x%04X",
                 board_data->frame_addr,
                 board_data->cmd_addr,
                 board_data->ges_addr);
@@ -342,6 +352,7 @@ static long goodix_thp_ioctl_notify_update(struct goodix_thp_core *core_data, vo
 static long goodix_thp_ioctl_set_wait_mode(struct goodix_thp_core *core_data, unsigned long arg)
 {
         struct goodix_thp_core *ts = core_data;
+        struct thp_ts_device *ts_dev = ts->ts_dev;
         unsigned int wait_frame_mode = arg;
 
         mutex_lock(&(ts->frame_mutex));
@@ -352,7 +363,7 @@ static long goodix_thp_ioctl_set_wait_mode(struct goodix_thp_core *core_data, un
         ts->frame_waitq_state = WAKEUP_STATE;
         wake_up_interruptible(&(ts->frame_wq));
         mutex_unlock(&(ts->frame_mutex));
-        ts_info("set block %d", wait_frame_mode);
+        ts_info(ts_dev->dev, "set block %d", wait_frame_mode);
         return 0;
 }
 
@@ -372,8 +383,9 @@ static long goodix_thp_ioctl_get_frame_buf_num(struct goodix_thp_core *core_data
 static long goodix_thp_ioctl_reset_frame_list(struct goodix_thp_core *core_data)
 {
         struct goodix_thp_core *ts = core_data;
+        struct thp_ts_device *ts_dev = ts->ts_dev;
 
-        ts_info("%s called", __func__);
+        ts_info(ts_dev->dev, "%s called", __func__);
         goodix_thp_reset_frame_list(ts);
         return 0;
 }
@@ -381,17 +393,18 @@ static long goodix_thp_ioctl_reset_frame_list(struct goodix_thp_core *core_data)
 static long goodix_thp_ioctl_get_driver_state(struct goodix_thp_core *core_data, unsigned long arg)
 {
         struct goodix_thp_core *ts = core_data;
+        struct thp_ts_device *ts_dev = ts->ts_dev;
         u32 __user *driver_state = (u32 *)arg;
 
-        ts_info("%s:driver state = %d", __func__, ts->suspended);
+        ts_info(ts_dev->dev, "%s:driver state = %d", __func__, ts->suspended);
 
         if (driver_state == NULL) {
-                ts_err("%s: input parameter null", __func__);
+                ts_err(ts_dev->dev, "%s: input parameter null", __func__);
                 return -EINVAL;
         }
 
         if(copy_to_user(driver_state, &ts->suspended, sizeof(u32))) {
-                ts_err("%s:copy driver_state failed", __func__);
+                ts_err(ts_dev->dev, "%s:copy driver_state failed", __func__);
                 return -EFAULT;
         }
 
@@ -401,17 +414,18 @@ static long goodix_thp_ioctl_get_driver_state(struct goodix_thp_core *core_data,
 static long goodix_thp_ioctl_get_state_change_flag(struct goodix_thp_core *core_data, unsigned long arg)
 {
         struct goodix_thp_core *ts = core_data;
+        struct thp_ts_device *ts_dev = ts->ts_dev;
         u32 __user *change_flag = (u32 *)arg;
 
         //ts_info("%s:state_change_flag = %d", __func__, ts->state_change_flag);
 
         if (change_flag == NULL) {
-                ts_err("%s: input parameter null", __func__);
+                ts_err(ts_dev->dev, "%s: input parameter null", __func__);
                 return -EINVAL;
         }
 
         if(copy_to_user(change_flag, &ts->state_change_flag, sizeof(u32))) {
-                ts_err("%s:copy state_change_flag failed", __func__);
+                ts_err(ts_dev->dev, "%s:copy state_change_flag failed", __func__);
                 return -EFAULT;
         }
 
@@ -465,30 +479,30 @@ static long goodix_thp_ioctl_multi_spi_trans(struct goodix_thp_core *core_data, 
 
         xfer_data =  kzalloc(multi_data.xfer_num * sizeof(*xfer_data), GFP_KERNEL);
         if (!xfer_data) {
-                ts_info("failed alloc memory for xfer_data");
+                ts_info(dev->dev, "failed alloc memory for xfer_data");
                 goto exit;
         }
 
         xfer =  kzalloc(multi_data.xfer_num * sizeof(*xfer), GFP_KERNEL);
         if (!xfer) {
-                ts_info("failed alloc memory for xfer");
+                ts_info(dev->dev, "failed alloc memory for xfer");
                 goto exit;
         }
 
         if (copy_from_user(xfer_data, multi_data.xfer_data,
                 sizeof(struct thp_ioctl_spi_xfer_data) * multi_data.xfer_num)) {
-                ts_info("failed copy from user for xfer_data");
+                ts_info(dev->dev, "failed copy from user for xfer_data");
                 goto exit;
         }
 
         rx_buf = kzalloc(5120, GFP_KERNEL);
         if (!rx_buf) {
-                ts_info("failed alloc buffer for rx_buf");
+                ts_info(dev->dev, "failed alloc buffer for rx_buf");
                 goto exit;
         }
         tx_buf = kzalloc(5120, GFP_KERNEL);
         if (!tx_buf) {
-                ts_info("failed alloc buffer for tx_buf");
+                ts_info(dev->dev, "failed alloc buffer for tx_buf");
                 goto exit;
         }
 
@@ -498,7 +512,7 @@ static long goodix_thp_ioctl_multi_spi_trans(struct goodix_thp_core *core_data, 
                         r = copy_from_user(tx_buf + tmp_len,
                                 xfer_data[i].tx, xfer_data[i].len);
                         if (r) {
-                                ts_info("failed copy from user:%d", r);
+                                ts_info(dev->dev, "failed copy from user:%d", r);
                                 goto exit;
                         }
                 }
@@ -521,7 +535,7 @@ static long goodix_thp_ioctl_multi_spi_trans(struct goodix_thp_core *core_data, 
                 r = spi_sync(spi, &msg);
                 mutex_unlock(&dev->spi_mutex);
                 if(r) {
-                        ts_info("failed do spi sync:%d", r);
+                        ts_info(dev->dev, "failed do spi sync:%d", r);
                         goto exit;
                 }
                 tmp_len = 0;
@@ -546,14 +560,15 @@ exit:
 static long goodix_thp_ioctl_enter_suspend(struct goodix_thp_core *core_data, unsigned long arg)
 {
         struct goodix_thp_core *cd = core_data;
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         int r = 0;
 
         cd->gesture_enable = arg;
-        ts_info("%s: called", __func__);
+        ts_info(ts_dev->dev, "%s: called", __func__);
 
         r = goodix_thp_suspend(cd);
         if (r)
-                ts_err("%s failed, r %d", __func__, r);
+                ts_err(ts_dev->dev, "%s failed, r %d", __func__, r);
 
         return r;
 }
@@ -563,7 +578,7 @@ static long goodix_thp_ioctl_dump_rep_done(struct goodix_thp_core *core_data, un
         struct goodix_thp_core *cd = core_data;
         int r = 0;
 
-        ts_info("Notify raw data capture down");
+        ts_info(core_data->ts_dev->dev, "Notify raw data capture down");
         sysfs_notify(cd->imports->kobj_notify, NULL, "log_trigger");
 
         return r;
@@ -572,13 +587,14 @@ static long goodix_thp_ioctl_dump_rep_done(struct goodix_thp_core *core_data, un
 static long goodix_thp_ioctl_enter_resume(struct goodix_thp_core *core_data)
 {
         struct goodix_thp_core *cd = core_data;
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         int r = 0;
 
-        ts_info("%s: called", __func__);
+        ts_info(ts_dev->dev, "%s: called", __func__);
 
         r = goodix_thp_resume(cd);
         if (r)
-                ts_err("%s failed, r %d", __func__, r);
+                ts_err(ts_dev->dev, "%s failed, r %d", __func__, r);
 
         //restore param after IC reset
         goodix_ts_mmi_post_resume(cd);
@@ -590,12 +606,13 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
 {
         void __user *argp = (void __user *)arg;
         struct thp_ioctl_tsc_msg tsc_msg;
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         u8 ble_mac[6];
         u8 stylus_id[2];
 
         if (copy_from_user(&tsc_msg, argp,
                         sizeof(struct thp_ioctl_tsc_msg))) {
-                ts_err("Failed to copy_from_user .");
+                ts_err(ts_dev->dev, "Failed to copy_from_user .");
                 return -EFAULT;
         }
 
@@ -611,23 +628,22 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
         case SVC_CMD_BLE_MAC:
                 memcpy(ble_mac, &tsc_msg.value[0], sizeof(ble_mac));
                 memcpy(stylus_id, &tsc_msg.value[6], sizeof(stylus_id));
-                ts_info("recv ble mac:%*ph, stylusID:%*ph", 6, ble_mac, 2, stylus_id);
+                ts_info(ts_dev->dev, "recv ble mac:%*ph, stylusID:%*ph", 6, ble_mac, 2, stylus_id);
                 break;
         case SVC_CMD_GAME_FILTER:
-                ts_info("recv game filter:%*ph", tsc_msg.len, tsc_msg.value);
+                ts_info(ts_dev->dev, "recv game filter:%*ph", tsc_msg.len, tsc_msg.value);
                 break;
         case SVC_CMD_UPDATE_VERSION:
                 memcpy(core_data->ts_dev->board_data.thp_ver, tsc_msg.value, tsc_msg.len);
-                ts_info("thp_ver:%s", tsc_msg.value);
+                ts_info(ts_dev->dev, "thp_ver:%s", tsc_msg.value);
                 break;
         case SVC_CMD_HAL_INIT_FINISH:
-                ts_info("HAL has finished");
+                ts_info(ts_dev->dev, "HAL has finished");
                 break;
         default:
-                ts_err("not support svc msg:0x%02x", tsc_msg.cmd);
+                ts_err(ts_dev->dev, "not support svc msg:0x%02x", tsc_msg.cmd);
                 break;
         }
-
 
         return 0;
 }
@@ -635,15 +651,16 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
 static long goodix_thp_ioctl_get_chip_type(struct goodix_thp_core *core_data, unsigned long arg)
 {
         struct goodix_thp_core *ts = core_data;
+        struct thp_ts_device *ts_dev = ts->ts_dev;
         u32 __user *user_val = (u32 *)arg;
 
         if (user_val == NULL) {
-                ts_err("input parameter null");
+                ts_err(ts_dev->dev, "input parameter null");
                 return -EINVAL;
         }
 
         if(copy_to_user(user_val, &ts->ts_dev->board_data.chip_type, sizeof(u32))) {
-                ts_err("copy driver_state failed");
+                ts_err(ts_dev->dev, "copy driver_state failed");
                 return -EFAULT;
         }
 
@@ -654,10 +671,11 @@ static long goodix_thp_ioctl_get_chip_type(struct goodix_thp_core *core_data, un
 static int goodix_thp_ioctl_set_tsd_state(struct goodix_thp_core *core_data, int tsd_enable)
 {
         struct goodix_thp_core *cd = core_data;
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         u8 val[2];
 
         /* resume: touch power on is after display to avoid display disturb */
-        ts_info("%s IN, set tsd state %d", __func__, tsd_enable);
+        ts_info(ts_dev->dev, "%s IN, set tsd state %d", __func__, tsd_enable);
 
         val[0] = NOTIFY_TYPE_TSD_CTRL;
         val[1] = tsd_enable;
@@ -669,10 +687,11 @@ static int goodix_thp_ioctl_set_tsd_state(struct goodix_thp_core *core_data, int
 static int goodix_thp_ioctl_set_stylus_state(struct goodix_thp_core *core_data, int stylus_enable)
 {
         struct goodix_thp_core *cd = core_data;
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         u8 val[2];
 
         /* resume: touch power on is after display to avoid display disturb */
-        ts_info("%s IN, set stylus state %d", __func__, stylus_enable);
+        ts_info(ts_dev->dev, "%s IN, set stylus state %d", __func__, stylus_enable);
 
         val[0] = NOTIFY_TYPE_STYLUS_CTRL;
         val[1] = stylus_enable;
@@ -685,6 +704,7 @@ static long goodix_thp_ioctl(struct file *filp, unsigned int cmd,
 {
         struct goodix_thp_core *cd =
                 container_of(filp->private_data, struct goodix_thp_core, thp_misc_dev);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         long ret;
 
         switch (cmd) {
@@ -749,7 +769,7 @@ static long goodix_thp_ioctl(struct file *filp, unsigned int cmd,
                 ret = goodix_thp_ioctl_set_tsd_state(cd, arg);
                 break;
         default:
-                ts_err("cmd unknown.");
+                ts_err(ts_dev->dev, "cmd unknown.");
                 ret = 0;
         }
 
@@ -760,12 +780,13 @@ static int goodix_thp_mmap(struct file *filp, struct vm_area_struct *vma)
 {
         struct goodix_thp_core *cd =
                 container_of(filp->private_data, struct goodix_thp_core, thp_misc_dev);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         void *sh_mem = (void *)cd->frame_mmap_list.buf;
         size_t size = vma->vm_end - vma->vm_start;
         struct page *page = NULL;
 
         if (size > MMAP_BUFFER_SIZE) {
-                ts_err("vm_size[%d] > mmap_size[%d]",
+                ts_err(ts_dev->dev, "vm_size[%d] > mmap_size[%d]",
                         (int)size, MMAP_BUFFER_SIZE);
                 return -EINVAL;
         }
@@ -795,10 +816,11 @@ static const struct file_operations g_thp_fops = {
 static int goodix_thp_power_init(struct goodix_thp_core *core_data)
 {
         struct goodix_thp_board_data *ts_bdata;
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         struct device *dev = NULL;
         int r = 0;
 
-        ts_info("Power init");
+        ts_info(ts_dev->dev, "Power init");
         /* dev:i2c client device or spi slave device*/
         dev =  core_data->ts_dev->dev;
         ts_bdata = board_data(core_data);
@@ -808,22 +830,22 @@ static int goodix_thp_power_init(struct goodix_thp_core *core_data)
                                  ts_bdata->avdd_name);
                 if (IS_ERR_OR_NULL(core_data->avdd)) {
                         r = PTR_ERR(core_data->avdd);
-                        ts_err("Failed to get regulator avdd:%d", r);
+                        ts_err(ts_dev->dev, "Failed to get regulator avdd:%d", r);
                         core_data->avdd = NULL;
                         return r;
                 }
                 r = regulator_set_load(core_data->avdd, 50000);
                 if (r) {
-                    ts_err("set avdd load fail");
+                    ts_err(ts_dev->dev, "set avdd load fail");
                     return r;
                 }
                 r = regulator_set_voltage(core_data->avdd, 3000000, 3000000);
                 if (r) {
-                    ts_err("set avdd voltage fail");
+                    ts_err(ts_dev->dev, "set avdd voltage fail");
                     return r;
                 }
         } else {
-                ts_info("Avdd name is NULL[skip]");
+                ts_info(ts_dev->dev, "Avdd name is NULL[skip]");
         }
 
         if (strlen(ts_bdata->iovdd_name)) {
@@ -831,12 +853,12 @@ static int goodix_thp_power_init(struct goodix_thp_core *core_data)
                                 ts_bdata->iovdd_name);
                 if (IS_ERR_OR_NULL(core_data->iovdd)) {
                         r = PTR_ERR(core_data->iovdd);
-                        ts_err("Failed to get regulator iovdd:%d", r);
+                        ts_err(ts_dev->dev, "Failed to get regulator iovdd:%d", r);
                         core_data->iovdd = NULL;
                         return r;
                 }
         } else {
-                ts_info("iovdd name is NULL[skip]");
+                ts_info(ts_dev->dev, "iovdd name is NULL[skip]");
         }
 
         return r;
@@ -852,12 +874,13 @@ int goodix_thp_reset_after(struct goodix_thp_core *cd);
 static int goodix_thp_power_on(struct goodix_thp_core *core_data)
 {
         struct goodix_thp_board_data *ts_bdata = board_data(core_data);
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         int r;
         int iovdd_gpio = ts_bdata->iovdd_gpio;
 
-        ts_info("Device power on");
+        ts_info(ts_dev->dev, "Device power on");
         if (core_data->power_on) {
-                ts_info("device has already power on");
+                ts_info(ts_dev->dev, "device has already power on");
                 return 0;
         }
 
@@ -866,7 +889,7 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
         } else if (core_data->iovdd) {
                 r = regulator_enable(core_data->iovdd);
                 if (r) {
-                        ts_err("Failed to enable iovdd:%d", r);
+                        ts_err(ts_dev->dev, "Failed to enable iovdd:%d", r);
                         goto power_off;
                 }
                 usleep_range(3000, 3100);
@@ -875,20 +898,12 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
         if (core_data->avdd) {
                 r = regulator_enable(core_data->avdd);
                 if (r) {
-                        ts_err("Failed to enable avdd:%d", r);
+                        ts_err(ts_dev->dev, "Failed to enable avdd:%d", r);
                         goto power_off;
                 }
                 usleep_range(15000, 15100);
         }
         gpio_direction_output(ts_bdata->reset_gpio, 1);
-        if (ts_bdata->chip_type == CHIP_TYPE_9897) {
-                r = goodix_thp_reset_after(core_data);
-                if (r < 0) {
-                        ts_err("reset_after process failed,r=%d", r);
-                        goto power_off;
-                }
-        }
-
         core_data->power_on = 1;
         return 0;
 
@@ -909,10 +924,11 @@ power_off:
 static void goodix_thp_power_off(struct goodix_thp_core *core_data)
 {
         struct goodix_thp_board_data *ts_bdata = board_data(core_data);
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
 
-        ts_info("Device power off");
+        ts_info(ts_dev->dev, "Device power off");
         if (core_data->power_on == 0) {
-                ts_info("device has already power off");
+                ts_info(ts_dev->dev, "device has already power off");
                 return;
         }
 
@@ -931,9 +947,10 @@ static void goodix_thp_power_off(struct goodix_thp_core *core_data)
 static int goodix_thp_gpio_setup(struct goodix_thp_core *core_data)
 {
         struct goodix_thp_board_data *ts_bdata = board_data(core_data);
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         int r = 0;
 
-        ts_info("GPIO setup,reset-gpio:%d, irq-gpio:%d",
+        ts_info(ts_dev->dev, "GPIO setup,reset-gpio:%d, irq-gpio:%d",
                 ts_bdata->reset_gpio, ts_bdata->irq_gpio);
 
         /*
@@ -943,14 +960,14 @@ static int goodix_thp_gpio_setup(struct goodix_thp_core *core_data)
         r = devm_gpio_request_one(&core_data->pdev->dev, ts_bdata->reset_gpio,
                                   GPIOF_OUT_INIT_LOW, "ts_reset_gpio");
         if (r < 0) {
-                ts_err("Failed to request reset gpio, r:%d", r);
+                ts_err(ts_dev->dev, "Failed to request reset gpio, r:%d", r);
                 return r;
         }
 
         r = devm_gpio_request_one(&core_data->pdev->dev, ts_bdata->irq_gpio,
                                   GPIOF_IN, "ts_irq_gpio");
         if (r < 0) {
-                ts_err("Failed to request irq gpio, r:%d", r);
+                ts_err(ts_dev->dev, "Failed to request irq gpio, r:%d", r);
                 return r;
         }
 
@@ -958,7 +975,7 @@ static int goodix_thp_gpio_setup(struct goodix_thp_core *core_data)
             r = devm_gpio_request_one(&core_data->pdev->dev, ts_bdata->iovdd_gpio,
                 GPIOF_OUT_INIT_LOW, "ts_iovdd_gpio");
             if (r < 0) {
-                ts_err("Failed to request iovdd-gpio, r:%d", r);
+                ts_err(ts_dev->dev, "Failed to request iovdd-gpio, r:%d", r);
                 return r;
             }
         }
@@ -980,22 +997,22 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
         int fod_down = core_data->zerotap_data[0];
 
         if (ges_addr == 0) {
-                ts_err("gesture addr has not been assigned");
+                ts_err(ts_dev->dev, "gesture addr has not been assigned");
                 goto exit;
         }
 
         /* get gesture data */
         r = ts_dev->hw_ops->read(ts_dev, ges_addr, temp_data, sizeof(temp_data));
         if (r < 0 || ((temp_data[0] & GESTURE_DATA_TYPE) == 0)) {
-                ts_err("Read gesture data failed, r=%d, data[0]=0x%x",
+                ts_err(ts_dev->dev, "Read gesture data failed, r=%d, data[0]=0x%x",
                                 r, temp_data[0]);
                 goto re_send_ges_cmd;
         }
 
         /* check gesture data */
         if (checksum16_cmp(temp_data, GESTURE_DATA_HEAD_LEN, GOODIX_LE_MODE)) {
-                ts_err("gesture data head check failed");
-                ts_err("%*ph", GESTURE_DATA_HEAD_LEN, temp_data);
+                ts_err(ts_dev->dev, "gesture data head check failed");
+                ts_err(ts_dev->dev, "%*ph", GESTURE_DATA_HEAD_LEN, temp_data);
                 goto re_send_ges_cmd;
         }
 
@@ -1004,44 +1021,44 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
 
         switch (temp_data[4]) {
         case 0xCC: //double tap
-                ts_info("get gesture event: Double tap");
+                ts_info(ts_dev->dev, "get gesture event: Double tap");
                 mmi_event.evcode =4;
                 mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
                 mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
                 core_data->imports->report_gesture(&mmi_event);
                 break;
         case 0x63: // C
-                ts_info("get gesture event: C");
+                ts_info(ts_dev->dev, "get gesture event: C");
                 break;
         case 0x65: // E
-                ts_info("get gesture event: E");
+                ts_info(ts_dev->dev, "get gesture event: E");
                 break;
         case 0x6D: // M
-                ts_info("get gesture event: M");
+                ts_info(ts_dev->dev, "get gesture event: M");
                 break;
         case 0x77: // W
-                ts_info("get gesture event: W");
+                ts_info(ts_dev->dev, "get gesture event: W");
                 break;
         case 0x40: // A
-                ts_info("get gesture event: A");
+                ts_info(ts_dev->dev, "get gesture event: A");
                 break;
         case 0x66: // F
-                ts_info("get gesture event: F");
+                ts_info(ts_dev->dev, "get gesture event: F");
                 break;
         case 0x6F: // O
-                ts_info("get gesture event: O");
+                ts_info(ts_dev->dev, "get gesture event: O");
                 break;
         case 0xAA: // R2L
-                ts_info("get gesture event: right to left");
+                ts_info(ts_dev->dev, "get gesture event: right to left");
                 break;
         case 0xBB: // L2R
-                ts_info("get gesture event: left to right");
+                ts_info(ts_dev->dev, "get gesture event: left to right");
                 break;
         case 0xBA: // UP
-                ts_info("get gesture event: up");
+                ts_info(ts_dev->dev, "get gesture event: up");
                 break;
         case 0xAB: // DOWN
-                ts_info("get gesture event: down");
+                ts_info(ts_dev->dev, "get gesture event: down");
                 break;
         case 0x46: // FP_DOWN
                 fod_down_interval = (int)jiffies_to_msecs(jiffies-start);
@@ -1050,7 +1067,7 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
                 mmi_event.evdata.x= 0;
                 mmi_event.evdata.y= 0;
 
-                ts_info("Get FOD-DOWN gesture:%d interval:%d",fod_down,fod_down_interval);
+                ts_info(ts_dev->dev, "Get FOD-DOWN gesture:%d interval:%d",fod_down,fod_down_interval);
                 if(fod_down_interval > 2000)
                         fod_down = 0;
                 if(fod_down_interval > 0 && fod_down_interval < 250 && fod_down) {
@@ -1061,9 +1078,10 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
                 if(fod_down < 6)
                         core_data->imports->report_gesture(&mmi_event);
                 fod_down++;
+
                 break;
         case 0x55: // FP_UP
-                ts_info("Get FOD-UP gesture");
+                ts_info(ts_dev->dev, "Get FOD-UP gesture");
                 mmi_event.evcode = 3;
                 mmi_event.evdata.x= 0;
                 mmi_event.evdata.y= 0;
@@ -1071,14 +1089,14 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
                 fod_down = 0;
                 break;
         case 0x4C: // single tap
-                ts_info("get gesture event: single tap");
+                ts_info(ts_dev->dev, "get gesture event: single tap");
                 mmi_event.evcode =1;
                 mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
                 mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
                 core_data->imports->report_gesture(&mmi_event);
                 break;
         default:
-                ts_err("not support gesture type %x", temp_data[4]);
+                ts_err(ts_dev->dev, "not support gesture type %x", temp_data[4]);
                 break;
         }
 
@@ -1088,7 +1106,7 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
 re_send_ges_cmd:
         /* resend gesture cmd */
         if(ts_dev->hw_ops->send_cmd(ts_dev, CMD_GESTURE, gsx_data))
-                ts_info("warning: failed re_send gesture cmd");
+                ts_info(ts_dev->dev, "warning: failed re_send gesture cmd");
 exit:
         clean_data = 0;
         ts_dev->hw_ops->write(ts_dev, ges_addr, &clean_data, 1);
@@ -1118,9 +1136,9 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
             cpumask.bits[0] = core_data->ts_dev->board_data.cpu_mask;
             set_cpus_allowed_ptr(current, &cpumask);
             if (set_cpus_allowed_ptr(current, &cpumask) != 0) {
-                ts_err("Failed to set CPU affinity");
+                ts_err(ts_dev->dev, "Failed to set CPU affinity");
             } else {
-                ts_info("CPU affinity set to mask 0x%lx", cpumask.bits[0]);
+                ts_info(ts_dev->dev, "CPU affinity set to mask 0x%lx", cpumask.bits[0]);
             }
             affinity_initialized = true;
         }
@@ -1156,14 +1174,14 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
                      core_data->bus_ready,
                      msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
                      if (!r) {
-                         ts_err("system can't finish resuming procedure.");
+                         ts_err(ts_dev->dev, "system can't finish resuming procedure.");
                          goto exit;
                      }
             /*ts_info("Device maybe resume!");*/
         }
 
         if (core_data->reset_state) {
-                ts_err("%s: ignore this irq.", __func__);
+                ts_err(ts_dev->dev, "%s: ignore this irq.", __func__);
                 goto exit;
         }
 
@@ -1176,7 +1194,7 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         /* get frame */
         r = ts_dev->hw_ops->get_frame(ts_dev, read_data);
         if (r < 0) {
-                ts_err("failed to read frame, r %d", r);
+                ts_err(ts_dev->dev, "failed to read frame, r %d", r);
                 goto exit;
         }
 
@@ -1214,6 +1232,7 @@ exit:
 static int goodix_thp_irq_setup(struct goodix_thp_core *core_data)
 {
         const struct goodix_thp_board_data *ts_bdata = board_data(core_data);
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         int r;
         struct irq_desc *desc;
         struct task_struct *task;
@@ -1225,7 +1244,7 @@ static int goodix_thp_irq_setup(struct goodix_thp_core *core_data)
         else
                 core_data->irq = ts_bdata->irq;
 
-        ts_info("IRQ:%u,flags:%d", core_data->irq, (int)ts_bdata->irq_flags);
+        ts_info(ts_dev->dev, "IRQ:%u,flags:%d", core_data->irq, (int)ts_bdata->irq_flags);
 
         if (core_data->pdev->id == 0)
                 sprintf(core_data->irq_name, "%s", GOODIX_CORE_DRIVER_NAME);
@@ -1239,7 +1258,7 @@ static int goodix_thp_irq_setup(struct goodix_thp_core *core_data)
                                       core_data);
 
         if (r < 0) {
-                ts_err("Failed to requeset threaded irq:%d", r);
+                ts_err(ts_dev->dev, "Failed to requeset threaded irq:%d", r);
                 return r;
         }
 
@@ -1258,7 +1277,7 @@ static int goodix_thp_irq_setup(struct goodix_thp_core *core_data)
         disable_irq(core_data->irq);
         core_data->irq_state = false;
         mutex_unlock(&core_data->irq_mutex);
-        ts_info("%s: disable irq", __func__);
+        ts_info(ts_dev->dev, "%s: disable irq", __func__);
 
         return 0;
 }
@@ -1266,12 +1285,13 @@ static int goodix_thp_irq_setup(struct goodix_thp_core *core_data)
 static int goodix_thp_pen_input_dev_init(struct goodix_thp_core *core_data)
 {
         struct input_dev *pen_dev = NULL;
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         int r;
 
         /* alloc input_dev */
         pen_dev = input_allocate_device();
         if (!pen_dev) {
-                ts_err("Failed to alloc suspend input dev");
+                ts_err(ts_dev->dev, "Failed to alloc suspend input dev");
                 return -ENOMEM;
         }
         core_data->pen_dev = pen_dev;
@@ -1283,7 +1303,7 @@ static int goodix_thp_pen_input_dev_init(struct goodix_thp_core *core_data)
                 sprintf(core_data->pen_dev_name, "%s%d", GOODIX_THP_STYLUS_INPUT_DEVICE_NAME, core_data->pdev->id);
         pen_dev->name = core_data->pen_dev_name;
         pen_dev->id.bustype = BUS_SPI;
-        pen_dev->id.product = 0x0200;
+        pen_dev->id.product = 0x0210 + core_data->pdev->id;
         pen_dev->id.vendor = 0x27C6;
         pen_dev->id.version = 0x0001;
 
@@ -1315,7 +1335,7 @@ static int goodix_thp_pen_input_dev_init(struct goodix_thp_core *core_data)
         /* register input_dev */
         r = input_register_device(pen_dev);
         if (r) {
-                ts_err("failed to register suspend input device");
+                ts_err(ts_dev->dev, "failed to register suspend input device");
                 return r;
         }
 
@@ -1365,14 +1385,14 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
 #endif
 
         if (arg == 0) {
-                ts_err("%s:arg is null.", __func__);
+                ts_err(tdev->dev, "%s:arg is null.", __func__);
                 return -EINVAL;
         }
 
         /* copy data from hal */
         if (copy_from_user(&data, argp,
                         sizeof(struct thp_input_agent_ioctl_coor_data))) {
-                ts_err("Failed to copy_from_user().");
+                ts_err(tdev->dev, "Failed to copy_from_user().");
                 return -EFAULT;
         }
 
@@ -1391,7 +1411,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 input_report_key(input_dev, BTN_TOOL_FINGER, 0);
                 input_sync(input_dev);
                 // report stylus
-                ts_debug("x:%d y:%d p:%d tilt_x:%d tilt_y:%d",
+                ts_debug(tdev->dev, "x:%d y:%d p:%d tilt_x:%d tilt_y:%d",
                         stylus_data->x, stylus_data->y, stylus_data->p,
                         stylus_data->tilt_x, stylus_data->tilt_y);
                 input_report_abs(pen_dev, ABS_X, stylus_data->x);
@@ -1408,7 +1428,8 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 input_report_key(pen_dev, BTN_TOOL_PEN, 0);
                 input_sync(pen_dev);
                 // report fingers
-                for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
+                if (data.ref_not_set == 0) {
+                    for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
                         input_mt_slot(input_dev, i);
 
 #ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
@@ -1427,26 +1448,27 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
 
                         if (data.touch[i].touch_valid != 0) {
 #ifdef CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID
-                                ts_debug("[%d] x:%d y:%d w:%d, id_palm %d, tool_type %d", i,
+                                ts_debug(tdev->dev, "[%d] x:%d y:%d w:%d, id_palm %d, tool_type %d", i,
                                         data.touch[i].x, data.touch[i].y, data.touch[i].major,
                                         data.touch[i].cancel_flag, tool_type);
 #else
-                                ts_debug("[%d] x:%d y:%d w:%d", i, 
+                                ts_debug(tdev->dev, "[%d] x:%d y:%d w:%d", i,
                                         data.touch[i].x, data.touch[i].y, data.touch[i].major);
 #endif
                                 input_report_abs(input_dev, ABS_MT_POSITION_X,
-                                                        data.touch[i].x);
+                                        data.touch[i].x);
                                 input_report_abs(input_dev, ABS_MT_POSITION_Y,
-                                                        data.touch[i].y);
+                                        data.touch[i].y);
                                 input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR,
-                                                        data.touch[i].major);
-                        //	input_report_abs(input_dev, ABS_MT_TOUCH_MINOR,
-                        //				data.touch[i].minor);
+                                        data.touch[i].major);
+                                //	input_report_abs(input_dev, ABS_MT_TOUCH_MINOR,
+                                //				data.touch[i].minor);
                         }
-                }
-                input_report_key(input_dev, BTN_TOUCH, (data.touch_num > 0) ? 1 : 0);
-                input_report_key(input_dev, BTN_TOOL_FINGER, (data.touch_num > 0) ? 1 : 0);
-                input_sync(input_dev);
+                    }
+                    input_report_key(input_dev, BTN_TOUCH, (data.touch_num > 0) ? 1 : 0);
+                    input_report_key(input_dev, BTN_TOOL_FINGER, (data.touch_num > 0) ? 1 : 0);
+                    input_sync(input_dev);
+            }
         }
 
         /* fp touch flag */
@@ -1457,14 +1479,14 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                         input_sync(input_dev);
                         input_report_key(input_dev, BTN_TRIGGER_HAPPY1, 0);
                         input_sync(input_dev);
-                        ts_info("report BTN_TRIGGER_HAPPY1");
+                        ts_info(tdev->dev, "report BTN_TRIGGER_HAPPY1");
                 } else {
                         tdev->hw_ops->set_fp_int_pin(tdev, 0);
                         input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 1);
                         input_sync(input_dev);
                         input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 0);
                         input_sync(input_dev);
-                        ts_info("report BTN_TRIGGER_HAPPY2");
+                        ts_info(tdev->dev, "report BTN_TRIGGER_HAPPY2");
                 }
                 pre_flags = data.fp_mode;
         }
@@ -1481,16 +1503,17 @@ static int goodix_thp_input_agent_ioctl_get_custom_info(struct goodix_thp_core *
 {
         char __user *custom_info = (char *)arg;
         struct goodix_thp_core *cd = core_data;
+        struct thp_ts_device *ts_dev = cd->ts_dev;
 
         if (!cd || !custom_info) {
-                ts_err("%s:args error", __func__);
+                ts_err(ts_dev->dev, "%s:args error", __func__);
                 return -EINVAL;
         }
 
-        ts_info("%s:custom info:%s", __func__, cd->custom_info);
+        ts_info(ts_dev->dev, "%s:custom info:%s", __func__, cd->custom_info);
 
         if(copy_to_user(custom_info, cd->custom_info, sizeof(cd->custom_info))) {
-                ts_err("%s:copy window_info failed", __func__);
+                ts_err(ts_dev->dev, "%s:copy window_info failed", __func__);
                 return -EFAULT;
         }
 
@@ -1512,17 +1535,18 @@ int goodix_thp_input_agent_ioctl_get_events(struct goodix_thp_core *core_data, u
 static int goodix_thp_input_agent_ioctl_get_driver_state(struct goodix_thp_core *core_data, unsigned long arg)
 {
         struct goodix_thp_core *cd = core_data;
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         u32 __user *driver_state = (u32 *)arg;
 
         //ts_info("%s:driver state = %d", __func__, cd->suspended);
 
         if (driver_state == NULL) {
-                ts_err("%s: input parameter null", __func__);
+                ts_err(ts_dev->dev, "%s: input parameter null", __func__);
                 return -EINVAL;
         }
 
         if(copy_to_user(driver_state, &cd->suspended, sizeof(u32))) {
-                ts_err("%s:copy driver_state failed", __func__);
+                ts_err(ts_dev->dev, "%s:copy driver_state failed", __func__);
                 return -EFAULT;
         }
 
@@ -1544,7 +1568,8 @@ static long goodix_thp_input_agent_ioctl(struct file *filp, unsigned int cmd,
                                 unsigned long arg)
 {
         struct goodix_thp_core *cd =
-                container_of(filp->private_data, struct goodix_thp_core, input_misc_dev);        
+                container_of(filp->private_data, struct goodix_thp_core, input_misc_dev);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         long ret;
 
         switch (cmd) {
@@ -1567,7 +1592,7 @@ static long goodix_thp_input_agent_ioctl(struct file *filp, unsigned int cmd,
                 ret = goodix_thp_input_agent_ioctl_get_driver_state(cd, arg);
                 break;
         default:
-                ts_err("cmd unkown.");
+                ts_err(ts_dev->dev, "cmd unkown.");
                 ret = -EINVAL;
         }
 
@@ -1583,13 +1608,14 @@ static const struct file_operations g_thp_input_agent_fops = {
 
 static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
 {
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         struct input_dev *input_dev;
         int r;
 
         /* alloc input_dev */
         input_dev = input_allocate_device();
         if (!input_dev) {
-                ts_err("%s:Unable to allocated input device", __func__);
+                ts_err(ts_dev->dev, "%s:Unable to allocated input device", __func__);
                 return	-ENODEV;
         }
         core_data->input_dev = input_dev;
@@ -1635,7 +1661,7 @@ static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
         /* register input_dev */
         r = input_register_device(input_dev);
         if (r) {
-                ts_err("%s:failed to register input device", __func__);
+                ts_err(ts_dev->dev, "%s:failed to register input device", __func__);
                 goto input_dev_reg_err;
         }
 
@@ -1648,7 +1674,7 @@ static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
         core_data->input_misc_dev.fops = &g_thp_input_agent_fops;
         r = misc_register(&core_data->input_misc_dev);
         if (r) {
-                ts_err("%s:failed to register misc device", __func__);
+                ts_err(ts_dev->dev, "%s:failed to register misc device", __func__);
                 goto misc_dev_reg_err;
         }
 
@@ -1682,7 +1708,7 @@ static ssize_t goodix_thp_scan_rate_store(struct device *dev,
                 return -EINVAL;
 
         if (tdev->hw_ops->send_cmd(tdev, CMD_ACTIVE_SCAN_RATE, index))
-                ts_err("goodix switch scan rate failed, index %d", index);
+                ts_err(tdev->dev,"goodix switch scan rate failed, index %d", index);
 
         return count;
 }
@@ -1757,10 +1783,11 @@ static ssize_t goodix_thp_gesture_store(struct device *dev,
                                      size_t count)
 {
         struct goodix_thp_core *cd = dev_get_drvdata(dev);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         u8 val[3];
 
         if (count < 2) {
-                ts_err("invalid input param len:%zu", count);
+                ts_err(ts_dev->dev, "invalid input param len:%zu", count);
                 return count;
         }
 
@@ -1788,10 +1815,11 @@ static ssize_t goodix_thp_dump_rep_log_store(struct device *dev,
                                      size_t count)
 {
         struct goodix_thp_core *cd = dev_get_drvdata(dev);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         u8 val[1] = {NOTIFY_TYPE_DUMP_REP};
 
         if (buf[0] == '1' || buf[0] == 1) {
-                ts_info("dump rep log");
+                ts_info(ts_dev->dev, "dump rep log");
                 put_frame_list(cd, REQUEST_TYPE_NOTIFY, val, 1);
         }
         return count;
@@ -1871,19 +1899,19 @@ static ssize_t goodix_thp_reg_rw_show(struct device *dev,
 	int ret;
 
 	if (!rw_addr || !rw_len) {
-		ts_err("address(0x%x) and length(%d) can't be null",
+		ts_err(ts_dev->dev, "address(0x%x) and length(%d) can't be null",
 			rw_addr, rw_len);
 		return -EINVAL;
 	}
 
 	if (rw_flag != 1) {
-		ts_err("invalid rw flag %d, only support [1/2]", rw_flag);
+		ts_err(ts_dev->dev, "invalid rw flag %d, only support [1/2]", rw_flag);
 		return -EINVAL;
 	}
 
 	ret = ts_dev->hw_ops->read(ts_dev, rw_addr, show_buf, rw_len);
 	if (ret < 0) {
-		ts_err("failed read addr(%x) length(%d)", rw_addr, rw_len);
+		ts_err(ts_dev->dev, "failed read addr(%x) length(%d)", rw_addr, rw_len);
 		return snprintf(buf, PAGE_SIZE,
 			"failed read addr(%x), len(%d)\n",
 			rw_addr, rw_len);
@@ -1905,7 +1933,7 @@ static ssize_t goodix_thp_reg_rw_store(struct device *dev,
 	int i;
 
 	if (!buf || !count) {
-		ts_err("invalid parame");
+		ts_err(ts_dev->dev, "invalid parame");
 		goto err_out;
 	}
 
@@ -1914,7 +1942,7 @@ static ssize_t goodix_thp_reg_rw_store(struct device *dev,
 	} else if (buf[0] == 'w') {
 		rw_flag = 2;
 	} else {
-		ts_err("string must start with 'r/w'");
+		ts_err(ts_dev->dev, "string must start with 'r/w'");
 		goto err_out;
 	}
 
@@ -1923,30 +1951,30 @@ static ssize_t goodix_thp_reg_rw_store(struct device *dev,
 	pos += 2;
 	token = strsep(&pos, ":");
 	if (!token) {
-		ts_err("invalid address info");
+		ts_err(ts_dev->dev, "invalid address info");
 		goto err_out;
 	} else {
 		if (kstrtol(token, 16, &result)) {
-			ts_err("failed get addr info");
+			ts_err(ts_dev->dev, "failed get addr info");
 			goto err_out;
 		}
 		rw_addr = (u32)result;
-		ts_info("rw addr is 0x%x", rw_addr);
+		ts_info(ts_dev->dev, "rw addr is 0x%x", rw_addr);
 	}
 
 	/* get length */
 	token = strsep(&pos, ":");
 	if (!token) {
-		ts_err("invalid length info");
+		ts_err(ts_dev->dev, "invalid length info");
 		goto err_out;
 	} else {
 		if (kstrtol(token, 0, &result)) {
-			ts_err("failed get length info");
+			ts_err(ts_dev->dev, "failed get length info");
 			goto err_out;
 		}
 		rw_len = (u32)result;
 		if (rw_len > sizeof(store_buf)) {
-			ts_err("data len > %lu", sizeof(store_buf));
+			ts_err(ts_dev->dev, "data len > %lu", sizeof(store_buf));
 			goto err_out;
 		}
 	}
@@ -1957,11 +1985,11 @@ static ssize_t goodix_thp_reg_rw_store(struct device *dev,
 	for (i = 0; i < rw_len; i++) {
 		token = strsep(&pos, ":");
 		if (!token) {
-			ts_err("invalid data info");
+			ts_err(ts_dev->dev, "invalid data info");
 			goto err_out;
 		} else {
 			if (kstrtol(token, 16, &result)) {
-				ts_err("failed get data[%d] info", i);
+				ts_err(ts_dev->dev, "failed get data[%d] info", i);
 				goto err_out;
 			}
 			store_buf[i] = (u8)result;
@@ -1995,21 +2023,22 @@ static ssize_t goodix_thp_special_area_store(struct device *dev,
                                      size_t count)
 {
         struct goodix_thp_core *cd = dev_get_drvdata(dev);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         u8 en_cmd[] = {0x00, 0x00, 0x05, 0x37, 0x01, 0x3D, 0x00};
         u8 dis_cmd[] = {0x00, 0x00, 0x05, 0x37, 0x00, 0x3C, 0x00};
         u8 val[512];
 
         if (count > sizeof(val) - 1) {
-                ts_err("special area param len[%zu] > limit[%lu]", count, sizeof(val) - 1);
+                ts_err(ts_dev->dev, "special area param len[%zu] > limit[%lu]", count, sizeof(val) - 1);
                 return -EINVAL;
         }
 
         if (buf[0] == 0) {
-                ts_info("close special area");
+                ts_info(ts_dev->dev, "close special area");
                 cd->special_area_on = false;
                 put_frame_list(cd, REQUEST_TYPE_CMD, dis_cmd, sizeof(dis_cmd));
         } else {
-                ts_info("open special area");
+                ts_info(ts_dev->dev, "open special area");
                 cd->special_area_on = true;
                 if (count > 3) { //set special area param
                         val[0] = NOTIFY_TYPE_SPECIAL_AREA;
@@ -2070,11 +2099,12 @@ static const struct attribute_group sysfs_group = {
 
 static int goodix_thp_sysfs_init(struct goodix_thp_core *core_data)
 {
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
         int ret;
 
         ret = sysfs_create_group(&core_data->pdev->dev.kobj, &sysfs_group);
         if (ret) {
-                ts_err("failed create core sysfs group");
+                ts_err(ts_dev->dev, "failed create core sysfs group");
                 return ret;
         }
 
@@ -2092,10 +2122,10 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
         struct thp_ts_device *ts_dev = core_data->ts_dev;
         u16 gsx_data = ~core_data->gesture_enable;
 
-        ts_info("Suspend start");
+        ts_info(ts_dev->dev, "%s: Suspend start", __func__);
 
         if (core_data->suspended == 1) {
-		ts_info("Already in suspend mode, exit.");
+		ts_info(ts_dev->dev, "Already in suspend mode, exit.");
 		goto exit;
 	}
 
@@ -2107,11 +2137,11 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
                 /* power off */
                 goodix_thp_power_off(core_data);
         } else {
-                ts_info("enter gesture mode!");
+                ts_info(ts_dev->dev, "enter gesture mode!");
                 /* send enter gesture cmd */
                 r = ts_dev->hw_ops->send_cmd(ts_dev, CMD_GESTURE, gsx_data);
                 if (r) {
-                        ts_err("send enter gesture cmd failed, r %d", r);
+                        ts_err(ts_dev->dev, "send enter gesture cmd failed, r %d", r);
                         goto exit;
                 }
                 goodix_thp_set_irq_enable(core_data, IRQ_ENABLE_FLAG);
@@ -2119,7 +2149,7 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
         }
 exit:
         goodix_thp_force_release_all(core_data);
-        ts_info("Suspend end");
+        ts_info(ts_dev->dev, "%s: Suspend end", __func__);
         return r;
 }
 
@@ -2127,10 +2157,10 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
 {
         struct thp_ts_device *ts_dev = core_data->ts_dev;
 
-        ts_info("Resume start");
+        ts_info(ts_dev->dev, "%s: Resume start", __func__);
 
         if (core_data->suspended == 0) {
-                ts_info("Already in normal mode,exit.");
+                ts_info(ts_dev->dev, "Already in normal mode,exit.");
                 goto exit;
         }
 
@@ -2149,7 +2179,7 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
         core_data->state_change_flag = 1;
 exit:
         goodix_thp_set_irq_enable(core_data, IRQ_ENABLE_FLAG);
-        ts_info("Resume end");
+        ts_info(ts_dev->dev, "%s: Resume end", __func__);
         return 0;
 }
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
@@ -2158,37 +2188,38 @@ static int goodix_thp_drm_notifier_callback(struct notifier_block *nb,
 {
 	struct goodix_thp_core *cd =
                 container_of(nb, struct goodix_thp_core, pm_notif);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
 	int *data = (int *)v;
         u8 val[2];
 
         if (!cd || !v) {
-                ts_err("%s invalid parameters", __func__);
+                ts_err(ts_dev->dev, "%s invalid parameters", __func__);
                 return -1;
         }
 
         if (value == MTK_DISP_EVENT_BLANK) {
                 /* resume: touch power on is after display to avoid display disturb */
-                ts_info("%s IN, MTK_DISP_EVENT_BLANK", __func__);
+                ts_info(ts_dev->dev, "%s IN, MTK_DISP_EVENT_BLANK", __func__);
                 if (*data == MTK_DISP_BLANK_UNBLANK) {
                         val[0] = NOTIFY_TYPE_SCREEN;
                         val[1] = 1;
                         put_frame_list(cd, REQUEST_TYPE_NOTIFY, val, sizeof(val));
                 }
-                ts_info("%s OUT", __func__);
+                ts_info(ts_dev->dev, "%s OUT", __func__);
         } else if (value == MTK_DISP_EARLY_EVENT_BLANK) {
                 /**
                  * suspend: touch power off is before display to avoid touch report event
                  * after screen is off
                  */
-                ts_info("%s IN, MTK_DISP_EARLY_EVENT_BLANK", __func__);
+                ts_info(ts_dev->dev, "%s IN, MTK_DISP_EARLY_EVENT_BLANK", __func__);
                 if (*data == MTK_DISP_BLANK_POWERDOWN) {
                         val[0] = NOTIFY_TYPE_SCREEN;
                         val[1] = 0;
                         put_frame_list(cd, REQUEST_TYPE_NOTIFY, val, sizeof(val));
                 }
-                ts_info("%s OUT", __func__);
+                ts_info(ts_dev->dev, "%s OUT", __func__);
         } else {
-                ts_info("%s ignore disp value %d, data %d", __func__, value, *data);
+                ts_info(ts_dev->dev, "%s ignore disp value %d, data %d", __func__, value, *data);
         }
 
 	return 0;
@@ -2201,10 +2232,11 @@ static int goodix_thp_fb_notifier_callback(struct notifier_block *self,
         int *blank = NULL;
         struct goodix_thp_core *cd = container_of(self, struct goodix_thp_core,
                 pm_notif);
+        struct thp_ts_device *ts_dev = cd->ts_dev;
         u8 val[2];
 
         blank = evdata->data;
-        ts_info("FB event:%lu,blank:%d", event, *blank);
+        ts_info(ts_dev->dev, "FB event:%lu,blank:%d", event, *blank);
 	if (event == FB_EVENT_BLANK) {
 		if (*blank == FB_BLANK_UNBLANK) {
                         val[0] = NOTIFY_TYPE_SCREEN;
@@ -2245,21 +2277,19 @@ static int goodix_thp_probe(struct platform_device *pdev)
         struct thp_ts_device *tdev;
         int r;
 
-        ts_info("goodix_thp_probe IN");
-
         /*init thp core data */
         tdev = pdev->dev.platform_data;
         if (!tdev || !tdev->hw_ops) {
-                ts_err("Invalid touch device");
+                ts_err(NULL, "Invalid touch device");
                 return -ENODEV;
         }
 
+        ts_info(tdev->dev, "%s IN", __func__);
+
         core_data = devm_kzalloc(&pdev->dev, sizeof(struct goodix_thp_core),
                                  GFP_KERNEL);
-        if (!core_data) {
-                ts_err("Failed to allocate memory for core data");
+        if (!core_data)
                 return -ENOMEM;
-        }
 
         core_data->frame_mmap_list.buf = kmalloc(MMAP_BUFFER_SIZE, GFP_KERNEL);
         core_data->pdev = pdev;
@@ -2282,27 +2312,27 @@ static int goodix_thp_probe(struct platform_device *pdev)
         /* get GPIO resource*/
         r = goodix_thp_gpio_setup(core_data);
         if (r < 0) {
-                ts_err("setup gpio failed, r %d", r);
+                ts_err(tdev->dev, "setup gpio failed, r %d", r);
                 goto out;
         }
 
         /* power init & power on */
         r = goodix_thp_power_init(core_data);
         if (r < 0) {
-                ts_err("power init failed, r %d", r);
+                ts_err(tdev->dev, "power init failed, r %d", r);
                 goto out;
         }
 
         r = goodix_thp_power_on(core_data);
         if (r < 0) {
-                ts_err("power on failed, r %d", r);
+                ts_err(tdev->dev, "power on failed, r %d", r);
                 goto out;
         }
 
         /* board init */
         r = tdev->hw_ops->board_init(tdev);
         if (r) {
-                ts_err("goodix device chip detect failed, r %d", r);
+                ts_err(tdev->dev, "goodix device chip detect failed, r %d", r);
                 goto out;
         }
 
@@ -2310,7 +2340,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
         r = tdev->hw_ops->get_custom_info(tdev, core_data->custom_info,
                                         GOODIX_THP_CUSTOM_INFO_LEN);
         if (r) {
-                ts_err("goodix get custom info failed, r %d", r);
+                ts_err(tdev->dev, "goodix get custom info failed, r %d", r);
                 goto out;
         }
         core_data->custom_info[GOODIX_THP_CUSTOM_INFO_LEN] = '\0';
@@ -2325,27 +2355,27 @@ static int goodix_thp_probe(struct platform_device *pdev)
         core_data->thp_misc_dev.fops = &g_thp_fops;
         r = misc_register(&core_data->thp_misc_dev);
         if (r) {
-                ts_err("failed to register misc device '/dev/thp', r %d", r);
+                ts_err(tdev->dev, "failed to register misc device '/dev/thp', r %d", r);
                 goto out;
         }
 
         r = goodix_thp_pen_input_dev_init(core_data);
         if (r) {
-                ts_err("failed to init suspend input dev, r %d", r);
+                ts_err(tdev->dev, "failed to init suspend input dev, r %d", r);
                 goto err_init_pen_dev;
         }
 
         /* init input_agent */
         r = goodix_thp_input_agent_init(core_data);
         if (r) {
-                ts_err("failed to init gdix_input_agent, r %d", r);
+                ts_err(tdev->dev, "failed to init gdix_input_agent, r %d", r);
                 goto err_init_wrapper;
         }
 
         /* init sysfs */
         r = goodix_thp_sysfs_init(core_data);
         if (r) {
-                ts_err("failed to create sysfs, r %d", r);
+                ts_err(tdev->dev, "failed to create sysfs, r %d", r);
                 goto err_sysfs_init;
         }
 
@@ -2370,7 +2400,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
 #else
                 pm_qos_add_request(&core_data->pm_qos_req, PM_QOS_CPU_DMA_LATENCY, core_data->pm_qos_value);
 #endif
-                ts_info("add qos request in touch driver.");
+                ts_info(tdev->dev, "add qos request in touch driver.");
                 core_data->pm_qos_state = 1;
         }
 
@@ -2379,26 +2409,26 @@ static int goodix_thp_probe(struct platform_device *pdev)
         /* request irq */
         r = goodix_thp_irq_setup(core_data);
         if (r) {
-                ts_err("goodix setup irq failed, r %d", r);
+                ts_err(tdev->dev, "goodix setup irq failed, r %d", r);
                 goto err_irq_setup;
         }
         core_data->bus_ready = true;
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
         core_data->pm_notif.notifier_call = goodix_thp_drm_notifier_callback;
 	if (mtk_disp_notifier_register("Touch", &core_data->pm_notif))
-		ts_err("Failed to register disp notifier client:%d", ret);
+		ts_err(tdev->dev, "Failed to register disp notifier client:%d", ret);
 #elif IS_ENABLED(CONFIG_FB)
         core_data->pm_notif.notifier_call = goodix_thp_fb_notifier_callback;
         r = fb_register_client(&core_data->pm_notif);
         if (r < 0)
-                ts_err("[FB]Unable to register fb_notifier, ret:%d", r);
+                ts_err(tdev->dev, "[FB]Unable to register fb_notifier, ret:%d", r);
 #endif
 
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
-        ts_info("%s:goodix_ts_mmi_dev_register",__func__);
+        ts_info(tdev->dev, "%s:goodix_ts_mmi_dev_register",__func__);
         r = goodix_ts_mmi_dev_register(pdev);
         if (r) {
-            ts_info("Failed register touchscreen mmi.");
+            ts_info(tdev->dev, "Failed register touchscreen mmi.");
             goto out;
         }
 #endif
@@ -2414,17 +2444,18 @@ err_init_wrapper:
 err_init_pen_dev:
         misc_deregister(&core_data->thp_misc_dev);
 out:
-        ts_info("goodix_thp_probe OUT, r:%d", r);
+        ts_info(tdev->dev, "goodix_thp_probe OUT, r:%d", r);
         return r;
 }
 
 static int goodix_thp_remove(struct platform_device *pdev)
 {
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
+        struct thp_ts_device *tdev = core_data->ts_dev;
 
-        ts_info("IN");
+        ts_info(tdev->dev, "%s: IN", __func__);
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
-        ts_info("%s:goodix_ts_mmi_dev_unregister",__func__);
+        ts_info(tdev->dev, "%s:goodix_ts_mmi_dev_unregister", __func__);
         goodix_ts_mmi_dev_unregister(pdev);
 #endif
         goodix_thp_power_off(core_data);
@@ -2434,7 +2465,7 @@ static int goodix_thp_remove(struct platform_device *pdev)
         misc_deregister(&core_data->thp_misc_dev);
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
         if (mtk_disp_notifier_unregister(&core_data->pm_notif))
-                ts_info("Error occurred when unregister disp_notifier");
+                ts_info(tdev->dev, "Error occurred when unregister disp_notifier");
 #elif IS_ENABLED(CONFIG_FB)
         fb_unregister_client(&core_data->pm_notif);
 #endif
@@ -2466,15 +2497,14 @@ static struct platform_driver thp_core_driver = {
 
 int goodix_thp_core_init(void)
 {
-        ts_info("IN");
-        ts_info("goodix thp driver v%s", GOODIX_THP_DRIVER_VERSION);
+        ts_info(NULL, "%s: goodix thp driver v%s", __func__, GOODIX_THP_DRIVER_VERSION);
 
         return platform_driver_register(&thp_core_driver);
 }
 
 int goodix_thp_core_deinit(void)
 {
-        ts_info("IN");
+        ts_info(NULL, "%s: IN", __func__);
 
         platform_driver_unregister(&thp_core_driver);
         return 0;

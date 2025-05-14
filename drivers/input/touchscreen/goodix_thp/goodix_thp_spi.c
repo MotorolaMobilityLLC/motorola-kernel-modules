@@ -121,6 +121,45 @@ struct goodix_version_info {
 };
 #pragma pack(pop)
 
+void ts_info(struct device *dev, const char *fmt, ...)
+{
+        va_list args;
+        char str[256] = {0};
+
+        va_start(args, fmt);
+        vsnprintf(str, sizeof(str), fmt, args);
+        va_end(args);
+
+	dev_info(dev, "[THP-INF] %s\n", str);
+}
+
+void ts_err(struct device *dev, const char *fmt, ...)
+{
+        va_list args;
+        char str[256] = {0};
+
+        va_start(args, fmt);
+        vsnprintf(str, sizeof(str), fmt, args);
+        va_end(args);
+
+	dev_info(dev, "[THP-ERR] %s\n", str);
+}
+
+void ts_debug(struct device *dev, const char *fmt, ...)
+{
+        va_list args;
+        char str[256] = {0};
+
+        if (!debug_log_flag)
+                return;
+
+        va_start(args, fmt);
+        vsnprintf(str, sizeof(str), fmt, args);
+        va_end(args);
+
+	dev_info(dev, "[THP-DBG] %s\n", str);
+}
+
 u16 checksum16_cmp(u8 *data, u32 size, int mode)
 {
         u16 cal_checksum = 0;
@@ -128,7 +167,7 @@ u16 checksum16_cmp(u8 *data, u32 size, int mode)
         u32 i;
 
         if (size < sizeof(u16)) {
-                ts_err("inval size %d", size);
+                ts_err(NULL, "inval size %d", size);
                 return 1;
         }
 
@@ -161,7 +200,7 @@ u8 checksum8_u16(const u8 *data, u32 size)
         u32 i;
 
         if (size < sizeof(u16)) {
-                ts_err("inval size %d", size);
+                ts_err(NULL, "inval size %d", size);
                 return 1;
         }
 
@@ -172,7 +211,7 @@ u8 checksum8_u16(const u8 *data, u32 size)
         }
 
         if (!non_zero_count) {
-                ts_err("buf data is all 0\n");
+                ts_err(NULL, "buf data is all 0");
                 return 0xFF;
         }
         return checksum + ((data[i] << 8) + data[i + 1]);
@@ -184,7 +223,7 @@ u32 checksum16_u32(const u8 *data, int size)
     u32 checksum = 0;
 
         if (size < sizeof(u32)) {
-                ts_err("inval size %d", size);
+                ts_err(NULL, "inval size %d", size);
                 return 1;
         }
 
@@ -206,6 +245,9 @@ static int goodix_thp_parse_spi_setting(struct device_node *node,
         int r;
         unsigned int value;
         struct thp_spi_setting *spi_setting;
+        struct thp_ts_device *ts_dev = container_of(board_data,
+                struct thp_ts_device, board_data);
+        struct device *dev = ts_dev->dev;
 
         spi_setting = &board_data->spi_setting;
 
@@ -214,9 +256,9 @@ static int goodix_thp_parse_spi_setting(struct device_node *node,
         r = of_property_read_u32(node, "spi-max-frequency", &value);
         if (!r) {
                 spi_setting->spi_max_speed = value;
-                ts_info("spi-max-frequency configed %d", value);
+                ts_info(dev, "spi-max-frequency configed %d", value);
         } else {
-                ts_err("invalid spi-max-frequency, r %d", r);
+                ts_err(dev, "invalid spi-max-frequency, r %d", r);
                 goto exit;
         }
 
@@ -225,9 +267,9 @@ static int goodix_thp_parse_spi_setting(struct device_node *node,
         r = of_property_read_u32(node, "spi-mode", &value);
         if (!r) {
                 spi_setting->spi_mode = value;
-                ts_info("spi-mode configed %d", value);
+                ts_info(dev, "spi-mode configed %d", value);
         } else {
-                ts_err("invalid spi-mode, r %d", r);
+                ts_err(dev, "invalid spi-mode, r %d", r);
                 goto exit;
         }
 
@@ -236,9 +278,9 @@ static int goodix_thp_parse_spi_setting(struct device_node *node,
         r = of_property_read_u32(node, "bits-per-word", &value);
         if (!r) {
                 spi_setting->bits_per_word = value;
-                ts_info("bits-per-word configed %d", value);
+                ts_info(dev, "bits-per-word configed %d", value);
         } else {
-                ts_err("invalid bits-per-word, r %d", r);
+                ts_err(dev, "invalid bits-per-word, r %d", r);
                 goto exit;
         }
 
@@ -255,27 +297,30 @@ exit:
 static int goodix_thp_parse_dt_resolution(struct device_node *node,
                 struct goodix_thp_board_data *board_data)
 {
+        struct thp_ts_device *ts_dev = container_of(board_data,
+                        struct thp_ts_device, board_data);
+        struct device *dev = ts_dev->dev;
         int r;
 
         r = of_property_read_u32(node, "goodix,panel-max-x",
                                  &board_data->panel_max_x);
         if (r)
-                ts_err("invalid goodix,panel-max-x, r %d", r);
+                ts_err(dev, "invalid goodix,panel-max-x, r %d", r);
 
         r = of_property_read_u32(node, "goodix,panel-max-y",
                                  &board_data->panel_max_y);
         if (r)
-                ts_err("invalid goodix,panel-max-y, r %d", r);
+                ts_err(dev, "invalid goodix,panel-max-y, r %d", r);
 
         r = of_property_read_u32(node, "goodix,panel-max-w",
                                  &board_data->panel_max_w);
         if (r)
-                ts_err("invalid goodix,panel-max-w, r %d", r);
+                ts_err(dev, "invalid goodix,panel-max-w, r %d", r);
 
         r = of_property_read_u32(node, "goodix,panel-max-p",
                                  &board_data->panel_max_p);
         if (r)
-                ts_err("invalid goodix,panel-max-p, r %d", r);
+                ts_err(dev, "invalid goodix,panel-max-p, r %d", r);
 
         return 0;
 }
@@ -289,19 +334,22 @@ static int goodix_thp_parse_dt_resolution(struct device_node *node,
 static int goodix_thp_parse_dt(struct device_node *node,
         struct goodix_thp_board_data *board_data)
 {
+        struct thp_ts_device *ts_dev = container_of(board_data,
+                        struct thp_ts_device, board_data);
         //struct property *prop;
+        struct device *dev = ts_dev->dev;
         const char *name_tmp;
         int r;
 
         if (!board_data) {
-                ts_err("invalid board data");
+                ts_err(dev, "invalid board data");
                 return -EINVAL;
         }
 
         /* get spi property */
         r = goodix_thp_parse_spi_setting(node, board_data);
         if (r < 0) {
-                ts_err("parse spi config fail from dt: %d", r);
+                ts_err(dev, "parse spi config fail from dt: %d", r);
                 return -EINVAL;
         }
 
@@ -309,33 +357,33 @@ static int goodix_thp_parse_dt(struct device_node *node,
         r = of_property_read_u32(node, "chip-type",
                         &board_data->chip_type);
         if (r) {
-                ts_err("invalid chip_type");
+                ts_err(dev, "invalid chip_type");
                 return -EINVAL;
         }
-        ts_info("get chip-type[%d] from dt", board_data->chip_type);
+        ts_info(dev, "get chip-type[%d] from dt", board_data->chip_type);
 
         /* get gpio property*/
         r = of_get_named_gpio(node, "goodix,reset-gpio", 0);
         if (r < 0) {
-                ts_err("invalid reset-gpio in dt: %d", r);
+                ts_err(dev, "invalid reset-gpio in dt: %d", r);
                 return -EINVAL;
         }
-        ts_info("get reset-gpio[%d] from dt", r);
+        ts_info(dev, "get reset-gpio[%d] from dt", r);
         board_data->reset_gpio = r;
 
         r = of_get_named_gpio(node, "goodix,irq-gpio", 0);
         if (r < 0) {
-                ts_err("invalid irq-gpio in dt: %d", r);
+                ts_err(dev, "invalid irq-gpio in dt: %d", r);
                 return -EINVAL;
         }
-        ts_info("get irq-gpio[%d] from dt", r);
+        ts_info(dev, "get irq-gpio[%d] from dt", r);
         board_data->irq_gpio = r;
 
         /* get irq trigger type property*/
         r = of_property_read_u32(node, "goodix,irq-flags",
                         &board_data->irq_flags);
         if (r) {
-                ts_err("invalid irq-flags");
+                ts_err(dev, "invalid irq-flags");
                 return -EINVAL;
         }
 
@@ -343,12 +391,12 @@ static int goodix_thp_parse_dt(struct device_node *node,
         memset(board_data->avdd_name, 0, sizeof(board_data->avdd_name));
         r = of_property_read_string(node, "goodix,avdd-name", &name_tmp);
         if (!r) {
-                ts_info("avdd name form dt: %s", name_tmp);
+                ts_info(dev, "avdd name form dt: %s", name_tmp);
                 if (strlen(name_tmp) < sizeof(board_data->avdd_name))
                         strncpy(board_data->avdd_name,
                                 name_tmp, sizeof(board_data->avdd_name));
                 else
-                        ts_info("invalied avdd name length: %ld > %ld",
+                        ts_info(dev, "invalied avdd name length: %ld > %ld",
                                 strlen(name_tmp),
                                 sizeof(board_data->avdd_name));
         }
@@ -356,22 +404,22 @@ static int goodix_thp_parse_dt(struct device_node *node,
         memset(board_data->iovdd_name, 0, sizeof(board_data->iovdd_name));
         r = of_property_read_string(node, "goodix,iovdd-name", &name_tmp);
         if (!r) {
-                ts_info("avdd name form dt: %s", name_tmp);
+                ts_info(dev, "avdd name form dt: %s", name_tmp);
                 if (strlen(name_tmp) < sizeof(board_data->iovdd_name))
                         strncpy(board_data->iovdd_name,
                                 name_tmp, sizeof(board_data->iovdd_name));
                 else
-                        ts_info("invalied avdd name length: %ld > %ld",
+                        ts_info(dev, "invalied avdd name length: %ld > %ld",
                                 strlen(name_tmp),
                                 sizeof(board_data->iovdd_name));
         }
 
         r = of_get_named_gpio(node, "goodix,iovdd-gpio", 0);
         if (r < 0) {
-            ts_info("can't find iovdd-gpio, use other power supply");
+            ts_info(dev, "can't find iovdd-gpio, use other power supply");
             board_data->iovdd_gpio = 0;
         } else {
-            ts_info("get iovdd-gpio[%d] from dt", r);
+            ts_info(dev, "get iovdd-gpio[%d] from dt", r);
             board_data->iovdd_gpio = r;
         }
 
@@ -380,7 +428,7 @@ static int goodix_thp_parse_dt(struct device_node *node,
         if (!r) {
                 /* 1000ms is too large, maybe you have pass a wrong value */
                 if (board_data->power_on_delay_us > 1000 * 1000) {
-                        ts_err("Power on delay time exceed 1s, please check");
+                        ts_err(dev, "Power on delay time exceed 1s, please check");
                         board_data->power_on_delay_us = 0;
                 }
         }
@@ -390,7 +438,7 @@ static int goodix_thp_parse_dt(struct device_node *node,
         if (!r) {
                 /* 1000ms is too large, maybe you have pass */
                 if (board_data->power_off_delay_us > 1000 * 1000) {
-                        ts_err("Power off delay time exceed 1s, please check");
+                        ts_err(dev, "Power off delay time exceed 1s, please check");
                         board_data->power_off_delay_us = 0;
                 }
         }
@@ -398,49 +446,49 @@ static int goodix_thp_parse_dt(struct device_node *node,
         /* get xyz resolutions */
         r = goodix_thp_parse_dt_resolution(node, board_data);
         if (r < 0) {
-                ts_err("Failed to parse resolutions:%d", r);
+                ts_err(dev, "Failed to parse resolutions:%d", r);
                 return r;
         }
 
         board_data->interpolation_ctrl = of_property_read_bool(node,
                 "goodix,interpolation-ctrl");
         if (board_data->interpolation_ctrl)
-            ts_info("support goodix interpolation mode");
+            ts_info(dev, "support goodix interpolation mode");
 
         board_data->sample_ctrl = of_property_read_bool(node,
                 "goodix,sample-ctrl");
         if (board_data->sample_ctrl)
-            ts_info("support goodix sample mode");
+            ts_info(dev, "support goodix sample mode");
 
         board_data->stowed_mode_ctrl = of_property_read_bool(node,
                 "goodix,stowed-mode-ctrl");
         if (board_data->stowed_mode_ctrl)
-            ts_info("Support goodix touch stowed mode");
+            ts_info(dev, "Support goodix touch stowed mode");
 
         board_data->pocket_mode_ctrl = of_property_read_bool(node,
             "goodix,pocket-mode-ctrl");
         if (board_data->pocket_mode_ctrl)
-            ts_info("Support goodix touch pocket mode");
+            ts_info(dev, "Support goodix touch pocket mode");
 
         board_data->edge_ctrl = of_property_read_bool(node,
                 "goodix,edge-ctrl");
         if (board_data->edge_ctrl)
-            ts_info("support goodix edge mode");
+            ts_info(dev, "support goodix edge mode");
 
         r = of_property_read_u32(node, "touchpanel,irq_need_dev_resume_time", &board_data->irq_need_dev_resume_time);
         if (r) {
-            ts_info("board_data->irq_need_dev_resume_time not specified");
+            ts_info(dev, "board_data->irq_need_dev_resume_time not specified");
             board_data->irq_need_dev_resume_time = 50;
         }
-        ts_info("board_data->irq_need_dev_resume_time = %d ms", board_data->irq_need_dev_resume_time);
+        ts_info(dev, "board_data->irq_need_dev_resume_time = %d ms", board_data->irq_need_dev_resume_time);
 
         if (of_property_read_u32(node, "goodix,sched-priority", &board_data->sched_priority)) {
-            ts_info("Failed to read sched-priority");
+            ts_info(dev, "Failed to read sched-priority");
             board_data->sched_priority = 49;
         }
 
         if (of_property_read_u32(node, "goodix,cpu-affinity", &board_data->cpu_mask)) {
-            ts_info("Failed to read cpu-affinity");
+            ts_info(dev, "Failed to read cpu-affinity");
             board_data->cpu_mask = 0xff;
         }
 
@@ -470,25 +518,7 @@ static int goodix_thp_spi_read(struct thp_ts_device *dev, unsigned int addr,
         spi_message_init(&spi_msg);
         memset(&xfers, 0, sizeof(xfers));
 
-        if (dev->board_data.chip_type == CHIP_TYPE_9916 ||
-                        dev->board_data.chip_type == CHIP_TYPE_9966 ||
-                        dev->board_data.chip_type == CHIP_TYPE_9615) {
-                tx_buf[0] = SPI_FLAG_RD; /* 0xF1 start read flag */
-                tx_buf[1] = (addr >> MOVE_24BIT) & MASK_8BIT;
-                tx_buf[2] = (addr >> MOVE_16BIT) & MASK_8BIT;
-                tx_buf[3] = (addr >> MOVE_8BIT) & MASK_8BIT;
-                tx_buf[4] = addr & MASK_8BIT;
-                tx_buf[5] = MASK_8BIT;
-                tx_buf[6] = MASK_8BIT;
-                tx_buf[7] = MASK_8BIT;
-
-                xfers.tx_buf = tx_buf;
-                xfers.rx_buf = rx_buf;
-                xfers.len = len + GOODIX_READ_WRITE_BYTE_OFFSET_GT9916;
-                //TODO：to confirm later yuanjie
-                xfers.cs_change = 0;
-                spi_message_add_tail(&xfers, &spi_msg);
-        } else if (dev->board_data.chip_type == CHIP_TYPE_9897) {
+        if (dev->board_data.chip_type == CHIP_TYPE_9897) {
                 tx_buf[0] = SPI_FLAG_RD; /* 0xF1 start read flag */
                 tx_buf[1] = (addr >> MOVE_24BIT) & MASK_8BIT;
                 tx_buf[2] = (addr >> MOVE_16BIT) & MASK_8BIT;
@@ -504,21 +534,33 @@ static int goodix_thp_spi_read(struct thp_ts_device *dev, unsigned int addr,
                 xfers.len = len + GOODIX_READ_WRITE_BYTE_OFFSET_GT9897;
                 xfers.cs_change = 1;
                 spi_message_add_tail(&xfers, &spi_msg);
+        } else {
+                tx_buf[0] = SPI_FLAG_RD; /* 0xF1 start read flag */
+                tx_buf[1] = (addr >> MOVE_24BIT) & MASK_8BIT;
+                tx_buf[2] = (addr >> MOVE_16BIT) & MASK_8BIT;
+                tx_buf[3] = (addr >> MOVE_8BIT) & MASK_8BIT;
+                tx_buf[4] = addr & MASK_8BIT;
+                tx_buf[5] = MASK_8BIT;
+                tx_buf[6] = MASK_8BIT;
+                tx_buf[7] = MASK_8BIT;
+
+                xfers.tx_buf = tx_buf;
+                xfers.rx_buf = rx_buf;
+                xfers.len = len + GOODIX_READ_WRITE_BYTE_OFFSET_GT9916;
+                xfers.cs_change = 0;
+                spi_message_add_tail(&xfers, &spi_msg);
         }
 
         ret = spi_sync(spi, &spi_msg);
         if (ret < 0) {
-                ts_err("Spi transfer error:%d", ret);
+                ts_err(&spi->dev, "Spi transfer error:%d", ret);
                 goto exit;
         }
 
-        if (dev->board_data.chip_type == CHIP_TYPE_9916 ||
-                        dev->board_data.chip_type == CHIP_TYPE_9966 ||
-                        dev->board_data.chip_type == CHIP_TYPE_9615) {
-                memcpy(data, &rx_buf[GOODIX_READ_WRITE_BYTE_OFFSET_GT9916], len);
-        } else if (dev->board_data.chip_type == CHIP_TYPE_9897) {
+        if (dev->board_data.chip_type == CHIP_TYPE_9897)
                 memcpy(data, &rx_buf[GOODIX_READ_WRITE_BYTE_OFFSET_GT9897], len);
-        }
+        else
+                memcpy(data, &rx_buf[GOODIX_READ_WRITE_BYTE_OFFSET_GT9916], len);
 
 exit:
         mutex_unlock(&dev->spi_mutex);
@@ -546,20 +588,13 @@ static int goodix_thp_spi_write(struct thp_ts_device *dev, unsigned int addr,
         spi_message_init(&spi_msg);
         memset(&xfers, 0, sizeof(xfers));
 
-        if (dev->board_data.chip_type == CHIP_TYPE_9916 ||
-                        dev->board_data.chip_type == CHIP_TYPE_9966 ||
-                        dev->board_data.chip_type == CHIP_TYPE_9615) {
-                tx_buf[0] = SPI_FLAG_WR; /* 0xF1 start read flag */
-                tx_buf[1] = (addr >> MOVE_24BIT) & MASK_8BIT;
-                tx_buf[2] = (addr >> MOVE_16BIT) & MASK_8BIT;
-                tx_buf[3] = (addr >> MOVE_8BIT) & MASK_8BIT;
-                tx_buf[4] = addr & MASK_8BIT;
-                memcpy(&tx_buf[5], data, len);
-                xfers.len = len + 5;
-        }  else {
-		memcpy(&tx_buf[0], data, len);
-		xfers.len = len;
-	}
+        tx_buf[0] = SPI_FLAG_WR; /* 0xF1 start read flag */
+        tx_buf[1] = (addr >> MOVE_24BIT) & MASK_8BIT;
+        tx_buf[2] = (addr >> MOVE_16BIT) & MASK_8BIT;
+        tx_buf[3] = (addr >> MOVE_8BIT) & MASK_8BIT;
+        tx_buf[4] = addr & MASK_8BIT;
+        memcpy(&tx_buf[5], data, len);
+        xfers.len = len + 5;
 
         xfers.tx_buf = tx_buf;
         xfers.cs_change = 0;
@@ -567,7 +602,7 @@ static int goodix_thp_spi_write(struct thp_ts_device *dev, unsigned int addr,
 
         ret = spi_sync(spi, &spi_msg);
         if (ret < 0)
-                ts_err("Spi transfer error:%d", ret);
+                ts_err(&spi->dev, "Spi transfer error:%d", ret);
 
         mutex_unlock(&dev->spi_mutex);
 
@@ -586,7 +621,7 @@ static int goodix_thp_get_cmd_ack(struct thp_ts_device *tdev, unsigned int ack_r
                 ret = goodix_thp_spi_read(tdev, ack_reg,
                         cmd_ack_buf, sizeof(cmd_ack_buf));
                 if (ret < 0) {
-                        ts_err("%s: failed read cmd ack info, ret %d",
+                        ts_err(tdev->dev, "%s: failed read cmd ack info, ret %d",
                                 __func__, ret);
                         return -EINVAL;
                 }
@@ -621,7 +656,7 @@ static int goodix_thp_send_cmd(struct thp_ts_device *tdev, u8 cmd, u16 data)
         struct thp_goodix_cmd cmd_send = {0};
 
         if (cmd_addr == 0) {
-                ts_err("cmd addr has not been assigned");
+                ts_err(tdev->dev, "cmd addr has not been assigned");
                 return -EINVAL;
         }
 
@@ -636,135 +671,21 @@ static int goodix_thp_send_cmd(struct thp_ts_device *tdev, u8 cmd, u16 data)
                 ret = goodix_thp_spi_write(tdev, cmd_addr, cmd_send.buf,
                         sizeof(cmd_send));
                 if (ret < 0) {
-                        ts_err("failed send command, ret %d", ret);
+                        ts_err(tdev->dev, "failed send command, ret %d", ret);
                         return -EINVAL;
                 }
 
                 ret = goodix_thp_get_cmd_ack(tdev, cmd_addr);
 		if (ret) {
-			ts_err("cmd ack read back error, ret %d", ret);
+			ts_err(tdev->dev, "cmd ack read back error, ret %d", ret);
 			continue;
 		} else {
-			ts_info("cmd ack read back ok!");
+			ts_info(tdev->dev, "cmd ack read back ok!");
 			break;
 		}
 	}
 
         return ret;
-}
-
-static int goodix_thp_select_spi_mode(struct goodix_thp_core *cd)
-{
-        int ret;
-        int i;
-        u8 w_value = GOODIX_SPI_NORMAL_MODE_0;
-        u8 r_value;
-
-        for (i = 0; i < GOODIX_RETRY_5; i++) {
-                cd->ts_dev->hw_ops->write(cd->ts_dev, GOODIX_SPI_MODE_REG,
-                                &w_value, 1);
-                ret = cd->ts_dev->hw_ops->read(cd->ts_dev, GOODIX_SPI_MODE_REG,
-                                &r_value, 1);
-                if (!ret && r_value == w_value) {
-                        return 0;
-                }
-        }
-        ts_err("failed switch SPI mode after reset");
-        return -EINVAL;
-}
-
-int goodix_thp_reset_after(struct goodix_thp_core *cd)
-{
-        u8 reg_val[2] = {0};
-        u8 temp_buf[12] = {0};
-        int ret;
-        int retry;
-
-        ts_info("IN");
-        usleep_range(5000, 5100);
-
-        /* select spi mode */
-        ret = goodix_thp_select_spi_mode(cd);
-        if (ret < 0)
-                return ret;
-
-        /* hold cpu */
-        retry = GOODIX_RETRY_10;
-        while (retry--) {
-                reg_val[0] = 0x01;
-                reg_val[1] = 0x00;
-                ret = cd->ts_dev->hw_ops->write(cd->ts_dev, HOLD_CPU_REG_W, reg_val, 2);
-                ret |= cd->ts_dev->hw_ops->read(cd->ts_dev, HOLD_CPU_REG_R, &temp_buf[0], 4);
-                ret |= cd->ts_dev->hw_ops->read(cd->ts_dev, HOLD_CPU_REG_R, &temp_buf[4], 4);
-                ret |= cd->ts_dev->hw_ops->read(cd->ts_dev, HOLD_CPU_REG_R, &temp_buf[8], 4);
-                if (!ret && !memcmp(&temp_buf[0], &temp_buf[4], 4) &&
-                        !memcmp(&temp_buf[4], &temp_buf[8], 4) &&
-                        !memcmp(&temp_buf[0], &temp_buf[8], 4)) {
-                        break;
-                }
-        }
-        if (retry < 0) {
-                ts_err("failed to hold cpu");
-                return -EINVAL;
-        }
-
-        /* enable sta0 clk */
-        retry = GOODIX_RETRY_5;
-        while (retry--) {
-                reg_val[0] = GOODIX_CLK_STA0_ENABLE;
-                ret = cd->ts_dev->hw_ops->write(cd->ts_dev, GOODIX_REG_CLK_STA0, reg_val, 1);
-                ret |= cd->ts_dev->hw_ops->read(cd->ts_dev, GOODIX_REG_CLK_STA0, temp_buf, 1);
-                if (!ret && temp_buf[0] == GOODIX_CLK_STA0_ENABLE)
-                        break;
-        }
-        if (retry < 0) {
-                ts_err("failed to enable sta0 clk");
-                return -EINVAL;
-        }
-
-        /* enable sta1 clk */
-        retry = GOODIX_RETRY_5;
-        while (retry--) {
-                reg_val[0] = GOODIX_CLK_STA1_ENABLE;
-                ret = cd->ts_dev->hw_ops->write(cd->ts_dev, GOODIX_REG_CLK_STA1, reg_val, 1);
-                ret |= cd->ts_dev->hw_ops->read(cd->ts_dev, GOODIX_REG_CLK_STA1, temp_buf, 1);
-                if (!ret && temp_buf[0] == GOODIX_CLK_STA1_ENABLE)
-                        break;
-        }
-        if (retry < 0) {
-                ts_err("failed to enable sta1 clk");
-                return -EINVAL;
-        }
-
-        /* set D12 level */
-        retry = GOODIX_RETRY_5;
-        while (retry--) {
-                reg_val[0] = GOODIX_TRIM_D12_LEVEL;
-                ret = cd->ts_dev->hw_ops->write(cd->ts_dev, GOODIX_REG_TRIM_D12, reg_val, 1);
-                ret |= cd->ts_dev->hw_ops->read(cd->ts_dev, GOODIX_REG_TRIM_D12, temp_buf, 1);
-                if (!ret && temp_buf[0] == GOODIX_TRIM_D12_LEVEL)
-                        break;
-        }
-        if (retry < 0) {
-                ts_err("failed to set D12");
-                return -EINVAL;
-        }
-
-        usleep_range(5000, 5100);
-        /* soft reset */
-        reg_val[0] = GOODIX_RESET_EN;
-        ret = cd->ts_dev->hw_ops->write(cd->ts_dev, GOODIX_REG_RESET, reg_val, 1);
-        if (ret < 0)
-                return ret;
-
-        /* select spi mode */
-        ret = goodix_thp_select_spi_mode(cd);
-        if (ret < 0)
-                return ret;
-
-        ts_info("OUT");
-
-        return 0;
 }
 
 /* prepare to confirm spi normal.
@@ -773,10 +694,10 @@ int goodix_thp_reset_after(struct goodix_thp_core *cd)
 static int goodix_thp_prepare(struct thp_ts_device *ts_dev)
 {
         int retry = 3;
-	u8 tx_buf[5] = {0};
-	u8 rx_buf[5] = {0};
+        u8 tx_buf[5] = {0};
+        u8 rx_buf[5] = {0};
 
-        ts_info("%s IN", __func__);
+        ts_info(ts_dev->dev, "%s IN", __func__);
 
         /* reset ic */
         ts_dev->hw_ops->reset(ts_dev, 5);
@@ -785,16 +706,16 @@ static int goodix_thp_prepare(struct thp_ts_device *ts_dev)
         while (retry--) {
                 goodix_thp_spi_write(ts_dev, 0x10000, tx_buf, sizeof(tx_buf));
                 goodix_thp_spi_read(ts_dev, 0x10000, rx_buf, sizeof(rx_buf));
-		if (!memcmp(tx_buf, rx_buf, sizeof(tx_buf)))
-			break;
-		usleep_range(5000, 5100);
+                if (!memcmp(tx_buf, rx_buf, sizeof(tx_buf)))
+                        break;
+                usleep_range(5000, 5100);
         }
         if (retry < 0) {
-                ts_err("device confirm failed, rx_buf:%*ph", 5, rx_buf);
+                ts_err(ts_dev->dev, "device confirm failed, rx_buf:%*ph", 5, rx_buf);
                 return -EINVAL;
         }
 
-        ts_info("device online");
+        ts_info(ts_dev->dev, "device online");
         msleep(100);
         return 0;
 }
@@ -803,7 +724,7 @@ static int goodix_thp_get_ic_version(struct thp_ts_device *tdev)
 {
         struct goodix_version_info version_info;
         int len, ret, retry;
-	u8 temp_buf[DEBUG_BUF_LEN] = {0};
+        u8 temp_buf[DEBUG_BUF_LEN] = {0};
         u32 ver_addr;
 
         if (tdev->board_data.chip_type == CHIP_TYPE_9897)
@@ -814,28 +735,26 @@ static int goodix_thp_get_ic_version(struct thp_ts_device *tdev)
         len = sizeof(version_info);
         memset(&version_info, 0, len);
         for (retry = 0; retry < VERSION_INFO_READ_RETRY; retry++) {
-                ret = goodix_thp_spi_read(tdev, ver_addr,
-                                (u8 *)&version_info, len);
-                if (!ret && !checksum16_cmp((u8 *)&version_info,
-					len, GOODIX_LE_MODE))
-			break;
+                ret = goodix_thp_spi_read(tdev, ver_addr, (u8 *)&version_info, len);
+                if (!ret && !checksum16_cmp((u8 *)&version_info, len, GOODIX_LE_MODE))
+                        break;
                 /* retry need delay 10ms */
-		usleep_range(10000, 11000);
+                usleep_range(10000, 11000);
         }
-        ts_info("hw info: ret %d, retry %d", ret, retry);
+        ts_info(tdev->dev, "hw info: ret %d, retry %d", ret, retry);
         if (retry == VERSION_INFO_READ_RETRY) {
-                ts_err("failed read module info");
+                ts_err(tdev->dev, "failed read module info");
                 return -EINVAL;
         }
 
         memcpy(temp_buf, version_info.rom_pid, sizeof(version_info.rom_pid));
-        ts_info("rom_pid:%s", temp_buf);
-	ts_info("rom_vid:%*ph", (int)sizeof(version_info.rom_vid),
-		version_info.rom_vid);
+        ts_info(tdev->dev, "rom_pid:%s", temp_buf);
+        ts_info(tdev->dev, "rom_vid:%*ph", (int)sizeof(version_info.rom_vid),
+                version_info.rom_vid);
         memcpy(temp_buf, version_info.patch_pid, sizeof(version_info.patch_pid));
-        ts_info("patch_pid:%s", temp_buf);
-	ts_info("patch_vid:%*ph", (int)sizeof(version_info.patch_vid),
-		version_info.patch_vid);
+        ts_info(tdev->dev, "patch_pid:%s", temp_buf);
+        ts_info(tdev->dev, "patch_vid:%*ph", (int)sizeof(version_info.patch_vid),
+                version_info.patch_vid);
 
         return 0;
 }
@@ -844,17 +763,17 @@ static int goodix_thp_board_init(struct thp_ts_device *tdev)
 {
         int ret = -1;
 
-        ts_info("%s IN", __func__);
+        ts_info(tdev->dev, "%s IN", __func__);
 
         if (!tdev) {
-                ts_err("thp_ts_device null!");
+                ts_err(tdev->dev, "thp_ts_device null!");
                 return -EINVAL;
         }
 
         /* reset ic & ic_init */
         ret = goodix_thp_prepare(tdev);
         if (ret) {
-                ts_err("goodix device prepare failed, ret %d", ret);
+                ts_err(tdev->dev, "goodix device prepare failed, ret %d", ret);
                 goto out;
         }
 
@@ -886,18 +805,13 @@ static int goodix_thp_get_custom_info(struct thp_ts_device *tdev, char *buf,
 {
         char custom_info[GOODIX_THP_CUSTOM_INFO_LEN + 1] = {0};
 
-        if (tdev->board_data.chip_type == CHIP_TYPE_9897)
-                strncpy(custom_info, "P1729S1300", len);
-        else if (tdev->board_data.chip_type == CHIP_TYPE_9916 ||
-                        tdev->board_data.chip_type == CHIP_TYPE_9966 ||
-                        tdev->board_data.chip_type == CHIP_TYPE_9615)
-                strncpy(custom_info, "H018AM2900", len);
-        ts_info("custom_info[0-9] %*ph", 10, custom_info);
-        
+        strncpy(custom_info, "H018AM2900", len);
+        ts_info(tdev->dev, "custom_info[0-9] %*ph", 10, custom_info);
+
         if (is_valid_custom_info(custom_info)) {
                 strncpy(buf, custom_info, len);
         } else {
-                ts_err("%s:get custom info fail", __func__);
+                ts_err(tdev->dev, "%s:get custom info fail", __func__);
                 return -EIO;
         }
         return 0;
@@ -914,31 +828,31 @@ static int goodix_thp_get_frame(struct thp_ts_device *tdev, char *buf)
         int i;
 
         if (!tdev) {
-                ts_err("thp_ts_device null!");
+                ts_err(tdev->dev, "thp_ts_device null!");
                 return -EINVAL;
         }
 
         if (addr == 0) {
-                ts_err("frame addr has not been assigned");
+                ts_err(tdev->dev, "frame addr has not been assigned");
                 return -EINVAL;
         }
 
         ret = goodix_thp_spi_read(tdev, addr, buf, FRAME_HEAD_LEN);
         if (ret < 0) {
-                ts_err("read frame head failed");
+                ts_err(tdev->dev, "read frame head failed");
                 return ret;
         }
         for (i = 0; i < FRAME_HEAD_LEN - 2; i++)
                 cal_checksum += buf[i];
         checksum = le16_to_cpup((__le16 *)&buf[FRAME_HEAD_LEN - 2]);
         if (checksum != cal_checksum) {
-                ts_err("frame head checksum error, %*ph", FRAME_HEAD_LEN, buf);
+                ts_err(tdev->dev, "frame head checksum error, %*ph", FRAME_HEAD_LEN, buf);
                 return -EINVAL;
         }
 
         frame_len = le16_to_cpup((__le16 *)&buf[6]);
         if (frame_len == 0 || frame_len > GOODIX_THP_MAX_FRAME_LEN) {
-                ts_err("invalid frame_len:%d", frame_len);
+                ts_err(tdev->dev, "invalid frame_len:%d", frame_len);
                 return -EINVAL;
         }
         goodix_thp_spi_read(tdev, addr + FRAME_HEAD_LEN,
@@ -949,31 +863,29 @@ static int goodix_thp_get_frame(struct thp_ts_device *tdev, char *buf)
 
 static int goodix_thp_get_version(struct thp_ts_device *tdev, u64 *version)
 {
-
-
     return 0;
 }
 
 /* level: 1-HIGH 0-LOW */
-static int goodix_thp_set_fp_int_pin(struct thp_ts_device *dev, u8 level)
+static int goodix_thp_set_fp_int_pin(struct thp_ts_device *tdev, u8 level)
 {
         int ret;
 
-        ret = goodix_thp_send_cmd(dev, 0x30, level);
+        ret = goodix_thp_send_cmd(tdev, 0x30, level);
         if (ret < 0) {
-                ts_err("failed to set fp pin level");
+                ts_err(tdev->dev, "failed to set fp pin level");
                 return ret;
         }
         return 0;
 }
 
-static int goodix_thp_reset(struct thp_ts_device *dev, u32 delay_ms)
+static int goodix_thp_reset(struct thp_ts_device *tdev, u32 delay_ms)
 {
-        ts_info("reset %dms", delay_ms);
+        ts_info(tdev->dev, "reset %dms", delay_ms);
 
-        gpio_direction_output(dev->board_data.reset_gpio, 0);
+        gpio_direction_output(tdev->board_data.reset_gpio, 0);
         udelay(RESET_LOW_DELAY_US);
-        gpio_direction_output(dev->board_data.reset_gpio, 1);
+        gpio_direction_output(tdev->board_data.reset_gpio, 1);
         if (delay_ms > 0) {
                 if (delay_ms < 20)
                         usleep_range(delay_ms * 1000, delay_ms * 1000 + 100);
@@ -983,18 +895,18 @@ static int goodix_thp_reset(struct thp_ts_device *dev, u32 delay_ms)
         return 0;
 }
 
-static int goodix_thp_set_spi_speed(struct thp_ts_device *dev, u32 speed)
+static int goodix_thp_set_spi_speed(struct thp_ts_device *tdev, u32 speed)
 {
-        struct spi_device *spi = dev->spi_dev;
+        struct spi_device *spi = tdev->spi_dev;
         int ret;
 
-        spi->mode = dev->board_data.spi_setting.spi_mode;
+        spi->mode = tdev->board_data.spi_setting.spi_mode;
         spi->max_speed_hz = speed;
-        spi->bits_per_word = dev->board_data.spi_setting.bits_per_word;
+        spi->bits_per_word = tdev->board_data.spi_setting.bits_per_word;
 
         ret = spi_setup(spi);
         if (ret)
-                ts_err("failed setup spi speed to %d, ret %d",
+                ts_err(tdev->dev, "failed setup spi speed to %d, ret %d",
                                 spi->max_speed_hz, ret);
 
         return ret;
@@ -1018,7 +930,7 @@ static void goodix_pdev_release(struct device *dev)
 {
         struct platform_device *pdev = to_platform_device(dev);
 
-        ts_info("goodix pdev released, id:%d", pdev->id);
+        ts_info(dev, "goodix pdev released, id:%d", pdev->id);
         kfree(pdev);
 }
 
@@ -1029,21 +941,18 @@ static int goodix_spi_probe(struct spi_device *spi)
         static int pdev_id;
         int r = 0;
 
-        ts_info("%s IN", __func__);
+        ts_info(&spi->dev, "%s IN", __func__);
 
         /* init thp device data */
         ts_dev = devm_kzalloc(&spi->dev,
                 sizeof(struct thp_ts_device), GFP_KERNEL);
-        if (!ts_dev) {
-                ts_err("out of memory");
+        if (!ts_dev)
                 return -ENOMEM;
-        }
 
         /* alloc memory for spi transfer buffer */
         ts_dev->tx_buff = devm_kzalloc(&spi->dev, GOODIX_SPI_BUFF_MAX_SIZE, GFP_KERNEL);
         ts_dev->rx_buff = devm_kzalloc(&spi->dev, GOODIX_SPI_BUFF_MAX_SIZE, GFP_KERNEL);
         if (!ts_dev->tx_buff || !ts_dev->rx_buff) {
-                ts_err("%s: out of memory\n", __func__);
                 r = -ENOMEM;
                 goto err_spi_buf;
         }
@@ -1059,12 +968,12 @@ static int goodix_spi_probe(struct spi_device *spi)
                 r = goodix_thp_parse_dt(spi->dev.of_node,
                                     &ts_dev->board_data);
                 if (r < 0) {
-                        ts_err("failed parse device info form dts, %d", r);
+                        ts_err(&spi->dev, "failed parse device info form dts, %d", r);
                         r = -EINVAL;
                         goto err_spi_buf;
                 }
         } else {
-                ts_err("no valid device tree node found");
+                ts_err(&spi->dev, "no valid device tree node found");
                 r = -ENODEV;
                 goto err_spi_buf;
         }
@@ -1077,7 +986,6 @@ static int goodix_spi_probe(struct spi_device *spi)
         /* init ts core device */
         pdev = kzalloc(sizeof(struct platform_device), GFP_KERNEL);
         if (!pdev) {
-                ts_err("kzalloc core dev pdev faliled!");
                 r = -ENOMEM;
                 goto err_spi_buf;
         }
@@ -1097,14 +1005,14 @@ static int goodix_spi_probe(struct spi_device *spi)
         /* register platform device, then the goodix_thp_core
          * module will probe the touch deivce.
          */
-        ts_info("platform device register, id:%d", pdev->id);
+        ts_info(&spi->dev, "platform device register, id:%d", pdev->id);
         r = platform_device_register(pdev);
         if (r) {
-                ts_err("failed register goodix platform device, %d", r);
+                ts_err(&spi->dev, "failed register goodix platform device, %d", r);
                 goto err_pdev;
         }
 
-        ts_info("%s OUT", __func__);
+        ts_info(&spi->dev, "%s OUT", __func__);
         return r;
 
 err_pdev:
@@ -1113,7 +1021,7 @@ err_pdev:
                 pdev = NULL;
         }
 err_spi_buf:
-        ts_info("OUT, %d", r);
+        ts_info(&spi->dev, "OUT, %d", r);
         return r;
 }
 
@@ -1122,7 +1030,7 @@ static void goodix_spi_remove(struct spi_device *spi)
 {
         struct platform_device *pdev = spi_get_drvdata(spi);
 
-	ts_info("goodix spi driver remove, id:%d", pdev->id);
+	ts_info(&spi->dev, "goodix spi driver remove, id:%d", pdev->id);
 	platform_device_unregister(pdev);
 }
 #else
@@ -1130,7 +1038,7 @@ static int goodix_spi_remove(struct spi_device *spi)
 {
         struct platform_device *pdev = spi_get_drvdata(spi);
 
-        ts_info("goodix spi driver remove, id:%d", pdev->id);
+        ts_info(&spi->dev, "goodix spi driver remove, id:%d", pdev->id);
         platform_device_unregister(pdev);
         return 0;
 }
@@ -1187,10 +1095,10 @@ static int __init goodix_thp_spi_init(void)
 {
         int ret;
 
-        ts_info("Goodix thp driver init");
+        ts_info(NULL, "Goodix thp driver init");
         ret = goodix_thp_core_init();
         if (ret < 0) {
-                ts_err("failed register platform driver");
+                ts_err(NULL, "failed register platform driver");
                 return ret;
         }
         return spi_register_driver(&goodix_spi_driver);
@@ -1198,7 +1106,7 @@ static int __init goodix_thp_spi_init(void)
 
 static void __exit goodix_thp_spi_exit(void)
 {
-        ts_info("Goodix thp spi driver exit");
+        ts_info(NULL, "Goodix thp spi driver exit");
         spi_unregister_driver(&goodix_spi_driver);
         goodix_thp_core_deinit();
 }
