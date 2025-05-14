@@ -14,8 +14,9 @@
 
 struct goodix_ic_report_rate_config report_rate_config_info;
 
-int parse_report_rate_config(struct device_node *np)
+int parse_report_rate_config(struct device *dev)
 {
+	struct device_node *np = dev->of_node;
 	struct device_node *rate_node;
 	int ret, i;
 	u8 raw_data[9];
@@ -24,7 +25,7 @@ int parse_report_rate_config(struct device_node *np)
 
 	rate_node = of_get_child_by_name(np, "goodix,report-rate-config");
 	if (!rate_node) {
-		ts_err("No report rate config found");
+		ts_err(dev, "No report rate config found");
 		return -ENODATA;
 	}
 
@@ -32,7 +33,7 @@ int parse_report_rate_config(struct device_node *np)
 	ret = of_property_read_u8(rate_node, "goodix,rate-config-count",
                             &config->rate_config_count);
 	if (ret) {
-		ts_err("Can't read rate config count");
+		ts_err(dev, "Can't read rate config count");
 		goto out;
 	}
 
@@ -43,7 +44,7 @@ int parse_report_rate_config(struct device_node *np)
 
 	/* limit the max rate config count */
 	if (config->rate_config_count > MAX_REPORT_RATE_CONFIG) {
-		ts_debug("Rate config count exceeds max, truncating to %d", MAX_REPORT_RATE_CONFIG);
+		ts_debug(dev, "Rate config count exceeds max, truncating to %d", MAX_REPORT_RATE_CONFIG);
 		config->rate_config_count = MAX_REPORT_RATE_CONFIG;
 	}
 
@@ -63,7 +64,7 @@ int parse_report_rate_config(struct device_node *np)
 
 		ret = of_property_read_u8_array(rate_node, prop_name, raw_data, arry_size);
 		if (ret) {
-			ts_err("Can't read config %d: %d", i, ret);
+			ts_err(dev, "Can't read config %d: %d", i, ret);
 			goto out;
 		}
 
@@ -92,6 +93,7 @@ int goodix_thp_mmi_get_report_rate(struct goodix_thp_core *core_data)
 	int interpolation_flag = 0;
 	int refresh_rate = 0;
 	int i = 0;
+	struct device *tdev = core_data->ts_dev->dev;
 
 	refresh_rate_ctrl = core_data->ts_dev->board_data.report_rate_ctrl;
 	interpolation_ctrl = core_data->ts_dev->board_data.interpolation_ctrl;
@@ -99,7 +101,7 @@ int goodix_thp_mmi_get_report_rate(struct goodix_thp_core *core_data)
 	interpolation_flag = core_data->get_mode.interpolation;
 	refresh_rate = core_data->refresh_rate;
 
-	ts_debug("refresh_rate_ctrl: %d, interpolation_ctrl: %d, interpolation_flag: %d, refresh_rate: %d",
+	ts_debug(tdev, "refresh_rate_ctrl: %d, interpolation_ctrl: %d, interpolation_flag: %d, refresh_rate: %d",
 		refresh_rate_ctrl, interpolation_ctrl, interpolation_flag, refresh_rate);
 
 	if (refresh_rate_ctrl == 0 && interpolation_ctrl == 1) {
@@ -129,10 +131,10 @@ int goodix_thp_mmi_get_report_rate(struct goodix_thp_core *core_data)
 	}
 
 	if (i == report_rate_config_info.rate_config_count) {
-		ts_err("Get config report rate fail");
+		ts_err(tdev, "Get config report rate fail");
 		return -1;
 	} else {
-		ts_debug("Get config report rate %dHZ, command : 0x%02x ",
+		ts_debug(tdev, "Get config report rate %dHZ, command : 0x%02x ",
 			report_rate_config_info.report_rate_info[i].report_rate,
 			report_rate_config_info.report_rate_info[i].command);
 		return report_rate_config_info.report_rate_info[i].command;

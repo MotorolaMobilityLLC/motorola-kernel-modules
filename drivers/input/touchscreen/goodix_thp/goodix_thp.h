@@ -51,8 +51,8 @@
 #endif
 
 /* macros definition */
-#define GOODIX_THP_DRIVER_VERSION                       "1.0.2.3"
-#define GOODIX_THP_DRIVER_NAME                          "goodix_thp,gt9916"
+#define GOODIX_THP_DRIVER_VERSION                       "1.0.2.4"
+#define GOODIX_THP_DRIVER_NAME                          "goodix_thp_drvier"
 #define GOODIX_CORE_DRIVER_NAME                         "goodix_thp"
 #define GOODIX_THP_STYLUS_INPUT_DEVICE_NAME             "goodix_stylus_input"
 #define GOODIX_THP_INPUT_DEVICE_NAME                    "gdix_input_agent"
@@ -380,7 +380,8 @@ struct thp_input_agent_ioctl_coor_data {
         int down_num;
         unsigned char fp_mode;				/* 0:normal mode;1:fp mode*/
         unsigned char hover_stat;			/* 0:normal stat;1:hover stat*/
-        unsigned char large_touch_stat;		/* 0:normal touch stat;1:large_touch_stat*/
+        unsigned char large_touch_stat;		        /* 0:normal touch stat;1:large_touch_stat*/
+        unsigned char ref_not_set;
         struct timeval64 time_stamp;
 };
 
@@ -465,15 +466,10 @@ struct goodix_thp_core {
 
 };
 
-/* func definition & statement*/
-/* log macro */
 extern bool debug_log_flag;
-#define ts_info(fmt, arg...)\
-        pr_info("[THP-INF][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
-#define ts_err(fmt, arg...)\
-        pr_err("[THP-ERR][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
-#define ts_debug(fmt, arg...)\
-        if (debug_log_flag) pr_info("[THP-DBG][%s:%d] "fmt"\n", __func__, __LINE__, ##arg)
+void ts_info(struct device *dev, const char *fmt, ...);
+void ts_err(struct device *dev, const char *fmt, ...);
+void ts_debug(struct device *dev, const char *fmt, ...);
 
 /*
  * get board data pointer
