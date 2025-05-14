@@ -1311,6 +1311,21 @@ static int ilitek_plat_remove(void)
 #if SPRD_SYSFS_SUSPEND_RESUME
 	ili_sysfs_remove_device(ilits->dev);
 #endif
+
+#if CHARGER_NOTIFIER_CALLBACK
+#if KERNEL_VERSION(4, 1, 0) <= LINUX_VERSION_CODE
+        if (ilits->notifier_charger.notifier_call) {
+                ILI_INFO("remove power_supply_unreg_notifier\n");
+                power_supply_unreg_notifier(&ilits->notifier_charger);
+        }
+#endif
+        if (ilits->charger_notify_wq != NULL) {
+                ILI_INFO("remove charger_notify_wq\n");
+                flush_workqueue(ilits->charger_notify_wq);
+                destroy_workqueue(ilits->charger_notify_wq);
+}
+#endif
+
 	ili_dev_remove(ENABLE);
 	return 0;
 }
