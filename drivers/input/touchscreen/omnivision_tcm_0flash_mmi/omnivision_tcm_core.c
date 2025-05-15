@@ -2484,6 +2484,9 @@ static int ovt_tcm_wait_hdl(struct ovt_tcm_hcd *tcm_hcd)
 		LOGE(tcm_hcd->pdev->dev.parent,
 				"Timed out waiting for completion of host download\n");
 		atomic_set(&tcm_hcd->host_downloading, 0);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+		set_hdl_for_disp(0);
+#endif
 		retval = -EIO;
 	} else {
 		retval = 0;
@@ -4041,6 +4044,9 @@ static void ovt_tcm_helper_work(struct work_struct *work)
 		mutex_unlock(&mod_pool.mutex);
 		mutex_unlock(&tcm_hcd->reset_mutex);
 		wake_up_interruptible(&tcm_hcd->hdl_wq);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+		set_hdl_for_disp(0);
+#endif
 		break;
 
 	/* this helper is used to reinit the touch reporting */

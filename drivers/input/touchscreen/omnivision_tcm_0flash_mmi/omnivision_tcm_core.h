@@ -941,5 +941,8 @@ extern int __attribute__ ((weak)) panel_gesture_register_client(const char *sour
 extern int __attribute__ ((weak)) panel_gesture_unregister_client(struct notifier_block *nb);
 extern int __attribute__ ((weak)) panel_gesture_notifier_call_chain(unsigned long val, void *v);
 #endif
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+extern int __attribute__ ((weak)) set_hdl_for_disp(int val);
+#endif
 
 #endif
