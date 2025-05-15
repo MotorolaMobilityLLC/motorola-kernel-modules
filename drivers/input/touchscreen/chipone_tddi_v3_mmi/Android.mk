@@ -39,6 +39,7 @@ endif
 
 ifeq ($(CONFIG_STOWED_MODE_EN),true)
         KERNEL_CFLAGS += CONFIG_STOWED_MODE_EN=y
+        KBUILD_OPTIONS += CONFIG_STOWED_MODE_EN=y
 endif
 
 ifeq ($(BOARD_USES_DOUBLE_TAP_CTRL),true)
