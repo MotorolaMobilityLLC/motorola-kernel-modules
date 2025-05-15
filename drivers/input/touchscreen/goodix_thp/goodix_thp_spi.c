@@ -1153,6 +1153,7 @@ static int goodix_spi_resume(struct device *dev)
         struct goodix_thp_core *core_data = dev_get_drvdata(dev);
 
         core_data->bus_ready = true;
+        wake_up_interruptible(&core_data->wait);
         return 0;
 }
 

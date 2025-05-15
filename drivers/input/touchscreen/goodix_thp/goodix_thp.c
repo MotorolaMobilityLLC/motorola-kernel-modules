@@ -2267,6 +2267,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
         mutex_init(&core_data->frame_mutex);
         mutex_init(&core_data->irq_mutex);
         init_waitqueue_head(&(core_data->frame_wq));
+        init_waitqueue_head(&core_data->wait);
         /* gesture init */
         memset(core_data->gesture_type, 0xff, GESTURE_TYPE_LEN);
         memset(core_data->gesture_data, 0xff, GESTURE_KEY_DATA_LEN);
