@@ -59,6 +59,12 @@ ifneq ($(filter m y,$(CONFIG_OVT_PANEL_GESTURE_NOTIFY_SUPPORT)),)
 	EXTRA_CFLAGS += -DOVT_PANEL_GESTURE_NOTIFY_SUPPORT
 endif
 
+ifneq ($(filter m y,$(CONFIG_OVT_PANEL_HDL_STATE_SUPPORT)),)
+        EXTRA_CFLAGS += \
+                -I$(DEVICE_MODULES_PATH)/kernel-5.10/drivers/gpu/drm/panel/include
+        EXTRA_CFLAGS += -DOVT_PANEL_HDL_STATE_SUPPORT
+endif
+
 ifneq ($(filter m y,$(CONFIG_OVT_CHECK_DEVICE_BOOTMODE_SUPPORT)),)
 	EXTRA_CFLAGS += -DOVT_CHECK_DEVICE_BOOTMODE
 endif

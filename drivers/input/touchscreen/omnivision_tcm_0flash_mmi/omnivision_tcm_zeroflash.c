@@ -237,6 +237,9 @@ static int zeroflash_wait_hdl(struct ovt_tcm_hcd *tcm_hcd)
 		LOGE(tcm_hcd->pdev->dev.parent,
 				"Timed out waiting for completion of host download\n");
 		atomic_set(&tcm_hcd->host_downloading, 0);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+		set_hdl_for_disp(0);
+#endif
 		retval = -EIO;
 	} else {
 		retval = 0;
@@ -1012,6 +1015,9 @@ static void zeroflash_download_config_work(struct work_struct *work)
 		retval = zeroflash_download_app_config();
 		if (retval < 0) {
 			atomic_set(&tcm_hcd->host_downloading, 1);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+			set_hdl_for_disp(1);
+#endif
 			LOGE(tcm_hcd->pdev->dev.parent,
 					"Failed to download application config, abort\n");
 			goto config_download_err;
@@ -1023,6 +1029,9 @@ static void zeroflash_download_config_work(struct work_struct *work)
 		retval = zeroflash_download_disp_config();
 		if (retval < 0) {
 			atomic_set(&tcm_hcd->host_downloading, 1);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+			set_hdl_for_disp(1);
+#endif
 			LOGE(tcm_hcd->pdev->dev.parent,
 					"Failed to download display config, abort\n");
 			goto config_download_err;
@@ -1036,6 +1045,9 @@ static void zeroflash_download_config_work(struct work_struct *work)
 		retval = zeroflash_download_open_short_config();
 		if (retval < 0) {
 			atomic_set(&tcm_hcd->host_downloading, 1);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+			set_hdl_for_disp(1);
+#endif
 			LOGE(tcm_hcd->pdev->dev.parent,
 					"Failed to download open_short config, abort\n");
 			goto config_download_err;
@@ -1186,6 +1198,9 @@ static void zeroflash_do_f35_firmware_download(void)
 	}
 
 	atomic_set(&tcm_hcd->host_downloading, 1);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+	set_hdl_for_disp(1);
+#endif
 
 	retval = ovt_tcm_rmi_read(tcm_hcd,
 			zeroflash_hcd->f35_addr.data_base,
@@ -1281,6 +1296,9 @@ static void zeroflash_do_romboot_firmware_download(void)
 			"Prepare ROMBOOT firmware download\n");
 
 	atomic_set(&tcm_hcd->host_downloading, 1);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+	set_hdl_for_disp(1);
+#endif
 	resp_buf = NULL;
 	resp_buf_size = 0;
 
@@ -1298,6 +1316,9 @@ static void zeroflash_do_romboot_firmware_download(void)
 		LOGE(tcm_hcd->pdev->dev.parent,
 				"Not in romboot mode\n");
 		atomic_set(&tcm_hcd->host_downloading, 0);
+#ifdef OVT_PANEL_HDL_STATE_SUPPORT
+		set_hdl_for_disp(0);
+#endif
 		goto exit;
 	}
 
