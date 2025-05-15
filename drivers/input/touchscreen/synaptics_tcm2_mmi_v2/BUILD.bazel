@@ -1,0 +1,24 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module(
+    name = "synaptics_tcm2",
+    srcs = ([
+            "syna_tcm2.c",
+            "syna_tcm2_cdev.c",
+            "syna_tcm2_cdev.h",
+            "syna_tcm2.h",
+            "syna_tcm2_platform.h",
+            "syna_tcm2_platform_spi.c",
+            "syna_tcm2_runtime.h",
+            "syna_tcm2_sysfs.c",
+            "tcm/synaptics_touchcom_core_dev.h",
+            "tcm/synaptics_touchcom_func_base.c",
+            "tcm/synaptics_touchcom_func_touch.c",
+            "tcm/synaptics_touchcom_image_parsing.c",
+            "tcm/synaptics_touchcom_platform.h",
+            "tcm/synaptics_touchcom_core_v1.c",
+            "tcm/synaptics_touchcom_func_base.h",
+            "tcm/synaptics_touchcom_func_touch.h",
+            "tcm/synaptics_touchcom_image_parsing.h",
+    ]),
+)
