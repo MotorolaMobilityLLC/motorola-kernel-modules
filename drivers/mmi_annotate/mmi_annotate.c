@@ -27,6 +27,7 @@
 #if KERNEL_VERSION(5, 10, 0) > LINUX_VERSION_CODE
 #include <linux/dma-contiguous.h>
 #endif
+#include <linux/vmalloc.h>
 #include <linux/dma-mapping.h>
 #include <linux/mmi_annotate.h>
 #include <linux/seq_file.h>
@@ -261,7 +262,7 @@ static int mmi_annotate_probe(struct platform_device *pdev)
 #if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
 #if IS_ENABLED(CONFIG_QCOM_MINIDUMP)
 	/*Register annotate to minidump */
-	strlcpy(md_entry.name, "ANNOTATE", sizeof(md_entry.name));
+	strscpy(md_entry.name, "ANNOTATE", sizeof(md_entry.name));
 	if (!persist_unsupported) {
 		md_entry.virt_addr = (uintptr_t)phys_to_virt(pdata->mem_address);
 		md_entry.phys_addr = pdata->mem_address;
@@ -327,13 +328,13 @@ int mmi_annotate_persist(const char *fmt, ...)
 }
 EXPORT_SYMBOL(mmi_annotate_persist);
 
-static int mmi_annotate_remove(struct platform_device *pdev)
+static void mmi_annotate_remove(struct platform_device *pdev)
 {
 	if (procfs_file)
 		remove_proc_entry("driver/mmi_annotate", NULL);
 	if(mem_data.contents)
 		kfree(mem_data.contents);
-	return 0;
+	return;
 }
 
 static const struct of_device_id mmi_annotate_match[] = {
