@@ -478,7 +478,7 @@ static int goodix_thp_parse_dt(struct device_node *node,
         r = of_property_read_u32(node, "touchpanel,irq_need_dev_resume_time", &board_data->irq_need_dev_resume_time);
         if (r) {
             ts_info(dev, "board_data->irq_need_dev_resume_time not specified");
-            board_data->irq_need_dev_resume_time = 50;
+            board_data->irq_need_dev_resume_time = 700;
         }
         ts_info(dev, "board_data->irq_need_dev_resume_time = %d ms", board_data->irq_need_dev_resume_time);
 
@@ -1058,18 +1058,25 @@ static const struct spi_device_id spi_id_table[] = {
 
 static int goodix_spi_resume(struct device *dev)
 {
-        struct goodix_thp_core *core_data = dev_get_drvdata(dev);
+        struct spi_device *spi = to_spi_device(dev);
+        struct platform_device *pdev = spi_get_drvdata(spi);
+        struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
 
-        core_data->bus_ready = true;
-        wake_up_interruptible(&core_data->wait);
+        ts_info(dev, "system resumes from pm_suspend");
+        core_data->pm_suspend = false;
+        complete(&core_data->pm_completion);
         return 0;
 }
 
 static int goodix_spi_suspend(struct device *dev)
 {
-        struct goodix_thp_core *core_data = dev_get_drvdata(dev);
+        struct spi_device *spi = to_spi_device(dev);
+        struct platform_device *pdev = spi_get_drvdata(spi);
+        struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
 
-        core_data->bus_ready = false;
+        ts_info(dev, "system enters into pm_suspend");
+        core_data->pm_suspend = true;
+        reinit_completion(&core_data->pm_completion);
         return 0;
 }
 

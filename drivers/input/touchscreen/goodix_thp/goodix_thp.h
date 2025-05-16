@@ -456,8 +456,8 @@ struct goodix_thp_core {
         struct ts_mmi_class_methods *imports;
         struct timeval64 last_event_time;
         struct wakeup_source *ws;
-        wait_queue_head_t wait;
-        bool bus_ready; /*spi or i2c resume status*/
+        struct completion pm_completion;
+        bool pm_suspend;
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
         struct pm_qos_request pm_qos_req;
         int pm_qos_value;
