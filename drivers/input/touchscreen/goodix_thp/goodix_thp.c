@@ -1143,6 +1143,17 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
             affinity_initialized = true;
         }
 
+        /*for check bus i2c/spi is ready or not*/
+        if ((core_data->suspended) && (core_data->pm_suspend)) {
+            r = wait_for_completion_timeout(
+                        &core_data->pm_completion,
+                        msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
+            if (!r) {
+                ts_err(ts_dev->dev, "Bus don't resume from pm(deep),timeout,skip irq");
+                return IRQ_HANDLED;
+            }
+        }
+
         disable_irq_nosync(core_data->irq);
         if (core_data->ws) {
                 __pm_stay_awake(core_data->ws);
@@ -1166,19 +1177,6 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         }
 
 #endif
-
-        /*for check bus i2c/spi is ready or not*/
-        if (core_data->bus_ready == false) {
-            /*ts_info("Wait device resume!");*/
-            r = wait_event_interruptible_timeout(core_data->wait,
-                     core_data->bus_ready,
-                     msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
-                     if (!r) {
-                         ts_err(ts_dev->dev, "system can't finish resuming procedure.");
-                         goto exit;
-                     }
-            /*ts_info("Device maybe resume!");*/
-        }
 
         if (core_data->reset_state) {
                 ts_err(ts_dev->dev, "%s: ignore this irq.", __func__);
@@ -2297,7 +2295,8 @@ static int goodix_thp_probe(struct platform_device *pdev)
         mutex_init(&core_data->frame_mutex);
         mutex_init(&core_data->irq_mutex);
         init_waitqueue_head(&(core_data->frame_wq));
-        init_waitqueue_head(&core_data->wait);
+        init_completion(&core_data->pm_completion);
+        core_data->pm_suspend = false;
         /* gesture init */
         memset(core_data->gesture_type, 0xff, GESTURE_TYPE_LEN);
         memset(core_data->gesture_data, 0xff, GESTURE_KEY_DATA_LEN);
@@ -2412,7 +2411,6 @@ static int goodix_thp_probe(struct platform_device *pdev)
                 ts_err(tdev->dev, "goodix setup irq failed, r %d", r);
                 goto err_irq_setup;
         }
-        core_data->bus_ready = true;
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
         core_data->pm_notif.notifier_call = goodix_thp_drm_notifier_callback;
 	if (mtk_disp_notifier_register("Touch", &core_data->pm_notif))
