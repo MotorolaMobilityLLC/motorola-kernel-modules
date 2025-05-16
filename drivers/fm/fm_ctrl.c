@@ -199,7 +199,8 @@ static int fm_ctrl_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	device_init_wakeup(&pdev->dev, 1);
+	/* remove this because we donot need to support ant auto-det feature */
+	//device_init_wakeup(&pdev->dev, 1);
 	dev_info(&pdev->dev, "probe: All success !\n");
 
 	return ret;
@@ -207,7 +208,8 @@ static int fm_ctrl_probe(struct platform_device *pdev)
 
 static int fm_ctrl_remove(struct platform_device *pdev)
 {
-	device_init_wakeup(&pdev->dev, 0);
+	/* remove this because we donot need to support ant auto-det feature */
+	//device_init_wakeup(&pdev->dev, 0);
 	return 0;
 }
 
