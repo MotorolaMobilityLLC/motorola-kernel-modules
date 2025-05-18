@@ -1,3 +1,5 @@
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers", "ddk_uapi_headers")
+
 package(
     default_visibility = [
         "//visibility:public",
@@ -6,12 +8,20 @@ package(
 
 
 filegroup(
-    name = "moto_modules_public_headers",
+    name = "moto_modules_headers",
     srcs = glob([
         "include/**/*.h",
     ]),
 )
 
-load("//soc-repo:kleaf-scripts/moto/moto_module_list.bzl", "define_moto_modules")
-
-define_moto_modules()
+ddk_headers(
+    name = "moto_modules_ddk_headers",
+    hdrs = [
+        # do not sort
+        ":moto_modules_headers",
+    ],
+    includes = [
+        "include",
+    ],
+    visibility = ["//visibility:public"],
+)
