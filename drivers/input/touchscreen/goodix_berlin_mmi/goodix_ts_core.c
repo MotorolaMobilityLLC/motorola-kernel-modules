@@ -983,6 +983,13 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->avdd_gpio = r;
 	}
 
+	if (of_property_read_bool(node, "goodix,avdd-set")) {
+		ts_info("goodix,avdd-set");
+		board_data->avdd_set = true;
+	} else {
+		board_data->avdd_set = false;
+	}
+
 	r = of_get_named_gpio(node, "goodix,iovdd-gpio", 0);
 	if (r < 0) {
 		ts_info("can't find iovdd-gpio, use other power supply");
@@ -1487,7 +1494,10 @@ static int goodix_ts_power_init(struct goodix_ts_core *core_data)
 			ts_err("set avdd load fail");
 			return ret;
 		}
-		ret = regulator_set_voltage(core_data->avdd, 3000000, 3000000);
+		if (ts_bdata->avdd_set)
+			ret = regulator_set_voltage(core_data->avdd, 3300000, 3300000);
+		else
+			ret = regulator_set_voltage(core_data->avdd, 3000000, 3000000);
 		if (ret) {
 			ts_err("set avdd voltage fail");
 			return ret;
