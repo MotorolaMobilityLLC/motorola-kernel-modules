@@ -49,20 +49,20 @@ static void mmi_bootarg_setup(void)
 	if (mmi_get_bootarg("androidboot.radio=", &s) == 0) {
 		if (kstrtouint(s, 16, &androidboot_radio) < 0)
 			androidboot_radio = 0;
-		strlcpy(androidboot_radio_str, s, RADIO_MAX_LEN);
+		strscpy(androidboot_radio_str, s, RADIO_MAX_LEN);
 	}
 
 	if (mmi_get_bootarg("androidboot.device=", &s) == 0)
-		strlcpy(androidboot_device, s, ANDROIDBOOT_DEVICE_MAX_LEN);
+		strscpy(androidboot_device, s, ANDROIDBOOT_DEVICE_MAX_LEN);
 
 	if (mmi_get_bootarg("androidboot.baseband=", &s) == 0)
-		strlcpy(baseband, s, BASEBAND_MAX_LEN);
+		strscpy(baseband, s, BASEBAND_MAX_LEN);
 
 	if (mmi_get_bootarg("androidboot.carrier=", &s) == 0)
-		strlcpy(carrier, s, CARRIER_MAX_LEN);
+		strscpy(carrier, s, CARRIER_MAX_LEN);
 
 	if (mmi_get_bootarg("androidboot.serialno=", &s) == 0)
-		strlcpy(serialno, s, SERIALNO_MAX_LEN);
+		strscpy(serialno, s, SERIALNO_MAX_LEN);
 }
 
 static int unitinfo_seq_show(struct seq_file *f, void *ptr)
@@ -106,13 +106,13 @@ static int mmi_unit_smem_setup(void)
 	mui_copy->system_rev = mmi_chosen_data.system_rev;
 	mui_copy->system_serial_low = mmi_chosen_data.system_serial_low;
 	mui_copy->system_serial_high = mmi_chosen_data.system_serial_high;
-	strlcpy(mui_copy->machine, "", MACHINE_MAX_LEN);
-	strlcpy(mui_copy->barcode, serialno, BARCODE_MAX_LEN);
-	strlcpy(mui_copy->baseband, mmi_chosen_data.baseband, BASEBAND_MAX_LEN);
-	strlcpy(mui_copy->carrier, carrier, CARRIER_MAX_LEN);
-	strlcpy(mui_copy->device, androidboot_device, DEVICE_MAX_LEN);
+	strscpy(mui_copy->machine, "", MACHINE_MAX_LEN);
+	strscpy(mui_copy->barcode, serialno, BARCODE_MAX_LEN);
+	strscpy(mui_copy->baseband, mmi_chosen_data.baseband, BASEBAND_MAX_LEN);
+	strscpy(mui_copy->carrier, carrier, CARRIER_MAX_LEN);
+	strscpy(mui_copy->device, androidboot_device, DEVICE_MAX_LEN);
 	mui_copy->radio = androidboot_radio;
-	strlcpy(mui_copy->radio_str, androidboot_radio_str, RADIO_MAX_LEN);
+	strscpy(mui_copy->radio_str, androidboot_radio_str, RADIO_MAX_LEN);
 	mui_copy->powerup_reason = mmi_chosen_data.powerup_reason;
 
 	pr_info("mmi_unit_info (SMEM) for modem: version = 0x%02x,"
