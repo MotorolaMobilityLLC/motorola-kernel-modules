@@ -12,7 +12,7 @@
  */
 #ifndef __BALANCE_GLINK_H__
 #define __BALANCE_GLINK_H__
-#include "device_class.h"
+#include "../device_class.h"
 
 struct balance_dev_info
 {

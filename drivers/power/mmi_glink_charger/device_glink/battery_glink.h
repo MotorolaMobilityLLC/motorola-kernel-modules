@@ -12,8 +12,8 @@
  */
 #ifndef __BATTERY_GLINK_H__
 #define __BATTERY_GLINK_H__
-#include "battery_host.h"
-#include "device_class.h"
+#include "../battery_host.h"
+#include "../device_class.h"
 
 typedef enum batt_role {
 	BATT_MAIN,

@@ -27,6 +27,7 @@
 #include <linux/time64.h>
 #include <linux/ipc_logging.h>
 #include <linux/debugfs.h>
+#include <linux/power/mmi_glink_api.h>
 
 #include "device_class.h"
 #include "battery_host.h"
@@ -242,6 +243,4 @@ struct encrypted_data {
 };
 
 struct battery_host *battery_glink_host_init(struct mmi_glink_chip *chip);
-int mmi_vote_charging_disable(const char *voter, bool enable);
-int mmi_vote_charger_suspend(const char *voter, bool enable);
 #endif

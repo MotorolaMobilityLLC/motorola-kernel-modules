@@ -14,7 +14,7 @@
 #include "battery_host.h"
 #include <linux/power_supply.h>
 #include <linux/of.h>
-#include "qti_glink_charger_v2.h"
+#include <linux/power/qti_glink_charger_v2.h>
 
 static struct mmi_glink_chip *this_root_chip =  NULL;
 static struct battery_host *this_batt_host = NULL;

@@ -12,9 +12,8 @@
  */
 #include <linux/power_supply.h>
 #include <linux/of.h>
-#include "mmi_glink_core.h"
-#include "qti_glink_charger_v2.h"
-#include "device_class.h"
+#include "../mmi_glink_core.h"
+#include <linux/power/qti_glink_charger_v2.h>
 #include "charge_pump_glink.h"
 
 static struct mmi_glink_chip *this_root_chip =  NULL;

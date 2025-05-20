@@ -12,6 +12,7 @@
  */
  #ifndef __SWITCH_BUCK_GLINK_H__
 #define __SWITCH_BUCK_GLINK_H__
+#include "../device_class.h"
 
 struct buck_dev_info
 {

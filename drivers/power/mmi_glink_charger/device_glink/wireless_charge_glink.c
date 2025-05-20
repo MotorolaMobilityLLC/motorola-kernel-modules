@@ -13,9 +13,9 @@
 
 #include <linux/power_supply.h>
 #include <linux/notifier.h>
-#include "mmi_glink_core.h"
-#include "qti_glink_charger_v2.h"
-#include "device_class.h"
+#include "../mmi_glink_core.h"
+#include <linux/power/qti_glink_charger_v2.h>
+#include "../device_class.h"
 #include "wireless_charge_glink.h"
 #ifdef CONFIG_MMI_PHONE_CASE_SUPPORT
 #include <linux/phone_case_detection_notify.h>

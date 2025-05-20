@@ -13,9 +13,9 @@
 
 #include <linux/power_supply.h>
 #include <linux/of.h>
-#include "mmi_glink_core.h"
-#include "qti_glink_charger_v2.h"
-#include "device_class.h"
+#include "../mmi_glink_core.h"
+#include <linux/power/qti_glink_charger_v2.h>
+#include "../device_class.h"
 #include "battery_glink.h"
 #include "usb_glink.h"
 #include <linux/power/bm_adsp_ulog.h>
@@ -239,9 +239,9 @@ static void glink_usb_work(struct work_struct *work)
 		mmi_info(chip->mmi_chip, "LPD status transit: %d -> %d\n",
 				chip->usb_info.lpd_st, !!usb_info.lpd_st);
 		chip->usb_info.lpd_st = usb_info.lpd_st;
-		relay_notifier_fire(BLOCKING, LPD,
-				NOTIFY_EVENT_LPD_STATUS,
-				(void *)&(usb_info.lpd_st));
+//		relay_notifier_fire(BLOCKING, LPD,
+//				NOTIFY_EVENT_LPD_STATUS,
+//				(void *)&(usb_info.lpd_st));
 		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_LPD_STATUS);
 	}
 
@@ -249,9 +249,9 @@ static void glink_usb_work(struct work_struct *work)
 		mmi_info(chip->mmi_chip, "CID status transit: %d -> %d\n",
 				chip->usb_info.cid_st, usb_info.cid_st);
 		chip->usb_info.cid_st = usb_info.cid_st;
-		relay_notifier_fire(BLOCKING, LPD,
-				NOTIFY_EVENT_CID_STATUS,
-				(void *)&(usb_info.cid_st));
+//		relay_notifier_fire(BLOCKING, LPD,
+//				NOTIFY_EVENT_CID_STATUS,
+//				(void *)&(usb_info.cid_st));
 		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_CID_STATUS);
 	}
 

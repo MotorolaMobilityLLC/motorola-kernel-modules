@@ -12,8 +12,8 @@
  */
  #ifndef __WIRELESS_CHARGE_GLINK_H__
 #define __WIRELESS_CHARGE_GLINK_H__
-#include "battery_host.h"
-#include "device_class.h"
+#include "../battery_host.h"
+#include "../device_class.h"
 
 enum wls_notify_event {
   NOTIFY_EVENT_WLS_RX_CONNECTED,

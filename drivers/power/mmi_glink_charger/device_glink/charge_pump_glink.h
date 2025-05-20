@@ -12,7 +12,7 @@
  */
 #ifndef __CHARGE_PUMP_H__
 #define __CHARGE_PUMP_H__
-#include "device_class.h"
+#include "../device_class.h"
 
 struct charge_pump_dev_info
 {

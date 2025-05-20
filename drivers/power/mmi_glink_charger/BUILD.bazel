@@ -1,0 +1,33 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module(
+    name = "mmi_glink_charger",
+    srcs = ([
+        "battery_host.c",
+        "device_class.c",
+        "mmi_glink_core.c",
+        "trusted_shash_lib.c",
+        "battery_host.h",
+        "device_class.h",
+        "mmi_glink_core.h",
+        "trusted_shash_lib.h",
+        "device_glink/balance_charge_glink.c",
+        "device_glink/battery_glink.c",
+        "device_glink/charge_pump_glink.c",
+        "device_glink/switch_buck_glink.c",
+        "device_glink/usb_glink.c",
+        "device_glink/wireless_charge_glink.c",
+        "device_glink/balance_charge_glink.h",
+        "device_glink/battery_glink.h",
+        "device_glink/charge_pump_glink.h",
+        "device_glink/switch_buck_glink.h",
+        "device_glink/usb_glink.h",
+        "device_glink/wireless_charge_glink.h",
+    ]),
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/power/bm_adsp_ulog:bm_adsp_ulog",
+        "//motorola/kernel/modules/drivers/mmi_info:mmi_info",
+        "//motorola/kernel/modules/drivers/power/qti_glink_charger_v2:qti_glink_charger_v2",
+        "//soc-repo:kernel/trace/qcom_ipc_logging",
+    ],
+)

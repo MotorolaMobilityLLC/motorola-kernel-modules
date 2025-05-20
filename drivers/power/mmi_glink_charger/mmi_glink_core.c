@@ -30,16 +30,16 @@
 #include <linux/time64.h>
 #include <linux/power/bm_adsp_ulog.h>
 
-#include "qti_glink_charger_v2.h"
+#include <linux/power/qti_glink_charger_v2.h>
 #include "mmi_glink_core.h"
 #include "device_class.h"
 #include "battery_host.h"
-#include "battery_glink.h"
-#include "balance_charge_glink.h"
-#include "wireless_charge_glink.h"
-#include "switch_buck_glink.h"
-#include "charge_pump_glink.h"
-#include "usb_glink.h"
+#include "./device_glink/battery_glink.h"
+#include "./device_glink/balance_charge_glink.h"
+#include "./device_glink/wireless_charge_glink.h"
+#include "./device_glink/switch_buck_glink.h"
+#include "./device_glink/charge_pump_glink.h"
+#include "./device_glink/usb_glink.h"
 #include "trusted_shash_lib.h"
 #define HYST_STEP_MV 50
 #define DEMO_MODE_HYS_SOC 5
@@ -1670,7 +1670,7 @@ exit:
 	return rc;
 }
 
-static int mmi_charger_remove(struct platform_device *pdev)
+static void mmi_charger_remove(struct platform_device *pdev)
 {
 	struct mmi_glink_chip *chip = platform_get_drvdata(pdev);
 
@@ -1694,7 +1694,7 @@ static int mmi_charger_remove(struct platform_device *pdev)
 	PM_WAKEUP_UNREGISTER(chip->mmi_hb_wake_source);
 	ipc_log_context_destroy(chip->ipc_log);
 	mmi_glink_class_exit();
-	return 0;
+	return;
 }
 
 static void mmi_charger_shutdown(struct platform_device *pdev)
