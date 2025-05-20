@@ -49,6 +49,10 @@ ifneq ($(filter m y,$(CONFIG_CHIPONE_CHECK_DEVICE_BOOTMODE)),)
 	EXTRA_CFLAGS += -DCTS_CHECK_DEVICE_BOOTMODE
 endif
 
+ifneq ($(filter m y, $(CONFIG_CHIPONE_LOG_CAPTURE)),)
+        EXTRA_CFLAGS += -DCONFIG_CTS_LOG_CAPTURE
+endif
+
 #obj-$(CONFIG_TOUCHSCREEN_CHIPONE) += chipone-tddi.o
 obj-m += chipone_tddi_v3_mmi.o
 

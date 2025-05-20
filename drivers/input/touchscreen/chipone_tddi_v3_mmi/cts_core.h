@@ -544,6 +544,10 @@ static inline void put_unaligned_be24(u32 v, void *p)
 
 #define wrap(max, x)        ((max) - 1 - (x))
 
+#ifdef CONFIG_CTS_LOG_CAPTURE
+int cts_tp_data_dump_capture(struct device *dev);
+#endif
+
 extern void cts_lock_device(const struct cts_device *cts_dev);
 extern void cts_unlock_device(const struct cts_device *cts_dev);
 

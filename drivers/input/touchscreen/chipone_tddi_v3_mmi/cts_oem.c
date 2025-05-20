@@ -65,6 +65,11 @@
 #define OEM_SHORT_TEST_DATA_FILEPATH        OEM_TEST_DATA_DIR"/ShortTest.csv"
 #define OEM_COMP_CAP_TEST_DATA_FILEPATH     OEM_TEST_DATA_DIR"/FWCCTest.csv"
 
+#ifdef CONFIG_CTS_LOG_CAPTURE
+#define ROW_NUM_FORMAT_STR  "%2d | "
+#define COL_NUM_FORMAT_STR  "%-5d "
+#define DATA_FORMAT_STR     "%-5d "
+#endif
 
 #pragma pack(1)
 struct cts_limit {
@@ -1104,6 +1109,100 @@ static const struct proc_ops cts_diffdata_ops = {
     .proc_open = cts_diffdata_open,
     .proc_read = seq_read,
 };
+#endif
+
+#ifdef CONFIG_CTS_LOG_CAPTURE
+int cts_tp_rawdata_capture(struct device *dev)
+{
+    struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+    struct cts_device *cts_dev;
+    u8 *rawdata;
+    s16 *data;
+    u8 rows, cols;
+    u8 i, j;
+    int count = 0;
+    char line_buf[1024];
+
+    cts_dev = &cts_data->cts_dev;
+    rows = cts_dev->hwdata->num_row;
+    cols = cts_dev->hwdata->num_col;
+    rawdata = kzalloc(rows * cols * 2, GFP_KERNEL);
+    if (rawdata == NULL) {
+        cts_err("Allocate rawdata failed");
+        return -ENOMEM;
+    }
+
+    cts_lock_device(cts_dev);
+    cts_tcs_top_get_rawdata(cts_dev, rawdata, rows * cols * 2);
+    cts_unlock_device(cts_dev);
+
+    data = (s16 *)rawdata;
+    for (i = 0; i < rows; i++) {
+        count = 0;
+        count += scnprintf(line_buf + count, sizeof(line_buf) - count,
+            ROW_NUM_FORMAT_STR, i);
+        for (j = 0; j < cols; j++) {
+            count += scnprintf(line_buf + count, sizeof(line_buf) - count,
+                DATA_FORMAT_STR, data[i * cts_dev->hwdata->num_col + j]);
+        }
+        cts_info("%s", line_buf);
+    }
+
+    kfree(rawdata);
+    return 0;
+}
+
+int cts_tp_diffdata_capture(struct device *dev)
+{
+    struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+    struct cts_device *cts_dev;
+    u8 *rawdata;
+    s16 *data;
+    u8 rows, cols;
+    u8 i, j;
+    int count = 0;
+    char line_buf[1024];
+
+    cts_dev = &cts_data->cts_dev;
+    rows = cts_dev->hwdata->num_row;
+    cols = cts_dev->hwdata->num_col;
+    rawdata = kzalloc(rows * cols * 2, GFP_KERNEL);
+    if (rawdata == NULL) {
+        cts_err("Allocate rawdata failed");
+        return -ENOMEM;
+    }
+
+    cts_lock_device(cts_dev);
+    cts_tcs_top_get_real_diff(cts_dev, rawdata, rows * cols * 2);
+    cts_unlock_device(cts_dev);
+
+    data = (s16 *)rawdata;
+    for (i = 0; i < rows; i++) {
+        count = 0;
+        count += scnprintf(line_buf + count, sizeof(line_buf) - count,
+            ROW_NUM_FORMAT_STR, i);
+        for (j = 0; j < cols; j++) {
+            count += scnprintf(line_buf + count, sizeof(line_buf) - count,
+                DATA_FORMAT_STR, data[i * cts_dev->hwdata->num_col + j]);
+        }
+        cts_info("%s", line_buf);
+    }
+
+    kfree(rawdata);
+    return 0;
+}
+
+int cts_tp_data_dump_capture(struct device *dev)
+{
+    int ret = 0;
+
+    //get diffdata
+    ret = cts_tp_diffdata_capture(dev);
+    //get rawdata
+    ret = cts_tp_rawdata_capture(dev);
+
+    return ret;
+}
 #endif
 
 static int cts_manual_show(struct seq_file *m, void *v)

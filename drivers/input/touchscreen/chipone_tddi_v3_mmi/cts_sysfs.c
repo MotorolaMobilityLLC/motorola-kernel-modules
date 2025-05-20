@@ -3271,6 +3271,24 @@ static ssize_t productinfo_show (
             cts_data->cts_dev.hwdata->name);
 }
 
+#ifdef CONFIG_CTS_LOG_CAPTURE
+static ssize_t cts_dbg_data_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	int ret = 0;
+	ret = cts_tp_data_dump_capture(dev);
+	if (0 == ret)
+		cts_info("capture data succesful");
+	return ret;
+}
+
+static ssize_t cts_dbg_data_store(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	return count;
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
     __ATTR_RO(path),
     __ATTR_RO(vendor),
@@ -3281,6 +3299,9 @@ static struct device_attribute touchscreen_attributes[] = {
 #endif
 #ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
         __ATTR_RW(gesture),
+#endif
+#ifdef CONFIG_CTS_LOG_CAPTURE
+	__ATTR(log_trigger, S_IRUGO | S_IWUSR | S_IWGRP, cts_dbg_data_show, cts_dbg_data_store),
 #endif
 #ifdef CTS_STOWED_MODE_EN
     __ATTR_RW(stowed),
