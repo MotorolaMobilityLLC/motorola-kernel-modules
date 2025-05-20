@@ -22,43 +22,6 @@
 
 #define MAX_OEM_NOTIFY_DATA_LEN		8
 
-#define mmi_err(chg, fmt, ...)			\
-	do {						\
-		pr_err("%s: %s: " fmt, chg->name,	\
-		       __func__, ##__VA_ARGS__);	\
-		ipc_log_string(chg->ipc_log,		\
-		"E %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
-	} while (0)
-
-#define mmi_warn(chg, fmt, ...)			\
-	do {						\
-		pr_warn("%s: %s: " fmt, chg->name,	\
-		       __func__, ##__VA_ARGS__);	\
-		ipc_log_string(chg->ipc_log,		\
-		"W %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
-	} while (0)
-
-#define mmi_info(chg, fmt, ...)			\
-	do {						\
-		pr_info("%s: %s: " fmt, chg->name,	\
-		       __func__, ##__VA_ARGS__);	\
-		ipc_log_string(chg->ipc_log,		\
-		"I %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
-	} while (0)
-
-#define mmi_dbg(chg, fmt, ...)			\
-	do {							\
-		if (*chg->debug_enabled)		\
-			pr_info("%s: %s: " fmt, chg->name,	\
-				__func__, ##__VA_ARGS__);	\
-		else						\
-			pr_debug("%s: %s: " fmt, chg->name,	\
-				__func__, ##__VA_ARGS__);	\
-		ipc_log_string(chg->ipc_log,		\
-			"D %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
-	} while (0)
-
-
 enum oem_property_type {
 	OEM_PROP_BATT_INFO,
 	OEM_PROP_CHG_INFO,

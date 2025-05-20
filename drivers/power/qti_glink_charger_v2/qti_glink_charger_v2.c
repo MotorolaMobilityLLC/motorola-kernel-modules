@@ -38,7 +38,7 @@
 #include <linux/thermal.h>
 #include <soc/qcom/mmi_boot_info.h>
 
-#include "qti_glink_charger_v2.h"
+#include <linux/power/qti_glink_charger_v2.h>
 
 /* PPM specific definitions */
 #define MSG_OWNER_OEM			32782
@@ -68,6 +68,41 @@ static bool debug_enabled;
 module_param(debug_enabled, bool, 0600);
 MODULE_PARM_DESC(debug_enabled, "Enable debug for qti glink charger driver");
 
+#define mmi_err(chg, fmt, ...)			\
+	do {						\
+		pr_err("%s: %s: " fmt, chg->name,	\
+		       __func__, ##__VA_ARGS__);	\
+		ipc_log_string(chg->ipc_log,		\
+		"E %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
+	} while (0)
+
+#define mmi_warn(chg, fmt, ...)			\
+	do {						\
+		pr_warn("%s: %s: " fmt, chg->name,	\
+		       __func__, ##__VA_ARGS__);	\
+		ipc_log_string(chg->ipc_log,		\
+		"W %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
+	} while (0)
+
+#define mmi_info(chg, fmt, ...)			\
+	do {						\
+		pr_info("%s: %s: " fmt, chg->name,	\
+		       __func__, ##__VA_ARGS__);	\
+		ipc_log_string(chg->ipc_log,		\
+		"I %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
+	} while (0)
+
+#define mmi_dbg(chg, fmt, ...)			\
+	do {							\
+		if (*chg->debug_enabled)		\
+			pr_info("%s: %s: " fmt, chg->name,	\
+				__func__, ##__VA_ARGS__);	\
+		else						\
+			pr_debug("%s: %s: " fmt, chg->name,	\
+				__func__, ##__VA_ARGS__);	\
+		ipc_log_string(chg->ipc_log,		\
+			"D %s: %s: " fmt, chg->name, __func__, ##__VA_ARGS__); \
+	} while (0)
 
 struct oem_notify_ind_msg {
 	struct pmic_glink_hdr	hdr;
@@ -934,7 +969,7 @@ static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_fla
 		if (!bootargs_str)
 			goto putnode;
 	}
-	strlcpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
+	strscpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
 
 	idx = strnstr(bootargs_str, key, strlen(bootargs_str));
 	if (idx) {
@@ -969,7 +1004,7 @@ static int mmi_get_sku_type(struct qti_charger *chg, u8 *sku_type)
 
 	if (mmi_get_bootarg("androidboot.radio=", &s) == 0) {
 		if (s != NULL) {
-			strlcpy(androidboot_radio_str, s, RADIO_MAX_LEN);
+			strscpy(androidboot_radio_str, s, RADIO_MAX_LEN);
 			if (!strncmp("PRC", androidboot_radio_str, 3)) {
 				*sku_type = MMI_CHARGER_SKU_PRC;
 			} else if (!strncmp("ROW", androidboot_radio_str, 3)) {
@@ -1009,7 +1044,7 @@ static int mmi_get_hw_revision(struct qti_charger *chg, u16 *hw_rev)
 
 	if (mmi_get_bootarg("androidboot.hwrev=", &s) == 0) {
 		if (s != NULL) {
-			strlcpy(androidboot_hwrev_str, s, RADIO_MAX_LEN);
+			strscpy(androidboot_hwrev_str, s, RADIO_MAX_LEN);
 			ret = kstrtou16(androidboot_hwrev_str, 16, hw_rev);
 			if (ret < 0) {
 				mmi_info(chg, "kstrtou16 error: %d \n", ret);
@@ -1040,7 +1075,7 @@ static bool mmi_is_softbank_sku(struct qti_charger *chg)
 	if (mmi_get_bootarg("androidboot.carrier=", &s) == 0) {
 		mmi_info(chg, "Get bootarg androidboot.hardware.sku success");
 		if (s != NULL) {
-			strlcpy(androidboot_carrier_str, s, RADIO_MAX_LEN);
+			strscpy(androidboot_carrier_str, s, RADIO_MAX_LEN);
 			mmi_info(chg, "carrier: %s", androidboot_carrier_str);
 			if (!strncmp("softbank", androidboot_carrier_str, 8)) {
 				is_softbank = true;
@@ -1395,7 +1430,7 @@ static int qti_charger_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int qti_charger_remove(struct platform_device *pdev)
+static void qti_charger_remove(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct qti_charger *chg= dev_get_drvdata(dev);
@@ -1407,7 +1442,7 @@ static int qti_charger_remove(struct platform_device *pdev)
 		mmi_err(chg, "pmic_glink_unregister_client failed rc=%d\n",
 			rc);
 
-	return rc;
+	return;
 }
 
 static const struct of_device_id qti_charger_match_table[] = {
