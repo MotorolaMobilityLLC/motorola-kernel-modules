@@ -2032,6 +2032,9 @@ void ili_report_debug_mode(u8 *buf, int len)
 	ilitek_tddi_touch_customer_data_parsing(buf);
 
 	ilitek_tddi_touch_send_debug_data(buf, len);
+#ifdef ENABLE_TP_ILI_LOG_CAPTURE
+	ili_get_frame_log_capture(buf, len);
+#endif
 }
 
 void ili_report_pen_debug_mode(u8 *buf, int len)
@@ -2047,6 +2050,9 @@ void ili_report_pen_debug_mode(u8 *buf, int len)
 	}
 
 	ilitek_tddi_touch_send_debug_data(buf, len);
+#ifdef ENABLE_TP_ILI_LOG_CAPTURE
+	ili_get_frame_log_capture(buf, len);
+#endif
 }
 
 void ili_report_debug_lite_mode(u8 *buf, int len)

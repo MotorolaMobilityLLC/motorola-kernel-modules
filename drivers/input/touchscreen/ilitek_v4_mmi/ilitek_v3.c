@@ -670,6 +670,9 @@ int ili_sleep_handler(int mode)
 		ILI_INFO("TP suspend start\n");
 		ilits->tp_suspend = true;
 		ilits->power_status = false;
+#ifdef ENABLE_TP_ILI_LOG_CAPTURE
+		ilits->allow_capture= false;
+#endif
 		if (sense_stop) {
 			if (ili_ic_func_ctrl("sense", DISABLE) < 0)
 				ILI_ERR("Write sense stop cmd failed\n");
@@ -712,6 +715,9 @@ int ili_sleep_handler(int mode)
 		ILI_INFO("TP deep suspend start\n");
 		ilits->tp_suspend = true;
 		ilits->power_status = false;
+#ifdef ENABLE_TP_TM_ILI_LOG_CAPTURE
+		ilits->allow_capture= false;
+#endif
 		if (sense_stop) {
 			if (ili_ic_func_ctrl("sense", DISABLE) < 0)
 				ILI_ERR("Write sense stop cmd failed\n");

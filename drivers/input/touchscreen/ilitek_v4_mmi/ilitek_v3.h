@@ -1036,6 +1036,7 @@ struct ilitek_pen_info {
 #define P5_X_FW_GESTURE_MODE				0x0F
 #define P5_X_FW_SIGNAL_DATA_MODE			0x03
 #define P5_X_FW_RAW_DATA_MODE				0x08
+#define P5_X_FW_BASE_DATA_MODE				0x09
 #define P5_X_DEMO_PACKET_ID				0x5A
 #ifdef ILI_DEBUG_INFO
 #define P5_X_DEBUG_INFO_PACKET_ID			0xBB
@@ -1360,7 +1361,9 @@ struct ilitek_ts_data {
 	char *outputStrArr;
 	u8 *md_fw_ili;
 	char *mp_result;
-
+#ifdef ENABLE_TP_ILI_LOG_CAPTURE
+	bool allow_capture;
+#endif
 	atomic_t irq_stat;
 	atomic_t tp_reset;
 	atomic_t ice_stat;
@@ -1695,6 +1698,15 @@ extern void ili_get_dma1_config(struct ilitek_dma_config *dma);
 extern void ili_set_dma1_config(struct ilitek_dma_config *dma);
 extern int file_write(struct file_buffer *file, bool new_open);
 extern int ili_ic_check_debug_lite_support(int format, bool send, u8 *data);
+
+#ifdef ENABLE_TP_ILI_LOG_CAPTURE
+extern void ili_clear_kfifo(void);
+extern void ili_put_fifo_with_discard(char *log_buf, int len);
+extern int ili_log_capture_register_misc(void);
+extern int ili_log_capture_unregister_misc(void);
+extern int ili_get_frame_log_capture(u8 *buf,u16 len);
+extern void frame_log_capture_stop(void);
+#endif
 
 #ifdef ILI_SET_TOUCH_STATE
 extern int touch_set_state(int state, int panel_idx);

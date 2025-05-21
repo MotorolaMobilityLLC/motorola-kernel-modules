@@ -58,6 +58,12 @@ endif
 ifneq ($(filter m y, $(CONFIG_STOWED_MODE_EN)),)
 	EXTRA_CFLAGS += -DILI_STOWED_MODE_EN
 endif
+
+ifneq ($(filter m y,$(CONFIG_ENABLE_TP_ILI_LOG_CAPTURE)),)
+	EXTRA_CFLAGS += -DENABLE_TP_ILI_LOG_CAPTURE
+	ilitek_v4_mmi-objs += ilitek_ts_log_capture.o
+endif
+
 ilitek_v4_mmi-objs += ilitek_v3.o
 ilitek_v4_mmi-objs += ilitek_v3_spi.o
 ilitek_v4_mmi-objs += ilitek_v3_qcom.o

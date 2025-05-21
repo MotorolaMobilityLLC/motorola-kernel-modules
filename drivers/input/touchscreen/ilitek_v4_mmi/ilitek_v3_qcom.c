@@ -1241,6 +1241,9 @@ static int ilitek_plat_probe(void)
 		ILI_ERR("ILITEK Driver probe failed\n");
 		ili_irq_unregister();
 		ili_dev_remove(DISABLE);
+#ifdef ENABLE_TP_ILI_LOG_CAPTURE
+		ili_log_capture_unregister_misc();
+#endif
 		return -ENODEV;
 	}
 #if SPRD_SYSFS_SUSPEND_RESUME
