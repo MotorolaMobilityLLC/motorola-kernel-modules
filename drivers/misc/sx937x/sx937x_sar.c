@@ -866,7 +866,7 @@ static void sx937x_reg_init(psx93XX_t this)
 		sx937x_i2c_write_16bit(this, SX937X_COMMAND, 0xF);  //enable phase control
 	}
 	else {
-		LOG_ERR("ERROR! platform data 0x%p\n",pDevice->hw);
+		LOG_ERR("ERROR! platform data exception\n");
 	}
 
 }
