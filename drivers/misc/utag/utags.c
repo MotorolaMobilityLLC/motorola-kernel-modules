@@ -497,7 +497,7 @@ static int open_utags(struct blkdev *cb)
 		return -EIO;
 	}
 
-	cb->bdev = inode->i_sb->s_bdev;
+	cb->bdev = file_bdev(cb->filep);
 	cb->size = i_size_read(inode);
 
 	pr_debug("[%s] (pid %i) open (%s) success\n",
