@@ -616,7 +616,7 @@ static void aw9610x_set_active_cmd(void *i2c)
 	aw_sar_i2c_write(i2c, REG_CMD, AW9610X_ACTIVE_MODE);
 
 #ifdef AW9610X_TVS_ABNORMAL_CAIL
-	AWLOGD(g_aw_sar->dev, "AW9610X_TVS_ABNORMAL_CAIL");
+	pr_info("AW9610X_TVS_ABNORMAL_CAIL\n");
 	if (g_aw_sar != NULL) {
 		aw9610x_set_aot(g_aw_sar);
 	}
@@ -849,7 +849,7 @@ static const struct aw_sar_chip_config g_aw9610x_chip_config = {
 int32_t aw9610x_init(struct aw_sar *p_sar)
 {
 	if (p_sar == NULL) {
-		AWLOGE(p_sar->dev, "para is NULL, error!");
+		pr_err("para is NULL, error!\n");
 		return -AW_ERR;
 	}
 

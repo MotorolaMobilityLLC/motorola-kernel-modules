@@ -58,7 +58,7 @@ int32_t aw9620x_check_chipid(void *data)
 	uint32_t reg_val = 0;
 	struct aw_sar *p_sar = (struct aw_sar *)data;
 
-	if ((p_sar == NULL) && ( p_sar->priv_data == NULL)) {
+	if ((p_sar == NULL) || ( p_sar->priv_data == NULL)) {
 		return -AW_BIN_PARA_INVALID;
 	}
 
@@ -637,7 +637,7 @@ static const struct aw_sar_chip_config g_aw9620x_chip_config = {
 int32_t aw9620x_init(struct aw_sar *p_sar)
 {
 	if (p_sar == NULL) {
-		AWLOGE(p_sar->dev, "para is NULL, error!");
+		pr_err("para is NULL, error!\n");
 		return -AW_ERR;
 	}
 

@@ -1476,7 +1476,7 @@ int32_t aw963xx_init(struct aw_sar *p_sar)
 	pr_info("%s enter\n",__func__);
 
 	if (p_sar == NULL) {
-		AWLOGE(p_sar->dev, "para is NULL, error!");
+		pr_err("para is NULL, error!\n");
 		return -AW_ERR;
 	}
 

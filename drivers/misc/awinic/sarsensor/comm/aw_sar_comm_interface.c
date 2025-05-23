@@ -49,7 +49,7 @@ int32_t aw_sar_i2c_read(struct i2c_client *i2c, uint16_t reg_addr16,  uint32_t *
 	uint8_t r_buf[6] = { 0 };
 
 	if (i2c == NULL) {
-		AWLOGE(&i2c->dev, "i2c_dev is null error!");
+		pr_err("i2c_dev is null error!\n");
 		return -AW_ERR;
 	}
 
@@ -92,7 +92,7 @@ int32_t aw_sar_i2c_write(struct i2c_client *i2c, uint16_t reg_addr16, uint32_t r
 	uint8_t w_buf[6] = { 0 };
 
 	if (i2c == NULL) {
-		AWLOGE(&i2c->dev, "i2c_dev is null error!");
+		pr_err("i2c_dev is null error!\n");
 		return -AW_ERR;
 	}
 

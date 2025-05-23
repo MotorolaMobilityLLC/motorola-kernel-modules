@@ -581,7 +581,11 @@ int32_t aw_sar_soft_reset(struct aw_sar *p_sar)
 		return p_sar->p_sar_para->p_soft_rst->p_soft_reset_fn(p_sar);
 	}
 
-	return aw_sar_soft_reset_func(p_sar->i2c,  p_sar->p_sar_para->p_soft_rst);
+	if (p_sar->p_sar_para->p_soft_rst != NULL) {
+		return aw_sar_soft_reset_func(p_sar->i2c,  p_sar->p_sar_para->p_soft_rst);
+	}
+
+	return -AW_ERR;
 }
 
 static int32_t aw_sar_check_chipid(struct aw_sar *p_sar)

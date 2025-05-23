@@ -114,11 +114,13 @@ static int32_t dri_to_soc_pack_send(AW_SAR_I2C_TYPE i2c, uint8_t module, uint8_t
 	prot_pack_w[5] = (uint16_t)(AW_PACK_FIXED_SIZE + length) & GET_BITS_7_0;
 
 	//checksum
-	checksum = get_pack_checksum(data, length, module, command);
-	prot_pack_w[6] = ((uint32_t)checksum & GET_BITS_31_25) >> OFFSET_BIT_24;
-	prot_pack_w[7] = ((uint32_t)checksum & GET_BITS_24_16) >> OFFSET_BIT_16;
-	prot_pack_w[8] = ((uint32_t)checksum & GET_BITS_15_8) >> OFFSET_BIT_8;
-	prot_pack_w[9] = (uint32_t)checksum & GET_BITS_7_0;
+	if (length != 0 && data != NULL) {
+		checksum = get_pack_checksum(data, length, module, command);
+		prot_pack_w[6] = ((uint32_t)checksum & GET_BITS_31_25) >> OFFSET_BIT_24;
+		prot_pack_w[7] = ((uint32_t)checksum & GET_BITS_24_16) >> OFFSET_BIT_16;
+		prot_pack_w[8] = ((uint32_t)checksum & GET_BITS_15_8) >> OFFSET_BIT_8;
+		prot_pack_w[9] = (uint32_t)checksum & GET_BITS_7_0;
+	}
 
 	//module
 	prot_pack_w[10] = module;
