@@ -25,9 +25,13 @@
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
+#ifdef SUPPORT_FM_ELNA_LDO
+#include <linux/regulator/consumer.h>
+#endif
 
 
 #define DRIVER_VERSION "0.0.1"
+
 
 struct fm_ctrl_drvdata {
 	struct device	*dev;
@@ -36,6 +40,13 @@ struct fm_ctrl_drvdata {
 	struct pinctrl_state *pstate_active;
 	struct pinctrl_state *pstate_suspend;
 	bool   factory_mode;
+#ifdef SUPPORT_FM_ELNA_LDO
+	/* voltage regulator handle */
+	struct regulator *reg;
+	/* voltage levels to be set */
+	unsigned int low_vol_level;
+	unsigned int high_vol_level;
+#endif
 };
 
 
@@ -116,33 +127,9 @@ static ssize_t elna_en_write(struct device *dev,
 }
 
 
-static DEVICE_ATTR(device_name, 0444, device_name_read, NULL);
-static DEVICE_ATTR(elna_en, 0644, elna_en_read, elna_en_write);
-
-static struct attribute *fm_ctrl_sysfs_attrs[] = {
-	&dev_attr_device_name.attr,
-	&dev_attr_elna_en.attr,
-	NULL,
-};
-
-static struct attribute_group fm_ctrl_sysfs_attr_grp = {
-	.attrs = fm_ctrl_sysfs_attrs,
-};
-
-
-static int fm_ctrl_probe(struct platform_device *pdev)
-{
-	struct device *dev = &pdev->dev;
-	struct fm_ctrl_drvdata *drvdata;
+static int fm_ctrl_pinctrl_dt_parse(struct device *dev) {
 	int ret = 0;
-
-	dev_dbg(&pdev->dev, "%s begin\n", __func__);
-	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
-	if (!drvdata)
-		return -ENOMEM;
-
-	drvdata->dev = &pdev->dev;
-	platform_set_drvdata(pdev, drvdata);
+	struct fm_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
 
 	/* Get pinctrl if target uses pinctrl */
 	drvdata->pinctrl = devm_pinctrl_get(dev);
@@ -173,6 +160,102 @@ static int fm_ctrl_probe(struct platform_device *pdev)
 		pr_err("Can not lookup suspend pinstate %d\n", ret);
 		return ret;
 	}
+
+	return ret;
+}
+
+
+#ifdef SUPPORT_FM_ELNA_LDO
+static int fm_ctrl_vreg_config(struct device *dev) {
+	int ret = 0;
+	struct fm_ctrl_drvdata *drvdata = dev_get_drvdata(dev);
+	struct device_node *np = dev->of_node;
+	struct regulator *vddvreg = NULL;
+	uint32_t vol_suply[2];
+
+	vddvreg = regulator_get(dev, "vdd-elna");
+	if (IS_ERR(vddvreg)) {
+		ret = PTR_ERR(vddvreg);
+		pr_err("%s: elna regulator_get failed ret = %d\n", __func__, ret);
+		return ret;
+	}
+	drvdata->reg = vddvreg;
+
+	ret = of_property_read_u32_array(np, "moto,vdd-elna-voltage", vol_suply, 2);
+	if (ret < 0) {
+		pr_err("%s: elna vreg info parse failed ret = %d\n", __func__, ret);
+		ret =  -EINVAL;
+	}
+	else {
+		drvdata->low_vol_level = vol_suply[0];
+		drvdata->high_vol_level = vol_suply[1];
+		ret = regulator_set_voltage(vddvreg, \
+			drvdata->low_vol_level, \
+			drvdata->high_vol_level);
+		if (ret < 0) {
+			pr_err("%s: elna vreg set voltage failed ret = %d\n", __func__, ret);
+		}
+		else {
+			ret = regulator_enable(vddvreg);
+			if (ret < 0) {
+				pr_err("%s: elna vreg enable failed ret = %d\n", __func__, ret);
+				regulator_set_voltage(vddvreg, \
+					0, \
+					drvdata->high_vol_level);
+			}
+			else {
+				pr_info("%s: enable elan regulator done.\n", __func__);
+			}
+		}
+	}
+
+	return ret;
+}
+#endif
+
+
+static DEVICE_ATTR(device_name, 0444, device_name_read, NULL);
+static DEVICE_ATTR(elna_en, 0644, elna_en_read, elna_en_write);
+
+static struct attribute *fm_ctrl_sysfs_attrs[] = {
+	&dev_attr_device_name.attr,
+	&dev_attr_elna_en.attr,
+	NULL,
+};
+
+static struct attribute_group fm_ctrl_sysfs_attr_grp = {
+	.attrs = fm_ctrl_sysfs_attrs,
+};
+
+
+static int fm_ctrl_probe(struct platform_device *pdev)
+{
+	struct device *dev = &pdev->dev;
+	struct fm_ctrl_drvdata *drvdata;
+	int ret = 0;
+
+	dev_dbg(&pdev->dev, "%s begin\n", __func__);
+	drvdata = devm_kzalloc(dev, sizeof(struct fm_ctrl_drvdata), GFP_KERNEL);
+	if (!drvdata)
+		return -ENOMEM;
+
+	drvdata->dev = &pdev->dev;
+	platform_set_drvdata(pdev, drvdata);
+
+	ret = fm_ctrl_pinctrl_dt_parse(dev);
+	if (0 != ret) {
+		kfree(drvdata);
+		return ret;
+	}
+
+#ifdef SUPPORT_FM_ELNA_LDO
+	ret = fm_ctrl_vreg_config(dev);
+	if (0 != ret) {
+		kfree(drvdata);
+		return ret;
+	}
+#endif
+
 	drvdata->factory_mode = mmi_factory_check();
 	if(drvdata->factory_mode) {
 		ret = pinctrl_select_state(drvdata->pinctrl, drvdata->pstate_active);
@@ -196,6 +279,10 @@ static int fm_ctrl_probe(struct platform_device *pdev)
 	ret = sysfs_create_group(&dev->kobj, &fm_ctrl_sysfs_attr_grp);
 	if (ret) {
 		pr_err("%s: sysfs group creation failed %d\n", __func__, ret);
+	#ifdef SUPPORT_FM_ELNA_LDO
+		regulator_put(drvdata->reg);
+	#endif
+		kfree(drvdata);
 		return ret;
 	}
 
@@ -208,8 +295,17 @@ static int fm_ctrl_probe(struct platform_device *pdev)
 
 static int fm_ctrl_remove(struct platform_device *pdev)
 {
+	struct fm_ctrl_drvdata *drvdata = dev_get_drvdata(&pdev->dev);
+
 	/* remove this because we donot need to support ant auto-det feature */
 	//device_init_wakeup(&pdev->dev, 0);
+	sysfs_remove_group(&pdev->dev.kobj, &fm_ctrl_sysfs_attr_grp);
+#ifdef SUPPORT_FM_ELNA_LDO
+	regulator_put(drvdata->reg);
+#endif
+	platform_set_drvdata(pdev, NULL);
+	kfree(drvdata);
+
 	return 0;
 }
 
