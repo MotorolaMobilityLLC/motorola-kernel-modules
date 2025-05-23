@@ -66,7 +66,7 @@ extern void fts_mmi_dev_unregister(struct fts_ts_data *ts_data);
 #define FTS_IOVCC_VTG_MAX_UV                1800000
 #endif
 
-#define FTS_WAKELOCK_TIMEOUT                5000
+#define FTS_WAKELOCK_TIMEOUT                750
 
 /*****************************************************************************
 * Global variable or extern global variabls/functions
