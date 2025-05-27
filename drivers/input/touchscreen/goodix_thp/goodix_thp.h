@@ -206,6 +206,7 @@ typedef enum {
         NOTIFY_TYPE_POCKET_MODE,
         NOTIFY_TYPE_ROTATION,
         NOTIFY_TYPE_SWITCH_REPORT_RATE,
+        NOTIFY_TYPE_SAVE_MOTO_DATA,
 } NOTIFY_TYPE_T;
 
 #pragma pack(push, 1)
@@ -427,6 +428,7 @@ struct goodix_thp_core {
 #if IS_ENABLED(CONFIG_FB) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
         struct notifier_block pm_notif;
 #endif
+        bool save_moto_data_on;
         bool special_area_on;
         bool logtofile_on;
         bool irq_state;
