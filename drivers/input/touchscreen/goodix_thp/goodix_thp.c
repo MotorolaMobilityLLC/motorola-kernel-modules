@@ -2050,6 +2050,35 @@ static ssize_t goodix_thp_special_area_store(struct device *dev,
         return count;
 }
 
+static ssize_t goodix_thp_save_moto_data_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+        struct goodix_thp_core *cd = dev_get_drvdata(dev);
+
+        return sprintf(buf, "%s\n", cd->save_moto_data_on ? "enable" : "disabled");
+}
+
+static ssize_t goodix_thp_save_moto_data_store(struct device *dev,
+                                     struct device_attribute *attr,
+                                     const char *buf,
+                                     size_t count)
+{
+        struct goodix_thp_core *cd = dev_get_drvdata(dev);
+        u8 val[2] = {NOTIFY_TYPE_SAVE_MOTO_DATA, 0};
+
+        if (buf[0] == 1 || buf[0] == '1') {
+                val[1] = 1;
+                cd->save_moto_data_on = true;
+        } else {
+                val[1] = 0;
+                cd->save_moto_data_on = false;
+        }
+
+        put_frame_list(cd, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+        ts_info(cd->ts_dev->dev, "save moto data %s", cd->save_moto_data_on ? "enable" : "disable");
+        return count;
+}
+
 static DEVICE_ATTR(scan_rate, S_IWUSR | S_IWGRP, NULL,
                                 goodix_thp_scan_rate_store);
 static DEVICE_ATTR(driver_info, S_IRUGO, goodix_thp_driver_info_show, NULL);
@@ -2074,6 +2103,9 @@ static DEVICE_ATTR(reg_rw, S_IRUGO | S_IWUSR | S_IWGRP,
                                 goodix_thp_reg_rw_show, goodix_thp_reg_rw_store);
 static DEVICE_ATTR(special_area, S_IRUGO | S_IWUSR | S_IWGRP,
                                 goodix_thp_special_area_show, goodix_thp_special_area_store);
+static DEVICE_ATTR(save_moto_data, S_IRUGO | S_IWUSR | S_IWGRP,
+                                goodix_thp_save_moto_data_show, goodix_thp_save_moto_data_store);
+
 static struct attribute *sysfs_attrs[] = {
         &dev_attr_scan_rate.attr,
         &dev_attr_driver_info.attr,
@@ -2088,6 +2120,7 @@ static struct attribute *sysfs_attrs[] = {
         &dev_attr_logtofile.attr,
         &dev_attr_reg_rw.attr,
         &dev_attr_special_area.attr,
+        &dev_attr_save_moto_data.attr,
         NULL,
 };
 
