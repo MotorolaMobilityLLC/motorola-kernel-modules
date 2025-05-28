@@ -39,6 +39,7 @@
 #include "syna_tcm2_platform.h"
 #include "tcm/synaptics_touchcom_core_dev.h"
 #include "tcm/synaptics_touchcom_func_base.h"
+#include <linux/pinctrl/consumer.h>
 
 #define PLATFORM_DRIVER_NAME "synaptics_tcm"
 
@@ -52,6 +53,9 @@
 #define SYNAPTICS_TCM_DRIVER_VERSION 1
 #define SYNAPTICS_TCM_DRIVER_SUBVER "7.1"
 
+#define PINCTRL_STYLUS_CLK_ACTIVE       "stylus_clk_active"
+#define PINCTRL_STYLUS_CLK_SUSPEND      "stylus_clk_suspend"
+
 
 /*
  * Modules Configurations
@@ -61,9 +65,9 @@
  *         Open to enable the sysfs kernel attributes.
  *         Typically, it's aligned with the deconfig, CONFIG_TOUCHSCREEN_SYNA_TCM2_SYSFS
  */
-#if defined(CONFIG_TOUCHSCREEN_SYNA_TCM2_SYSFS)
+//#if defined(CONFIG_TOUCHSCREEN_SYNA_TCM2_SYSFS)
 #define HAS_SYSFS_INTERFACE
-#endif
+//#endif
 
 /* HAS_REFLASH_FEATURE
  *         Open to enable firmware reflash features.
@@ -359,6 +363,9 @@ struct syna_tcm {
 	bool concurrent_reporting;
 	syna_pal_completion_t init_completed;
 
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *stylus_clk_active;
+	struct pinctrl_state *stylus_clk_suspend;
 
 	/* Pointer of userspace application info data */
 	void *userspace_app_info;

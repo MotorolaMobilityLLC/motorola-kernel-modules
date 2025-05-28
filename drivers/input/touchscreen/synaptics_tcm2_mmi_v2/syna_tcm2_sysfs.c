@@ -296,6 +296,60 @@ static struct kobj_attribute kobj_attr_fw_update =
 	__ATTR(fw_update, 0220, NULL, syna_sysfs_fw_update_store);
 #endif
 
+static ssize_t syna_sysfs_stylus_clk_store(struct kobject *kobj,
+	struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int retval = 0;
+	struct device *p_dev;
+	struct syna_tcm *tcm;
+	unsigned int input;
+
+	p_dev = container_of(kobj->parent->parent, struct device, kobj);
+	tcm = dev_get_drvdata(p_dev);
+
+	if (!tcm->is_connected) {
+		LOGW("Device is NOT connected\n");
+		return count;
+	}
+
+	if (kstrtouint(buf, 10, &input))
+		return -EINVAL;
+
+	if (input == 1) {
+		if (tcm->pinctrl) {
+			retval = pinctrl_select_state(tcm->pinctrl,
+					tcm->stylus_clk_active);
+			if (retval < 0) {
+				LOGE("Failed to select active pinstate, r:%d\n", retval);
+				goto exit;
+			}
+			LOGI("Select active pinstate, r:%d\n", retval);
+		}
+	} else if (input == 0) {
+		if (tcm->pinctrl) {
+			retval = pinctrl_select_state(tcm->pinctrl,
+					tcm->stylus_clk_suspend);
+			if (retval < 0) {
+				LOGE("Failed to select suspend pinstate, r:%d\n", retval);
+				goto exit;
+			}
+			LOGI("Select suspend pinstate, r:%d\n", retval);
+		}
+	} else {
+		LOGW("Unknown option %d (0:disable / 1:enable)\n", input);
+		retval = -EINVAL;
+		goto exit;
+	}
+
+	retval = count;
+
+exit:
+	return retval;
+}
+
+static struct kobj_attribute kobj_attr_stylus_clk =
+	__ATTR(stylus_clk, 0220, NULL, syna_sysfs_stylus_clk_store);
+
 /* Definitions of debugging sysfs attributes */
 static struct attribute *attrs_debug[] = {
 	&kobj_attr_reset.attr,
@@ -304,6 +358,7 @@ static struct attribute *attrs_debug[] = {
 #if defined(HAS_REFLASH_FEATURE)
 	&kobj_attr_fw_update.attr,
 #endif
+	&kobj_attr_stylus_clk.attr,
 	NULL,
 };
 

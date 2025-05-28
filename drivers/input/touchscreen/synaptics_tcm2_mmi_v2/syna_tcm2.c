@@ -47,6 +47,7 @@
 #ifdef REFLASH_TDDI
 #include "synaptics_touchcom_func_reflash_tddi.h"
 #endif
+#include <linux/spi/spi.h>
 
 #ifdef USE_CUSTOM_TOUCH_REPORT_CONFIG
 /* An example of the format of custom touch configuration  */
@@ -1833,6 +1834,57 @@ static void syna_dev_unregister_panel(struct drm_bridge *bridge)
 }
 #endif
 
+/**
+ * syna_ts_pinctrl_init - Get pinctrl handler and pinctrl_state
+ * @tcm: pointer to touch core data
+ * return: 0 ok, <0 failed
+ */
+static int syna_ts_pinctrl_init(struct syna_tcm *tcm)
+{
+	struct syna_hw_interface *hw_if = tcm->hw_if;
+	struct spi_device *spi = (struct spi_device *)hw_if->pdev;
+	struct device *dev = &spi->dev;
+	int r = 0;
+
+	/* get pinctrl handler from of node */
+	tcm->pinctrl = devm_pinctrl_get(dev);
+	if (IS_ERR_OR_NULL(tcm->pinctrl)) {
+		LOGE("Failed to get pinctrl handler[need confirm]\n");
+		tcm->pinctrl = NULL;
+		return -EINVAL;
+	}
+	LOGI("success get pinctrl\n");
+	/* active state */
+	tcm->stylus_clk_active = pinctrl_lookup_state(tcm->pinctrl,
+				PINCTRL_STYLUS_CLK_ACTIVE);
+	if (IS_ERR_OR_NULL(tcm->stylus_clk_active)) {
+		r = PTR_ERR(tcm->stylus_clk_active);
+		LOGE("Failed to get pinctrl state:%s, r:%d\n",
+				PINCTRL_STYLUS_CLK_ACTIVE, r);
+		tcm->stylus_clk_active = NULL;
+		goto exit_pinctrl_put;
+	}
+	LOGI("success get avtive pinctrl state\n");
+
+	/* suspend state */
+	tcm->stylus_clk_suspend = pinctrl_lookup_state(tcm->pinctrl,
+				PINCTRL_STYLUS_CLK_SUSPEND);
+	if (IS_ERR_OR_NULL(tcm->stylus_clk_suspend)) {
+		r = PTR_ERR(tcm->stylus_clk_suspend);
+		LOGE("Failed to get pinctrl state:%s, r:%d\n",
+				PINCTRL_STYLUS_CLK_SUSPEND, r);
+		tcm->stylus_clk_suspend = NULL;
+		goto exit_pinctrl_put;
+	}
+	LOGI("success get suspend pinctrl state\n");
+
+	return 0;
+exit_pinctrl_put:
+	devm_pinctrl_put(tcm->pinctrl);
+	tcm->pinctrl = NULL;
+	return r;
+}
+
 /*
  * Probe of TouchComm device driver.
  *
@@ -1982,6 +2034,15 @@ static int syna_dev_probe(struct platform_device *pdev)
 			create_singlethread_workqueue("synaptics_tcm_helper");
 	INIT_WORK(&tcm->helper.work, syna_dev_helper_work);
 #endif
+
+	/* Pinctrl handle is optional. */
+	retval = syna_ts_pinctrl_init(tcm);
+	//if (!retval && tcm->pinctrl) {
+	//	retval = pinctrl_select_state(tcm->pinctrl,
+	//				 tcm->stylus_clk_active);
+	//	if (retval < 0)
+	//		LOGE("Failed to select active pinstate, r:%d\n", retval);
+	//}
 
 	LOGI("TouchComm driver, %s ver.: %d.%s, installed\n",
 		PLATFORM_DRIVER_NAME,

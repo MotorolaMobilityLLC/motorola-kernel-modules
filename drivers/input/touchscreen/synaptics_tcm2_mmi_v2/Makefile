@@ -47,9 +47,7 @@ ifeq ($(CONFIG_TOUCHSCREEN_SYNA_TCM2_SPI),y)
 	synaptics_tcm2$(NAME)-objs += syna_tcm2_platform_spi.o
 endif
 
-ifeq ($(CONFIG_TOUCHSCREEN_SYNA_TCM2_SYSFS),y)
 	synaptics_tcm2$(NAME)-objs += syna_tcm2_sysfs.o
-endif
 
 ifeq ($(CONFIG_TOUCHSCREEN_SYNA_TCM2_TESTING),y)
 	synaptics_tcm2$(NAME)-objs += syna_tcm2_testing.o
