@@ -47,7 +47,7 @@ void ili_put_fifo_with_discard(char *log_buf, int len)
 
 	if (kfifo_is_full(&ts_log_dev.fifo)) {
 		kfifo_skip(&ts_log_dev.fifo);
-		ILI_INFO("Save a byte to a FIFO and discard the oldest byte if FIFO is full");
+		//ILI_INFO("Save a byte to a FIFO and discard the oldest byte if FIFO is full");
 	}
 
 	kfifo_in(&ts_log_dev.fifo, log_buf, len);
