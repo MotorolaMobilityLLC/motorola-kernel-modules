@@ -36,6 +36,7 @@ static int netlink_send_message(const char *p_buffer, uint16_t length) {
     struct nlmsghdr *p_nlmsghdr = NULL;
 
     CHECK_PTR_PARAM(p_buffer);
+    CHECK_PTR_PARAM(gp_netlink_sock);
     CHECK_INT_PARAM(length);
 
     /* 创建sk_buff 空间 */
@@ -50,11 +51,6 @@ static int netlink_send_message(const char *p_buffer, uint16_t length) {
     if (NULL == p_nlmsghdr) {
         ANC_LOGE("nlmsg_put failaure");
         nlmsg_free(p_sk_buff);
-        return -1;
-    }
-
-    if (NULL == gp_netlink_sock) {
-        ANC_LOGE("gp_netlink_sock is NULL!");
         return -1;
     }
 
