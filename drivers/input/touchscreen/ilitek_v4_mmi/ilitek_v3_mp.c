@@ -469,6 +469,12 @@ static int parser_sramtest_group(char *str, char (*strSramPartialArea)[SRAM_TEST
 	ILI_INFO("Parsing Sram group\n");
 
 	temp = strsep(&pstrtemp, delim);
+
+	if (temp == NULL) {
+		ILI_ERR("Invalid SRAM group string (empty)\n");
+		return -1;
+	}
+
 	strcpy(strSramPartialArea[group_num], temp);
 
 	while(temp != NULL) {
@@ -2888,7 +2894,7 @@ out:
 
 static int open_test_sp(int index)
 {
-	struct mp_test_P540_open *open;
+	struct mp_test_P540_open *open = NULL;
 	int i = 0, x = 0, y = 0, ret = 0, addr = 0;
 	int Charge_AA = 0, Charge_Border = 0, Charge_Notch = 0, full_open_rate = 0;
 	char str[512] = {0};
@@ -3086,7 +3092,7 @@ static int open_test_sp(int index)
 out:
 	ipio_kfree((void **)&tItems[index].node_type);
 
-	if (open != NULL) {
+	if (open) {
 		for (i = 0; i < tItems[index].frame_count; i++) {
 			ipio_kfree((void **)&open[i].tdf_700);
 			ipio_kfree((void **)&open[i].tdf_250);
@@ -3108,7 +3114,7 @@ out:
 static int open_test_cap(int index)
 {
 	u32 pid = core_mp.chip_pid >> 8;
-	struct mp_test_open_c *open;
+	struct mp_test_open_c *open = NULL;
 	int i = 0, x = 0, y = 0, ret = 0, addr = 0;
 	bool isOpenX = DISABLE;
 	char str[512] = {0};
@@ -3282,7 +3288,7 @@ static int open_test_cap(int index)
 	}
 
 out:
-	if (open != NULL) {
+	if (open) {
 		for (i = 0; i < tItems[index].frame_count; i++) {
 			ipio_kfree((void **)&open[i].cap_dac);
 			ipio_kfree((void **)&open[i].cap_raw);
@@ -3669,8 +3675,10 @@ static int mp_compare_test_result(int index)
 			mp_compare_cdc_result(index, tItems[index].result_buf, max_threshold, min_threshold, &test_result);
 		} else {
 			if (tItems[index].bch_mrk_multi) {
-				for (i = 0; i < tItems[index].bch_mrk_frm_num; i++) {
-					mp_compare_cdc_result(index, frm_buf[i], tItems[index].bch_mrk_max[i], tItems[index].bch_mrk_min[i], &test_result);
+				if(frm_buf != NULL){
+					for (i = 0; i < tItems[index].bch_mrk_frm_num; i++) {
+						mp_compare_cdc_result(index, frm_buf[i], tItems[index].bch_mrk_max[i], tItems[index].bch_mrk_min[i], &test_result);
+					}
 				}
 			} else {
 				mp_compare_cdc_result(index, tItems[index].max_buf, max_threshold, min_threshold, &test_result);
@@ -4542,7 +4550,7 @@ static int mp_sort_item(bool lcm_on)
 			if (tItems[j].run != 1 || tItems[j].lcm != lcm_on)
 				continue;
 
-			if (ri.count > MP_TEST_ITEM) {
+			if (ri.count >= MP_TEST_ITEM) {
 				ILI_ERR("Test item(%d) is invaild, abort\n", ri.count);
 				return -EINVAL;
 			}

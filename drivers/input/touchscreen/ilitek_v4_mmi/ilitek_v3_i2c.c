@@ -328,9 +328,7 @@ int ili_core_spi_setup(int num)
 
 static int ilitek_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
 {
-	struct touch_bus_info *info =
-		container_of(to_i2c_driver(i2c->dev.driver),
-			struct touch_bus_info, bus_driver);
+	struct touch_bus_info *info = NULL;
 
 	ILI_INFO("ilitek i2c probe\n");
 
@@ -338,6 +336,8 @@ static int ilitek_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *
 		ILI_ERR("i2c client is NULL\n");
 		return -ENODEV;
 	}
+
+	info = container_of(to_i2c_driver(i2c->dev.driver), struct touch_bus_info, bus_driver);
 
 	if (i2c->addr != TDDI_I2C_ADDR) {
 		i2c->addr = TDDI_I2C_ADDR;

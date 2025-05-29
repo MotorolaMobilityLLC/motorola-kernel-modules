@@ -1007,8 +1007,7 @@ int cts_test_rawdata(struct cts_device *cts_dev, struct cts_test_param *param)
     if (cts_dev == NULL || param == NULL ||
         param->priv_param_size != sizeof(*priv_param) ||
         param->priv_param == NULL) {
-        cts_err("Rawdata test with invalid param: priv param: %p size: %d",
-            param->priv_param, param->priv_param_size);
+        cts_err("Rawdata test with invalid param:");
         return -EINVAL;
     }
 
@@ -1232,8 +1231,7 @@ int cts_test_noise(struct cts_device *cts_dev, struct cts_test_param *param)
     if (cts_dev == NULL || param == NULL ||
         param->priv_param_size != sizeof(*priv_param) ||
         param->priv_param == NULL) {
-        cts_err("Noise test with invalid param: priv param: %p size: %d",
-            param->priv_param, param->priv_param_size);
+        cts_err("Noise test with invalid param:");
         return -EINVAL;
     }
 
@@ -1481,8 +1479,7 @@ int cts_test_open(struct cts_device *cts_dev, struct cts_test_param *param)
     u16 old_int_data_types = cts_dev->fwdata.int_data_types;
 
     if (cts_dev == NULL || param == NULL) {
-        cts_err("Open test with invalid param: cts_dev: %p test param: %p",
-            cts_dev, param);
+        cts_err("Open test with invalid param:");
         return -EINVAL;
     }
 
@@ -1719,8 +1716,7 @@ int cts_test_short(struct cts_device *cts_dev, struct cts_test_param *param)
     u16 old_int_data_types = cts_dev->fwdata.int_data_types;
 
     if (cts_dev == NULL || param == NULL) {
-        cts_err("Short test with invalid param: cts_dev: %p test param: %p",
-             cts_dev, param);
+        cts_err("Short test with invalid param:");
         return -EINVAL;
     }
 

@@ -1111,10 +1111,11 @@ static void cts_driver_remove(struct spi_device *client)
         if (cts_data->workqueue)
             destroy_workqueue(cts_data->workqueue);
 
-        cts_deinit_platform_data(cts_data->pdata);
-
         if (cts_data->pdata)
             kfree(cts_data->pdata);
+
+        cts_deinit_platform_data(cts_data->pdata);
+
         kfree(cts_data);
     } else {
         cts_warn("Chipone i2c driver remove while NULL chipone_ts_data");

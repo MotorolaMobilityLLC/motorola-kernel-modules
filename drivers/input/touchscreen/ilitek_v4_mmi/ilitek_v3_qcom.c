@@ -1312,7 +1312,11 @@ static int ilitek_plat_remove(void)
 		ILI_ERR("Error unregistering disp_notifier\n");
 #endif
 #if SPRD_SYSFS_SUSPEND_RESUME
-	ili_sysfs_remove_device(ilits->dev);
+	if (ilits != NULL) {
+		ili_sysfs_remove_device(ilits->dev);
+	} else {
+		ILI_ERR("ilits is NULL when removing sysfs device\n");
+	}
 #endif
 
 #if CHARGER_NOTIFIER_CALLBACK

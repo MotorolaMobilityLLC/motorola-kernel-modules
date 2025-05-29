@@ -147,7 +147,7 @@ static enum power_supply_property power_supply_prop_from_name(const char *name)
 }
 
 static const char *charger_detect_type_text[] = {
-    "none", "notify", "poll",
+    "none", "notify", "poll", "Unknown",
 };
 
 static const char *charger_detect_type_str(enum cts_charger_detect_type type)

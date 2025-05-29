@@ -705,9 +705,7 @@ static int ili_check_panel(void)
 
 static int ilitek_spi_probe(struct spi_device *spi)
 {
-	struct touch_bus_info *info =
-	container_of(to_spi_driver(spi->dev.driver),
-		struct touch_bus_info, bus_driver);
+	struct touch_bus_info *info = NULL;
 
 #ifdef ILI_MTK_CHECK_PANEL
 	int ret;
@@ -719,6 +717,8 @@ static int ilitek_spi_probe(struct spi_device *spi)
 		ILI_ERR("spi device is NULL\n");
 		return -ENODEV;
 	}
+
+	info = container_of(to_spi_driver(spi->dev.driver),struct touch_bus_info, bus_driver);
 
 #ifdef ILI_MTK_CHECK_PANEL
 	ret = ili_check_panel();
