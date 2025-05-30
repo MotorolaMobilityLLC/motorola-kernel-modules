@@ -1258,6 +1258,13 @@ static int syna_spi_probe(struct spi_device *spi)
 		return retval;
 	}
 
+	/* register the platform device */
+	retval = platform_device_register(p_device);
+	if (retval < 0) {
+		LOGE("Fail to register platform device\n");
+		return retval;
+	}
+
 	return 0;
 }
 
@@ -1353,13 +1360,6 @@ static struct platform_device syna_spi_device = {
 int syna_hw_interface_init(void)
 {
 	int retval;
-
-	/* register the platform device */
-	retval = platform_device_register(&syna_spi_device);
-	if (retval < 0) {
-		LOGE("Fail to register platform device\n");
-		return retval;
-	}
 
 	p_device = &syna_spi_device;
 
