@@ -1236,6 +1236,14 @@ static int st54spi_probe(struct spi_device *spi)
 	int status, ret;
 	unsigned long minor;
 
+
+	if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+                pr_err("%s : mmi: device not supported\n", __func__);
+                return -ENODEV;
+        } else {
+                pr_err("%s : supported device found\n", __func__);
+        }
+
 	/*
 	 * st54spi should never be referenced in DT without a specific
 	 * compatible string, it is a Linux implementation thing
