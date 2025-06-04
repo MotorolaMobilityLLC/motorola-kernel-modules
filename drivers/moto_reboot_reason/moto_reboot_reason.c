@@ -157,7 +157,7 @@ static int moto_reboot_reason_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int moto_reboot_reason_remove(struct platform_device *pdev)
+static void moto_reboot_reason_remove(struct platform_device *pdev)
 {
 	struct moto_reboot_reason *reboot = platform_get_drvdata(pdev);
 
@@ -166,7 +166,7 @@ static int moto_reboot_reason_remove(struct platform_device *pdev)
 	unregister_reboot_notifier(&reboot->reboot_nb);
 	unregister_restart_handler(&reboot->restart_nb);
 
-	return 0;
+	return;
 }
 
 static const struct of_device_id of_moto_reboot_reason_match[] = {
