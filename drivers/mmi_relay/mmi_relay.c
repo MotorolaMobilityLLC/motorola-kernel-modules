@@ -193,10 +193,10 @@ static int mmi_relay_probe(struct platform_device *pdev)
     return 0;
 }
 
-static int mmi_relay_remove(struct platform_device *pdev)
+static void mmi_relay_remove(struct platform_device *pdev)
 {
     kfree(relay_dev);
-    return 0;
+    return;
 }
 
 static const struct of_device_id mmi_relay_mt[] = {
