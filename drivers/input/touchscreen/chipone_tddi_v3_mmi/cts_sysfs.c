@@ -10,6 +10,17 @@
 #include "cts_firmware.h"
 #include "cts_strerror.h"
 
+
+#include <linux/syscalls.h>
+#include <linux/namei.h>
+#include <linux/time.h>
+#include <linux/ktime.h>
+#include <linux/fs.h>
+#include <linux/file.h>
+#include <linux/uaccess.h>
+#include <linux/slab.h>
+
+
 #ifdef CONFIG_CTS_SYSFS
 
 #define SPLIT_LINE_STR \
@@ -2977,6 +2988,363 @@ static ssize_t cts_write_tcs_cmd_store(struct device *dev,
 }
 static DEVICE_ATTR(write_tcs_cmd, S_IWUSR, NULL, cts_write_tcs_cmd_store);
 
+static ssize_t tp_data_show(struct device *dev,
+        struct device_attribute *attr, char *buf)
+{
+    struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+    struct cts_device *cts_dev = &cts_data->cts_dev;
+    s16 *diffdata = NULL;
+    int ret, r, c, count = 0;
+    int max, min, sum, average;
+    int max_r, max_c, min_r, min_c;
+    bool data_valid = true;
+
+    diffdata = (s16 *) kmalloc(RAWDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
+    if (diffdata == NULL) {
+        cts_err("Allocate memory for diffdata failed");
+        return -ENOMEM;
+    }
+
+    cts_lock_device(cts_dev);
+    ret = cts_tcs_top_get_real_diff(cts_dev, (u8 *) diffdata,
+            RAWDATA_BUFFER_SIZE(cts_dev));
+
+    cts_unlock_device(cts_dev);
+    if (ret < 0) {
+        cts_err("Get diffdata failed");
+        kfree(diffdata);
+    }
+    data_valid = true;
+
+    if (data_valid) {
+        max = min = diffdata[0];
+        sum = 0;
+        max_r = max_c = min_r = min_c = 0;
+        for (r = 0; r < cts_dev->fwdata.rows; r++) {
+            for (c = 0; c < cts_dev->fwdata.cols; c++) {
+                s16 val = diffdata[r * cts_dev->hwdata->num_col + c];
+
+                sum += val;
+                if (val > max) {
+                    max = val;
+                    max_r = r;
+                    max_c = c;
+                } else if (val < min) {
+                    min = val;
+                    min_r = r;
+                    min_c = c;
+                }
+            }
+        }
+        average = sum / (cts_dev->fwdata.rows * cts_dev->fwdata.cols);
+
+        count += snprintf(buf + count, PAGE_SIZE - count,
+                SPLIT_LINE_STR
+                "Diff data MIN: [%d][%d]=%d, MAX: [%d][%d]=%d, AVG=%d\n"
+                SPLIT_LINE_STR
+                "   |  ", min_r, min_c, min, max_r, max_c,
+                max, average);
+        for (c = 0; c < cts_dev->fwdata.cols; c++)
+            count += snprintf(buf + count, PAGE_SIZE - count,
+                    COL_NUM_FORMAT_STR, c);
+
+        count += snprintf(buf + count, PAGE_SIZE - count,
+                "\n" SPLIT_LINE_STR);
+
+        for (r = 0; r < cts_dev->fwdata.rows; r++) {
+            count += snprintf(buf + count, PAGE_SIZE - count,
+                    ROW_NUM_FORMAT_STR, r);
+            for (c = 0; c < cts_dev->fwdata.cols; c++)
+                count += snprintf(buf + count, PAGE_SIZE - count,
+                    DATA_FORMAT_STR, diffdata[r * cts_dev->hwdata->num_col + c]);
+
+            buf[count++] = '\n';
+        }
+    }
+    kfree(diffdata);
+
+    return data_valid ? count : ret;
+}
+
+int cts_write_file_data(struct file *filp, const void *data, size_t size)
+{
+#ifdef CFG_CTS_FOR_GKI
+    cts_info("%s(): kernel_write is forbiddon with GKI Version!", __func__);
+    return -EPERM;
+#else
+    loff_t pos;
+    ssize_t ret;
+
+    pos = filp->f_pos;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+    ret = kernel_write(filp, data, size, &pos);
+#else
+    ret = kernel_write(filp, data, size, pos);
+#endif
+
+    if (ret >= 0) {
+        filp->f_pos += ret;
+    }
+
+    return ret;
+#endif
+}
+
+static void cts_dump_data(struct cts_device *cts_dev,
+    const char *desc, const s16 *data, bool to_console)
+{
+#define SPLIT_LINE \
+"--------------------------------------------------------"\
+"----------------------------------------"
+#define ROW_NUM_FORMAT_STRE  "%2d | "
+#define COL_NUM_FORMAT_STRE  "%5d "
+#define DATA_FORMAT_STRE     "%5d "
+
+    int r, c;
+    //u32 max, min, sum, average;
+    //int max_r, max_c, min_r, min_c;
+    char line_buf[512];
+    int count = 0;
+
+    /*max = min = data[0];
+    sum = 0;
+    max_r = max_c = min_r = min_c = 0;
+    for (r = 0; r < cts_dev->fwdata.rows; r++) {
+        for (c = 0; c < cts_dev->fwdata.cols; c++) {
+            u16 val = data[r * cts_dev->hwdata->num_col + c];
+
+            sum += val;
+            if (val > max) {
+                max = val;
+                max_r = r;
+                max_c = c;
+            } else if (val < min) {
+                min = val;
+                min_r = r;
+                min_c = c;
+            }
+        }
+    }
+    average = sum / (cts_dev->fwdata.rows * cts_dev->fwdata.cols);*/
+
+    if (to_console) {
+        cts_info(SPLIT_LINE);
+    }
+
+    count = 0;
+    count += snprintf(line_buf + count, sizeof(line_buf) - count, "   |  ");
+    for (c = 0; c < cts_dev->fwdata.cols; c++) {
+        count += scnprintf(line_buf + count, sizeof(line_buf) - count,
+            COL_NUM_FORMAT_STR, c);
+    }
+    if (to_console) {
+        cts_info("%s", line_buf);
+        cts_info(SPLIT_LINE);
+    }
+
+    for (r = 0; r < cts_dev->fwdata.rows; r++) {
+        count = 0;
+        count += snprintf(line_buf + count, sizeof(line_buf) - count,
+            ROW_NUM_FORMAT_STR, r);
+        for (c = 0; c < cts_dev->fwdata.cols; c++) {
+            count += snprintf(line_buf + count, sizeof(line_buf) - count,
+                DATA_FORMAT_STR, data[r * cts_dev->hwdata->num_col + c]);
+        }
+        if (to_console) {
+            cts_info("%s", line_buf);
+        }
+
+    }
+    if (to_console) {
+        cts_info(SPLIT_LINE);
+    }
+
+#undef SPLIT_LINE
+#undef ROW_NUM_FORMAT_STRE
+#undef COL_NUM_FORMAT_STRE
+#undef DATA_FORMAT_STRE
+}
+
+
+int cts_start_dump_test_data(const char *filepath, bool append_to_file)
+{
+    int ret;
+
+    if (!filepath) {
+        cts_err("invalid file path");
+        return -EINVAL;
+    }
+    cts_info("Start dump test data to file '%s'", filepath);
+
+#ifdef CTS_CONFIG_MKDIR_FOR_CTS_TEST
+    ret = cts_mkdir_for_file(filepath, 0777);
+    if (ret) {
+        cts_err("Create dir for test data file failed %d", ret);
+        return ret;
+    }
+#endif /* CTS_CONFIG_MKDIR_FOR_CTS_TEST */
+
+#ifdef CFG_CTS_FOR_GKI
+    cts_info("%s(): filp_open is forbiddon with GKI Version!", __func__);
+    ret = -EPERM;
+    return ret;
+#else
+    cts_test_data_filp = filp_open(filepath,
+        O_WRONLY | O_CREAT | (append_to_file ? O_APPEND : O_TRUNC),
+        S_IRUGO | S_IWUGO);
+    if (IS_ERR(cts_test_data_filp)) {
+        ret = PTR_ERR(cts_test_data_filp);
+        cts_test_data_filp = NULL;
+        cts_err("Open file '%p' for test data failed %d", cts_test_data_filp, ret);
+        return ret;
+    }
+
+    return 0;
+#endif
+}
+void cts_stop_dump_test_data(void)
+{
+#ifndef CFG_CTS_FOR_GKI
+    int r;
+#endif
+
+    cts_info("Stop dump test data to file");
+
+    if (cts_test_data_filp) {
+#ifndef CFG_CTS_FOR_GKI
+        r = filp_close(cts_test_data_filp, NULL);
+        if (r) {
+            cts_err("Close test data file failed %d", r);
+        }
+#endif
+        cts_test_data_filp = NULL;
+    } else {
+        cts_warn("Stop dump tsdata to file with filp = NULL");
+    }
+
+}
+
+#define DATE_TYPE_INDEX                  12
+#define USED_COLS_INDEX                  14
+#define USED_ROWS_INDEX                  15
+
+#define APP_TYPE_INDEX                   20
+#define RES_XY_INDEX                     32
+#define DATA_VALID_INDEX                 174
+#define CHECK_TYPE_INDEX                 176
+
+static ssize_t tp_data_store(struct device *dev,
+        struct device_attribute *attr, const char *buf, size_t cou)
+{
+    u16 s = 0;
+    //s16 *diffdata = NULL;
+    void *alldata = NULL;
+    u8 old_int_data_method;
+    u16 old_int_data_types;
+    int ret;
+    u32 total_cnt = 0;
+    u8 data_valid;
+    u8 check_type;
+    u8 header[40] = {
+        'C',  'h',  'i',  'p',
+        'o',  'n',  'e', 0x20,    // header(7), len(1)
+        0x05, 0x00, 0x01, 0x00,    // version
+        0x02, 0x00, 0x12, 0x20,    // type(2), cols(1), rows(1)
+        0x00, 0x00, 0x00, 0x00,    // pccol, pcrow, prcol, prrow
+        0x00, 0x00, 0x00, 0x00,    // chip-class
+        0x00, 0x00, 0x00, 0x00,    // frame-count
+        0x00, 0x00, 0x00, 0x00,    // total-time
+        0xCF, 0x02, 0x43, 0x06,    // resx(2), resy(2)
+        0x12, 0x20, 0x00, 0x00,
+    };
+    struct chipone_ts_data *cts_data = dev_get_drvdata(dev);
+    struct cts_device *cts_dev = &cts_data->cts_dev;
+
+    parse_arg(buf, cou);
+
+    if (argc > 1) {
+        cts_err("Invalid num args %d", argc);
+        return -EFAULT;
+    }
+
+    // diffdata = (u8 *)kmalloc(RAWDATA_BUFFER_SIZE(cts_dev), GFP_KERNEL);
+    // if (diffdata == NULL) {
+    //     cts_err("Allocate memory for diffdata failed");
+    //     return -ENOMEM;
+    // }
+
+    alldata = (u8 *)kmalloc((RAWDATA_BUFFER_SIZE(cts_dev) + 180), GFP_KERNEL);
+    if (alldata == NULL) {
+        cts_err("Allocate memory for diffdata failed");
+        return -ENOMEM;
+    }
+
+    ret = kstrtou16(argv[0], 0, &s);
+    if (ret) {
+        cts_err("Invalid spi speed: %s", argv[0]);
+        return -EINVAL;
+    }
+
+    old_int_data_types = cts_dev->fwdata.int_data_types;
+    old_int_data_method = cts_dev->fwdata.int_data_method;
+
+    ret = cts_start_dump_test_data("/sdcard/diffdata_tp_data.bin", 1);
+        if (ret)
+            cts_err("Start dump test data to file failed %d", ret);
+
+    header[DATE_TYPE_INDEX] = 2;
+    header[APP_TYPE_INDEX] = 0;
+
+    if (cts_test_data_filp) {
+        cts_write_file_data(cts_test_data_filp, header, sizeof(header));
+    }
+
+    cts_lock_device(&cts_data->cts_dev);
+    cts_set_int_data_types(cts_dev, s);
+    cts_set_int_data_method(cts_dev, INT_DATA_METHOD_HOST);
+    cts_unlock_device(&cts_data->cts_dev);
+
+    while (total_cnt < 1000)
+    {
+        memcpy((u8 *)alldata, cts_dev->int_data, cts_dev->fwdata.int_data_size - 5);
+
+        //memcpy((u8 *)diffdata, cts_dev->int_data + 180, cts_dev->fwdata.int_data_size - 5);
+
+        //cts_dump_data(cts_dev, "Diffdata", (s16 *)diffdata, 1);
+
+
+        data_valid = *((u8 *)alldata + DATA_VALID_INDEX);
+        check_type = *((u8 *)alldata + CHECK_TYPE_INDEX);
+        if (data_valid != 1) {
+                continue;
+        }
+
+        if (check_type != 0x02) {
+            continue;
+        }
+
+        cts_dump_data(cts_dev, "Diffdata", (s16 *)(alldata + 180), 1);
+
+        total_cnt += 1;
+
+        if (cts_test_data_filp) {
+            cts_write_file_data(cts_test_data_filp, (u8 *)alldata, cts_dev->fwdata.int_data_size - 5);
+        }
+
+    }
+
+    cts_set_int_data_method(cts_dev, old_int_data_method);
+    cts_set_int_data_types(cts_dev, old_int_data_types);
+
+    cts_stop_dump_test_data();
+
+    return cou;
+}
+
+static DEVICE_ATTR(tp_data, S_IRUSR | S_IWUSR, tp_data_show,
+        tp_data_store);
+
 static struct attribute *cts_dev_misc_atts[] = {
     &dev_attr_ic_type.attr,
     &dev_attr_program_mode.attr,
@@ -3015,6 +3383,7 @@ static struct attribute *cts_dev_misc_atts[] = {
     &dev_attr_tcs_cmd.attr,
     &dev_attr_read_tcs_cmd.attr,
     &dev_attr_write_tcs_cmd.attr,
+    &dev_attr_tp_data.attr,
     NULL
 };
 

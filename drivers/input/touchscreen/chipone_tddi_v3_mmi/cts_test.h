@@ -30,6 +30,8 @@ struct cts_device;
 #define INVALID_NODE_ROW(node)                      ((u16)(node))
 #define INVALID_NODE_COL(node)                      ((u16)((node) >> 16))
 
+extern struct file *cts_test_data_filp;
+
 enum cts_test_item {
     CTS_TEST_RESET_PIN = 1,
     CTS_TEST_INT_PIN,
