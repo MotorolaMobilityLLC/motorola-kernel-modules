@@ -590,7 +590,7 @@
 #define AW8693X_REG_IDL					(0x58)
 #define AW8693X_REG_TRIMCFG5				(0x5D)
 #define AW8693X_REG_TMCFG				(0x5E)
-#define AW8693X_REG_EFCFG9				(0x67)
+#define AW8693X_REG_EFCFG6				(0x64)
 #define AW8693X_REG_ANACFG7				(0x6F)
 #define AW8693X_REG_ANACFG8				(0x70)
 #define AW8693X_REG_ANACFG10				(0x72)
