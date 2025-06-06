@@ -285,7 +285,7 @@ static int aw8693x_check_qualify(struct aw_haptic *aw_haptic)
 {
 	uint8_t reg_val = 0;
 
-	haptic_hv_i2c_reads(aw_haptic, AW8693X_REG_EFCFG9, &reg_val, AW_I2C_BYTE_ONE);
+	haptic_hv_i2c_reads(aw_haptic, AW8693X_REG_EFCFG6, &reg_val, AW_I2C_BYTE_ONE);
 	if (!(reg_val & 0x80)) {
 		aw_err("unqualified chip");
 		return -ERANGE;
