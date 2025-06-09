@@ -10,6 +10,9 @@ moto_ddk_module(
     ],
     local_defines = [
         "CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS",
+        "CONFIG_TOUCHCLASS_MMI_IRQ_ON_ONCE",
+        "CONFIG_TOUCHSCREEN_DEVICE_VIRTUAL_PATH",
+        "CONFIG_BOARD_USES_DOUBLE_TAP_CTRL",
     ],
     deps_ext = [
         "//soc-repo:drivers/soc/qcom/panel_event_notifier",
