@@ -1,0 +1,24 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module(
+    name = "goodix_brl_thp",
+    srcs = [
+        "goodix_thp.c",
+        "goodix_thp_spi.c",
+        "goodix_thp_config.c",
+        "goodix_thp_mmi.c",
+        "goodix_thp.h",
+        "goodix_thp_config.h",
+        "goodix_thp_mmi.h",
+    ],
+    local_defines = [
+        "CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS",
+        "CONFIG_INPUT_TOUCHSCREEN_MMI",
+        "CONFIG_ENABLE_GTP_PALM_CANCEL",
+        "CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID",
+        "CONFIG_TOUCHIRQ_UPDATE_QOS",
+    ],
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/input/touchscreen/touchscreen_mmi:touchscreen_mmi",
+    ],
+)

@@ -2479,7 +2479,7 @@ out:
         return r;
 }
 
-static int goodix_thp_remove(struct platform_device *pdev)
+static void goodix_thp_remove(struct platform_device *pdev)
 {
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
         struct thp_ts_device *tdev = core_data->ts_dev;
@@ -2507,7 +2507,7 @@ static int goodix_thp_remove(struct platform_device *pdev)
             wakeup_source_unregister(core_data->ws);
         }
 
-        return 0;
+        return;
 }
 
 static const struct platform_device_id ts_core_ids[] = {
