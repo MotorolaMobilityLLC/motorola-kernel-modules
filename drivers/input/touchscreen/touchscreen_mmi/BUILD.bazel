@@ -1,0 +1,20 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module(
+    name = "touchscreen_mmi",
+    srcs = [
+        "touchscreen_mmi_class.c",
+        "touchscreen_mmi_panel.c",
+        "touchscreen_mmi_notif.c",
+        "touchscreen_mmi_gesture.c",
+    ],
+    local_defines = [
+        "CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS",
+    ],
+    deps_ext = [
+        "//soc-repo:drivers/soc/qcom/panel_event_notifier",
+        "//vendor/qcom/opensource/display-drivers:msm_drm",
+        "//motorola/kernel/modules/drivers/mmi_relay:mmi_relay",
+        "//motorola/kernel/modules/drivers/sensors:sensors_class",
+    ],
+)

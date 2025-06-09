@@ -273,7 +273,7 @@ int ts_mmi_parse_dt(struct ts_mmi_dev *touch_cdev,
 			of_node_put(child);
 
 			if (id == panel_id && ver == panel_ver) {
-				strlcpy(touch_cdev->panel_supplier, child->name,
+				strscpy(touch_cdev->panel_supplier, child->name,
 					sizeof(touch_cdev->panel_supplier));
 				break;
 			}

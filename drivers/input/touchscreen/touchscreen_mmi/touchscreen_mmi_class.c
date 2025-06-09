@@ -291,7 +291,7 @@ static ssize_t ts_mmi_doreflash_store(struct device *dev,
 		}
 	}
 
-	strlcpy(fw_path, buf, size);
+	strscpy(fw_path, buf, size);
 	dev_dbg(dev, "%s: FW filename: %s\n", __func__, fw_path);
 
 	TRY_TO_CALL(firmware_update, fw_path);
