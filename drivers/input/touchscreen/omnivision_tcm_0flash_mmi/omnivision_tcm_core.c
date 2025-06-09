@@ -4925,7 +4925,7 @@ static int32_t ovt_charger_notifier_callback(struct notifier_block *nb, unsigned
 				  LOGN(g_tcm_hcd->pdev->dev.parent,"g_tcm_hcd->charger_plugin=%d, prop.intval=%d\n",
 						g_tcm_hcd->charger_plugin, prop.intval);
 				}
-				if (2 == prop.intval) {
+				if (2 == prop.intval || 1 == prop.intval) {
 					if (1 == ovt_charger_flag)
 						return 0;
 					LOGN(g_tcm_hcd->pdev->dev.parent,"prop.intval:%d, charger usb in!\n", prop.intval);
