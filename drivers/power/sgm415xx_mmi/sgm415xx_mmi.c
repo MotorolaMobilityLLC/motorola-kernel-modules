@@ -1659,6 +1659,57 @@ err_putnode1:
         return factory;
 }
 
+static bool is_atm_mode(void)
+{
+	const char *bootargs_ptr = NULL;
+	char *bootargs_str = NULL;
+	char *idx = NULL;
+	char *kvpair = NULL;
+	struct device_node *n = of_find_node_by_path("/chosen");
+	size_t bootargs_ptr_len = 0;
+	char *value = NULL;
+	bool atm_mode = false;
+
+	if (n == NULL)
+		goto err_putnode;
+
+	bootargs_ptr = (char *)of_get_property(n, "mmi,bootconfig", NULL);
+
+	if (!bootargs_ptr) {
+		chr_err("%s: failed to get mmi,bootconfig\n", __func__);
+		goto err_putnode;
+	}
+
+	bootargs_ptr_len = strlen(bootargs_ptr);
+	if (!bootargs_str) {
+		/* Following operations need a non-const version of bootargs */
+		bootargs_str = kzalloc(bootargs_ptr_len + 1, GFP_KERNEL);
+		if (!bootargs_str)
+			goto err_putnode;
+	}
+	strlcpy(bootargs_str, bootargs_ptr, bootargs_ptr_len + 1);
+
+	idx = strnstr(bootargs_str, "androidboot.atm=", strlen(bootargs_str));
+	if (idx) {
+		kvpair = strsep(&idx, " ");
+		if (kvpair)
+			if (strsep(&kvpair, "=")) {
+				value = strsep(&kvpair, "\n");
+			}
+	}
+	if (value) {
+		if (!strncmp(value, "enable", strlen("enable"))) {
+			atm_mode = true;
+		}
+		chr_err("%s: value = %s  enable %d\n", __func__, value, atm_mode);
+	}
+	kfree(bootargs_str);
+
+err_putnode:
+	of_node_put(n);
+	return atm_mode;
+}
+
 static void charger_detect_work_func(struct work_struct *work)
 {
 	struct sgm4154x_device *sgm = NULL;
@@ -1726,7 +1777,10 @@ static void charger_detect_work_func(struct work_struct *work)
 		if (sgm-> first_boot) {
 			pr_info("[%s] SGM4154x charger type: dcp, retry bc12 count:%d\n", __func__, sgm-> first_boot);
 			schedule_delayed_work(&sgm->retry_charger_detect_work, 100);
-			}
+		}
+		if (is_atm_mode()) {
+			sgm4154x_set_input_curr_lim(sgm->chg_dev, 3250000);
+		}
 		break;
 
 	case SGM4154x_UNKNOWN:
