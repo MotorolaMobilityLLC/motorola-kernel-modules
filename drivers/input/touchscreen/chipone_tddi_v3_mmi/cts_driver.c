@@ -66,6 +66,11 @@ int cts_suspend(struct chipone_ts_data *cts_data)
 {
     int ret;
 
+    if (!cts_data || !cts_data->pdata) {
+        cts_err("Invalid cts_data or pddata pointer");
+        return -EINVAL;
+    }
+
     cts_info("Suspend");
 
     cts_lock_device(&cts_data->cts_dev);
@@ -137,12 +142,21 @@ int cts_resume(struct chipone_ts_data *cts_data)
 {
     int ret;
 
+    if (!cts_data || !cts_data->pdata) {
+        cts_err("Invalid cts_data or pddata pointer");
+        return -EINVAL;
+    }
+
     cts_info("Resume");
 
 #ifdef CTS_STOWED_MODE_EN
     cts_data->pdata->stowed_set = 0;
     atomic_set(&cts_data->post_suspended, 0);
 #endif
+
+    if (cts_is_device_enabled(&cts_data->cts_dev)) {
+        cts_data->cts_dev.enabled = false;
+    }
 
 #ifdef CFG_CTS_GESTURE
     if (cts_is_gesture_wakeup_enabled(&cts_data->cts_dev)) {
