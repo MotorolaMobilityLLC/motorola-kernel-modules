@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 250101
+#define VERION 250610
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
