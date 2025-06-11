@@ -2290,7 +2290,7 @@ static ssize_t gain_store(struct device *dev, struct device_attribute *attr,
 	aw_info("value=0x%02x", val);
 	mutex_lock(&aw_haptic->lock);
 	aw_haptic->upgain = val;
-	//aw_haptic->func->set_gain(aw_haptic, aw_haptic->gain);
+	aw_haptic->func->set_gain(aw_haptic, aw_haptic->upgain);
 	mutex_unlock(&aw_haptic->lock);
 
 	return count;
