@@ -34,6 +34,7 @@
 #if IS_ENABLED(CONFIG_MOTO_ENABLE_MDPF)
 #include "msched_uclamp.h"
 #endif
+#include "msched_trace.h"
 
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
@@ -207,6 +208,9 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d task_util=%lu mvp_prio=%d\n",
 		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, moto_task_util(p), prio);
 
+	if (trace_msched_task_get_mvp_prio_enabled()) {
+		trace_msched_task_get_mvp_prio(p, ux_type, prio, moto_task_util(p), moto_sched_scene);
+	}
 	return prio;
 }
 EXPORT_SYMBOL(task_get_mvp_prio);
