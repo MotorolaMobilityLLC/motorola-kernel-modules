@@ -119,7 +119,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 		prio = UX_PRIO_KSWAPD;
 	// system lock & service mgr
-	else if (ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER))
+	else if ((ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER)) || (p->tgid == global_systemserver_tgid && p->prio == 105) )
 		prio = UX_PRIO_SYSTEM;
 	// inherit lock & binder
 	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER|UX_TYPE_INHERIT_LOCK)))
