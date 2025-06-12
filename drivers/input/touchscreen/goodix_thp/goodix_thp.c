@@ -839,7 +839,7 @@ static int goodix_thp_power_init(struct goodix_thp_core *core_data)
                     ts_err(ts_dev->dev, "set avdd load fail");
                     return r;
                 }
-                r = regulator_set_voltage(core_data->avdd, 3000000, 3000000);
+                r = regulator_set_voltage(core_data->avdd, 3200000, 3200000);
                 if (r) {
                     ts_err(ts_dev->dev, "set avdd voltage fail");
                     return r;
