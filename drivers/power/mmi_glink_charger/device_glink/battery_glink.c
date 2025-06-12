@@ -51,8 +51,10 @@ static int batt_psy_get_prop(struct power_supply *psy,
 	struct timespec64 glink_access_time_now;
 	int rc = 0;
 
-	pval->intval = -ENODATA;
+	if (!this_root_chip || !batt_chip)
+		return -ENODEV;
 
+	pval->intval = -ENODATA;
 
 	switch (batt_chip->batt_role ) {
 	case BATT_MAIN:
@@ -135,8 +137,11 @@ static int batt_psy_set_prop(struct power_supply *psy,
 			 enum power_supply_property prop,
 			 const union power_supply_propval *val)
 {
-	int rc = 0;
 	struct battery_glink_dev *batt_chip = power_supply_get_drvdata(psy);
+	int rc = 0;
+
+	if (!this_root_chip || !batt_chip)
+		return -ENODEV;
 
 	if (batt_chip->batt_role == BATT_MAIN) {
 		mmi_err(this_root_chip, "Set BATT_MAIN, property %d", prop);
@@ -420,6 +425,9 @@ static void battery_notify_flip_uevent(struct battery_info *batt_info)
 
 static void battery_notify_charger_uevent(BATT_ROLE batt_role, struct battery_info *batt_info)
 {
+      if (!this_batt_chip[batt_role])
+		return;
+
 	struct battery_info batt_info_save = this_batt_chip[batt_role]->batt_dev_info;
 
 	if (batt_role == BATT_MAIN)
@@ -438,7 +446,9 @@ static int battery_notify_handler(struct notifier_block *nb, unsigned long event
 	struct battery_info batt_info;
 	struct battery_glink_dev *batt_chip =
 			container_of(nb, struct battery_glink_dev, batt_nb);
-//	struct struct mmi_glink_chip *chip = data;
+
+	if (!this_root_chip || !batt_chip)
+		return -ENODEV;
 
 	mmi_dbg(this_root_chip, "batt_role %d, notify-dev %ld", batt_chip->batt_role, event);
 	if (event == DEV_BATT || event == DEV_ALL) {
@@ -489,6 +499,7 @@ struct glink_device *battery_glink_device_register(struct mmi_glink_chip *chip, 
 
 	if (!chip)
 		goto exit;
+	this_root_chip = chip;
 
 	batt_chip = kzalloc(sizeof(struct battery_glink_dev),GFP_KERNEL);
 	if (!batt_chip)
@@ -535,7 +546,6 @@ struct glink_device *battery_glink_device_register(struct mmi_glink_chip *chip, 
 	batt_chip->batt_nb.notifier_call = battery_notify_handler;
 	mmi_glink_register_notifier(&batt_chip->batt_nb);
 
-	this_root_chip = chip;
 	this_batt_chip[batt_chip->batt_role] = batt_chip;
 	mmi_err(chip, "battery glink device %s register successfully", dev_dts->glink_dev_name);
 	return glink_dev;

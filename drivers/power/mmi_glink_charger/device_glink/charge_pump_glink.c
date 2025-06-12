@@ -170,9 +170,17 @@ static int charge_pump_psy_get_prop(struct power_supply *psy,
 			 enum power_supply_property prop,
 			 union power_supply_propval *pval)
 {
+	if (!psy) {
+		mmi_err(this_root_chip, "charge_pump_psy_get_prop, psy is null");
+		return -ENODEV;
+	}
+
 	struct charge_pump_glink_dev *charge_pump_chip = power_supply_get_drvdata(psy);
 	struct timespec64 glink_access_time_now;
 	int rc = 0;
+
+	if (!charge_pump_chip)
+		return -ENODEV;
 
 	pval->intval = -ENODATA;
 

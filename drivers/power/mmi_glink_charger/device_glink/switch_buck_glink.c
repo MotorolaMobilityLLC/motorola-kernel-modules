@@ -169,6 +169,9 @@ static int buck_psy_get_prop(struct power_supply *psy,
 	struct timespec64 glink_access_time_now;
 	int rc = 0;
 
+	if (!this_root_chip || !buck_chip)
+		return -ENODEV;
+
 	pval->intval = -ENODATA;
 
 	ktime_get_real_ts64(&glink_access_time_now);
@@ -215,6 +218,9 @@ static int buck_psy_set_prop(struct power_supply *psy,
 			 const union power_supply_propval *val)
 {
 	int rc = 0, prop_cmd = 0, value = 0;
+
+	if (!this_root_chip)
+		return -ENODEV;
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:

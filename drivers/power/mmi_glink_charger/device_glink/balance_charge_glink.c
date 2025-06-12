@@ -255,6 +255,9 @@ static int balance_psy_get_prop(struct power_supply *psy,
 	struct timespec64 glink_access_time_now;
 	int rc = 0;
 
+	if (!this_root_chip || !balance_chip)
+		return -ENODEV;
+
 	pval->intval = -ENODATA;
 
 	switch (balance_chip->dev_role) {
@@ -328,6 +331,9 @@ static int balance_psy_set_prop(struct power_supply *psy,
 {
 	int rc = 0, prop_cmd = 0, value = 0;
 	struct balance_glink_dev *balance_chip = power_supply_get_drvdata(psy);
+
+	if (!this_root_chip || !balance_chip)
+		return -ENODEV;
 
 	switch (prop) {
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
@@ -423,6 +429,7 @@ struct glink_device *balance_glink_device_register(struct mmi_glink_chip *chip, 
 
 	if (!chip)
 		goto exit;
+	this_root_chip = chip;
 
 	balance_chip = kzalloc(sizeof(struct balance_glink_dev),GFP_KERNEL);
 	if (!balance_chip)
@@ -481,7 +488,6 @@ struct glink_device *balance_glink_device_register(struct mmi_glink_chip *chip, 
         if (rc)
 		pr_err("couldn't create balance extmos en\n");
 
-	this_root_chip = chip;
 	this_balance_chip[balance_chip->dev_role] = balance_chip;
 	mmi_err(chip, "balance glink device %s register successfully", dev_dts->glink_dev_name);
 	return glink_dev;
