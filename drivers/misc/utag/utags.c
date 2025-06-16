@@ -1814,10 +1814,12 @@ static int reload_show(struct seq_file *file, void *v)
 {
 	struct ctrl *ctrl = (struct ctrl *)file->private;
 
-	if (!ctrl)
+	if (!ctrl) {
 		pr_err("no control data set\n");
-	else
-		seq_printf(file, "%c\n", ctrl->reload);
+		return -EIO;
+	}
+
+	seq_printf(file, "%c\n", ctrl->reload);
 
 	pr_debug("[%s] %c\n", ctrl->dir_name, ctrl->reload);
 	return 0;
