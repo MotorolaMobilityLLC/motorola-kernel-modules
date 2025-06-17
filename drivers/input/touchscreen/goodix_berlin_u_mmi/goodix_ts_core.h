@@ -628,6 +628,9 @@ struct goodix_ts_core {
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
 	atomic_t fp_event;
 #endif
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+	u8 open_status;
+#endif
 };
 
 /* external module structures */

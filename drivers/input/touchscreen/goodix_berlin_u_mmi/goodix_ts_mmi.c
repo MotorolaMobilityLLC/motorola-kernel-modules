@@ -51,6 +51,10 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+#endif
 #ifdef CONFIG_GTP_LAST_TIME
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
@@ -79,6 +83,9 @@ static DEVICE_ATTR(sensitivity, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_sensitivity_store);
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	goodix_ts_stowed_show, goodix_ts_stowed_store);
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NULL);
+#endif
 #ifdef CONFIG_GTP_LAST_TIME
 static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
 #endif
@@ -154,7 +161,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->board_data.stowed_mode_ctrl)
 		ADD_ATTR(stowed);
-
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+	ADD_ATTR(hardware_status);
+#endif
 #ifdef CONFIG_GTP_POCKET_MODE
 	if (core_data->board_data.pocket_mode_ctrl)
 		ADD_ATTR(pocket_mode);
@@ -664,6 +673,24 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 	ts_info("Stowed state = %d.\n", core_data->set_mode.stowed);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.stowed);
 }
+
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	u8 hardware_status = 0;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	hardware_status = core_data->open_status;
+	ts_info("Read touch hardware status = %d.\n", hardware_status);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
+}
+#endif
+
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
 static ssize_t goodix_ts_fp_event_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
