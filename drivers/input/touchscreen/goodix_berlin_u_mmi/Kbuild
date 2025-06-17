@@ -142,6 +142,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_MULTI_CONFIG)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_MULTI_CONFIG
 endif
 
+ifneq ($(filter m y,$(CONFIG_TOUCH_HARDWARE_STATUS)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_HARDWARE_STATUS
+endif
+
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
 USE_TARGET_PRODUCT := $(strip $(subst _factory,, $(TARGET_PRODUCT)))
 else
