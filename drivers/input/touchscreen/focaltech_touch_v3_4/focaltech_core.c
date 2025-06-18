@@ -72,6 +72,12 @@ extern void fts_mmi_dev_unregister(struct fts_ts_data *ts_data);
 #define FTS_I2C_VTG_MAX_UV                  1800000
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#define FTS_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio(np,name,idx)
+#else
+#define FTS_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio_flags(np,name,idx,flags_ptr)
+#endif
+
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
@@ -2021,18 +2027,20 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
 
 
 #ifdef CONFIG_FTS_VDD_GPIO_CONTROL
-    pdata->vdd_gpio = of_get_named_gpio_flags(np, "focaltech,vdd-gpio",
-                        0, &pdata->vdd_gpio_flags);
+    pdata->vdd_gpio = FTS_GET_NAMED_GPIO(np, "focaltech,vdd-gpio", 0,
+                      &pdata->vdd_gpio_flags);
     if (pdata->vdd_gpio < 0)
         FTS_ERROR("Unable to get vdd_gpio");
 #endif
 
     /* reset, irq gpio info */
-    pdata->reset_gpio = of_get_named_gpio(np, "focaltech,reset-gpio", 0);
+    pdata->reset_gpio = FTS_GET_NAMED_GPIO(np, "focaltech,reset-gpio", 0,
+                        &pdata->reset_gpio_flags);
     if (pdata->reset_gpio < 0)
         FTS_ERROR("Unable to get reset_gpio");
 
-    pdata->irq_gpio = of_get_named_gpio(np, "focaltech,irq-gpio", 0);
+    pdata->irq_gpio = FTS_GET_NAMED_GPIO(np, "focaltech,irq-gpio", 0,
+                      &pdata->irq_gpio_flags);
     if (pdata->irq_gpio < 0)
         FTS_ERROR("Unable to get irq_gpio");
 
