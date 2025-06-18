@@ -43,6 +43,9 @@
 #include <linux/hrtimer.h>
 #include <linux/rtc.h>
 #include <linux/vmalloc.h>
+#ifdef CONFIG_OVT_LOG_CAPTURE
+#include <linux/sysfs.h>
+#endif
 
 #include "omnivision_tcm_core.h"
 #include "omnivision_tcm_testing.h"
@@ -58,6 +61,10 @@
 #define OVT_TCM_LIMIT_TSR_IMAGE_NAME "omnivision/tsr_limit.img"
 
 #define REPORT_TIMEOUT_MS 5000
+
+#ifdef CONFIG_OVT_LOG_CAPTURE
+static int raw_delta_frame_cnt = 10;
+#endif
 
 #define testing_sysfs_show(t_name) \
 static ssize_t testing_sysfs_##t_name##_show(struct device *dev, \
@@ -246,6 +253,9 @@ SHOW_PROTOTYPE(testing, do_testing)
 SHOW_PROTOTYPE(testing, pt11_open_detection)
 SHOW_PROTOTYPE(testing, raw_data)
 SHOW_PROTOTYPE(testing, delta_data)
+#ifdef CONFIG_OVT_LOG_CAPTURE
+STORE_PROTOTYPE(testing, log_trigger)
+#endif
 
 
 static struct device_attribute *attrs[] = {
@@ -261,6 +271,9 @@ static struct device_attribute *attrs[] = {
 	ATTRIFY(reset_open),
 	ATTRIFY(raw_data),
 	ATTRIFY(delta_data),
+#ifdef CONFIG_OVT_LOG_CAPTURE
+	ATTRIFY(log_trigger),
+#endif
 };
 
 static ssize_t testing_sysfs_data_show(struct file *data_file,
@@ -297,6 +310,28 @@ testing_sysfs_raw_delta_show(raw_data)
 testing_sysfs_raw_delta_show(delta_data)
 
 #ifdef CONFIG_OVT_LOG_CAPTURE
+void ovt_format_frame_data_to_print_buf(int frame_cnt, int frame_size, int rows, int cols, unsigned char *frame_data, unsigned char *output_str, int str_size)
+{
+	int frame_idx = 0;
+	int i, j;
+	int data_value;
+	unsigned char *report_data_buf;
+
+	memset(output_str, 0, str_size);
+	while (frame_idx < frame_cnt) {
+		report_data_buf = frame_data + frame_idx * frame_size;
+		snprintf(output_str + strlen(output_str), str_size - strlen(output_str), "frame %d :\n", frame_idx);
+		for (i = 0; i < rows; i++) {
+			for (j = 0; j < cols; j++) {
+				data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
+				snprintf(output_str + strlen(output_str), str_size - strlen(output_str), "%04d, ", data_value);
+			}
+			snprintf(output_str + strlen(output_str), str_size - strlen(output_str), "\n");
+		}
+		frame_idx++;
+	}
+}
+
 int ovt_tp_rawdata_capture(struct device *dev)
 {
 	int retval;
@@ -532,6 +567,48 @@ static ssize_t testing_sysfs_data_show(struct file *data_file,
 
 	return retval;
 }
+
+#ifdef CONFIG_OVT_LOG_CAPTURE
+static int capture_data_type = 0;
+
+static ssize_t testing_sysfs_log_trigger_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int input;
+	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
+	struct ovt_tcm_app_info *app_info;
+	int rows, cols , frame_size;
+
+	app_info = &tcm_hcd->app_info;
+	rows = le2_to_uint(app_info->num_of_image_rows);
+	cols = le2_to_uint(app_info->num_of_image_cols);
+	frame_size = rows * cols * 2;
+	if (sscanf(buf, "%u", &input) != 1)
+		return -EINVAL;
+
+	capture_data_type = input;
+
+	if (capture_data_type == 1) {
+		//raw
+		testing_raw_data();
+
+	} else if (capture_data_type == 2) {
+		//delta
+		testing_delta_data();
+	}
+	if (!g_testing_output_buf) {
+		g_testing_output_buf = vmalloc(OUTPUT_TO_CSV_STRING_LEN);
+		if (!g_testing_output_buf) {
+			LOGE(tcm_hcd->pdev->dev.parent,
+				"can not alloc buffer for g_testing_output_buf\n");
+			return -1;
+		}
+	}
+	ovt_format_frame_data_to_print_buf(raw_delta_frame_cnt, frame_size, rows, cols, testing_hcd->report.buf, g_testing_output_buf, OUTPUT_TO_CSV_STRING_LEN);
+	return count;
+}
+#endif
+
 /*/proc/fts_test_csv*/
 static int ovt_csv_show(struct seq_file *s, void *v)
 {
@@ -2008,7 +2085,11 @@ static int testing_raw_data(void)
 {
 	int retval;
 	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
- 	retval = testing_collect_reports(REPORT_RAW,1);
+#ifdef CONFIG_OVT_LOG_CAPTURE
+	retval = testing_collect_reports(REPORT_RAW, raw_delta_frame_cnt);
+#else
+	retval = testing_collect_reports(REPORT_RAW, 1);
+#endif
 	if (retval >= 0) {
 		LOGN(tcm_hcd->pdev->dev.parent, "success to collect raw data\n");
 	} else {
@@ -2021,7 +2102,11 @@ static int testing_delta_data(void)
 {
 	int retval;
 	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
- 	retval = testing_collect_reports(REPORT_DELTA,1);
+#ifdef CONFIG_OVT_LOG_CAPTURE
+	retval = testing_collect_reports(REPORT_DELTA, raw_delta_frame_cnt);
+#else
+	retval = testing_collect_reports(REPORT_DELTA,1);
+#endif
 	if (retval >= 0) {
 		LOGN(tcm_hcd->pdev->dev.parent, "success to collect raw data\n");
 	} else {
