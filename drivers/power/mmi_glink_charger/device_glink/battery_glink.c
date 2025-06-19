@@ -467,9 +467,9 @@ static int battery_notify_handler(struct notifier_block *nb, unsigned long event
 		}
 
 		mmi_info(this_root_chip, "Batt_dev[%d]: batt_uv %d, batt_ua %d, "
-							"batt_soc %d, batt_temp %d, batt_status %d, batt_soh %d",
+							"batt_soc %d, batt_temp %d, batt_status %d, batt_soh %d, batt_present %d",
 							batt_chip->batt_role, batt_info.batt_uv, batt_info.batt_ua, batt_info.batt_soc,
-							batt_info.batt_temp, batt_info.batt_status, batt_info.batt_soh);
+							batt_info.batt_temp, batt_info.batt_status, batt_info.batt_soh, batt_info.present);
 
 		mmi_info(this_root_chip, "Batt_dev[%d]: batt_cycle %d, batt_full_uah %d, "
 							"batt_design_uah %d, batt_chg_counter %d, batt_fv_uv %d, batt_fcc_ua %d",
