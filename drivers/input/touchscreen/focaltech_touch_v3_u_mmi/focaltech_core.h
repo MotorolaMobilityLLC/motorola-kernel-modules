@@ -355,6 +355,9 @@ struct fts_ts_data {
 #ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
     bool palm_on;
 #endif
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+	u8 open_status;
+#endif
 
 };
 
