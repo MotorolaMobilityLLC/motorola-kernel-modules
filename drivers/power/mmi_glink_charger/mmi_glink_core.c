@@ -615,6 +615,13 @@ static void mmi_update_battery_status(struct mmi_glink_chip *chip)
 		mmi_info(chip, "state_of_health %d\n", chip->state_of_health);
 	}
 
+       if (!qti_batt_info.present) {
+		mmi_info(chip, "BATT_INFO, batt_present check failure, Do not allow to charge\n");
+              chip->force_chrg_disabled_batt_err = true;
+       } else {
+              chip->force_chrg_disabled_batt_err = false;
+       }
+
 	ret = power_supply_get_property(batt_host->batt_psy,
 		POWER_SUPPLY_PROP_STATUS, &prop);
 	if (!ret)
@@ -944,6 +951,10 @@ static void mmi_configure_charger(struct mmi_glink_chip *chip)
 
 	if (chip->force_charging_enabled) {
 		chip->charging_disable = false;
+	}
+
+	if (chip->force_chrg_disabled_batt_err) {
+		chip->charging_disable = true;
 	}
 
 	if (pre_charger_suspend != chip->charger_suspend) {
