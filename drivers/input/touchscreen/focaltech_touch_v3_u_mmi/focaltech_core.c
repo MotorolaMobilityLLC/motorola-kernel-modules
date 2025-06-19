@@ -1169,6 +1169,11 @@ static int fts_irq_read_report(struct fts_ts_data *ts_data)
 #endif
 
     case TOUCH_PROTOCOL_v2:
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+        if (!ts_data->suspended) {
+            ts_data->open_status= !!touch_buf[3];
+        }
+#endif
 #if FTS_INPUT_PROTOCOL_V2
         fts_input_report_touch_pv2(ts_data, touch_buf);
 #else

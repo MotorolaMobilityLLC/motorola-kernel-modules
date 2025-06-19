@@ -75,7 +75,10 @@ static ssize_t fts_stowed_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
-
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+static ssize_t fts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+#endif
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_edge_show, fts_edge_store);
@@ -85,6 +88,9 @@ static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_sample_show, fts_sample_store);
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	fts_stowed_show, fts_stowed_store);
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+static DEVICE_ATTR(hardware_status, S_IRUGO, fts_hardware_status_show, NULL);
+#endif
 
 #define ADD_ATTR(name) { \
 	if (idx < MAX_ATTRS_ENTRIES)  { \
@@ -463,6 +469,22 @@ static ssize_t fts_stowed_show(struct device *dev,
 	FTS_INFO("Stowed state = %d.\n", ts_data->set_mode.stowed);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts_data->set_mode.stowed);
 }
+
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+static ssize_t fts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data;
+	u8 hardware_status = 0;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	hardware_status = ts_data->open_status;
+	FTS_INFO("Read touch hardware status = %d.\n", hardware_status);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
+}
+#endif
 
 static int fts_mmi_methods_get_vendor(struct device *dev, void *cdata)
 {
@@ -1083,6 +1105,10 @@ static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_g
 
 #ifdef CONFIG_FTS_LAST_TIME
 	ADD_ATTR(timestamp);
+#endif
+
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+	ADD_ATTR(hardware_status);
 #endif
 
 	if(pdata->pocket_mode_ctrl)
