@@ -35,7 +35,7 @@
 #define LOG_ERR(fmt, args...)    pr_err(DRIVER_NAME " [ERR]" "<%s:%d>"fmt, __func__, __LINE__, ##args)
 
 static int hall_sensor_probe(struct platform_device *pdev);
-static int hall_sensor_remove(struct platform_device *pdev);
+static void hall_sensor_remove(struct platform_device *pdev);
 
 struct hall_gpio {
 	char gpio_name[32];
@@ -488,7 +488,7 @@ fail_for_mem:
 	return ret;
 }
 
-static int hall_sensor_remove(struct platform_device *pdev)
+static void hall_sensor_remove(struct platform_device *pdev)
 {
 	int i;
 
@@ -541,7 +541,7 @@ static int hall_sensor_remove(struct platform_device *pdev)
 		kfree(hall_sensor_dev);
 
 	LOG_INFO("paltform rm\r\n");
-	return 0;
+	//return 0;
 }
 
 module_platform_driver(hall_phone_case_driver);
