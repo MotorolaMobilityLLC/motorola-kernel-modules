@@ -20,5 +20,6 @@ moto_ddk_module(
     ],
     deps_ext = [
         "//motorola/kernel/modules/drivers/input/touchscreen/touchscreen_mmi:touchscreen_mmi",
+        "//motorola/kernel/modules/drivers/mmi_info:mmi_info",
     ],
 )

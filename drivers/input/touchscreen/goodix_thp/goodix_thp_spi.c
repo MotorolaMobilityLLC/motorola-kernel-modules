@@ -15,7 +15,7 @@
 #include <linux/version.h>
 
 #include "goodix_thp.h"
-
+#include <linux/mmi_device.h>
 
 /* flag */
 #define SPI_FLAG_WR					0xF0
@@ -942,6 +942,11 @@ static int goodix_spi_probe(struct spi_device *spi)
         int r = 0;
 
         ts_info(&spi->dev, "%s IN", __func__);
+
+        if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+            ts_err(&spi->dev, "device not supported");
+            return -ENODEV;
+        }
 
         /* init thp device data */
         ts_dev = devm_kzalloc(&spi->dev,
