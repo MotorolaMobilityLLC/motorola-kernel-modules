@@ -377,10 +377,27 @@ static void probe_android_vh_binder_priority_skip(void *ignore, struct task_stru
 }
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void android_vh_binder_proc_transaction_finish(void *unused, struct binder_proc *proc,
+		struct binder_transaction *t, struct task_struct *task, bool pending_async, bool sync)
+{
+	if (current == task)
+		return;
+
+	if (!pending_async && task) {
+		binder_ux_type_set(task);
+	}
+}
+#endif
+
 void register_vendor_comm_hooks(void)
 {
 	register_trace_android_vh_dup_task_struct(android_vh_dup_task_struct, NULL);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	register_trace_android_vh_binder_priority_skip(probe_android_vh_binder_priority_skip, NULL);
+#endif
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+	register_trace_android_vh_binder_proc_transaction_finish(
+		android_vh_binder_proc_transaction_finish, NULL);
 #endif
 }
