@@ -97,6 +97,9 @@ struct cts_platform_data {
 
     u32 res_x;
     u32 res_y;
+#ifdef CHIPONE_SENSOR_EN
+    u32 resolution_boost;
+#endif
 
 #ifdef CONFIG_CTS_VIRTUALKEY
     u8 vkey_num;
@@ -226,6 +229,11 @@ void cts_report_palm_event(struct cts_platform_data *pdata);
 extern int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
         struct cts_device_touch_msg *msgs, int num);
 extern int cts_plat_release_all_touch(struct cts_platform_data *pdata);
+
+#ifdef CFG_CTS_GESTURE
+extern int cts_plat_process_touch_gesture_msg(struct cts_platform_data *pdata,
+        struct cts_device_touch_msg *msgs, int num);
+#endif
 
 #ifdef CONFIG_CTS_VIRTUALKEY
 extern int cts_plat_init_vkey_device(struct cts_platform_data *pdata);

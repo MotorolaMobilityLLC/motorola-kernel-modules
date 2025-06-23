@@ -628,6 +628,17 @@ static int cts_plat_parse_dt(struct cts_platform_data *pdata,
 
     cts_info("  %-12s: %d", "Y resolution", pdata->res_y);
 
+#ifdef CHIPONE_SENSOR_EN
+    ret = of_property_read_u32(dev_node, "chipone,resolution_boost",
+            &pdata->resolution_boost);
+    if (ret) {
+        cts_warn("Parse resolution_boost from dt failed %d", ret);
+        pdata->resolution_boost = 1;
+    }
+
+    cts_info("  %-12s: %d", "resolution_boost", pdata->resolution_boost);
+#endif
+
     if (of_property_read_u32(dev_node, "chipone,def-build-id", &pdata->build_id)) {
         pdata->build_id = 0;
         cts_info("chipone,build_id undefined.");
@@ -1017,6 +1028,10 @@ int cts_plat_init_touch_device(struct cts_platform_data *pdata)
 
 void cts_plat_deinit_touch_device(struct cts_platform_data *pdata)
 {
+    if (!pdata) {
+       cts_err("pdata is null");
+       return;
+    }
     cts_info("De-init touch device");
 
 #ifndef CONFIG_GENERIC_HARDIRQS
@@ -1028,6 +1043,10 @@ void cts_plat_deinit_touch_device(struct cts_platform_data *pdata)
 #ifdef CFG_CTS_PALM_DETECT
 void cts_report_palm_event(struct cts_platform_data *pdata)
 {
+    if (!pdata) {
+       cts_err("pdata is null");
+       return;
+    }
     input_report_key(pdata->ts_input_dev, CFG_CTS_PALM_EVENT, 1);
     input_sync(pdata->ts_input_dev);
     msleep(100);
@@ -1036,17 +1055,184 @@ void cts_report_palm_event(struct cts_platform_data *pdata)
 }
 #endif
 
+#ifdef CFG_CTS_GESTURE
+int cts_plat_process_touch_gesture_msg(struct cts_platform_data *pdata,
+        struct cts_device_touch_msg *msgs, int num)
+{
+    struct chipone_ts_data *cts_data;
+    struct input_dev *input_dev;
+    int i;
+    int contact = 0;
+
+#ifdef CONFIG_CTS_SLOTPROTOCOL
+    static unsigned char finger_last[CFG_CTS_MAX_TOUCH_NUM] = { 0 };
+    unsigned char finger_current[CFG_CTS_MAX_TOUCH_NUM] = { 0 };
+#endif
+
+    if (!pdata || !msgs) {
+       cts_err("data or msgs is null");
+       return -EINVAL;
+    }
+
+    input_dev = pdata->ts_input_dev;
+
+    cts_dbg("Process touch %d msgs", num);
+    cts_data = container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
+    (void) cts_data;
+#endif
+    if (num == 0 || num > CFG_CTS_MAX_TOUCH_NUM)
+        return 0;
+
+    for (i = 0; i < num; i++) {
+        u16 x, y;
+
+        x = le16_to_cpu(msgs[i].x);
+        y = le16_to_cpu(msgs[i].y);
+
+#ifdef CFG_CTS_SWAP_XY
+        swap(x, y);
+#endif /* CFG_CTS_SWAP_XY */
+#ifdef CFG_CTS_WRAP_X
+        x = wrap(pdata->res_x, x);
+#endif /* CFG_CTS_WRAP_X */
+#ifdef CFG_CTS_WRAP_Y
+        y = wrap(pdata->res_y, y);
+#endif /* CFG_CTS_WRAP_Y */
+        cts_dbg("  Process touch msg[%d]: id[%u] ev=%u x=%u y=%u p=%u",
+            i, msgs[i].id, msgs[i].event, x, y, msgs[i].pressure);
+        if (msgs[i].event == CTS_DEVICE_TOUCH_EVENT_DOWN
+        || msgs[i].event == CTS_DEVICE_TOUCH_EVENT_MOVE
+        || msgs[i].event == CTS_DEVICE_TOUCH_EVENT_STAY
+        || msgs[i].event == CTS_DEVICE_TOUCH_EVENT_UP) {
+            if (msgs[i].id < CFG_CTS_MAX_TOUCH_NUM)
+                finger_current[msgs[i].id] = 1;
+        }
+#ifdef CONFIG_CTS_SLOTPROTOCOL
+        /* input_mt_slot(input_dev, msgs[i].id); */
+        switch (msgs[i].event) {
+        case CTS_DEVICE_TOUCH_EVENT_DOWN:
+        case CTS_DEVICE_TOUCH_EVENT_MOVE:
+        case CTS_DEVICE_TOUCH_EVENT_STAY:
+        case CTS_DEVICE_TOUCH_EVENT_UP:
+            contact++;
+#ifdef CONFIG_GTP_LAST_TIME
+	    cts_data->last_event_time = ktime_get_boottime();
+#endif
+#ifdef CHIPONE_SENSOR_EN
+            input_report_abs(g_cts_data->sensor_pdata->input_sensor_dev, ABS_X, x/pdata->resolution_boost);
+            input_report_abs(g_cts_data->sensor_pdata->input_sensor_dev, ABS_Y, y/pdata->resolution_boost);
+#else
+            input_mt_slot(input_dev, msgs[i].id);
+            input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, true);
+            input_report_abs(input_dev, ABS_MT_POSITION_X, x);
+            input_report_abs(input_dev, ABS_MT_POSITION_Y, y);
+            input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR, msgs[i].pressure);
+            input_report_abs(input_dev, ABS_MT_PRESSURE, msgs[i].pressure);
+#endif
+            break;
+
+        default:
+            cts_warn("Process touch msg with unknwon event %u id %u",
+                    msgs[i].event, msgs[i].id);
+            break;
+        }
+#else /* CONFIG_CTS_SLOTPROTOCOL */
+    /**
+    * If the driver reports one of BTN_TOUCH or ABS_PRESSURE
+    * in addition to the ABS_MT events, the last SYN_MT_REPORT event
+    * may be omitted. Otherwise, the last SYN_REPORT will be dropped
+    * by the input core, resulting in no zero-contact event
+    * reaching userland.
+    */
+        switch (msgs[i].event) {
+        case CTS_DEVICE_TOUCH_EVENT_DOWN:
+        case CTS_DEVICE_TOUCH_EVENT_MOVE:
+        case CTS_DEVICE_TOUCH_EVENT_STAY:
+        case CTS_DEVICE_TOUCH_EVENT_UP:
+            contact++;
+            input_report_abs(input_dev, ABS_MT_PRESSURE, msgs[i].pressure);
+            input_report_abs(input_dev, ABS_MT_TOUCH_MAJOR, msgs[i].pressure);
+            input_report_key(input_dev, BTN_TOUCH, 1);
+            input_report_abs(input_dev, ABS_MT_POSITION_X, x);
+            input_report_abs(input_dev, ABS_MT_POSITION_Y, y);
+            input_mt_sync(input_dev);
+            break;
+
+        case CTS_DEVICE_TOUCH_EVENT_UP:
+            break;
+        default:
+            cts_warn("Process touch msg with unknwon event %u id %u",
+                    msgs[i].event, msgs[i].id);
+            break;
+        }
+#endif /* CONFIG_CTS_SLOTPROTOCOL */
+    }
+
+#ifdef CONFIG_CTS_SLOTPROTOCOL
+    for (i = 0; i < CFG_CTS_MAX_TOUCH_NUM; i++) {
+        if (finger_last[i] != 0 && finger_current[i] == 0) {
+            input_mt_slot(input_dev, i);
+            input_mt_report_slot_state(input_dev, MT_TOOL_FINGER, false);
+        }
+        finger_last[i] = finger_current[i];
+    }
+    input_report_key(input_dev, BTN_TOUCH, contact > 0);
+#else
+    if (contact == 0) {
+        input_report_key(input_dev, BTN_TOUCH, 0);
+        input_mt_sync(input_dev);
+    }
+#endif
+    input_sync(input_dev);
+#ifdef CFG_CTS_FORCE_UP
+    if (contact) {
+        if (delayed_work_pending(&pdata->touch_event_timeout_work)) {
+            mod_delayed_work(cts_data->workqueue,
+                    &pdata->touch_event_timeout_work, msecs_to_jiffies(100));
+        } else {
+            queue_delayed_work(cts_data->workqueue,
+                    &pdata->touch_event_timeout_work, msecs_to_jiffies(100));
+        }
+    } else {
+        cancel_delayed_work_sync(&pdata->touch_event_timeout_work);
+    }
+#endif
+
+#ifdef CFG_CTS_HEARTBEAT_MECHANISM
+    if (contact) {
+        if (delayed_work_pending(&cts_data->heart_work)) {
+            mod_delayed_work(cts_data->heart_workqueue,
+                    &cts_data->heart_work, msecs_to_jiffies(2000));
+        } else {
+            queue_delayed_work(cts_data->heart_workqueue,
+                    &cts_data->heart_work, msecs_to_jiffies(2000));
+        }
+    }
+#endif
+
+    return 0;
+}
+#endif
+
 int cts_plat_process_touch_msg(struct cts_platform_data *pdata,
         struct cts_device_touch_msg *msgs, int num)
 {
     struct chipone_ts_data *cts_data;
-    struct input_dev *input_dev = pdata->ts_input_dev;
+    struct input_dev *input_dev;
     int i;
     int contact = 0;
 #ifdef CONFIG_CTS_SLOTPROTOCOL
     static unsigned char finger_last[CFG_CTS_MAX_TOUCH_NUM] = { 0 };
     unsigned char finger_current[CFG_CTS_MAX_TOUCH_NUM] = { 0 };
 #endif
+
+    if (!pdata || !msgs) {
+       cts_err("data or msgs is null");
+       return -EINVAL;
+    }
+
+    input_dev = pdata->ts_input_dev;
 
     cts_dbg("Process touch %d msgs", num);
     cts_data = container_of(pdata->cts_dev, struct chipone_ts_data, cts_dev);

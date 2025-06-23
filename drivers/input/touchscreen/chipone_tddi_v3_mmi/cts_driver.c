@@ -564,6 +564,11 @@ static int chipone_sensor_init(struct chipone_ts_data *data)
         struct input_dev *sensor_input_dev;
         int err;
 
+        if (!data) {
+            cts_err("data is null");
+            return -EINVAL;
+        }
+
         sensor_input_dev = input_allocate_device();
         if (!sensor_input_dev) {
                 cts_err("Failed to allocate device");
@@ -585,6 +590,9 @@ static int chipone_sensor_init(struct chipone_ts_data *data)
         __set_bit(BTN_TRIGGER_HAPPY6, sensor_input_dev->keybit);
 #endif
         __set_bit(EV_SYN, sensor_input_dev->evbit);
+
+	input_set_abs_params(sensor_input_dev, ABS_X, 0, data->pdata->res_x, 0, 0);
+	input_set_abs_params(sensor_input_dev, ABS_Y, 0, data->pdata->res_y, 0, 0);
 
         sensor_input_dev->name = "double-tap";
         data->sensor_pdata->input_sensor_dev = sensor_input_dev;

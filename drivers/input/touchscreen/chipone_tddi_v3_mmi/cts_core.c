@@ -1464,6 +1464,9 @@ int cts_irq_handler(struct cts_device *cts_dev)
 
             ret = cts_plat_process_gesture_info(cts_dev->pdata, gesture_info);
 
+            if (!ret)
+               cts_plat_process_touch_gesture_msg(cts_dev->pdata, touch_info->msgs, touch_info->num_msg);
+
             if (cts_dev->fwdata.int_data_method != INT_DATA_METHOD_HOST) {
                 if (ret)
                     cts_err("Process gesture info failed %d", ret);
