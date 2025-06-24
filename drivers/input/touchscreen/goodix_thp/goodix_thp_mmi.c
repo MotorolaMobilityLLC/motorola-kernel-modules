@@ -45,6 +45,10 @@ static ssize_t goodix_ts_pocket_mode_show(struct device *dev,
     struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
             struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_stylus_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -59,6 +63,8 @@ static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
 static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
     goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
+static DEVICE_ATTR(stylus_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_stylus_mode_show, goodix_ts_stylus_mode_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -129,6 +135,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 		ADD_ATTR(pocket_mode);
 
 	ADD_ATTR(timestamp);
+
+	if (core_data->ts_dev->board_data.stylus_mode_ctrl)
+		ADD_ATTR(stylus_mode);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -610,14 +619,140 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%lld.%lld\n", last_ts.tv_sec, last_ts.tv_usec);
 }
 
+static int goodix_clock_enable(struct goodix_thp_core *core_data, bool mode)
+{
+	int ret = 0;
+	struct thp_ts_device *tdev = core_data->ts_dev;
+
+	if (mode) {
+		if (IS_ERR_OR_NULL(core_data->stylus_clk_active)) {
+			ts_err(tdev->dev, "Failed to get state clk pinctrl state:%s",
+				PINCTRL_STYLUS_CLK_ACTIVE);
+			core_data->stylus_clk_active = NULL;
+			return -EINVAL;
+		}
+		ret = pinctrl_select_state(core_data->pinctrl,
+					core_data->stylus_clk_active);
+		if (ret < 0) {
+			ts_err(tdev->dev, "Failed to select active stylus clk state, ret:%d", ret);
+			return ret;
+		}
+		ts_info(tdev->dev, "success to enable stylus clk");
+	} else {
+		if (IS_ERR_OR_NULL(core_data->stylus_clk_suspend)) {
+			ts_err(tdev->dev, "Failed to get state clk pinctrl state:%s",
+				PINCTRL_STYLUS_CLK_SUSPEND);
+			core_data->stylus_clk_suspend = NULL;
+			return -EINVAL;
+		}
+		ret = pinctrl_select_state(core_data->pinctrl,
+					core_data->stylus_clk_suspend);
+		if (ret < 0) {
+			ts_err(tdev->dev, "Failed to select stylus clk suspend state, ret:%d", ret);
+			return ret;
+		}
+		ts_info(tdev->dev, "success to disable stylus clk");
+	}
+
+	return ret;
+}
+
+static int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
+{
+	int ret = 0;
+	u8 val[2];
+
+	val[0] = NOTIFY_TYPE_STYLUS_CTRL;
+
+	if (mode) {
+		goodix_clock_enable(core_data, mode);
+		msleep(50);
+		val[1] = 1;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		msleep(20);
+	} else {
+		val[1] = 0;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		msleep(20);
+		goodix_clock_enable(core_data, mode);
+	}
+
+	ts_info(core_data->ts_dev->dev, "Success to %s stylus mode", mode ? "Enable" : "Disable");
+	return ret;
+}
+
+static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ts_err(tdev->dev, "Failed to convert value.");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+
+	core_data->get_mode.stylus_mode = mode;
+	if (core_data->set_mode.stylus_mode == mode) {
+		ts_info(tdev->dev, "The value = %lu is same,so not write.", mode);
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info(tdev->dev, "The touch is in sleep state, restore the value when resume");
+		goto exit;
+	}
+
+	ret = goodix_stylus_mode(core_data, mode);
+	if (!ret)
+		core_data->set_mode.stylus_mode = mode;
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+
+	return size;
+}
+
+static ssize_t goodix_ts_stylus_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info(core_data->ts_dev->dev, "Stylus mode = %d.", core_data->set_mode.stylus_mode);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.stylus_mode);
+}
+
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 	struct device *dev = core_data->ts_dev->dev;
 	u8 val[3];
+	int ret = 0;
 
 	mutex_lock(&core_data->mode_lock);
 	/* All IC status are cleared after reset */
 	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
 	/* restore data */
+	if (core_data->ts_dev->board_data.stylus_mode_ctrl && core_data->get_mode.stylus_mode) {
+		ret = goodix_stylus_mode(core_data, core_data->get_mode.stylus_mode);
+		if (!ret) {
+			core_data->set_mode.stylus_mode = core_data->get_mode.stylus_mode;
+			ts_info(dev, "Success to %s stylus mode after post resume",
+				core_data->get_mode.stylus_mode ? "Enable" : "Disable");
+		}
+	}
 
 	if (core_data->ts_dev->board_data.interpolation_ctrl && core_data->get_mode.interpolation) {
 		val[0] = NOTIFY_TYPE_SWITCH_REPORT_RATE;
@@ -767,6 +902,29 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 	return 0;
 }
 
+static int goodix_ts_mmi_pre_suspend(struct device *dev)
+{
+	int ret = 0;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	GET_GOODIX_DATA(dev);
+
+	ts_info(core_data->ts_dev->dev, "Suspend start");
+
+	if (core_data->ts_dev->board_data.stylus_mode_ctrl && core_data->set_mode.stylus_mode) {
+		mutex_lock(&core_data->mode_lock);
+		ret = goodix_stylus_mode(core_data, 0x00);
+		if (!ret) {
+			ts_info(core_data->ts_dev->dev, "Success to exit stylus mode");
+			core_data->set_mode.stylus_mode = 0x00;
+		}
+		mutex_unlock(&core_data->mode_lock);
+	}
+
+	return 0;
+}
+
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
@@ -774,6 +932,7 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	/* vendor specific attribute group */
 	.extend_attribute_group = goodix_ts_mmi_extend_attribute_group,
 	.panel_state = goodix_ts_mmi_panel_state,
+	.pre_suspend = goodix_ts_mmi_pre_suspend,
 };
 
 int goodix_ts_mmi_dev_register(struct platform_device *pdev) {

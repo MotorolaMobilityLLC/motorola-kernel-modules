@@ -35,6 +35,7 @@
 #include <linux/completion.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/kthread.h>
+#include <linux/pinctrl/consumer.h>
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
@@ -182,6 +183,9 @@
 #define INPUT_AGENT_IOCTL_GET_DRIVER_STATE \
         _IOR(INPUT_AGENT_IO_TYPE, 0x06, u32)
 
+#define PINCTRL_STYLUS_CLK_ACTIVE       "stylus_clk_active"
+#define PINCTRL_STYLUS_CLK_SUSPEND      "stylus_clk_suspend"
+
 typedef enum {
         REQUEST_TYPE_FRAME = 1,
         REQUEST_TYPE_CMD,
@@ -297,6 +301,7 @@ struct goodix_mode_info {
         int interpolation;
         int stowed;
         int pocket_mode;
+        int stylus_mode;
 };
 
 struct goodix_thp_board_data {
@@ -327,6 +332,7 @@ struct goodix_thp_board_data {
         bool stowed_mode_ctrl;
         bool pocket_mode_ctrl;
         bool edge_ctrl;
+        bool stylus_mode_ctrl;
         int irq_need_dev_resume_time; /*control setting of wait resume time*/
         u32 sched_priority;
         u32 cpu_mask;
@@ -424,6 +430,8 @@ struct goodix_thp_core {
         struct pinctrl *pinctrl;
         struct pinctrl_state *pin_sta_active;
         struct pinctrl_state *pin_sta_suspend;
+        struct pinctrl_state *stylus_clk_active;
+        struct pinctrl_state *stylus_clk_suspend;
 #endif
 #if IS_ENABLED(CONFIG_FB) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
         struct notifier_block pm_notif;

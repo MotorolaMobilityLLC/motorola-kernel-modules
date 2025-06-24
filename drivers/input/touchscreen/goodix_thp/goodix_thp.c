@@ -2298,6 +2298,52 @@ int goodix_thp_exit_tui(void)
 }
 EXPORT_SYMBOL_GPL(goodix_thp_exit_tui);
 
+static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        struct device *dev = ts_dev->dev;
+        int r = 0;
+
+        /* get pinctrl handler from of node */
+        core_data->pinctrl = devm_pinctrl_get(dev);
+        if (IS_ERR_OR_NULL(core_data->pinctrl)) {
+                ts_err(ts_dev->dev, "Failed to get pinctrl handler[need confirm]");
+                core_data->pinctrl = NULL;
+                return -EINVAL;
+        }
+        ts_info(ts_dev->dev, "success get pinctrl");
+        /* stylus active state */
+        core_data->stylus_clk_active = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STYLUS_CLK_ACTIVE);
+        if (IS_ERR_OR_NULL(core_data->stylus_clk_active)) {
+                r = PTR_ERR(core_data->stylus_clk_active);
+                ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
+                                PINCTRL_STYLUS_CLK_ACTIVE, r);
+                core_data->stylus_clk_active = NULL;
+                goto exit_pinctrl_put;
+        }
+        ts_info(ts_dev->dev, "success get stylus avtive pinctrl state");
+
+        /* stylus suspend state */
+        core_data->stylus_clk_suspend = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STYLUS_CLK_SUSPEND);
+        if (IS_ERR_OR_NULL(core_data->stylus_clk_suspend)) {
+                r = PTR_ERR(core_data->stylus_clk_suspend);
+                ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
+                                PINCTRL_STYLUS_CLK_SUSPEND, r);
+                core_data->stylus_clk_suspend = NULL;
+                goto exit_pinctrl_put;
+        }
+        ts_info(ts_dev->dev, "success get stylus suspend pinctrl state");
+
+        return 0;
+exit_pinctrl_put:
+        devm_pinctrl_put(core_data->pinctrl);
+        core_data->pinctrl = NULL;
+
+        return r;
+}
+
 /**
  * goodix_thp_probe - called by kernel when a Goodix touch
  *  platform driver is added.
@@ -2409,6 +2455,13 @@ static int goodix_thp_probe(struct platform_device *pdev)
         if (r) {
                 ts_err(tdev->dev, "failed to create sysfs, r %d", r);
                 goto err_sysfs_init;
+        }
+
+        /* init stylus clock */
+        if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
+                r = goodix_ts_stylus_clk_init(core_data);
+                if (r)
+                        ts_err(tdev->dev, "failed get goodix stylus clock");
         }
 
         /* irq wake lock */
