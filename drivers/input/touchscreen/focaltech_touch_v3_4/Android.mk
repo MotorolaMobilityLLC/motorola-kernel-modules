@@ -1,7 +1,7 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
-ifeq ($(call is-board-platform-in-list,taro kalama parrot blair), true)
+ifeq ($(call is-board-platform-in-list,taro kalama parrot blair sun), true)
 
 ifneq ($(FOCALTECH_TOUCH_IC_NAME),)
 	KBUILD_OPTIONS += CONFIG_INPUT_FOCAL_IC_NAME=$(FOCALTECH_TOUCH_IC_NAME)
@@ -76,6 +76,10 @@ ifeq ($(FOCALTECH_REPORT_PRESSURE_DISABLE),true)
 	KBUILD_OPTIONS += CONFIG_FOCALTECH_REPORT_PRESSURE_DISABLE=y
 endif
 
+ifeq ($(BUILD_FOR_ANDROID_V),true)
+	KBUILD_OPTIONS += CONFIG_BUILD_FOR_ANDROID_V=y
+endif
+
 else
 ifneq ($(FOCALTECH_TOUCH_IC_NAME),)
 	KERNEL_CFLAGS += CONFIG_INPUT_FOCAL_IC_NAME=$(FOCALTECH_TOUCH_IC_NAME)
@@ -139,5 +143,7 @@ ifneq ($(findstring touchscreen_mmi.ko,$(BOARD_VENDOR_KERNEL_MODULES)),)
 endif
 
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
+ifneq ($(BUILD_FOR_ANDROID_V),true)
 KBUILD_OPTIONS_GKI += MODULE_KERNEL_VERSION=$(TARGET_KERNEL_VERSION)
+endif
 include $(DLKM_DIR)/AndroidKernelModule.mk

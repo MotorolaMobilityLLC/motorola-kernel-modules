@@ -113,5 +113,8 @@ else ifneq ($(filter avatrn%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_AVATRN
 endif
 
-KBUILD_EXTRA_SYMBOLS += $(CURDIR)/../../kernel/msm-$(MODULE_KERNEL_VERSION)/Module.symvers
+ifeq ($(filter m y,$(CONFIG_BUILD_FOR_ANDROID_V)),)
+    KBUILD_EXTRA_SYMBOLS += $(CURDIR)/../../kernel/msm-$(MODULE_KERNEL_VERSION)/Module.symvers
+endif
+
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers
