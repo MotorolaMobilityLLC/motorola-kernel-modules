@@ -439,25 +439,36 @@ static int nu2115_get_adc_ibus(struct nu2115_device *bq)
 	return ibus_adc * 1000;
 }
 
+static int nu2115_read_block(struct nu2115_device *bq,
+	int reg, uint8_t *val, int len)
+{
+	int ret;
+
+	ret = regmap_bulk_read(bq->regmap, reg, val, len);
+	if (ret < 0) {
+		dev_err(bq->dev, "nu2115 read %02x block failed %d\n", reg, ret);
+	}
+
+	return ret;
+}
+
 static int nu2115_get_adc_vbus(struct nu2115_device *bq)
 {
 	int vbus_adc_lsb, vbus_adc_msb;
 	u16 vbus_adc;
 	int ret;
+	uint8_t val[2] = {0};
 
-
-	ret = regmap_read(bq->regmap, NU2115_VBUS_ADC_MSB, &vbus_adc_msb);
-	if (ret)
+        ret = nu2115_read_block(bq, NU2115_VBUS_ADC_MSB, val, 2);
+        if (ret)
 		return ret;
-
-	ret = regmap_read(bq->regmap, NU2115_VBUS_ADC_LSB, &vbus_adc_lsb);
-	if (ret)
-		return ret;
-
+        vbus_adc_msb = val[0];
+        vbus_adc_lsb = val[1];
 	vbus_adc = (vbus_adc_msb << 8) | vbus_adc_lsb;
 
 	if (vbus_adc_msb & NU2115_ADC_POLARITY_BIT)
 		vbus_adc = ((vbus_adc ^ 0xffff) + 1);//mA
+
 	return vbus_adc * 1000;
 }
 
