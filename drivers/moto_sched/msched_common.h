@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 250610
+#define VERION 250630
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -43,6 +43,7 @@ do {										\
 #define DEBUG_BASE					(1 << 0)
 #define DEBUG_LOCK					(1 << 1)
 #define DEBUG_BINDER				(1 << 2)
+#define DEBUG_MDPF				(1 << 3)
 
 #define UX_ENABLE_BASE				(1 << 0)
 #define UX_ENABLE_INTERACTION		(1 << 1)
@@ -53,6 +54,7 @@ do {										\
 #define UX_ENABLE_KSWAPD			(1 << 6)
 #define UX_ENABLE_BOOST				(1 << 7)
 #define UX_ENABLE_KERNEL			(1 << 8)
+#define UX_ENABLE_MDPF				(1 << 9)
 
 /* define for UX thread type, keep same as the define in java file */
 #define UX_TYPE_PERF_DAEMON			(1 << 0)
@@ -79,6 +81,7 @@ do {										\
 #define UX_TYPE_KERNEL				(1 << 21)
 #define UX_TYPE_IO_PRIO_1			(1 << 22)
 #define UX_TYPE_IO_PRIO_2			(1 << 23)
+#define UX_TYPE_MDPF				(1 << 24)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
@@ -94,6 +97,7 @@ do {										\
 #define UX_PRIO_AUDIO		80
 #define UX_PRIO_ANIMATOR	79
 #define UX_PRIO_SYSTEM		78
+#define UX_PRIO_MDPF		71 // must be aligned with walt.h!
 #define UX_PRIO_TOPAPP		70 // must be aligned with walt.h!
 #define UX_PRIO_CAMERA		69
 #define UX_PRIO_KSWAPD		65 // must be aligned with walt.h!
@@ -123,7 +127,11 @@ struct moto_task_struct {
 
 	u64				boost_kernel_start;
 	int				boost_kernel_lock_depth;
-	char			cgr_type;
+	char				cgr_type;
+
+	u16				uclamp[UCLAMP_CNT];
+	u16				uclamp_pi[UCLAMP_CNT];
+	bool				uclamp_active;
 };
 
 /* global vars and functions */
@@ -140,6 +148,8 @@ extern pid_t __read_mostly global_audioapp_tgid;
 extern pid_t __read_mostly global_camera_tgid;
 extern atomic_t __read_mostly global_boost_pid;
 
+extern void task_ux_type_set(int pid, int ux_type);
+extern void task_ux_type_clear(int pid, int ux_type);
 extern int task_get_origin_mvp_prio(struct task_struct *p, bool with_inherit);
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
 extern unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio);

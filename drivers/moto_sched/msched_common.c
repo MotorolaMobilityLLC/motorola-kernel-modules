@@ -32,6 +32,7 @@
 #include "locking/locking_main.h"
 #define CREATE_TRACE_POINTS
 #include "msched_trace.h"
+#include "msched_uclamp.h"
 
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
@@ -94,6 +95,77 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 	return false;
 }
 
+void task_ux_type_set(int pid, int ux_type) {
+	struct task_struct *ux_task = NULL;
+	static DEFINE_MUTEX(ux_mutex);
+
+	mutex_lock(&ux_mutex);
+	rcu_read_lock();
+	ux_task = find_task_by_vpid(pid);
+	if (ux_task)
+		get_task_struct(ux_task);
+	rcu_read_unlock();
+
+	if (ux_task) {
+		if (ux_type & UX_TYPE_PERF_DAEMON) {
+			// perf daemon is in systemserver, so use its tgid.
+			global_systemserver_tgid = ux_task->tgid;
+		} else if (ux_type & UX_TYPE_LAUNCHER) {
+			global_launcher_tgid = ux_task->tgid;
+		} else if (ux_type & UX_TYPE_SYSUI) {
+			global_sysui_tgid = ux_task->tgid;
+		} else if (ux_type & UX_TYPE_SF) {
+			global_sf_tgid = ux_task->tgid;
+		} else if (ux_type & UX_TYPE_AUDIOAPP) {
+			global_audioapp_tgid = ux_task->tgid;
+		} else if (ux_type & UX_TYPE_CAMERAAPP) {
+			global_camera_tgid = ux_task->tgid;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+		} else if (ux_type & UX_TYPE_IO_PRIO_1) {
+			set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_RT, IOPRIO_NORM)); // use rt-4 for UX_TYPE_IO_PRIO_1
+		} else if (ux_type & UX_TYPE_IO_PRIO_2) {
+			set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, 0)); // use be-0 for UX_TYPE_IO_PRIO_2
+#endif
+		}
+		task_add_ux_type(ux_task, ux_type);
+		put_task_struct(ux_task);
+
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE) && ux_type != UX_TYPE_SYSTEM_LOCK),
+				"set ux_type %d to %d\n", ux_type, ux_task->pid);
+	}
+	mutex_unlock(&ux_mutex);
+}
+
+void task_ux_type_clear(int pid, int ux_type) {
+	struct task_struct *ux_task = NULL;
+	static DEFINE_MUTEX(ux_mutex);
+
+	mutex_lock(&ux_mutex);
+	rcu_read_lock();
+	ux_task = find_task_by_vpid(pid);
+	if (ux_task)
+		get_task_struct(ux_task);
+	rcu_read_unlock();
+
+	if (ux_task) {
+		if (ux_type & UX_TYPE_AUDIOAPP && global_audioapp_tgid == ux_task->tgid) {
+			global_audioapp_tgid = -1;
+		} else if (ux_type & UX_TYPE_CAMERAAPP) {
+			global_camera_tgid = -1;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+		} else if (ux_type & (UX_TYPE_IO_PRIO_1|UX_TYPE_IO_PRIO_2)) {
+			set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_BE_NORM));
+#endif
+		}
+		task_clr_ux_type(ux_task, ux_type);
+		put_task_struct(ux_task);
+
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE) && ux_type != UX_TYPE_SYSTEM_LOCK),
+				"clr ux_type %d from %d\n", ux_type, ux_task->pid);
+	}
+	mutex_unlock(&ux_mutex);
+}
+
 int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 {
 	int ux_type = task_get_ux_type(p);
@@ -118,6 +190,8 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		prio = UX_PRIO_TOPAPP;
 	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 		prio = UX_PRIO_KSWAPD;
+	else if (ux_type & (UX_TYPE_MDPF))
+		prio = UX_PRIO_MDPF;
 	// system lock & service mgr
 	else if ((ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER)) || (p->tgid == global_systemserver_tgid && p->prio == 105) )
 		prio = UX_PRIO_SYSTEM;
@@ -166,7 +240,7 @@ unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
 	bool boost = is_scene(UX_SCENE_LAUNCH)
 			|| (is_enabled(UX_ENABLE_BOOST) && is_scene(UX_SCENE_BOOST));
 
-	if (mvp_prio == UX_PRIO_TOPAPP)
+	if (mvp_prio == UX_PRIO_TOPAPP|| mvp_prio == UX_PRIO_MDPF)
 		return boost ? TOPAPP_MVP_LIMIT_BOOST : TOPAPP_MVP_LIMIT;
 	else if (mvp_prio == UX_PRIO_CAMERA)
 		return CAMERA_LIMIT;
@@ -187,6 +261,7 @@ void binder_inherit_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER) && current_is_important_ux()) {
 		task_add_ux_type(task, UX_TYPE_INHERIT_BINDER);
 	}
+	msched_uclamp_binder_set_priority_hook(task);
 }
 EXPORT_SYMBOL(binder_inherit_ux_type);
 
@@ -194,6 +269,7 @@ void binder_clear_inherited_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER)) {
 		task_clr_ux_type(task, UX_TYPE_INHERIT_BINDER);
 	}
+	msched_uclamp_binder_restore_priority_hook(task);
 }
 EXPORT_SYMBOL(binder_clear_inherited_ux_type);
 
@@ -351,7 +427,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 }
 
 // don't dup ux_type for UX_TYPE_SERVICEMANAGER as init was labeled.
-#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR)
+#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR|UX_TYPE_MDPF)
 static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
 {
 	// Base feature: inherit task ux_type during fork for some native services.
@@ -362,6 +438,7 @@ static void android_vh_dup_task_struct(void *unused, struct task_struct *task, s
 			"copy ux_type %d from %d to %d\n", ux_type, orig->pid, task->pid);
 
 	}
+	msched_uclamp_vh_dup_task_struct(unused, task, orig);
 }
 
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(5, 10, 0))
@@ -400,4 +477,6 @@ void register_vendor_comm_hooks(void)
 	register_trace_android_vh_binder_proc_transaction_finish(
 		android_vh_binder_proc_transaction_finish, NULL);
 #endif
+
+	msched_uclamp_register_vendor_comm_hooks();
 }
