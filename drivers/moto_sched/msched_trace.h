@@ -42,6 +42,84 @@ TRACE_EVENT(msched_task_get_mvp_prio,
                 __entry->ux_type, __entry->util, __entry->mvp_prio)
 );
 
+TRACE_EVENT(msched_uclamp_restriction_result,
+	TP_PROTO(pid_t pid, enum uclamp_id id,
+	         unsigned int req, unsigned int eff,
+	         unsigned int max, unsigned int tg_min, unsigned int tg_max,
+	         unsigned int pi_min, unsigned int pi_max,
+	         unsigned int binder_min, unsigned int binder_max),
+	TP_ARGS(pid, id, req, eff, max, tg_min, tg_max, pi_min, pi_max, binder_min, binder_max),
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(enum uclamp_id, id)
+		__field(unsigned int, req)
+		__field(unsigned int, eff)
+		__field(unsigned int, max)
+		__field(unsigned int, tg_min)
+		__field(unsigned int, tg_max)
+		__field(unsigned int, pi_min)
+		__field(unsigned int, pi_max)
+		__field(unsigned int, binder_min)
+		__field(unsigned int, binder_max)
+	),
+	TP_fast_assign(
+		__entry->pid = pid;
+		__entry->id = id;
+		__entry->req = req;
+		__entry->eff = eff;
+		__entry->max = max;
+		__entry->tg_min = tg_min;
+		__entry->tg_max = tg_max;
+		__entry->pi_min = pi_min;
+		__entry->pi_max = pi_max;
+		__entry->binder_min = binder_min;
+		__entry->binder_max = binder_max;
+	),
+	TP_printk("pid=%d clamp_id=%d req=%u eff=%u max=%u tg=[%u,%u] pi=[%u,%u] binder=[%u,%u]",
+		__entry->pid, __entry->id, __entry->req, __entry->eff, __entry->max,
+		__entry->tg_min, __entry->tg_max, __entry->pi_min, __entry->pi_max,
+		__entry->binder_min, __entry->binder_max)
+);
+
+TRACE_EVENT(msched_uclamp_inheritance_result,
+	TP_PROTO(pid_t pid, pid_t pi_pid,
+	         unsigned long p_util, u16 p_min, u16 p_max,
+	         unsigned long pi_util, u16 pi_min, u16 pi_max,
+	         u16 inherited_min, u16 inherited_max, int type),
+	TP_ARGS(pid, pi_pid, p_util, p_min, p_max, pi_util, pi_min, pi_max, inherited_min, inherited_max, type),
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, pi_pid)
+		__field(unsigned long, p_util)
+		__field(u16, p_min)
+		__field(u16, p_max)
+		__field(unsigned long, pi_util)
+		__field(u16, pi_min)
+		__field(u16, pi_max)
+		__field(u16, inherited_min)
+		__field(u16, inherited_max)
+		__field(int, type)
+	),
+	TP_fast_assign(
+		__entry->pid = pid;
+		__entry->pi_pid = pi_pid;
+		__entry->p_util = p_util;
+		__entry->p_min = p_min;
+		__entry->p_max = p_max;
+		__entry->pi_util = pi_util;
+		__entry->pi_min = pi_min;
+		__entry->pi_max = pi_max;
+		__entry->inherited_min = inherited_min;
+		__entry->inherited_max = inherited_max;
+		__entry->type = type;
+	),
+	TP_printk("p=%d pi=%d p_util=%lu [%u,%u] pi_util=%lu [%u,%u] inherit_min=%u inherit_max=%u type=%d",
+		__entry->pid, __entry->pi_pid,
+		__entry->p_util, __entry->p_min, __entry->p_max,
+		__entry->pi_util, __entry->pi_min, __entry->pi_max,
+		__entry->inherited_min, __entry->inherited_max, __entry->type)
+);
+
 #endif /* _TRACE_MSCHED_H */
 
 #undef TRACE_INCLUDE_PATH
