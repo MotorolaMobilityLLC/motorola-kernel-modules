@@ -131,7 +131,7 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 	char buffer[128];
 	size_t len = 0;
 
-	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d kernel=%d\n",
+	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d kernel=%d mdpf=%d\n",
 			moto_sched_enabled,
 			is_enabled(UX_ENABLE_BASE),
 			is_enabled(UX_ENABLE_INTERACTION),
@@ -141,7 +141,8 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 			is_enabled(UX_ENABLE_CAMERA),
 			is_enabled(UX_ENABLE_KSWAPD),
 			is_enabled(UX_ENABLE_BOOST),
-			is_enabled(UX_ENABLE_KERNEL));
+			is_enabled(UX_ENABLE_KERNEL),
+			is_enabled(UX_ENABLE_MDPF));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
@@ -177,11 +178,12 @@ static ssize_t proc_debug_read(struct file *file, char __user *buf,
 	size_t len = 0;
 
 	len = snprintf(buffer, sizeof(buffer), "%d\n", moto_sched_debug);
-	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d lock=%d binder=%d \n",
+	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d lock=%d binder=%d mdpf=%d \n",
 			moto_sched_debug,
 			is_debuggable(DEBUG_BASE),
 			is_debuggable(DEBUG_LOCK),
-			is_debuggable(DEBUG_BINDER));
+			is_debuggable(DEBUG_BINDER),
+			is_debuggable(DEBUG_MDPF));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
@@ -239,13 +241,11 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 {
 	char buffer[MAX_SET];
 	char *str, *token;
-	char opt_str[OPT_STR_MAX][8] = {"0", "0", "0"};
+	char opt_str[OPT_STR_MAX][9] = {"0", "0", "0"};
 	int cnt = 0;
 	int pid = 0;
 	int ux_type = 0;
 	int err = 0;
-	struct task_struct *ux_task = NULL;
-	static DEFINE_MUTEX(ux_mutex);
 
 	memset(buffer, 0, sizeof(buffer));
 
@@ -281,40 +281,7 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 		if (err || ux_type <= 0)
 			return err;
 
-		mutex_lock(&ux_mutex);
-		rcu_read_lock();
-		ux_task = find_task_by_vpid(pid);
-		if (ux_task)
-			get_task_struct(ux_task);
-		rcu_read_unlock();
-
-		if (ux_task) {
-			if (ux_type & UX_TYPE_PERF_DAEMON) {
-				// perf daemon is in systemserver, so use its tgid.
-				global_systemserver_tgid = ux_task->tgid;
-			} else if (ux_type & UX_TYPE_LAUNCHER) {
-				global_launcher_tgid = ux_task->tgid;
-			} else if (ux_type & UX_TYPE_SYSUI) {
-				global_sysui_tgid = ux_task->tgid;
-			} else if (ux_type & UX_TYPE_SF) {
-				global_sf_tgid = ux_task->tgid;
-			} else if (ux_type & UX_TYPE_AUDIOAPP) {
-				global_audioapp_tgid = ux_task->tgid;
-			} else if (ux_type & UX_TYPE_CAMERAAPP) {
-				global_camera_tgid = ux_task->tgid;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
-			} else if (ux_type & UX_TYPE_IO_PRIO_1) {
-				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_RT, IOPRIO_NORM)); // use rt-4 for UX_TYPE_IO_PRIO_1
-			} else if (ux_type & UX_TYPE_IO_PRIO_2) {
-				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, 0)); // use be-0 for UX_TYPE_IO_PRIO_2
-#endif
-			}
-			task_add_ux_type(ux_task, ux_type);
-			put_task_struct(ux_task);
-			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE) && ux_type != UX_TYPE_SYSTEM_LOCK),
-					"set ux_type %d to %d\n", ux_type, ux_task->pid);
-		}
-		mutex_unlock(&ux_mutex);
+		task_ux_type_set(pid, ux_type);
 
 	// clear pid state
 	} else if (!strncmp(opt_str[OPT_STR_TYPE], "c", 1) && cnt == OPT_STR_MAX) {
@@ -322,29 +289,7 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 		if (err || ux_type < 0)
 			return err;
 
-		mutex_lock(&ux_mutex);
-		rcu_read_lock();
-		ux_task = find_task_by_vpid(pid);
-		if (ux_task)
-			get_task_struct(ux_task);
-		rcu_read_unlock();
-
-		if (ux_task) {
-			if (ux_type & UX_TYPE_AUDIOAPP && global_audioapp_tgid == ux_task->tgid) {
-				global_audioapp_tgid = -1;
-			} else if (ux_type & UX_TYPE_CAMERAAPP) {
-				global_camera_tgid = -1;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
-			} else if (ux_type & (UX_TYPE_IO_PRIO_1|UX_TYPE_IO_PRIO_2)) {
-				set_task_ioprio(ux_task, IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, IOPRIO_BE_NORM));
-#endif
-			}
-			task_clr_ux_type(ux_task, ux_type);
-			put_task_struct(ux_task);
-			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE) && ux_type != UX_TYPE_SYSTEM_LOCK),
-					"clr ux_type %d from %d\n", ux_type, ux_task->pid);
-		}
-		mutex_unlock(&ux_mutex);
+		task_ux_type_clear(pid, ux_type);
 	} else {
 		return -EFAULT;
 	}

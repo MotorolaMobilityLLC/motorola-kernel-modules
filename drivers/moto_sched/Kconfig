@@ -17,3 +17,10 @@ config MOTO_MUTEX_INHERIT
     default n
     help
       boost mutex owner for the blocked ux thread.
+
+config MOTO_ENABLE_MDPF
+    tristate "Enable moto dynamic performance feature"
+    default n
+    help
+      This feature will allow the scheduler to maintain more detailed
+      mvp scheduling of MDPF tasks (uclmap inheritance).

@@ -24,6 +24,7 @@
 
 #include "msched_sysfs.h"
 #include "msched_common.h"
+#include "mdpf/mdpf_sysfs.h"
 
 #define MOTO_OEM_DATA_SIZE_TEST(wstruct, kstruct)		\
 	BUILD_BUG_ON(sizeof(wstruct) > (sizeof(u64) *		\
@@ -42,6 +43,12 @@ static int __init moto_sched_init(void)
 	ret = moto_sched_proc_init();
 	if (ret != 0)
 		return ret;
+	ret = mdpf_proc_init();
+	if (ret != 0) {
+		pr_err("mdpf_proc_init failed!\n");
+		moto_sched_proc_deinit();
+		return ret;
+	}
 
 	register_vendor_comm_hooks();
 	locking_opt_init();
