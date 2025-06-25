@@ -473,7 +473,7 @@ struct goodix_thp_core {
         int pm_qos_value;
         int pm_qos_state;
 #endif
-
+        u8 prev_finger_state[INPUT_AGENT_MAX_FINGERS]; // recording the prev finger state
 };
 
 extern bool debug_log_flag;

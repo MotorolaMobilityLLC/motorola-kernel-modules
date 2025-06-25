@@ -1365,6 +1365,9 @@ static void goodix_thp_force_release_all(struct goodix_thp_core *core_data)
         input_report_key(pen_dev, BTN_TOUCH, 0);
         input_report_key(pen_dev, BTN_TOOL_PEN, 0);
         input_sync(pen_dev);
+
+        //clear previous finger state
+        memset(core_data->prev_finger_state, 0, sizeof(core_data->prev_finger_state));
 }
 
 static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *core_data, unsigned long arg)
@@ -1381,6 +1384,8 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
 #if defined(CONFIG_ENABLE_GTP_PALM_CANCEL) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
         unsigned int tool_type;
 #endif
+        int prev_state;
+        int curr_state;
 
         if (arg == 0) {
                 ts_err(tdev->dev, "%s:arg is null.", __func__);
@@ -1429,6 +1434,24 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 if (data.ref_not_set == 0) {
                     for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
                         input_mt_slot(input_dev, i);
+
+                        // --- check and print state change ---
+                        prev_state = core_data->prev_finger_state[i];
+                        curr_state = (data.touch[i].touch_valid != 0);
+
+                        if (prev_state != curr_state) {
+                            if (curr_state) {
+                                // DOWN event：print coord and pressure
+                                ts_info(tdev->dev, "Finger[%d] DOWN: x=%d, y=%d, pressure=%d",
+                                    i, data.touch[i].x, data.touch[i].y, data.touch[i].major);
+                            } else {
+                                // UP event
+                                ts_info(tdev->dev, "Finger[%d] UP", i);
+                            }
+                            // update state
+                            core_data->prev_finger_state[i] = curr_state;
+                        }
+                        // --- check state change end ---
 
 #ifdef CONFIG_ENABLE_GTP_PALM_CANCEL
                         tool_type = data.large_touch_stat ? MT_TOOL_PALM : MT_TOOL_FINGER;
