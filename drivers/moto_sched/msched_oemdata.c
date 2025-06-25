@@ -26,6 +26,7 @@
 
 #include "msched_oemdata.h"
 #include "msched_common.h"
+#include "msched_uclamp.h"
 
 #ifdef CONFIG_MOTO_LOCKING_2
 struct kmem_cache *msched_task_struct_cachep;
@@ -80,6 +81,8 @@ void android_vh_dup_task_struct_handler(void *unused,
 		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"copy ux_type %d from %d to %d\n", ux_type, orig->pid, tsk->pid);
 	}
+
+	msched_uclamp_vh_dup_task_struct(unused, tsk, orig);
 }
 
 void android_vh_free_task_handler(void *unused, struct task_struct *tsk)
