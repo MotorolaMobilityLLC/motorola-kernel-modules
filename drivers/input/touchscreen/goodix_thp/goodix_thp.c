@@ -102,7 +102,7 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
         mutex_lock(&core_data->frame_mutex);
         /* check for max limit */
         if ((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head) {
-                ts_err(ts_dev->dev, "frame mmap buffer is full, overwriting oldest data");
+                ts_err(ts_dev->dev, "touch_health - frame mmap buffer is full, overwriting oldest data");
                 list->head = (list->head + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT; // Overwrite the oldest data
         }
 
@@ -1130,6 +1130,7 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         int r;
         static bool affinity_initialized = false;
         struct cpumask cpumask;
+        static int cur_index, pre_index;
 
         if (unlikely(!affinity_initialized)) {
             cpumask_clear(&cpumask);
@@ -1198,6 +1199,13 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
 
         /* copy frame to frame list */
         put_frame_list(core_data, REQUEST_TYPE_FRAME, read_data, r);
+
+        /* print frame index that write on FW  */
+        cur_index = (read_data[5] << 8) | read_data[4];
+        if ((cur_index != pre_index + 1) && (cur_index > pre_index))
+                ts_err(ts_dev->dev, "touch_health - frame cur_index:%d pre_index:%d", cur_index, pre_index);
+        pre_index = cur_index;
+
 exit:
         enable_irq(core_data->irq);
 
@@ -1442,11 +1450,11 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                         if (prev_state != curr_state) {
                             if (curr_state) {
                                 // DOWN event：print coord and pressure
-                                ts_info(tdev->dev, "Finger[%d] DOWN: x=%d, y=%d, pressure=%d",
+                                ts_info(tdev->dev, "touch_health - Finger[%d] DOWN: x=%d, y=%d, pressure=%d",
                                     i, data.touch[i].x, data.touch[i].y, data.touch[i].major);
                             } else {
                                 // UP event
-                                ts_info(tdev->dev, "Finger[%d] UP", i);
+                                ts_info(tdev->dev, "touch_health - Finger[%d] UP", i);
                             }
                             // update state
                             core_data->prev_finger_state[i] = curr_state;
