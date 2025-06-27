@@ -225,6 +225,7 @@ static int fts_atoi(char *nptr)
     return (int)fts_atol(nptr);
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 static int fts_test_get_ini_size(char *config_name)
 {
     struct file *pfile = NULL;
@@ -308,9 +309,11 @@ static int fts_test_read_ini_data(char *config_name, char *config_buf)
     FTS_TEST_FUNC_EXIT();
     return 0;
 }
+#endif
 
 static int __maybe_unused fts_test_get_ini_default(struct ini_data *ini, char *fwname)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
     int ret = 0;
     int inisize = 0;
 
@@ -337,6 +340,10 @@ static int __maybe_unused fts_test_get_ini_default(struct ini_data *ini, char *f
     ini->data[inisize] = '\n';  /* last line is null line */
 
     return 0;
+#else
+    FTS_TEST_INFO("not support vfs_read to get ini file");
+    return -EINVAL;
+#endif
 }
 
 static int fts_test_get_ini_via_request_firmware(struct ini_data *ini, char *fwname)

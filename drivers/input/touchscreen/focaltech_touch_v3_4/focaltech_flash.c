@@ -1140,6 +1140,7 @@ read_flash_err:
 
 static int __maybe_unused fts_read_file_default(char *file_name, u8 **file_buf)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
     int ret = 0;
     char file_path[FILE_NAME_LENGTH] = { 0 };
     struct file *filp = NULL;
@@ -1195,6 +1196,10 @@ static int __maybe_unused fts_read_file_default(char *file_name, u8 **file_buf)
 #endif
 
     return ret;
+#else
+    FTS_INFO("not support vfs_read to get fw file");
+    return -EINVAL;
+#endif
 }
 
 static int fts_read_file_request_firmware(char *file_name, u8 **file_buf)
