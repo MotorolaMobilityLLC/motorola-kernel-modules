@@ -30,6 +30,7 @@
 #include <linux/workqueue.h>
 #include <linux/compat.h>
 #include <linux/version.h>
+#include <drivers/thermal/thermal_core.h>
 
 #define TEMP_NODE_SENSOR_NAMES "mmi,temperature-names"
 #define SENSOR_LISTENER_NAMES "mmi,sensor-listener-names"
@@ -60,7 +61,25 @@ struct mmi_sys_temp_dev {
 
 static struct mmi_sys_temp_dev *sys_temp_dev;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,30)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+#include <drivers/thermal/thermal_core.h>
+static struct thermal_trip mmi_sys_trips[] = {
+        [0] = {
+                .type = THERMAL_TRIP_PASSIVE,
+                .flags = THERMAL_TRIP_FLAG_RW_TEMP,
+        },
+};
+
+struct thermal_zone_device *thermal_zone_device_register(const char *type, int ntrips, int mask,
+                                                        void *devdata, struct thermal_zone_device_ops *ops,
+                                                        const struct thermal_zone_params *tzp, int passive_delay,
+                                                        int polling_delay)
+{
+       return thermal_zone_device_register_with_trips(type, mmi_sys_trips, ARRAY_SIZE(mmi_sys_trips),
+                                                      devdata, ops, tzp,
+                                                      passive_delay, polling_delay);
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,30)
 struct thermal_zone_device *thermal_zone_device_register(const char *type, int ntrips, int mask,
                                                         void *devdata, struct thermal_zone_device_ops *ops,
                                                         const struct thermal_zone_params *tzp, int passive_delay,
@@ -446,6 +465,20 @@ err_thermal_unreg:
 	return ret;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,11,0)
+static void mmi_sys_temp_remove(struct platform_device *pdev)
+{
+	int i;
+	struct mmi_sys_temp_dev *dev =  platform_get_drvdata(pdev);
+
+	for (i = 0; i < dev->num_sensors; i++)
+		thermal_zone_device_unregister(dev->sensor[i].tz_dev);
+
+	misc_deregister(&mmi_sys_temp_misc);
+	platform_set_drvdata(pdev, NULL);
+	devm_kfree(&pdev->dev, sys_temp_dev);
+}
+#elif
 static int mmi_sys_temp_remove(struct platform_device *pdev)
 {
 	int i;
@@ -459,6 +492,7 @@ static int mmi_sys_temp_remove(struct platform_device *pdev)
 	devm_kfree(&pdev->dev, sys_temp_dev);
 	return 0;
 }
+#endif
 
 static const struct of_device_id mmi_sys_temp_match_table[] = {
 	{.compatible = "mmi,sys-temp"},
