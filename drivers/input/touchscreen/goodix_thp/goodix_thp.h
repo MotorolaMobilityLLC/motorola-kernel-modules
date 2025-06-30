@@ -229,7 +229,7 @@ struct driver_response_pkg {
 struct driver_request_app_pkg {
         uint32_t id;
         uint32_t type;
-        uint8_t data[0];
+        uint8_t data[];
 };
 
 struct driver_request_pkg {
