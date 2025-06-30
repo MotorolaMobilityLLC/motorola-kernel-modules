@@ -894,6 +894,15 @@ static void mmi_charger_set_constraint(struct mmi_glink_chip *chip)
 		if (!rc)
 			chip->charger_constraint.wls_pmax = chip->wls_pmax;
 	}
+
+	if (chip->factory_version != chip->charger_constraint.factory_version) {
+		value = chip->factory_version;
+		qti_charger_set_property(OEM_PROP_FACTORY_VERSION,
+					&value,
+					sizeof(value));
+		if (!rc)
+			chip->charger_constraint.factory_version = chip->factory_version;
+	}
 }
 
 static void mmi_configure_charger(struct mmi_glink_chip *chip)
@@ -1082,98 +1091,103 @@ static void mmi_charger_heartbeat_work(struct work_struct *work)
 	PM_RELAX(chip->mmi_hb_wake_source);
 }
 
+static char *bootargs_str = NULL;
+static size_t bootargs_str_len = 0;
+static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_flag)
+{
+	const char *bootargs_tmp = NULL;
+	char *idx = NULL;
+	char *kvpair = NULL;
+	int err = 1;
+	struct device_node *n = of_find_node_by_path("/chosen");
+	size_t bootargs_tmp_len = 0;
+
+	if (n == NULL)
+		goto err;
+
+	if (of_property_read_string(n, prop, &bootargs_tmp) != 0)
+		goto putnode;
+
+	bootargs_tmp_len = strlen(bootargs_tmp);
+	if (bootargs_tmp_len >= bootargs_str_len) {
+		if (bootargs_str)
+			kfree(bootargs_str);
+		bootargs_str = kzalloc(bootargs_tmp_len + 1, GFP_KERNEL);
+		if (!bootargs_str) {
+			err = -ENOMEM;
+			goto putnode;
+		}
+		bootargs_str_len = bootargs_tmp_len + 1;
+	} else {
+		memset(bootargs_str, '\0', bootargs_str_len);
+	}
+
+	strscpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
+
+	idx = strnstr(bootargs_str, key, strlen(bootargs_str));
+	if (idx) {
+		kvpair = strsep(&idx, " ");
+		if (kvpair)
+			if (strsep(&kvpair, "=")) {
+				*value = strsep(&kvpair, spl_flag);
+				if (*value)
+					err = 0;
+			}
+	}
+
+putnode:
+	of_node_put(n);
+err:
+	return err;
+}
+
+static int mmi_get_bootarg(char *key, char **value)
+{
+#ifdef CONFIG_BOOT_CONFIG
+	return mmi_get_bootarg_dt(key, value, "mmi,bootconfig", "\n");
+#else
+	return mmi_get_bootarg_dt(key, value, "bootargs", " ");
+#endif
+}
+
 static bool mmi_is_factory_mode(void)
 {
-	struct device_node *np = of_find_node_by_path("/chosen");
-	bool factory_mode = false;
-	const char *bootargs = NULL;
-	char *bootmode = NULL;
-	char *end = NULL;
+	char *mode = NULL;
 
 	if ((this_chip && this_chip->factory_mode) ||
 	    !strncmp(bi_bootmode(), "mot-factory", 11))
 		return true;
 
-	if (!np)
-		return factory_mode;
-
-	if (!of_property_read_string(np, "bootargs", &bootargs)) {
-		bootmode = strstr(bootargs, "androidboot.mode=");
-		if (bootmode) {
-			end = strpbrk(bootmode, " ");
-			bootmode = strpbrk(bootmode, "=");
-		}
-		if (bootmode &&
-		    end > bootmode &&
-		    strnstr(bootmode, "factory", end - bootmode)) {
-				factory_mode = true;
-		}
+	if (mmi_get_bootarg("androidboot.mode=", &mode) ||
+		!mode || strncmp("mot-factory", mode, 11)) {
+		return false;
 	}
-	of_node_put(np);
-
-	return factory_mode;
+	return true;
 }
 
 static bool mmi_is_softbank_sku(void)
 {
-	struct device_node *np = of_find_node_by_path("/chosen");
-	bool is_softbank = false;
-	const char *bootargs = NULL;
 	char *carrier = NULL;
-	char *end = NULL;
 
-	if (this_chip && this_chip->is_softbank)
-		return true;
-
-	if (!np)
-		return is_softbank;
-
-	if (!of_property_read_string(np, "bootargs", &bootargs)) {
-		carrier = strstr(bootargs, "androidboot.carrier=");
-		if (carrier) {
-			end = strpbrk(carrier, " ");
-			carrier = strpbrk(carrier, "=");
-		}
-		if (carrier &&
-		    end > carrier &&
-		    strnstr(carrier, "softbank", end - carrier)) {
-				is_softbank = true;
-		}
+	if (mmi_get_bootarg("androidboot.carrier=", &carrier)
+	   || !carrier || strncmp("softbank", carrier, 8)) {
+		return false;
 	}
-	of_node_put(np);
-
-	return is_softbank;
+	return true;
 }
 
 static bool mmi_is_factory_version(void)
 {
-	struct device_node *np = of_find_node_by_path("/chosen");
-	bool factory_version = false;
-	const char *bootargs = NULL;
 	char *bootloader = NULL;
-	char *end = NULL;
 
 	if (this_chip && this_chip->factory_version)
 		return true;
 
-	if (!np)
-		return factory_version;
-
-	if (!of_property_read_string(np, "bootargs", &bootargs)) {
-		bootloader = strstr(bootargs, "androidboot.bootloader=");
-		if (bootloader) {
-			end = strpbrk(bootloader, " ");
-			bootloader = strpbrk(bootloader, "=");
-		}
-		if (bootloader &&
-		    end > bootloader &&
-		    strnstr(bootloader, "factory", end - bootloader)) {
-				factory_version = true;
-		}
+	if (mmi_get_bootarg("androidboot.bootloader=", &bootloader) ||
+		!bootloader || !strnstr(bootloader, "factory", strlen(bootloader))) {
+		return false;
 	}
-	of_node_put(np);
-
-	return factory_version;
+	return true;
 }
 
 int mmi_vote_charging_disable(const char *voter, bool enable)
@@ -1694,6 +1708,11 @@ static void mmi_charger_remove(struct platform_device *pdev)
 	PM_WAKEUP_UNREGISTER(chip->mmi_hb_wake_source);
 	ipc_log_context_destroy(chip->ipc_log);
 	mmi_glink_class_exit();
+	if (bootargs_str) {
+		kfree(bootargs_str);
+		bootargs_str = NULL;
+		bootargs_str_len = 0;
+	}
 	return;
 }
 

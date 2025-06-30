@@ -945,6 +945,8 @@ static ssize_t fg_operation_store(struct device *dev,
 }
 static DEVICE_ATTR(fg_operation, S_IWUSR|S_IWGRP, NULL, fg_operation_store);
 
+static char *bootargs_str = NULL;
+static size_t bootargs_str_len = 0;
 static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_flag)
 {
 	const char *bootargs_tmp = NULL;
@@ -953,7 +955,6 @@ static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_fla
 	int err = 1;
 	struct device_node *n = of_find_node_by_path("/chosen");
 	size_t bootargs_tmp_len = 0;
-	char *bootargs_str = NULL;
 
 	if (n == NULL)
 		goto err;
@@ -962,14 +963,19 @@ static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_fla
 		goto putnode;
 
 	bootargs_tmp_len = strlen(bootargs_tmp);
-	if (!bootargs_str) {
-		/* The following operations need a non-const
-		 * version of bootargs
-		 */
+	if (bootargs_tmp_len >= bootargs_str_len) {
+		if (bootargs_str)
+			kfree(bootargs_str);
 		bootargs_str = kzalloc(bootargs_tmp_len + 1, GFP_KERNEL);
-		if (!bootargs_str)
+		if (!bootargs_str) {
+			err = -ENOMEM;
 			goto putnode;
+		}
+		bootargs_str_len = bootargs_tmp_len + 1;
+	} else {
+		memset(bootargs_str, '\0', bootargs_str_len);
 	}
+
 	strscpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
 
 	idx = strnstr(bootargs_str, key, strlen(bootargs_str));
@@ -1089,61 +1095,31 @@ static bool mmi_is_softbank_sku(struct qti_charger *chg)
 
 static bool mmi_is_factory_mode(void)
 {
-	struct device_node *np = of_find_node_by_path("/chosen");
-	bool factory_mode = false;
-	const char *bootargs = NULL;
-	char *bootmode = NULL;
-	char *end = NULL;
+	char *mode = NULL;
 
-	if (!strncmp(bi_bootmode(), "mot-factory", strlen("mot-factory")))
+	if ((this_chip && this_chip->factory_mode) ||
+	    !strncmp(bi_bootmode(), "mot-factory", 11))
 		return true;
 
-	if (!np)
-		return factory_mode;
-
-	if (!of_property_read_string(np, "bootargs", &bootargs)) {
-		bootmode = strstr(bootargs, "androidboot.mode=");
-		if (bootmode) {
-			end = strpbrk(bootmode, " ");
-			bootmode = strpbrk(bootmode, "=");
-		}
-		if (bootmode &&
-		    end > bootmode &&
-		    strnstr(bootmode, "factory", end - bootmode)) {
-				factory_mode = true;
-		}
+	if (mmi_get_bootarg("androidboot.mode=", &mode) ||
+		!mode || strncmp("mot-factory", mode, 11)) {
+		return false;
 	}
-	of_node_put(np);
-
-	return factory_mode;
+	return true;
 }
 
 static bool mmi_is_factory_version(void)
 {
-	struct device_node *np = of_find_node_by_path("/chosen");
-	bool factory_version = false;
-	const char *bootargs = NULL;
 	char *bootloader = NULL;
-	char *end = NULL;
 
-	if (!np)
-		return factory_version;
+	if (this_chip && this_chip->factory_version)
+		return true;
 
-	if (!of_property_read_string(np, "bootargs", &bootargs)) {
-		bootloader = strstr(bootargs, "androidboot.bootloader=");
-		if (bootloader) {
-			end = strpbrk(bootloader, " ");
-			bootloader = strpbrk(bootloader, "=");
-		}
-		if (bootloader &&
-		    end > bootloader &&
-		    strnstr(bootloader, "factory", end - bootloader)) {
-				factory_version = true;
-		}
+	if (mmi_get_bootarg("androidboot.bootloader=", &bootloader) ||
+		!bootloader || !strnstr(bootloader, "factory", strlen(bootloader))) {
+		return false;
 	}
-	of_node_put(np);
-
-	return factory_version;
+	return true;
 }
 
 static int qti_charger_parameters_init(struct qti_charger *chg)
@@ -1442,6 +1418,12 @@ static void qti_charger_remove(struct platform_device *pdev)
 	if (rc < 0)
 		mmi_err(chg, "pmic_glink_unregister_client failed rc=%d\n",
 			rc);
+
+	if (bootargs_str) {
+		kfree(bootargs_str);
+		bootargs_str = NULL;
+		bootargs_str_len = 0;
+	}
 
 	return;
 }
