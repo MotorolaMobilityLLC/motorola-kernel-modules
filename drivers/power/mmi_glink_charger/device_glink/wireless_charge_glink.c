@@ -696,6 +696,39 @@ static ssize_t folio_mode_show(struct device *dev,
 }
 static DEVICE_ATTR(folio_mode, S_IRUGO|S_IWUSR, folio_mode_show, folio_mode_store);
 
+static ssize_t wireless_chip_id_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	int data;
+
+	qti_charger_get_property(OEM_PROP_WLS_CHIP_ID,
+				&data,
+				sizeof(int));
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "0x%04x\n", data);
+}
+
+static DEVICE_ATTR(wireless_chip_id, S_IRUGO,
+		wireless_chip_id_show,
+		NULL);
+
+static ssize_t wireless_fw_ver_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	int data;
+
+	qti_charger_get_property(OEM_PROP_WLS_FW_VER,
+				&data,
+				sizeof(int));
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "0x%04x\n", data);
+}
+
+static DEVICE_ATTR(wireless_fw_ver, S_IRUGO,
+		wireless_fw_ver_show,
+		NULL);
 
 static int wireless_charger_notify_callback(struct notifier_block *nb,
 		unsigned long event, void *data)
@@ -824,6 +857,16 @@ static int phone_case_detection_notifier_call(struct notifier_block *nb,
 		return;
 	}
 	pr_info("wireless power supply is found\n");
+
+	rc = device_create_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_wireless_chip_id);
+        if (rc)
+		pr_err("couldn't create wireless tx mode\n");
+
+	rc = device_create_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_wireless_fw_ver);
+        if (rc)
+		pr_err("couldn't create wireless tx mode\n");
 
 	rc = device_create_file(chip->wls_dev_psy->dev.parent,
 				&dev_attr_tx_mode);
