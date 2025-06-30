@@ -24,7 +24,7 @@
 #include "jiiov_netlink.h"
 // clang-format on
 
-#define NETLINK_ANC 30
+#define NETLINK_ANC 29
 #define USER_PORT 100
 
 static struct sock *gp_netlink_sock = NULL;
@@ -36,6 +36,7 @@ static int netlink_send_message(const char *p_buffer, uint16_t length) {
     struct nlmsghdr *p_nlmsghdr = NULL;
 
     CHECK_PTR_PARAM(p_buffer);
+    CHECK_PTR_PARAM(gp_netlink_sock);
     CHECK_INT_PARAM(length);
 
     /* 创建sk_buff 空间 */
