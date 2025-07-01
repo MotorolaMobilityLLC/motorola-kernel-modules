@@ -100,6 +100,8 @@
 #define GET_FRAME_NONBLOCK_MODE				0
 #define IRQ_ENABLE_FLAG					1
 #define IRQ_DISABLE_FLAG				0
+#define IRQ_WAKE_ENABLE_FLAG				1
+#define IRQ_WAKE_DISABLE_FLAG				0
 #define GESTURE_DOUBLE_CLICK				0
 #define GESTURE_SINGLE_CLICK				1
 
@@ -425,6 +427,7 @@ struct goodix_thp_core {
         struct thp_frame_mmap_list frame_mmap_list;
         struct mutex frame_mutex;
         struct mutex irq_mutex;
+        struct mutex irq_wake_mutex;
         struct mutex mode_lock;
 
 #ifdef CONFIG_PINCTRL
@@ -441,6 +444,7 @@ struct goodix_thp_core {
         bool special_area_on;
         bool logtofile_on;
         bool irq_state;
+        bool irq_wake_state;
         u32 suspended;
         u16 gesture_enable;
         u32 state_change_flag;

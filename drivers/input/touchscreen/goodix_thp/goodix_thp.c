@@ -75,6 +75,21 @@ static void goodix_thp_set_irq_enable(struct goodix_thp_core *core_data,
         mutex_unlock(&core_data->irq_mutex);
 };
 
+static void goodix_thp_set_irq_wake_enable(struct goodix_thp_core *core_data,
+					int status)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+
+        mutex_lock(&core_data->irq_wake_mutex);
+        if (core_data->irq_wake_state != !!status) {
+                status ? enable_irq_wake(core_data->irq) : disable_irq_wake(core_data->irq);
+                core_data->irq_wake_state = !!status;
+                ts_info(ts_dev->dev, "%s: %s irq_wake", __func__,
+                                status ? "enable" : "disable");
+        }
+        mutex_unlock(&core_data->irq_wake_mutex);
+};
+
 static void goodix_thp_frame_wake_up(struct goodix_thp_core *core_data)
 {
         mutex_lock(&(core_data->frame_mutex));
@@ -130,7 +145,7 @@ static void goodix_thp_reinit(struct goodix_thp_core *core_data)
         else
                 ts_dev->hw_ops->reset(ts_dev, 100);
 
-        disable_irq_wake(core_data->irq);
+        goodix_thp_set_irq_wake_enable(core_data, IRQ_WAKE_DISABLE_FLAG);
         core_data->suspended = 0;
         core_data->gesture_enable = 0;
 }
@@ -2207,7 +2222,7 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
                         goto exit;
                 }
                 goodix_thp_set_irq_enable(core_data, IRQ_ENABLE_FLAG);
-                enable_irq_wake(core_data->irq);
+                goodix_thp_set_irq_wake_enable(core_data, IRQ_WAKE_ENABLE_FLAG);
         }
 exit:
         goodix_thp_force_release_all(core_data);
@@ -2233,7 +2248,7 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
                 goodix_thp_power_on(core_data);
                 msleep(100);
         } else {
-                disable_irq_wake(core_data->irq);
+                goodix_thp_set_irq_wake_enable(core_data, IRQ_WAKE_DISABLE_FLAG);
                 ts_dev->hw_ops->reset(ts_dev, 100);
         }
 
@@ -2404,6 +2419,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
         core_data->ts_dev = tdev;
         mutex_init(&core_data->frame_mutex);
         mutex_init(&core_data->irq_mutex);
+        mutex_init(&core_data->irq_wake_mutex);
         init_waitqueue_head(&(core_data->frame_wq));
         init_completion(&core_data->pm_completion);
         core_data->pm_suspend = false;
