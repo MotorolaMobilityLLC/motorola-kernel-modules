@@ -49,6 +49,10 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_stylus_mode_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_fp_int_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_fp_int_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -65,6 +69,8 @@ static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
     goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
 static DEVICE_ATTR(stylus_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_stylus_mode_show, goodix_ts_stylus_mode_store);
+static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_fp_int_show, goodix_ts_fp_int_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -138,6 +144,8 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->ts_dev->board_data.stylus_mode_ctrl)
 		ADD_ATTR(stylus_mode);
+
+	ADD_ATTR(fp_int);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -734,6 +742,65 @@ static ssize_t goodix_ts_stylus_mode_show(struct device *dev,
 
 	ts_info(core_data->ts_dev->dev, "Stylus mode = %d.", core_data->set_mode.stylus_mode);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.stylus_mode);
+}
+
+static ssize_t goodix_ts_fp_int_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ts_info(tdev->dev, "Failed to convert value.");
+		return -EINVAL;
+	}
+
+	mutex_lock(&core_data->mode_lock);
+	core_data->get_mode.fp_int_state= mode;
+	if (core_data->set_mode.fp_int_state == mode) {
+		ts_info(tdev->dev, "The value = %lu is same, so not to write", mode);
+		ret = size;
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info(tdev->dev, "The touch is in sleep state, restore the value when resume");
+		ret = size;
+		goto exit;
+	}
+
+	ret = tdev->hw_ops->set_fp_int_pin(tdev, mode);
+	if (!ret)
+		core_data->set_mode.fp_int_state = mode;
+	msleep(20);
+	ts_info(tdev->dev, "Success set fp int to %s", mode ? "high" : "low");
+
+	ret = size;
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
+static ssize_t goodix_ts_fp_int_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info(core_data->ts_dev->dev, "fp_int_state = %d.",
+		core_data->set_mode.fp_int_state);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.fp_int_state);
 }
 
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {

@@ -302,6 +302,7 @@ struct goodix_mode_info {
         int stowed;
         int pocket_mode;
         int stylus_mode;
+        int fp_int_state;
 };
 
 struct goodix_thp_board_data {
