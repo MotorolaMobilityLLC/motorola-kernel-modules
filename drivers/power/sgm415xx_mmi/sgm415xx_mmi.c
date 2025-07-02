@@ -1877,6 +1877,7 @@ static irqreturn_t sgm4154x_irq_handler_thread(int irq, void *private)
 		Charger_Detect_Release(sgm);
 		sgm4154x_set_dpdm_hiz(sgm);
 		allow_set_dp_dm_vol = false;
+		power_supply_changed(sgm->charger);
 	} else if (is_factory_build()) {
 		dev_info(sgm->dev, "%s: start get charger type\n", __func__);
 		schedule_delayed_work(&sgm->charge_detect_delayed_work, msecs_to_jiffies(200));

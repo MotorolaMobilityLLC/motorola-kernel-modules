@@ -1836,6 +1836,7 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		dev_info(sc->dev, "%s: adapter/usb removed\n", __func__);
 		sc8989x_set_dpdm_hiz(sc);
 		//sc8989x_get_charger_type(sc);
+		power_supply_changed(sc->psy);
 	}
 
 	//power_supply_changed(sc->psy);
