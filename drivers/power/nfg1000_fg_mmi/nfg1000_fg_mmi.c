@@ -97,8 +97,14 @@
 #define NFG1000_seal_WAIT_TIME	1200
 #define NFG1000_hold_WAIT_TIME	800
 #define NFG1000_com_WAIT_TIME	5
+#define NFG1000_answer_WAIT_TIME 1
+#define NFG1000_authen_WAIT_TIME 10
 
 #define NFG1000_SUCESS_CODE  	0x79
+
+#define MPC8011B_CHIP_NAME      0x122101C8
+#define MPC8011B_write_WAIT_TIME	5
+#define MPC8011B_crc32_WAIT_TIME 	20
 
 #define NAKE_DWORD_8BITS(HH,HL,LH,LL) ((u32)(HH)<<24)|((u32)(HL)<<16)|((u32)(LH)<<8)|((u32)(LL))
 enum mmi_fg_reg_idx {
@@ -150,6 +156,7 @@ enum mmi_fg_mac_cmd {
 	FG_MAC_CMD_GAUGING	= 0x0021,
 	FG_MAC_CMD_SEAL		= 0x0030,
 	FG_MAC_CMD_DEV_RESET	= 0x0041,
+	FG_MAC_CMD_MANUFAC_NAME	= 0x004C,
 	FG_MAC_CMD_POWEROFF_THRESHOLD	= 0x0050,
 	FG_MAC_CMD_BATT_SERIALNUM_MAP	= 0x0070,
 	FG_MAC_CMD_TEMPERATURE	= 0x00C0,
@@ -245,11 +252,13 @@ struct mmi_fg_chip {
 
 	int mcu_auth_code;
 
+	const char **batt_serialnum_arry;
 	int battid_cnt;
 	int battid_alis_cnt;
 	struct battid_map *battid_table;
 	struct battid_map_alis *battid_table_alis;
-
+	u8 *batt_chem_version_arry;
+	int batt_chem_version_cnt;
 	u8 *fw_version;
 	u8 *fw_data;
 	u8 *params_data;
@@ -261,10 +270,12 @@ struct mmi_fg_chip {
 	struct gauge_device	*gauge_dev;
 	const char *gauge_dev_name;
 	bool support_update_partial_config;
-
+	bool support_update_param_chem;
 };
 
 static int fg_get_capacity(struct gauge_device *gauge_dev, int *soc);
+int fg_get_voltage_now(struct gauge_device *gauge_dev, int *mV);
+int fg_get_temp(struct gauge_device *gauge_dev, int *temp);
 
 static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
 {
@@ -533,11 +544,17 @@ u8 data_flash_erase_order[] = {0x00,0x07,0x01,0x86,0x01,0x87,0x01,0x88,0x01,0x89
 u8 nfg1000_Dataflash_updata_CMD[] = {0x00,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0D,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1A,0x1C};
 u8 nfg1000_Dataflash_updata_partial_CMD[] = {0x0B,0x11,0x12};
 u8 nfg1000_Dataflash_updata_CMD_IFC[] = {0x00,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0A,0x0B,0x0D,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1A,0x1C,0x23,0x24,0x25,0x26,0x27,0x28,0x29,0x2a,0x2b,0x2c,0x2d,0x2e,0x2f};
+u8 mpc8011b_updata_param_chem_CMD[] = {0x0B};
+u8 mpc8011b_data_flash_erase_order[] = {0x00,0x11,0x01,0x84,0x01,0x85,0x01,0x86,0x01,0x87,0x01,0x88,0x01,0x89,0x01,0x8A,0x01,0x8B,0x01,0x8C,0x01,0x8D,0x01,0x8E,0x01,0x8F,0x01,0x90,0x01,0x91,0x01,0x92,0x01,0x93,0x01,0x94,0x01,0x95};
 static u32 crc_table[256];
 
 static s32 nfg1000_GetReturnCode(struct mmi_fg_chip *di)
 {
 	int ret = 0;u8 uReCode[2] = {0};
+
+	if (di->support_update_param_chem) {
+		mdelay(NFG1000_answer_WAIT_TIME);
+	}
 
 	ret = fg_read_block(di,I2C_NO_REG_DATA,uReCode,1);
 	if(ret < 0)
@@ -934,6 +951,9 @@ static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
 			return -ERROR_CODE_I2C_WRITE;
 		}
 #endif
+		if (di->support_update_param_chem) {
+			mdelay(NFG1000_answer_WAIT_TIME);
+		}
 		ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode,1);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 		if(ret < 0) {
@@ -956,6 +976,9 @@ static int nfg1000_ota_program_step1_EnterBootLoad(struct mmi_fg_chip *di)
 				return -ERROR_CODE_I2C_WRITE;
 			}
 #endif
+			if (di->support_update_param_chem) {
+				mdelay(NFG1000_answer_WAIT_TIME);
+			}
 			ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode, 1);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 			if(ret < 0) {
@@ -1020,6 +1043,9 @@ static int nfg1000_ota_program_step2_ShaAuth(struct mmi_fg_chip *di)
 	if(ret) {
 		return ret;
 	}
+	if (di->support_update_param_chem) {
+		mdelay(NFG1000_authen_WAIT_TIME);
+	}
 
 	memcpy(&u8Data[0], sha_256_pass_word, SHA_DATA_SIZE);
 	u8Data[SHA_DATA_SIZE] = CalcXorsum(sha_256_pass_word, SHA_DATA_SIZE);
@@ -1044,7 +1070,9 @@ static int nfg1000_ota_program_step3_mcuAuth(struct mmi_fg_chip *di)
 	u32 tmpMcuCode =0;
 	u8 u8Data[8] = {0};
 	u8 uReCode[8] = {0};
-
+	if (di->support_update_param_chem) {
+		di->mcu_auth_code = MPC8011B_CHIP_NAME;
+	}
 	u8Data[0] = 0x91;
 	u8Data[1] = 0x6e;
 	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, 2);
@@ -1088,6 +1116,9 @@ static int nfg1000_ota_program_step3_mcuAuth(struct mmi_fg_chip *di)
 		return ret;
 	}
 
+	if (di->support_update_param_chem) {
+		mdelay(NFG1000_answer_WAIT_TIME);
+	}
 	ret = fg_read_block(di, I2C_NO_REG_DATA, uReCode, 4);
 	if(ret < 0) {
 		mmi_err(":read reg: %x error!!\n", I2C_NO_REG_DATA);
@@ -1390,8 +1421,23 @@ static int nfg1000_ota_program_step7_ExitBoot(struct mmi_fg_chip *di)
 static int nfg1000_ota_program_step8_EraseDATA(struct mmi_fg_chip *di)
 {
 	int ret = 0;
+	int datalen = 0;
+	u8 nfg1000_u8Data[20] = {0};
+	u8 mpc8011b_u8Data[40] = {0};
+	u8 * u8Data = NULL;
 
-	u8 u8Data[20] = {0};
+	if (di->support_update_param_chem) {
+		u8Data = mpc8011b_u8Data;
+	} else {
+		u8Data = nfg1000_u8Data;
+	}
+
+	if (u8Data == NULL) {
+		mmi_err("u8Data is NULL!!\n");
+		ret = -1;
+		return ret;
+	}
+
 	u8Data[0] = 0xc4;
 	u8Data[1] = 0x3b;
 
@@ -1408,16 +1454,31 @@ static int nfg1000_ota_program_step8_EraseDATA(struct mmi_fg_chip *di)
 		return ret;
 	}
 
-	memcpy(u8Data,data_flash_erase_order,sizeof(data_flash_erase_order));
+	if (di->support_update_param_chem) {
+		datalen = sizeof(mpc8011b_data_flash_erase_order);
+		memcpy(u8Data, mpc8011b_data_flash_erase_order, datalen);
+		u8Data[datalen] = CalcXorsum(u8Data,datalen);
+		datalen += 1;
+		if(datalen <= 0)
+		{
+			return datalen;
+		}
+	} else {
+		datalen = sizeof(data_flash_erase_order);
+		memcpy(u8Data, data_flash_erase_order, datalen);
+	}
 
-	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, sizeof(data_flash_erase_order));
+	ret = fg_write_block(di, I2C_NO_REG_DATA, u8Data, datalen);
 	if(ret < 0)
 	{
 		mmi_err("nfg1000_ota_program_step8_EraseDATA:write reg: %x error!!\n",I2C_NO_REG_DATA);
 		return -ERROR_CODE_I2C_WRITE;
 	}
-
-	mdelay(NFG1000_erase_DF_TIME);
+	if (di->support_update_param_chem) {
+		mdelay(sizeof(mpc8011b_data_flash_erase_order));
+	} else {
+		mdelay(NFG1000_erase_DF_TIME);
+	}
 	ret = nfg1000_GetReturnCode(di);
 	if(ret)
 	{
@@ -1430,6 +1491,8 @@ static int nfg1000_ota_program_step8_EraseDATA(struct mmi_fg_chip *di)
 
 #define CHEMID_START_DATAFLASH	3072
 #define CHEMID_STOP_DATAFLASH	4096
+#define MPC8011B_CHEMID_START_DATAFLASH	0xC800
+#define MPC8011B_CHEMID_STOP_DATAFLASH	0xEC00
 static int nfg1000_ota_program_step9_WriteDatafile(struct mmi_fg_chip *di)
 {
 	int ret = 0;
@@ -1438,8 +1501,18 @@ static int nfg1000_ota_program_step9_WriteDatafile(struct mmi_fg_chip *di)
 	u32 i=0;
 	u32 j=0;
 	u32 tmpaddr = 0;
+	u32 nfg_chemid_start_dataflash = CHEMID_START_DATAFLASH;
+	u32 nfg_chemid_stop_dataflash = CHEMID_STOP_DATAFLASH;
+	u8 nfg_write_wait_time = NFG1000_write_WAIT_TIME;
 
-	for(i = CHEMID_START_DATAFLASH;i < CHEMID_STOP_DATAFLASH;i += 256)
+	if (di->support_update_param_chem) {
+		nfg_chemid_start_dataflash = MPC8011B_CHEMID_START_DATAFLASH;
+		nfg_chemid_stop_dataflash = MPC8011B_CHEMID_STOP_DATAFLASH;
+		nfg_write_wait_time = MPC8011B_write_WAIT_TIME;
+		di->param_start_addr = 0x30800;
+	}
+
+	for(i = nfg_chemid_start_dataflash;i < nfg_chemid_stop_dataflash;i += 256)
 	{
 		u8Data[0] = 0xb1;
 		u8Data[1] = 0x4e;
@@ -1458,6 +1531,9 @@ static int nfg1000_ota_program_step9_WriteDatafile(struct mmi_fg_chip *di)
 		}
 
 		tmpaddr = di->param_start_addr + i;
+		if (di->support_update_param_chem) {
+			tmpaddr = tmpaddr - nfg_chemid_start_dataflash;
+		}
 		u8Data[0] = (tmpaddr>>24)&0xff;
 		u8Data[1] = (tmpaddr>>16)&0xff;
 		u8Data[2] = (tmpaddr>>8)&0xff;
@@ -1493,7 +1569,7 @@ static int nfg1000_ota_program_step9_WriteDatafile(struct mmi_fg_chip *di)
 			mmi_err("nfg1000_ota_program_step9_WriteDatafile:write reg: %x error!!\n",I2C_NO_REG_DATA);
 			return -ERROR_CODE_I2C_WRITE;
 		}
-		mdelay(NFG1000_write_WAIT_TIME);
+		mdelay(nfg_write_wait_time);
 		ret = nfg1000_GetReturnCode(di);
 		if(ret)
 		{
@@ -1510,9 +1586,26 @@ static int nfg1000_ota_program_step10_CheckDataCrc(struct mmi_fg_chip *di)
 	int ret = 0;
 	u8 u8Data[8] = {0};
 	u8 uReCode[8] = {0};
-	u32 tmpaddr = 0;
+	u32 tmpaddr = 0x30C00;
 	u32 Crc32tmp = 0;
 	u32 Crc32_code = 0;
+	u32 nfg_chemid_start_dataflash = CHEMID_START_DATAFLASH;
+	u32 nfg_chemid_stop_dataflash = CHEMID_STOP_DATAFLASH;
+	u32 nfg_chemid_dataflash_size = 0;
+
+	if (di->support_update_param_chem) {
+		nfg_chemid_start_dataflash = MPC8011B_CHEMID_START_DATAFLASH;
+		nfg_chemid_stop_dataflash = MPC8011B_CHEMID_STOP_DATAFLASH;
+		tmpaddr = 0x30800;
+	}
+
+	if (nfg_chemid_stop_dataflash > nfg_chemid_start_dataflash) {
+		nfg_chemid_dataflash_size = nfg_chemid_stop_dataflash - nfg_chemid_start_dataflash;
+	} else {
+		mmi_err("nfg1000_ota_program_step10_CheckDataCrc:size error!!\n");
+		ret = -1;
+		return ret;
+	}
 
 	u8Data[0] = 0xd0;
 	u8Data[1] = 0x2f;
@@ -1531,7 +1624,6 @@ static int nfg1000_ota_program_step10_CheckDataCrc(struct mmi_fg_chip *di)
 		return ret;
 	}
 
-	tmpaddr = 0x30C00;
 	u8Data[0] = (tmpaddr>>24)&0xff;
 	u8Data[1] = (tmpaddr>>16)&0xff;
 	u8Data[2] = (tmpaddr>>8)&0xff;
@@ -1552,7 +1644,11 @@ static int nfg1000_ota_program_step10_CheckDataCrc(struct mmi_fg_chip *di)
 	}
 
 
-	tmpaddr = 0x03FF;
+	if (di->support_update_param_chem) {
+		tmpaddr = MPC8011B_CHEMID_STOP_DATAFLASH - MPC8011B_CHEMID_START_DATAFLASH - 1;
+	} else {
+		tmpaddr = 0x03FF;
+	}
 	u8Data[0] = (tmpaddr>>24)&0xff;
 	u8Data[1] = (tmpaddr>>16)&0xff;
 	u8Data[2] = (tmpaddr>>8)&0xff;
@@ -1573,6 +1669,9 @@ static int nfg1000_ota_program_step10_CheckDataCrc(struct mmi_fg_chip *di)
 	}
 
 	//read crc and compare
+	if (di->support_update_param_chem) {
+		mdelay(NFG1000_crc32_WAIT_TIME);
+	}
 	ret = fg_read_block(di, I2C_NO_REG_DATA,uReCode,4);
 	if(ret < 0)
 	{
@@ -1582,7 +1681,7 @@ static int nfg1000_ota_program_step10_CheckDataCrc(struct mmi_fg_chip *di)
 	Crc32tmp = NAKE_DWORD_8BITS(uReCode[3],uReCode[2],uReCode[1],uReCode[0]);
 
 	init_crc_table();
-	Crc32_code  = crc32(0xFFFFFFFF, &di->params_data[CHEMID_START_DATAFLASH], 1024);
+	Crc32_code  = crc32(0xFFFFFFFF, &di->params_data[nfg_chemid_start_dataflash], nfg_chemid_dataflash_size);
 	if(Crc32_code != Crc32tmp)
 	{
 		mmi_err("nfg1000_ota_program_step10_CheckDataCrc:calculate crc: %x error!!\n",  Crc32_code);
@@ -1756,23 +1855,23 @@ if (di->support_update_partial_config != true)	{
 		return PROGRAM_ERROR_EXIT_BOOT;
 	}
 }
-
-	mmi_info("ota_unseal");
-	if(nfg1000_ota_unseal(di))
-	{
-		return PROGRAM_ERROR_UNSEAL;
+	if (!di->support_update_param_chem) {
+		mmi_info("ota_unseal");
+		if(nfg1000_ota_unseal(di))
+		{
+			return PROGRAM_ERROR_UNSEAL;
+		}
+		mmi_info("ota_updata_config");
+		if(nfg1000_ota_updata_config(di))
+		{
+			return PROGRAM_ERROR_UNSEAL;
+		}
+		mmi_info("ota_seal");
+		if(nfg1000_ota_seal(di))
+		{
+			return PROGRAM_ERROR_SEAL;
+		}
 	}
-	mmi_info("ota_updata_config");
-	if(nfg1000_ota_updata_config(di))
-	{
-		return PROGRAM_ERROR_UNSEAL;
-	}
-	mmi_info("ota_seal");
-	if(nfg1000_ota_seal(di))
-	{
-		return PROGRAM_ERROR_SEAL;
-	}
-
 	return 0;
 }
 
@@ -1821,6 +1920,189 @@ static ssize_t nfg1000_upgrade_APP(struct mmi_fg_chip *di)
 	}
 
 	return 0;
+}
+
+// updata calibrate config
+static int nfg1000_ota_updata_chem_id_version(struct mmi_fg_chip *di)
+{
+	u8 ret;
+	u8 i = 0;
+	u8 j = 0;
+	u8 retry_cnt = 0;
+	u8 retry_flag = 0;
+	u8 addr_cmd = 0;
+	u16 dataflash_base_addr = 0x4400;
+	u8 config_data_read[32] = {0};
+	u8 config_data_write[32] = {0};
+
+	addr_cmd = mpc8011b_updata_param_chem_CMD[0];
+	while(i == 0)
+	{
+		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, dataflash_base_addr + addr_cmd, config_data_read, 32);
+
+		if(ret)
+		{
+			mmi_err("nfg1000_ota_updata_config:read reg: %x error!!\n",ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+
+		for(j = 0;j < 32;j++)
+		{
+			config_data_write[j] = config_data_read[j];
+		}
+		config_data_write[26] = 0x32;
+
+		ret = nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(di, dataflash_base_addr + addr_cmd, config_data_write, sizeof(config_data_write));
+		mdelay(NFG1000_RESET_WAIT_TIME);
+		if(ret)
+		{
+			mmi_err("nfg1000_ota_updata_config:write reg: %x error!!\n",ret);
+			break;
+		}
+
+		ret = nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, dataflash_base_addr + addr_cmd, config_data_read, 32);
+
+		if(ret)
+		{
+			mmi_err("nfg1000_ota_updata_config:read reg: %x error!!\n",ret);
+			return -ERROR_CODE_I2C_WRITE;
+		}
+
+		for(j = 0;j < 32;j++)
+		{
+			if(config_data_read[j] != config_data_write[j])
+			{
+				retry_flag = 1;
+				retry_cnt++;
+				break;
+			}
+		}
+
+		if(retry_flag == 0)
+		{
+			retry_cnt = 0;
+			i++;
+		}
+		else
+		{
+			if(retry_cnt > 4)
+			{
+				mmi_err("nfg1000_ota_updata_config:config updata reg: %x error!!\n",1);
+				break;
+			}
+
+			retry_flag = 0;
+		}
+	}
+	mmi_info("retry_flag=%d, retry_cnt=%d, i=%d\n", retry_flag, retry_cnt, i);
+	if(i == 0)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+static bool nfg1000_ota_program_check_batt_params_chem_version(struct mmi_fg_chip *di)
+{
+	bool upgrade_status = false;
+	int i = 0, j = 0, index = 0;
+	u8 fg_manufac_name[15] = {0};
+	u8 dataflash_read[32] = {0};
+	char batt_params_bin_name[50] = {0};
+	const char *dev_sn = NULL;
+
+	if(nfg1000_ota_unseal(di)) {
+		return PROGRAM_ERROR_UNSEAL;
+	}
+
+	if(nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_MANUFAC_NAME, fg_manufac_name, sizeof(fg_manufac_name)) < 0)
+	{
+		return upgrade_status;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(fg_manufac_name); i++) {
+		mmi_info("read chem version: %d", fg_manufac_name[i]);
+	}
+
+	//dev_sn = get_battery_serialnumber();
+	if (!dev_sn) {
+		if(nfg1000_i2c_BLOCK_command_read_with_CHECKSUM(di, FG_MAC_CMD_BATT_SERIALNUM, dataflash_read, 32))
+		{
+			mmi_err("nfg1000_ota_program_dataflash_version_check:dataflash version read error!\n");
+			return upgrade_status;
+		}
+		dev_sn = dataflash_read;
+		//fg_print_buf("The batt_serialnum from FG", dataflash_read, 13);
+		mmi_info("The batt_serialnum from FG = %s\n", dev_sn);
+	}
+
+	if (dev_sn && di->battid_cnt !=0 && di->batt_chem_version_cnt != 0) {
+		for (i = 0; i < di->battid_cnt; i++) {
+			if ((strnstr(dev_sn, di->batt_serialnum_arry[i], 10))) {
+				for (j = 0; j < ARRAY_SIZE(fg_manufac_name); j++) {
+					index = i * ARRAY_SIZE(fg_manufac_name) + j;
+					if ((index < di->batt_chem_version_cnt)
+						&& (fg_manufac_name[j] != di->batt_chem_version_arry[index])) {
+						sprintf(batt_params_bin_name,
+						"NFG1000A_battery_parameter_%s.bin",
+						di->batt_serialnum_arry[i]);
+						mmi_info("Need to upgrading battery parameters: %s", batt_params_bin_name);
+						upgrade_status = true;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (upgrade_status) {
+		di->params_data = nfg1000_upgrade_read_firmware(batt_params_bin_name, di);
+		if (di->params_data == NULL) {
+			mmi_err("battery paramter chem is null, exit upgrade.");
+			upgrade_status = false;
+		}
+	}
+
+	if (!upgrade_status)
+		nfg1000_ota_seal(di);
+
+	return upgrade_status;
+
+}
+
+u8 Gauge_update_Process(struct mmi_fg_chip *di)
+{
+	int return_data = 0;
+	int i = 0;
+
+	nfg1000_ota_unseal(di);
+	for(i = 0; i < 5; i++)
+	{
+		return_data = nfg1000_upgrade_Params(di);
+		mmi_info("return_data=%d\n", return_data);
+		if(return_data == 0)
+		{
+			break;
+		}
+	}
+	mmi_info("i=%d\n", i);
+	if(i == 5)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+static bool check_volt_temp_state(struct mmi_fg_chip *di)
+{
+	mmi_info("batt_volt=%d, batt_temp=%d\n", di->batt_volt, di->batt_temp);
+	if ((di->batt_volt > 3800) && (di->batt_temp > 150)) {
+		return true;
+	 }
+
+	return false;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
@@ -1879,10 +2161,47 @@ err_putnode:
 	return factory_mode;
 }
 
+// Voltage Read
+static int nfg1000_ota_Voltage_Read(struct mmi_fg_chip *di)
+{
+	int ret = 0;
+	u8 fw_ver_read[2] = {0x00,0x18};
+	u8 fw_ver_cmd = 0x08;
+	u8 i = 0;
+
+	for(i = 0;i < 3;i++)
+	{
+		ret = fg_read_block(di, fw_ver_cmd, fw_ver_read, sizeof(fw_ver_read));
+		if(ret < 0)
+		{
+			mmi_err("nfg1000_ota_Voltage_Read:Voltage read error: %x error!!\n",fw_ver_read[1]);
+			mdelay(100);
+		}
+		else
+		{
+			mmi_info("ota_Voltage_Read: %d\n", fw_ver_read[1]);
+			break;
+		}
+	}
+
+	if(i == 3)
+	{
+		return -ERROR_CODE_I2C_WRITE;
+	}
+
+	if(fw_ver_read[1] > 0x14)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
 static void nfg1000_force_upgrade_func(struct work_struct *work)
 {
 	struct mmi_fg_chip *di = container_of(work, struct mmi_fg_chip, fg_FUpgrade_dwork.work);
 	int count = 1;
+	int return_data = 0;
 
 	if (di->force_upgrade == false)
 		return;
@@ -1891,29 +2210,62 @@ static void nfg1000_force_upgrade_func(struct work_struct *work)
 
 	di->fake_battery = true;
 	di->do_upgrading = true;
-
-	if (di->fw_data == NULL)
-		di->fw_data = nfg1000_upgrade_read_firmware("NFG1000A_firmware.bin", di);
-	if (di->fw_data == NULL) {
-		mmi_err("fw data is null, exit upgrade.");
-		goto upgrade_error;
-	}
-
-	for (count=1; count<=3; count++) {
-		if(nfg1000_ota_unseal(di))
-		{
-			mmi_err("ota unseal,failed");
-			//goto upgrade_error;
+	if (!di->support_update_param_chem) {
+		if (di->fw_data == NULL)
+			di->fw_data = nfg1000_upgrade_read_firmware("NFG1000A_firmware.bin", di);
+		if (di->fw_data == NULL) {
+			mmi_err("fw data is null, exit upgrade.");
+			goto upgrade_error;
 		}
-		if (nfg1000_upgrade_APP(di) != 0) {
-			mmi_err("nfg1000_upgrade_APP failed, retry=%d", count);
-			if (count == 3) {
-				mmi_err("nfg1000_upgrade_APP failed, use fake battery");
-				goto upgrade_error;
+
+		for (count=1; count<=3; count++) {
+			if(nfg1000_ota_unseal(di))
+			{
+				mmi_err("ota unseal,failed");
+				//goto upgrade_error;
 			}
-		} else {
-			mmi_info("nfg1000_upgrade_APP successfully!!");
-			break;
+			if (nfg1000_upgrade_APP(di) != 0) {
+				mmi_err("nfg1000_upgrade_APP failed, retry=%d", count);
+				if (count == 3) {
+					mmi_err("nfg1000_upgrade_APP failed, use fake battery");
+					goto upgrade_error;
+				}
+			} else {
+				mmi_info("nfg1000_upgrade_APP successfully!!");
+				break;
+			}
+		}
+	} else {
+		mmi_info("nfg1000_upgrade_chem start!!");
+		di->params_data = nfg1000_upgrade_read_firmware("NFG1000A_battery_parameter_ATLSP50NVT.bin", di);
+		if (di->params_data == NULL) {
+			mmi_err("battery paramter chem is null, exit upgrade.");
+			goto upgrade_error;
+		}
+
+		return_data = nfg1000_ota_Voltage_Read(di);
+
+		if(return_data != 0)
+		{
+			mdelay(2000);
+			for(count = 0; count < 5; count++)
+			{
+				return_data = nfg1000_upgrade_Params(di);
+				if(return_data == 0)
+				{
+					break;
+				}
+			}
+
+			if(count != 5)
+			{
+				nfg1000_ota_unseal(di);
+
+				nfg1000_ota_updata_chem_id_version(di);
+
+				nfg1000_ota_seal(di);
+				mmi_info("nfg1000_upgrade_chem successfully!!");
+			}
 		}
 	}
 
@@ -1946,6 +2298,10 @@ static void nfg1000_upgrade_func(struct work_struct *work)
 	nfg1000_ota_init(di);
 
 	fg_get_capacity(di->gauge_dev, &di->batt_soc);
+	if (di->support_update_param_chem) {
+		fg_get_voltage_now(di->gauge_dev, &di->batt_volt);
+		fg_get_temp(di->gauge_dev, &di->batt_temp);
+	}
 	di->fake_battery = true;
 	di->do_upgrading = true;
 
@@ -1980,7 +2336,8 @@ static void nfg1000_upgrade_func(struct work_struct *work)
 		}
 	}
 
-	if (nfg1000_ota_program_check_batt_params_version(di) == false) {
+	if (di->support_update_param_chem
+		 || (nfg1000_ota_program_check_batt_params_version(di) == false)) {
 		mmi_info("battery params not need upgrade,exit");
 	} else {
 		for (count=1; count<=3; count++) {
@@ -1996,6 +2353,24 @@ static void nfg1000_upgrade_func(struct work_struct *work)
 			}
 		}
 	}
+
+	if (di->support_update_param_chem) {
+		if (nfg1000_ota_program_check_batt_params_chem_version(di) == false) {
+			mmi_info("battery params chem not need upgrade,exit");
+		} else {
+			if(check_volt_temp_state(di)) {
+				if(Gauge_update_Process(di) == 0)
+				{
+					nfg1000_ota_unseal(di);
+					nfg1000_ota_updata_chem_id_version(di);
+				}
+				nfg1000_ota_seal(di);
+			} else {
+				mmi_info("Not meeting the upgrade chem con,exit");
+			}
+		}
+	}
+
 	di->do_upgrading = false;
 	di->fake_battery = false;
 
@@ -3283,6 +3658,7 @@ static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)
 	int rc;
 	int count;
 	int rtn = 0;
+	int i;
 
 	rc = of_property_read_u32(np , "uirbat_pull_up_r_full", &mmi_fg->rbat_pull_up_r);
 	if (rc < 0) {
@@ -3357,11 +3733,47 @@ static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)
 		}
 	}
 
+	count = of_property_count_strings(np, "batt_serialnums");
+	if (count > 0) {
+		mmi_info("battid_cnt=%d", count);
+		mmi_fg->battid_cnt = count;
+		mmi_fg->batt_serialnum_arry = devm_kzalloc(&mmi_fg->client->dev, count * sizeof(char *), GFP_KERNEL);
+		if (mmi_fg->batt_serialnum_arry) {
+			for (i = 0; i < mmi_fg->battid_cnt; i++) {
+				rc = of_property_read_string_index(np, "batt_serialnums", i,
+								    &mmi_fg->batt_serialnum_arry[i]);
+				if (rc < 0)
+					mmi_fg->battid_cnt = 0;
+				else
+					mmi_info("support serialnum[%d](%s)\n", i, mmi_fg->batt_serialnum_arry[i]);
+			}
+		}
+	}
+
+	count = of_property_count_u8_elems(np, "batt_chem_versions");
+	if (count > 0) {
+		mmi_info("batt_chem_version_cnt=%d", count);
+		mmi_fg->batt_chem_version_cnt = count;
+		mmi_fg->batt_chem_version_arry = devm_kzalloc(&mmi_fg->client->dev, count * sizeof(u8), GFP_KERNEL);
+		rc = of_property_read_u8_array(np, "batt_chem_versions", mmi_fg->batt_chem_version_arry, count);
+		if (rc < 0) {
+			mmi_info("of_property_read_u16_array fail err:%d", rc);
+			mmi_fg->batt_chem_version_cnt = 0;
+		}
+
+		for (i = 0; i < count; i++)
+		{
+			mmi_info("batt_chem_versions[%d](%x)\n", i, mmi_fg->batt_chem_version_arry[i]);
+		}
+	}
+
 	mmi_fg->support_ifc =of_property_read_bool(np, "nfg,support_ifc");
 
 	mmi_fg->enable_user_upgrade_batt =of_property_read_bool(np, "nfg,enable_user_upgrade_batt");
 
 	mmi_fg->support_update_partial_config = of_property_read_bool(np, "nfg,support_update_partial_config");
+
+	mmi_fg->support_update_param_chem = of_property_read_bool(np, "mpc,support_update_param_chem");
 
 	return rtn;
 }
@@ -3454,7 +3866,8 @@ static int mmi_fg_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&mmi->fg_FUpgrade_dwork, nfg1000_force_upgrade_func);
 	INIT_DELAYED_WORK(&mmi->fg_upgrade_dwork, nfg1000_upgrade_func);
 	if (mmi->fake_battery == false &&
-		(is_atm_mode() == true || mmi->enable_user_upgrade_batt)) {
+		(is_atm_mode() == true || mmi->enable_user_upgrade_batt
+		|| mmi->support_update_param_chem)) {
 		queue_delayed_work(system_long_wq, &mmi->fg_FUpgrade_dwork , msecs_to_jiffies(queue_delayed_work_time));
 		queue_delayed_work(system_long_wq, &mmi->fg_upgrade_dwork , msecs_to_jiffies(queue_delayed_work_time));
 	}
