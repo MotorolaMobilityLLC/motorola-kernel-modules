@@ -38,6 +38,7 @@
 
 #include "syna_tcm2.h"
 #include "syna_tcm2_platform.h"
+#include <linux/mmi_device.h>
 
 #if (KERNEL_VERSION(5, 15, 0) > LINUX_VERSION_CODE)
 #define SPI_HAS_DELAY_USEC
@@ -1211,6 +1212,11 @@ static struct syna_hw_interface syna_spi_hw_if = {
 static int syna_spi_probe(struct spi_device *spi)
 {
 	int retval;
+
+	if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+		LOGE("device not supported\n");
+		return -ENODEV;
+	}
 
 #ifdef CONFIG_OF
 	syna_spi_parse_dt(&syna_spi_hw_if, &spi->dev);

@@ -21,4 +21,7 @@ moto_ddk_module(
             "tcm/synaptics_touchcom_func_touch.h",
             "tcm/synaptics_touchcom_image_parsing.h",
     ]),
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/mmi_info:mmi_info",
+    ],
 )
