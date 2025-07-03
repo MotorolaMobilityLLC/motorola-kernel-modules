@@ -1,0 +1,70 @@
+/********************************/
+        Catalog Description
+/********************************/
+
+.
+├── 130                                         /* Device tree and RAM waveform file matching with F0=130 */
+│   ├── haptic_hv.dtsi
+│   ├── haptic_ram_101635_130.bin
+├── 170                                         /* Device tree and RAM waveform file matching with F0=170 */
+│   ├── haptic_hv.dtsi
+│   ├── haptic_ram_0619_170.bin
+│   ├── haptic_ram_0815_170.bin
+│   ├── haptic_ram_1010_170.bin
+│   └── haptic_ram_1040_170.bin
+├── 205                                         /* Device tree and RAM waveform file matching with F0=205 */
+│   ├── haptic_hv.dtsi
+│   └── haptic_ram_0832_205.bin
+├── 235                                         /* Device tree and RAM waveform file matching with F0=235 */
+│   ├── haptic_hv.dtsi
+│   └── haptic_ram_0832_235.bin
+├── 240                                         /* Device tree and RAM waveform file matching with F0=240 */
+│   ├── haptic_hv.dtsi
+│   └── haptic_ram_041235_240.bin
+├── 260                                         /* Device tree and RAM waveform file matching with F0=260 */
+│   ├── haptic_hv.dtsi
+│   └── haptic_ram_0832_260.bin
+├── document                                    /* Driver porting documentation */
+│   ├── PG_Haptic_HV_QCOM_Porting_Guide_CN_V2.1.pdf
+│   └── PG_Haptic_HV_QCOM_Porting_Guide_EN_V2.1.pdf
+├── dual_170                                    /* Dual motor device tree */
+│   └── haptic_hv.dtsi
+├── input_test                                  /* Input architecture test program */
+│   └── jni
+│       ├── Android.mk
+│       ├── Application.mk
+│       └── src
+│           └── main.c
+├── uefi                                        /* Uefi driver */
+│   ├── aw8671x_uefi.c
+│   ├── aw8672x_uefi.c
+│   ├── aw8692x_uefi.c
+│   ├── aw8693x_uefi.c
+│   ├── aw8693xs_uefi.c
+│   ├── aw869x_uefi.c
+│   ├── aw869xx_uefi.c
+│   ├── EFII2CHaptic.h
+│   ├── haptic_hv_uefi_wav.c
+│   ├── I2CHapticDxe.c
+│   ├── I2CHapticDxe.h
+│   ├── I2CHapticDxe.inf
+│   └── I2CHapticDxeReg.h
+├── aw869x.c
+├── aw869xx.c
+├── aw8671x.c
+├── aw8672x.c
+├── aw8692x.c
+├── aw8693x.c
+├── aw8693xs.c
+├── haptic_hv.c
+├── haptic_hv.h
+├── haptic_hv_reg.h
+├── haptic_ram.bin                              /* Referenced RAM waveform file */
+├── haptic_rtp.bin                              /* Referenced RTP waveform file */
+├── haptic_rtp_lighthouse.bin                   /* Referenced RTP waveform file */
+├── haptic_rtp_osc_24K_5s.bin                   /* RTP OSC calibration file */
+├── haptic_rtp_silk.bin                         /* Referenced RTP waveform file */
+├── haptic_rtp_auto_sin.bin                     /* Referenced RTP auto sin waveform file */
+├── Kconfig
+├── Makefile
+└── README

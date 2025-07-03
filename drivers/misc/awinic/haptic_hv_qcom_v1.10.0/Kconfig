@@ -1,0 +1,12 @@
+#
+# Qcom AWINIC_HAPTIC_HV Driver
+#
+
+config AWINIC_HAPTIC_HV
+	tristate "Awinic high voltage LRA haptic driver"
+	depends on I2C
+	help
+	  Say Y here if you have awinic high voltage haptic chip in your system.
+	  If unsure, say N.
+	  To compile this driver as a module, choose M here: the
+	  module will be called haptic.
