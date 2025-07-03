@@ -999,6 +999,15 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->iovdd_gpio = r;
 	}
 
+	r = of_get_named_gpio(node, "goodix,iovdden-gpio", 0);
+	if (r < 0) {
+		ts_info("can't find iovdd-gpio, use other power supply");
+		board_data->iovdden_gpio = 0;
+	} else {
+		ts_info("get iovdd-gpio[%d] from dt", r);
+		board_data->iovdden_gpio = r;
+	}
+
 	r = of_get_named_gpio(node, "goodix,reset-gpio", 0);
 	if (r < 0) {
 		ts_err("invalid reset-gpio in dt: %d", r);
@@ -1713,6 +1722,15 @@ static int goodix_ts_gpio_setup(struct goodix_ts_core *core_data)
 				GPIOF_OUT_INIT_LOW, "ts_iovdd_gpio");
 		if (r < 0) {
 			ts_err("Failed to request iovdd-gpio, r:%d", r);
+			return r;
+		}
+	}
+
+	if (ts_bdata->iovdden_gpio > 0) {
+		r = devm_gpio_request_one(&core_data->pdev->dev, ts_bdata->iovdden_gpio,
+				GPIOF_OUT_INIT_LOW, "ts_iovdden_gpio");
+		if (r < 0) {
+			ts_err("Failed to request iovdden-gpio, r:%d", r);
 			return r;
 		}
 	}

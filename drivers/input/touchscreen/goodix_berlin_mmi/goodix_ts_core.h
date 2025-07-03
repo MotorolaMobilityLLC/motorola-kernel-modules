@@ -304,6 +304,7 @@ struct goodix_ts_board_data {
 	int irq_gpio;
 	int avdd_gpio;
 	int iovdd_gpio;
+	int iovdden_gpio;
 	unsigned int  irq_flags;
 
 	unsigned int swap_axis;

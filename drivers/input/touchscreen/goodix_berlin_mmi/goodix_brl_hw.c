@@ -188,9 +188,18 @@ static int brl_reset_after(struct goodix_ts_core *cd)
 static int brl_power_on(struct goodix_ts_core *cd, bool on)
 {
 	int ret = 0;
-	int iovdd_gpio = cd->board_data.iovdd_gpio;
-	int avdd_gpio = cd->board_data.avdd_gpio;
-	int reset_gpio = cd->board_data.reset_gpio;
+	int iovdd_gpio = 0;
+	int avdd_gpio = 0;
+	int reset_gpio = 0;
+	int iovdden_gpio = 0;
+
+	if(!cd)
+		return 0;
+
+	iovdd_gpio = cd->board_data.iovdd_gpio;
+	avdd_gpio = cd->board_data.avdd_gpio;
+	reset_gpio = cd->board_data.reset_gpio;
+	iovdden_gpio = cd->board_data.iovdden_gpio;
 
 	if (on) {
 		if (iovdd_gpio > 0) {
@@ -200,6 +209,9 @@ static int brl_power_on(struct goodix_ts_core *cd, bool on)
 			if (ret < 0) {
 				ts_err("Failed to enable iovdd:%d", ret);
 				goto power_off;
+			}
+	              if (iovdden_gpio > 0){
+				gpio_direction_output(iovdden_gpio, 1);
 			}
 		}
 		usleep_range(3000, 3100);
@@ -226,8 +238,12 @@ power_off:
 	gpio_direction_output(reset_gpio, 0);
 	if (iovdd_gpio > 0)
 		gpio_direction_output(iovdd_gpio, 0);
-	else if (cd->iovdd)
+	else if (cd->iovdd){
+              if (iovdden_gpio > 0){
+		    gpio_direction_output(iovdden_gpio, 0);
+		}
 		regulator_disable(cd->iovdd);
+	}
 	if (avdd_gpio > 0)
 		gpio_direction_output(avdd_gpio, 0);
 	else if (cd->avdd)
