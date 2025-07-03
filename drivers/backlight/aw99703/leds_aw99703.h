@@ -243,6 +243,8 @@ struct aw99703_data {
 	unsigned int  pwm_mode;
 	unsigned int  map_type;
 	bool using_lsb;
+	bool skip_first_trans;
+	bool reset_trans_delay;
 	bool bl_reconfig_enable;
 	char panel_info[16];
 	unsigned int bl_slow_reg;
