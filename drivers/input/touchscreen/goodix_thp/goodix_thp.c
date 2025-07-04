@@ -27,6 +27,7 @@
 
 
 bool debug_log_flag;
+static u8 ble_mac[6] = {0};
 
 static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);
@@ -622,7 +623,6 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
         void __user *argp = (void __user *)arg;
         struct thp_ioctl_tsc_msg tsc_msg;
         struct thp_ts_device *ts_dev = core_data->ts_dev;
-        u8 ble_mac[6];
         u8 stylus_id[2];
 
         if (copy_from_user(&tsc_msg, argp,
@@ -643,6 +643,7 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
         case SVC_CMD_BLE_MAC:
                 memcpy(ble_mac, &tsc_msg.value[0], sizeof(ble_mac));
                 memcpy(stylus_id, &tsc_msg.value[6], sizeof(stylus_id));
+                kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
                 ts_info(ts_dev->dev, "recv ble mac:%*ph, stylusID:%*ph", 6, ble_mac, 2, stylus_id);
                 break;
         case SVC_CMD_GAME_FILTER:
@@ -2390,6 +2391,33 @@ exit_pinctrl_put:
         return r;
 }
 
+static int ts_touch_info_uevent(const struct device *dev, struct kobj_uevent_env *env)
+{
+    int ret = 0;
+
+    ret = add_uevent_var(env, "UEVENT_TO=PEN_FRAMEWORK");
+    if (ret)
+        return ret;
+
+    ret = add_uevent_var(env, "TYPE=TP");
+    if (ret)
+        return ret;
+
+    ret = add_uevent_var(env, "MAC=%02x:%02x:%02x:%02x:%02x:%02x",
+                        ble_mac[5], ble_mac[4],
+                        ble_mac[3], ble_mac[2],
+                        ble_mac[1], ble_mac[0]);
+    if (ret)
+        return ret;
+
+    return 0;
+}
+
+const struct device_type tp_dev_type ={
+    .name = "goodix_ts",
+    .uevent = ts_touch_info_uevent,
+};
+
 /**
  * goodix_thp_probe - called by kernel when a Goodix touch
  *  platform driver is added.
@@ -2406,6 +2434,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
                 ts_err(NULL, "Invalid touch device");
                 return -ENODEV;
         }
+        pdev->dev.type = &tp_dev_type;
 
         ts_info(tdev->dev, "%s IN", __func__);
 

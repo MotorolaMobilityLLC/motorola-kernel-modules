@@ -406,6 +406,7 @@ struct goodix_thp_hw_ops {
         int (*get_frame)(struct thp_ts_device *dev, char *data);
         int (*get_version)(struct thp_ts_device *dev, u64 *version);
         int (*set_fp_int_pin)(struct thp_ts_device *dev, u8 level);
+        int (*set_ble_broadcast)(struct thp_ts_device *dev, u8 enable);
         int (*reset)(struct thp_ts_device *dev, u32 delay_ms);
         int (*set_spi_speed)(struct thp_ts_device *dev, u32 speed);
 };

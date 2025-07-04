@@ -53,6 +53,8 @@ static ssize_t goodix_ts_fp_int_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_fp_int_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -71,6 +73,8 @@ static DEVICE_ATTR(stylus_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_stylus_mode_show, goodix_ts_stylus_mode_store);
 static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fp_int_show, goodix_ts_fp_int_store);
+static DEVICE_ATTR(ble_broadcast, (S_IRUGO | S_IWUSR | S_IWGRP),
+	NULL, goodix_ts_ble_broadcast_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -80,7 +84,7 @@ static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
 #define BIG_MODE   1
 #define SMALL_MODE    2
 #define DEFAULT_MODE   0
-#define MAX_ATTRS_ENTRIES 10
+#define MAX_ATTRS_ENTRIES 15
 
 #define NORMAL_DEFAULT_MODE 10
 #define NORMAL_SMALL_MODE 11
@@ -146,6 +150,8 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 		ADD_ATTR(stylus_mode);
 
 	ADD_ATTR(fp_int);
+
+	ADD_ATTR(ble_broadcast);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -801,6 +807,44 @@ static ssize_t goodix_ts_fp_int_show(struct device *dev,
 	ts_info(core_data->ts_dev->dev, "fp_int_state = %d.",
 		core_data->set_mode.fp_int_state);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.fp_int_state);
+}
+
+static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ts_info(tdev->dev, "Failed to convert value.");
+		return -EINVAL;
+	}
+
+	mutex_lock(&core_data->mode_lock);
+
+	if (core_data->power_on == 0) {
+		ts_info(tdev->dev, "The touch is in sleep state, ignore the value");
+		ret = size;
+		goto exit;
+	}
+
+	ret = tdev->hw_ops->set_ble_broadcast(tdev, mode);
+	if (!ret)
+		ts_info(tdev->dev, "Success %s ble broadcast", mode ? "start" : "stop");
+
+	msleep(20);
+	ret = size;
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
 }
 
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
