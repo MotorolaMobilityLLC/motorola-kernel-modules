@@ -271,6 +271,7 @@ static void ktd3136_transition_ramp(struct ktd3136_data *drvdata)
 		pr_debug("temp is %d\n", temp);
 	}
 
+        reg_pwm = reg_pwm << 4;
 	ktd3136_masked_write(drvdata->client, REG_TRANS_RAMP, 0x70, reg_pwm);
 	ktd3136_masked_write(drvdata->client, REG_TRANS_RAMP, 0x0f, reg_i2c);
 
