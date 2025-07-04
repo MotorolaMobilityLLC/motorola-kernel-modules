@@ -1294,6 +1294,7 @@ struct ilitek_ts_data {
 	const char *psy_name;
 #endif
 
+	char firmware_name[30];
 	u16 flash_mid;
 	u16 flash_devid;
 	u8 current_report_rate_mode;

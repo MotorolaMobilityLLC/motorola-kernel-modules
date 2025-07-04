@@ -23,7 +23,7 @@
 #include "ilitek_v3.h"
 
 #ifdef ILI_FW_MULTI_CHIP_EN
-#define FW_NAME_LENGTH 	20
+#define FW_NAME_LENGTH 	30
 char tp_fwname[FW_NAME_LENGTH] = {0};
 #endif
 
@@ -1579,7 +1579,11 @@ static void ili_update_tp_module_info(void)
 		ILI_ERR("Couldn't find any tp modules, applying default settings\n");
 		ilits->md_name = "DEF";
 		ilits->md_fw_filp_path = DEF_FW_FILP_PATH;
-		ilits->md_fw_rq_path = DEF_FW_REQUEST_PATH;
+		if((strlen(ilits->firmware_name) > 0) && (strlen(ilits->firmware_name) < 30)){
+			ilits->md_fw_rq_path = ilits->firmware_name;
+		}else{
+			ilits->md_fw_rq_path = DEF_FW_REQUEST_PATH;
+		}
 		ilits->md_ini_path = DEF_INI_NAME_PATH;
 		ilits->md_ini_rq_path = DEF_INI_REQUEST_PATH;
 		ilits->md_fw_ili = CTPM_FW_DEF;

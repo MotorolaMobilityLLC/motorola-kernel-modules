@@ -652,7 +652,7 @@ void ili_parse_tp_module(void)
 static int parse_dt(struct device_node *np)
 {
 	int32_t ret = 0;
-
+	const char *fw_name = NULL;
 #ifdef ILI_DOUBLE_TAP_CTRL
 	uint32_t value;
 
@@ -678,6 +678,21 @@ static int parse_dt(struct device_node *np)
 	if (ilits->psy_name)
 		ILI_INFO("%s: get psy_name:%s", __func__, ilits->psy_name);
 #endif
+
+	ret = of_property_read_string(np, "ilitek,firmware_name", &fw_name);
+	if (ret){
+		ILI_ERR("read  fw name err \n");
+		return ret;
+	}
+
+	if(strlen(fw_name) <= 0 || strlen(fw_name) >= 30){
+		ret = -1;
+		ILI_ERR("strlen fwname err \n");
+		return ret;
+	}
+	strcpy(ilits->firmware_name,fw_name);
+	ILI_INFO("ilitek,firmware_name : %s ",ilits->firmware_name);
+
 
   return ret;
 }
