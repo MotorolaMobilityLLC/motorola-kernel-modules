@@ -1,0 +1,3 @@
+load(":moto_swap.bzl", "define_modules")
+
+define_modules()
