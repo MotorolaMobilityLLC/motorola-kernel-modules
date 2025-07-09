@@ -263,6 +263,7 @@ static int aw8693x_snd_soc_init(struct device *dev)
 	int ret = 0;
 	struct snd_soc_dai_driver *dai;
 
+	dev_set_name(dev, "%s", AW_I2C_NAME);
 	/* register codec */
 	dai = devm_kzalloc(dev, sizeof(aw8693x_dai), GFP_KERNEL);
 	if (!dai)
