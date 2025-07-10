@@ -3138,10 +3138,12 @@ static int fts_ts_remove(struct spi_device *spi)
 
 static void fts_ts_shutdown(struct spi_device *spi)
 {
+    struct fts_ts_data *ts_data = spi_get_drvdata(spi);
     FTS_FUNC_ENTER();
-    if (fts_data) {
-        fts_ts_remove_entry(fts_data);
+    if (ts_data) {
+        fts_ts_remove_entry(ts_data);
         spi_set_drvdata(spi, NULL);
+        kfree_safe(ts_data);
     }
     FTS_FUNC_EXIT();
 }
