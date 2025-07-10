@@ -215,6 +215,12 @@ typedef enum {
         NOTIFY_TYPE_SAVE_MOTO_DATA,
 } NOTIFY_TYPE_T;
 
+enum pen_action_state {
+    PEN_STATE_NONE,
+    PEN_STATE_HOVER,
+    PEN_STATE_TOUCH
+};
+
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
         uint32_t id;
@@ -480,6 +486,7 @@ struct goodix_thp_core {
         int pm_qos_state;
 #endif
         u8 prev_finger_state[INPUT_AGENT_MAX_FINGERS]; // recording the prev finger state
+        enum pen_action_state pen_state;
 };
 
 extern bool debug_log_flag;

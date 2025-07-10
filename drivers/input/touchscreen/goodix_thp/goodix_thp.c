@@ -1392,6 +1392,9 @@ static void goodix_thp_force_release_all(struct goodix_thp_core *core_data)
 
         //clear previous finger state
         memset(core_data->prev_finger_state, 0, sizeof(core_data->prev_finger_state));
+
+        //reinitialize pen action state
+        core_data->pen_state = PEN_STATE_NONE;
 }
 
 static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *core_data, unsigned long arg)
@@ -1429,6 +1432,37 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
 
         if (data.touch[STYLUS_TRACK_ID].touch_valid == 1) {
                 stylus_data = &data.touch[STYLUS_TRACK_ID];
+                int is_hover = (stylus_data->p == 0) ? 1 : 0;
+                int is_touch = !is_hover;
+
+                // --- pen action state transfer detection start ---
+                if (is_hover) {
+                    //pen hover state
+                    if (core_data->pen_state != PEN_STATE_HOVER) {
+                        // from pen touch state to pen hover state
+                        if (core_data->pen_state == PEN_STATE_TOUCH) {
+                            ts_info(tdev->dev, "touch_health - pen_action=UP");
+                        }
+                        // record enter pen hover state
+                        ts_info(tdev->dev, "touch_health - pen_action=HOVER_ENTER x=%d y=%d",
+                                    stylus_data->x, stylus_data->y);
+                        core_data->pen_state = PEN_STATE_HOVER;
+                    }
+                } else if (is_touch) {
+                    // pen touch state
+                    if (core_data->pen_state != PEN_STATE_TOUCH) {
+                        // from pen hover state to pen touch state
+                        if (core_data->pen_state == PEN_STATE_HOVER) {
+                            ts_info(tdev->dev, "touch_health - pen_action=HOVER_EXIT");
+                        }
+                        // record enter pen touch state
+                        ts_info(tdev->dev, "touch_health - pen_action=DOWN x=%d y=%d pressure=%d",
+                                stylus_data->x, stylus_data->y, stylus_data->p);
+                        core_data->pen_state = PEN_STATE_TOUCH;
+                    }
+                }
+                // --- pen action state transfer detection end ---
+
                 // release all fingers
                 for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
                         input_mt_slot(input_dev, i);
@@ -1450,6 +1484,16 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 input_report_key(pen_dev, BTN_TOOL_PEN, 1);
                 input_sync(pen_dev);
         } else {
+                // --- release pen action detection start ---
+                if (core_data->pen_state == PEN_STATE_HOVER) {
+                    ts_info(tdev->dev, "touch_health - pen_action=HOVER_EXIT");
+                    core_data->pen_state = PEN_STATE_NONE;
+                } else if (core_data->pen_state == PEN_STATE_TOUCH) {
+                    ts_info(tdev->dev, "touch_health - pen_action=UP");
+                    core_data->pen_state = PEN_STATE_NONE;
+                }
+                // --- release pen action detection end ---
+
                 // release stylus
                 input_report_key(pen_dev, BTN_TOUCH, 0);
                 input_report_key(pen_dev, BTN_TOOL_PEN, 0);
@@ -2462,6 +2506,8 @@ static int goodix_thp_probe(struct platform_device *pdev)
         core_data->reset_state = 0;
         core_data->get_frame_wait_mode = GET_FRAME_BLOCK_MODE;
         core_data->frame_wait_time = GOODIX_THP_DEFATULT_WAIT_FRAME_TIME;
+        //initialize pen action state
+        core_data->pen_state = PEN_STATE_NONE;
 
         /* get GPIO resource*/
         r = goodix_thp_gpio_setup(core_data);
