@@ -42,14 +42,14 @@
 
 #define bm_info(bmdev, fmt, ...)		\
 	do {					\
-		pr_info(fmt, ##__VA_ARGS__);	\
+		printk(KERN_INFO "BM_ULOG: " fmt, ##__VA_ARGS__); \
 		ipc_log_string(bmdev->ipc_log, fmt, ##__VA_ARGS__); \
 	} while (0)
 
 #define bm_dbg(bmdev, fmt, ...)			\
 	do {					\
 		if (bmdev->debug_enabled && *bmdev->debug_enabled)  \
-			pr_info(fmt, ##__VA_ARGS__);	\
+			printk(KERN_INFO "BM_ULOG: " fmt, ##__VA_ARGS__); \
 		else				\
 			pr_debug(fmt, ##__VA_ARGS__);	\
 		ipc_log_string(bmdev->ipc_log, fmt, ##__VA_ARGS__); \
@@ -310,12 +310,22 @@ int bm_ulog_get_mask_log(enum bm_ulog_category_bitmap categories,
 }
 EXPORT_SYMBOL(bm_ulog_get_mask_log);
 
+#define TIMESTAMP_LEN 18
+#define TIMESTAMP_DIV 19200000
 static int bm_ulog_print_buffer(struct bm_ulog_dev *bmdev, u32 size)
 {
 	int i;
 	int header = 0;
 	int lines = 0;
 	int line_len = 0;
+	u64 timestamp = 0;
+	int hh = 0, mm = 0, ss = 0, ms = 0;
+	char timestamp_str[TIMESTAMP_LEN + 1];
+
+	if (!bmdev) {
+		pr_err("BM ulog has not initialized yet\n");
+		return -ENODEV;
+	}
 
 	for (i = 0; i < size && header < size; i++) {
 		line_len = 0;
@@ -329,17 +339,37 @@ static int bm_ulog_print_buffer(struct bm_ulog_dev *bmdev, u32 size)
 			size = i;
 		}
 
-		if (line_len > 0) {
-			if (bmdev->ulog_enabled)
-				bm_info(bmdev, "%s\n", &bmdev->ulog_buffer[header]);
-			else
-				bm_dbg(bmdev, "%s\n", &bmdev->ulog_buffer[header]);
-			header = i + 1;
-			lines++;
+		if (line_len < TIMESTAMP_LEN) {
+			if (line_len > 0) {
+				header = i + 1;
+				lines++;
+			}
+			continue;
 		}
+
+		timestamp_str[TIMESTAMP_LEN] = '\0';
+		memcpy(timestamp_str, &bmdev->ulog_buffer[header],
+			TIMESTAMP_LEN);
+		if (!kstrtou64(timestamp_str, 0, &timestamp)) {
+			hh = timestamp / TIMESTAMP_DIV / 3600;
+			mm = (timestamp / TIMESTAMP_DIV % 3600) / 60;
+			ss = timestamp / TIMESTAMP_DIV % 60;
+			ms = (timestamp * 1000 / TIMESTAMP_DIV) % 1000;
+		}
+		if (bmdev->ulog_enabled) {
+			bm_info(bmdev, "[%02d:%02d:%02d.%03d]%s\n",
+				hh, mm, ss, ms,
+				&bmdev->ulog_buffer[header + TIMESTAMP_LEN]);
+		} else {
+			bm_dbg(bmdev, "[%02d:%02d:%02d.%03d]%s\n",
+				hh, mm, ss, ms,
+				&bmdev->ulog_buffer[header + TIMESTAMP_LEN]);
+		}
+		header = i + 1;
+		lines++;
 	}
 	if (lines > 0)
-		pr_info("recv len=%d, lines=%d\n", i, lines);
+		pr_debug("recv len=%d, lines=%d\n", i, lines);
 	return lines > 0? i : 0;
 }
 
@@ -586,14 +616,12 @@ static int bm_ulog_kthread(void *param)
 			read_count = bm_ulog_print_buffer(bmdev, MAX_ULOG_READ_BUFFER_SIZE);
 
 			if (read_count > 1024) {
-				sleep_ms = 1;
-			} else if (read_count > 128) {
 				sleep_ms = 50;
-			} else if (read_count == 0) {
-				sleep_ms = sleep_ms + 50;
-			}
-			if (sleep_ms > 200)
+			} else if (read_count > 128) {
+				sleep_ms = 100;
+			} else {
 				sleep_ms = 200;
+			}
 		} else {
 			sleep_ms = 1000;
 		}
@@ -683,10 +711,9 @@ static int bm_ulog_probe(struct platform_device *pdev)
 	if (init_log_enabled) {
 		init_debug_enabled = debug_enabled;
 		debug_enabled = init_log_enabled;
-		bm_ulog_print_log(MAX_ULOG_READ_BUFFER_SIZE);
+		bm_ulog_set_mask(bmdev, bmdev->categories, bmdev->level);
 		bm_ulog_print_init_log(MAX_ULOG_READ_BUFFER_SIZE);
-		bm_ulog_print_mask_log(bmdev->categories, bmdev->level,
-					MAX_ULOG_READ_BUFFER_SIZE);
+		bm_ulog_print_log(MAX_ULOG_READ_BUFFER_SIZE);
 		debug_enabled = init_debug_enabled;
 	}
 
@@ -716,6 +743,7 @@ static int bm_ulog_remove(struct platform_device *pdev)
 	int rc;
 
 	if (bmdev->bm_ulog_task) {
+		kthread_stop(bmdev->bm_ulog_task);
 		cancel_delayed_work(&bmdev->ulog_complete_work);
 		pm_relax(bmdev->dev);
 	}
