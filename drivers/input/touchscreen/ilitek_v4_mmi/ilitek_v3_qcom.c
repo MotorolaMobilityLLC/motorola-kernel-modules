@@ -964,6 +964,11 @@ static int ili_sensor_init(struct ilitek_ts_data *data)
 	sensor_input_dev->name = "double-tap";
 	data->sensor_pdata->input_sensor_dev = sensor_input_dev;
 
+	input_set_abs_params(sensor_input_dev, ABS_X,
+			0, ilits->resolution_boost_x, 0, 0);
+	input_set_abs_params(sensor_input_dev, ABS_Y,
+			0, ilits->resolution_boost_y, 0, 0);
+
 	err = input_register_device(sensor_input_dev);
 	if (err) {
 		ILI_ERR("Unable to register device, err=%d", err);

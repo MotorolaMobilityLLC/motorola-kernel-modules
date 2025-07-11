@@ -2327,6 +2327,11 @@ void ili_report_gesture_mode(u8 *buf, int len)
 
 	}
 
+#ifdef ILI_SENSOR_EN
+        input_report_abs(ilits->sensor_pdata->input_sensor_dev, ABS_X, gc->pos_start.x/ilits->resolution_boost);
+        input_report_abs(ilits->sensor_pdata->input_sensor_dev, ABS_Y, gc->pos_start.y/ilits->resolution_boost);
+#endif
+
 	ILI_INFO("Transfer = %d, Type = %d, clockwise = %d\n", transfer, gc->type, gc->clockwise);
 	ILI_INFO("Gesture Points: (%d, %d)(%d, %d)(%d, %d)(%d, %d)(%d, %d)(%d, %d)\n",
 			gc->pos_start.x, gc->pos_start.y,

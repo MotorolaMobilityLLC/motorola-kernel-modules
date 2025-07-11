@@ -1432,6 +1432,11 @@ struct ilitek_ts_data {
 #ifdef ILI_TOUCH_LAST_TIME
 	ktime_t last_event_time;
 #endif
+#ifdef ILI_SENSOR_EN
+	u32 resolution_boost;
+	u32 resolution_boost_x;
+	u32 resolution_boost_y;
+#endif
 };
 extern struct ilitek_ts_data *ilits;
 

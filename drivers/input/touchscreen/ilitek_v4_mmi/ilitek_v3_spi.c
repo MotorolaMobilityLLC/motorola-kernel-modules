@@ -648,6 +648,32 @@ static int parse_dt(struct device_node *np)
 #endif //ILI_DOUBLE_TAP_CTRL
 
 #ifdef ILI_SENSOR_EN
+	ret = of_property_read_u32(np, "ilitek,resolution_boost_x",
+		&ilits->resolution_boost_x);
+	if (ret) {
+		ILI_INFO("Parse X resolution from dt failed %d", ret);
+		ilits->resolution_boost_x = 1080;
+	}
+
+	ILI_INFO("X boost resolution:%d", ilits->resolution_boost_x);
+
+	ret = of_property_read_u32(np, "ilitek,resolution_boost_y",
+		&ilits->resolution_boost_y);
+	if (ret) {
+		ILI_INFO("Parse Y resolution from dt failed %d", ret);
+		ilits->resolution_boost_y = 2400;
+	}
+
+	ILI_INFO("Y boost resolution:%d", ilits->resolution_boost_y);
+
+        ret = of_property_read_u32(np, "ilitek,resolution_boost",
+            &ilits->resolution_boost);
+        if (ret) {
+                ILI_INFO("Parse ilitek resolution_boost from dt failed %d", ret);
+                ilits->resolution_boost = 1;
+        }
+	ILI_INFO("ilitek resolution_boost:%d\n", ilits->resolution_boost);
+
 	if (of_property_read_bool(np, "ilitek,report_gesture_key")) {
 		ILI_INFO("ilitek,report_gesture_key set");
 		ilits->report_gesture_key = 1;
