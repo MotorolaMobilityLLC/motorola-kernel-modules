@@ -4251,7 +4251,7 @@ static int ovt_tcm_disp_notifier_cb(struct notifier_block *nb,
 			}
 		}
 
-		if (action == MTK_DISP_EARLY_EVENT_BLANK &&
+		if ((action == MTK_DISP_EARLY_EVENT_BLANK || action == MTK_DISP_EVENT_BLANK) &&
 				*tcm_disp_status == MTK_DISP_BLANK_POWERDOWN) {
 				retval = ovt_tcm_disp_suspend(&tcm_hcd->pdev->dev);
 				tcm_hcd->fb_ready = 0;
