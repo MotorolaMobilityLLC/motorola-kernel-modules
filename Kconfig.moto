@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "Moto kernel module Configuration"
+
+source "motorola/kernel/modules/drivers/input/touchscreen/goodix_thp/Kconfig"
+
+source "motorola/kernel/modules/drivers/input/touchscreen/synaptics_tcm2_mmi_v2/Kconfig"
+
+source "motorola/kernel/modules/drivers/input/touchscreen/goodix_berlin_mmi/Kconfig"
+
+endmenu

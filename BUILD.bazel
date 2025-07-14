@@ -14,6 +14,16 @@ filegroup(
     ]),
 )
 
+filegroup(
+    name = "moto_kconfigs_group",
+    srcs = [
+         "//motorola/kernel/modules/drivers/input/touchscreen/goodix_thp:Kconfig",
+         "//motorola/kernel/modules/drivers/input/touchscreen/synaptics_tcm2_mmi_v2:Kconfig",
+         "//motorola/kernel/modules/drivers/input/touchscreen/goodix_berlin_mmi:Kconfig",
+         "//motorola/kernel/modules:Kconfig.moto",
+    ],
+)
+
 ddk_headers(
     name = "moto_modules_ddk_headers",
     hdrs = [
