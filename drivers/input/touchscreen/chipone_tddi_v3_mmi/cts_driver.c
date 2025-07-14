@@ -645,26 +645,32 @@ static bool cts_is_charger_mode(void)
     bool charger_mode = false;
     const char *bootargs = NULL;
     char *bootmode = NULL;
-    char *end = NULL;
 
     if (!np)
         return charger_mode;
 
 #ifdef CONFIG_BOOT_CONFIG
-    if (!of_property_read_string(np, "mmi,bootconfig", &bootargs)) {
+	cts_info("BOOT_CONFIG is define");
+	if (!of_property_read_string(np, "mmi,bootconfig", &bootargs)) {
 #else
-    if (!of_property_read_string(np, "bootargs", &bootargs)) {
+	cts_info("BOOT_CONFIG is not define");
+	if (!of_property_read_string(np, "bootargs", &bootargs)) {
 #endif
         bootmode = strstr(bootargs, "androidboot.mode=");
-        if (bootmode) {
-            end = strpbrk(bootmode, " ");
-            bootmode = strpbrk(bootmode, "=");
-        }
-        if (bootmode &&
-            end > bootmode &&
-            strnstr(bootmode, "charger", end - bootmode)) {
-                charger_mode = true;
-        }
+	if(bootmode) {
+		cts_info("bootmode info: %s", bootmode);
+		bootmode = strpbrk(bootmode, "=");
+		if (strlen(bootmode) > 1) {
+			bootmode++;
+			cts_info("bootmode=%s", bootmode);
+			if (!strncmp(bootmode, "charger", strlen("charger"))) {
+				charger_mode = true;
+				cts_info("Charger mode true");
+			}
+		}
+	} else {
+		cts_info("bootmode NULL");
+	}
     }
     of_node_put(np);
     cts_info("Charger mode = %d", charger_mode);

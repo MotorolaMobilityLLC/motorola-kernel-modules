@@ -1185,6 +1185,47 @@ err_register_disp_notif_failed:
 }
 #endif/*SPRD_SYSFS_SUSPEND_RESUME*/
 
+#ifdef ILI_CHECK_DEVICE_BOOTMODE
+static bool ili_is_charger_mode(void)
+{
+    struct device_node *np = of_find_node_by_path("/chosen");
+    bool charger_mode = false;
+    const char *bootargs = NULL;
+    char *bootmode = NULL;
+
+    if (!np)
+        return charger_mode;
+
+#ifdef CONFIG_BOOT_CONFIG
+	ILI_INFO("CONFIG BOOT CONFIG is define\n");
+	if (!of_property_read_string(np, "mmi,bootconfig", &bootargs)) {
+#else
+	ILI_INFO("CONFIG BOOT CONFIG is not define\n");
+	if (!of_property_read_string(np, "bootargs", &bootargs)) {
+#endif
+        bootmode = strstr(bootargs, "androidboot.mode=");
+	if(bootmode) {
+		ILI_INFO("bootmode info: %s\n", bootmode);
+		bootmode = strpbrk(bootmode, "=");
+		if (strlen(bootmode) > 1) {
+			bootmode++;
+			ILI_INFO("bootmode=%s\n", bootmode);
+			if (!strncmp(bootmode, "charger", strlen("charger"))) {
+				charger_mode = true;
+				ILI_INFO("Charger mode true\n");
+			}
+		}
+	} else {
+		ILI_INFO("bootmode NULL\n");
+	}
+    }
+    of_node_put(np);
+    ILI_INFO("Charger mode = %d\n", charger_mode);
+
+    return charger_mode;
+}
+#endif
+
 //#endif/*kernel 5.15*/
 static int ilitek_plat_probe(void)
 {
@@ -1236,6 +1277,13 @@ static int ilitek_plat_probe(void)
 #endif
 #endif
 #endif/*kernel 5.15*/
+
+#ifdef ILI_CHECK_DEVICE_BOOTMODE
+    if (ili_is_charger_mode()) {
+        ILI_INFO("Charger mode, ignore insmod ilitek modules.\n");
+        return -ENODEV;
+    }
+#endif
 
 	if (ilitek_plat_gpio_register() < 0)
 		ILI_ERR("Register gpio failed\n");
