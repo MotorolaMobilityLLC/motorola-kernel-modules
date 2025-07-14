@@ -3607,15 +3607,8 @@ static int tiktap_file_mmap(struct file *file, struct vm_area_struct *vma)
 	int ret = 0;
 
 #if KERNEL_VERSION(4, 7, 0) < LINUX_VERSION_CODE
-	vm_flags_t vm_flags = calc_vm_prot_bits(PROT_READ|PROT_WRITE, 0) |
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-			      __calc_vm_flag_bits(MAP_SHARED);
-#else
-			      calc_vm_flag_bits(MAP_SHARED);
-#endif
-
-	vm_flags |= current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE |
-		    VM_MAYEXEC | VM_SHARED | VM_MAYSHARE;
+	vm_flags_t vm_flags = current->mm->def_flags | VM_MAYREAD | VM_MAYWRITE |
+		    VM_MAYEXEC | VM_READ | VM_WRITE | VM_SHARED | VM_MAYSHARE;
 
 	if (!vma || (pgprot_val(vma->vm_page_prot) != pgprot_val(vm_get_page_prot(vm_flags)))) {
 		aw_err("vm_page_prot error!");
