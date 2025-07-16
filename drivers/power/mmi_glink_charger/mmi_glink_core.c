@@ -700,6 +700,8 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	int rc;
 	struct mmi_charger_info *charger_info = NULL;
 	struct mmi_charger_info charger_info_update;
+	struct mmi_pmic_info *pmic_info = NULL;
+	struct mmi_pmic_info pmic_info_update;
 	struct battery_host *batt_host;
 	int thermal_level = 0;
 
@@ -707,6 +709,7 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 		return;
 
 	charger_info = &chip->charger_info;
+	pmic_info = &chip->pmic_info;
 	batt_host = chip->batt_host;
 
 	mmi_get_cur_thermal_level(chip, &thermal_level);
@@ -726,12 +729,7 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	charger_info->wls_tx_enabled = charger_info_update.wls_tx_enabled;
 	charger_info->icm_sm_st = charger_info_update.icm_sm_st;
 	charger_info->chrg_otg_enabled = charger_info_update.chrg_otg_enabled;
-	charger_info->pmic_vbatt_uv = charger_info_update.pmic_vbatt_uv;
-	charger_info->pmic_ibatt_ua = charger_info_update.pmic_ibatt_ua;;
-	charger_info->aicl_result_ma = charger_info_update.aicl_result_ma;
-	charger_info->vfloat_mv = charger_info_update.vfloat_mv;
 	charger_info->chrg_stat = charger_info_update.chrg_stat;
-	charger_info->pmic_suspend_st = charger_info_update.pmic_suspend_st;
 
 	if (charger_info->chrg_present != charger_info_update.chrg_present && !charger_info_update.chrg_present) {
 		qti_encrypt_authentication(chip);
@@ -747,7 +745,7 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	}
 
 	mmi_info(chip, "chrg_present %d, chrg_type %d, chrg_pmax_mw %d,"
-		" chrg_uv %d, chrg_ua %d, usb_in %d, wls_in %d, wls_tx %d, chrg_otg_enabled %d, thermal_level %d\n",
+		" chrg_uv %d, chrg_ua %d, usb_in %d, wls_in %d, wls_tx %d, chrg_otg_enabled %d, thermal_level %d, icm_sm_st %d, chrg_stat %d\n",
 		charger_info->chrg_present,
 		charger_info->chrg_type,
 		charger_info->chrg_pmax_mw,
@@ -757,16 +755,32 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 		charger_info->wls_online,
 		charger_info->wls_tx_enabled,
 		charger_info->chrg_otg_enabled,
-		thermal_level);
+		thermal_level,
+		charger_info->icm_sm_st,
+		charger_info->chrg_stat);
 
-	mmi_info(chip, "pmic_vbatt_mv %d, pmic_ibatt_ma %d, pmic_suspend_st %d, vfloat_mv %d, aicl_result_ma %d, chrg_stat %d, icm_sm_st %d\n",
-		charger_info->pmic_vbatt_uv / 1000,
-		charger_info->pmic_ibatt_ua / 1000,
-		charger_info->pmic_suspend_st,
-		charger_info->vfloat_mv,
-		charger_info->aicl_result_ma,
-		charger_info->chrg_stat,
-		charger_info->icm_sm_st);
+	rc = qti_charger_get_property(OEM_PROP_PMIC_INFO,
+				&pmic_info_update,
+				sizeof(struct mmi_pmic_info));
+	if (rc)
+		return;
+
+	pmic_info->pmic_vbatt_uv = pmic_info_update.pmic_vbatt_uv;
+	pmic_info->pmic_ibatt_ua = pmic_info_update.pmic_ibatt_ua;
+	pmic_info->aicl_result_ma = pmic_info_update.aicl_result_ma;
+	pmic_info->icl_result_ma = pmic_info_update.icl_result_ma;
+	pmic_info->vfloat_mv = pmic_info_update.vfloat_mv;
+	pmic_info->pmic_suspend_st = pmic_info_update.pmic_suspend_st;
+	pmic_info->pmic_vph_uv = pmic_info_update.pmic_vph_uv;
+
+	mmi_info(chip, "pmic_vph_mv %d, pmic_vbatt_mv %d, pmic_ibatt_ma %d, pmic_suspend_st %d, vfloat_mv %d, aicl_result_ma %d, icl_result_ma %d\n",
+		pmic_info->pmic_vph_uv / 1000,
+		pmic_info->pmic_vbatt_uv / 1000,
+		pmic_info->pmic_ibatt_ua / 1000,
+		pmic_info->pmic_suspend_st,
+		pmic_info->vfloat_mv,
+		pmic_info->aicl_result_ma,
+		pmic_info->icl_result_ma);
 
 	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
 }

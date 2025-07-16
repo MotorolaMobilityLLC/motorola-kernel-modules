@@ -90,11 +90,16 @@ struct mmi_charger_info {
 	int wls_online;
 	int wls_tx_enabled;
 	int icm_sm_st;
+	int chrg_stat;
+};
+
+struct mmi_pmic_info {
+	int pmic_vph_uv;
 	int pmic_vbatt_uv;
 	int pmic_ibatt_ua;
 	int aicl_result_ma;
+	int icl_result_ma;
 	int vfloat_mv;
-	int chrg_stat;
 	int pmic_suspend_st;
 };
 
@@ -175,6 +180,7 @@ struct mmi_glink_chip {
 	struct battery_host *batt_host;
 
 	struct mmi_charger_info charger_info;
+	struct mmi_pmic_info pmic_info;
 	struct mmi_charger_status charger_status;
 	struct mmi_charger_constraint charger_constraint;
 	struct battery_info battery_info;
