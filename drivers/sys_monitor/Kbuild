@@ -1,0 +1,15 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power_monitor
+
+
+obj-m += sys_monitor.o
+
+sys_monitor-y := main.o sleep.o
+
