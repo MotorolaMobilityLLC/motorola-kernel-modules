@@ -1,0 +1,11 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module(
+    name = "sx937x_multi",
+    srcs = [
+        "sx937x_multi.c",
+    ],
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/sensors:sensors_class",
+    ],
+)
