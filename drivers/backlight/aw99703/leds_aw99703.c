@@ -340,7 +340,7 @@ static int aw99703_backlight_enable(struct aw99703_data *drvdata)
 
 int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 {
-	pr_info("%s brt_val is %d\n", __func__, brt_val);
+	pr_debug("%s brt_val is %d\n", __func__, brt_val);
 
 	if (drvdata->enable == false) {
 		if(brt_val == 0)
