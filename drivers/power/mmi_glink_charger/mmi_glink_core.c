@@ -603,24 +603,30 @@ static void mmi_update_battery_status(struct mmi_glink_chip *chip)
 		return;
 	}
 
-	qti_charger_get_property(OEM_PROP_BATT_INFO,
+	memcpy(&qti_batt_info, batt_info, sizeof(struct battery_info));
+	qti_batt_info.present = true;
+	ret = qti_charger_get_property(OEM_PROP_BATT_INFO,
 				&qti_batt_info,
 				sizeof(struct battery_info));
 
-	batt_info->batt_soh = qti_batt_info.batt_soh;
-	batt_host->state_of_health = qti_batt_info.batt_soh;
-	if (chip->state_of_health != qti_batt_info.batt_soh) {
-		chip->state_of_health = qti_batt_info.batt_soh;
-		mmi_notify_charger_event(chip, NOTIFY_EVENT_TYPE_BATTERY_SOH);
-		mmi_info(chip, "state_of_health %d\n", chip->state_of_health);
-	}
+	if (!ret) {
+		batt_info->batt_soh = qti_batt_info.batt_soh;
+		batt_host->state_of_health = qti_batt_info.batt_soh;
+		if (chip->state_of_health != qti_batt_info.batt_soh) {
+			chip->state_of_health = qti_batt_info.batt_soh;
+			mmi_notify_charger_event(chip, NOTIFY_EVENT_TYPE_BATTERY_SOH);
+			mmi_info(chip, "state_of_health %d\n", chip->state_of_health);
+		}
 
-       if (!qti_batt_info.present) {
-		mmi_info(chip, "BATT_INFO, batt_present check failure, Do not allow to charge\n");
-              chip->force_chrg_disabled_batt_err = true;
-       } else {
-              chip->force_chrg_disabled_batt_err = false;
-       }
+		if (!qti_batt_info.present) {
+			mmi_info(chip, "BATT_INFO, batt_present check failure, Do not allow to charge\n");
+			chip->force_chrg_disabled_batt_err = true;
+		} else {
+			chip->force_chrg_disabled_batt_err = false;
+		}
+	} else {
+		mmi_info(chip, "BATT_INFO, get qti_batt_info failed\n");
+	}
 
 	ret = power_supply_get_property(batt_host->batt_psy,
 		POWER_SUPPLY_PROP_STATUS, &prop);
