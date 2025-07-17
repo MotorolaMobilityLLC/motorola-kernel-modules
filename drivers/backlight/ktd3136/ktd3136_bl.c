@@ -321,7 +321,7 @@ static int ktd3136_backlight_enable(struct ktd3136_data *drvdata)
 
 int ktd3136_set_brightness(struct ktd3136_data *drvdata, int brt_val)
 {
-	pr_info("%s brt_val is %d\n", __func__, brt_val);
+	pr_debug("%s brt_val is %d\n", __func__, brt_val);
 
 	if (drvdata->enable == false) {
 		if (brt_val == 0) {
