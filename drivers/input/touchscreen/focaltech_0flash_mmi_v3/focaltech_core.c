@@ -1880,9 +1880,11 @@ static int fts_deinit_pm_disp_notifier(struct fts_ts_data *ts_data)
 	int ret = 0;
 	FTS_INFO("Deinit DISP notifier");
 
-	ret = mtk_disp_notifier_unregister(&ts_data->disp_notifier);
-	if (ret)
-		FTS_ERROR("Failed to register disp notifier client:%d", ret);
+	if (ts_data->disp_notifier.notifier_call){
+		ret = mtk_disp_notifier_unregister(&ts_data->disp_notifier);
+		if (ret)
+			FTS_ERROR("Failed to unregister disp notifier client:%d", ret);
+	}
 
 	return ret;
 
