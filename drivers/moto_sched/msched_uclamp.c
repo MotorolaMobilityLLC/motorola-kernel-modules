@@ -48,11 +48,11 @@ uclamp_tg_restrict_moto(struct task_struct *p, enum uclamp_id clamp_id) {
 	value = clamp(value, tg_min, tg_max);
 
 	// RT_mutex inherited uclamp restriction
-	value = clamp(value, vp->uclamp_pi[UCLAMP_MIN], vp->uclamp_pi[UCLAMP_MAX]);
+	value = clamp_t(unsigned int, value, vp->uclamp_pi[UCLAMP_MIN], vp->uclamp_pi[UCLAMP_MAX]);
 
 	// Inherited uclamp restriction
 	if (vbinder->uclamp_active) {
-		value = clamp(value, vbinder->uclamp[UCLAMP_MIN], vbinder->uclamp[UCLAMP_MAX]);
+		value = clamp_t(unsigned int, value, vbinder->uclamp[UCLAMP_MIN], vbinder->uclamp[UCLAMP_MAX]);
 	}
 
 	uc_req.value = value;
@@ -139,19 +139,22 @@ void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 	u16 *uclamp_i, unsigned int type) {
 	struct rq_flags rf;
 	struct rq *rq;
+	unsigned long p_util, pi_util;
+	u16 p_uclamp_min, p_uclamp_max;
+	u16 pi_uclamp_min, pi_uclamp_max;
 
 	if(type == VENDOR_INHERITANCE_RTMUTEX) {
 		rq = __task_rq_lock(p, & rf);
 		lockdep_assert_held(&p->pi_lock);
 	} else
 		rq = task_rq_lock(p, &rf);
-	unsigned long p_util = moto_task_util(p);
-	u16 p_uclamp_min = uclamp_eff_value_moto(p, UCLAMP_MIN);
-	u16 p_uclamp_max = uclamp_eff_value_moto(p, UCLAMP_MAX);
+	p_util = moto_task_util(p);
+	p_uclamp_min = uclamp_eff_value_moto(p, UCLAMP_MIN);
+	p_uclamp_max = uclamp_eff_value_moto(p, UCLAMP_MAX);
 	if (pi_task) {
-		unsigned long pi_util = moto_task_util(pi_task);
-		u16 pi_uclamp_min = uclamp_eff_value_moto(pi_task, UCLAMP_MIN);
-		u16 pi_uclamp_max = uclamp_eff_value_moto(pi_task, UCLAMP_MAX);
+		pi_util = moto_task_util(pi_task);
+		pi_uclamp_min = uclamp_eff_value_moto(pi_task, UCLAMP_MIN);
+		pi_uclamp_max = uclamp_eff_value_moto(pi_task, UCLAMP_MAX);
 
 		/*
 		 * Take task's util into consideration first to do full
@@ -165,8 +168,8 @@ void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 		 * 100, then pi_task could wait for longer to acquire the lock
 		 * because the performance of p is too low.
 		 */
-		p_uclamp_min = clamp(p_util, p_uclamp_min, p_uclamp_max);
-		pi_uclamp_min = clamp(pi_util, pi_uclamp_min, pi_uclamp_max);
+		p_uclamp_min = clamp_t(unsigned long, p_util, p_uclamp_min, p_uclamp_max);
+		pi_uclamp_min = clamp_t(unsigned long, pi_util, pi_uclamp_min, pi_uclamp_max);
 
 		/* Inherit unclamp_min/max if they're inverted */
 
@@ -196,6 +199,7 @@ void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 void msched_uclamp_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig) {
 	struct rq_flags rf;
 	struct rq *rq;
+	enum uclamp_id clamp_id;
 
 	if (is_enabled(UX_ENABLE_MDPF)) {
 		int ux_type = task_get_ux_type(orig);
@@ -206,7 +210,7 @@ void msched_uclamp_vh_dup_task_struct(void *unused, struct task_struct *task, st
 				task->uclamp[UCLAMP_MIN].value, task->uclamp_req[UCLAMP_MIN].value,
 				task->tgid, task->pid, moto_task_util(task),
 				orig->tgid, orig->pid, moto_task_util(orig));
-			enum uclamp_id clamp_id;
+
 			rq = task_rq_lock(task, &rf);
 			for_each_clamp_id(clamp_id) {
 				uclamp_se_set(&task->uclamp_req[clamp_id],
