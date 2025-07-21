@@ -36,6 +36,7 @@
 #include <uapi/linux/sched/types.h>
 #include <linux/kthread.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/cpufreq.h>
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
@@ -352,6 +353,10 @@ struct goodix_thp_board_data {
         int irq_need_dev_resume_time; /*control setting of wait resume time*/
         u32 sched_priority;
         u32 cpu_mask;
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        int max_boost_count;
+        int boost_timeout;
+#endif
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -424,6 +429,14 @@ struct goodix_thp_hw_ops {
         int (*set_spi_speed)(struct thp_ts_device *dev, u32 speed);
 };
 
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+struct cpu_boost_info {
+        struct freq_qos_request qos_req;
+        unsigned int max_freq;
+        bool initialized;
+};
+#endif
+
 struct goodix_thp_core {
         char thp_misc_name[32];
         struct miscdevice thp_misc_dev;
@@ -494,6 +507,15 @@ struct goodix_thp_core {
 #endif
         u8 prev_finger_state[INPUT_AGENT_MAX_FINGERS]; // recording the prev finger state
         enum pen_action_state pen_state;
+
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        int boost_count;
+        struct timer_list boost_timer;
+
+        struct cpu_boost_info *boost_infos;
+        int *cpu_to_index_map;
+        int qos_count;
+#endif
 };
 
 extern bool debug_log_flag;

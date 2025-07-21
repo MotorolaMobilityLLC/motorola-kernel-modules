@@ -497,6 +497,22 @@ static int goodix_thp_parse_dt(struct device_node *node,
         if (board_data->stylus_mode_ctrl)
             ts_info(dev, "support goodix stylus mode");
 
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        r = of_property_read_u32(node, "touch-boost-count",
+                              &board_data->max_boost_count);
+        if (r) {
+            ts_info(dev, "No touch-boost-count, using default 3");
+            board_data->max_boost_count = 3;
+        }
+
+        r = of_property_read_u32(node, "touch-boost-timeout",
+                              &board_data->boost_timeout);
+        if (r) {
+            ts_info(dev, "No touch-boost-timeout, using default 50ms");
+            board_data->boost_timeout = 50;
+        }
+#endif
+
         return 0;
 }
 #endif

@@ -1147,6 +1147,11 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         static bool affinity_initialized = false;
         struct cpumask cpumask;
         static int cur_index, pre_index;
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        struct goodix_thp_board_data *board_data =
+                        &core_data->ts_dev->board_data;
+        int cpu, index;
+#endif
 
         if (unlikely(!affinity_initialized)) {
             cpumask_clear(&cpumask);
@@ -1159,6 +1164,25 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
             }
             affinity_initialized = true;
         }
+
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        cpu = raw_smp_processor_id();
+
+        if (cpu < NR_CPUS && (index = core_data->cpu_to_index_map[cpu]) >= 0) {
+                struct cpu_boost_info *info = &core_data->boost_infos[index];
+
+                if (core_data->boost_count < board_data->max_boost_count) {
+                        freq_qos_update_request(&info->qos_req, info->max_freq);
+                        core_data->boost_count++;
+
+                        ts_debug(ts_dev->dev, "CPU%d: index=%d, freq boosted to %u kHz (count %d/%d)",
+                                cpu, index, info->max_freq,
+                                core_data->boost_count, board_data->max_boost_count);
+                }
+        }
+
+        del_timer(&core_data->boost_timer);
+#endif
 
         /*for check bus i2c/spi is ready or not*/
         if ((core_data->suspended) && (core_data->pm_suspend)) {
@@ -1242,6 +1266,16 @@ exit:
         if (core_data->ws) {
                 __pm_relax(core_data->ws);
         }
+
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        if (index >= 0 && core_data->boost_count <= board_data->max_boost_count) {
+                struct cpu_boost_info *info = &core_data->boost_infos[index];
+                freq_qos_update_request(&info->qos_req, 0);
+        }
+
+        mod_timer(&core_data->boost_timer,
+                      jiffies + msecs_to_jiffies(board_data->boost_timeout));
+#endif
 
         return IRQ_HANDLED;
 }
@@ -2462,6 +2496,125 @@ const struct device_type tp_dev_type ={
     .uevent = ts_touch_info_uevent,
 };
 
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+static int goodix_init_cpu_boost(struct platform_device *pdev)
+{
+        struct cpumask cpumask;
+        cpumask_var_t valid_cpus;
+        int cpu, index = 0, ret = 0;
+        struct thp_ts_device *ts_dev;
+        struct goodix_thp_core *core_data;
+        core_data = platform_get_drvdata(pdev);
+        if (!core_data) {
+                ts_info(NULL, "Failed to get core data");
+                return -ENODEV;
+            }
+            ts_dev = core_data->ts_dev;
+
+        cpumask_clear(&cpumask);
+        cpumask.bits[0] = core_data->ts_dev->board_data.cpu_mask;
+
+        if (!alloc_cpumask_var(&valid_cpus, GFP_KERNEL))
+                return -ENOMEM;
+
+        cpumask_and(valid_cpus, &cpumask, cpu_online_mask);
+        core_data->qos_count = cpumask_weight(valid_cpus);
+
+        if (core_data->qos_count == 0) {
+                ts_info(ts_dev->dev, "No valid CPUs for boosting");
+                free_cpumask_var(valid_cpus);
+                return -EINVAL;
+        }
+
+        core_data->cpu_to_index_map = kcalloc(NR_CPUS, sizeof(int), GFP_KERNEL);
+        if (!core_data->cpu_to_index_map) {
+                free_cpumask_var(valid_cpus);
+                return -ENOMEM;
+        }
+
+        for (cpu = 0; cpu < NR_CPUS; cpu++)
+                core_data->cpu_to_index_map[cpu] = -1;
+
+        core_data->boost_infos = kcalloc(core_data->qos_count,
+                                    sizeof(struct cpu_boost_info), GFP_KERNEL);
+        if (!core_data->boost_infos) {
+                kfree(core_data->cpu_to_index_map);
+                free_cpumask_var(valid_cpus);
+                return -ENOMEM;
+        }
+
+        for_each_cpu(cpu, valid_cpus) {
+                struct cpufreq_policy *policy;
+                struct cpu_boost_info *info = &core_data->boost_infos[index];
+
+                policy = cpufreq_cpu_get(cpu);
+                if (!policy) {
+                        ts_info(ts_dev->dev, "Failed to get policy for CPU%d", cpu);
+                        continue;
+                }
+
+                info->max_freq = policy->cpuinfo.max_freq;
+
+                if (freq_qos_add_request(&policy->constraints, &info->qos_req,
+                                FREQ_QOS_MIN, 0) < 0) {
+                        ts_info(ts_dev->dev, "Failed to add QoS for CPU%d", cpu);
+                        cpufreq_cpu_put(policy);
+                        continue;
+                }
+
+                info->initialized = true;
+
+        core_data->cpu_to_index_map[cpu] = index;
+        index++;
+
+        cpufreq_cpu_put(policy);
+
+        ts_info(ts_dev->dev, "Initialized CPU%d, index:%d, boost: max_freq=%u kHz",
+                cpu, index-1, info->max_freq);
+        }
+
+        core_data->qos_count = index;
+        free_cpumask_var(valid_cpus);
+
+        ts_info(ts_dev->dev, "Successfully initialized CPU boost for %d CPUs",
+                    core_data->qos_count);
+        return ret;
+}
+
+static void goodix_boost_timer_handler(struct timer_list *t)
+{
+        struct goodix_thp_core *core_data = from_timer(core_data, t, boost_timer);
+        core_data->boost_count = 0; // reset boost_count
+        ts_debug(core_data->ts_dev->dev, "Boost counter reset");
+}
+
+static void goodix_cleanup_cpu_boost(struct goodix_thp_core *core_data)
+{
+        int i;
+
+        if (!core_data->boost_infos)
+                return;
+
+        for (i = 0; i < core_data->qos_count; i++) {
+                struct cpu_boost_info *info = &core_data->boost_infos[i];
+
+                if (info->initialized && freq_qos_request_active(&info->qos_req)) {
+                        freq_qos_remove_request(&info->qos_req);
+                }
+        }
+
+        kfree(core_data->boost_infos);
+        core_data->boost_infos = NULL;
+
+        if (core_data->cpu_to_index_map) {
+                kfree(core_data->cpu_to_index_map);
+                core_data->cpu_to_index_map = NULL;
+        }
+
+        core_data->qos_count = 0;
+}
+#endif
+
 /**
  * goodix_thp_probe - called by kernel when a Goodix touch
  *  platform driver is added.
@@ -2644,6 +2797,21 @@ static int goodix_thp_probe(struct platform_device *pdev)
         }
 #endif
 
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        if (goodix_init_cpu_boost(pdev)) {
+                ts_err(tdev->dev, "CPU boost initialization failed");
+                core_data->qos_count = 0;
+        }
+
+        //init timer for clear boost_count
+        core_data->boost_count = 0;
+        timer_setup(&core_data->boost_timer, goodix_boost_timer_handler, 0);
+         ts_info(tdev->dev, "Touch boost config: affinity=0x%lx, boost-count=%d, timeout=%dms",
+                  tdev->board_data.cpu_mask,
+                  tdev->board_data.max_boost_count,
+                  tdev->board_data.boost_timeout);
+#endif
+
         return 0;
 
 err_irq_setup:
@@ -2693,6 +2861,10 @@ static void goodix_thp_remove(struct platform_device *pdev)
         if (core_data->ws) {
             wakeup_source_unregister(core_data->ws);
         }
+
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        goodix_cleanup_cpu_boost(core_data);
+#endif
 
         return;
 }
