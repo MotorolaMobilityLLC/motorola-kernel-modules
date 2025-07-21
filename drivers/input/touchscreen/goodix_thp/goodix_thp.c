@@ -2592,6 +2592,11 @@ static int goodix_thp_probe(struct platform_device *pdev)
 #else
         core_data->ws = wakeup_source_register(tdev->dev, dev_name(tdev->dev));
 #endif
+        if (!core_data->ws) {
+                ts_err(tdev->dev, "failed to allocate goodix thp wakeup source");
+                r = -EINVAL;
+                goto err_wakeup_source_register_failed;
+        }
 
         /* PM QoS */
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
@@ -2635,7 +2640,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
         r = goodix_ts_mmi_dev_register(pdev);
         if (r) {
             ts_info(tdev->dev, "Failed register touchscreen mmi.");
-            goto out;
+            goto err_irq_setup;
         }
 #endif
 
@@ -2643,6 +2648,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
 
 err_irq_setup:
         goodix_thp_sysfs_exit(core_data);
+err_wakeup_source_register_failed:
 err_sysfs_init:
         goodix_thp_input_agent_exit(core_data);
 err_init_wrapper:
@@ -2650,6 +2656,12 @@ err_init_wrapper:
 err_init_pen_dev:
         misc_deregister(&core_data->thp_misc_dev);
 out:
+        if (r) {
+                platform_set_drvdata(pdev, NULL);
+                ts_info(tdev->dev, "Cleared pdev drvdata due to probe failure");
+                kfree_safe(core_data->frame_mmap_list.buf);
+                goodix_thp_power_off(core_data);
+        }
         ts_info(tdev->dev, "goodix_thp_probe OUT, r:%d", r);
         return r;
 }
@@ -2675,7 +2687,7 @@ static void goodix_thp_remove(struct platform_device *pdev)
 #elif IS_ENABLED(CONFIG_FB)
         fb_unregister_client(&core_data->pm_notif);
 #endif
-        kfree(core_data->frame_mmap_list.buf);
+        kfree_safe(core_data->frame_mmap_list.buf);
 
         /*free wakeup source*/
         if (core_data->ws) {

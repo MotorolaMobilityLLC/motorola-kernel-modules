@@ -947,10 +947,21 @@ static const struct goodix_thp_hw_ops hw_spi_ops = {
 
 static void goodix_pdev_release(struct device *dev)
 {
+        /* if pdev probe success, release device flow:
+        * spi device remove -> platform device remove -> (pdev->dev.release)
+        * if pdev probe fail, release device flow:
+        * spi device remove -> (pdev->dev.release)
+        */
         struct platform_device *pdev = to_platform_device(dev);
+        struct thp_ts_device *tdev = pdev->dev.platform_data;
+        if (!tdev || !tdev->spi_dev) {
+                ts_err(dev, "Invalid touch device");
+                return;
+        }
 
         ts_info(dev, "goodix pdev released, id:%d", pdev->id);
         kfree(pdev);
+        spi_set_drvdata(tdev->spi_dev, NULL);
 }
 
 static int goodix_spi_probe(struct spi_device *spi)
@@ -1044,6 +1055,7 @@ err_pdev:
                 kfree(pdev);
                 pdev = NULL;
         }
+        spi_set_drvdata(spi, NULL);
 err_spi_buf:
         ts_info(&spi->dev, "OUT, %d", r);
         return r;
@@ -1054,8 +1066,9 @@ static void goodix_spi_remove(struct spi_device *spi)
 {
         struct platform_device *pdev = spi_get_drvdata(spi);
 
-	ts_info(&spi->dev, "goodix spi driver remove, id:%d", pdev->id);
-	platform_device_unregister(pdev);
+        ts_info(&spi->dev, "goodix spi driver remove, id:%d", pdev->id);
+        platform_device_unregister(pdev);
+
 }
 #else
 static int goodix_spi_remove(struct spi_device *spi)
@@ -1084,7 +1097,15 @@ static int goodix_spi_resume(struct device *dev)
 {
         struct spi_device *spi = to_spi_device(dev);
         struct platform_device *pdev = spi_get_drvdata(spi);
+        if (!pdev) {
+                ts_info(dev, "Resume: No platform device");
+                return 0;
+        }
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
+        if (!core_data) {
+                ts_info(dev, "Resume: No core data");
+                return 0;
+        }
 
         ts_info(dev, "system resumes from pm_suspend");
         core_data->pm_suspend = false;
@@ -1096,7 +1117,15 @@ static int goodix_spi_suspend(struct device *dev)
 {
         struct spi_device *spi = to_spi_device(dev);
         struct platform_device *pdev = spi_get_drvdata(spi);
+        if (!pdev) {
+                ts_info(dev, "Suspend: No platform device");
+                return 0;
+        }
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
+        if (!core_data) {
+                ts_info(dev, "Suspend: No core data");
+                return 0;
+        }
 
         ts_info(dev, "system enters into pm_suspend");
         core_data->pm_suspend = true;

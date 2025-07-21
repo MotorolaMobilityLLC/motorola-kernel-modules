@@ -188,6 +188,13 @@
 #define PINCTRL_STYLUS_CLK_ACTIVE       "stylus_clk_active"
 #define PINCTRL_STYLUS_CLK_SUSPEND      "stylus_clk_suspend"
 
+#define kfree_safe(pbuf) do {\
+    if (pbuf) {\
+        kfree(pbuf);\
+        pbuf = NULL;\
+    }\
+} while(0)
+
 typedef enum {
         REQUEST_TYPE_FRAME = 1,
         REQUEST_TYPE_CMD,
