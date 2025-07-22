@@ -235,6 +235,7 @@ struct mmi_fg_chip {
 	int batt_version_cnt;
 	u8 *batt_chem_version_arry;
 	int batt_chem_version_cnt;
+	int batt_version_index;
 	u8 *fw_version;
 	u8 *fw_data;
 	u8 *params_data;
@@ -1841,6 +1842,14 @@ static int nfg1000_ota_updata_chem_id_version(struct mmi_fg_chip *di)
 	u16 dataflash_base_addr = 0x4400;
 	u8 config_data_read[32] = {0};
 	u8 config_data_write[32] = {0};
+	u8 chem_id_version = 0;
+
+	if (di->batt_version_index > (di->batt_chem_version_cnt -1)) {
+		mmi_err("index overflow , aborting chem id upgrade");
+		return 1;
+	} else {
+		chem_id_version = di->batt_chem_version_arry[di->batt_version_index];
+	}
 
 	addr_cmd = mpc8011b_updata_param_chem_CMD[0];
 	while(i == 0)
@@ -1857,7 +1866,7 @@ static int nfg1000_ota_updata_chem_id_version(struct mmi_fg_chip *di)
 		{
 			config_data_write[j] = config_data_read[j];
 		}
-		config_data_write[26] = 0x32;
+		config_data_write[26] = chem_id_version;
 
 		ret = nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(di, dataflash_base_addr + addr_cmd, config_data_write, sizeof(config_data_write));
 		mdelay(NFG1000_RESET_WAIT_TIME);
@@ -1918,6 +1927,7 @@ static bool nfg1000_ota_program_check_batt_params_chem_version(struct mmi_fg_chi
 	u8 dataflash_read[32] = {0};
 	char batt_params_bin_name[50] = {0};
 	const char *dev_sn = NULL;
+	int batt_chem_version_number = 0;
 
 	if(nfg1000_ota_unseal(di)) {
 		return PROGRAM_ERROR_UNSEAL;
@@ -1944,24 +1954,41 @@ static bool nfg1000_ota_program_check_batt_params_chem_version(struct mmi_fg_chi
 		mmi_info("The batt_serialnum from FG = %s\n", dev_sn);
 	}
 
-	if (dev_sn && di->battid_cnt !=0 && di->batt_chem_version_cnt != 0) {
+	if (dev_sn && di->battid_cnt != 0 && di->batt_chem_version_cnt != 0) {
+		batt_chem_version_number = di->batt_chem_version_cnt / di->battid_cnt;
+		if (batt_chem_version_number == 0) {
+			mmi_err("version number is invalid, can't upgrade chem parameters");
+			return upgrade_status;
+		}
+
 		for (i = 0; i < di->battid_cnt; i++) {
-			if ((strnstr(dev_sn, di->batt_serialnum_arry[i], 10))) {
-				for (j = 0; j < ARRAY_SIZE(fg_manufac_name); j++) {
-					index = i * ARRAY_SIZE(fg_manufac_name) + j;
-					if ((index < di->batt_chem_version_cnt)
-						&& (fg_manufac_name[j] != di->batt_chem_version_arry[index])) {
-						sprintf(batt_params_bin_name,
-						"NFG1000A_battery_parameter_%s.bin",
-						di->batt_serialnum_arry[i]);
-						mmi_info("Need to upgrading battery parameters: %s", batt_params_bin_name);
-						upgrade_status = true;
+			if (strnstr(dev_sn, di->batt_serialnum_arry[i], 10)) {
+				for (j = 0; j < batt_chem_version_number; j++) {
+					index = i * batt_chem_version_number + j;
+					if (index >= di->batt_chem_version_cnt) {
+						mmi_err("Index overflow , aborting parameters upgrade");
 						break;
+					}
+					if (fg_manufac_name[j] != di->batt_chem_version_arry[index]) {
+						if (j < (batt_chem_version_number - 1)) {
+							mmi_err("Manufacturer name mismatch, aborting parameters upgrade");
+							break;
+						} else {
+							sprintf(batt_params_bin_name,
+								"NFG1000A_battery_parameter_%s.bin",
+								di->batt_serialnum_arry[i]);
+							mmi_info("Need to upgrade battery parameters: %s",
+								batt_params_bin_name);
+							upgrade_status = true;
+							di->batt_version_index = index;
+							break;
+						}
 					}
 				}
 			}
 		}
 	}
+
 
 	if (upgrade_status) {
 		di->params_data = nfg1000_upgrade_read_firmware(batt_params_bin_name, di);
@@ -2109,6 +2136,7 @@ static void nfg1000_force_upgrade_func(struct work_struct *work)
 	struct mmi_fg_chip *di = container_of(work, struct mmi_fg_chip, fg_FUpgrade_dwork.work);
 	int count = 1;
 	int return_data = 0;
+	int batt_chem_version_number = 0;
 
 	if (di->force_upgrade == false)
 		return;
@@ -2144,6 +2172,16 @@ static void nfg1000_force_upgrade_func(struct work_struct *work)
 		}
 	} else {
 		mmi_info("nfg1000_upgrade_chem start!!");
+		if (di->battid_cnt != 0 && di->batt_chem_version_cnt != 0) {
+			batt_chem_version_number = di->batt_chem_version_cnt / di->battid_cnt;
+			mmi_info("batt_chem_version_number=%d", batt_chem_version_number);
+			if (batt_chem_version_number == 0) {
+				mmi_err("version number is invalid, can't upgrade chem parameters");
+				goto upgrade_error;
+			}
+			/* the first battery as default when force upgrading*/
+			di->batt_version_index = batt_chem_version_number - 1;
+		}
 		di->params_data = nfg1000_upgrade_read_firmware("NFG1000A_battery_parameter_ATLSP50NVT.bin", di);
 		if (di->params_data == NULL) {
 			mmi_err("battery paramter chem is null, exit upgrade.");
@@ -2155,6 +2193,7 @@ static void nfg1000_force_upgrade_func(struct work_struct *work)
 		if(return_data != 0)
 		{
 			mdelay(2000);
+			nfg1000_ota_unseal(di);
 			for(count = 0; count < 5; count++)
 			{
 				return_data = nfg1000_upgrade_Params(di);
@@ -2170,9 +2209,9 @@ static void nfg1000_force_upgrade_func(struct work_struct *work)
 
 				nfg1000_ota_updata_chem_id_version(di);
 
-				nfg1000_ota_seal(di);
 				mmi_info("nfg1000_upgrade_chem successfully!!");
 			}
+			nfg1000_ota_seal(di);
 		}
 	}
 
@@ -3184,6 +3223,7 @@ static int mmi_fg_probe(struct i2c_client *client,
 	mmi->force_upgrade = false;
 	mmi->fw_data = NULL;
 	mmi->params_data = NULL;
+	mmi->batt_version_index = 0;
 
 	mmi_parse_dt(mmi);
 
