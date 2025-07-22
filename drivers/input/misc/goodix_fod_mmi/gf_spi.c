@@ -41,6 +41,7 @@
 #include <linux/fb.h>
 #include <linux/pm_qos.h>
 #include <linux/cpufreq.h>
+
 #ifdef MMI_RELAY_MODULE
 #include <linux/mmi_relay.h>
 #endif
@@ -1166,15 +1167,45 @@ static struct platform_driver gf_driver = {
 	.remove = gf_remove,
 };
 
+static bool is_fingerprint_disabled(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool rt = false;
+	const char *bootargs = NULL;
+	char *is_hw_enabled = NULL;
+
+
+	if (!np) {
+		printk(KERN_INFO "is_fingerprint_disabled np is null\n");
+		return false;
+	}
+
+	if (!of_property_read_string(np, "bootargs", &bootargs)) {
+		is_hw_enabled = strstr(bootargs,"androidboot.disable_hw=1");
+		printk(KERN_INFO "of_property_read_string is_hw_enabled=%s\n", is_hw_enabled);
+		if (is_hw_enabled) {
+			rt = true;
+		}
+	}
+
+	of_node_put(np);
+
+	printk(KERN_INFO "is_fingerprint_disabled rt = %d\n", rt);
+	return rt;
+}
+
 static int __init gf_init(void)
 {
 	int status;
+	if (is_fingerprint_disabled()) {
+		printk(KERN_INFO "Hardware module driver is disabled.\n");
+		return -ENODEV;
+	}
 
 	/* Claim our 256 reserved device numbers.  Then register a class
 	 * that will key udev/mdev to add/remove /dev nodes.  Last, register
 	 * the driver which manages those device numbers.
 	 */
-
 	BUILD_BUG_ON(N_SPI_MINORS > 256);
 	status = register_chrdev(SPIDEV_MAJOR, CHRD_DRIVER_NAME, &gf_fops);
 	if (status < 0) {
