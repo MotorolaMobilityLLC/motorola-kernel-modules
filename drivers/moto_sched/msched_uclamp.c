@@ -197,26 +197,22 @@ void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 }
 
 void msched_uclamp_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig) {
-	struct rq_flags rf;
-	struct rq *rq;
 	enum uclamp_id clamp_id;
 
 	if (is_enabled(UX_ENABLE_MDPF)) {
 		int ux_type = task_get_ux_type(orig);
 		if(ux_type & UX_TYPE_MDPF) {
 			/* reset uclamp min value of new forked task */
- 		       	cond_trace_printk(unlikely(is_debuggable(DEBUG_MDPF)),
+			cond_trace_printk(unlikely(is_debuggable(DEBUG_MDPF)),
 				"reset uclamp min[%d,%d] of task(tgid-%d pid-%d util-%lu) which is forked from MDPF task(tgid-%d pid-%d util-%lu)!\n",
 				task->uclamp[UCLAMP_MIN].value, task->uclamp_req[UCLAMP_MIN].value,
 				task->tgid, task->pid, moto_task_util(task),
 				orig->tgid, orig->pid, moto_task_util(orig));
 
-			rq = task_rq_lock(task, &rf);
 			for_each_clamp_id(clamp_id) {
 				uclamp_se_set(&task->uclamp_req[clamp_id],
 						uclamp_none(clamp_id), false);
 			}
-			task_rq_unlock(rq, task, &rf);
 		}
 	}
 }
