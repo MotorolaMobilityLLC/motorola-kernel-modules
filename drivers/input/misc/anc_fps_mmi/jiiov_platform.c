@@ -1955,11 +1955,41 @@ static anc_driver_t anc_driver = {
     .remove = anc_remove,
     .shutdown = anc_shutdown,
 };
+static bool is_fingerprint_disabled(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool rt = false;
+	const char *bootargs = NULL;
+	char *is_hw_enabled = NULL;
+
+
+	if (!np) {
+		printk(KERN_INFO "is_fingerprint_disabled np is null\n");
+		return false;
+	}
+
+	if (!of_property_read_string(np, "bootargs", &bootargs)) {
+		is_hw_enabled = strstr(bootargs,"androidboot.disable_hw=1");
+		printk(KERN_INFO "of_property_read_string is_hw_enabled=%s\n", is_hw_enabled);
+		if (is_hw_enabled) {
+			rt = true;
+		}
+	}
+
+	of_node_put(np);
+
+	printk(KERN_INFO "is_fingerprint_disabled rt = %d\n", rt);
+	return rt;
+}
 
 static int __init ancfp_init(void) {
     int ret_val = -1;
 
     ANC_LOGD("entry");
+    if (is_fingerprint_disabled()) {
+        printk(KERN_INFO "Hardware module driver is disabled.\n");
+        return -ENODEV;
+    }
 
 #if defined(ANC_USE_REE_SPI) || defined(MTK_PLATFORM)
     ret_val = spi_register_driver(&anc_driver);
