@@ -1051,6 +1051,7 @@ static int brl_esd_check(struct goodix_ts_core *cd)
 #define GOODIX_TOUCH_EVENT			0x80
 #define GOODIX_REQUEST_EVENT		0x40
 #define GOODIX_GESTURE_EVENT		0x20
+#define GOODIX_OPEN_EVENT		    0x10
 #define POINT_TYPE_STYLUS_HOVER		0x01
 #define POINT_TYPE_STYLUS			0x03
 #if defined(CONFIG_MOTO_DDA_PASSIVESTYLUS) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
@@ -1485,6 +1486,10 @@ static int brl_event_handler(struct goodix_ts_core *cd,
 
 	event_status = pre_buf[0];
 	if (event_status & GOODIX_TOUCH_EVENT) {
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+		cd->open_status= !!(event_status & GOODIX_OPEN_EVENT);
+		ts_debug("Touch open state = 0x%02x", cd->open_status);
+#endif
 		return goodix_touch_handler(cd, ts_event,
 					    pre_buf, pre_read_len);
 

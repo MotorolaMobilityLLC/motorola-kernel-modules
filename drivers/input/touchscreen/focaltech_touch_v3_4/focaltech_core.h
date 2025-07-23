@@ -354,6 +354,9 @@ struct fts_ts_data {
 #ifdef CONFIG_FTS_LAST_TIME
     ktime_t last_event_time;
 #endif
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+	u8 open_status;
+#endif
 
 };
 

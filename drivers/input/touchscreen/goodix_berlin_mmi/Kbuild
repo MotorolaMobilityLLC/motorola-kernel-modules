@@ -109,6 +109,10 @@ ifneq ($(filter m y,$(CONFIG_INPUT_GTP_PASSIVE_PEN_NOTIFIER)),)
 	EXTRA_CFLAGS += -DGTP_PEN_NOTIFIER
 endif
 
+ifneq ($(filter m y,$(CONFIG_TOUCH_HARDWARE_STATUS)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_HARDWARE_STATUS
+endif
+
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
 USE_TARGET_PRODUCT := $(strip $(subst _factory,, $(TARGET_PRODUCT)))
 else
