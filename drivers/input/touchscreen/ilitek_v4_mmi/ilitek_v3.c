@@ -49,7 +49,7 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 			ILI_ERR("Couldn't get psy:%s\n", ilits->psy_name);
 		else
 			ILI_ERR("Couldn't get usbpsy\n");
-		return -EINVAL;
+		return NOTIFY_DONE;
 	}
 
 	if (!strcmp(psy->desc->name, "battery") && (val == POWER_SUPPLY_PROP_STATUS)) {
@@ -59,7 +59,7 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 			ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,&prop);
 			if (ret < 0) {
 				ILI_ERR("Couldn't get POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
-				return ret;
+				return NOTIFY_DONE;
 			}
 		}
 	}
@@ -70,7 +70,7 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 				ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_ONLINE, &prop);
 				if (ret) {
 					ILI_ERR("Couldn't get POWER_SUPPLY_PROP_ONLINE and  POWER_SUPPLY_PROP_PRESENT rc=%d\n", ret);
-					return ret;
+					return NOTIFY_DONE;
 				}
 			}
 		}
@@ -87,7 +87,7 @@ static int ilitek_charger_notifier_callback(struct notifier_block *nb, unsigned 
 		else
 			ILI_DBG("unsupport prop.intval =%d\n", prop.intval);
 	}
-	return 0;
+	return NOTIFY_OK;
 }
 static void ilitek_update_charger(struct work_struct *work)
 {
