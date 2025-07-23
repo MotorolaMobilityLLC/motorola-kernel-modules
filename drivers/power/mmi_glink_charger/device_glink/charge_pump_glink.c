@@ -178,6 +178,7 @@ static int charge_pump_psy_get_prop(struct power_supply *psy,
 	struct charge_pump_glink_dev *charge_pump_chip = power_supply_get_drvdata(psy);
 	struct timespec64 glink_access_time_now;
 	int rc = 0;
+	bool msc_is_bq_dev = false;
 
 	if (!charge_pump_chip)
 		return -ENODEV;
@@ -220,24 +221,45 @@ static int charge_pump_psy_get_prop(struct power_supply *psy,
 		return rc;
 	}
 
+      if (charge_pump_chip->charge_pump_dev_info.vendor_id == MSC_BQ)
+          msc_is_bq_dev = true;
+
 	switch (prop) {
 	case  POWER_SUPPLY_PROP_STATUS:
-		pval->intval = charge_pump_chip->charge_pump_dev_info.chg_en;
+		if (msc_is_bq_dev)
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_bq_info.ce;
+		else
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_sc_info.chg_en;
 		break;
 	case POWER_SUPPLY_PROP_ONLINE:
-		pval->intval = charge_pump_chip->charge_pump_dev_info.otg_en;
+		if (msc_is_bq_dev)
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_bq_info.online;
+		else
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_sc_info.otg_en;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-		pval->intval = charge_pump_chip->charge_pump_dev_info.vbus_mv;
+		if (msc_is_bq_dev)
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_bq_info.vac1_mv;
+		else
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_sc_info.vbus_mv;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		pval->intval = charge_pump_chip->charge_pump_dev_info.vout_mv;
+		if (msc_is_bq_dev)
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_bq_info.vbat_mv;
+		else
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_sc_info.vout_mv;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		pval->intval = charge_pump_chip->charge_pump_dev_info.ibus_ma;
+		if (msc_is_bq_dev)
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_bq_info.ibus_ma;
+		else
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_sc_info.ibus_ma;
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		pval->intval = charge_pump_chip->charge_pump_dev_info.die_temp;
+		if (msc_is_bq_dev)
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_bq_info.tdie;
+		else
+		    pval->intval = charge_pump_chip->charge_pump_dev_info.msc_info.msc_sc_info.die_temp;
 		break;
 	default:
 		break;
@@ -281,14 +303,45 @@ static int charge_pump_notify_handler(struct notifier_block *nb, unsigned long e
 			mmi_err(this_root_chip, "charge_pump_get_prop, Can not find correct charge_pump role %d", charge_pump_chip->dev_role);
 			return rc;
 		}
-		mmi_info(this_root_chip, "charge_pump_dev[0x%04x]-[%d]: chg_en %d, work_mode %d, ovpgate %d, manual_mode %d, otg_en %d,"
+
+             switch (charge_pump_info.vendor_id) {
+             case MSC_BQ:
+		    mmi_info(this_root_chip, "charge_pump_dev[bq%04x]-[%d]:  vbat_mv %dmV, ibat_ma %dmA, ibus_ma %dmA,  vac1_adc %dmv, "
+		                                             "tsbat %d, tdie %d",
+		                                             charge_pump_info.msc_info.msc_bq_info.chip_id,
+		                                             charge_pump_chip->dev_role, charge_pump_info.msc_info.msc_bq_info.vbat_mv,
+		                                             charge_pump_info.msc_info.msc_bq_info.ibat_ma, charge_pump_info.msc_info.msc_bq_info.ibus_ma,
+		                                             charge_pump_info.msc_info.msc_bq_info.vac1_mv, charge_pump_info.msc_info.msc_bq_info.tsbat,
+		                                             charge_pump_info.msc_info.msc_bq_info.tdie);
+
+		    mmi_info(this_root_chip, "charge_pump_dev[bq%04x]-[%d]:  dischg %d, ovp %d, ocp %d, tflt %d,  wdt %d, ext_reverse %d, online %d",
+		                                             charge_pump_info.msc_info.msc_bq_info.chip_id,
+		                                             charge_pump_chip->dev_role, charge_pump_info.msc_info.msc_bq_info.dischg,
+		                                             charge_pump_info.msc_info.msc_bq_info.ovp, charge_pump_info.msc_info.msc_bq_info.ocp,
+		                                             charge_pump_info.msc_info.msc_bq_info.tflt, charge_pump_info.msc_info.msc_bq_info.wdt,
+		                                             charge_pump_info.msc_info.msc_bq_info.ext_reverse_en,
+		                                             charge_pump_info.msc_info.msc_bq_info.online);
+
+		    mmi_info(this_root_chip, "charge_pump_dev[bq%04x]-[%d]:  ce %d, hiz %d, acdrv1 %d, acdrv2 %d, reverse %d, bypass %d, sc41 %d,  sc21 %d",
+		                                             charge_pump_info.msc_info.msc_bq_info.chip_id,
+		                                             charge_pump_chip->dev_role, charge_pump_info.msc_info.msc_bq_info.ce,
+		                                             charge_pump_info.msc_info.msc_bq_info.hiz, charge_pump_info.msc_info.msc_bq_info.acdrv1_en,
+		                                             charge_pump_info.msc_info.msc_bq_info.acdrv2_en, charge_pump_info.msc_info.msc_bq_info.reverse_en,
+		                                             charge_pump_info.msc_info.msc_bq_info.bypass,
+		                                             charge_pump_info.msc_info.msc_bq_info.sc41, charge_pump_info.msc_info.msc_bq_info.sc21);
+		    break;
+             default:
+		    mmi_info(this_root_chip, "charge_pump_dev[0x%04x]-[%d]: chg_en %d, work_mode %d, ovpgate %d, manual_mode %d, otg_en %d, "
 									"int_stat %d, ibus_ma %d, ibat_ma %d",
-							charge_pump_info.chip_id, charge_pump_chip->dev_role, charge_pump_info.chg_en, charge_pump_info.work_mode,
-							charge_pump_info.ovpgate, charge_pump_info.manual, charge_pump_info.otg_en, charge_pump_info.int_stat,
-							charge_pump_info.ibus_ma, charge_pump_info.ibat_ma);
-		mmi_info(this_root_chip, "charge_pump_dev[0x%04x]-[%d]: vbus_mv %d, vout_mv %d, vac_mv %d, vbat_mv %d, vusb_mv %d, vwpc_mv %d, die_temp %d",
-							charge_pump_info.chip_id, charge_pump_chip->dev_role,charge_pump_info.vbus_mv, charge_pump_info.vout_mv, charge_pump_info.vac_mv,
-							charge_pump_info.vbat_mv, charge_pump_info.vusb_mv, charge_pump_info.vwpc_mv, charge_pump_info.die_temp);
+							charge_pump_info.msc_info.msc_sc_info.chip_id, charge_pump_chip->dev_role, charge_pump_info.msc_info.msc_sc_info.chg_en, charge_pump_info.msc_info.msc_sc_info.work_mode,
+							charge_pump_info.msc_info.msc_sc_info.ovpgate, charge_pump_info.msc_info.msc_sc_info.manual, charge_pump_info.msc_info.msc_sc_info.otg_en, charge_pump_info.msc_info.msc_sc_info.int_stat,
+							charge_pump_info.msc_info.msc_sc_info.ibus_ma, charge_pump_info.msc_info.msc_sc_info.ibat_ma);
+		    mmi_info(this_root_chip, "charge_pump_dev[0x%04x]-[%d]: vbus_mv %d, vout_mv %d, vac_mv %d, vbat_mv %d, vusb_mv %d, vwpc_mv %d, die_temp %d",
+							charge_pump_info.msc_info.msc_sc_info.chip_id, charge_pump_chip->dev_role,charge_pump_info.msc_info.msc_sc_info.vbus_mv, charge_pump_info.msc_info.msc_sc_info.vout_mv, charge_pump_info.msc_info.msc_sc_info.vac_mv,
+							charge_pump_info.msc_info.msc_sc_info.vbat_mv, charge_pump_info.msc_info.msc_sc_info.vusb_mv, charge_pump_info.msc_info.msc_sc_info.vwpc_mv, charge_pump_info.msc_info.msc_sc_info.die_temp);
+		    break;
+             }
+
 	}
 
 	return NOTIFY_DONE;
