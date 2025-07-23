@@ -39,6 +39,7 @@
 #define BM_ULOG_WAIT_TIME_MS		5000
 #define MAX_ULOG_READ_BUFFER_SIZE	8192
 #define BM_ULOG_PAGES			(50)
+#define INIT_ULOG_RETRY_CNT		3
 
 #define bm_info(bmdev, fmt, ...)		\
 	do {					\
@@ -351,10 +352,11 @@ static int bm_ulog_print_buffer(struct bm_ulog_dev *bmdev, u32 size)
 		memcpy(timestamp_str, &bmdev->ulog_buffer[header],
 			TIMESTAMP_LEN);
 		if (!kstrtou64(timestamp_str, 0, &timestamp)) {
-			hh = timestamp / TIMESTAMP_DIV / 3600;
-			mm = (timestamp / TIMESTAMP_DIV % 3600) / 60;
-			ss = timestamp / TIMESTAMP_DIV % 60;
 			ms = (timestamp * 1000 / TIMESTAMP_DIV) % 1000;
+			timestamp /= TIMESTAMP_DIV;
+			hh = timestamp / 3600;
+			mm = (timestamp % 3600) / 60;
+			ss = timestamp % 60;
 		}
 		if (bmdev->ulog_enabled) {
 			bm_info(bmdev, "[%02d:%02d:%02d.%03d]%s\n",
@@ -709,11 +711,15 @@ static int bm_ulog_probe(struct platform_device *pdev)
 		dev_err(bmdev->dev, "Failed to create ipc log\n");
 
 	if (init_log_enabled) {
+		int ulog_retry_cnt = 0;
 		init_debug_enabled = debug_enabled;
 		debug_enabled = init_log_enabled;
 		bm_ulog_set_mask(bmdev, bmdev->categories, bmdev->level);
-		bm_ulog_print_init_log(MAX_ULOG_READ_BUFFER_SIZE);
-		bm_ulog_print_log(MAX_ULOG_READ_BUFFER_SIZE);
+		do {
+			bm_ulog_print_init_log(MAX_ULOG_READ_BUFFER_SIZE);
+			bm_ulog_print_log(MAX_ULOG_READ_BUFFER_SIZE);
+			bm_info(bmdev, "ulog_retry_cnt = %d\n", ulog_retry_cnt);
+		} while (++ulog_retry_cnt < INIT_ULOG_RETRY_CNT);
 		debug_enabled = init_debug_enabled;
 	}
 
