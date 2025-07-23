@@ -121,7 +121,7 @@ struct goodix_version_info {
 };
 #pragma pack(pop)
 
-void ts_info(struct device *dev, const char *fmt, ...)
+void _ts_info(struct device *dev, const char *func, int line, const char *fmt, ...)
 {
         va_list args;
         char str[256] = {0};
@@ -130,10 +130,10 @@ void ts_info(struct device *dev, const char *fmt, ...)
         vsnprintf(str, sizeof(str), fmt, args);
         va_end(args);
 
-	dev_info(dev, "[THP-INF] %s\n", str);
+        dev_info(dev, "[THP-INF] [%s:%d] %s\n", func, line, str);
 }
 
-void ts_err(struct device *dev, const char *fmt, ...)
+void _ts_err(struct device *dev, const char *func, int line, const char *fmt, ...)
 {
         va_list args;
         char str[256] = {0};
@@ -142,22 +142,19 @@ void ts_err(struct device *dev, const char *fmt, ...)
         vsnprintf(str, sizeof(str), fmt, args);
         va_end(args);
 
-	dev_info(dev, "[THP-ERR] %s\n", str);
+        dev_info(dev, "[THP-ERR] [%s:%d] %s\n", func, line, str);
 }
 
-void ts_debug(struct device *dev, const char *fmt, ...)
+void _ts_debug(struct device *dev, const char *func, int line, const char *fmt, ...)
 {
         va_list args;
         char str[256] = {0};
-
-        if (!debug_log_flag)
-                return;
 
         va_start(args, fmt);
         vsnprintf(str, sizeof(str), fmt, args);
         va_end(args);
 
-	dev_info(dev, "[THP-DBG] %s\n", str);
+        dev_info(dev, "[THP-DBG] [%s:%d] %s\n", func, line, str);
 }
 
 u16 checksum16_cmp(u8 *data, u32 size, int mode)
@@ -642,8 +639,8 @@ static int goodix_thp_get_cmd_ack(struct thp_ts_device *tdev, unsigned int ack_r
                 ret = goodix_thp_spi_read(tdev, ack_reg,
                         cmd_ack_buf, sizeof(cmd_ack_buf));
                 if (ret < 0) {
-                        ts_err(tdev->dev, "%s: failed read cmd ack info, ret %d",
-                                __func__, ret);
+                        ts_err(tdev->dev, "failed read cmd ack info, ret %d",
+                                 ret);
                         return -EINVAL;
                 }
 
@@ -718,7 +715,7 @@ static int goodix_thp_prepare(struct thp_ts_device *ts_dev)
         u8 tx_buf[5] = {0};
         u8 rx_buf[5] = {0};
 
-        ts_info(ts_dev->dev, "%s IN", __func__);
+        ts_info(ts_dev->dev, "IN");
 
         /* reset ic */
         ts_dev->hw_ops->reset(ts_dev, 5);
@@ -784,7 +781,7 @@ static int goodix_thp_board_init(struct thp_ts_device *tdev)
 {
         int ret = -1;
 
-        ts_info(tdev->dev, "%s IN", __func__);
+        ts_info(tdev->dev, "IN");
 
         if (!tdev) {
                 ts_err(tdev->dev, "thp_ts_device null!");
@@ -832,7 +829,7 @@ static int goodix_thp_get_custom_info(struct thp_ts_device *tdev, char *buf,
         if (is_valid_custom_info(custom_info)) {
                 strncpy(buf, custom_info, len);
         } else {
-                ts_err(tdev->dev, "%s:get custom info fail", __func__);
+                ts_err(tdev->dev, "get custom info fail");
                 return -EIO;
         }
         return 0;
@@ -987,7 +984,7 @@ static int goodix_spi_probe(struct spi_device *spi)
         static int pdev_id;
         int r = 0;
 
-        ts_info(&spi->dev, "%s IN", __func__);
+        ts_info(&spi->dev, "IN");
 
         if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
             ts_err(&spi->dev, "device not supported");
@@ -1063,7 +1060,7 @@ static int goodix_spi_probe(struct spi_device *spi)
                 goto err_pdev;
         }
 
-        ts_info(&spi->dev, "%s OUT", __func__);
+        ts_info(&spi->dev, "OUT");
         return r;
 
 err_pdev:

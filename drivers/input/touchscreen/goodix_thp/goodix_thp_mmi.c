@@ -874,7 +874,7 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 		ret = goodix_stylus_mode(core_data, core_data->get_mode.stylus_mode);
 		if (!ret) {
 			core_data->set_mode.stylus_mode = core_data->get_mode.stylus_mode;
-			ts_info(dev, "Success to %s stylus mode after post resume",
+			ts_info(dev, "Success to %s stylus mode",
 				core_data->get_mode.stylus_mode ? "Enable" : "Disable");
 		}
 	}
@@ -943,7 +943,7 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 
 		core_data->set_mode.charger_mode = core_data->get_mode.charger_mode;
 		msleep(20);
-		ts_info(core_data->ts_dev->dev, "Success to %s charger mode after post resume",
+		ts_info(core_data->ts_dev->dev, "Success to %s charger mode",
 			core_data->get_mode.charger_mode ? "enable" : "disable");
 	}
 

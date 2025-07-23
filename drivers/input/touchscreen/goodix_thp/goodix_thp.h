@@ -520,9 +520,21 @@ struct goodix_thp_core {
 };
 
 extern bool debug_log_flag;
-void ts_info(struct device *dev, const char *fmt, ...);
-void ts_err(struct device *dev, const char *fmt, ...);
-void ts_debug(struct device *dev, const char *fmt, ...);
+void _ts_info(struct device *dev, const char *func, int line, const char *fmt, ...);
+void _ts_err(struct device *dev, const char *func, int line, const char *fmt, ...);
+void _ts_debug(struct device *dev, const char *func, int line, const char *fmt, ...);
+
+#define ts_info(dev, fmt, ...) \
+        _ts_info(dev, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define ts_err(dev, fmt, ...) \
+        _ts_err(dev, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define ts_debug(dev, fmt, ...) \
+        do { \
+                if (debug_log_flag) \
+                        _ts_debug(dev, __func__, __LINE__, fmt, ##__VA_ARGS__); \
+        } while (0)
 
 /*
  * get board data pointer
