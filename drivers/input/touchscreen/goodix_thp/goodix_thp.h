@@ -319,6 +319,7 @@ struct goodix_mode_info {
         int pocket_mode;
         int stylus_mode;
         int fp_int_state;
+        int charger_mode;
 };
 
 struct goodix_thp_board_data {
