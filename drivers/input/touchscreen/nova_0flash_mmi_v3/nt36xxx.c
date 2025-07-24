@@ -26,6 +26,10 @@
 #include <linux/of_irq.h>
 #include <linux/power_supply.h>
 #include <linux/version.h>
+#ifdef CONFIG_NVT_LOG_CAPTURE
+#include <linux/miscdevice.h>
+#include <linux/wait.h>
+#endif
 
 #include "nt36xxx.h"
 #if NVT_TOUCH_ESD_PROTECT
@@ -68,6 +72,184 @@ static unsigned long irq_timer = 0;
 uint8_t esd_check = false;
 uint8_t esd_retry = 0;
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
+#ifdef CONFIG_NVT_LOG_CAPTURE
+/* raw-data streaming (/dev/tp_tools) */
+static bool nvt_log_trigger;
+#define TP_RAW_BUF_SIZE       (64 * 1024)
+struct nvt_raw_stream {
+	struct miscdevice    mdev;
+	char                 buf[TP_RAW_BUF_SIZE];
+	uint8_t              prbuf[TP_RAW_BUF_SIZE];
+	size_t               len;          /* valid bytes in @buf            */
+	spinlock_t           lock;
+	spinlock_t           pr_lock;
+	wait_queue_head_t    wq;
+	struct work_struct   work;
+};
+
+static struct nvt_raw_stream nvt_raw;
+static struct workqueue_struct *nvt_raw_wq;
+
+static void nvt_raw_worker(struct work_struct *wk)
+{
+	size_t len = 0, idx, lo, hi;
+	const u8 *raw;
+	unsigned long flags;
+	s16 v;
+	int r, c;
+
+	spin_lock_irqsave(&nvt_raw.pr_lock, flags);
+	raw = nvt_raw.prbuf;
+	spin_unlock_irqrestore(&nvt_raw.pr_lock, flags);
+
+	if (!raw || !ts || !ts->print_buf)
+		return;
+
+	for (r = 0; r < ts->y_num; r++) {
+		for (c = 0; c < ts->x_num; c++) {
+			idx = (size_t)r * ts->x_num + c;
+			lo  = (size_t)idx * 2;
+			hi  = (size_t)lo + 1;
+			v   = (s16)((raw[lo]) | (raw[hi] << 8));
+			len += scnprintf(ts->print_buf + len,
+							ts->print_buf_size - len,
+							"%6d%s",
+							v,
+							(c == ts->x_num - 1) ? "\n" : ", ");
+		}
+	}
+
+	len += scnprintf(ts->print_buf + len,
+					ts->print_buf_size - len,
+					"\n");
+
+	if (len >= TP_RAW_BUF_SIZE) {
+	        len = TP_RAW_BUF_SIZE -1;
+	}
+	spin_lock(&nvt_raw.lock);
+	memcpy(nvt_raw.buf, ts->print_buf, len);
+	nvt_raw.len = len;
+	spin_unlock(&nvt_raw.lock);
+	wake_up_interruptible(&nvt_raw.wq);
+}
+
+static void nvt_push_raw_frame(const u8 *raw, uint32_t size)
+{
+	unsigned long flags;
+
+	if (!raw || !ts || size > TP_RAW_BUF_SIZE)
+		return;
+
+	spin_lock_irqsave(&nvt_raw.pr_lock, flags);
+	memcpy(nvt_raw.prbuf, raw, size);
+	spin_unlock_irqrestore(&nvt_raw.pr_lock, flags);
+	queue_work(nvt_raw_wq, &nvt_raw.work);
+}
+
+static ssize_t nvt_raw_read(struct file *f, char __user *buf,
+                            size_t cnt, loff_t *ppos)
+{
+	int ret = 0;
+	unsigned long flags;
+	ssize_t avail, remain;
+	u8 *kbuf;
+
+	if (!f || !buf || !ppos || !nvt_log_trigger)
+		return -EINVAL;
+
+	if (!ts || !ts->print_buf)
+		return -ENODEV;
+
+	for (;;) {
+		if (nvt_raw.len == 0) {
+			if (f->f_flags & O_NONBLOCK)
+				return -EAGAIN;
+			ret = wait_event_interruptible(nvt_raw.wq, nvt_raw.len != 0);
+			if (ret)
+				return ret;
+		}
+
+		kbuf = kmalloc(cnt, GFP_KERNEL);
+		if (!kbuf) {
+			return -ENOMEM;
+		}
+
+		spin_lock_irqsave(&nvt_raw.lock, flags);
+		avail = (ssize_t)nvt_raw.len;
+		if (*ppos >= avail) {
+			nvt_raw.len = 0;
+			*ppos       = 0;
+			spin_unlock_irqrestore(&nvt_raw.lock, flags);
+			kfree(kbuf);
+			continue;
+		}
+
+		if (avail > *ppos)
+			remain = avail - (ssize_t)*ppos;
+		else
+			remain = 0;
+
+		if (cnt > remain)
+			cnt = (size_t)remain;
+
+		memcpy(kbuf, nvt_raw.buf + *ppos, cnt);
+		spin_unlock_irqrestore(&nvt_raw.lock, flags);
+
+		if (copy_to_user(buf, kbuf, cnt)) {
+			ret = -EFAULT;
+		} else {
+			*ppos += cnt;
+			ret = (ssize_t)cnt;
+		}
+		kfree(kbuf);
+		return ret;
+	}
+}
+
+static const struct file_operations nvt_raw_fops = {
+	.owner  = THIS_MODULE,
+	.read   = nvt_raw_read,
+	.llseek = no_llseek,
+};
+
+static bool raw_stream_misc_registered;
+static int nvt_raw_stream_register(void)
+{
+	int ret = 0;
+	nvt_raw.len = 0;
+	spin_lock_init(&nvt_raw.lock);
+	spin_lock_init(&nvt_raw.pr_lock);
+	init_waitqueue_head(&nvt_raw.wq);
+
+	nvt_raw_wq = alloc_workqueue("nvt_raw_wq", WQ_UNBOUND | WQ_MEM_RECLAIM, 1);
+	if (!nvt_raw_wq)
+		return -ENOMEM;
+	INIT_WORK(&nvt_raw.work, nvt_raw_worker);
+	nvt_raw.mdev.minor = MISC_DYNAMIC_MINOR;
+	nvt_raw.mdev.name  = "tp_tools";
+	nvt_raw.mdev.fops  = &nvt_raw_fops;
+
+	ret = misc_register(&nvt_raw.mdev);
+	if (ret == 0)
+		raw_stream_misc_registered = true;
+
+	return ret;
+}
+
+static void nvt_raw_stream_unregister(void)
+{
+	if (raw_stream_misc_registered) {
+		misc_deregister(&nvt_raw.mdev);
+		raw_stream_misc_registered = false;
+	}
+
+	if (nvt_raw_wq) {
+		cancel_work_sync(&nvt_raw.work);
+		destroy_workqueue(nvt_raw_wq);
+		nvt_raw_wq = NULL;
+	}
+}
+#endif
 
 #if NVT_TOUCH_EXT_PROC
 extern int32_t nvt_extra_proc_init(void);
@@ -867,6 +1049,20 @@ info_retry:
 	ts->nvt_pid = (uint16_t)((buf[36] << 8) | buf[35]);
 
 	NVT_LOG("fw_ver=0x%02X, fw_type=0x%02X, PID=0x%04X\n", ts->fw_ver, buf[14], ts->nvt_pid);
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	if (!ts->rawdata_buf) {
+		ts->rawdata_buf_size = (uint32_t)ts->x_num * ts->y_num * 2 + 1;
+		ts->rawdata_buf = devm_kzalloc(&ts->client->dev, ts->rawdata_buf_size, GFP_KERNEL);
+		if (!ts->rawdata_buf)
+			return -ENOMEM;
+	}
+	if (!ts->print_buf) {
+		ts->print_buf_size = (uint32_t)ts->x_num * ts->y_num * 8 + 1;
+		ts->print_buf = devm_kzalloc(&ts->client->dev, ts->print_buf_size, GFP_KERNEL);
+		if (!ts->print_buf)
+			return -ENOMEM;
+	}
+#endif
 
 	ret = 0;
 out:
@@ -2037,6 +2233,18 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 
 	input_sync(ts->input_dev);
 
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	// read and push rawdata
+	if (nvt_log_trigger && likely(ts->rawdata_buf) && finger_cnt && ts->mmap->DIFF_RAWDATA_ADDR) {
+		nvt_set_page(ts->mmap->DIFF_RAWDATA_ADDR);
+		ts->rawdata_buf[0] = ts->mmap->DIFF_RAWDATA_ADDR & 0x7F;
+		ret = CTP_SPI_READ(ts->client, ts->rawdata_buf, ts->rawdata_buf_size);
+		nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
+		if (ret == 0)
+			nvt_push_raw_frame(ts->rawdata_buf + 1, ts->rawdata_buf_size - 1);
+	}
+#endif
+
 XFER_ERROR:
 
 	mutex_unlock(&ts->lock);
@@ -2646,16 +2854,18 @@ static ssize_t stowed_show(struct device *dev,
 static ssize_t nvt_dbg_data_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	int ret = 0;
-	ret = nvt_tp_data_dump_capture ();
-	if (0 == ret)
-		NVT_LOG("capture rawdata succesful\n");
-	return ret;
+	return scnprintf(buf, PAGE_SIZE, "%u\n", nvt_log_trigger);
 }
 
 static ssize_t nvt_dbg_data_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	unsigned long v;
+
+	if (kstrtoul(buf, 0, &v))
+		return -EINVAL;
+
+	nvt_log_trigger = !!v;
 	return count;
 }
 #endif
@@ -3262,6 +3472,13 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 			msecs_to_jiffies(NVT_TOUCH_ESD_CHECK_PERIOD));
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	ret = nvt_raw_stream_register();
+	if (ret) {
+		NVT_ERR("can't register /dev/tp_tools (%d)\n", ret);
+		goto err_misc;
+	}
+#endif
 	//---set device node---
 #if NVT_TOUCH_PROC
 	ret = nvt_flash_proc_init();
@@ -3360,6 +3577,10 @@ err_extra_proc_init_failed:
 #if NVT_TOUCH_PROC
 	nvt_flash_proc_deinit();
 err_flash_proc_init_failed:
+#endif
+#ifdef CONFIG_NVT_LOG_CAPTURE
+err_misc:
+	nvt_raw_stream_unregister();
 #endif
 #if NVT_TOUCH_ESD_PROTECT
 	if (nvt_esd_check_wq) {
@@ -3471,7 +3692,9 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 		ts->charger_detection = NULL;
 	}
 #endif
-
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	nvt_raw_stream_unregister();
+#endif
 #if NVT_TOUCH_ESD_PROTECT
 	if (nvt_esd_check_wq) {
 		cancel_delayed_work_sync(&nvt_esd_check_work);
@@ -3545,6 +3768,9 @@ static void nvt_ts_shutdown(struct spi_device *client)
 #endif
 #if NVT_TOUCH_PROC
 	nvt_flash_proc_deinit();
+#endif
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	nvt_raw_stream_unregister();
 #endif
 
 #if NVT_TOUCH_ESD_PROTECT

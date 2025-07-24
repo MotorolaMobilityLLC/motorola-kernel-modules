@@ -284,6 +284,12 @@ struct nvt_ts_data {
 	uint32_t chip_ver_trim_addr;
 	uint32_t swrst_sif_addr;
 	uint32_t crc_err_flag_addr;
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	char *print_buf;
+	uint32_t print_buf_size;
+	uint8_t *rawdata_buf;
+	uint32_t rawdata_buf_size;
+#endif
 #ifdef CONFIG_MTK_SPI
 	struct mt_chip_conf spi_ctrl;
 #endif

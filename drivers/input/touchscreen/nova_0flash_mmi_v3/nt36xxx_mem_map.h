@@ -79,6 +79,9 @@ struct nvt_ts_mem_map {
 	uint32_t BLD_ILM_DLM_CRC_ADDR;
 	uint32_t DMA_CRC_FLAG_ADDR;
 	uint32_t SPI_DMA_VAL_ADDR;
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	uint32_t DIFF_RAWDATA_ADDR;
+#endif
 };
 
 struct nvt_ts_hw_info {
@@ -159,6 +162,9 @@ static const struct nvt_ts_mem_map NT36528A_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x3F136,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
 	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0x26F00,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36532_cascade_memory_map = {
@@ -212,6 +218,9 @@ static const struct nvt_ts_mem_map NT36532_cascade_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x1FB536,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x1FB533,
 	.DMA_CRC_FLAG_ADDR        = 0x1FB534,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36532_single_memory_map = {
@@ -265,6 +274,9 @@ static const struct nvt_ts_mem_map NT36532_single_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x1FB536,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x1FB533,
 	.DMA_CRC_FLAG_ADDR        = 0x1FB534,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36523N_memory_map = {
@@ -318,6 +330,9 @@ static const struct nvt_ts_mem_map NT36523N_memory_map = {
 	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
 	.DMA_CRC_FLAG_ADDR        = 0x3F134,
 	.SPI_DMA_VAL_ADDR         = 0x3F7D0,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36528_memory_map = {
@@ -352,6 +367,9 @@ static const struct nvt_ts_mem_map NT36528_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x3F136,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
 	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36523_memory_map = {
@@ -404,6 +422,9 @@ static const struct nvt_ts_mem_map NT36523_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x3F136,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
 	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36526_memory_map = {
@@ -438,6 +459,9 @@ static const struct nvt_ts_mem_map NT36526_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x3F136,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
 	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 
@@ -473,6 +497,9 @@ static const struct nvt_ts_mem_map NT36675_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x3F136,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
 	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36672A_memory_map = {
@@ -507,6 +534,9 @@ static const struct nvt_ts_mem_map NT36672A_memory_map = {
 	.DMA_CRC_EN_ADDR          = 0x3F132,
 	.BLD_ILM_DLM_CRC_ADDR     = 0x3F133,
 	.DMA_CRC_FLAG_ADDR        = 0x3F134,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36772_memory_map = {
@@ -530,6 +560,9 @@ static const struct nvt_ts_mem_map NT36772_memory_map = {
 	.POR_CD_ADDR              = 0x1F61C,
 	/* BLD CRC */
 	.R_ILM_CHECKSUM_ADDR      = 0x1BF00,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36525_memory_map = {
@@ -553,6 +586,9 @@ static const struct nvt_ts_mem_map NT36525_memory_map = {
 	.POR_CD_ADDR              = 0x1F61C,
 	/* BLD CRC */
 	.R_ILM_CHECKSUM_ADDR      = 0x1BF00,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static const struct nvt_ts_mem_map NT36676F_memory_map = {
@@ -576,6 +612,9 @@ static const struct nvt_ts_mem_map NT36676F_memory_map = {
 	.POR_CD_ADDR              = 0x1F61C,
 	/* BLD CRC */
 	.R_ILM_CHECKSUM_ADDR      = 0x1BF00,
+#ifdef CONFIG_NVT_LOG_CAPTURE
+	.DIFF_RAWDATA_ADDR        = 0,
+#endif
 };
 
 static struct nvt_ts_hw_info NT36528A_hw_info = {
