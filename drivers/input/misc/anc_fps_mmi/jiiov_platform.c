@@ -26,7 +26,7 @@
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 #include <net/sock.h>
-
+#include <linux/version.h>
 // clang-format off
 #include "jiiov_config.h"
 #include "jiiov_log.h"
@@ -1892,18 +1892,30 @@ out_free:
     ANC_LOGE("Probe Failed, ret_val = %d", ret_val);
     return ret_val;
 }
-
-static void anc_remove(anc_device_t *pdev) {
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
+static void anc_remove(anc_device_t *pdev)
+#else
+static int anc_remove(anc_device_t *pdev)
+#endif
+{
     struct anc_data *p_data = NULL;
 
     if (pdev == NULL) {
         ANC_LOGE("dev is NULL");
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
         return;
+#else
+        return -1;
+#endif
     }
     p_data = dev_get_drvdata(&pdev->dev);
     if (p_data == NULL) {
         ANC_LOGE("get data handle failed");
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
         return;
+#else
+        return -1;
+#endif
     }
 
     sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
@@ -1919,7 +1931,11 @@ static void anc_remove(anc_device_t *pdev) {
     anc_destroy_device(p_data);
     anc_free(p_data, &pdev->dev);
 
-    return;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 0, 0)
+        return;
+#else
+        return -1;
+#endif
 }
 
 static void anc_shutdown(anc_device_t *pdev) {
