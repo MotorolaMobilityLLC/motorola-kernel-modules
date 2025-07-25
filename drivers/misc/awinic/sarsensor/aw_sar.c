@@ -589,7 +589,7 @@ int32_t aw_sar_soft_reset(struct aw_sar *p_sar)
 	AWLOGD(p_sar->dev, "enter");
 
 	//If a private interface is defined, the private interface is used
-	if ((p_sar->p_sar_para->p_soft_rst != NULL) && 
+	if ((p_sar->p_sar_para->p_soft_rst != NULL) &&
 		(p_sar->p_sar_para->p_soft_rst->p_soft_reset_fn != NULL)) {
 		return p_sar->p_sar_para->p_soft_rst->p_soft_reset_fn(p_sar);
 	}
@@ -1767,19 +1767,19 @@ static int aw_sar_ps_notify_callback(struct notifier_block *self,
 		AWLOGI(p_sar->dev, "ps notification: event = %lu", event);
 		retval = aw_sar_ps_get_state(p_sar, psy, &present);
 		if (retval) {
-			AWLOGE(p_sar->dev, "psy get property failed");
-			return retval;
+			AWLOGE(p_sar->dev, "psy get property failed,ret=%d\n", retval);
+			return NOTIFY_DONE;
 		}
 		if (event == PSY_EVENT_PROP_CHANGED) {
 			if (p_sar->ps_is_present == present) {
 				AWLOGE(p_sar->dev, "ps present state not change");
-				return 0;
+				return NOTIFY_DONE;
 			}
 		}
 		p_sar->ps_is_present = present;
 		schedule_work(&p_sar->ps_notify_work);
 	}
-	return 0;
+	return NOTIFY_DONE;
 }
 
 static int aw_sar_ps_notify_init(struct aw_sar *p_sar)

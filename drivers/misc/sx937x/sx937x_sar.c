@@ -1463,13 +1463,14 @@ static int ps_notify_callback(struct notifier_block *self,
 		LOG_DBG("ps notification: event = %lu\n", event);
 		retval = ps_get_state(psy, &present);
 		if (retval) {
-			return retval;
+			LOG_ERR("psy get state failed, ret=%d\n", retval);
+			return NOTIFY_DONE;
 		}
 
 		if (event == PSY_EVENT_PROP_CHANGED) {
 			if (data->ps_is_present == present) {
 				LOG_DBG("ps present state not change\n");
-				return 0;
+				return NOTIFY_DONE;
 			}
 		}
 		data->ps_is_present = present;
@@ -1483,8 +1484,10 @@ static int ps_notify_callback(struct notifier_block *self,
 		LOG_DBG("phone ps notification: event = %lu\n", event);
 
 		retval = ps_get_state(psy, &present);
-		if (retval)
-			return retval;
+		if (retval) {
+			LOG_ERR("psy get state failed,ret=%d\n", retval);
+			return NOTIFY_DONE;
+		}
 
 		if (data->phone_is_present != present) {
 			data->phone_is_present = present;
@@ -1493,7 +1496,7 @@ static int ps_notify_callback(struct notifier_block *self,
 	}
 #endif
 
-	return 0;
+	return NOTIFY_DONE;
 }
 
 #ifdef CONFIG_CAPSENSE_HALL_CAL
