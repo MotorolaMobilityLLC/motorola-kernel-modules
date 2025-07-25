@@ -1788,7 +1788,10 @@ static ssize_t activate_store(struct device *dev, struct device_attribute *attr,
 		aw_err("ram init failed, not allow to play!");
 		return count;
 	}
+
 	mutex_lock(&aw_haptic->lock);
+	if ((0 == val) && (aw_haptic->activate_mode == AW_RAM_MODE))
+	    usleep_range(3000, 3500);
 	aw_haptic->state = val;
 	aw_haptic->activate_mode = aw_haptic->info.mode;
 	if (0 == val)
