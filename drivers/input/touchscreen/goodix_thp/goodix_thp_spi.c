@@ -15,7 +15,7 @@
 #include <linux/version.h>
 
 #include "goodix_thp.h"
-
+#include <linux/mmi_device.h>
 
 /* flag */
 #define SPI_FLAG_WR					0xF0
@@ -121,7 +121,7 @@ struct goodix_version_info {
 };
 #pragma pack(pop)
 
-void ts_info(struct device *dev, const char *fmt, ...)
+void _ts_info(struct device *dev, const char *func, int line, const char *fmt, ...)
 {
         va_list args;
         char str[256] = {0};
@@ -130,10 +130,10 @@ void ts_info(struct device *dev, const char *fmt, ...)
         vsnprintf(str, sizeof(str), fmt, args);
         va_end(args);
 
-	dev_info(dev, "[THP-INF] %s\n", str);
+        dev_info(dev, "[THP-INF] [%s:%d] %s\n", func, line, str);
 }
 
-void ts_err(struct device *dev, const char *fmt, ...)
+void _ts_err(struct device *dev, const char *func, int line, const char *fmt, ...)
 {
         va_list args;
         char str[256] = {0};
@@ -142,22 +142,19 @@ void ts_err(struct device *dev, const char *fmt, ...)
         vsnprintf(str, sizeof(str), fmt, args);
         va_end(args);
 
-	dev_info(dev, "[THP-ERR] %s\n", str);
+        dev_info(dev, "[THP-ERR] [%s:%d] %s\n", func, line, str);
 }
 
-void ts_debug(struct device *dev, const char *fmt, ...)
+void _ts_debug(struct device *dev, const char *func, int line, const char *fmt, ...)
 {
         va_list args;
         char str[256] = {0};
-
-        if (!debug_log_flag)
-                return;
 
         va_start(args, fmt);
         vsnprintf(str, sizeof(str), fmt, args);
         va_end(args);
 
-	dev_info(dev, "[THP-DBG] %s\n", str);
+        dev_info(dev, "[THP-DBG] [%s:%d] %s\n", func, line, str);
 }
 
 u16 checksum16_cmp(u8 *data, u32 size, int mode)
@@ -492,6 +489,27 @@ static int goodix_thp_parse_dt(struct device_node *node,
             board_data->cpu_mask = 0xff;
         }
 
+        board_data->stylus_mode_ctrl = of_property_read_bool(node,
+                "goodix,stylus_mode-ctrl");
+        if (board_data->stylus_mode_ctrl)
+            ts_info(dev, "support goodix stylus mode");
+
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        r = of_property_read_u32(node, "touch-boost-count",
+                              &board_data->max_boost_count);
+        if (r) {
+            ts_info(dev, "No touch-boost-count, using default 3");
+            board_data->max_boost_count = 3;
+        }
+
+        r = of_property_read_u32(node, "touch-boost-timeout",
+                              &board_data->boost_timeout);
+        if (r) {
+            ts_info(dev, "No touch-boost-timeout, using default 50ms");
+            board_data->boost_timeout = 50;
+        }
+#endif
+
         return 0;
 }
 #endif
@@ -621,8 +639,8 @@ static int goodix_thp_get_cmd_ack(struct thp_ts_device *tdev, unsigned int ack_r
                 ret = goodix_thp_spi_read(tdev, ack_reg,
                         cmd_ack_buf, sizeof(cmd_ack_buf));
                 if (ret < 0) {
-                        ts_err(tdev->dev, "%s: failed read cmd ack info, ret %d",
-                                __func__, ret);
+                        ts_err(tdev->dev, "failed read cmd ack info, ret %d",
+                                 ret);
                         return -EINVAL;
                 }
 
@@ -697,7 +715,7 @@ static int goodix_thp_prepare(struct thp_ts_device *ts_dev)
         u8 tx_buf[5] = {0};
         u8 rx_buf[5] = {0};
 
-        ts_info(ts_dev->dev, "%s IN", __func__);
+        ts_info(ts_dev->dev, "IN");
 
         /* reset ic */
         ts_dev->hw_ops->reset(ts_dev, 5);
@@ -763,7 +781,7 @@ static int goodix_thp_board_init(struct thp_ts_device *tdev)
 {
         int ret = -1;
 
-        ts_info(tdev->dev, "%s IN", __func__);
+        ts_info(tdev->dev, "IN");
 
         if (!tdev) {
                 ts_err(tdev->dev, "thp_ts_device null!");
@@ -811,7 +829,7 @@ static int goodix_thp_get_custom_info(struct thp_ts_device *tdev, char *buf,
         if (is_valid_custom_info(custom_info)) {
                 strncpy(buf, custom_info, len);
         } else {
-                ts_err(tdev->dev, "%s:get custom info fail", __func__);
+                ts_err(tdev->dev, "get custom info fail");
                 return -EIO;
         }
         return 0;
@@ -879,6 +897,19 @@ static int goodix_thp_set_fp_int_pin(struct thp_ts_device *tdev, u8 level)
         return 0;
 }
 
+/* enable: 1-start ble broadcast 0-stop ble broadcast */
+static int goodix_thp_set_ble_broadcast(struct thp_ts_device *tdev, u8 enable)
+{
+        int ret;
+
+        ret = goodix_thp_send_cmd(tdev, 0x1A, enable);
+        if (ret < 0) {
+                ts_err(tdev->dev, "failed to %s ble broadcast", enable ? "start" : "stop");
+                return ret;
+        }
+        return 0;
+}
+
 static int goodix_thp_reset(struct thp_ts_device *tdev, u32 delay_ms)
 {
         ts_info(tdev->dev, "reset %dms", delay_ms);
@@ -922,16 +953,28 @@ static const struct goodix_thp_hw_ops hw_spi_ops = {
         .get_frame = goodix_thp_get_frame,
         .get_version = goodix_thp_get_version,
         .set_fp_int_pin = goodix_thp_set_fp_int_pin,
+        .set_ble_broadcast = goodix_thp_set_ble_broadcast,
         .reset = goodix_thp_reset,
         .set_spi_speed = goodix_thp_set_spi_speed,
 };
 
 static void goodix_pdev_release(struct device *dev)
 {
+        /* if pdev probe success, release device flow:
+        * spi device remove -> platform device remove -> (pdev->dev.release)
+        * if pdev probe fail, release device flow:
+        * spi device remove -> (pdev->dev.release)
+        */
         struct platform_device *pdev = to_platform_device(dev);
+        struct thp_ts_device *tdev = pdev->dev.platform_data;
+        if (!tdev || !tdev->spi_dev) {
+                ts_err(dev, "Invalid touch device");
+                return;
+        }
 
         ts_info(dev, "goodix pdev released, id:%d", pdev->id);
         kfree(pdev);
+        spi_set_drvdata(tdev->spi_dev, NULL);
 }
 
 static int goodix_spi_probe(struct spi_device *spi)
@@ -941,7 +984,12 @@ static int goodix_spi_probe(struct spi_device *spi)
         static int pdev_id;
         int r = 0;
 
-        ts_info(&spi->dev, "%s IN", __func__);
+        ts_info(&spi->dev, "IN");
+
+        if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+            ts_err(&spi->dev, "device not supported");
+            return -ENODEV;
+        }
 
         /* init thp device data */
         ts_dev = devm_kzalloc(&spi->dev,
@@ -1012,7 +1060,7 @@ static int goodix_spi_probe(struct spi_device *spi)
                 goto err_pdev;
         }
 
-        ts_info(&spi->dev, "%s OUT", __func__);
+        ts_info(&spi->dev, "OUT");
         return r;
 
 err_pdev:
@@ -1020,6 +1068,7 @@ err_pdev:
                 kfree(pdev);
                 pdev = NULL;
         }
+        spi_set_drvdata(spi, NULL);
 err_spi_buf:
         ts_info(&spi->dev, "OUT, %d", r);
         return r;
@@ -1030,8 +1079,9 @@ static void goodix_spi_remove(struct spi_device *spi)
 {
         struct platform_device *pdev = spi_get_drvdata(spi);
 
-	ts_info(&spi->dev, "goodix spi driver remove, id:%d", pdev->id);
-	platform_device_unregister(pdev);
+        ts_info(&spi->dev, "goodix spi driver remove, id:%d", pdev->id);
+        platform_device_unregister(pdev);
+
 }
 #else
 static int goodix_spi_remove(struct spi_device *spi)
@@ -1060,7 +1110,15 @@ static int goodix_spi_resume(struct device *dev)
 {
         struct spi_device *spi = to_spi_device(dev);
         struct platform_device *pdev = spi_get_drvdata(spi);
+        if (!pdev) {
+                ts_info(dev, "Resume: No platform device");
+                return 0;
+        }
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
+        if (!core_data) {
+                ts_info(dev, "Resume: No core data");
+                return 0;
+        }
 
         ts_info(dev, "system resumes from pm_suspend");
         core_data->pm_suspend = false;
@@ -1072,7 +1130,15 @@ static int goodix_spi_suspend(struct device *dev)
 {
         struct spi_device *spi = to_spi_device(dev);
         struct platform_device *pdev = spi_get_drvdata(spi);
+        if (!pdev) {
+                ts_info(dev, "Suspend: No platform device");
+                return 0;
+        }
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
+        if (!core_data) {
+                ts_info(dev, "Suspend: No core data");
+                return 0;
+        }
 
         ts_info(dev, "system enters into pm_suspend");
         core_data->pm_suspend = true;

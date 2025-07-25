@@ -21,6 +21,10 @@ ifeq ($(GTP_ENABLE_PM_QOS),true)
 	KBUILD_OPTIONS += CONFIG_GTP_ENABLE_PM_QOS=y
 endif
 
+ifeq ($(ENABLE_TOUCH_CPU_BOOST),true)
+	KBUILD_OPTIONS += CONFIG_ENABLE_TOUCH_CPU_BOOST=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_brl_thp.ko
 LOCAL_MODULE_TAGS := optional

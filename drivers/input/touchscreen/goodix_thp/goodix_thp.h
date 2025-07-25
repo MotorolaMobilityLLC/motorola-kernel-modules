@@ -35,6 +35,8 @@
 #include <linux/completion.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/kthread.h>
+#include <linux/pinctrl/consumer.h>
+#include <linux/cpufreq.h>
 #ifdef CONFIG_OF
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
@@ -99,6 +101,8 @@
 #define GET_FRAME_NONBLOCK_MODE				0
 #define IRQ_ENABLE_FLAG					1
 #define IRQ_DISABLE_FLAG				0
+#define IRQ_WAKE_ENABLE_FLAG				1
+#define IRQ_WAKE_DISABLE_FLAG				0
 #define GESTURE_DOUBLE_CLICK				0
 #define GESTURE_SINGLE_CLICK				1
 
@@ -182,6 +186,16 @@
 #define INPUT_AGENT_IOCTL_GET_DRIVER_STATE \
         _IOR(INPUT_AGENT_IO_TYPE, 0x06, u32)
 
+#define PINCTRL_STYLUS_CLK_ACTIVE       "stylus_clk_active"
+#define PINCTRL_STYLUS_CLK_SUSPEND      "stylus_clk_suspend"
+
+#define kfree_safe(pbuf) do {\
+    if (pbuf) {\
+        kfree(pbuf);\
+        pbuf = NULL;\
+    }\
+} while(0)
+
 typedef enum {
         REQUEST_TYPE_FRAME = 1,
         REQUEST_TYPE_CMD,
@@ -209,6 +223,12 @@ typedef enum {
         NOTIFY_TYPE_SAVE_MOTO_DATA,
 } NOTIFY_TYPE_T;
 
+enum pen_action_state {
+    PEN_STATE_NONE,
+    PEN_STATE_HOVER,
+    PEN_STATE_TOUCH
+};
+
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
         uint32_t id;
@@ -225,7 +245,7 @@ struct driver_response_pkg {
 struct driver_request_app_pkg {
         uint32_t id;
         uint32_t type;
-        uint8_t data[0];
+        uint8_t data[];
 };
 
 struct driver_request_pkg {
@@ -297,6 +317,9 @@ struct goodix_mode_info {
         int interpolation;
         int stowed;
         int pocket_mode;
+        int stylus_mode;
+        int fp_int_state;
+        int charger_mode;
 };
 
 struct goodix_thp_board_data {
@@ -327,9 +350,14 @@ struct goodix_thp_board_data {
         bool stowed_mode_ctrl;
         bool pocket_mode_ctrl;
         bool edge_ctrl;
+        bool stylus_mode_ctrl;
         int irq_need_dev_resume_time; /*control setting of wait resume time*/
         u32 sched_priority;
         u32 cpu_mask;
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        int max_boost_count;
+        int boost_timeout;
+#endif
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -397,9 +425,18 @@ struct goodix_thp_hw_ops {
         int (*get_frame)(struct thp_ts_device *dev, char *data);
         int (*get_version)(struct thp_ts_device *dev, u64 *version);
         int (*set_fp_int_pin)(struct thp_ts_device *dev, u8 level);
+        int (*set_ble_broadcast)(struct thp_ts_device *dev, u8 enable);
         int (*reset)(struct thp_ts_device *dev, u32 delay_ms);
         int (*set_spi_speed)(struct thp_ts_device *dev, u32 speed);
 };
+
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+struct cpu_boost_info {
+        struct freq_qos_request qos_req;
+        unsigned int max_freq;
+        bool initialized;
+};
+#endif
 
 struct goodix_thp_core {
         char thp_misc_name[32];
@@ -418,12 +455,15 @@ struct goodix_thp_core {
         struct thp_frame_mmap_list frame_mmap_list;
         struct mutex frame_mutex;
         struct mutex irq_mutex;
+        struct mutex irq_wake_mutex;
         struct mutex mode_lock;
 
 #ifdef CONFIG_PINCTRL
         struct pinctrl *pinctrl;
         struct pinctrl_state *pin_sta_active;
         struct pinctrl_state *pin_sta_suspend;
+        struct pinctrl_state *stylus_clk_active;
+        struct pinctrl_state *stylus_clk_suspend;
 #endif
 #if IS_ENABLED(CONFIG_FB) || IS_ENABLED(CONFIG_DRM_MEDIATEK)
         struct notifier_block pm_notif;
@@ -432,6 +472,7 @@ struct goodix_thp_core {
         bool special_area_on;
         bool logtofile_on;
         bool irq_state;
+        bool irq_wake_state;
         u32 suspended;
         u16 gesture_enable;
         u32 state_change_flag;
@@ -465,13 +506,35 @@ struct goodix_thp_core {
         int pm_qos_value;
         int pm_qos_state;
 #endif
+        u8 prev_finger_state[INPUT_AGENT_MAX_FINGERS]; // recording the prev finger state
+        enum pen_action_state pen_state;
 
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        int boost_count;
+        struct timer_list boost_timer;
+
+        struct cpu_boost_info *boost_infos;
+        int *cpu_to_index_map;
+        int qos_count;
+#endif
 };
 
 extern bool debug_log_flag;
-void ts_info(struct device *dev, const char *fmt, ...);
-void ts_err(struct device *dev, const char *fmt, ...);
-void ts_debug(struct device *dev, const char *fmt, ...);
+void _ts_info(struct device *dev, const char *func, int line, const char *fmt, ...);
+void _ts_err(struct device *dev, const char *func, int line, const char *fmt, ...);
+void _ts_debug(struct device *dev, const char *func, int line, const char *fmt, ...);
+
+#define ts_info(dev, fmt, ...) \
+        _ts_info(dev, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define ts_err(dev, fmt, ...) \
+        _ts_err(dev, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define ts_debug(dev, fmt, ...) \
+        do { \
+                if (debug_log_flag) \
+                        _ts_debug(dev, __func__, __LINE__, fmt, ##__VA_ARGS__); \
+        } while (0)
 
 /*
  * get board data pointer
