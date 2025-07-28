@@ -88,7 +88,6 @@ int netlink_init(void)
 	netlink_cfg.groups = 0;
 	netlink_cfg.flags = 0;
 	netlink_cfg.input = nl_data_ready;
-	netlink_cfg.cb_mutex = NULL;
 
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_TEST,
 			&netlink_cfg);
