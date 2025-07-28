@@ -11,5 +11,6 @@ KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
 include $(SRC_PATH)/stat/mm/Android.mk
+include $(SRC_PATH)/stat/mm515/Android.mk
 include $(SRC_PATH)/vh/kernel/metrics/Android.mk
 
