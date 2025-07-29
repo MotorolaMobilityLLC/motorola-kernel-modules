@@ -459,6 +459,58 @@ static ssize_t charge_real_type_show(struct device *dev,
 }
 static DEVICE_ATTR(charge_real_type, S_IRUGO, charge_real_type_show, NULL);
 
+static ssize_t batt_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int battsn_nums = 0, count = 0, i = 0;
+	int rc;
+
+	if (!this_root_chip) {
+		pr_err("mmi_glink_charger: chip not valid\n");
+		return -ENODEV;
+	}
+
+	struct profile_sn_map {
+		const char *id;
+		const char *sn;
+	} *map_table;
+
+	battsn_nums = of_property_count_strings(this_root_chip->dev->of_node, "profile-ids-map");
+	if (battsn_nums <= 0 || (battsn_nums % 2)) {
+		pr_err("Invalid profile-ids-map in DT, rc=%d\n", battsn_nums);
+		return -EINVAL;
+	}
+
+	map_table = devm_kmalloc_array(this_root_chip->dev, battsn_nums / 2,
+					sizeof(struct profile_sn_map),
+					GFP_KERNEL);
+	if (!map_table)
+		return -ENOMEM;
+
+	rc = of_property_read_string_array(this_root_chip->dev->of_node, "profile-ids-map",
+					(const char **)map_table,
+					battsn_nums);
+	if (rc < 0) {
+		pr_err("Failed to get profile-ids-map, rc=%d\n", rc);
+		goto free_map;
+	}
+
+	count += scnprintf(buf+count, CHG_SHOW_MAX_SIZE, "%d", battsn_nums / 2);
+
+	for (i = 0; i < battsn_nums / 2 && map_table[i].sn; i++) {
+		count += scnprintf(buf+count, CHG_SHOW_MAX_SIZE,
+				"%s", map_table[i].sn);
+	}
+	count += scnprintf(buf+count, CHG_SHOW_MAX_SIZE, "\n");
+
+free_map:
+	devm_kfree(this_root_chip->dev, map_table);
+
+	return count;
+}
+
+static DEVICE_ATTR_RO(batt_id);
+
 static ssize_t thermal_primary_charge_control_limit_store(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
@@ -833,6 +885,11 @@ void battery_supply_init(struct battery_host *batt_host)
 				&dev_attr_charge_real_type);
 	if (rc)
 		mmi_err(this_root_chip, "couldn't create charge_real_type\n");
+
+	rc = device_create_file(batt_psy->dev.parent,
+				&dev_attr_batt_id);
+	if (rc)
+		mmi_err(this_root_chip, "couldn't create batt_id\n");
 	mmi_info(this_root_chip, "battery supply is initialized\n");
 
 	thermal_charge_control_init(batt_host);
