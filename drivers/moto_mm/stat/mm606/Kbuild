@@ -1,0 +1,16 @@
+# add -Wall to try to catch everything we can.
+
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += -I$(srctree)
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
+
+# vendor hook for mm
+obj-m += moto_mm_stat_606.o
+moto_mm_stat_606-y += init.o page_alloc.o sysfs_node.o filemap.o cma.o meminfo.o vmscan.o slowpath.o compaction.o procfs_node.o
+
