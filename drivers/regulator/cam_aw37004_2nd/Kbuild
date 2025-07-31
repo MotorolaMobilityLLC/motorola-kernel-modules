@@ -1,0 +1,5 @@
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+
+cam_aw37004_2nd-objs += aw37004-2nd-regulator.o
+obj-m	+= cam_aw37004_2nd.o
