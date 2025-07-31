@@ -441,6 +441,7 @@ static int aw35615_probe(struct i2c_client *client, const struct i2c_device_id *
 	/* Initialize sysfs file accessors */
 	aw_Sysfs_Init();
 
+	chip->shutdown = AW_FALSE;
 #ifdef AW_DEBUG
 	/* Initialize debugfs file accessors */
 	aw_DFS_Init();
@@ -489,6 +490,12 @@ static void aw35615_shutdown(struct i2c_client *client)
 		return;
 	}
 
+	if (chip->shutdown) {
+		pr_err("AW35615 shutdown - Chip already shutdown !\n");
+		return;
+	}
+
+	chip->shutdown = AW_TRUE;
 	core_enable_typec(&chip->port, AW_FALSE);
 	if (chip->gpio_IntN_irq)
 		disable_irq(chip->gpio_IntN_irq);

@@ -73,6 +73,9 @@ struct aw35615_chip {
 	/* Port Object */
 	Port_t port;
 	DevicePolicyPtr_t dpm;
+
+	/* chip status*/
+	AW_BOOL shutdown;
 };
 
 extern struct aw35615_chip *g_chip;

@@ -1178,6 +1178,11 @@ static void work_function(struct work_struct *work)
 		return;
 	}
 
+	if (chip->shutdown) {
+		pr_err("AWINIC  %s - shutdown is %d\n", __func__, chip->shutdown);
+		return;
+	}
+
 	/* Disable timer while processing */
 	aw_StopTimer(&chip->alarmtimer);
 
