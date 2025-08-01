@@ -83,6 +83,7 @@ static int moto_stat_mm_init(void)
 		return ret;
 
 	/* rvh_madvise_pageout_end depends on rvh_madvise_pageout_begin so do not reorder */
+	/* Disable madvise_pageout and mapping shrinkable hook register
 	ret = register_trace_android_rvh_madvise_pageout_end(rvh_madvise_pageout_end, NULL);
 	if (ret)
 		return ret;
@@ -98,7 +99,7 @@ static int moto_stat_mm_init(void)
 	ret = register_trace_android_rvh_mapping_shrinkable(rvh_mapping_shrinkable, NULL);
 	if (ret)
 		return ret;
-
+	*/
 	return 0;
 }
 
