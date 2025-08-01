@@ -1,0 +1,8 @@
+#
+# awinic sar driver configuration
+#
+
+config USE_POWER_SUPPLY_ONLINE
+    bool "Enable aw963xx power supply online"
+    help
+      Say Y here if aw963xx power supply online

@@ -8,4 +8,7 @@ source "motorola/kernel/modules/drivers/input/touchscreen/synaptics_tcm2_mmi_v2/
 
 source "motorola/kernel/modules/drivers/input/touchscreen/goodix_berlin_mmi/Kconfig"
 
+source "motorola/kernel/modules/drivers/misc/sarsensor/awinic/aw963xx/Kconfig"
+
+source "motorola/kernel/modules/drivers/misc/sarsensor/semtech/sx937x/Kconfig"
 endmenu

@@ -1,0 +1,14 @@
+#
+# semtech sar driver configuration
+#
+
+config CAPSENSE_USB_CAL
+    bool "Enable sar sensor recalibration when the USB connection state changes"
+    help
+      Say Y here if sx937x usb cali enable
+
+
+config USE_POWER_SUPPLY_ONLINE
+    bool "Enable sx937x power supply online"
+    help
+      Say Y here if sx937x power supply online

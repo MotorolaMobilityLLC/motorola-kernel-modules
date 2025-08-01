@@ -20,6 +20,8 @@ filegroup(
          "//motorola/kernel/modules/drivers/input/touchscreen/goodix_thp:Kconfig",
          "//motorola/kernel/modules/drivers/input/touchscreen/synaptics_tcm2_mmi_v2:Kconfig",
          "//motorola/kernel/modules/drivers/input/touchscreen/goodix_berlin_mmi:Kconfig",
+         "//motorola/kernel/modules/drivers/misc/sarsensor/awinic/aw963xx:Kconfig",
+         "//motorola/kernel/modules/drivers/misc/sarsensor/semtech/sx937x:Kconfig",
          "//motorola/kernel/modules:Kconfig.moto",
     ],
 )
