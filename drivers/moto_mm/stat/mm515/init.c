@@ -25,6 +25,10 @@ static int moto_stat_mm_init(void)
 	if (ret)
 		return ret;
 
+	ret = register_trace_android_vh_rmqueue(vh_rmqueue_mod, NULL);
+	if (ret)
+		return ret;
+
 	ret = register_trace_mm_vmscan_direct_reclaim_begin(vh_direct_reclaim_begin, NULL);
 	if (ret)
 		return ret;

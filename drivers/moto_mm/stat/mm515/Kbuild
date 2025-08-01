@@ -17,5 +17,5 @@ endif
 
 # vendor hook for mm
 obj-m += moto_mm_stat_515.o
-moto_mm_stat_515-y += init.o sysfs_node.o vmscan.o
+moto_mm_stat_515-y += init.o sysfs_node.o vmscan.o page_alloc.o
 
