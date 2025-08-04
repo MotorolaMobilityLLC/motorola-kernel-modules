@@ -526,7 +526,7 @@ struct goodix_thp_core {
         int zerotap_data[1];
         /* touchscreen_mmi */
         struct ts_mmi_class_methods *imports;
-        struct timeval64 last_event_time;
+        ktime_t last_event_time;
         struct wakeup_source *ws;
         struct completion pm_completion;
         bool pm_suspend;

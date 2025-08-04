@@ -1554,7 +1554,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         }
 
         if (data.touch_num > 0) {
-            memcpy(&core_data->last_event_time, &data.time_stamp, sizeof(data.time_stamp));
+            core_data->last_event_time = ktime_get_boottime();
         }
 
         if (data.touch[STYLUS_TRACK_ID].touch_valid == 1) {

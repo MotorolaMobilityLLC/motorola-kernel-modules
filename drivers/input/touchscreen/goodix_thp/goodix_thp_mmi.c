@@ -651,7 +651,8 @@ static ssize_t goodix_ts_stowed_show(struct device *dev,
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	struct timeval64 last_ts;
+	ktime_t last_ktime;
+	struct timespec64 last_ts;
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
 
@@ -659,11 +660,13 @@ static ssize_t goodix_ts_timestamp_show(struct device *dev,
 	GET_GOODIX_DATA(dev);
 
 	mutex_lock(&core_data->mode_lock);
-	memcpy(&last_ts, &core_data->last_event_time, sizeof(core_data->last_event_time));
-	memset(&core_data->last_event_time, 0, sizeof(core_data->last_event_time));
+	last_ktime = core_data->last_event_time;
+	core_data->last_event_time = 0;
 	mutex_unlock(&core_data->mode_lock);
 
-	return scnprintf(buf, PAGE_SIZE, "%lld.%lld\n", last_ts.tv_sec, last_ts.tv_usec);
+	last_ts = ktime_to_timespec64(last_ktime);
+
+	return scnprintf(buf, PAGE_SIZE, "%lld.%ld\n", last_ts.tv_sec, last_ts.tv_nsec);
 }
 
 static int goodix_clock_enable(struct goodix_thp_core *core_data, bool mode)
