@@ -420,6 +420,15 @@ static int goodix_thp_parse_dt(struct device_node *node,
             board_data->iovdd_gpio = r;
         }
 
+        r = of_get_named_gpio(node, "goodix,avdd-gpio", 0);
+        if (r < 0) {
+            ts_info(dev, "can't find avdd-gpio, use other power supply");
+            board_data->avdd_gpio = 0;
+        } else {
+            ts_info(dev, "get avdd-gpio[%d] from dt", r);
+            board_data->avdd_gpio = r;
+        }
+
         r = of_property_read_u32(node, "goodix,power-on-delay-us",
                                 &board_data->power_on_delay_us);
         if (!r) {
@@ -493,6 +502,11 @@ static int goodix_thp_parse_dt(struct device_node *node,
                 "goodix,stylus_mode-ctrl");
         if (board_data->stylus_mode_ctrl)
             ts_info(dev, "support goodix stylus mode");
+
+        board_data->gpio_expander = of_property_read_bool(node,
+                "goodix,gpio-expander");
+        if (board_data->gpio_expander)
+            ts_info(dev, "support goodix gpio_expander");
 
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
         r = of_property_read_u32(node, "touch-boost-count",

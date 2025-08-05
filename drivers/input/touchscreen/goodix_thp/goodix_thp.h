@@ -331,6 +331,7 @@ struct goodix_thp_board_data {
         int irq;
         unsigned int irq_flags;
         int iovdd_gpio;
+        int avdd_gpio;
 
         unsigned int power_on_delay_us;
         unsigned int power_off_delay_us;
@@ -351,6 +352,7 @@ struct goodix_thp_board_data {
         bool pocket_mode_ctrl;
         bool edge_ctrl;
         bool stylus_mode_ctrl;
+        bool gpio_expander;
         int irq_need_dev_resume_time; /*control setting of wait resume time*/
         u32 sched_priority;
         u32 cpu_mask;

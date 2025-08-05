@@ -893,6 +893,7 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
         struct thp_ts_device *ts_dev = core_data->ts_dev;
         int r;
         int iovdd_gpio = ts_bdata->iovdd_gpio;
+        int avdd_gpio = ts_bdata->avdd_gpio;
 
         ts_info(ts_dev->dev, "Device power on");
         if (core_data->power_on) {
@@ -911,13 +912,21 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
                 usleep_range(3000, 3100);
         }
 
-        if (core_data->avdd) {
+        if (avdd_gpio > 0) {
+            gpio_direction_output(avdd_gpio, 1);
+        } else if (core_data->avdd) {
                 r = regulator_enable(core_data->avdd);
                 if (r) {
                         ts_err(ts_dev->dev, "Failed to enable avdd:%d", r);
                         goto power_off;
                 }
                 usleep_range(15000, 15100);
+        }
+
+        if (ts_bdata->gpio_expander ) {
+            /* for the expander gpio, the default sleep is not enough */
+            ts_info(ts_dev->dev, "sleep 20ms for expander gpio config");
+            msleep(20);
         }
         gpio_direction_output(ts_bdata->reset_gpio, 1);
         core_data->power_on = 1;
@@ -930,7 +939,9 @@ power_off:
         } else if (core_data->iovdd)
             regulator_disable(core_data->iovdd);
 
-        if (core_data->avdd) {
+        if (avdd_gpio > 0) {
+            gpio_direction_output(avdd_gpio, 0);
+        } else if (core_data->avdd) {
             regulator_disable(core_data->avdd);
         }
 
@@ -954,7 +965,9 @@ static void goodix_thp_power_off(struct goodix_thp_core *core_data)
         } else if (core_data->iovdd)
             regulator_disable(core_data->iovdd);
 
-        if (core_data->avdd) {
+        if (ts_bdata->avdd_gpio > 0) {
+            gpio_direction_output(ts_bdata->avdd_gpio, 0);
+        } else if (core_data->avdd) {
             regulator_disable(core_data->avdd);
         }
         core_data->power_on = 0;
@@ -992,6 +1005,15 @@ static int goodix_thp_gpio_setup(struct goodix_thp_core *core_data)
                 GPIOF_OUT_INIT_LOW, "ts_iovdd_gpio");
             if (r < 0) {
                 ts_err(ts_dev->dev, "Failed to request iovdd-gpio, r:%d", r);
+                return r;
+            }
+        }
+
+        if (ts_bdata->avdd_gpio > 0) {
+            r = devm_gpio_request_one(&core_data->pdev->dev, ts_bdata->avdd_gpio,
+                GPIOF_OUT_INIT_LOW, "ts_avdd_gpio");
+            if (r < 0) {
+                ts_err(ts_dev->dev, "Failed to request avdd-gpio, r:%d", r);
                 return r;
             }
         }
