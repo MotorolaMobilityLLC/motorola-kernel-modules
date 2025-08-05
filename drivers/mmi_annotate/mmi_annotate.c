@@ -64,6 +64,7 @@ static DEFINE_MUTEX(persist_lock);
 static DEFINE_MUTEX(mem_lock);
 
 static struct proc_dir_entry *procfs_file;
+static struct proc_dir_entry *mem_procfs_file;
 static struct persist_data_t *persist_data;
 static struct mem_data_t mem_data;
 static int persist_unsupported = 0;
@@ -121,6 +122,25 @@ static const struct file_operations mmi_annotate_operations = {
 	.release	= single_release,
 };
 #endif
+
+static ssize_t mmi_annotate_mem_write(struct file *file, const char __user *buf,
+				size_t count, loff_t *offset)
+{
+	char buffer[MAX_USER_STR];
+	const size_t maxlen = sizeof(buffer) - 1;
+
+	memset(buffer, 0, sizeof(buffer));
+	if (copy_from_user(buffer, buf, count > maxlen ? maxlen : count))
+		return -EFAULT;
+
+	mmi_annotate("%s", buffer);
+
+	return count;
+}
+
+static const struct proc_ops mmi_annotate_mem_operations = {
+	.proc_write		= mmi_annotate_mem_write,
+};
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0)
 static void* mmi_annotate_ram_vmap(phys_addr_t start, size_t size)
@@ -258,6 +278,9 @@ static int mmi_annotate_probe(struct platform_device *pdev)
 	/* Create the procfs file at /proc/driver/mmi_annotate */
 	procfs_file = proc_create("driver/mmi_annotate",
 		0444, NULL, &mmi_annotate_operations);
+	/* shell can write mmi_annotate mem area*/
+	mem_procfs_file = proc_create("driver/mmi_annotate_mem",
+		0640, NULL, &mmi_annotate_mem_operations);
 
 #if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE
 #if IS_ENABLED(CONFIG_QCOM_MINIDUMP)
@@ -332,6 +355,8 @@ static void mmi_annotate_remove(struct platform_device *pdev)
 {
 	if (procfs_file)
 		remove_proc_entry("driver/mmi_annotate", NULL);
+	if (mem_procfs_file)
+		remove_proc_entry("driver/mmi_annotate_mem", NULL);
 	if(mem_data.contents)
 		kfree(mem_data.contents);
 	return;
