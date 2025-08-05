@@ -16,8 +16,6 @@
 #define KERNEL_ABOVE_6_6
 #endif
 
-#undef pr_debug
-#define pr_debug pr_info
 
 /*********************************************************
  *
