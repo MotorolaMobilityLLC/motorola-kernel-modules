@@ -14,6 +14,9 @@
 #if IS_ENABLED(CONFIG_MMI_SGM41543D_CHARGER)
 #undef __SGM41542_CHIP_ID__
 #define __SGM41543D_CHIP_ID__
+#elif IS_ENABLED(CONFIG_MMI_SGM41542S_CHARGER)
+#undef __SGM41542_CHIP_ID__
+#define __SGM41542S_CHIP_ID__
 #endif
 
 #ifdef __SGM41541_CHIP_ID__
@@ -24,6 +27,11 @@
 #ifdef __SGM41542_CHIP_ID__
 #define SGM4154x_NAME		"sgm41542"
 #define SGM4154x_PN_ID		(BIT(6)| BIT(5)| BIT(3))
+#endif
+
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_NAME		"sgm41542s"
+#define SGM4154x_PN_ID		((BIT(6)| BIT(4)))
 #endif
 
 #ifdef __SGM41513_CHIP_ID__

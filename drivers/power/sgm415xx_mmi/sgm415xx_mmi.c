@@ -87,7 +87,7 @@ static const unsigned int BOOST_VOLT_LIMIT[] = {
 };
 
 /* SGM4154x REG02 BOOST_LIM[7:7], uA */
-#if (defined(__SGM41542_CHIP_ID__) || defined(__SGM41541_CHIP_ID__)|| defined(__SGM41543_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__))
+#if (defined(__SGM41542_CHIP_ID__) || defined(__SGM41541_CHIP_ID__)|| defined(__SGM41543_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__)|| defined(__SGM41542S_CHIP_ID__))
 static const unsigned int BOOST_CURRENT_LIMIT[] = {
 	1200000, 2000000
 };
@@ -1176,7 +1176,7 @@ static int sgm4154x_get_is_safetytimer_enable(struct charger_device *chg_dev, bo
 	return 0;
 }
 
-#if (defined(__SGM41542_CHIP_ID__)|| defined(__SGM41516D_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__))
+#if (defined(__SGM41542_CHIP_ID__)|| defined(__SGM41516D_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__)|| defined(__SGM41542S_CHIP_ID__))
 static int sgm4154x_en_pe_current_partern(struct charger_device *chg_dev, bool is_up)
 {
 	int ret = 0;
@@ -1753,7 +1753,7 @@ static void charger_detect_work_func(struct work_struct *work)
 		goto err;
 	}
 #endif
-#if (defined(__SGM41542_CHIP_ID__)|| defined(__SGM41516D_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__))
+#if (defined(__SGM41542_CHIP_ID__)|| defined(__SGM41516D_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__)|| defined(__SGM41542S_CHIP_ID__))
 	switch(sgm->state.chrg_type) {
 	case SGM4154x_USB_SDP:
 		pr_info("[%s] SGM4154x charger type: SDP\n", __func__);
@@ -2368,7 +2368,7 @@ static struct charger_ops sgm4154x_chg_ops = {
 	/* AICL */
 	//.run_aicl = mt6375_run_aicc,
 	/* PE+/PE+20 */
-#if (defined(__SGM41542_CHIP_ID__)|| defined(__SGM41516D_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__))
+#if (defined(__SGM41542_CHIP_ID__)|| defined(__SGM41516D_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__)|| defined(__SGM41542S_CHIP_ID__))
 	.send_ta_current_pattern = sgm4154x_en_pe_current_partern,
 #else
 	.send_ta_current_pattern = NULL,
