@@ -44,6 +44,9 @@
 #include <linux/regulator/consumer.h>
 #include <linux/clk.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+#include <linux/pinctrl/consumer.h>
+#endif
 
 #ifdef FPC_TEE_BOOST
 #include <mc_linux_api.h>
