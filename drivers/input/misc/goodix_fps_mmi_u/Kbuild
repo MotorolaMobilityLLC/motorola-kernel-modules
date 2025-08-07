@@ -1,0 +1,31 @@
+# add -Wall to try to catch everything we can.
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+ifeq ($(DEVICE_MODULES_PATH),)
+DEVICE_MODULES_PATH = $(srctree)
+else
+LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+endif
+
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += \
+		-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
+
+ifneq ($(filter m y,$(CONFIG_MOTO_FPS_PRECISE_POWERON)),)
+        EXTRA_CFLAGS += -DCONFIG_MOTO_FPS_PRECISE_POWERON
+endif
+
+#ifneq ($(filter m y,$(CONFIG_MMI_RELAY)),)
+#	EXTRA_CFLAGS += -DMMI_RELAY_MODULE
+#endif
+#goodix_mtk_tee-y += gf_spi_tee.o gf_spi_factory.o
+
+goodix_fps_mmi_u-y += gf_spi_tee.o
+
+obj-m += goodix_fps_mmi_u.o
+
+#KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_relay/$(GKI_OBJ_MODULE_DIR)/Module.symvers
