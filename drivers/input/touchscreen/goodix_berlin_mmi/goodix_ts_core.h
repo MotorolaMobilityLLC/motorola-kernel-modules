@@ -333,6 +333,9 @@ struct goodix_ts_board_data {
 	bool pocket_mode_ctrl;
 	bool fw_upgrade_drv;
 	bool avdd_set;
+#ifdef CONFIG_GTP_MULTI_CONFIG
+	const char *panel_supplier;
+#endif
 };
 
 enum goodix_fw_update_mode {
