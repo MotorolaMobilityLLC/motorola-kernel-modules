@@ -356,20 +356,27 @@ void record_task_cpufreq_times(void *data, u64 cputime, struct task_struct *p,
 				if (records[i].max_state < state)
 					records[i].max_state = state;
 			}
-			if (pid == tgid)
-				strlcpy(records[i].name, p->comm, TASK_COMM_LEN);
+			if (pid == tgid && likely(p != NULL)) {
+				if (likely(p->comm)) {
+					memcpy(records[i].name, p->comm, TASK_COMM_LEN);
+					records[i].name[TASK_COMM_LEN - 1] = '\0';
+				}
+			}
 			records[i].total_power += (DIV_ROUND_CLOSEST(cputime, NSEC_PER_MSEC)  * get_weights(state));
 			goto _exit;
 		}
 	}
 
-	if (i >= max_count) {
+	if (i >= max_count || unlikely(p == NULL)) {
 		goto _exit;
 	}
 
 	records[i].uid = uid;
 	/* the unit of time_in_state is ms */
-	strlcpy(records[i].name, p->comm, TASK_COMM_LEN);
+	if (likely(p->comm)) {
+		memcpy(records[i].name, p->comm, TASK_COMM_LEN);
+		records[i].name[TASK_COMM_LEN - 1] = '\0';
+	}
 	if (state < STATE_MAX) {
 		records[i].time_in_state[state] = DIV_ROUND_CLOSEST(cputime, NSEC_PER_MSEC);
 		records[i].max_state = state;
