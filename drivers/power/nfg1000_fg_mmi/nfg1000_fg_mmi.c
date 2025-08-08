@@ -1962,18 +1962,21 @@ static bool nfg1000_ota_program_check_batt_params_chem_version(struct mmi_fg_chi
 		}
 
 		for (i = 0; i < di->battid_cnt; i++) {
-			if (strnstr(dev_sn, di->batt_serialnum_arry[i], 10)) {
+			if (strnstr(dev_sn, di->batt_serialnum_arry[i], 32)) {
 				for (j = 0; j < batt_chem_version_number; j++) {
 					index = i * batt_chem_version_number + j;
 					if (index >= di->batt_chem_version_cnt) {
 						mmi_err("Index overflow , aborting parameters upgrade");
 						break;
 					}
-					if (fg_manufac_name[j] != di->batt_chem_version_arry[index]) {
-						if (j < (batt_chem_version_number - 1)) {
+
+					if (j < (batt_chem_version_number - 1)) {
+						if (fg_manufac_name[j] != di->batt_chem_version_arry[index]) {
 							mmi_err("Manufacturer name mismatch, aborting parameters upgrade");
 							break;
-						} else {
+						}
+					} else {
+						if (fg_manufac_name[j] < di->batt_chem_version_arry[index]) {
 							sprintf(batt_params_bin_name,
 								"NFG1000A_battery_parameter_%s.bin",
 								di->batt_serialnum_arry[i]);
@@ -1985,6 +1988,9 @@ static bool nfg1000_ota_program_check_batt_params_chem_version(struct mmi_fg_chi
 						}
 					}
 				}
+			}
+			if (upgrade_status) {
+				break;
 			}
 		}
 	}
