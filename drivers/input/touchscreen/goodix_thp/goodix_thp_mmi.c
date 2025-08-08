@@ -704,7 +704,7 @@ static int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
 	} else {
 		val[1] = 0;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-		msleep(20);
+		msleep(50);
 		goodix_clock_enable(core_data, mode);
 	}
 
