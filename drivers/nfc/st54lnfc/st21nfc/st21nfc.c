@@ -1386,15 +1386,21 @@ err_pidle_workqueue:
 	return ret;
 }
 
-static
-void
-st21nfc_remove(struct i2c_client *client)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void st21nfc_remove(struct i2c_client *client)
+#else
+static int st21nfc_remove(struct i2c_client *client)
+#endif
 {
 	struct st21nfc_device *st21nfc_dev = i2c_get_clientdata(client);
 
 	if (poweroff_charging_mode) {
 		pr_info("%s: bootmode is poweroff_charging_mode, return\n", __func__);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+		return 0;
+#else
 		return ;
+#endif
 	}
 	st21nfc_clock_deselect(st21nfc_dev);
 	misc_deregister(&st21nfc_dev->st21nfc_device);
@@ -1421,7 +1427,9 @@ st21nfc_remove(struct i2c_client *client)
 	if (!IS_ERR_OR_NULL(st21nfc_dev->gpiod_clkreq)) {
 		devm_gpiod_put(&client->dev,st21nfc_dev->gpiod_clkreq);
 	}
-	return;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+	return 0;
+#endif
 }
 
 static int st21nfc_suspend(struct device *device)

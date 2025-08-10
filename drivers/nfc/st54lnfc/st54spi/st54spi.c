@@ -52,6 +52,7 @@
 // AND avoid SPI_NSS low when VCC_SE is high but SPI not used.
 
 #include <st21nfc.h>
+#include <linux/version.h>
 
 /*
  * This supports access to SPI devices using normal userspace I/O calls.
@@ -1319,15 +1320,21 @@ static int st54spi_probe(struct spi_device *spi)
 	return status;
 }
 
-static
-void
-st54spi_remove(struct spi_device *spi)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void st54spi_remove(struct spi_device *spi)
+#else
+static int st54spi_remove(struct spi_device *spi)
+#endif
 {
 	struct st54spi_data *st54spi = spi_get_drvdata(spi);
 
 	if (poweroff_charging_mode) {
 		pr_info("%s : bootmode is poweroff_charging_mode, return\n", __func__);
-		return;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+		return 0;
+#else
+		return ;
+#endif
 	}
 
 	if (st54spi->power_or_nreset_gpio_mode == POWER_MODE_ST54H) {
@@ -1357,7 +1364,9 @@ st54spi_remove(struct spi_device *spi)
 
 	mutex_unlock(&device_list_lock);
 
-	return;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
+	return 0;
+#endif
 }
 
 static struct spi_driver st54spi_spi_driver = {
