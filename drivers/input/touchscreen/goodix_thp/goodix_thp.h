@@ -288,6 +288,9 @@ enum {
         SVC_CMD_GAME_FILTER,
         SVC_CMD_UPDATE_VERSION,
         SVC_CMD_HAL_INIT_FINISH = 36,
+        SVC_CMD_BATTERY = 38,
+        SVC_CMD_BUTTON,
+        SVC_CMD_PEN_INFO,
 };
 
 #define MAX_TSC_MSG_DATA_LEN 128
@@ -517,6 +520,7 @@ struct goodix_thp_core {
         int *cpu_to_index_map;
         int qos_count;
 #endif
+        u8 uid_data[9];
 };
 
 extern bool debug_log_flag;

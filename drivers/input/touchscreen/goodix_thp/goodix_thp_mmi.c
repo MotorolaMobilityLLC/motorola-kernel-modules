@@ -49,6 +49,8 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_stylus_mode_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_pen_info_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_fp_int_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_fp_int_show(struct device *dev,
@@ -71,6 +73,7 @@ static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
 static DEVICE_ATTR(stylus_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_stylus_mode_show, goodix_ts_stylus_mode_store);
+static DEVICE_ATTR(pen_info, S_IRUGO, goodix_ts_pen_info_show, NULL);
 static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fp_int_show, goodix_ts_fp_int_store);
 static DEVICE_ATTR(ble_broadcast, (S_IRUGO | S_IWUSR | S_IWGRP),
@@ -146,8 +149,10 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	ADD_ATTR(timestamp);
 
-	if (core_data->ts_dev->board_data.stylus_mode_ctrl)
+	if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
 		ADD_ATTR(stylus_mode);
+		ADD_ATTR(pen_info);
+	}
 
 	ADD_ATTR(fp_int);
 
@@ -762,6 +767,26 @@ static ssize_t goodix_ts_stylus_mode_show(struct device *dev,
 
 	ts_info(core_data->ts_dev->dev, "Stylus mode = %d.", core_data->set_mode.stylus_mode);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.stylus_mode);
+}
+
+static ssize_t goodix_ts_pen_info_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	u8 pen_info[9] = {0};
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	memcpy(pen_info, &core_data->uid_data, sizeof(core_data->uid_data));
+	mutex_unlock(&core_data->mode_lock);
+
+	return scnprintf(buf, PAGE_SIZE, "%x%x%x%x%x%x%x%x%x\n",
+					pen_info[0], pen_info[1], pen_info[2],
+					pen_info[3], pen_info[4], pen_info[5],
+					pen_info[6], pen_info[7], pen_info[8]);
 }
 
 static ssize_t goodix_ts_fp_int_store(struct device *dev,
