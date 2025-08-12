@@ -53,7 +53,7 @@
 #endif
 
 /* macros definition */
-#define GOODIX_THP_DRIVER_VERSION                       "1.0.2.4"
+#define GOODIX_THP_DRIVER_VERSION                       "1.0.2.8"
 #define GOODIX_THP_DRIVER_NAME                          "goodix_thp_drvier"
 #define GOODIX_CORE_DRIVER_NAME                         "goodix_thp"
 #define GOODIX_THP_STYLUS_INPUT_DEVICE_NAME             "goodix_stylus_input"
@@ -415,6 +415,7 @@ struct thp_input_agent_ioctl_coor_data {
         unsigned char large_touch_stat;		        /* 0:normal touch stat;1:large_touch_stat*/
         unsigned char ref_not_set;
         struct timeval64 time_stamp;
+        unsigned char stylus_key;
 };
 
 struct goodix_thp_hw_ops {
