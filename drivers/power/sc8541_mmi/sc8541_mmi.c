@@ -25,6 +25,7 @@
 #include <linux/bitops.h>
 #include <linux/math64.h>
 #include <linux/regmap.h>
+#include <linux/version.h>
 
 #include "mtk_battery.h"
 #include "mtk_charger.h"
@@ -1492,7 +1493,11 @@ static int sc8541_register_interrupt(struct sc8541_chip *sc)
 	int ret;
 
 	if (gpio_is_valid(sc->irq_gpio)) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+		ret = gpio_request_one(sc->irq_gpio, GPIOF_IN,"sc8541_irq");
+#else
 		ret = gpio_request_one(sc->irq_gpio, GPIOF_DIR_IN,"sc8541_irq");
+#endif
 		if (ret) {
 			dev_err(sc->dev,"failed to request sc8541_irq\n");
 			return -EINVAL;
@@ -1745,7 +1750,11 @@ static struct of_device_id sc8541_charger_match_table[] = {
         { },
 };
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static int sc8541_charger_probe(struct i2c_client *client)
+#else
 static int sc8541_charger_probe(struct i2c_client *client, const struct i2c_device_id *id)
+#endif
 {
 	struct sc8541_chip *sc;
 	const struct of_device_id *match;
@@ -1874,13 +1883,21 @@ err_kzalloc:
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void sc8541_charger_remove(struct i2c_client *client)
+#else
 static int sc8541_charger_remove(struct i2c_client *client)
+#endif
 {
 	struct sc8541_chip *sc = i2c_get_clientdata(client);
 
 	power_supply_unregister(sc->psy);
 	devm_kfree(&client->dev, sc);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+	return;
+#else
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_PM_SLEEP
