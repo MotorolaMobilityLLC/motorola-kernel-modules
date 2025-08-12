@@ -14,7 +14,12 @@
 #include <linux/delay.h>
 #include <linux/mutex.h>
 #include <linux/debugfs.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+#include "charger_class.h"
+#else
 #include "../../drivers/power/supply/charger_class.h"
+#endif
 #include "nu2115a_mmi.h"
 
 #if IS_ENABLED(CONFIG_OEM_DEVINFO)
@@ -1948,8 +1953,11 @@ static bool nu2115_detect_device(struct nu2115 *chip)
 		return false;
 }
 
-static int nu2115_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static int nu2115_probe(struct i2c_client *client)
+#else
+static int nu2115_probe(struct i2c_client *client, const struct i2c_device_id *id)
+#endif
 {
 	struct nu2115 *chip;
 	int ret;
@@ -2026,13 +2034,21 @@ static int nu2115_probe(struct i2c_client *client,
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void nu2115_remove(struct i2c_client *client)
+#else
 static int nu2115_remove(struct i2c_client *client)
+#endif
 {
 	struct nu2115 *chip = i2c_get_clientdata(client);
 
 	charger_device_unregister(chip->chg_dev);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+	return;
+#else
 	return 0;
+#endif
 }
 
 static void nu2115_shutdown(struct i2c_client *client)
