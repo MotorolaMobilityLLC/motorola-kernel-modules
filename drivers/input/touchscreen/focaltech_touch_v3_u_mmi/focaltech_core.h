@@ -149,6 +149,27 @@
 #define FTS_TOUCH_HIRES_EN                  0
 #endif
 
+#if defined(CFG_MTK_PANEL_NOTIFIER)
+/* A hardware display blank change occurred */
+#define DRM_PANEL_EVENT_BLANK          0x01
+/* A hardware display blank early change occurred */
+#define DRM_PANEL_EARLY_EVENT_BLANK    0x02
+
+enum {
+       /* panel: power on */
+       DRM_PANEL_BLANK_UNBLANK,
+       /* panel: power off */
+       DRM_PANEL_BLANK_POWERDOWN,
+};
+
+struct drm_panel_notifier {
+       void *data;
+};
+struct msm_drm_notifier {
+       void *data;
+};
+#endif
+
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
 *****************************************************************************/
@@ -234,6 +255,9 @@ struct fts_ts_data {
     struct i2c_client *client;
     struct spi_device *spi;
     struct device *dev;
+#ifdef CFG_MTK_PANEL_NOTIFIER
+	struct notifier_block disp_notifier;
+#endif
     struct input_dev *input_dev;
     struct input_dev *pen_dev;
     struct fts_ts_platform_data *pdata;
