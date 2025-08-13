@@ -1398,7 +1398,9 @@ void syna_hw_interface_exit(void)
 	spi_unregister_driver(&syna_spi_driver);
 
 	/* unregister the platform device */
-	platform_device_unregister(&syna_spi_device);
+	if (device_is_registered(&syna_spi_device.dev)) {
+		platform_device_unregister(&syna_spi_device);
+	}
 }
 
 MODULE_AUTHOR("Synaptics, Inc.");
