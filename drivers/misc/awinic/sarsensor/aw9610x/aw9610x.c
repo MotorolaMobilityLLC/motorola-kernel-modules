@@ -265,8 +265,14 @@ static void aw9610x_reg_version_comp(struct aw_sar *p_sar, struct aw_bin *aw_bin
 	}
 }
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+static int32_t aw9610x_load_reg_bin(struct aw_bin *aw_bin, void *p_sar_void)
+{
+	struct aw_sar *p_sar = (struct aw_sar *)p_sar_void;
+#else
 static int32_t aw9610x_load_reg_bin(struct aw_bin *aw_bin, struct aw_sar *p_sar)
 {
+#endif
 	int32_t ret = 0;
 
 	struct aw9610x *aw9610x = (struct aw9610x *)p_sar->priv_data;
@@ -734,7 +740,11 @@ static const struct aw_sar_mode_set_t g_aw9610x_mode_set[] = {
 /**********************mode operation end*******************************/
 
 static const struct aw_sar_irq_init_t g_aw9610x_irq_init = {
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+	.flags = GPIOF_IN | GPIOD_OUT_HIGH,
+#else
 	.flags = GPIOF_DIR_IN | GPIOF_INIT_HIGH,
+#endif
 	.irq_flags = IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 	.handler = NULL,
 	.thread_fn = NULL,

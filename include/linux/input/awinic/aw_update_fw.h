@@ -238,7 +238,11 @@ struct aw_soc_protocol {
 	uint8_t module;
 	uint8_t command;
 	uint16_t length;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+	uint8_t value[4];
+#else
 	uint8_t value[0];
+#endif
 };
 
 enum AW_UPDATE_FW_STATE {

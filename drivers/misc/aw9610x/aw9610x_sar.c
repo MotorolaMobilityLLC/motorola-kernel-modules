@@ -1753,7 +1753,11 @@ static int32_t aw9610x_interrupt_init(struct aw9610x *aw9610x)
 
 		ret = devm_gpio_request_one(aw9610x->dev,
 					aw9610x->irq_gpio,
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+					GPIOF_IN | GPIOD_OUT_HIGH,
+#else
 					GPIOF_DIR_IN | GPIOF_INIT_HIGH,
+#endif
 					irq_gpio_name);
 
 		if (ret) {
