@@ -740,7 +740,11 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 		goto exit;
 	}
 
-	if (core_data->power_on == 0) {
+	/* 1) If on screen on state, here can switch stylus mode directly,
+	* 2) If BLE enable stylus notify after IC resume done,
+	*     here will do the stylus mode switch or will do the stylus mode switch on post resume
+	*/
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
 		ts_info(tdev->dev, "The touch is in sleep state, restore the value when resume");
 		goto exit;
 	}
@@ -903,6 +907,10 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
 	/* restore data */
 	if (core_data->ts_dev->board_data.stylus_mode_ctrl && core_data->get_mode.stylus_mode) {
+		/* If BLE enable stylus notify before IC resume done,
+		* stylus_mode_store() will not switch to stylus mode,
+		* here will do the stylus mode switch
+		*/
 		ret = goodix_stylus_mode(core_data, core_data->get_mode.stylus_mode);
 		if (!ret) {
 			core_data->set_mode.stylus_mode = core_data->get_mode.stylus_mode;
@@ -1090,6 +1098,10 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev)
 		if (!ret) {
 			ts_info(core_data->ts_dev->dev, "Success to exit stylus mode");
 			core_data->set_mode.stylus_mode = 0x00;
+			/* clear get stylus mode after suspend,
+			* because after screen on we will receive BLE setting again
+			*/
+			core_data->get_mode.stylus_mode = 0x00;
 		}
 		mutex_unlock(&core_data->mode_lock);
 	}
