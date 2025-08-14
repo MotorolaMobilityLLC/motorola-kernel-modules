@@ -221,6 +221,7 @@ typedef enum {
         NOTIFY_TYPE_ROTATION,
         NOTIFY_TYPE_SWITCH_REPORT_RATE,
         NOTIFY_TYPE_SAVE_MOTO_DATA,
+        NOTIFY_TYPE_SHIPMODE,
 } NOTIFY_TYPE_T;
 
 enum pen_action_state {

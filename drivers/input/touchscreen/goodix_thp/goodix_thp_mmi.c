@@ -57,6 +57,8 @@ static ssize_t goodix_ts_fp_int_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_shipmode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -78,6 +80,8 @@ static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fp_int_show, goodix_ts_fp_int_store);
 static DEVICE_ATTR(ble_broadcast, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_ble_broadcast_store);
+static DEVICE_ATTR(shipmode, (S_IRUGO | S_IWUSR | S_IWGRP),
+	NULL, goodix_ts_shipmode_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -152,6 +156,7 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 	if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
 		ADD_ATTR(stylus_mode);
 		ADD_ATTR(pen_info);
+		ADD_ATTR(shipmode);
 	}
 
 	ADD_ATTR(fp_int);
@@ -909,6 +914,46 @@ static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
 		ts_info(tdev->dev, "Success %s ble broadcast", mode ? "start" : "stop");
 
 	msleep(20);
+	ret = size;
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
+static ssize_t goodix_ts_shipmode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+	u8 val[2];
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ts_info(tdev->dev, "Failed to convert value.");
+		return -EINVAL;
+	}
+
+	mutex_lock(&core_data->mode_lock);
+
+	if (core_data->power_on == 0) {
+		ts_info(tdev->dev, "The touch is in sleep state, ignore the value");
+		ret = size;
+		goto exit;
+	}
+
+	val[0] = NOTIFY_TYPE_SHIPMODE;
+	val[1] = (u8)mode;
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+	msleep(20);
+	ts_info(core_data->ts_dev->dev, "Success to %s shipmode mode", mode ? "enable" : "disable");
 	ret = size;
 exit:
 	mutex_unlock(&core_data->mode_lock);
