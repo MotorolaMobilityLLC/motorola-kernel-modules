@@ -720,6 +720,7 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 	struct thp_ts_device *tdev;
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
+	u8 val[3];
 
 	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
@@ -747,6 +748,34 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 	ret = goodix_stylus_mode(core_data, mode);
 	if (!ret)
 		core_data->set_mode.stylus_mode = mode;
+
+	/* when exit stylus mode, need check if need restore game mode */
+	if (!core_data->set_mode.stylus_mode) {
+		if (core_data->ts_dev->board_data.sample_ctrl && core_data->set_mode.sample) {
+			val[0] = NOTIFY_TYPE_GAME_MODE;
+			val[1] = core_data->set_mode.sample;
+			put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+			msleep(20);
+			ts_info(dev, "Restore game mode after exit stylus mode");
+
+			/* check if need restore high report rate */
+			if (core_data->ts_dev->board_data.interpolation_ctrl && core_data->set_mode.interpolation) {
+				val[0] = NOTIFY_TYPE_SWITCH_REPORT_RATE;
+				val[1] = ((core_data->set_mode.report_rate_mode) >> 8) & 0xFF;
+				val[2] = (core_data->set_mode.report_rate_mode) & 0xFF;
+				put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+				msleep(20);
+				ts_info(tdev->dev, "Success to restore %s interpolation mode",
+					core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_480HZ ? "REPORT_RATE_480HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_576HZ ? "REPORT_RATE_576HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
+				"Unsupported"))))));
+			}
+		}
+	}
 
 exit:
 	mutex_unlock(&core_data->mode_lock);
