@@ -65,3 +65,9 @@ config HYBRIDSWAP_CORE
 	  If unsure, say N here.
 	  This module can't be compiled as a module,
 	  the module is as one part of the ZRAM driver.
+
+config MOTO_SWAP_KERNEL_FLAG
+	bool "Moto swap depend kernel version flag"
+	default "y"
+	help
+	  Indicate the kernel version required by ther moto swap.

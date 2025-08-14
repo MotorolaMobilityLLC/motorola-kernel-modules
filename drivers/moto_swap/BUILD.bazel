@@ -1,3 +1,5 @@
 load(":moto_swap.bzl", "define_modules")
 
+exports_files(["Kconfig"])
+
 define_modules()
