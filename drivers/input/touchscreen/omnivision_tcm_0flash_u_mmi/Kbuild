@@ -1,0 +1,79 @@
+# add -Wall to try to catch everything we can.
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/drivers/gpu/drm/mediatek/mediatek_v2 \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/drivers/gpu/drm \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/sensors \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/omnivision_tcm_0flash_u_mmi \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/omnivision_tcm_0flash_u_mmi/include
+
+ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
+	EXTRA_CFLAGS += -DOVT_DOUBLE_TAP_CTRL
+ifneq ($(filter m y, $(CONFIG_OVT_STOWED_MODE_SUPPORT)),)
+        EXTRA_CFLAGS += -DOVT_STOWED_MODE_SUPPORT
+endif
+endif
+
+obj-m := omnivision_tcm_0flash_u_mmi.o
+omnivision_tcm_0flash_u_mmi-objs += omnivision_tcm_core.o \
+			omnivision_tcm_touch.o \
+			omnivision_tcm_spi.o \
+			omnivision_tcm_zeroflash.o \
+			omnivision_tcm_device.o \
+			omnivision_tcm_testing.o \
+			omnivision_tcm_recovery.o \
+			omnivision_tcm_diagnostics.o
+
+
+ifneq ($(filter m y,$(CONFIG_OVT_ENABLE_DOUBLE_TAP)),)
+	EXTRA_CFLAGS += -DOVT_TAP_SENSOR_EN
+	KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../sensors/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+endif
+
+ifneq ($(filter m y,$(CONFIG_TP_MTK_CHECK_PANEL)),)
+	EXTRA_CFLAGS += -DOVT_MTK_CHECK_PANEL
+endif
+
+
+ifneq ($(filter m y, $(CONFIG_MTK_PANEL_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCONFIG_MTK_PANEL_NOTIFICATIONS
+endif
+
+ifneq ($(filter m y,$(CONFIG_TP_LAST_TIME)),)
+	EXTRA_CFLAGS += -DCONFIG_TP_LAST_TIME
+endif
+
+
+ifneq ($(filter m y, $(CONFIG_OMN_LOG_CAPTURE)),)
+        EXTRA_CFLAGS += -DCONFIG_OVT_LOG_CAPTURE
+endif
+
+ifneq ($(filter m y,$(CONFIG_OVT_PANEL_GESTURE_NOTIFY_SUPPORT)),)
+	EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/drivers/gpu/drm/panel/include
+	EXTRA_CFLAGS += -DOVT_PANEL_GESTURE_NOTIFY_SUPPORT
+endif
+
+ifneq ($(filter m y,$(CONFIG_OVT_PANEL_HDL_STATE_SUPPORT)),)
+        EXTRA_CFLAGS += \
+                -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/drivers/gpu/drm/panel/include
+        EXTRA_CFLAGS += -DOVT_PANEL_HDL_STATE_SUPPORT
+endif
+
+ifneq ($(filter m y,$(CONFIG_OVT_CHECK_DEVICE_BOOTMODE_SUPPORT)),)
+	EXTRA_CFLAGS += -DOVT_CHECK_DEVICE_BOOTMODE
+endif
+
+ifneq ($(filter m y,$(CONFIG_OVT_CHARGER_DETECT_SUPPORT)),)
+	EXTRA_CFLAGS += -DCONFIG_OVT_CHARGER_DETECT
+endif
+
+ifneq ($(filter m y,$(CONFIG_SUPPORT_MULTI_FIRMWARE)),)
+        EXTRA_CFLAGS += -DCONFIG_SUPPORT_MULTI_FIRMWARE
+endif
+
