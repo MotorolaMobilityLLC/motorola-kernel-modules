@@ -34,9 +34,15 @@ ifneq ($(filter m y,$(CONFIG_GTP_ENABLE_PM_QOS)),)
     EXTRA_CFLAGS += -DCONFIG_TOUCHIRQ_UPDATE_QOS
 endif
 
+ifneq ($(filter m y,$(CONFIG_INPUT_GTP_PASSIVE_PEN_NOTIFIER)),)
+	EXTRA_CFLAGS += -DGTP_PEN_NOTIFIER
+endif
 ifneq ($(filter m y,$(CONFIG_ENABLE_TOUCH_CPU_BOOST)),)
     EXTRA_CFLAGS += -DCONFIG_ENABLE_TOUCH_CPU_BOOST
 endif
 
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+ifneq ($(filter m y, $(CONFIG_INPUT_GTP_PASSIVE_PEN_NOTIFIER)),)
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../misc/hall/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+endif

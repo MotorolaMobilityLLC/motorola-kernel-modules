@@ -52,6 +52,10 @@
 #define PM_QOS_TOUCH_WAKEUP_VALUE 400
 #endif
 
+#ifdef GTP_PEN_NOTIFIER
+#include <linux/pen_detection_notify.h>
+#endif
+
 /* macros definition */
 #define GOODIX_THP_DRIVER_VERSION                       "1.0.2.8"
 #define GOODIX_THP_DRIVER_NAME                          "goodix_thp_drvier"
@@ -229,6 +233,11 @@ enum pen_action_state {
     PEN_STATE_HOVER,
     PEN_STATE_TOUCH
 };
+
+#ifdef GTP_PEN_NOTIFIER
+#define GTP_FINGER_MODE	0
+#define GTP_PEN_MODE		1
+#endif
 
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
@@ -523,6 +532,11 @@ struct goodix_thp_core {
         int qos_count;
 #endif
         u8 uid_data[9];
+#ifdef GTP_PEN_NOTIFIER
+	int initialized;
+	int gtp_pen_detect_flag;
+	struct notifier_block pen_notif;
+#endif
 };
 
 extern bool debug_log_flag;
@@ -561,5 +575,6 @@ u8 checksum8_u16(const u8 *data, u32 size);
 
 void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len);
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data);
+int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode);
 
 #endif /* _GOODIX_THP_H_ */

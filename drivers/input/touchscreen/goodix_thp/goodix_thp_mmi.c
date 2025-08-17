@@ -695,7 +695,7 @@ static int goodix_clock_enable(struct goodix_thp_core *core_data, bool mode)
 	return ret;
 }
 
-static int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
+int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
 {
 	int ret = 0;
 	u8 val[2];
@@ -731,6 +731,12 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 	tdev = core_data->ts_dev;
+
+	/* if pen in, don't set stylus mode from app */
+#ifdef GTP_PEN_NOTIFIER
+	if (!core_data->gtp_pen_detect_flag)
+		return -EINVAL;
+#endif
 
 	mutex_lock(&core_data->mode_lock);
 	ret = kstrtoul(buf, 0, &mode);

@@ -1743,6 +1743,80 @@ static const struct file_operations g_thp_input_agent_fops = {
         .unlocked_ioctl = goodix_thp_input_agent_ioctl,
 };
 
+#ifdef GTP_PEN_NOTIFIER
+void set_pen_mode_boot(struct goodix_thp_core *cd)
+{
+	int ret, value;
+        struct thp_ts_device *tdev = cd->ts_dev;
+
+	/* get status from hall pen module */
+	value = pen_detection_status();
+
+	ts_info(tdev->dev, "Received pen status(%d) for pen detection\n", value);
+
+	if (value == PEN_DETECTION_INSERT)
+		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
+	else if (value == PEN_DETECTION_PULL)
+		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
+
+	ret = mutex_lock_interruptible(&cd->mode_lock);
+	if (cd->power_on == 0) {
+		ts_err(tdev->dev, "The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	if (cd->gtp_pen_detect_flag == GTP_PEN_MODE) {
+		ret = goodix_stylus_mode(cd, GTP_PEN_MODE);
+		if (ret < 0) {
+			ts_err(tdev->dev, "failed to send passive pen mode cmd");
+			goto exit;
+		}
+	}
+
+exit:
+	mutex_unlock(&cd->mode_lock);
+	return;
+}
+#endif
+
+int goodix_ts_stage2_init(struct goodix_thp_core *core_data)
+{
+#ifdef GTP_PEN_NOTIFIER
+	set_pen_mode_boot(core_data);
+	core_data->initialized = true;
+#endif
+        return 0;
+}
+
+static int goodix_later_init_thread(void *data)
+{
+        int ret;
+        struct goodix_thp_core *core_data = data;
+
+        /* wait for 10s for other modules and functions ready*/
+        msleep(5*1000);
+	/* init other resources */
+	ret = goodix_ts_stage2_init(core_data);
+	if (ret) {
+		printk(KERN_INFO "stage2 init failed");
+	}
+        return 0;
+}
+
+static int goodix_start_later_init(struct goodix_thp_core *core_data)
+{
+	struct task_struct *init_thrd;
+	/* create and run update thread */
+	init_thrd = kthread_run(goodix_later_init_thread,
+				core_data, "goodix_init_thread");
+	if (IS_ERR_OR_NULL(init_thrd)) {
+		printk(KERN_INFO "Failed to create update thread:%ld",
+		       PTR_ERR(init_thrd));
+		return -EFAULT;
+	}
+	return 0;
+}
+
 static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
 {
         struct thp_ts_device *ts_dev = core_data->ts_dev;
@@ -2630,6 +2704,48 @@ static void goodix_cleanup_cpu_boost(struct goodix_thp_core *core_data)
 }
 #endif
 
+#ifdef GTP_PEN_NOTIFIER
+static int pen_notifier_callback(struct notifier_block *self,
+				unsigned long event, void *data)
+{
+	int ret = 0;
+	struct goodix_thp_core *cd = container_of(self,
+		struct goodix_thp_core, pen_notif);
+        struct thp_ts_device *tdev = cd->ts_dev;
+
+	if (!cd->initialized) return ret;
+
+	ts_info(tdev->dev, "Received event(%lu) for pen detection\n", event);
+
+	if (event == PEN_DETECTION_INSERT) {
+		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
+		cd->set_mode.stylus_mode = GTP_FINGER_MODE;
+		cd->get_mode.stylus_mode = GTP_FINGER_MODE;
+	} else if (event == PEN_DETECTION_PULL) {
+		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
+		cd->set_mode.stylus_mode = GTP_PEN_MODE;
+		cd->get_mode.stylus_mode = GTP_PEN_MODE;
+	}
+
+	ret = mutex_lock_interruptible(&cd->mode_lock);
+
+	if (cd->power_on == 0) {
+		ts_err(tdev->dev, "The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	ret = goodix_stylus_mode(cd, cd->gtp_pen_detect_flag);
+	if (ret < 0) {
+		ts_err(tdev->dev, "failed to send passive pen mode cmd");
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&cd->mode_lock);
+	return ret;
+}
+#endif
+
 /**
  * goodix_thp_probe - called by kernel when a Goodix touch
  *  platform driver is added.
@@ -2786,6 +2902,18 @@ static int goodix_thp_probe(struct platform_device *pdev)
 
 #endif
 
+#ifdef GTP_PEN_NOTIFIER
+	core_data->gtp_pen_detect_flag = GTP_FINGER_MODE;
+	core_data->get_mode.stylus_mode = GTP_PEN_MODE; //app default mode is pen
+	core_data->set_mode.stylus_mode = GTP_PEN_MODE;
+#endif
+
+	/* Try start a thread to get later inited info */
+	r = goodix_start_later_init(core_data);
+	if (r) {
+		ts_err(tdev->dev, "Failed start cfg_bin_proc, %d", r);
+	}
+
         /* request irq */
         r = goodix_thp_irq_setup(core_data);
         if (r) {
@@ -2821,10 +2949,17 @@ static int goodix_thp_probe(struct platform_device *pdev)
         //init timer for clear boost_count
         core_data->boost_count = 0;
         timer_setup(&core_data->boost_timer, goodix_boost_timer_handler, 0);
-         ts_info(tdev->dev, "Touch boost config: affinity=0x%lx, boost-count=%d, timeout=%dms",
+        ts_info(tdev->dev, "Touch boost config: affinity=0x%lx, boost-count=%d, timeout=%dms",
                   tdev->board_data.cpu_mask,
                   tdev->board_data.max_boost_count,
                   tdev->board_data.boost_timeout);
+#endif
+
+#ifdef GTP_PEN_NOTIFIER
+        core_data->pen_notif.notifier_call = pen_notifier_callback;
+        r = pen_detection_register_client(&core_data->pen_notif);
+        if (r)
+                ts_err(tdev->dev, "[PEN]Unable to register pen_notifier: %d\n", r);
 #endif
 
         return 0;
