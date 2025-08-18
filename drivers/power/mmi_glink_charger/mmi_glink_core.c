@@ -783,6 +783,19 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 		pmic_info->icl_result_ma);
 
 	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
+
+	if(chip->charger_present_dynamic_control_bm_ulog && !bm_ulog_is_enabled_by_cmd()) {
+		if(chip->charger_info.chrg_present){
+			bm_ulog_enable_log(true, 1000);
+			chip->bm_ulog_enabled = true;
+			//mmi_info(chip, "enable adsp log during chg present!\n");
+		}else if(!chip->charger_info.chrg_present && chip->bm_ulog_enabled) {
+			bm_ulog_enable_log(false, 0);
+			chip->bm_ulog_enabled = false;
+			//mmi_info(chip, "disable adsp log during chg not present!\n");
+		}
+	}
+
 }
 
 #define TAPER_COUNT 2
@@ -1462,6 +1475,10 @@ static int mmi_parse_dt(struct mmi_glink_chip *chip)
 				  &chip->ibat_calc_alignment_time);
 	if (rc)
 		chip->ibat_calc_alignment_time = UINT_MAX;
+
+	chip->charger_present_dynamic_control_bm_ulog =
+			of_property_read_bool(node, "mmi,charger_control_bm_ulog");
+	chip->bm_ulog_enabled = false;
 
 	for_each_child_of_node(node, child)
 		chip->glink_dev_num++;
