@@ -55,6 +55,7 @@ static struct proc_dir_entry *entry;
 static bool dump_reg_enable;
 enum sc8960x_part_no {
 	SC89890H_PN_NUM = 0x04,
+	UPM6920A_PN_NUM = 0x03,
 	SC89895_PN_NUM = 0x04,
 	SC8950_PN_NUM = 0x02,
 	SC89890W_PN_NUM = 0x07,
@@ -82,6 +83,10 @@ enum vindpm_track {
 #define MAX_REG_NUM		0x14
 #define SINGLE_DUMP_LEN		22
 #define TOTAL_DUMP_LEN		(SINGLE_DUMP_LEN * (MAX_REG_NUM + 1))
+
+#define UPM6920A_REG_CFG_MODE     0xA9
+#define UPM6920A_CFG_MODE_ENABLE  0x6E
+#define UPM6920A_CFG_MODE_DISABLE 0x00
 
 enum sc8989x_vbus_stat {
 	VBUS_STAT_NO_INPUT = 0,
@@ -146,6 +151,7 @@ enum sc8989x_fields {
 	ADC_IBUS,
 	DP3P3V_DM0V_EN,
 	F_VINDPM_TRACK,
+	CFGINIT_BIT,
 	F_MAX_FIELDS,
 };
 
@@ -161,6 +167,8 @@ enum sc8989x_reg_range {
 	SC8989X_VBUS,
 	SC8989X_ICC,
 	SC8989X_IBUS,
+	UPM6920A_ICHG,
+	UPM6920A_ITERM,
 };
 
 enum attach_type {
@@ -255,6 +263,7 @@ struct sc8989x_chip {
 	int force_detect_count;
 	int power_good;
 	int vbus_good;
+	int is_upm6920A;
 	uint8_t dev_id;
 	struct power_supply_desc psy_desc;
 	struct sc8989x_cfg_e *cfg;
@@ -295,6 +304,8 @@ static const struct reg_range sc8989x_reg_range_ary[] = {
 	[SC8989X_VBUS] = SC8989X_CHG_RANGE(2600, 15300, 100, 2600, false),
 	[SC8989X_ICC] = SC8989X_CHG_RANGE(0, 6350, 50, 0, false),
 	[SC8989X_IBUS] = SC8989X_CHG_RANGE(0, 6350, 50, 0, false),
+	[UPM6920A_ICHG] = SC8989X_CHG_RANGE(0, 5040, 64, 0, false),
+	[UPM6920A_ITERM] = SC8989X_CHG_RANGE(64, 1024, 64, 64, false),
 };
 
 //REGISTER
@@ -390,6 +401,8 @@ static const struct reg_field sc8989x_reg_fields[] = {
 	[DP3P3V_DM0V_EN] = REG_FIELD(0x83, 5, 5),
 	/*reg85 */
 	[F_VINDPM_TRACK] = REG_FIELD(0x85, 1, 2),
+	/*regC4 */
+	[CFGINIT_BIT] = REG_FIELD(0xC4, 7, 7),
 };
 
 static const struct regmap_config sc8989x_regmap_config = {
@@ -566,6 +579,13 @@ int Charger_Detect_Release(struct sc8989x_chip *sc)
 
 static int sc8989x_set_key(struct sc8989x_chip *sc)
 {
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
+	if (sc->is_upm6920A) {
+		return 0;
+	}
 	regmap_write(sc->regmap, SC8989X_REG7D, SC8989X_KEY1);
 	regmap_write(sc->regmap, SC8989X_REG7D, SC8989X_KEY2);
 	regmap_write(sc->regmap, SC8989X_REG7D, SC8989X_KEY3);
@@ -576,6 +596,10 @@ static int sc8989x_set_tmr2x(struct sc8989x_chip *sc, bool enable)
 {
 	int reg_val = enable ? 1 : 0;
 
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
 	return sc8989x_field_write(sc, TMR2X_EN, reg_val);
 }
 
@@ -583,6 +607,14 @@ static int sc8989x_set_wa(struct sc8989x_chip *sc)
 {
 	int ret;
 	int val;
+
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
+	if (sc->is_upm6920A) {
+		return 0;
+	}
 
 	ret = regmap_read(sc->regmap, SC8989X_DPDM3, &val);
 	if (ret < 0) {
@@ -599,6 +631,14 @@ __maybe_unused static int sc8989x_set_vbat_lsb(struct sc8989x_chip *sc, bool en)
 	int ret;
 	int val;
 
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
+	if (sc->is_upm6920A) {
+		return 0;
+	}
+
 	ret = sc8989x_field_read(sc, VBAT_REG_LSB, &val);
 	if (ret < 0) {
 		sc8989x_set_key(sc);
@@ -613,6 +653,14 @@ __maybe_unused static int sc8989x_adc_ibus_en(struct sc8989x_chip *sc, bool en)
 {
 	int ret;
 	int val;
+
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
+	if (sc->is_upm6920A) {
+		return 0;
+	}
 
 	ret = regmap_read(sc->regmap, SC8989X_ADC_EN, &val);
 	if (ret < 0) {
@@ -733,8 +781,18 @@ __maybe_unused static int sc8989x_set_dpdm_hiz(struct sc8989x_chip *sc)
 	return sc8989x_field_write(sc, DM_DRIVE, 0);
 }
 
+__maybe_unused static int sc8989x_set_dpdm_0V(struct sc8989x_chip *sc)
+{
+	sc8989x_field_write(sc, DP_DRIVE, 1);
+	return sc8989x_field_write(sc, DM_DRIVE, 1);
+}
+
 static int sc8989x_set_chg_term(struct sc8989x_chip *sc, bool en)
 {
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
 	if (en)
 		return sc8989x_field_write(sc, EN_ITERM, 1);
 	else
@@ -783,7 +841,17 @@ __maybe_unused static int sc8989x_set_iboost(struct sc8989x_chip *sc, int curr_m
 
 static int sc8989x_set_ichg(struct sc8989x_chip *sc, int curr_ma)
 {
-	int reg_val = val2reg(SC8989X_ICHG, curr_ma);
+	int reg_val;
+
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
+	if (sc->is_upm6920A) {
+		reg_val = val2reg(UPM6920A_ICHG, curr_ma);
+	} else {
+		reg_val = val2reg(SC8989X_ICHG, curr_ma);
+	}
 
 	return sc8989x_field_write(sc, ICC, reg_val);
 }
@@ -791,9 +859,19 @@ static int sc8989x_set_ichg(struct sc8989x_chip *sc, int curr_ma)
 static int sc8989x_get_ichg(struct sc8989x_chip *sc, int *curr_ma)
 {
 	int ret, reg_val;
+
+	if ((sc == NULL) || (curr_ma == NULL)) {
+		return -EINVAL;
+	}
+
 	ret = sc8989x_field_read(sc, ICC, &reg_val);
 	if (ret) {
 		dev_err(sc->dev, "read ICC failed(%d)\n", ret);
+		return ret;
+	}
+
+	if (sc->is_upm6920A) {
+		*curr_ma = reg2val(UPM6920A_ICHG, reg_val);
 		return ret;
 	}
 
@@ -804,7 +882,18 @@ static int sc8989x_get_ichg(struct sc8989x_chip *sc, int *curr_ma)
 
 static int sc8989x_set_term_curr(struct sc8989x_chip *sc, int curr_ma)
 {
-	int reg_val = val2reg(SC8989X_ITERM, curr_ma);
+	int reg_val;
+
+	if (sc == NULL) {
+		return -EINVAL;
+	}
+
+	if (sc->is_upm6920A) {
+		reg_val = val2reg(UPM6920A_ITERM, curr_ma);
+	} else {
+		reg_val = val2reg(SC8989X_ITERM, curr_ma);
+	}
+
 
 	return sc8989x_field_write(sc, ITERM, reg_val);
 }
@@ -813,11 +902,20 @@ static int sc8989x_get_term_curr(struct sc8989x_chip *sc, int *curr_ma)
 {
 	int ret, reg_val;
 
+	if ((sc == NULL) || (curr_ma == NULL)) {
+		return -EINVAL;
+	}
+
 	ret = sc8989x_field_read(sc, ITERM, &reg_val);
 	if (ret)
 		return ret;
 
-	*curr_ma = reg2val(SC8989X_ITERM, reg_val);
+	if (sc->is_upm6920A) {
+		*curr_ma = reg2val(UPM6920A_ITERM, reg_val);
+	} else {
+		*curr_ma = reg2val(SC8989X_ITERM, reg_val);
+	}
+
 
 	return ret;
 }
@@ -956,11 +1054,24 @@ static bool sc8989x_detect_device(struct sc8989x_chip *sc)
 	int ret;
 	int val;
 
+	if (sc == NULL) {
+		return false;
+	}
+
 	ret = sc8989x_field_read(sc, PN, &val);
-	if (ret < 0 || !(val == SC89890H_PN_NUM || val == SC89895_PN_NUM ||
-		val == SC8950_PN_NUM || val == SC89890W_PN_NUM)) {
+	if (ret < 0 || !(val == SC89890H_PN_NUM ||
+		val == SC8950_PN_NUM || val == SC89890W_PN_NUM ||
+		val == UPM6920A_PN_NUM)) {
 		dev_err(sc->dev, "not find sc8989x, part_no = %d\n", val);
 		return false;
+	}
+
+
+	if (val == UPM6920A_PN_NUM) {
+		sc->is_upm6920A = 1;
+		regmap_write(sc->regmap, UPM6920A_REG_CFG_MODE, UPM6920A_CFG_MODE_ENABLE);
+		sc8989x_field_write(sc, CFGINIT_BIT,0);
+		regmap_write(sc->regmap, UPM6920A_REG_CFG_MODE, UPM6920A_CFG_MODE_DISABLE);
 	}
 
 	sc->dev_id = val;
@@ -1795,6 +1906,10 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 	int type;
 	struct sc8989x_chip *sc = (struct sc8989x_chip *)data;
 
+	if (sc == NULL) {
+		return IRQ_HANDLED;
+	}
+
 	dev_info(sc->dev, "%s: sc8989x_irq_handler\n", __func__);
 
 	ret = sc8989x_field_read(sc, VBUS_GD, &reg_val);
@@ -1834,6 +1949,9 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 #endif
 	} else if (prev_vbus_gd && !sc->vbus_good) {
 		dev_info(sc->dev, "%s: adapter/usb removed\n", __func__);
+		if (sc->is_upm6920A) {
+			sc8989x_set_dpdm_0V(sc);
+		}
 		sc8989x_set_dpdm_hiz(sc);
 		//sc8989x_get_charger_type(sc);
 		power_supply_changed(sc->psy);
