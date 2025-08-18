@@ -521,6 +521,45 @@ int bm_ulog_enable_log(bool enable, unsigned int duration_ms)
 }
 EXPORT_SYMBOL(bm_ulog_enable_log);
 
+bool bm_ulog_is_enabled_by_cmd(void)
+{
+	struct bm_ulog_dev *bmdev = g_bmdev;
+	struct device_node *np = of_find_node_by_path("/chosen");
+	bool rt = false;
+	const char *bootargs = NULL;
+	char *bm_ulog_enabled = NULL;
+
+	if (!bmdev) {
+		pr_err("BM ulog has not initialized yet\n");
+		return false;
+	}
+
+	if (bmdev && bmdev->debug_enabled && *bmdev->debug_enabled) {
+		bm_info(bmdev, "bmdev->bm_ulog_enabled is true\n");
+		return true;
+	}
+
+	if (!np) {
+		bm_info(bmdev, "np is null\n");
+		return false;
+	}
+
+	if (!of_property_read_string(np, "bootargs", &bootargs)) {
+		bm_ulog_enabled = strstr(bootargs, "bm_ulog_enabled=1");
+		bm_info(bmdev, "of_property_read_string bm_ulog_enabled=%s\n", bm_ulog_enabled);
+		if (bm_ulog_enabled) {
+			rt = true;
+		}
+	}
+
+	of_node_put(np);
+
+	bm_info(bmdev,"bm ulog rt = %d\n", rt);
+	return rt;
+}
+EXPORT_SYMBOL(bm_ulog_is_enabled_by_cmd);
+
+
 #ifdef CONFIG_DEBUG_FS
 static int bm_ulog_dump_show(struct seq_file *s, void *unused)
 {

@@ -234,6 +234,8 @@ struct mmi_glink_chip {
 
 	int			heartbeat_dischg_ms;
 	uint32_t		ibat_calc_alignment_time;
+	bool			charger_present_dynamic_control_bm_ulog;
+	bool			bm_ulog_enabled;
 };
 
 struct encrypted_data {
