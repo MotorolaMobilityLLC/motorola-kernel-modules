@@ -370,8 +370,11 @@ static int read_head(struct blkdev *cb, struct utag *htag)
 		vfree(buf);
 		return -EIO;
 	}
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	strscpy(htag->name, buf->name, MAX_UTAG_NAME - 1);
+#else
 	strlcpy(htag->name, buf->name, MAX_UTAG_NAME - 1);
+#endif
 	if (strncmp(htag->name, UTAG_HEAD, MAX_UTAG_NAME)) {
 		pr_err("[%s] invalid or empty utags partition\n", cb->name);
 		vfree(buf);
@@ -399,7 +402,11 @@ static int init_empty(struct ctrl *ctrl)
 	if (!htag)
 		return -ENOMEM;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	strscpy(htag->name, UTAG_HEAD, MAX_UTAG_NAME);
+#else
 	strlcpy(htag->name, UTAG_HEAD, MAX_UTAG_NAME);
+#endif
 	add_utag_tail(htag, UTAG_TAIL, NULL);
 	ctrl->head = htag;
 	queue_work(ctrl->store_queue, &ctrl->store_work);
@@ -463,14 +470,22 @@ static int open_utags(struct blkdev *cb)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(CONFIG_MMI_UTAG_RW_BIO)
 	struct block_device *bdev = NULL;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	struct file *bdev_file = NULL;
+#endif
 
 	if (cb->bdev != NULL)
 		return 0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-	bdev = blkdev_get_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb, NULL);
+	bdev_file = bdev_file_open_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb, NULL);
+	bdev = file_bdev(bdev_file);
+	cb->filep = bdev_file;
+	cb->size = i_size_read(file_inode(bdev_file));
 #else
 	bdev = blkdev_get_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb);
+	cb->size = i_size_read(bdev->bd_inode);
+	cb->filep = NULL;
 #endif
 	if (IS_ERR(bdev)) {
 		pr_err("(%s) failed get block device\n", cb->name);
@@ -478,8 +493,7 @@ static int open_utags(struct blkdev *cb)
 	}
 
 	cb->bdev = bdev;
-	cb->size = i_size_read(bdev->bd_inode);
-	cb->filep = NULL;
+
 	pr_debug("%s: read inode size %zu\n", __func__, cb->size);
 #else
 	struct inode *inode = NULL;
@@ -688,8 +702,11 @@ static int add_utag_tail(struct utag *head, char *utag_name, char *utag_type)
 	new = kzalloc(sizeof(struct utag), GFP_KERNEL);
 	if (!new)
 		return -ENOMEM;
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	strscpy(new->name, utag, MAX_UTAG_NAME);
+#else
 	strlcpy(new->name, utag, MAX_UTAG_NAME);
+#endif
 	new->size = new->flags = new->util = 0;
 
 	if (!tail->prev) { /* tail is in fact the head */
@@ -751,10 +768,17 @@ static int proc_utag_file(char *utag_name, char *utag_type,
 	node = kzalloc(sizeof(struct proc_node), GFP_KERNEL);
 	if (node) {
 		list_add_tail(&node->entry, &ctrl->node_list);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+		strscpy(node->file_name, files[mode], MAX_UTAG_NAME);
+		strscpy(node->name, utag_name, MAX_UTAG_NAME);
+		if (utag_type)
+			strscpy(node->type, utag_type, MAX_UTAG_NAME);
+#else
 		strlcpy(node->file_name, files[mode], MAX_UTAG_NAME);
 		strlcpy(node->name, utag_name, MAX_UTAG_NAME);
 		if (utag_type)
 			strlcpy(node->type, utag_type, MAX_UTAG_NAME);
+#endif
 		else
 			node->type[0] = 0;
 		node->mode = mode;
@@ -846,8 +870,13 @@ static struct proc_dir_entry *proc_utag_dir(struct ctrl *ctrl,
 	dnode->ctrl = ctrl;
 	dnode->dir = dir;
 	list_add_tail(&dnode->entry, &ctrl->dir_list);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	strscpy(dnode->name, tname, MAX_UTAG_NAME);
+	strscpy(dnode->path, path, MAX_UTAG_NAME);
+#else
 	strlcpy(dnode->name, tname, MAX_UTAG_NAME);
 	strlcpy(dnode->path, path, MAX_UTAG_NAME);
+#endif
 
 	if (!populate)
 		return dir;
@@ -883,9 +912,13 @@ static struct utag *thaw_tags(size_t block_size, void *buf)
 			if (!cur)
 				return NULL;
 		}
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+		strscpy(cur->name, frozen->name, MAX_UTAG_NAME - 1);
+		strscpy(cur->name_only, frozen->name, MAX_UTAG_NAME-1);
+#else
 		strlcpy(cur->name, frozen->name, MAX_UTAG_NAME - 1);
 		strlcpy(cur->name_only, frozen->name, MAX_UTAG_NAME-1);
+#endif
 		sep = strnchr(cur->name_only, MAX_UTAG_NAME, ':');
 		if (sep)
 			*sep = 0;
@@ -1178,7 +1211,11 @@ static int check_utag_range(char *tag, struct utag *head, char *data,
 	size_t len, data_len;
 
 	/* copy utag name and append .range */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	strscpy(rtag, tag, MAX_UTAG_NAME);
+#else
 	strlcpy(rtag, tag, MAX_UTAG_NAME);
+#endif
 	tok = strnchr(rtag, MAX_UTAG_NAME, ':');
 	if (tok)
 		*tok = 0;
@@ -1991,7 +2028,11 @@ static int utag_get_bootarg(char *key, char **value, char *prop, char *spl_flag)
 		if (!bootargs_str)
 			goto err_putnode;
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	strscpy(bootargs_str, bootargs_ptr, bootargs_ptr_len + 1);
+#else
 	strlcpy(bootargs_str, bootargs_ptr, bootargs_ptr_len + 1);
+#endif
 
 	idx = strnstr(bootargs_str, key, strlen(bootargs_str));
 	if (idx) {
@@ -2218,7 +2259,11 @@ static int utags_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static void utags_remove(struct platform_device *pdev)
+#else
 static int utags_remove(struct platform_device *pdev)
+#endif
 {
 	struct ctrl *ctrl = dev_get_drvdata(&pdev->dev);
 
@@ -2237,11 +2282,11 @@ static int utags_remove(struct platform_device *pdev)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	if (ctrl->main.bdev) {
-		blkdev_put(ctrl->main.bdev, &ctrl->main);
+		bdev_fput(ctrl->main.filep);
 		ctrl->main.bdev = NULL;
 	}
 	if (ctrl->backup.bdev) {
-		blkdev_put(ctrl->backup.bdev, &ctrl->backup);
+		bdev_fput(ctrl->backup.filep);
 		ctrl->backup.bdev = NULL;
 	}
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(CONFIG_MMI_UTAG_RW_BIO)
@@ -2267,7 +2312,9 @@ static int utags_remove(struct platform_device *pdev)
 
 	devm_kfree(&pdev->dev, ctrl);
 	dev_set_drvdata(&pdev->dev, NULL);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_OF
@@ -2280,7 +2327,11 @@ static struct of_device_id utags_match_table[] = {
 
 static struct platform_driver utags_driver = {
 	.probe = utags_probe,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	.remove_new = utags_remove,
+#else
 	.remove = utags_remove,
+#endif
 	.driver = {
 		.name = DRVNAME,
 		.bus = &platform_bus_type,
