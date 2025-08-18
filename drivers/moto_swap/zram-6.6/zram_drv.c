@@ -1333,6 +1333,9 @@ int hybridswap_page_fault_sync(struct zram *zram, u32 index)
 {
 	struct hybridswap_work work;
 
+	if (!zram_test_flag(zram, index, ZRAM_WB))
+		return 0;
+
 	zram_slot_unlock(zram, index);
 	work.zram = zram;
 	work.index = index;
