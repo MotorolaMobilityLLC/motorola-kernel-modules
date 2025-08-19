@@ -34,6 +34,42 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);
 static int goodix_thp_power_on(struct goodix_thp_core *core_data);
 
+#ifdef GTP_PEN_NOTIFIER
+static void set_pen_mode_boot(struct goodix_thp_core *cd)
+{
+	int ret, value;
+        struct thp_ts_device *tdev = cd->ts_dev;
+
+	/* get status from hall pen module */
+	value = pen_detection_status();
+
+	ts_info(tdev->dev, "Received pen status(%d) for pen detection\n", value);
+
+	if (value == PEN_DETECTION_INSERT)
+		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
+	else if (value == PEN_DETECTION_PULL)
+		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
+
+	ret = mutex_lock_interruptible(&cd->mode_lock);
+	if (cd->power_on == 0) {
+		ts_err(tdev->dev, "The touch is in sleep state, restore the value when resume\n");
+		goto exit;
+	}
+
+	if (cd->gtp_pen_detect_flag == GTP_PEN_MODE) {
+		ret = goodix_stylus_mode(cd, GTP_PEN_MODE);
+		if (ret < 0) {
+			ts_err(tdev->dev, "failed to send passive pen mode cmd");
+			goto exit;
+		}
+	}
+
+exit:
+	mutex_unlock(&cd->mode_lock);
+	return;
+}
+#endif
+
 static int goodix_thp_spi_trans(struct goodix_thp_core *cd,
                         char *tx_buf, char *rx_buf, unsigned int len)
 {
@@ -655,6 +691,10 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 ts_info(ts_dev->dev, "thp_ver:%s", tsc_msg.value);
                 break;
         case SVC_CMD_HAL_INIT_FINISH:
+#ifdef GTP_PEN_NOTIFIER
+                set_pen_mode_boot(core_data);
+                core_data->initialized = true;
+#endif
                 ts_info(ts_dev->dev, "HAL has finished");
                 break;
         case SVC_CMD_BATTERY:
@@ -1742,80 +1782,6 @@ static const struct file_operations g_thp_input_agent_fops = {
         .release = goodix_thp_input_agent_release,
         .unlocked_ioctl = goodix_thp_input_agent_ioctl,
 };
-
-#ifdef GTP_PEN_NOTIFIER
-void set_pen_mode_boot(struct goodix_thp_core *cd)
-{
-	int ret, value;
-        struct thp_ts_device *tdev = cd->ts_dev;
-
-	/* get status from hall pen module */
-	value = pen_detection_status();
-
-	ts_info(tdev->dev, "Received pen status(%d) for pen detection\n", value);
-
-	if (value == PEN_DETECTION_INSERT)
-		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
-	else if (value == PEN_DETECTION_PULL)
-		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
-
-	ret = mutex_lock_interruptible(&cd->mode_lock);
-	if (cd->power_on == 0) {
-		ts_err(tdev->dev, "The touch is in sleep state, restore the value when resume\n");
-		goto exit;
-	}
-
-	if (cd->gtp_pen_detect_flag == GTP_PEN_MODE) {
-		ret = goodix_stylus_mode(cd, GTP_PEN_MODE);
-		if (ret < 0) {
-			ts_err(tdev->dev, "failed to send passive pen mode cmd");
-			goto exit;
-		}
-	}
-
-exit:
-	mutex_unlock(&cd->mode_lock);
-	return;
-}
-#endif
-
-int goodix_ts_stage2_init(struct goodix_thp_core *core_data)
-{
-#ifdef GTP_PEN_NOTIFIER
-	set_pen_mode_boot(core_data);
-	core_data->initialized = true;
-#endif
-        return 0;
-}
-
-static int goodix_later_init_thread(void *data)
-{
-        int ret;
-        struct goodix_thp_core *core_data = data;
-
-        /* wait for 10s for other modules and functions ready*/
-        msleep(5*1000);
-	/* init other resources */
-	ret = goodix_ts_stage2_init(core_data);
-	if (ret) {
-		printk(KERN_INFO "stage2 init failed");
-	}
-        return 0;
-}
-
-static int goodix_start_later_init(struct goodix_thp_core *core_data)
-{
-	struct task_struct *init_thrd;
-	/* create and run update thread */
-	init_thrd = kthread_run(goodix_later_init_thread,
-				core_data, "goodix_init_thread");
-	if (IS_ERR_OR_NULL(init_thrd)) {
-		printk(KERN_INFO "Failed to create update thread:%ld",
-		       PTR_ERR(init_thrd));
-		return -EFAULT;
-	}
-	return 0;
-}
 
 static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
 {
@@ -2907,12 +2873,6 @@ static int goodix_thp_probe(struct platform_device *pdev)
 	core_data->get_mode.stylus_mode = GTP_PEN_MODE; //app default mode is pen
 	core_data->set_mode.stylus_mode = GTP_PEN_MODE;
 #endif
-
-	/* Try start a thread to get later inited info */
-	r = goodix_start_later_init(core_data);
-	if (r) {
-		ts_err(tdev->dev, "Failed start cfg_bin_proc, %d", r);
-	}
 
         /* request irq */
         r = goodix_thp_irq_setup(core_data);
