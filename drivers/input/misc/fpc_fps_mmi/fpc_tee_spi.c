@@ -655,7 +655,11 @@ static int fpc1020_create_sysfs(struct fpc_data *fpc1020, bool create) {
 			goto ALLOC_REGION;
 		}
 		if (!fingerprint_class) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+			fingerprint_class = class_create("fingerprint");
+#else
 			fingerprint_class = class_create(THIS_MODULE, "fingerprint");
+#endif
 			if (IS_ERR(fingerprint_class)) {
 				dev_err(dev, "%s create fingerprint class failed.\n", __func__);
 				rc = PTR_ERR(fingerprint_class);
