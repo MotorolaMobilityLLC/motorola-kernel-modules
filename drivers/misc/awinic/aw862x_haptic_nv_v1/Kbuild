@@ -3,6 +3,10 @@ EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/misc/awinic/aw862x_haptic_nv_v1
 
+ifneq ($(filter m y,$(CONFIG_TARGET_BUILD_FACTORY)),)
+	EXTRA_CFLAGS += -DTARGET_BUILD_FACTORY
+endif
+
 obj-m += aw862x_haptic_nv_v1.o
 
 aw862x_haptic_nv_v1-objs += haptic_nv.o

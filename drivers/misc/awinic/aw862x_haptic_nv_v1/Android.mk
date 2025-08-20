@@ -1,6 +1,10 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
 
+ifeq ($(findstring factory,$(TARGET_PRODUCT)),factory)
+	KERNEL_CFLAGS += CONFIG_TARGET_BUILD_FACTORY=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := aw862x_haptic_nv_v1.ko
 LOCAL_MODULE_TAGS := optional
