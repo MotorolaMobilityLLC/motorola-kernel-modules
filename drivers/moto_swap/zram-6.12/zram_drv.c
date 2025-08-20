@@ -1589,8 +1589,7 @@ struct qpace_request_meta {
 
 struct qpace_request_data {
 	struct qpace_request_meta *zmeta;
-
-	phys_addr_t source_addr;
+	struct page *page;
 	u32 bdev_page_index;
 	unsigned long handle;
 };
@@ -1607,15 +1606,30 @@ struct qpace_request_queue {
 	int arr_offset;
 };
 
-struct zram_comp_queue_overflow_list_entry {
+struct qpace_request_queue_overflow_list_entry {
 	struct list_head list_node;
 	struct qpace_request_data zdata;
-	phys_addr_t input_page_addr;
 };
 
-static DEFINE_MUTEX(zram_comp_queue_lock);
-static bool zram_comp_queue_non_empty;
-static int zram_comp_queue_size;
+typedef int (*qpace_queue_op)(int tr_num, struct page *bio_page,
+			      struct page *tmp_output_page);
+
+struct qpace_control {
+	int queue_size;
+	bool queue_non_empty;
+	enum ring_vals ring;
+	qpace_queue_op qpace_queue_op;
+	int (*request_submit)(const struct qpace_request_data *zdata);
+	struct mutex queue_lock;
+	struct list_head queue_overflow_list;
+	struct mutex queue_overflow_list_lock;
+	struct qpace_request_queue *output_queue;
+	struct completion work_available;
+	spinlock_t work_available_lock;
+	struct timer_list work_available_timer;
+};
+
+/* Compression and copy control */
 
 static struct qpace_request comp_out_arr[DESCRIPTORS_PER_RING];
 static struct qpace_request_queue comp_out_queue = {
@@ -1627,16 +1641,26 @@ static struct qpace_request_queue copy_out_queue = {
 	.request_arr = copy_out_arr,
 };
 
-static DEFINE_MUTEX(zram_comp_queue_overflow_list_lock);
-static LIST_HEAD(zram_comp_queue_overflow_list);
-
 static struct task_struct *comp_thread;
-static int zram_qpace_work_fn(void *unused);
-/* Modifying comp_work_available requires zram_comp_queue_lock*/
-static struct completion comp_work_available;
-static DEFINE_SPINLOCK(comp_completion_lock);
 static void signal_comp_work_available(struct timer_list *unused);
-static DEFINE_TIMER(comp_queueing_timer, signal_comp_work_available);
+static int comp_request_submit(const struct qpace_request_data *zdata);
+static int qpace_queue_compress_wrapper(int tr_num, struct page *bio_page,
+					struct page *tmp_output_page);
+
+struct qpace_control comp_control = {
+	.queue_size = 0,
+	.queue_non_empty = false,
+	.ring = COMPRESS_RING,
+	.qpace_queue_op = qpace_queue_compress_wrapper,
+	.request_submit = comp_request_submit,
+	.queue_lock = __MUTEX_INITIALIZER(comp_control.queue_lock),
+	.queue_overflow_list = LIST_HEAD_INIT(comp_control.queue_overflow_list),
+	.queue_overflow_list_lock = __MUTEX_INITIALIZER(comp_control.queue_overflow_list_lock),
+	.output_queue = &comp_out_queue,
+	.work_available = COMPLETION_INITIALIZER(comp_control.work_available),
+	.work_available_lock = __SPIN_LOCK_UNLOCKED(comp_control.work_available_lock),
+	.work_available_timer = __TIMER_INITIALIZER(signal_comp_work_available, 0),
+};
 
 static inline void do_end_bio(struct bio *bio,
 			      unsigned long start_time)
@@ -1701,7 +1725,7 @@ static int zram_write_finish(struct qpace_request_data *zdata,
 	return 0;
 }
 
-static void zram_write_page_err_handler(struct qpace_request_meta *zmeta)
+static void zram_qpace_req_err_handler(struct qpace_request_meta *zmeta)
 {
 	zmeta->bio->bi_status = BLK_STS_IOERR;
 	kref_put(&zmeta->num_pages, put_qpace_request_meta);
@@ -1715,65 +1739,70 @@ static inline void zram_ring_increment(struct qpace_request_queue *queue)
 		queue->arr_offset++;
 }
 
-static inline void _signal_comp_work_available(void)
+static inline void _signal_work_available(struct qpace_control *qpace_ctl)
 {
-	timer_delete(&comp_queueing_timer);
-	if (READ_ONCE(zram_comp_queue_non_empty)) {
-		WRITE_ONCE(zram_comp_queue_non_empty, false);
-		complete(&comp_work_available);
+	timer_delete(&qpace_ctl->work_available_timer);
+	if (READ_ONCE(qpace_ctl->queue_non_empty)) {
+		WRITE_ONCE(qpace_ctl->queue_non_empty, false);
+		complete(&qpace_ctl->work_available);
 	}
+}
+
+static inline void signal_work_available(struct qpace_control *qpace_ctl)
+{
+	spin_lock_irq(&qpace_ctl->work_available_lock);
+	_signal_work_available(qpace_ctl);
+	spin_unlock_irq(&qpace_ctl->work_available_lock);
 }
 
 static void signal_comp_work_available(struct timer_list *unused)
 {
-	spin_lock_irq(&comp_completion_lock);
-	_signal_comp_work_available();
-	spin_unlock_irq(&comp_completion_lock);
+	signal_work_available(&comp_control);
 }
 
-static inline int _zram_compress_queue(const struct qpace_request_data *zdata,
-				       phys_addr_t input_page_addr)
+static inline int _zram_req_queue(struct qpace_control *qpace_ctl,
+	const struct qpace_request_data *zdata)
 {
-	struct page *output_buffer;
-
 	int pos;
+	int arr_offset = qpace_ctl->output_queue->arr_offset;
+	struct page *tmp_output_page;
 
-	lockdep_assert_held(&zram_comp_queue_lock);
+	lockdep_assert_held(&qpace_ctl->queue_lock);
 
-	if (zram_comp_queue_size == DESCRIPTORS_PER_RING - 1)
+	if (qpace_ctl->queue_size == DESCRIPTORS_PER_RING - 1)
 		return -ENOMEM;
 
-	output_buffer = comp_out_queue.request_arr[comp_out_queue.arr_offset].out_page;
+	tmp_output_page = qpace_ctl->output_queue->request_arr[arr_offset].out_page;
 
-	pos = qpace_queue_compress(COMPRESS_RING, input_page_addr,
-			     page_to_phys(output_buffer));
+	pos = qpace_ctl->qpace_queue_op(qpace_ctl->ring, zdata->page, tmp_output_page);
 
-	comp_out_queue.request_arr[pos].zdata = *zdata;
+	qpace_ctl->output_queue->request_arr[pos].zdata = *zdata;
 
-	zram_comp_queue_size++;
-	zram_ring_increment(&comp_out_queue);
+	qpace_ctl->queue_size++;
+	zram_ring_increment(qpace_ctl->output_queue);
 
 	/*
 	 * Trigger compression immediately if the queue is full, queue
 	 * delayed work otherwise. Kick compressor wait-queue if not kicked
 	 * already.
 	 */
-	spin_lock_irq(&comp_completion_lock);
-	if (zram_comp_queue_size == DESCRIPTORS_PER_RING - 1) {
-		_signal_comp_work_available();
-	} else if (!READ_ONCE(zram_comp_queue_non_empty)) {
-		WRITE_ONCE(zram_comp_queue_non_empty, true);
-		mod_timer(&comp_queueing_timer, jiffies + 1);
+	spin_lock_irq(&qpace_ctl->work_available_lock);
+	if (qpace_ctl->queue_size == DESCRIPTORS_PER_RING - 1) {
+		_signal_work_available(qpace_ctl);
+	} else if (!READ_ONCE(qpace_ctl->queue_non_empty)) {
+		WRITE_ONCE(qpace_ctl->queue_non_empty, true);
+		mod_timer(&qpace_ctl->work_available_timer,
+			jiffies + 1);
 	}
-	spin_unlock_irq(&comp_completion_lock);
+	spin_unlock_irq(&qpace_ctl->work_available_lock);
 
 	return 0;
 }
 
-static int _zram_comp_queue_overflow_list_insert(const struct qpace_request_data *zdata,
-						 phys_addr_t input_page_addr)
+static int _zram_req_queue_overflow_list_insert(struct qpace_control *qpace_ctl,
+						const struct qpace_request_data *zdata)
 {
-	struct zram_comp_queue_overflow_list_entry *entry = kzalloc(sizeof(*entry), GFP_NOIO);
+	struct qpace_request_queue_overflow_list_entry *entry = kzalloc(sizeof(*entry), GFP_NOIO);
 
 	if (!entry) {
 		pr_err("%s: mem-alloc failure\n", __func__);
@@ -1781,30 +1810,60 @@ static int _zram_comp_queue_overflow_list_insert(const struct qpace_request_data
 	}
 
 	entry->zdata = *zdata;
-	entry->input_page_addr = input_page_addr;
 
-	mutex_lock(&zram_comp_queue_overflow_list_lock);
-	list_add(&entry->list_node, &zram_comp_queue_overflow_list);
-	mutex_unlock(&zram_comp_queue_overflow_list_lock);
+	mutex_lock(&qpace_ctl->queue_overflow_list_lock);
+	list_add(&entry->list_node, &qpace_ctl->queue_overflow_list);
+	mutex_unlock(&qpace_ctl->queue_overflow_list_lock);
 
 	return 0;
 }
 
-static inline int zram_compress_queue(const struct qpace_request_data *zdata,
-				      phys_addr_t input_page_addr)
+static int qpace_queue_compress_wrapper(int tr_num, struct page *bio_page,
+					struct page *tmp_output_page)
+{
+	return qpace_queue_compress(tr_num, page_to_phys(bio_page),
+				    page_to_phys(tmp_output_page));
+}
+
+static int comp_request_submit(const struct qpace_request_data *zdata)
 {
 	int queue_ret;
 
 	pr_debug("%s: queueing page\n", __func__);
 
-	mutex_lock(&zram_comp_queue_lock);
-	queue_ret = _zram_compress_queue(zdata, input_page_addr);
-	mutex_unlock(&zram_comp_queue_lock);
+	mutex_lock(&comp_control.queue_lock);
+	queue_ret = _zram_req_queue(&comp_control, zdata);
+	mutex_unlock(&comp_control.queue_lock);
 
 	if (queue_ret)
-		return _zram_comp_queue_overflow_list_insert(zdata, input_page_addr);
+		queue_ret = _zram_req_queue_overflow_list_insert(&comp_control, zdata);
 
-	return 0;
+	return queue_ret;
+}
+
+static void enqueue_from_overflow_list(struct qpace_control *qpace_ctl)
+{
+	lockdep_assert_held(&qpace_ctl->queue_lock);
+	/*
+	 * Check overflow list. Grab its contents and queue it up, oldest
+	 * submissions are at the tail of the list.
+	 */
+	mutex_lock(&qpace_ctl->queue_overflow_list_lock);
+	if (!list_empty(&qpace_ctl->queue_overflow_list)) {
+		struct qpace_request_queue_overflow_list_entry *qpace_req, *tmp;
+
+		list_for_each_entry_safe_reverse(qpace_req, tmp,
+			&qpace_ctl->queue_overflow_list,
+						 list_node) {
+			if (qpace_ctl->queue_size == DESCRIPTORS_PER_RING - 1)
+				break;
+
+			list_del(&qpace_req->list_node);
+			_zram_req_queue(qpace_ctl, &qpace_req->zdata);
+			kfree(qpace_req);
+		}
+	}
+	mutex_unlock(&qpace_ctl->queue_overflow_list_lock);
 }
 
 static inline void zram_copy_queue(struct qpace_request_data *zdata,
@@ -1823,7 +1882,7 @@ static inline void zram_copy_queue(struct qpace_request_data *zdata,
 static void zram_compress_success_handler(struct qpace_event_descriptor *ed, int ed_index)
 {
 	unsigned long handle;
-	unsigned int comp_len = ed->size;
+	unsigned int comp_len = 0;
 	phys_addr_t comp_source;
 	struct qpace_request_data *zdata = &comp_out_queue.request_arr[ed_index].zdata;
 	struct qpace_request_meta *zmeta = zdata->zmeta;
@@ -1836,7 +1895,7 @@ static void zram_compress_success_handler(struct qpace_event_descriptor *ed, int
 	if (zmeta->bio->bi_status == BLK_STS_IOERR) {
 		pr_debug("comp-success-handler, index: %d, bio failed\n", ed_index);
 
-		zram_write_page_err_handler(zmeta);
+		zram_qpace_req_err_handler(zmeta);
 		return;
 	}
 
@@ -1847,9 +1906,11 @@ static void zram_compress_success_handler(struct qpace_event_descriptor *ed, int
 		return;
 	}
 
+	comp_len = ed->size;
+
 	if (comp_len >= huge_class_size) {
 		comp_len = PAGE_SIZE;
-		comp_source = zdata->source_addr;
+		comp_source = page_to_phys(zdata->page);
 	} else {
 		comp_source = ed->out_addr;
 	}
@@ -1865,7 +1926,7 @@ static void zram_compress_success_handler(struct qpace_event_descriptor *ed, int
 				   GFP_NOIO | __GFP_HIGHMEM |
 				   __GFP_MOVABLE);
 		if (IS_ERR_VALUE(handle)) {
-			zram_write_page_err_handler(zmeta);
+			zram_qpace_req_err_handler(zmeta);
 
 			pr_err("zs_malloc failed: %ld\n", PTR_ERR((void *)handle));
 
@@ -1883,7 +1944,7 @@ static void zram_compress_success_handler(struct qpace_event_descriptor *ed, int
 		pr_err("Surpassed ZRAM limit of %lu pages, bailing!\n",
 		       zmeta->zram->limit_pages);
 
-		zram_write_page_err_handler(zmeta);
+		zram_qpace_req_err_handler(zmeta);
 		return;
 	}
 
@@ -1908,7 +1969,7 @@ static void __maybe_unused zram_copy_success_handler(struct qpace_event_descript
 	struct qpace_request_meta *zmeta = zdata->zmeta;
 
 	if (zmeta->bio->bi_status == BLK_STS_IOERR) {
-		zram_write_page_err_handler(zmeta);
+		zram_qpace_req_err_handler(zmeta);
 		return;
 	}
 
@@ -1924,17 +1985,17 @@ static void __maybe_unused zram_copy_failure_handler(struct qpace_event_descript
 
 	pr_debug("Copy failed! err=%d\n", ed->completion_code);
 
-	zram_write_page_err_handler(zmeta);
+	zram_qpace_req_err_handler(zmeta);
 }
 
-static int zram_qpace_work_fn(void *unused)
+static int zram_qpace_comp(void *unused)
 {
 	bool triggered_compress;
 	int n_entries_consumed;
 
 	while (!kthread_should_stop()) {
 		pr_debug("waiting for comp work\n");
-		wait_for_completion(&comp_work_available);
+		wait_for_completion(&comp_control.work_available);
 
 		get_qpace();
 		pr_debug("kthread: about to kick off compression\n");
@@ -1943,9 +2004,9 @@ static int zram_qpace_work_fn(void *unused)
 		 * Triggering a ring is not atomic, and must be syncrhonized with
 		 * adding items to a ring.
 		 */
-		mutex_lock(&zram_comp_queue_lock);
+		mutex_lock(&comp_control.queue_lock);
 		triggered_compress = qpace_trigger_tr(COMPRESS_RING);
-		mutex_unlock(&zram_comp_queue_lock);
+		mutex_unlock(&comp_control.queue_lock);
 
 		if (!triggered_compress) {
 			pr_debug("Nothing to compress!\n");
@@ -1962,57 +2023,35 @@ static int zram_qpace_work_fn(void *unused)
 		 */
 		n_entries_consumed = qpace_consume_er(COMPRESS_RING,
 							zram_compress_success_handler,
-							zram_compress_success_handler);
+							zram_compress_success_handler, true);
 
 		/*
-		 * Protects zram_comp_queue_size and the compression queue itself, if
-		 * we end up placing items into the queue from the overflow list.
-		 * Grabbing this lock also prevents starvation for the requests coming
-		 * from the overflow list, by preventing new submissions going to the
-		 * now-empty compression queue until we fully empty the overflow list.
-		 */
-		mutex_lock(&zram_comp_queue_lock);
-
-		zram_comp_queue_size -= n_entries_consumed;
-
-		/*
-		 * Check overlow list. Grab its contents and queue it up. Oldest
-		 * submissions are at the tail of the list.
-		 */
-		mutex_lock(&zram_comp_queue_overflow_list_lock);
-		if (!list_empty(&zram_comp_queue_overflow_list)) {
-			struct zram_comp_queue_overflow_list_entry *comp_req, *tmp;
-
-			list_for_each_entry_safe_reverse(comp_req, tmp,
-							&zram_comp_queue_overflow_list,
-							list_node) {
-				if (zram_comp_queue_size == DESCRIPTORS_PER_RING - 1)
-					break;
-
-				list_del(&comp_req->list_node);
-				_zram_compress_queue(&comp_req->zdata, comp_req->input_page_addr);
-				kfree(comp_req);
-			}
-		}
-		mutex_unlock(&zram_comp_queue_overflow_list_lock);
-
-		mutex_unlock(&zram_comp_queue_lock);
+		* Protects comp_control.queue_size and the compression queue itself, if
+		* we end up placing items into the queue from the overflow list.
+		* Grabbing this lock also prevents starvation for the requests coming
+		* from the overflow list, by preventing new submissions going to the
+		* now-empty compression queue until we fully empty the overflow list.
+		*/
+		mutex_lock(&comp_control.queue_lock);
+		comp_control.queue_size -= n_entries_consumed;
+		enqueue_from_overflow_list(&comp_control);
+		mutex_unlock(&comp_control.queue_lock);
 
 wait_for_comp_request:
 		put_qpace();
 	}
-	mutex_unlock(&zram_comp_queue_overflow_list_lock);
 
 	return 0;
 }
 
-static int qpace_zram_write_page(struct zram *zram, struct bio *bio)
+static int qpace_zram_submit_bio(struct zram *zram, struct bio *bio,
+				 struct qpace_control *qpace_control)
 {
 	unsigned long start_time = bio_start_io_acct(bio);
 	struct bvec_iter iter = bio->bi_iter;
 	struct qpace_request_data zdata;
 	struct qpace_request_meta *zmeta;
-	int ret;
+	int ret = 0;
 
 	zmeta = zdata.zmeta = kmalloc(sizeof(struct qpace_request_meta), GFP_KERNEL);
 	if (!zmeta) {
@@ -2041,25 +2080,32 @@ static int qpace_zram_write_page(struct zram *zram, struct bio *bio)
 		bv.bv_len = min_t(u32, bv.bv_len, PAGE_SIZE - offset);
 		if (bv.bv_len != PAGE_SIZE) {
 			pr_err("%s: Offset leads to non-page-sized request\n", __func__);
-			zram_write_page_err_handler(zmeta);
-			return -EINVAL;
+			zram_qpace_req_err_handler(zmeta);
+			ret = -EINVAL;
+			break;
 		}
 
-		zdata.source_addr = page_to_phys(bv.bv_page);
+		zdata.page = bv.bv_page;
 		zdata.bdev_page_index = index;
 
-		ret = zram_compress_queue(&zdata, zdata.source_addr);
+		ret = qpace_control->request_submit(&zdata);
 		if (ret) {
-			zram_write_page_err_handler(zmeta);
-			return ret;
+			zram_qpace_req_err_handler(zmeta);
+			break;
 		}
 
 		bio_advance_iter_single(bio, &iter, bv.bv_len);
 	} while (iter.bi_size);
 
+	/*
+	 * When we reach here, the num_pages reference counter will be equal to the
+	 * number of pages that were successfully submitted to the QPACE plus one,
+	 * with the additional reference coming from the prior kref_init() call.
+	 * Drop this reference.
+	 */
 	kref_put(&zmeta->num_pages, put_qpace_request_meta);
 
-	return 0;
+	return ret;
 }
 #else
 static int qpace_zram_write_page(struct zram *zram, struct bio *bio)
@@ -2502,7 +2548,7 @@ static void zram_submit_bio(struct bio *bio)
 		break;
 	case REQ_OP_WRITE:
 		if (zram->qpace)
-			qpace_zram_write_page(zram, bio);
+			qpace_zram_submit_bio(zram, bio, &comp_control);
 		else
 			zram_bio_write(zram, bio);
 		break;
@@ -3100,9 +3146,7 @@ static int __init zram_init(void)
 	if (ret)
 		goto out_error;
 
-	init_completion(&comp_work_available);
-
-	comp_thread = kthread_run(zram_qpace_work_fn, NULL, "zram_comp");
+	comp_thread = kthread_run(zram_qpace_comp, NULL, "zram_comp");
 	if (!comp_thread)
 		goto delete_comp_queue;
 #endif
