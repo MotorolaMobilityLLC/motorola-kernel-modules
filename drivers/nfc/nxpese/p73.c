@@ -918,8 +918,15 @@ static int p61_probe(struct spi_device *spi)
 	unsigned int irq_flags;
 #endif
 
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+	P61_DBG_MSG("%s chip select : %d , bus number = %d \n", __func__,
+		    spi->chip_select[0], spi->controller->bus_num);
+#else
 	P61_DBG_MSG("%s chip select : %d , bus number = %d \n", __func__,
 		    spi->chip_select, spi->master->bus_num);
+#endif
+
 	memset(&platform_data1, 0x00, sizeof(struct p61_spi_platform_data));
 #if !DRAGON_P61
 	platform_data = spi->dev.platform_data;
