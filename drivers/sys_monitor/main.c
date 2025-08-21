@@ -125,7 +125,7 @@ static int show_top_records(struct uid_record *records, char *buf, int use_count
 			}
 		}
 		len += scnprintf(buf + len, PAGE_SIZE - len, "\n");
-		if (PAGE_SIZE - len < 64)
+		if (PAGE_SIZE - len < 256)
 			break;
 	}
 
@@ -356,7 +356,7 @@ void record_task_cpufreq_times(void *data, u64 cputime, struct task_struct *p,
 				/* the unit of time_in_state is ms */
 				records[i].time_in_state[state] += DIV_ROUND_CLOSEST(cputime, NSEC_PER_MSEC);
 				if (records[i].max_state < state)
-					records[i].max_state = state;
+					records[i].max_state = state + 1;
 			}
 			if (pid == tgid)
 				strlcpy(records[i].name, p->comm, TASK_COMM_LEN);
@@ -374,7 +374,7 @@ void record_task_cpufreq_times(void *data, u64 cputime, struct task_struct *p,
 	strlcpy(records[i].name, p->comm, TASK_COMM_LEN);
 	if (state < STATE_MAX) {
 		records[i].time_in_state[state] = DIV_ROUND_CLOSEST(cputime, NSEC_PER_MSEC);
-		records[i].max_state = state;
+		records[i].max_state = state + 1;
 	}
 	records[i].total_power = DIV_ROUND_CLOSEST(cputime, NSEC_PER_MSEC) * get_weights(state);
 
