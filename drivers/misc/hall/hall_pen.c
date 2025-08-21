@@ -546,6 +546,8 @@ static int hall_sensor_probe(struct platform_device *pdev)
 			}
 #ifndef CONFIG_HALL_PASSIVE_PEN
 			disable_irq(hall_sensor_dev->gpio_list[i].irq);
+#else
+			enable_irq_wake(hall_sensor_dev->gpio_list[i].irq);
 #endif
 		}
 	}
