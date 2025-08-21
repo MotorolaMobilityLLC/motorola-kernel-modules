@@ -401,6 +401,7 @@ static int pen_charger_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct pen_charger *chg;
 	int rc;
+	int pen_present;
 	char *name = NULL;
 
 	chg = devm_kzalloc(dev, sizeof(*chg), GFP_KERNEL);
@@ -473,6 +474,13 @@ static int pen_charger_probe(struct platform_device *pdev)
 		pr_err("Failed to register chg_psy notifier, rc=%d\n", rc);
 		return rc;
 	}
+
+	pen_present = pen_detection_status();
+	if (pen_present == PEN_DETECTION_INSERT)
+		chg->pen_insert_flag = true;
+	else if (pen_present == PEN_DETECTION_PULL)
+		chg->pen_insert_flag = false;
+	pr_info("pen_charger_probe pen insert = %d\n", chg->pen_insert_flag);
 
 	chg->initialized = true;
 	pr_info("pen_charger_probe done\n");
