@@ -37,7 +37,7 @@
 
 #define STATE_MAX 60
 
-#define SLEEP_REC_COUNT 100
+#define SLEEP_REC_COUNT 60
 #define MAX_WAKEUP_NAME_SIZE 32
 #define SUBSYS_NAME_LEN 16
 
@@ -131,7 +131,9 @@ static int get_battery_property(enum power_supply_property psp)
 ssize_t sleep_state_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	int i,j;
-	int len = 0;
+	int once_len, len = 0;
+	int total_record = cur_idx;
+	int remain_elements;
 	struct tm tm;
 	time64_t seconds;
 
@@ -139,6 +141,7 @@ ssize_t sleep_state_show(struct kobject *kobj, struct kobj_attribute *attr, char
 	for (i = 0; i < cur_idx; i++) {
 		seconds = suspend_state[i].sec;
 		time64_to_tm(seconds, 0 , &tm);
+		once_len = len;
 		len += scnprintf(buf + len, PAGE_SIZE - len, "%02d:%02d:%02d|%d|%d|%d|%d|%d|%s|%d|",
 					tm.tm_hour, tm.tm_min, tm.tm_sec, suspend_state[i].charge_counter,
 					suspend_state[i].current_avg, suspend_state[i].capacity, suspend_state[i].sleep_time,
@@ -148,13 +151,22 @@ ssize_t sleep_state_show(struct kobject *kobj, struct kobj_attribute *attr, char
 					suspend_state[i].subsys_state[j].name, suspend_state[i].subsys_state[j].sleep_time / 19200000L);
 		}
 		len += scnprintf(buf + len, PAGE_SIZE - len, "\n");
-		if ((PAGE_SIZE - len) < 64)
+		once_len = len - once_len;
+		if ((PAGE_SIZE - len) < (once_len + 128))
 			break;
 	}
-	memset(suspend_state, 0 , sizeof(suspend_state));
-	cur_idx = 0;
+	i++;
+	if (i < total_record) {
+		memmove(&suspend_state[0], &suspend_state[i], (total_record - i) * sizeof(struct suspend_state));
+		cur_idx = total_record - i;
+	} else {
+		cur_idx = 0;
+	}
+	remain_elements = total_record - cur_idx;
+	memset(&suspend_state[cur_idx], 0 , remain_elements * sizeof(struct suspend_state));
+
 	mutex_unlock(&sleep_state_mutex);
-	len += scnprintf(buf + len, PAGE_SIZE - len, "\n");
+
 	return len;
 }
 
