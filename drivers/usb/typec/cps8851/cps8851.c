@@ -1240,11 +1240,10 @@ static int cps8851_get_cc(struct tcpc_device *tcpc, int *cc1, int *cc2)
 	if (*cc2 != TYPEC_CC_VOLT_OPEN)
 		*cc2 |= (act_as_sink << 2);
 
-	if (tcpc == NULL) {
-		return -EINVAL;
+	if (tcpc != NULL) {
+		cps8851_init_cc_params(tcpc,
+			(uint8_t)tcpc->typec_polarity ? *cc2 : *cc1);
 	}
-	cps8851_init_cc_params(tcpc,
-		(uint8_t)tcpc->typec_polarity ? *cc2 : *cc1);
 
 	return 0;
 }
@@ -1286,10 +1285,6 @@ static int cps8851_set_cc(struct tcpc_device *tcpc, int pull)
 
 	CPS8851_INFO("pull = 0x%02X\n", pull);
 	pull = TYPEC_CC_PULL_GET_RES(pull);
-	if (tcpc == NULL) {
-		return -EINVAL;
-	}
-
 	if (pull == TYPEC_CC_DRP) {
 		data = TCPC_V10_REG_ROLE_CTRL_RES_SET(
 				1, rp_lvl, TYPEC_CC_RD, TYPEC_CC_RD);
@@ -1316,13 +1311,13 @@ static int cps8851_set_cc(struct tcpc_device *tcpc, int pull)
 		}
 	} else {
 #if IS_ENABLED(CONFIG_USB_POWER_DELIVERY)
-		if (pull == TYPEC_CC_RD && tcpc->pd_wait_pr_swap_complete)
+		if (pull == TYPEC_CC_RD && tcpc != NULL && tcpc->pd_wait_pr_swap_complete)
 			cps8851_init_cc_params(tcpc, TYPEC_CC_VOLT_SNK_DFT);
 #endif	/* CONFIG_USB_POWER_DELIVERY */
 
 		pull1 = pull2 = pull;
 
-		if (pull == TYPEC_CC_RP && tcpc->typec_is_attached_src) {
+		if (pull == TYPEC_CC_RP && tcpc != NULL && tcpc->typec_is_attached_src) {
 			if (tcpc->typec_polarity)
 				pull1 = TYPEC_CC_OPEN;
 			else
@@ -1606,11 +1601,7 @@ static int cps8851_transmit(struct tcpc_device *tcpc,
 		packet.cnt = data_cnt + sizeof(uint16_t);
 		packet.msg_header = header;
 
-		if (data == NULL) {
-			return -EINVAL;
-		}
-
-		if (data_cnt > 0)
+		if ((data != NULL) && (data_cnt > 0))
 			memcpy(packet.data, (uint8_t *) data, data_cnt);
 
 		rv = cps8851_block_write(chip->client,
