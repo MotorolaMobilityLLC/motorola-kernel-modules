@@ -251,7 +251,11 @@ static struct reg_default sgm41606s_reg_init_val[] = {
 	{BQ25980_BATOCP,	0xEE},//0xEE:disable for dual //0x46:7000mA for standalone
 	{BQ25980_BATOCP_ALM,	0x7F},//0x7F:12700mA
 	{BQ25980_CHRGR_CFG_1,	0x80},
-	{BQ25980_CHRGR_CTRL_1,	0x49},
+#ifdef CONFIG_MOTO_SGM41606S_ENABLE_ERRLO
+	{BQ25980_CHRGR_CTRL_1,	0x41}, //0x41: vbus ERRLO enabled
+#else
+	{BQ25980_CHRGR_CTRL_1,	0x49}, //0x49: vbus ERRLO disabled
+#endif
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	{BQ25980_BUSOVP,	0x7F},//0X6B:12350mV 0x7F:13350mv
 	{BQ25980_BUSOVP_ALM,	0x6B},//0X6B:12350mV 0X7F:13350mV
