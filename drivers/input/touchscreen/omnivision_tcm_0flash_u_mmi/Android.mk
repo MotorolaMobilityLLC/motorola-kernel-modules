@@ -55,7 +55,7 @@ include $(CLEAR_VARS)
 ifneq ($(BOARD_USES_DOUBLE_TAP),)
 LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/sensors_class.ko
 endif
-LOCAL_MODULE := omnivision_tcm_0flash_mmi.ko
+LOCAL_MODULE := omnivision_tcm_0flash_u_mmi.ko
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
