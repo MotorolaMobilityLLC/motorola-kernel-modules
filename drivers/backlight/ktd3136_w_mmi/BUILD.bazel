@@ -7,7 +7,7 @@ package(
 )
 
 define_mgk_ko(
-    name = "ktd3136_bl",
+    name = "ktd3136_bl_w",
     srcs = glob([
         "*.c",
         "*.h",
@@ -16,5 +16,5 @@ define_mgk_ko(
     ]) + [
         "//motorola/kernel/modules:public_headers",
     ],
-    outs = ["ktd3136_bl.ko"],
+    outs = ["ktd3136_bl_w.ko"],
 )

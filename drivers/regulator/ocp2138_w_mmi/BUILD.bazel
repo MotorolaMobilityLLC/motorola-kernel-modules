@@ -7,7 +7,7 @@ package(
 )
 
 define_mgk_ko(
-    name = "ocp2138",
+    name = "ocp2138_w",
     srcs = glob([
         "*.c",
         "*.h",
@@ -16,5 +16,5 @@ define_mgk_ko(
     ]) + [
         "//motorola/kernel/modules:public_headers",
     ],
-    outs = ["ocp2138.ko"],
+    outs = ["ocp2138_w.ko"],
 )

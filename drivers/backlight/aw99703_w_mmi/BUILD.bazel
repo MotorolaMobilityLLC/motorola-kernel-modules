@@ -7,7 +7,7 @@ package(
 )
 
 define_mgk_ko(
-    name = "leds_aw99703",
+    name = "leds_aw99703_w",
     srcs = glob([
         "*.c",
         "*.h",
@@ -16,5 +16,5 @@ define_mgk_ko(
     ]) + [
         "//motorola/kernel/modules:public_headers",
     ],
-    outs = ["leds_aw99703.ko"],
+    outs = ["leds_aw99703_w.ko"],
 )
