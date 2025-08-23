@@ -76,5 +76,8 @@ ifneq ($(filter m y, $(CONFIG_FTS_SPI_CS_DELAY)),)
 	EXTRA_CFLAGS += -DCONFIG_FTS_SPI_CS_DELAY
 endif
 
-
-KBUILD_EXTRA_SYMBOLS += $(CURDIR)/../../kernel/msm-$(MODULE_KERNEL_VERSION)/Module.symvers
+ifeq ($(shell [ $(VERSION) -le 5 ] && [ $(PATCHLEVEL) -le 4 ] && echo 1),1)
+	KBUILD_EXTRA_SYMBOLS += $(CURDIR)/../../kernel/msm-$(MODULE_KERNEL_VERSION)/Module.symvers
+endif
+KBUILD_EXTRA_SYMBOLS += $(M)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(OUT_DIR)/../../vendor/qcom/opensource/display-drivers/msm/Module.symvers
