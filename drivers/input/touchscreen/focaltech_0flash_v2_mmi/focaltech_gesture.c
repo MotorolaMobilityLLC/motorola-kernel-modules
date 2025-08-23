@@ -76,7 +76,7 @@
 #define GESTURE_Z                               0x41
 #define GESTURE_C                               0x34
 
-#ifdef FOCALTECH_SENSOR_EN
+#if defined(FOCALTECH_SENSOR_EN) || defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
 #define REPORT_MAX_COUNT 10000
 #endif
 
@@ -376,18 +376,6 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
                 input_sync(fts_data->sensor_pdata->input_sensor_dev);
             }
         }
-
-        FTS_INFO("input report: %d", report_cnt);
-        if (report_cnt >= REPORT_MAX_COUNT)
-            report_cnt = 0;
-
-        if (!ret) {
-#ifdef CONFIG_HAS_WAKELOCK
-            wake_lock_timeout(&gesture_wakelock, msecs_to_jiffies(5000));
-#else
-            PM_WAKEUP_EVENT(gesture_wakelock, 5000);
-#endif
-        }
 #elif defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
         /* report double tap */
         if (gesture == KEY_GESTURE_E) {
@@ -412,6 +400,12 @@ static void fts_gesture_report(struct input_dev *input_dev, int gesture_id)
                 ++report_cnt;
             }
         }
+#endif
+
+#if defined(FOCALTECH_SENSOR_EN) || defined(CONFIG_INPUT_TOUCHSCREEN_MMI)
+        FTS_INFO("input report: %d", report_cnt);
+        if (report_cnt >= REPORT_MAX_COUNT)
+            report_cnt = 0;
 
         if (!ret) {
 #ifdef CONFIG_HAS_WAKELOCK
