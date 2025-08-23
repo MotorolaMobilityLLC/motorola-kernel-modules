@@ -14,6 +14,7 @@
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include <mtk_charger_algorithm_class.h>
+#include <linux/version.h>
 #include "mmi_pehv.h"
 
 static int log_level = PEHV_INFO_LEVEL;
@@ -1363,7 +1364,10 @@ static int mmi_thermal_ratio(struct pehv_algo_info *info, int ibat, int vbat)
 	return ratio;
 }
 
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
 #define MIN(a, b)			((a) >= (b) ? (b) : (a))
+#endif
 static int pehv_algo_cc_cv_with_ta_cv(struct pehv_algo_info *info)
 {
 	int ret, vbat, ibat, vsys, fcc_min, ratio;
@@ -2629,7 +2633,11 @@ err:
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+static void pehv_remove(struct platform_device *pdev)
+#else
 static int pehv_remove(struct platform_device *pdev)
+#endif
 {
 	struct pehv_algo_info *info = platform_get_drvdata(pdev);
 	struct pehv_algo_data *data;
@@ -2644,8 +2652,11 @@ static int pehv_remove(struct platform_device *pdev)
 		mutex_destroy(&data->notify_lock);
 		chg_alg_device_unregister(info->alg);
 	}
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+	return;
+#else
 	return 0;
+#endif
 }
 
 static int __maybe_unused pehv_suspend(struct device *dev)
