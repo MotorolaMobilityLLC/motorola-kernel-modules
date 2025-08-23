@@ -13,8 +13,8 @@ define_mgk_ko(
         "*.h",
         "Kbuild",
         "Makefile",
-        "Makefile.include",
-    ]),
-
+    ]) + [
+        "//motorola/kernel/modules:public_headers",
+    ],
     outs = ["wt6670f_qc3p_mmi.ko"],
 )

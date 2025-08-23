@@ -23,6 +23,8 @@
 #include "wt6670f_firmware.h"
 #include <asm/neon.h>
 #include <adapter_class.h>
+#include <linux/version.h>
+#include <linux/pinctrl/consumer.h>
 
 static DEFINE_MUTEX(wt6670f_i2c_access);
 //static DEFINE_MUTEX(wt6670f_access_lock);
@@ -1368,8 +1370,12 @@ static const struct adapter_properties wt6670f_qc_props = {
     .alias_name = "wt6670f_qc",
 };
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static int wt6670f_i2c_probe(struct i2c_client *client)
+#else
 static int wt6670f_i2c_probe(struct i2c_client *client,
 					const struct i2c_device_id *id)
+#endif
 {
 	int ret = 0;
 	u16 firmware_version = 0;
