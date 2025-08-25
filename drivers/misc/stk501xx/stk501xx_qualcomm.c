@@ -325,16 +325,25 @@ struct attribute_group stk_attribute_sar_group =
 };
 
 /*class define */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_enable_show(struct class *class,
                                      struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_enable_show(const struct class *class,
+                                     const struct class_attribute *attr, char *buf)
+#endif
 {
     char en;
     en = global_stk->enabled;
     return scnprintf(buf, PAGE_SIZE, "enable = %d\n", en);
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_enable_store(struct class *class,
                                       struct class_attribute *attr, const char *buf, size_t count)
+#else
+static ssize_t class_stk_enable_store(const struct class *class,
+                                      const struct class_attribute *attr, const char *buf, size_t count)
+#endif
 {
     unsigned int data;
     int error;
@@ -366,8 +375,13 @@ static ssize_t class_stk_enable_store(struct class *class,
     return count;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_value_show(struct class *class,
                                     struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_value_show(const struct class *class,
+                                    const struct class_attribute *attr, char *buf)
+#endif
 {
     int i = 0;
     uint32_t prox_flag = 0;
@@ -385,8 +399,13 @@ static ssize_t class_stk_value_show(struct class *class,
     return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_flag_show(struct class *class,
                                    struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_flag_show(const struct class *class,
+                                   const struct class_attribute *attr, char *buf)
+#endif
 {
     int i = 0;
     uint32_t prox_flag = 0;
@@ -403,8 +422,13 @@ static ssize_t class_stk_flag_show(struct class *class,
     return scnprintf(buf, PAGE_SIZE, "flag=0x%d\n", prox_flag);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_send_store(struct class *class,
                                     struct class_attribute *attr, const char *buf, size_t count)
+#else
+static ssize_t class_stk_send_store(const struct class *class,
+                                    const struct class_attribute *attr, const char *buf, size_t count)
+#endif
 {
     char *token[10];
     int err, i;
@@ -454,16 +478,27 @@ exit:
     return count;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_temp_show(struct class *class,
                                    struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_temp_show(const struct class *class,
+                                   const struct class_attribute *attr, char *buf)
+#endif
 {
     STK_ERR("stk_temp_show");
     stk501xx_read_temp_data(global_stk, STK_ADDR_REG_RAW_PH0_REG, &global_stk->prev_temperature_ref_a);
     return scnprintf(buf, PAGE_SIZE, "temperature=%d\n", global_stk->prev_temperature_ref_a);
 }
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_allreg_show(struct class *class,
                                      struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_allreg_show(const struct class *class,
+                                     const struct class_attribute *attr, char *buf)
+#endif
 {
     int result;
     result = stk501xx_show_all_reg(global_stk);
@@ -474,15 +509,25 @@ static ssize_t class_stk_allreg_show(struct class *class,
     return (ssize_t)result;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_chipinfo_show(struct class *class,
                                        struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_chipinfo_show(const struct class *class,
+                                       const struct class_attribute *attr, char *buf)
+#endif
 {
     STK_ERR("chip id=0x%x, index=0x%x", global_stk->chip_id, global_stk->chip_index);
     return scnprintf(buf, PAGE_SIZE, "pid=0x%x,index=0x%x\n", global_stk->chip_id, global_stk->chip_index);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_phase_cali(struct class *class,
                                     struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_phase_cali(const struct class *class,
+                                    const struct class_attribute *attr, char *buf)
+#endif
 {
     int result = 0;
     STK_ERR("class_stk_phase_cali , reset all phase\n");
@@ -490,16 +535,27 @@ static ssize_t class_stk_phase_cali(struct class *class,
     return (ssize_t)result;
 }
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_phase_cali_store(struct class *class,
         struct class_attribute *attr, const char *buf, size_t count)
+#else
+static ssize_t class_stk_phase_cali_store(const struct class *class,
+        const struct class_attribute *attr, const char *buf, size_t count)
+#endif
 {
     STK_ERR("class_stk_phase_cali_store , reset all phase\n");
     stk501xx_phase_reset(global_stk, STK_TRIGGER_REG_INIT_ALL);
     return count;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t class_stk_int_state_show(struct class *class,
                 struct class_attribute *attr, char *buf)
+#else
+static ssize_t class_stk_int_state_show(const struct class *class,
+                const struct class_attribute *attr, char *buf)
+#endif
 {
     STK_ERR("int state %d", global_stk->intrrupt_init_state);
     return snprintf(buf, 8, "%d\n", global_stk->intrrupt_init_state);
@@ -558,7 +614,9 @@ static struct class_attribute capsense_class_attributes[] =
 struct class capsense_class =
     {
         .name                   = "capsense",
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
         .owner                  = THIS_MODULE,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
         .class_groups           = capsense_class_groups,
 #else
@@ -902,14 +960,21 @@ static int stk_parse_dt(struct device *dev,
 {
     struct device_node *np = dev->of_node;
     const int *p;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
     uint32_t int_flags;
+#endif
     p = of_get_property(np, "stk,direction", NULL);
 
     if (p)
         pdata->direction = be32_to_cpu(*p);
 
-    pdata->interrupt_int1_pin = of_get_named_gpio_flags(np,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+        pdata->interrupt_int1_pin = of_get_named_gpio(np,
+                                "stk501xx,irq-gpio", 0);
+#else
+       pdata->interrupt_int1_pin = of_get_named_gpio_flags(np,
                                 "stk501xx,irq-gpio", 0, &int_flags);
+#endif
 
     if (pdata->interrupt_int1_pin < 0)
     {
@@ -1380,8 +1445,12 @@ static struct of_device_id stk501xx_match_table[] =
  *          0: Success
  *          others: Fail
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 30))
+static int stk501xx_i2c_probe(struct i2c_client* client)
+#else
 static int stk501xx_i2c_probe(struct i2c_client* client,
                               const struct i2c_device_id* id)
+#endif
 {
     struct common_function common_fn =
     {
@@ -1399,10 +1468,17 @@ static int stk501xx_i2c_probe(struct i2c_client* client,
  *
  * @return: 0
  */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 30))
+static void stk501xx_i2c_remove(struct i2c_client* client)
+{
+    stk_i2c_remove(client);
+}
+#else
 static int stk501xx_i2c_remove(struct i2c_client* client)
 {
     return stk_i2c_remove(client);
 }
+#endif
 
 /**
  * @brief:
