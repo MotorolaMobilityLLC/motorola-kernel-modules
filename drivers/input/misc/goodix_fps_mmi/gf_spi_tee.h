@@ -219,6 +219,8 @@ struct gf_device {
 	struct pinctrl_state *pins_reset_high, *pins_reset_low,*pins_vcc_high,*pins_vcc_low;
 	struct pinctrl_state *pinstate_spi_func;
 #endif
+	/*status for spi register*/
+	bool sdrv_status;
 	struct wakeup_source fp_wakesrc;
 };
 

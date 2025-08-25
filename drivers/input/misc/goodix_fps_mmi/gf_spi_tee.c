@@ -1043,16 +1043,26 @@ static long gf_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			gf_debug(INFO_LOG, "%s: system re-started======\n", __func__);
 			break;
 		}
-		retval = spi_register_driver(&gf_spi_driver);
-		if (retval < 0) {
-			gf_debug(ERR_LOG, "%s, Failed to register SPI driver.\n",
-			 __func__);
-
+		if(gf_sensor->sdrv_status){
+			gf_debug(DEBUG_LOG," GF_IOC_SPIDEVICE_EN: already register\n");
+		} else {
+			retval = spi_register_driver(&gf_spi_driver);
+			if (retval < 0) {
+				gf_debug(ERR_LOG, "%s, Failed to register SPI driver.\n",
+				 __func__);
+			} else {
+				gf_sensor->sdrv_status = true;
+			}
 		}
 		break;
 	case GF_IOC_SPIDEVICE_DIS:
 		gf_debug(DEBUG_LOG," GF_IOC_SPIDEVICE_DIS %s %d\n", __func__, __LINE__);
-		spi_unregister_driver(&gf_spi_driver);
+		if(!gf_sensor->sdrv_status){
+			gf_debug(DEBUG_LOG," GF_IOC_SPIDEVICE_DIS: already unregistered\n");
+		} else {
+			spi_unregister_driver(&gf_spi_driver);
+			gf_sensor->sdrv_status = false;
+		}
 		break;
 	default:
 		gf_debug(ERR_LOG, "gf doesn't support this command(%x)\n", cmd);
@@ -1265,6 +1275,8 @@ static int gf_platform_probe(struct platform_device *pldev)
 	INIT_LIST_HEAD(&gf_dev->device_entry);
 
 	gf_sensor = gf_dev;
+	gf_sensor->sdrv_status = false;
+
 	gf_dev->device_count     = 0;
 	gf_dev->probe_finish     = 0;
 	gf_dev->system_status    = 0;
@@ -1531,8 +1543,11 @@ late_initcall(gf_init);
 static void __exit gf_exit(void)
 {
 	FUNC_ENTRY();
+	if(gf_sensor->sdrv_status){
+		spi_unregister_driver(&gf_spi_driver);
+		gf_sensor->sdrv_status = false;
+	}
 	platform_driver_unregister(&goodix_fp_driver);
-
 	FUNC_EXIT();
 }
 module_exit(gf_exit);
