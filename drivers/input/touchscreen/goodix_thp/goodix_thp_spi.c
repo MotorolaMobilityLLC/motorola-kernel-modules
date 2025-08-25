@@ -524,6 +524,11 @@ static int goodix_thp_parse_dt(struct device_node *node,
         }
 #endif
 
+        board_data->esd_enable = of_property_read_bool(node,
+                "goodix,esd-enable");
+        if (board_data->esd_enable)
+            ts_info(dev, "support goodix ESD check");
+
         return 0;
 }
 #endif

@@ -301,6 +301,7 @@ struct thp_ioctl_update_info {
         u32 frame_addr;
         u32 cmd_addr;
         u32 ges_addr;
+        u32 esd_addr;
 };
 
 /* struct definition*/
@@ -340,9 +341,11 @@ struct goodix_thp_board_data {
         unsigned int panel_max_w; /*major and minor*/
         unsigned int panel_max_p; /*pressure*/
         unsigned int chip_type;
+        bool esd_enable;
         unsigned int frame_addr;
         unsigned int cmd_addr;
         unsigned int ges_addr;
+        unsigned int esd_addr;
         char thp_ver[100];
         struct thp_spi_setting spi_setting;
         bool report_rate_ctrl;
@@ -519,6 +522,8 @@ struct goodix_thp_core {
         int *cpu_to_index_map;
         int qos_count;
 #endif
+        bool esd_on;
+        struct delayed_work esd_work;
 };
 
 extern bool debug_log_flag;
