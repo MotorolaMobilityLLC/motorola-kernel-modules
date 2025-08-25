@@ -1315,6 +1315,7 @@ static int zram_read_from_zspool(struct zram *zram, struct page *page,
 		ret = 0;
 	} else {
 		dst = kmap_local_page(page);
+#if IS_ENABLED(CONFIG_QTI_PAGE_COMPRESSION_ENGINE)
 		if (zram->qpace) {
 			pr_debug("%d: About to urgent-decomp: src: %p, dest: %p, size: %x!\n",
 				 current->pid, src, dst, size);
@@ -1331,7 +1332,9 @@ static int zram_read_from_zspool(struct zram *zram, struct page *page,
 		} else {
 			ret = zcomp_decompress(zstrm, src, size, dst);
 		}
-
+#else
+		ret = zcomp_decompress(zstrm, src, size, dst);
+#endif
 		kunmap_local(dst);
 		zcomp_stream_put(zram->comps[prio]);
 	}
@@ -2110,12 +2113,6 @@ static int qpace_zram_submit_bio(struct zram *zram, struct bio *bio,
 
 	return ret;
 }
-#else
-static int qpace_zram_write_page(struct zram *zram, struct bio *bio)
-{
-    panic("Illegal logic, should not enter this branch");
-    return 0;
-}
 #endif
 
 /*
@@ -2550,10 +2547,14 @@ static void zram_submit_bio(struct bio *bio)
 		zram_bio_read(zram, bio);
 		break;
 	case REQ_OP_WRITE:
+#if IS_ENABLED(CONFIG_QTI_PAGE_COMPRESSION_ENGINE)
 		if (zram->qpace)
 			qpace_zram_submit_bio(zram, bio, &comp_control);
 		else
 			zram_bio_write(zram, bio);
+#else
+	    zram_bio_write(zram, bio);
+#endif
 		break;
 	case REQ_OP_DISCARD:
 	case REQ_OP_WRITE_ZEROES:
