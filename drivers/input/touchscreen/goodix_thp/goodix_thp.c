@@ -94,6 +94,26 @@ static int goodix_thp_spi_trans(struct goodix_thp_core *cd,
         return ret;
 }
 
+static void goodix_thp_esd_on(struct goodix_thp_core *core_data, bool on)
+{
+        if (!core_data->ts_dev->board_data.esd_enable) {
+                ts_info(core_data->ts_dev->dev, "ESD function is not enabled");
+                return;
+        }
+
+        if (core_data->esd_on == on)
+                return;
+
+        core_data->esd_on = on;
+        if (on) {
+                schedule_delayed_work(&core_data->esd_work, 3 * HZ);
+        } else {
+                cancel_delayed_work(&core_data->esd_work);
+        }
+
+        ts_info(core_data->ts_dev->dev, "ESD %s", on ? "on" : "off");
+}
+
 /*
  * If irq is disabled/enabled, can not disable/enable again
  * disable - status 0; enable - status not 0
@@ -395,10 +415,12 @@ static long goodix_thp_ioctl_notify_update(struct goodix_thp_core *core_data, vo
         board_data->frame_addr = update_info.frame_addr;
         board_data->cmd_addr = update_info.cmd_addr;
         board_data->ges_addr = update_info.ges_addr;
-        ts_info(ts_dev->dev, "set frame addr:0x%04X cmd addr:0x%04X ges addr:0x%04X",
+        board_data->esd_addr = update_info.esd_addr;
+        ts_info(ts_dev->dev, "set frame addr:0x%04X cmd addr:0x%04X ges addr:0x%04X esd addr:0x%04X",
                 board_data->frame_addr,
                 board_data->cmd_addr,
-                board_data->ges_addr);
+                board_data->ges_addr,
+                board_data->esd_addr);
         return 0;
 }
 
@@ -696,6 +718,7 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 core_data->initialized = true;
 #endif
                 ts_info(ts_dev->dev, "HAL has finished");
+                goodix_thp_esd_on(core_data, true);
                 break;
         case SVC_CMD_BATTERY:
                 battery_level = tsc_msg.value[0];
@@ -2258,6 +2281,32 @@ static ssize_t goodix_thp_save_moto_data_store(struct device *dev,
         return count;
 }
 
+static ssize_t goodix_thp_esd_info_show(struct device *dev,
+                        struct device_attribute *attr, char *buf)
+{
+        struct goodix_thp_core *thp_core = dev_get_drvdata(dev);
+
+        return sprintf(buf, "%s\n", thp_core->esd_on ? "enable" : "disabled");
+}
+
+static ssize_t goodix_thp_esd_info_store(struct device *dev,
+                                     struct device_attribute *attr,
+                                     const char *buf,
+                                     size_t count)
+{
+        struct goodix_thp_core *thp_core = dev_get_drvdata(dev);
+
+        if (!buf || count <= 0)
+                return -EINVAL;
+
+        if (buf[0] == 0 || buf[0] == '0')
+                goodix_thp_esd_on(thp_core, false);
+        else
+                goodix_thp_esd_on(thp_core, true);
+
+        return count;
+}
+
 static DEVICE_ATTR(scan_rate, S_IWUSR | S_IWGRP, NULL,
                                 goodix_thp_scan_rate_store);
 static DEVICE_ATTR(driver_info, S_IRUGO, goodix_thp_driver_info_show, NULL);
@@ -2284,6 +2333,8 @@ static DEVICE_ATTR(special_area, S_IRUGO | S_IWUSR | S_IWGRP,
                                 goodix_thp_special_area_show, goodix_thp_special_area_store);
 static DEVICE_ATTR(save_moto_data, S_IRUGO | S_IWUSR | S_IWGRP,
                                 goodix_thp_save_moto_data_show, goodix_thp_save_moto_data_store);
+static DEVICE_ATTR(esd_info, S_IRUGO | S_IWUSR | S_IWGRP,
+                                goodix_thp_esd_info_show, goodix_thp_esd_info_store);
 
 static struct attribute *sysfs_attrs[] = {
         &dev_attr_scan_rate.attr,
@@ -2300,6 +2351,7 @@ static struct attribute *sysfs_attrs[] = {
         &dev_attr_reg_rw.attr,
         &dev_attr_special_area.attr,
         &dev_attr_save_moto_data.attr,
+        &dev_attr_esd_info.attr,
         NULL,
 };
 
@@ -2712,6 +2764,45 @@ exit:
 }
 #endif
 
+#define GOODIX_ESD_TICK_WRITE_DATA 0xAA
+static void goodix_thp_esd_work(struct work_struct *work)
+{
+        struct delayed_work *dwork = to_delayed_work(work);
+        struct goodix_thp_core *core_data =
+                container_of(dwork, struct goodix_thp_core, esd_work);
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        u32 esd_addr = core_data->ts_dev->board_data.esd_addr;
+        u8 esd_value;
+
+        if (!core_data->esd_on || esd_addr == 0)
+                return;
+
+        ts_dev->hw_ops->read(ts_dev, esd_addr, &esd_value, 1);
+        if (esd_value == GOODIX_ESD_TICK_WRITE_DATA) {
+                ts_err(ts_dev->dev, "esd check failed, 0x%x", esd_value);
+                goodix_thp_power_off(core_data);
+                msleep(200);
+                goodix_thp_power_on(core_data);
+        } else {
+                esd_value = GOODIX_ESD_TICK_WRITE_DATA;
+                ts_dev->hw_ops->write(ts_dev, esd_addr, &esd_value, 1);
+        }
+
+        schedule_delayed_work(dwork, 8 * HZ);
+}
+
+static int goodix_thp_esd_init(struct goodix_thp_core *core_data)
+{
+        if (core_data->ts_dev->board_data.esd_enable) {
+                ts_info(core_data->ts_dev->dev, "ESD work init");
+                INIT_DELAYED_WORK(&core_data->esd_work, goodix_thp_esd_work);
+        } else {
+                ts_info(core_data->ts_dev->dev, "ESD function is not enabled");
+        }
+
+        return 0;
+}
+
 /**
  * goodix_thp_probe - called by kernel when a Goodix touch
  *  platform driver is added.
@@ -2921,6 +3012,8 @@ static int goodix_thp_probe(struct platform_device *pdev)
         if (r)
                 ts_err(tdev->dev, "[PEN]Unable to register pen_notifier: %d\n", r);
 #endif
+
+        goodix_thp_esd_init(core_data);
 
         return 0;
 

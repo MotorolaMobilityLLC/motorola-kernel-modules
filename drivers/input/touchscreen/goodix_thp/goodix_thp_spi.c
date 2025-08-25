@@ -440,6 +440,8 @@ static int goodix_thp_parse_dt(struct device_node *node,
                 }
         }
 
+        board_data->esd_enable = of_property_read_bool(node, "goodix,esd-enable");
+
         /* get xyz resolutions */
         r = goodix_thp_parse_dt_resolution(node, board_data);
         if (r < 0) {
