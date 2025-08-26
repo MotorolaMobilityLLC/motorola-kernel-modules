@@ -45,10 +45,15 @@ static void set_pen_mode_boot(struct goodix_thp_core *cd)
 
 	ts_info(tdev->dev, "Received pen status(%d) for pen detection\n", value);
 
-	if (value == PEN_DETECTION_INSERT)
+	if (value == PEN_DETECTION_INSERT) {
 		cd->gtp_pen_detect_flag = GTP_FINGER_MODE;
-	else if (value == PEN_DETECTION_PULL)
+		cd->set_mode.stylus_mode = GTP_FINGER_MODE;
+		cd->get_mode.stylus_mode = GTP_FINGER_MODE;
+	} else if (value == PEN_DETECTION_PULL) {
 		cd->gtp_pen_detect_flag = GTP_PEN_MODE;
+		cd->set_mode.stylus_mode = GTP_PEN_MODE;
+		cd->get_mode.stylus_mode = GTP_PEN_MODE;
+	}
 
 	ret = mutex_lock_interruptible(&cd->mode_lock);
 	if (cd->power_on == 0) {
