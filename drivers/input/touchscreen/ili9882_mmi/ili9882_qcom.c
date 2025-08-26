@@ -57,6 +57,11 @@ static struct sensors_classdev __maybe_unused sensors_touch_cdev = {
 };
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#define ILI_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio(np,name,idx)
+#else
+#define ILI_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio_flags(np,name,idx,flags_ptr)
+#endif
 
 void ili_tp_reset(void)
 {
@@ -215,11 +220,13 @@ static void ilitek_plat_regulator_power_init(void)
 static int ilitek_plat_gpio_register(void)
 {
 	int ret = 0;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	u32 flag;
+#endif
 	struct device_node *dev_node = ilits->dev->of_node;
 
-	ilits->tp_int = of_get_named_gpio_flags(dev_node, DTS_INT_GPIO, 0, &flag);
-	ilits->tp_rst = of_get_named_gpio_flags(dev_node, DTS_RESET_GPIO, 0, &flag);
+	ilits->tp_int = ILI_GET_NAMED_GPIO(dev_node, DTS_INT_GPIO, 0, &flag);
+	ilits->tp_rst = ILI_GET_NAMED_GPIO(dev_node, DTS_RESET_GPIO, 0, &flag);
 
 	ILI_INFO("TP INT: %d\n", ilits->tp_int);
 	ILI_INFO("TP RESET: %d\n", ilits->tp_rst);

@@ -1414,7 +1414,6 @@ void ili_report_gesture_mode(u8 *buf, int len)
 #elif CONFIG_INPUT_TOUCHSCREEN_MMI
 		if (ilits->imports && ilits->imports->report_gesture) {
 			struct gesture_event_data event;
-			int ret = 0;
 
 			if(gc->code == GESTURE_SINGLECLICK) {
 				event.evcode = 1;
@@ -1422,7 +1421,7 @@ void ili_report_gesture_mode(u8 *buf, int len)
 				event.evcode =4;
 			}
 			/* call class method */
-			ret = ilits->imports->report_gesture(&event);
+			ilits->imports->report_gesture(&event);
 #ifdef CONFIG_HAS_WAKELOCK
 			wake_lock_timeout(&(ilits->gesture_wakelock), msecs_to_jiffies(5000));
 #else
