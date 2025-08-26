@@ -39,6 +39,9 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 30)
+#include <linux/pinctrl/consumer.h>
+#endif
 #include <linux/regulator/consumer.h>
 #include <linux/power_supply.h>
 #include <linux/fs.h>

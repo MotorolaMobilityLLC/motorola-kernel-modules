@@ -373,6 +373,7 @@ static int ili_spi_wrapper(u8 *txbuf, u32 wlen, u8 *rxbuf, u32 rlen, bool spi_ir
 		/* Won't break if it needs to read data following with writing. */
 		if (!rlen)
 			break;
+		fallthrough;
 	case SPI_READ:
 		if (!ice && spi_irq) {
 			/* Check INT triggered by FW when sending cmds. */
@@ -797,11 +798,18 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	return info->hwif->plat_probe();
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 30))
+static void ilitek_spi_remove(struct spi_device *spi)
+{
+	ILI_INFO();
+}
+#else
 static int ilitek_spi_remove(struct spi_device *spi)
 {
 	ILI_INFO();
 	return 0;
 }
+#endif
 
 static struct spi_device_id tp_spi_id[] = {
 	{TDDI_DEV_ID, 0},
