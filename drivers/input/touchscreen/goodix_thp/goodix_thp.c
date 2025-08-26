@@ -729,6 +729,12 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 memcpy(core_data->uid_data, &tsc_msg.value[0], sizeof(core_data->uid_data));
                 ts_info(ts_dev->dev, "recv pen info(uid):%*ph", 9, core_data->uid_data);
                 break;
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+        case SVC_CMD_OPEN_CIRCUIT:
+                core_data->open_status = tsc_msg.value[0];
+                ts_info(ts_dev->dev, "recv open circuit %d", core_data->open_status);
+                break;
+#endif
         default:
                 ts_err(ts_dev->dev, "not support svc msg:0x%02x", tsc_msg.cmd);
                 break;

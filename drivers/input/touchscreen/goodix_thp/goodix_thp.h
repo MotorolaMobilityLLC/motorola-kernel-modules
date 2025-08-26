@@ -301,6 +301,7 @@ enum {
         SVC_CMD_BATTERY = 38,
         SVC_CMD_BUTTON,
         SVC_CMD_PEN_INFO,
+        SVC_CMD_OPEN_CIRCUIT = 42,
 };
 
 #define MAX_TSC_MSG_DATA_LEN 128
@@ -541,6 +542,9 @@ struct goodix_thp_core {
 	int initialized;
 	int gtp_pen_detect_flag;
 	struct notifier_block pen_notif;
+#endif
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+	u8 open_status;
 #endif
 };
 
