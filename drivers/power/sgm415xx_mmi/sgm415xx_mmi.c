@@ -43,8 +43,13 @@
  *********************************************************/
 #define PHY_MODE_BC11_SET 1
 #define PHY_MODE_BC11_CLR 2
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154X_CHIP_ID	0x0A
+#define SGM4154x_REG_NUM	(0x1D)
+#else
 #define SGM4154X_CHIP_ID	2
 #define SGM4154x_REG_NUM	(0xF)
+#endif
 #define SINGLE_DUMP_LEN		22
 #define TOTAL_DUMP_LEN		(SINGLE_DUMP_LEN * (SGM4154x_REG_NUM))
 
@@ -82,12 +87,22 @@ enum attach_type {
 };
 
 /* SGM4154x REG06 BOOST_LIM[5:4], uV */
+#if defined(__SGM41542S_CHIP_ID__)
+static const unsigned int BOOST_VOLT_LIMIT[] = {
+	4850000, 5000000, 5150000, 5300000,5800000,6400000,6900000,7500000
+};
+#else
 static const unsigned int BOOST_VOLT_LIMIT[] = {
 	4850000, 5000000, 5150000, 5300000
 };
+#endif
 
 /* SGM4154x REG02 BOOST_LIM[7:7], uA */
-#if (defined(__SGM41542_CHIP_ID__) || defined(__SGM41541_CHIP_ID__)|| defined(__SGM41543_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__)|| defined(__SGM41542S_CHIP_ID__))
+#if defined(__SGM41542S_CHIP_ID__)
+static const unsigned int BOOST_CURRENT_LIMIT[] = {
+	500000, 1000000,1200000,1500000,2000000,2500000,3000000,3200000
+};
+#elif (defined(__SGM41542_CHIP_ID__) || defined(__SGM41541_CHIP_ID__)|| defined(__SGM41543_CHIP_ID__)|| defined(__SGM41543D_CHIP_ID__))
 static const unsigned int BOOST_CURRENT_LIMIT[] = {
 	1200000, 2000000
 };
@@ -107,6 +122,12 @@ static const unsigned int IPRECHG_CURRENT_STABLE[] = {
 static const unsigned int ITERM_CURRENT_STABLE[] = {
 	5000, 10000, 15000, 20000, 30000, 40000, 50000, 60000,
 	80000, 100000, 120000, 140000, 160000, 180000, 200000, 240000
+};
+#endif
+
+#if defined(__SGM41542S_CHIP_ID__)
+static const unsigned int VRECHG_VOLTAGE_STABLE_MV[] = {
+	100, 200, 300, 600
 };
 #endif
 
@@ -303,6 +324,9 @@ static int sgm4154x_get_vbus(struct charger_device *chg_dev, u32 *vbus)
 		dev_err(sgm->dev, "get vbus voltage failed");
 		return -EINVAL;
 	}
+	if (vbus == NULL) {
+		return -EINVAL;
+	}
 	*vbus = value + R_VBUS_CHARGER_1 * value / R_VBUS_CHARGER_2;
  	*vbus = *vbus * 1000;
 	dev_info(sgm->dev, "vbus voltage: %d", *vbus);
@@ -312,7 +336,10 @@ static int sgm4154x_get_vbus(struct charger_device *chg_dev, u32 *vbus)
 static int sgm4154x_set_tmr2x(struct sgm4154x_device *sgm, bool enable)
 {
 	int ret;
-	int reg_val = enable ? 1 : 0;
+	int reg_val = enable ? SGM4154x_SAFETY_TIMER_RM2X : 0;
+	if (sgm == NULL) {
+		return -EINVAL;
+	}
 	dev_err(sgm->dev, "start set tmr2x\n");
 
 	ret = sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_7,
@@ -532,13 +559,22 @@ static int sgm4154x_get_chrg_volt(struct charger_device *chg_dev,unsigned int *v
 	ret = sgm4154x_read_reg(sgm, SGM4154x_CHRG_CTRL_4, &vreg_val);
 	if (ret)
 		return ret;
+	if (volt == NULL) {
+		return -EINVAL;
+	}
 
+#ifdef __SGM41542S_CHIP_ID__
+	vreg_val = (vreg_val & SGM4154x_VREG_V_MASK) >> 1;
+
+	*volt = vreg_val * SGM4154x_VREG_V_STEP_uV + SGM4154x_VREG_V_MIN_uV;
+#else
 	vreg_val = (vreg_val & SGM4154x_VREG_V_MASK) >> 3;
 
 	if (15 == vreg_val)
 		*volt = 4352000; //default
 	else if (vreg_val < 25)
 		*volt = vreg_val * SGM4154x_VREG_V_STEP_uV + SGM4154x_VREG_V_MIN_uV;
+#endif
 
 	return 0;
 }
@@ -547,7 +583,9 @@ static int sgm4154x_get_vindpm_offset_os(struct sgm4154x_device *sgm)
 {
 	int ret;
 	u8 reg_val;
-
+	if (sgm == NULL) {
+		return -EINVAL;
+	}
 	ret = sgm4154x_read_reg(sgm, SGM4154x_CHRG_CTRL_f, &reg_val);
 	if (ret)
 		return ret;
@@ -673,7 +711,7 @@ static int sgm4154x_set_input_curr_lim(struct charger_device *chg_dev, unsigned 
 		iindpm > SGM4154x_IINDPM_I_MAX_uA)
 		return -EINVAL;
 
-#if (defined(__SGM41513_CHIP_ID__) || defined(__SGM41513A_CHIP_ID__) || defined(__SGM41513D_CHIP_ID__))
+#if (defined(__SGM41513_CHIP_ID__) || defined(__SGM41513A_CHIP_ID__) || defined(__SGM41513D_CHIP_ID__) || defined(__SGM41542S_CHIP_ID__))
 	reg_val = (iindpm - SGM4154x_IINDPM_I_MIN_uA) / SGM4154x_IINDPM_STEP_uA;
 #else
 	if (iindpm >= SGM4154x_IINDPM_I_MIN_uA && iindpm <= 3100000) {//default
@@ -703,16 +741,27 @@ static int sgm4154x_get_input_curr_lim(struct charger_device *chg_dev,unsigned i
 	if (ret)
 		return ret;
 
+	if (ilim == NULL) {
+		return -EINVAL;
+	}
+
+#ifdef __SGM41542S_CHIP_ID__
+	*ilim = (reg_val & SGM4154x_IINDPM_I_MASK) * SGM4154x_IINDPM_STEP_uA + SGM4154x_IINDPM_I_MIN_uA;
+#else
 	if (SGM4154x_IINDPM_I_MASK == (reg_val & SGM4154x_IINDPM_I_MASK))
 		*ilim =  SGM4154x_IINDPM_I_MAX_uA;
 	else
 		*ilim = (reg_val & SGM4154x_IINDPM_I_MASK) * SGM4154x_IINDPM_STEP_uA + SGM4154x_IINDPM_I_MIN_uA;
+#endif
 
 	return 0;
 }
 
 static int sgm4154x_get_input_mincurr_lim(struct charger_device *chg_dev,u32 *ilim)
 {
+	if (ilim == NULL) {
+		return -EINVAL;
+	}
 	*ilim = SGM4154x_IINDPM_I_MIN_uA;
 
 	return 0;
@@ -724,7 +773,9 @@ static int sgm4154x_get_state(struct sgm4154x_device *sgm, struct sgm4154x_state
 	u8 fault;
 	u8 chrg_param_0, chrg_param_1, chrg_param_2;
 	int ret;
-
+	if ((sgm == NULL) || (state == NULL)) {
+		return -EINVAL;
+	}
 	ret = sgm4154x_read_reg(sgm, SGM4154x_CHRG_STAT, &chrg_stat);
 	if (ret) {
 		ret = sgm4154x_read_reg(sgm, SGM4154x_CHRG_STAT, &chrg_stat);
@@ -752,11 +803,20 @@ static int sgm4154x_get_state(struct sgm4154x_device *sgm, struct sgm4154x_state
 	state->chrg_fault = fault;
 	state->ntc_fault = fault & SGM4154x_TEMP_MASK;
 	state->health = state->ntc_fault;
+
+#ifdef __SGM41542S_CHIP_ID__
+	ret = sgm4154x_read_reg(sgm, SGM41542S_CHRG_CTRL_12, &chrg_param_0);
+	if (ret) {
+		pr_err("%s read SGM41542S_CHRG_CTRL_12 fail\n", __func__);
+		return ret;
+	}
+#else
 	ret = sgm4154x_read_reg(sgm, SGM4154x_CHRG_CTRL_0, &chrg_param_0);
 	if (ret) {
 		pr_err("%s read SGM4154x_CHRG_CTRL_0 fail\n", __func__);
 		return ret;
 	}
+#endif
 	state->hiz_en = !!(chrg_param_0 & SGM4154x_HIZ_EN);
 
 	ret = sgm4154x_read_reg(sgm, SGM4154x_CHRG_CTRL_5, &chrg_param_1);
@@ -826,8 +886,13 @@ __maybe_unused static int sgm4154x_set_hiz_en(struct charger_device *chg_dev, bo
 	dev_notice(sgm->dev, "%s:%d", __func__, hiz_en);
 	reg_val = hiz_en ? SGM4154x_HIZ_EN : 0;
 
+#ifdef __SGM41542S_CHIP_ID__
+	return sgm4154x_update_bits(sgm, SGM41542S_CHRG_CTRL_12,
+			SGM4154x_HIZ_EN, reg_val);
+#else
 	return sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_0,
 			SGM4154x_HIZ_EN, reg_val);
+#endif
 }
 
 static int sgm4154x_enable_charger(struct sgm4154x_device *sgm)
@@ -943,10 +1008,25 @@ static int sgm4154x_set_recharge_volt(struct sgm4154x_device *sgm, int mV)
 {
 	u8 reg_val;
 
+	if (sgm == NULL) {
+		return -EINVAL;
+	}
+#ifdef __SGM41542S_CHIP_ID__
+	for(reg_val = 1; reg_val < 4; reg_val++) {
+		if (mV < VRECHG_VOLTAGE_STABLE_MV[reg_val])
+			break;
+	}
+
+	reg_val--;
+
+	return sgm4154x_update_bits(sgm, SGM41542S_CHRG_CTRL_11,
+			SGM4154x_VRECHARGE, reg_val);
+#else
 	reg_val = (mV - SGM4154x_VRECHRG_OFFSET_mV) / SGM4154x_VRECHRG_STEP_mV;
 
 	return sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_4,
 			SGM4154x_VRECHARGE, reg_val);
+#endif
 }
 
 static int sgm4154x_set_wdt_rst(struct sgm4154x_device *sgm, bool is_rst)
@@ -957,7 +1037,9 @@ static int sgm4154x_set_wdt_rst(struct sgm4154x_device *sgm, bool is_rst)
 		val = SGM4154x_WDT_RST_MASK;
 	else
 		val = 0;
-
+	if (sgm == NULL) {
+		return -EINVAL;
+	}
 	return sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_1,
 			SGM4154x_WDT_RST_MASK, val);
 }
@@ -967,19 +1049,35 @@ static int sgm4154x_set_dpdm_hiz(struct sgm4154x_device *sgm)
 	int ret;
 	int reg_val = 0;
 
+	if (sgm == NULL) {
+		return -EINVAL;
+	}
+
 	/*set dp in Hiz mode*/
+#ifdef __SGM41542S_CHIP_ID__
+	reg_val = 0;
+	ret = sgm4154x_update_bits(sgm, SGM41542S_CHRG_CTRL_1B,
+				SGM4154x_DP_VSEL_MASK, reg_val);
+#else
 	reg_val = 0 << 3;
 	ret = sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_d,
 				SGM4154x_DP_VSEL_MASK, reg_val);
+#endif
 	if (ret < 0) {
 		dev_err(sgm->dev, "%s set dp hiz failed ret(%d)\n", __func__, ret);
 		return ret;
 	}
 
 	/*set dm in Hiz mode*/
+#ifdef __SGM41542S_CHIP_ID__
+	reg_val = 0;
+	ret = sgm4154x_update_bits(sgm, SGM41542S_CHRG_CTRL_1B,
+				SGM4154x_DM_VSEL_MASK, reg_val);
+#else
 	reg_val = 0 << 1;
 	ret = sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_d,
 				SGM4154x_DM_VSEL_MASK, reg_val);
+#endif
 	if (ret < 0) {
 		dev_err(sgm->dev, "%s set dm hiz failed ret(%d)\n", __func__, ret);
 		return ret;
@@ -2224,10 +2322,21 @@ __maybe_unused static int sgm4154x_set_boost_voltage_limit(
 		struct charger_device *chg_dev, u32 uV)
 {
 	int ret = 0;
+#ifdef __SGM41542S_CHIP_ID__
+	u8 reg_val = 0;
+#else
 	char reg_val = -1;
 	int i = 0;
+#endif
 	struct sgm4154x_device *sgm = charger_get_data(chg_dev);
 
+#ifdef __SGM41542S_CHIP_ID__
+	for(reg_val = 1; reg_val < 8; reg_val++) {
+		if (uV < BOOST_VOLT_LIMIT[reg_val])
+			break;
+	}
+	reg_val--;
+#else
 	while (i < 4) {
 		if (uV == BOOST_VOLT_LIMIT[i]) {
 			reg_val = i;
@@ -2235,6 +2344,7 @@ __maybe_unused static int sgm4154x_set_boost_voltage_limit(
 		}
 		i++;
 	}
+#endif
 	if (reg_val < 0)
 		return reg_val;
 
@@ -2249,7 +2359,19 @@ static int sgm4154x_set_boost_current_limit(struct charger_device *chg_dev, u32 
 {
 	int ret = 0;
 	struct sgm4154x_device *sgm = charger_get_data(chg_dev);
+#ifdef __SGM41542S_CHIP_ID__
+	u8 reg_val = 0;
+#endif
 
+#ifdef __SGM41542S_CHIP_ID__
+	for(reg_val = 1; reg_val < 8; reg_val++) {
+		if (uA < BOOST_CURRENT_LIMIT[reg_val])
+			break;
+	}
+	reg_val--;
+	ret = sgm4154x_update_bits(sgm, SGM41542S_CHRG_CTRL_10,
+				SGM4154x_BOOST_LIM, reg_val);
+#else
 	if (uA == BOOST_CURRENT_LIMIT[0]) {
 		ret = sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_2,
 				SGM4154x_BOOST_LIM, 0);
@@ -2257,6 +2379,7 @@ static int sgm4154x_set_boost_current_limit(struct charger_device *chg_dev, u32 
 		ret = sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_2,
 				SGM4154x_BOOST_LIM, BIT(7));
 	}
+#endif
 
 	return ret;
 }

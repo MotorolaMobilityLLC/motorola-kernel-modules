@@ -86,10 +86,29 @@
 #define SGM4154x_CHRG_CTRL_d	0x0d
 #define SGM4154x_INPUT_DET   	0x0e
 #define SGM4154x_CHRG_CTRL_f	0x0f
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM41542S_CHRG_CTRL_10	0x10
+#define SGM41542S_CHRG_CTRL_11	0x11
+#define SGM41542S_CHRG_CTRL_12	0x12
+#define SGM41542S_CHRG_CTRL_13	0x13
+#define SGM41542S_CHRG_CTRL_14	0x14
+#define SGM41542S_CHRG_CTRL_15	0x15
+#define SGM41542S_CHRG_CTRL_16	0x16
+#define SGM41542S_CHRG_CTRL_17	0x17
+#define SGM41542S_CHRG_CTRL_18	0x18
+#define SGM41542S_CHRG_CTRL_19	0x19
+#define SGM41542S_CHRG_CTRL_1A	0x1A
+#define SGM41542S_CHRG_CTRL_1B	0x1B
+#define SGM41542S_CHRG_CTRL_1C	0x1C
+#endif
 
 /* charge status flags  */
 #define SGM4154x_CHRG_EN	BIT(4)
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_HIZ_EN		BIT(3)
+#else
 #define SGM4154x_HIZ_EN		BIT(7)
+#endif
 #define SGM4154x_TERM_EN	BIT(7)
 #define SGM4154x_PFM_EN		BIT(7)
 #define SGM4154x_VAC_OVP_MASK	GENMASK(7, 6)
@@ -97,8 +116,13 @@
 #define SGM4154x_VBUS_GOOD	BIT(7)
 #define SGM4154x_IN_VINDPM 	BIT(6)
 
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_BOOSTV		GENMASK(6, 4)
+#define SGM4154x_BOOST_LIM	GENMASK(2, 0)
+#else
 #define SGM4154x_BOOSTV		GENMASK(5, 4)
 #define SGM4154x_BOOST_LIM	BIT(7)
+#endif
 #define SGM4154x_OTG_EN		BIT(5)
 #define SGM4154x_CHG_EN		BIT(4)
 #define SGM4154x_FORCE_DPDM	BIT(7)
@@ -124,9 +148,13 @@
 #define SGM4154x_SAFETY_TIMER_RM2X	BIT(6)
 
 /* recharge voltage  */
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_VRECHARGE		GENMASK(1, 0)
+#else
 #define SGM4154x_VRECHARGE		BIT(0)
 #define SGM4154x_VRECHRG_STEP_mV	100
 #define SGM4154x_VRECHRG_OFFSET_mV	100
+#endif
 
 /* charge status  */
 #define SGM4154x_VSYS_STAT		BIT(0)
@@ -152,8 +180,13 @@
 #define SGM4154x_TEMP_NORMAL		BIT(0)
 #define SGM4154x_TEMP_WARM		BIT(1)
 #define SGM4154x_TEMP_COOL		(BIT(0) | BIT(1))
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_TEMP_COLD		(BIT(0) | BIT(2))
+#define SGM4154x_TEMP_HOT		(BIT(1) | BIT(2))
+#else
 #define SGM4154x_TEMP_COLD		(BIT(0) | BIT(3))
 #define SGM4154x_TEMP_HOT		(BIT(2) | BIT(3))
+#endif
 
 /* precharge current  */
 #define SGM4154x_PRECHRG_CUR_MASK		GENMASK(7, 4)
@@ -170,29 +203,51 @@
 #define SGM4154x_TERMCHRG_I_DEF_uA		180000
 
 /* charge current  */
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_ICHRG_I_MASK		GENMASK(6, 0)
+#else
 #define SGM4154x_ICHRG_I_MASK		GENMASK(5, 0)
+#endif
 
 #define SGM4154x_ICHRG_I_MIN_uA		0
 #if (defined(__SGM41513_CHIP_ID__) || defined(__SGM41513D_CHIP_ID__))
 #define SGM4154x_ICHRG_I_MAX_uA		3000000
 #define SGM4154x_ICHRG_I_DEF_uA		1980000
+#elif defined(__SGM41542S_CHIP_ID__)
+#define SGM4154x_ICHRG_I_STEP_uA	60000
+#define SGM4154x_ICHRG_I_MAX_uA		5100000
+#define SGM4154x_ICHRG_I_DEF_uA		2040000
 #else
 #define SGM4154x_ICHRG_I_STEP_uA	60000
 #define SGM4154x_ICHRG_I_MAX_uA		3780000
 #define SGM4154x_ICHRG_I_DEF_uA		2040000
 #endif
 /* charge voltage  */
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_VREG_V_MASK		GENMASK(7, 1)
+#define SGM4154x_VREG_V_MAX_uV		4770000
+#define SGM4154x_VREG_V_MIN_uV		3500000
+#define SGM4154x_VREG_V_DEF_uV		4200000
+#define SGM4154x_VREG_V_STEP_uV		10000
+#else
 #define SGM4154x_VREG_V_MASK		GENMASK(7, 3)
 #define SGM4154x_VREG_V_MAX_uV		4624000
 #define SGM4154x_VREG_V_MIN_uV		3856000
 #define SGM4154x_VREG_V_DEF_uV		4500000
 #define SGM4154x_VREG_V_STEP_uV		32000
+#endif
 
 /* iindpm current  */
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_IINDPM_I_MASK		GENMASK(5, 0)
+#else
 #define SGM4154x_IINDPM_I_MASK		GENMASK(4, 0)
+#endif
 #define SGM4154x_IINDPM_I_MIN_uA	100000
 #if (defined(__SGM41513_CHIP_ID__) || defined(__SGM41513A_CHIP_ID__) || defined(__SGM41513D_CHIP_ID__))
 #define SGM4154x_IINDPM_I_MAX_uA	3200000
+#elif defined(__SGM41542S_CHIP_ID__)
+#define SGM4154x_IINDPM_I_MAX_uA	3300000
 #else
 #define SGM4154x_IINDPM_I_MAX_uA	3800000
 #endif
@@ -210,8 +265,14 @@
 #define SGM4154x_VINDPM_TRACK		GENMASK(1, 0)
 
 /* DP DM SEL  */
+#ifdef __SGM41542S_CHIP_ID__
+#define SGM4154x_DP_VSEL_MASK		GENMASK(6, 5)
+#define SGM4154x_DM_VSEL_MASK		GENMASK(4, 3)
+#define SGM41542S_DPDM_EN		BIT(2)
+#else
 #define SGM4154x_DP_VSEL_MASK		GENMASK(4, 3)
 #define SGM4154x_DM_VSEL_MASK		GENMASK(2, 1)
+#endif
 
 /* PUMPX SET  */
 #define SGM4154x_EN_PUMPX		BIT(7)
