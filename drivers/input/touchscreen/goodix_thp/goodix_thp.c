@@ -1252,7 +1252,8 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
         cpu = raw_smp_processor_id();
 
-        if (cpu < NR_CPUS && (index = core_data->cpu_to_index_map[cpu]) >= 0) {
+        if (cpu < NR_CPUS && core_data->cpu_to_index_map && core_data->boost_infos &&
+                (index = core_data->cpu_to_index_map[cpu]) >= 0) {
                 struct cpu_boost_info *info = &core_data->boost_infos[index];
 
                 if (core_data->boost_count < board_data->max_boost_count) {
@@ -1352,7 +1353,7 @@ exit:
         }
 
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
-        if (index >= 0 && core_data->boost_count <= board_data->max_boost_count) {
+        if (index >= 0 && core_data->boost_infos && core_data->boost_count <= board_data->max_boost_count) {
                 struct cpu_boost_info *info = &core_data->boost_infos[index];
                 freq_qos_update_request(&info->qos_req, 0);
         }
@@ -2976,6 +2977,21 @@ static int goodix_thp_probe(struct platform_device *pdev)
 	core_data->set_mode.stylus_mode = GTP_PEN_MODE;
 #endif
 
+#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
+        if (goodix_init_cpu_boost(pdev)) {
+                ts_err(tdev->dev, "CPU boost initialization failed");
+                core_data->qos_count = 0;
+        }
+
+        //init timer for clear boost_count
+        core_data->boost_count = 0;
+        timer_setup(&core_data->boost_timer, goodix_boost_timer_handler, 0);
+        ts_info(tdev->dev, "Touch boost config: affinity=0x%lx, boost-count=%d, timeout=%dms",
+                  tdev->board_data.cpu_mask,
+                  tdev->board_data.max_boost_count,
+                  tdev->board_data.boost_timeout);
+#endif
+
         /* request irq */
         r = goodix_thp_irq_setup(core_data);
         if (r) {
@@ -3000,21 +3016,6 @@ static int goodix_thp_probe(struct platform_device *pdev)
             ts_info(tdev->dev, "Failed register touchscreen mmi.");
             goto err_irq_setup;
         }
-#endif
-
-#ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
-        if (goodix_init_cpu_boost(pdev)) {
-                ts_err(tdev->dev, "CPU boost initialization failed");
-                core_data->qos_count = 0;
-        }
-
-        //init timer for clear boost_count
-        core_data->boost_count = 0;
-        timer_setup(&core_data->boost_timer, goodix_boost_timer_handler, 0);
-        ts_info(tdev->dev, "Touch boost config: affinity=0x%lx, boost-count=%d, timeout=%dms",
-                  tdev->board_data.cpu_mask,
-                  tdev->board_data.max_boost_count,
-                  tdev->board_data.boost_timeout);
 #endif
 
 #ifdef GTP_PEN_NOTIFIER
