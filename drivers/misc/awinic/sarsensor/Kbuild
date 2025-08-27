@@ -16,3 +16,6 @@ KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../sensors/$(GKI_OBJ_MO
 obj-m := awinic_sar.o
 awinic_sar-objs := ./comm/aw_sar_comm_interface.o aw_sar.o ./aw963xx/aw963xx.o
 
+ifneq ($(filter m y,$(CONFIG_CAPSENSE_HALL_CAL)),)
+    KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../misc/hall/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+endif
