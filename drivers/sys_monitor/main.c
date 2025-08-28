@@ -33,7 +33,9 @@
 
 #define MAX_SYS_RECORD 100
 #define MAX_APP_RECORD 100
-#define MAX_RADIO_RECORD 50
+#define MAX_OTHERS_RECORD 100
+
+#define MAX_OTHERS_TOP 10
 
 #define STATE_MAX 60
 
@@ -50,10 +52,10 @@ struct uid_record {
 struct cpufreqs_mmap_data {
 	int app_count;
 	int sys_count;
-	int radio_count;
+	int others_count;
 	struct uid_record app_records[MAX_APP_RECORD];
 	struct uid_record sys_records[MAX_SYS_RECORD];
-	struct uid_record radio_records[MAX_RADIO_RECORD];
+	struct uid_record others_records[MAX_OTHERS_RECORD];
 };
 
 static struct cpufreqs_mmap_data cpufreqs_usage = {0};
@@ -64,7 +66,6 @@ static struct uid_record backup_record[MAX_SYS_RECORD];
 static struct kobject *sys_monitor_obj;
 static int cpufreq_count = 0;
 static int top_app_count = 10;
-static int top_sys_count = 10;
 static int core_num = 0;
 static char core_freq_count[3];
 
@@ -132,39 +133,22 @@ static int show_top_records(struct uid_record *records, char *buf, int use_count
 	return len;
 }
 
-static ssize_t radio_top_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+static ssize_t others_top_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	unsigned long flags;
 	int use_count;
 
 	spin_lock_irqsave(&sys_monitor_lock, flags);
-	use_count = cpufreqs_usage.radio_count;
-	memcpy(backup_record, cpufreqs_usage.radio_records, sizeof(struct uid_record) * use_count);
-	cpufreqs_usage.radio_count = 0;
-	clean_records(cpufreqs_usage.radio_records, use_count);
+	use_count = cpufreqs_usage.others_count;
+	memcpy(backup_record, cpufreqs_usage.others_records, sizeof(struct uid_record) * use_count);
+	cpufreqs_usage.others_count = 0;
+	clean_records(cpufreqs_usage.others_records, use_count);
 	spin_unlock_irqrestore(&sys_monitor_lock, flags);
 
-	return show_top_records(backup_record, buf, use_count, top_sys_count);
+	return show_top_records(backup_record, buf, use_count, MAX_OTHERS_TOP);
 }
 
-static size_t parse_sys_radio_count(const char *buf, size_t n)
-{
-	unsigned int val;
-	if (kstrtoint(buf, 0, &val)) {
-		return -EINVAL;
-	}
-	if (val > MAX_TOP_RECORD)
-		top_sys_count = MAX_TOP_RECORD;
-	else
-		top_sys_count = val;
-
-	return n;
-}
-static ssize_t radio_top_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t n)
-{
-	return parse_sys_radio_count(buf, n);
-}
-sys_monitor_attr(radio_top);
+sys_monitor_attr_ro(others_top);
 
 static ssize_t sys_top_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -178,14 +162,10 @@ static ssize_t sys_top_show(struct kobject *kobj, struct kobj_attribute *attr, c
 	clean_records(cpufreqs_usage.sys_records, use_count);
 	spin_unlock_irqrestore(&sys_monitor_lock, flags);
 
-	return show_top_records(backup_record, buf, use_count, top_sys_count);
+	return show_top_records(backup_record, buf, use_count, MAX_OTHERS_TOP);
 }
 
-static ssize_t sys_top_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t n)
-{
-	return parse_sys_radio_count(buf, n);
-}
-sys_monitor_attr(sys_top);
+sys_monitor_attr_ro(sys_top);
 
 static ssize_t app_top_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -199,7 +179,7 @@ static ssize_t app_top_show(struct kobject *kobj, struct kobj_attribute *attr, c
 	clean_records(cpufreqs_usage.app_records, use_count);
 	spin_unlock_irqrestore(&sys_monitor_lock, flags);
 
-	return show_top_records(backup_record, buf, use_count, top_sys_count);
+	return show_top_records(backup_record, buf, use_count, top_app_count);
 }
 
 static ssize_t app_top_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t n)
@@ -288,7 +268,7 @@ sys_monitor_attr(cpufreq_count);
 static struct attribute * sys_monitor[] = {
 	&app_top_attr.attr,
 	&sys_top_attr.attr,
-	&radio_top_attr.attr,
+	&others_top_attr.attr,
 	&cpufreq_count_attr.attr,
 	&sleep_state_attr.attr,
 	NULL,
@@ -325,11 +305,11 @@ void record_task_cpufreq_times(void *data, u64 cputime, struct task_struct *p,
 	int *count;
 	unsigned long flags;
 	int i;
-	unsigned int uid = (unsigned int )task_uid(p).val;
+	uid_t uid = from_kuid_munged(current_user_ns(), task_uid(p));
 	unsigned int pid = (unsigned int )task_pid_nr(p);
 	unsigned int tgid = (unsigned int )task_tgid_nr(p);
 
-	if (uid == 0 || cpufreq_count == 0)
+	if ((cpufreq_count == 0) || (uid == (uid_t) -1))
 		return;
 
 	spin_lock_irqsave(&sys_monitor_lock, flags);
@@ -339,11 +319,11 @@ void record_task_cpufreq_times(void *data, u64 cputime, struct task_struct *p,
 		max_count = MAX_SYS_RECORD;
 		records = ptr->sys_records;
 		count = &ptr->sys_count;
-	} else if (uid == 1001) {
+	} else if (uid == 1001 || uid == 0) {
 		uid = tgid;
-		max_count = MAX_RADIO_RECORD;
-		records = ptr->radio_records;
-		count = &ptr->radio_count;
+		max_count = MAX_OTHERS_RECORD;
+		records = ptr->others_records;
+		count = &ptr->others_count;
 	} else {
 		max_count = MAX_APP_RECORD;
 		records = ptr->app_records;
