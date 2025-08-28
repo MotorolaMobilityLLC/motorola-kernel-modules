@@ -43,11 +43,10 @@
  *********************************************************/
 #define PHY_MODE_BC11_SET 1
 #define PHY_MODE_BC11_CLR 2
+#define SGM4154X_CHIP_ID	2
 #ifdef __SGM41542S_CHIP_ID__
-#define SGM4154X_CHIP_ID	0x0A
 #define SGM4154x_REG_NUM	(0x1D)
 #else
-#define SGM4154X_CHIP_ID	2
 #define SGM4154x_REG_NUM	(0xF)
 #endif
 #define SINGLE_DUMP_LEN		22
@@ -542,10 +541,17 @@ static int sgm4154x_set_chrg_volt(struct charger_device *chg_dev, u32 chrg_volt)
 	else if (chrg_volt > sgm->init_data.max_vreg)
 		chrg_volt = sgm->init_data.max_vreg;
 
+#ifdef __SGM41542S_CHIP_ID__
+	reg_val = (chrg_volt - SGM4154x_VREG_V_MIN_uV) / SGM4154x_VREG_V_STEP_uV;
+	reg_val = reg_val << 1;
+	ret = sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_4,
+			SGM4154x_VREG_V_MASK, reg_val);
+#else
 	reg_val = (chrg_volt - SGM4154x_VREG_V_MIN_uV) / SGM4154x_VREG_V_STEP_uV;
 	reg_val = reg_val << 3;
 	ret = sgm4154x_update_bits(sgm, SGM4154x_CHRG_CTRL_4,
 			SGM4154x_VREG_V_MASK, reg_val);
+#endif
 
 	return ret;
 }
