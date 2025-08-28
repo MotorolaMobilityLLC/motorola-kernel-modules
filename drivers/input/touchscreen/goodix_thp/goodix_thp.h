@@ -418,6 +418,7 @@ struct thp_input_agent_ioctl_coor_data {
         unsigned char large_touch_stat;		        /* 0:normal touch stat;1:large_touch_stat*/
         unsigned char ref_not_set;
         struct timeval64 time_stamp;
+        unsigned char stylus_key;
 };
 
 struct goodix_thp_hw_ops {

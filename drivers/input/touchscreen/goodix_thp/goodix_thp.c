@@ -1422,6 +1422,7 @@ static int goodix_thp_pen_input_dev_init(struct goodix_thp_core *core_data)
         set_bit(ABS_TILT_Y, pen_dev->absbit);
         set_bit(BTN_STYLUS, pen_dev->keybit);
         set_bit(BTN_STYLUS2, pen_dev->keybit);
+        set_bit(BTN_STYLUS3, pen_dev->keybit);
         set_bit(BTN_TOUCH, pen_dev->keybit);
         set_bit(BTN_TOOL_PEN, pen_dev->keybit);
         set_bit(INPUT_PROP_DIRECT, pen_dev->propbit);
@@ -1565,6 +1566,10 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 input_report_abs(pen_dev, ABS_PRESSURE, stylus_data->p);
                 input_report_key(pen_dev, BTN_TOUCH, data.hover_stat ? 0 : 1);
                 input_report_key(pen_dev, BTN_TOOL_PEN, 1);
+
+                input_report_key(pen_dev, BTN_STYLUS, data.stylus_key & 0x02);
+                input_report_key(pen_dev, BTN_STYLUS2, data.stylus_key & 0x04);
+                input_report_key(pen_dev, BTN_STYLUS3, data.stylus_key & 0x08);
                 input_sync(pen_dev);
         } else {
                 // --- release pen action detection start ---
