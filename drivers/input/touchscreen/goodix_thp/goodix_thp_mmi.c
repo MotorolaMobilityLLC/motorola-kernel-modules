@@ -55,6 +55,8 @@ static ssize_t goodix_ts_fp_int_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -75,6 +77,7 @@ static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fp_int_show, goodix_ts_fp_int_store);
 static DEVICE_ATTR(ble_broadcast, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_ble_broadcast_store);
+static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NULL);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -152,6 +155,7 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 	ADD_ATTR(fp_int);
 
 	ADD_ATTR(ble_broadcast);
+	ADD_ATTR(hardware_status);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -895,6 +899,21 @@ static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
 exit:
 	mutex_unlock(&core_data->mode_lock);
 	return ret;
+}
+
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+	u8 hardware_status = 0;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	hardware_status = core_data->open_status;
+	ts_info(core_data->ts_dev->dev, "Read touch hardware status = %d", hardware_status);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
 }
 
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {

@@ -680,6 +680,10 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 ts_info(ts_dev->dev, "HAL has finished");
                 goodix_thp_esd_on(core_data, true);
                 break;
+        case SVC_CMD_OPEN_CIRCUIT:
+                core_data->open_status = tsc_msg.value[0];
+                ts_info(ts_dev->dev, "recv open circuit %d", core_data->open_status);
+                break;
         default:
                 ts_err(ts_dev->dev, "not support svc msg:0x%02x", tsc_msg.cmd);
                 break;

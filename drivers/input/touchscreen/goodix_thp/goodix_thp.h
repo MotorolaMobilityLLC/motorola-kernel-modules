@@ -288,6 +288,7 @@ enum {
         SVC_CMD_GAME_FILTER,
         SVC_CMD_UPDATE_VERSION,
         SVC_CMD_HAL_INIT_FINISH = 36,
+        SVC_CMD_OPEN_CIRCUIT = 38,
 };
 
 #define MAX_TSC_MSG_DATA_LEN 128
@@ -524,6 +525,7 @@ struct goodix_thp_core {
 #endif
         bool esd_on;
         struct delayed_work esd_work;
+        u8 open_status;
 };
 
 extern bool debug_log_flag;
