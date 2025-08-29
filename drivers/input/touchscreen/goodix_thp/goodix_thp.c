@@ -1686,14 +1686,14 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         /* fp touch flag */
         if (pre_flags != data.fp_mode) {
                 if (data.fp_mode) {
-                        tdev->hw_ops->set_fp_int_pin(tdev, 1);
+                        /*tdev->hw_ops->set_fp_int_pin(tdev, 1);*/
                         input_report_key(input_dev, BTN_TRIGGER_HAPPY1, 1);
                         input_sync(input_dev);
                         input_report_key(input_dev, BTN_TRIGGER_HAPPY1, 0);
                         input_sync(input_dev);
                         ts_info(tdev->dev, "report BTN_TRIGGER_HAPPY1");
                 } else {
-                        tdev->hw_ops->set_fp_int_pin(tdev, 0);
+                        /*tdev->hw_ops->set_fp_int_pin(tdev, 0);*/
                         input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 1);
                         input_sync(input_dev);
                         input_report_key(input_dev, BTN_TRIGGER_HAPPY2, 0);
