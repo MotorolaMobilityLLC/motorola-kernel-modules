@@ -493,7 +493,6 @@ static int hall_sensor_probe(struct platform_device *pdev)
 	hall_sensor_do_wq = create_singlethread_workqueue("hall_sensor_do_wq");
 	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_work, pen_report_function);
 	INIT_DELAYED_WORK(&hall_sensor_dev->hall_sensor_dowork, pen_do_work_function);
-	queue_delayed_work(hall_sensor_do_wq, &hall_sensor_dev->hall_sensor_dowork, 0);
 #ifdef CONFIG_HAS_WAKELOCK
 	wake_lock_init(&hall_sensor_dev->wake_lock, WAKE_LOCK_SUSPEND, "pen_suspend_blocker");
 #else
@@ -544,11 +543,7 @@ static int hall_sensor_probe(struct platform_device *pdev)
 				hall_sensor_dev->gpio_list[i].irq = 0;
 				goto fail_for_irq;
 			}
-#ifndef CONFIG_HALL_PASSIVE_PEN
 			disable_irq(hall_sensor_dev->gpio_list[i].irq);
-#else
-			enable_irq_wake(hall_sensor_dev->gpio_list[i].irq);
-#endif
 		}
 	}
 
@@ -570,6 +565,13 @@ static int hall_sensor_probe(struct platform_device *pdev)
 		}
 	}
 	LOG_INFO("hall_sensor_probe Done");
+#ifdef CONFIG_HALL_PASSIVE_PEN
+	for (i = 0; i < hall_sensor_dev->gpio_num; i++) {
+		enable_irq(hall_sensor_dev->gpio_list[i].irq);
+		enable_irq_wake(hall_sensor_dev->gpio_list[i].irq);
+	}
+
+#endif
 	return 0;
 
 fail_for_irq:
