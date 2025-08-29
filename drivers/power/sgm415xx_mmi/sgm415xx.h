@@ -269,6 +269,12 @@
 #define SGM4154x_DP_VSEL_MASK		GENMASK(6, 5)
 #define SGM4154x_DM_VSEL_MASK		GENMASK(4, 3)
 #define SGM41542S_DPDM_EN		BIT(2)
+#define SGM41542S_VSYSADC_DIS		BIT(3)
+#define SGM41542S_ADC_CONVER		BIT(4)
+#define SGM41542S_START_ADC		BIT(5)
+#define SGM41542S_VSYS_STEP		10980
+#define SGM41542S_VSYS_OFFSET		2304000
+#define SGM41542S_VSYS_MAX		4851000
 #else
 #define SGM4154x_DP_VSEL_MASK		GENMASK(4, 3)
 #define SGM4154x_DM_VSEL_MASK		GENMASK(2, 1)
@@ -356,6 +362,36 @@ struct sgm4154x_device {
 	int force_detect_count;
 	atomic_t attach;
 	struct adapter_device *pd_adapter;
+
+#ifdef __SGM41542S_CHIP_ID__
+	struct mutex dpdm_lock;
+	int pulse_cnt;
+	struct adapter_device *qc_dev;
+	bool	qc_is_detect;
+	int	qc_chg_type;
+
+	/*for software HVDCP detected*/
+	struct delayed_work mmi_hvdcp_detect_dwork;
+	bool mmi_hvdcp_support;
+	bool mmi_hvdcp_trig_flag;
+	struct task_struct	*mmi_hvdcp_authen_task;
+	wait_queue_head_t	mmi_hvdcp_wait_que;
+	struct	semaphore sem_dpdm;
+	int	mmi_qc3p_power;
+	bool	mmi_qc3p_rerun_done;
+#endif
 };
+
+#ifdef __SGM41542S_CHIP_ID__
+#define MMI_HVDCP_DETECT_TIMER       1500
+#define QC3P_AUTHEN_LOW_THR_MV       5500000
+#define QC3P_AUTHEN_HIGH_THR_MV      6500000
+#define QC3P_AUTHEN_NONE_THR_MV      9200000
+#define QC3P_AUTHEN_45W_THR_MV       8200000
+#define QC3P_AUTHEN_27W_THR_MV       7200000
+#define QC3P_AUTHEN_18W_THR_MV       6200000
+#define MMI_HVDCP2_VOLTAGE_STANDARD  8000000
+#define MMI_HVDCP3_VOLTAGE_STANDARD  7500000
+#endif
 
 #endif /* _SGM4154x_CHARGER_H__ */

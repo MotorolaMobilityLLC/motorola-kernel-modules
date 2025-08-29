@@ -8,6 +8,7 @@ EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/power/mmi_pephv \
 		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply \
 		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/kernel-5.15/drivers/power/supply \
 		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include \
 		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/include \
 		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/drivers/power/supply
