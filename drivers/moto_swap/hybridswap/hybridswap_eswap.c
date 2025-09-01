@@ -4196,7 +4196,7 @@ out:
 	bdev_fput(backing_dev);
 	return err;
 }
-#elif
+#else
 int hybridswap_bind(struct zram *zram, const char *file_name)
 {
 	struct file *backing_dev = NULL;
