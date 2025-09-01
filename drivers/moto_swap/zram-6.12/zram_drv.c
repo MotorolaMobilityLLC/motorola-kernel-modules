@@ -2534,6 +2534,7 @@ static int __init zram_init(void)
 	if (ret)
 		goto out_error;
 #endif
+        return 0;
 
 out_error:
 	destroy_devices();
