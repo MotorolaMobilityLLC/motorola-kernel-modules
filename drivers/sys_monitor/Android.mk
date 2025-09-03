@@ -12,5 +12,7 @@ LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
 endif
 KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 
+LOCAL_ADDITIONAL_DEPENDENCIES := $(PRODUCT_OUT)/$(TARGET_COPY_OUT_VENDOR_RAMDISK)/lib/modules/qrtr.ko
+
 include $(DLKM_DIR)/AndroidKernelModule.mk
 include $(call first-makefiles-under,$(LOCAL_PATH))
