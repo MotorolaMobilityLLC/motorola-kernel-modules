@@ -47,6 +47,8 @@ struct pen_charger {
 	bool initialized;
 	bool pen_insert_flag;
 	bool charging_by_insert_trig;
+	bool charging_by_insert_chg;
+	bool exit_shipmode_trig;
 	struct notifier_block pen_notif;
 	struct notifier_block chg_psy_nb;
 	struct alarm chg_tmr;
@@ -260,6 +262,16 @@ static int chg_thread_func(void *data) {
 		}
 		__pm_stay_awake(chg->charger_wakelock);
         chg->chg_thread_trigger = false;
+
+		if (chg->exit_shipmode_trig) {
+			chg->exit_shipmode_trig = false;
+			if (!chg->charging_by_insert_trig && !chg->charging_by_insert_chg) {
+				pr_info("Exit ship mode done \n");
+				start_charge(chg, false);
+				start_chg_timer(chg, false, 0);
+				goto exit;
+			}
+		}
 		if (!chg->pen_insert_flag)
 			goto exit;
 
@@ -272,6 +284,7 @@ static int chg_thread_func(void *data) {
 			} else {
 				pr_info("charge Done\n");
 				chg->charging_by_insert_trig = false;
+				chg->charging_by_insert_chg = false;
 				chg->chg_to_iterm = false;
 				start_charge(chg, false);
 				start_chg_timer(chg, false, 0);
@@ -318,6 +331,7 @@ static int pen_notifier_callback(struct notifier_block *self,
 		chg->pen_insert_flag = false;
 		chg->chg_to_iterm = false;
 		chg->charging_by_insert_trig = false;
+		chg->charging_by_insert_chg = false;
 		start_chg_timer(chg, false, 0);
 		start_charge(chg, false);
 		pen_charger_handle_event(chg, false);
@@ -383,18 +397,53 @@ static int charger_psy_notify_callback(struct notifier_block *nb,
 
 		if (chg->chg_is_present) {
 			start_charge(chg, true);
+			chg->charging_by_insert_chg = true;
 			start_chg_timer(chg, true, CHG_START_DELAY_S);
 			pen_charger_handle_event(chg, true);
 		} else {
 			chg->chg_to_iterm = false;
 			start_chg_timer(chg, false, 0);
 			start_charge(chg, false);
+			chg->charging_by_insert_chg = false;
 			pen_charger_handle_event(chg, false);
 		}
 	}
 
     return NOTIFY_OK;
 }
+
+static ssize_t pen_exit_shipmode_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct pen_charger *chg = dev_get_drvdata(dev);
+	unsigned long r;
+	unsigned long mode;
+
+	if (!chg) {
+		pr_err("pen_exit_shipmode_store: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &mode);
+	if (r) {
+		pr_err("pen_exit_shipmode_store: Invalid charger suspend value = %lu\n", mode);
+		return -EINVAL;
+	}
+
+	pr_info("pen_exit_shipmode_store: enable = %lu\n",mode);
+	if (!!mode) {
+		start_charge(chg, true);
+		start_chg_timer(chg, true, CHG_START_DELAY_S);
+		chg->exit_shipmode_trig = true;
+	}
+
+	return count;
+}
+static DEVICE_ATTR(pen_exit_shipmode, 0200,
+		NULL,
+		pen_exit_shipmode_store);
+
 
 static int pen_charger_probe(struct platform_device *pdev)
 {
@@ -444,6 +493,11 @@ static int pen_charger_probe(struct platform_device *pdev)
 	rc = device_create_file(dev, &dev_attr_pen_chg_enable);
 	if (rc) {
 		pr_err("couldn't create pen_chg_enable\n");
+		return rc;
+	}
+	rc = device_create_file(dev, &dev_attr_pen_exit_shipmode);
+	if (rc) {
+		pr_err("couldn't create pen_exit_shipmode\n");
 		return rc;
 	}
 
@@ -506,6 +560,7 @@ static int pen_charger_remove(struct platform_device *pdev)
         chg->chg_task = NULL;
     }
 
+	device_remove_file(dev, &dev_attr_pen_exit_shipmode);
 	device_remove_file(dev, &dev_attr_pen_chg_enable);
 	device_remove_file(dev, &dev_attr_pen_chg_current);
 
