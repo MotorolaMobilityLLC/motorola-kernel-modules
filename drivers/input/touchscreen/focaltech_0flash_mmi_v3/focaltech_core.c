@@ -3147,7 +3147,6 @@ static void fts_ts_shutdown(struct spi_device *spi)
     FTS_FUNC_ENTER();
     if (ts_data) {
         fts_ts_remove_entry(ts_data);
-        spi_set_drvdata(spi, NULL);
     }
     FTS_FUNC_EXIT();
 }
