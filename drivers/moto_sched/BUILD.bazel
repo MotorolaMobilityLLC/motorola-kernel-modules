@@ -13,9 +13,11 @@ define_mgk_ko(
         "**/*.h",
         "Kbuild",
         "Makefile",
-    ]) + [
-        "//kernel_device_modules-6.1:mtk_public_headers",
-    ],
+    ]) + select({
+        "//build/bazel_mgk_rules:kernel_version_6.1"     : ["//kernel_device_modules-6.1:mtk_public_headers"],
+        "//build/bazel_mgk_rules:kernel_version_6.6"     : ["//kernel_device_modules-6.6:mtk_public_headers"],
+        "//conditions:default"                           : [],
+    }),
 )
 
 filegroup(
