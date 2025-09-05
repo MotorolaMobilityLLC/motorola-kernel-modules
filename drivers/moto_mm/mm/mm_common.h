@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Motorola Mobility LLC
+ * Copyright (C) 2025 Motorola Mobility LLC
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -21,8 +21,12 @@
 #include <linux/version.h>
 
 /* Feature support check */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#define DRAIN_ALL_PAGES_BYPASS_SUPPORTED
+#else
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 #define DRAIN_ALL_PAGES_BYPASS_SUPPORTED
+#endif
 #endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))

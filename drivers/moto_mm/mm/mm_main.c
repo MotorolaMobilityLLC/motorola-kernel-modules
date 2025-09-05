@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Motorola Mobility LLC
+ * Copyright (C) 2025 Motorola Mobility LLC
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -25,6 +25,11 @@
 #if defined(TUNE_INACTIVE_SUPPORTED)
 static void tune_inactive_ratio_hook(void *data, unsigned long *inactive_ratio, int file)
 {
+        if (inactive_ratio == NULL) {
+        	pr_warn("tune_inactive_ratio_hook: inactive_ratio is NULL\n");
+        	return;
+        }
+
 	if (file)
 		*inactive_ratio = min(2UL, *inactive_ratio);
 	else
@@ -39,6 +44,11 @@ static void tune_inactive_ratio_hook(void *data, unsigned long *inactive_ratio, 
 static void drain_all_pages_bypass_hook(void *data, gfp_t gfp_mask, unsigned int order, unsigned long alloc_flags,
 					int migratetype, unsigned long did_some_progress, bool *bypass)
 {
+        if (bypass == NULL) {
+		pr_warn("drain_all_pages_bypass_hook: bypass is NULL\n");
+		return;
+        }
+
 	*bypass = true;
 }
 #endif
@@ -98,7 +108,6 @@ static int __init moto_mm_init(void)
 		mm_info_init();
 #endif // defined(MM_INFO_SUPPORTED)
 
-	pr_info("moto_mm_init succeed!\n");
 	return 0;
 }
 
@@ -111,7 +120,6 @@ static void __exit moto_mm_exit(void)
 	unregister_all_hooks();
 	moto_mm_proc_deinit();
 
-	pr_info("moto_mm_exit succeed!\n");
 	return;
 }
 
