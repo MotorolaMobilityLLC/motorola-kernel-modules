@@ -904,7 +904,7 @@ struct ilitek_pen_info {
 #define SPI_ESD_GESTURE_CORE146_PWD_ADDR		0x4005C
 #define I2C_ESD_GESTURE_CORE146_PWD_ADDR		0x4005C
 
-#define DOUBLE_TAP                                   	(ON)/* BIT0 */
+#define DOUBLE_TAP                                   	(OFF)/* BIT0 */
 #define ALPHABET_LINE_2_TOP                          	(ON)/* BIT1 */
 #define ALPHABET_LINE_2_BOTTOM                   	(ON)/* BIT2 */
 #define ALPHABET_LINE_2_LEFT                         	(ON)/* BIT3 */
