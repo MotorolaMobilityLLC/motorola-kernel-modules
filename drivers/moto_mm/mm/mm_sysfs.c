@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Motorola Mobility LLC
+ * Copyright (C) 2025 Motorola Mobility LLC
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -149,10 +149,10 @@ int moto_mm_proc_init(void)
 	return 0;
 
 #if defined(MM_INFO_SUPPORTED)
-	remove_proc_entry("alloc_warn_ms", NULL);
+	remove_proc_entry("alloc_warn_ms", d_moto_mm);
 err_creat_alloc_warn_ms:
 
-	remove_proc_entry("mm_info_enabled", NULL);
+	remove_proc_entry("mm_info_enabled", d_moto_mm);
 err_creat_mm_info_enabled:
 #endif // defined(MM_INFO_SUPPORTED)
 

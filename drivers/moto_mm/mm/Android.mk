@@ -1,6 +1,6 @@
 DLKM_DIR := motorola/kernel/modules
 LOCAL_PATH := $(call my-dir)
-SRC_PATH := $(LOCAL_PATH)
+#SRC_PATH := $(LOCAL_PATH)/..
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := moto_mm.ko
@@ -10,7 +10,7 @@ KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
 
 include $(DLKM_DIR)/AndroidKernelModule.mk
 
-include $(SRC_PATH)/stat/mm/Android.mk
-include $(SRC_PATH)/stat/mm515/Android.mk
-include $(SRC_PATH)/vh/kernel/metrics/Android.mk
+#include $(SRC_PATH)/stat/mm/Android.mk
+#include $(SRC_PATH)/stat/mm515/Android.mk
+#include $(SRC_PATH)/vh/kernel/metrics/Android.mk
 
