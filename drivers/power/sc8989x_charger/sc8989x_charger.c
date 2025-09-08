@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
-* Copyright (c) 2022 Southchip Semiconductor Technology(Shanghai) Co., Ltd.
+* Copyright (c) 2022-2025 Southchip Semiconductor Technology(Shanghai) Co., Ltd.
 */
 
 #include <linux/gpio.h>
@@ -87,6 +87,24 @@ enum vindpm_track {
 #define UPM6920A_REG_CFG_MODE     0xA9
 #define UPM6920A_CFG_MODE_ENABLE  0x6E
 #define UPM6920A_CFG_MODE_DISABLE 0x00
+
+#define MMI_HVDCP_DETECT_TIMER       1500
+#define QC3P_AUTHEN_LOW_THR_MV       5500000
+#define QC3P_AUTHEN_HIGH_THR_MV      6500000
+#define QC3P_AUTHEN_NONE_THR_MV      9200000
+#define QC3P_AUTHEN_45W_THR_MV       8200000
+#define QC3P_AUTHEN_27W_THR_MV       7200000
+#define QC3P_AUTHEN_18W_THR_MV       6200000
+#define MMI_HVDCP2_VOLTAGE_STANDARD  8000000
+#define MMI_HVDCP3_VOLTAGE_STANDARD  7500000
+#define QC3P_MSLEEP_1500DELAY        1500
+#define QC3P_MSLEEP_300DELAY         300
+#define QC3P_MSLEEP_100DELAY         100
+#define QC3P_MSLEEP_30DELAY          30
+#define QC3P_UDELAY_2500DELAY        2500
+#define DPDM_DRIVE_3V3               6
+#define DPDM_DRIVE_0V6               2
+
 
 enum sc8989x_vbus_stat {
 	VBUS_STAT_NO_INPUT = 0,
@@ -274,6 +292,21 @@ struct sc8989x_chip {
 	atomic_t vbus_good_flag;
 	atomic_t attach;
 	struct adapter_device *pd_adapter;
+	struct mutex dpdm_lock;
+	int pulse_cnt;
+	struct adapter_device *qc_dev;
+	bool	qc_is_detect;
+	int	qc_chg_type;
+
+	/*for software HVDCP detected*/
+	struct delayed_work mmi_hvdcp_detect_dwork;
+	bool mmi_hvdcp_support;
+	bool mmi_hvdcp_trig_flag;
+	struct task_struct	*mmi_hvdcp_authen_task;
+	wait_queue_head_t	mmi_hvdcp_wait_que;
+	struct	semaphore sem_dpdm;
+	int	mmi_qc3p_power;
+	bool	mmi_qc3p_rerun_done;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -410,6 +443,8 @@ static const struct regmap_config sc8989x_regmap_config = {
 	.val_bits = 8,
 	.max_register = 0xFF,
 };
+
+static bool is_pd_rdy(struct sc8989x_chip *sc);
 
 /********************COMMON API***********************/
 static u8 val2reg(enum sc8989x_reg_range id, u32 val)
@@ -739,6 +774,15 @@ __maybe_unused static int sc8989x_set_hiz(struct sc8989x_chip *sc, bool enable)
 {
 	int ret;
 	int reg_val = enable ? 1 : 0;
+
+	if (enable) {
+		if ((sc->qc_chg_type == USB_TYPE_QC3P_18)
+			|| (sc->qc_chg_type == USB_TYPE_QC3P_27)
+			|| (sc->qc_chg_type == USB_TYPE_QC3P_45)) {
+			dev_info(sc->dev, "[%s]Cannot set HIZ mode while QC3+ is active (type=%d)\n", __func__,sc->qc_chg_type);
+			return 0;
+		}
+	}
 	ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
 	if (!reg_val) {
 		atomic_set(&sc->vbus_good_flag, 1);
@@ -1105,6 +1149,18 @@ static int sc8989x_dump_register(struct sc8989x_chip *sc)
 	return ret;
 }
 
+
+static void sc8989x_qc_software_reset(struct sc8989x_chip *sc)
+{
+	if (!sc) {
+		return;
+	}
+	sc->pulse_cnt = 0;
+	sc->qc_chg_type = USB_TYPE_UNKNOWN;
+	sc->qc_is_detect = false;
+	sc->mmi_qc3p_rerun_done = false;
+}
+
 /********************MTK OPS***********************/
 static int sc8989x_plug_in(struct charger_device *chg_dev)
 {
@@ -1112,7 +1168,7 @@ static int sc8989x_plug_in(struct charger_device *chg_dev)
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
 
 	dev_info(sc->dev, "%s\n", __func__);
-
+	sc8989x_field_write(sc, CONV_START, true);
 	/* Enable charging */
 	ret = sc8989x_set_chg_enable(sc, true);
 	if (ret) {
@@ -1128,11 +1184,12 @@ static int sc8989x_plug_out(struct charger_device *chg_dev)
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
 
 	dev_info(sc->dev, "%s\n", __func__);
-
+	sc8989x_field_write(sc, CONV_START, false);
 	ret = sc8989x_set_chg_enable(sc, false);
 	if (ret) {
 		dev_err(sc->dev, "Failed to disable charging:%d\n", ret);
 	}
+	sc8989x_qc_software_reset(sc);
 
 	return ret;
 }
@@ -1611,6 +1668,656 @@ static int sc8989x_get_chip_id(struct charger_device *chg_dev, int *id)
 	return ret;
 }
 
+static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
+{
+	int ret;
+	int dp_val, dm_val;
+
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	/*dp and dm connected,dp 0.6V dm 0V*/
+	dp_val = 2;
+	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+	    return ret;
+
+	dm_val = 1;
+	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+		return ret;
+	msleep(QC3P_MSLEEP_1500DELAY);
+
+	/* dp 3.3v and dm 0.6v out 9V */
+	dp_val = 6;
+	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 3.3v
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+		return ret;
+
+	dm_val = 2;
+	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6v
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+		return ret;
+
+	return ret;
+}
+
+static int sc8989x_adjust_qc20_hvdcp_5v(struct sc8989x_chip *sc)
+{
+	int ret;
+	int dp_val, dm_val;
+
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	/* dp 0.6v and dm 0v out 5V */
+	dp_val = 2;
+	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+	    return ret;
+
+	dm_val = 1;
+	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+		return ret;
+
+	return ret;
+}
+
+// Must enter 3.0 mode to call ,otherwise cannot step correctly.
+static int sc8989x_qc30_step_up_vbus(struct sc8989x_chip *sc)
+{
+	int ret;
+	int dp_val;
+
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	/*  dm 3.3v to dm 0.6v  step up 200mV when IC is QC3.0 mode*/
+	dp_val = 6;
+	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 3.3V
+	if (ret)
+	    return ret;
+
+	udelay(QC3P_UDELAY_2500DELAY);
+	dp_val = 2;
+	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	if (ret)
+	    return ret;
+
+	udelay(QC3P_UDELAY_2500DELAY);
+	return ret;
+}
+// Must enter 3.0 mode to call ,otherwise cannot step correctly.
+static int sc8989x_qc30_step_down_vbus(struct sc8989x_chip *sc)
+{
+	int ret;
+	int dm_val;
+
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	/* dp 0.6v and dm 0.6v step down 200mV when IC is QC3.0 mode*/
+	dm_val = 2;
+	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6v
+	if (ret)
+		return ret;
+
+
+	udelay(QC3P_UDELAY_2500DELAY);
+	dm_val = 6;
+	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 3.3v
+	if (ret)
+		return ret;
+	udelay(QC3P_UDELAY_2500DELAY);
+
+	return ret;
+}
+
+static int sc8989x_detected_qc30_hvdcp(struct sc8989x_chip *sc, int *charger_type)
+{
+	int ret = 0;
+	int dp_val, dm_val;
+	int i=0, vbus_voltage;
+
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	/* dp 0.6v and dm 3.3v entry QC3.0 mode */
+	dp_val = 2;
+	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+	    return ret;
+
+	dm_val = 6;
+	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 3.3v
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+		return ret;
+
+	msleep(QC3P_MSLEEP_100DELAY);
+
+	for (i = 0; i < 16; i++) {
+		ret = sc8989x_qc30_step_up_vbus(sc);
+		if (ret)
+			dev_err(sc->dev, "%s qc30 step up vbus error\n", __func__);
+	}
+
+	msleep(QC3P_MSLEEP_100DELAY);
+
+	sc8989x_get_vbus(sc->chg_dev, &vbus_voltage);
+	dev_info(sc->dev, "%s vbus voltage now = %d in detected qc30\n", __func__,vbus_voltage);
+
+	if (vbus_voltage > MMI_HVDCP3_VOLTAGE_STANDARD) {
+		if (charger_type == NULL)
+			return -EINVAL;
+		*charger_type = USB_TYPE_QC30;
+		dev_info(sc->dev, "%s QC3.0 charger detected\n", __func__);
+	}
+
+	for (i = 0; i < 16; i++) {
+		ret = sc8989x_qc30_step_down_vbus(sc);
+		if (ret)
+			dev_err(sc->dev, "%s qc30 step down vbus error\n", __func__);
+	}
+
+	sc8989x_get_vbus(sc->chg_dev, &vbus_voltage);
+	dev_info(sc->dev, "%s vbus voltage now = %d after detected qc30\n", __func__,vbus_voltage);
+
+	return ret;
+}
+
+static int sc8989x_dp_dm(struct charger_device *chg_dev, int val)
+{
+	struct sc8989x_chip *sc;
+	int ret = 0;
+
+	if (!chg_dev) {
+		return -EINVAL;
+	}
+	sc = dev_get_drvdata(&chg_dev->dev);
+	if (!sc) {
+		return -EINVAL;
+	}
+	dev_info(sc->dev, "%s: val=%d\n", __func__, val);
+
+	switch (val) {
+	case DP_DM_FORCE_QC2_5V:
+		ret = sc8989x_adjust_qc20_hvdcp_5v(sc);
+		break;
+	case DP_DM_FORCE_QC3_5V:
+	case DP_DM_FORCE_QC3P_5V:
+		//ret = wt6670f_force_qc3_5V();
+		break;
+	case DP_DM_DP_PULSE:
+		ret = sc8989x_qc30_step_up_vbus(sc);
+		if (ret)
+			dev_err(sc->dev, "qc protocol ic set vbus up failed\n");
+		else
+			sc->pulse_cnt++;
+		break;
+	case DP_DM_DM_PULSE:
+		ret = sc8989x_qc30_step_down_vbus(sc);
+		if (ret)
+			dev_err(sc->dev, "qc protocol ic set vbus down failed\n");
+		else if (sc->pulse_cnt > 0)
+			sc->pulse_cnt--;
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static int mmi_qc_is_detect(struct charger_device *chg_dev, bool *val)
+{
+	struct sc8989x_chip *sc;
+
+	if (!chg_dev) {
+		return -EINVAL;
+	}
+	sc = dev_get_drvdata(&chg_dev->dev);
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	if (val == NULL) {
+		return -EINVAL;
+	}
+	*val = sc->qc_is_detect;
+
+	return 0;
+}
+
+static int mmi_get_protocol(struct charger_device *chg_dev, int *val)
+{
+	struct sc8989x_chip *sc;
+
+	if (!chg_dev) {
+		return -EINVAL;
+	}
+	sc = dev_get_drvdata(&chg_dev->dev);
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	if (val == NULL) {
+		return -EINVAL;
+	}
+	*val = sc->qc_chg_type;
+
+	return 0;
+}
+
+static int mmi_set_dp_dm(struct charger_device *chg_dev, int val)
+{
+	int ret = -EINVAL;
+	struct sc8989x_chip *sc;
+
+	if (!chg_dev) {
+		return -EINVAL;
+	}
+	sc = dev_get_drvdata(&chg_dev->dev);
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	mutex_lock(&sc->dpdm_lock);
+
+	if (sc->qc_is_detect == true) {
+		mutex_unlock(&sc->dpdm_lock);
+		return ret;
+	}
+	switch (val) {
+	case DP_DM_DP_PULSE:
+		if (sc->mmi_hvdcp_support) {
+			ret = sc8989x_qc30_step_up_vbus(sc);
+			if (ret)
+				dev_err(sc->dev, "qc protocol ic set vbus up failed\n");
+			else
+				sc->pulse_cnt++;
+			dev_info(sc->dev, "%s:%d: ret:%d,%d, \n", __func__, __LINE__, ret, sc->pulse_cnt);
+		}
+		break;
+	case DP_DM_DM_PULSE:
+		if (sc->mmi_hvdcp_support) {
+			ret = sc8989x_qc30_step_down_vbus(sc);
+			if (ret)
+				dev_err(sc->dev, "qc protocol ic set vbus down failed\n");
+			else if (sc->pulse_cnt > 0)
+				sc->pulse_cnt--;
+			dev_info(sc->dev, "%s:%d: ret:%d,%d, \n", __func__, __LINE__, ret, sc->pulse_cnt);
+		}
+		break;
+	default:
+		break;
+	}
+
+	mutex_unlock(&sc->dpdm_lock);
+	return ret;
+}
+
+static int mmi_get_dp_dm(struct charger_device *chg_dev, int *val)
+{
+	int ret = 0;
+	struct sc8989x_chip *sc;
+
+	if (!chg_dev) {
+		return -EINVAL;
+	}
+	sc = dev_get_drvdata(&chg_dev->dev);
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	if (val == NULL) {
+		return -EINVAL;
+	}
+	*val = sc->pulse_cnt;
+
+	return ret;
+}
+
+#define HVDCP_POWER_MIN			15000
+#define HVDCP_VOLTAGE_BASIC		5000000
+#define HVDCP_VOLTAGE_NOM		(HVDCP_VOLTAGE_BASIC - 200000)
+#define HVDCP_VOLTAGE_MAX		(HVDCP_VOLTAGE_BASIC + 200000)
+#define HVDCP_VOLTAGE_MIN		4000000
+#define HVDCP_PULSE_COUNT_MAX 	((HVDCP_VOLTAGE_BASIC - 5000000) / 200000 + 2)
+int mmi_config_qc_charger(struct charger_device *chg_dev)
+{
+	int rc = 0;
+	int vbus_uv;
+	struct sc8989x_chip *sc;
+
+	if (!chg_dev) {
+		return -EINVAL;
+	}
+	sc = dev_get_drvdata(&chg_dev->dev);
+	if (!sc) {
+		return -EINVAL;
+	}
+
+	if (!sc->qc_dev && !sc->mmi_hvdcp_support) {
+		dev_warn(sc->dev, "qc protocol don't ready, exit\n");
+		return -EINVAL;
+	}
+
+	if (!sc->chg_dev) {
+		dev_warn(sc->dev, "charger dev don't ready, exit\n");
+		return -EINVAL;
+	}
+
+	rc = sc8989x_get_vbus(sc->chg_dev, &vbus_uv);
+	if (rc < 0) {
+		dev_warn(sc->dev, "%s get vbus failed\n",__func__);
+		return -EINVAL;
+	}
+
+	if(vbus_uv < 4000000 || vbus_uv > 6000000) {
+		dev_warn(sc->dev, "vbus is not for qc3.0\n");
+		return -EINVAL;
+	}
+
+	pr_info("pulse_cnt=%d, vbus_uv=%d\n", sc->pulse_cnt, vbus_uv);
+	if (vbus_uv < HVDCP_VOLTAGE_NOM && sc->pulse_cnt < HVDCP_PULSE_COUNT_MAX) {
+		rc = sc8989x_dp_dm(sc->chg_dev, DP_DM_DP_PULSE);
+		if (rc)
+			dev_err(sc->dev, "qc protocol ic set vbus up failed\n");
+		else
+			sc->pulse_cnt++;
+	} else if (vbus_uv > HVDCP_VOLTAGE_MAX && sc->pulse_cnt > 0 ) {
+		rc = sc8989x_dp_dm(sc->chg_dev, DP_DM_DM_PULSE);
+		if (rc)
+			dev_err(sc->dev, "qc protocol ic set vbus down failed\n");
+		else {
+			sc->pulse_cnt--;
+		}
+	} else {
+		dev_info(sc->dev, "QC3.0 output configure completed\n");
+		rc = 0;
+		return rc;
+	}
+	msleep(QC3P_MSLEEP_100DELAY);
+	return rc;
+}
+
+void mmi_start_hvdcp_detect_work(struct work_struct *work)
+{
+	struct delayed_work *mmi_hvdcp_detect_dwork = NULL;
+	struct sc8989x_chip *sc = NULL;
+	int ret;
+	int vbus_uv = 0;
+
+	mmi_hvdcp_detect_dwork = container_of(work, struct delayed_work, work);
+	if(mmi_hvdcp_detect_dwork == NULL) {
+		pr_err("Can't get mmi_hvdcp_detect_dwork\n");
+		return ;
+	}
+	sc = container_of(mmi_hvdcp_detect_dwork, struct sc8989x_chip, mmi_hvdcp_detect_dwork);
+	if(sc == NULL) {
+		pr_err("Can't get mt6375_chg_data \n");
+		return ;
+	}
+
+	if (!sc->mmi_hvdcp_support) {
+		pr_err("HVDCP: mmi hvdcp don't support, exit \n");
+		return;
+	}
+
+	if (!IS_ERR_OR_NULL(sc->chg_dev)) {
+		ret = sc8989x_get_vbus(sc->chg_dev, &vbus_uv);
+		if (ret < 0) {
+			pr_err("%s get vbus failed\n",__func__);
+			return;
+		}
+	}
+	pr_info("HVDCP: %s get vbus %d uv\n",__func__,vbus_uv);
+	if (is_pd_rdy(sc) || vbus_uv > MMI_HVDCP2_VOLTAGE_STANDARD) {
+		pr_info("HVDCP: pd adaptor ready, exit qc detected\n");
+		return;
+	}
+
+	pr_info("HVDCP: mmi start hvdcp detect\n");
+	sc->mmi_hvdcp_trig_flag = true;
+	wake_up_interruptible(&sc->mmi_hvdcp_wait_que);
+}
+
+static int sc8989x_detected_qc3p_hvdcp(struct sc8989x_chip *sc, int *charger_type)
+{
+	int ret = 0;
+	int i=0, vbus_voltage;
+
+	if (!sc) {
+		return -EINVAL;
+	}
+	msleep(QC3P_MSLEEP_100DELAY);
+
+	ret = sc8989x_get_vbus(sc->chg_dev, &vbus_voltage);
+	if (ret < 0) {
+		pr_err("%s get vbus failed\n",__func__);
+		return -EINVAL;
+	}
+
+	if (vbus_voltage < QC3P_AUTHEN_LOW_THR_MV
+		|| vbus_voltage > QC3P_AUTHEN_HIGH_THR_MV) {
+		/*do qc3p rerun*/
+		pr_err("HVDCP: qc3p voltage is invalid\n");
+		return -EINVAL;
+	}
+
+	for (i = 0;i < 3; i++) {
+		ret = sc8989x_qc30_step_up_vbus(sc);
+		if (ret)
+			pr_err("HVDCP: %s qc3p step up vbus error\n", __func__);
+
+		ret = sc8989x_qc30_step_down_vbus(sc);
+		if (ret)
+			pr_err("HVDCP: %s qc3p step down vbus error\n", __func__);
+
+	}
+
+	msleep(QC3P_MSLEEP_30DELAY);
+
+	ret = sc8989x_get_vbus(sc->chg_dev, &vbus_voltage);
+	if (ret < 0) {
+		pr_err("%s get vbus failed\n",__func__);
+		return -EINVAL;
+	}
+
+	for (i = 0; i < 2; i++) {
+		ret = sc8989x_qc30_step_up_vbus(sc);
+		if (ret)
+			pr_err("HVDCP: %s qc3p step up vbus error\n", __func__);
+	}
+
+	for (i = 0; i < 2; i++) {
+		ret = sc8989x_qc30_step_down_vbus(sc);
+		if (ret)
+			pr_err("HVDCP: %s qc3p step down vbus error\n", __func__);
+	}
+
+	msleep(QC3P_MSLEEP_30DELAY);
+
+	pr_info("HVDCP: %s vbus voltage now = %d after detected qc3p\n", __func__,vbus_voltage);
+
+	if (vbus_voltage > QC3P_AUTHEN_NONE_THR_MV)
+		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_NONE;
+	else if (vbus_voltage > QC3P_AUTHEN_45W_THR_MV) {
+		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_45W;
+		if (charger_type == NULL)
+			return -EINVAL;
+		*charger_type = USB_TYPE_QC3P_45;
+	} else if (vbus_voltage > QC3P_AUTHEN_27W_THR_MV) {
+		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_27W;
+		if (charger_type == NULL)
+			return -EINVAL;
+		*charger_type = USB_TYPE_QC3P_27;
+	} else if (vbus_voltage > QC3P_AUTHEN_18W_THR_MV) {
+		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_18W;
+		if (charger_type == NULL)
+			return -EINVAL;
+		*charger_type = USB_TYPE_QC3P_18;
+	} else
+		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_NONE;
+
+	if (sc->mmi_qc3p_power != MMI_POWER_SUPPLY_QC3P_NONE) {
+		if (charger_type == NULL)
+			return -EINVAL;
+		pr_info("HVDCP: %s detected qc3p, qc3p power = %d, *charger_type=%d\n",
+					__func__, sc->mmi_qc3p_power, *charger_type);
+	} else {
+		pr_err("HVDCP: qc3p power is invalid\n");
+		return -EINVAL;
+	}
+
+	return ret;
+}
+static int sc8989x_detected_qc20_hvdcp(struct sc8989x_chip *sc, int *charger_type)
+{
+	int ret;
+	int vbus_voltage;
+
+	if (!sc) {
+		return -EINVAL;
+	}
+	//do qc2.0 detected
+	ret = sc8989x_enable_qc20_hvdcp_9v(sc);
+	if (ret) {
+		dev_err(sc->dev, "Can't enable qc20 hvdcp 9V\n");
+		return ret;
+	}
+
+	msleep(QC3P_MSLEEP_300DELAY);
+
+	sc8989x_get_vbus(sc->chg_dev, &vbus_voltage);
+	dev_info(sc->dev, "vbus voltage now = %d\n", vbus_voltage);
+
+	if (vbus_voltage > MMI_HVDCP2_VOLTAGE_STANDARD) {
+		dev_info(sc->dev, "QC20 charger detected\n");
+		if (charger_type == NULL)
+			return -EINVAL;
+		*charger_type = USB_TYPE_QC20;
+		ret = sc8989x_adjust_qc20_hvdcp_5v(sc);
+		if (ret) {
+			dev_err(sc->dev, "Can't adjust qc20 hvdcp 5V\n");
+		}
+	} else {
+		dev_info(sc->dev, "charger type is not HVDCP\n");
+		return ret;
+	}
+
+	msleep(QC3P_MSLEEP_300DELAY);
+	sc8989x_get_vbus(sc->chg_dev, &vbus_voltage);
+	dev_info(sc->dev, "vbus voltage now = %d after qc20 detected\n", vbus_voltage);
+	return ret;
+}
+
+static int mmi_hvdcp_detect_kthread(void *param)
+{
+	struct sc8989x_chip *sc = param;
+	int ret;
+	int charger_type = USB_TYPE_UNKNOWN;
+	union power_supply_propval val;
+
+	do {
+
+		wait_event_interruptible(sc->mmi_hvdcp_wait_que, sc->mmi_hvdcp_trig_flag || kthread_should_stop());
+		if (kthread_should_stop())
+			break;
+
+		//down(&ddata->sem_dpdm);
+		pr_info("HVDCP: mmi_hvdcp_detect_kthread begin\n");
+		sc->mmi_hvdcp_trig_flag = false;
+		sc->qc_is_detect = true;
+		sc8989x_set_charging_current(sc->chg_dev,1000000);
+		//mt6375_chg_field_set(ddata, F_IAICR, 500);
+		//mt6375_chg_set_usbsw(ddata, USBSW_CHG);
+
+rerun:
+		//do qc2.0 detected
+		ret = sc8989x_detected_qc20_hvdcp(sc, &charger_type);
+		if (ret) {
+			pr_err("HVDCP: Can't detect qc20 hvdcp\n");
+			goto out;
+		}
+
+		if (charger_type != USB_TYPE_QC20)
+			goto out;
+
+		//do qc3.0 detected
+		ret = sc8989x_detected_qc30_hvdcp(sc, &charger_type);
+		if (ret) {
+			pr_err("HVDCP: Can't detect qc30 hvdcp\n");
+		}
+
+		//do qc3p detected
+		if (charger_type == USB_TYPE_QC30) {
+			ret = sc8989x_detected_qc3p_hvdcp(sc, &charger_type);
+			if (ret) {
+				if (sc->mmi_qc3p_rerun_done == false) {
+					pr_info("HVDCP: Rerun detect hvdcp\n");
+					sc->mmi_qc3p_rerun_done = true;
+					//pull down dpdm for rerun HVDCP detected
+					msleep(QC3P_MSLEEP_100DELAY);
+					goto rerun;
+				} else {
+					pr_err("HVDCP: Can't detect qc3p hvdcp\n");
+				}
+			}
+		}
+
+		ret = power_supply_get_property(sc->psy, POWER_SUPPLY_PROP_ONLINE, &val);
+		if (!val.intval)
+			goto out;
+
+		sc->qc_chg_type = charger_type;
+		sc->qc_is_detect = false;
+
+		if(sc->qc_chg_type == USB_TYPE_QC20) {
+			/* dp 3.3v and dm 0.6v out 9V */
+			ret = sc8989x_field_write(sc, DP_DRIVE, DPDM_DRIVE_3V3);
+			if (ret)
+				goto out;
+			ret = sc8989x_field_write(sc, DM_DRIVE, DPDM_DRIVE_0V6);
+			if (ret)
+				goto out;
+			dev_info(sc->dev,"Force set qc2 9V");
+		}
+
+		//notify charging policy to update charger type
+		if ((sc->qc_chg_type == USB_TYPE_QC30)
+			|| (sc->qc_chg_type == USB_TYPE_QC3P_18 )
+			|| (sc->qc_chg_type == USB_TYPE_QC3P_27)
+			|| (sc->qc_chg_type == USB_TYPE_QC3P_45)) {
+			charger_dev_notify(sc->chg_dev, CHARGER_DEV_NOTIFY_CTD_DONE);
+		}
+
+		msleep(QC3P_MSLEEP_300DELAY);
+
+out:
+
+		sc->qc_is_detect = false;
+		pr_info("HVDCP: mmi_hvdcp_detect_kthread end\n");
+	}while(!kthread_should_stop());
+
+	pr_info("HVDCP: qc3 kthread stop\n");
+	return 0;
+}
+
 static struct charger_ops sc8989x_chg_ops = {
 	/* Normal charging */
 	.plug_in = sc8989x_plug_in,
@@ -1662,6 +2369,11 @@ static struct charger_ops sc8989x_chg_ops = {
 #endif
 	.enable_termination = sc8989x_enable_terminate,
 	.get_chip_id = sc8989x_get_chip_id,
+	.qc_is_detect = mmi_qc_is_detect,
+	.get_protocol = mmi_get_protocol,
+	.config_qc_charger = mmi_config_qc_charger,
+	.set_dp_dm = mmi_set_dp_dm,
+	.get_dp_dm = mmi_get_dp_dm,
 };
 
 static const struct charger_properties sc8989x_chg_props = {
@@ -1858,6 +2570,8 @@ static int sc8989x_get_charger_type(struct sc8989x_chip *sc)
 		sc->chg_type = POWER_SUPPLY_TYPE_USB_DCP;
 		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
 		dev_info(sc->dev, "%s: charger type: DCP\n", __func__);
+		if (sc->mmi_hvdcp_support)
+			schedule_delayed_work(&sc->mmi_hvdcp_detect_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER));
 		break;
 	case VBUS_STAT_UNKOWN:
 		sc->psy_usb_type = POWER_SUPPLY_USB_TYPE_SDP;
@@ -1994,6 +2708,8 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 		{"sc,sc8989x,iboost", &(sc->cfg->iboost)},
 		{"sc,sc8989x,vindpm", &(sc->cfg->vindpm)},
 	};
+
+	sc->mmi_hvdcp_support = of_property_read_bool(np, "mmi,hvdcp-support");
 
 	sc->irq_gpio = of_get_named_gpio(np, "sc,intr-gpio", 0);
 	if (sc->irq_gpio < 0)
@@ -2552,8 +3268,17 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, sc);
 	sc8989x_create_device_node(&(client->dev));
+	mutex_init(&sc->dpdm_lock);
+
+	sc->qc_dev = get_adapter_by_name("qc_protocol_ic");
+	if (sc->qc_dev) {
+		dev_info(sc->dev, "Found qc protocol ic dev\n");
+	} else {
+		dev_info(sc->dev, "Don't find qc protocol ic dev\n");
+	}
 
 	INIT_DELAYED_WORK(&sc->force_detect_dwork, sc8989x_force_detection_dwork_handler);
+	INIT_DELAYED_WORK(&sc->mmi_hvdcp_detect_dwork, mmi_start_hvdcp_detect_work);
 #ifdef CONFIG_MTK_CHARGER_V4P19
 	INIT_DELAYED_WORK(&sc->psy_dwork, sc8989x_inform_psy_dwork_handler);
 #endif /*CONFIG_MTK_CHARGER_V4P19*/
@@ -2605,6 +3330,17 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	determine_initial_status(sc);
 	sc8989x_dump_register(sc);
 
+	if (sc->mmi_hvdcp_support) {
+		sc->mmi_hvdcp_authen_task = kthread_create(mmi_hvdcp_detect_kthread, sc, "mmi_hvdcp_authen");
+		if (IS_ERR(sc->mmi_hvdcp_authen_task)) {
+			ret = PTR_ERR(sc->mmi_hvdcp_authen_task);
+			dev_err(sc->dev, "Failed to create mmi_hvdcp_authen_task ret = %d\n", ret);
+			return ret;
+		}
+		init_waitqueue_head(&sc->mmi_hvdcp_wait_que);
+		wake_up_process(sc->mmi_hvdcp_authen_task);
+	}
+
 #if IS_ENABLED(CONFIG_OEM_DEVINFO)
 	FULL_PRODUCT_DEVICE_INFO(ID_SWITCH_CHARGER, "SC89890H");
 #endif
@@ -2630,6 +3366,9 @@ static int sc8989x_charger_remove(struct i2c_client *client)
 
 	if (sc) {
 		dev_info(sc->dev, "%s\n", __func__);
+		cancel_delayed_work_sync(&sc->mmi_hvdcp_detect_dwork);
+		kthread_stop(sc->mmi_hvdcp_authen_task);
+		mutex_destroy(&sc->dpdm_lock);
 		sc8989x_destory_device_node(sc->dev);
 		charger_device_unregister(sc->chg_dev);
 		power_supply_put(sc->psy);
