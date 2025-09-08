@@ -288,9 +288,11 @@ uint64_t get_weights(int index)
 	if (index < little && little > 1) {
 		return (base + (int)(index * ((base * 2 - base) / (little - 1))));
 	} else if (index < (big + little) && big > 1) {
-		return (base + (int)(index * ((base * 6 - base) / (big - 1))));
+		int local_index = index - little;
+		return (base + (int)(local_index * ((base * 6 - base) / (big - 1))));
 	} else if (index < (big + little + super) && super > 1) {
-		return (base + (int)(index * ((base * 6 - base) / (super - 1))));
+		int local_index = index - little - big;
+		return (base + (int)(local_index * ((base * 6 - base) / (super - 1))));
 	}
 	return 1;
 }
