@@ -427,7 +427,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 }
 
 // don't dup ux_type for UX_TYPE_SERVICEMANAGER as init was labeled.
-#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR|UX_TYPE_MDPF)
+#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR)
 static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
 {
 	// Base feature: inherit task ux_type during fork for some native services.
