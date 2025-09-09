@@ -37,7 +37,7 @@ ifeq ($(BOARD_USES_DOUBLE_TAP_CTRL),true)
 	KBUILD_OPTIONS += CONFIG_BOARD_USES_DOUBLE_TAP_CTRL=y
 endif
 
-ifeq ($(call is-board-platform-in-list, pineapple sun), true)
+ifeq ($(call is-board-platform-in-list, pineapple sun volcano), true)
 	KBUILD_OPTIONS += CONFIG_TOUCHSCREEN_DEVICE_VIRTUAL_PATH=y
 endif
 
