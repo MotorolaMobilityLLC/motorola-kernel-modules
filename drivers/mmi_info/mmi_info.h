@@ -71,6 +71,7 @@ struct mmi_chosen_info {
 	char baseband[BASEBAND_MAX_LEN];
 	char msm_hw[MSMHW_MAX_LEN];
 	char chipid[CHIPID_MAX_LEN];
+	char native_hardware_name[DEVICE_MAX_LEN];
 };
 
 extern struct mmi_chosen_info mmi_chosen_data;

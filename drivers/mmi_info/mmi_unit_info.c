@@ -110,7 +110,10 @@ static int mmi_unit_smem_setup(void)
 	strlcpy(mui_copy->barcode, serialno, BARCODE_MAX_LEN);
 	strlcpy(mui_copy->baseband, mmi_chosen_data.baseband, BASEBAND_MAX_LEN);
 	strlcpy(mui_copy->carrier, carrier, CARRIER_MAX_LEN);
-	strlcpy(mui_copy->device, androidboot_device, DEVICE_MAX_LEN);
+	if (strlen(mmi_chosen_data.native_hardware_name) > 0)
+		strlcpy(mui_copy->device, mmi_chosen_data.native_hardware_name, DEVICE_MAX_LEN);
+	else
+		strlcpy(mui_copy->device, androidboot_device, DEVICE_MAX_LEN);
 	mui_copy->radio = androidboot_radio;
 	strlcpy(mui_copy->radio_str, androidboot_radio_str, RADIO_MAX_LEN);
 	mui_copy->powerup_reason = mmi_chosen_data.powerup_reason;
