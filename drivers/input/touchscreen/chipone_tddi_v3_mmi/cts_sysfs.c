@@ -3658,6 +3658,18 @@ static ssize_t cts_dbg_data_store(struct device *dev,
 }
 #endif
 
+#ifdef CONFIG_CTS_HARDWARE_STATUS
+static ssize_t hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	u8 hardware_status = 0;
+
+	hardware_status = g_cts_data->open_status;
+	cts_info("Read touch hardware status = %d.\n", hardware_status);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
+}
+#endif
+
 static struct device_attribute touchscreen_attributes[] = {
     __ATTR_RO(path),
     __ATTR_RO(vendor),
@@ -3674,6 +3686,9 @@ static struct device_attribute touchscreen_attributes[] = {
 #endif
 #ifdef CTS_STOWED_MODE_EN
     __ATTR_RW(stowed),
+#endif
+#ifdef CONFIG_CTS_HARDWARE_STATUS
+    __ATTR_RO(hardware_status),
 #endif
     __ATTR_NULL
 };

@@ -11,6 +11,10 @@
 #include "cts_earjack_detect.h"
 #include "cts_tcs.h"
 
+#ifdef CONFIG_CTS_HARDWARE_STATUS
+extern struct chipone_ts_data *g_cts_data;
+#endif
+
 #ifdef CONFIG_CTS_I2C_HOST
 static int cts_i2c_writeb(const struct cts_device *cts_dev,
         u32 addr, u8 b, int retry, int delay)
@@ -1532,6 +1536,10 @@ int cts_irq_handler(struct cts_device *cts_dev)
         }
 #endif
     }
+
+#ifdef CONFIG_CTS_HARDWARE_STATUS
+    g_cts_data->open_status = touch_info->debug_msg.open_data4;
+#endif
 
     return 0;
 }

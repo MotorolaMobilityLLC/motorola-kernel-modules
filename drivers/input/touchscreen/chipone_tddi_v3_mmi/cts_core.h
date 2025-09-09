@@ -230,11 +230,20 @@ struct cts_touch_debug_msg {
     u16 frame_index;
     u16 firmware_status;
 
+#ifdef CONFIG_CTS_HARDWARE_STATUS
+    u8 open_data0;
+    u8 open_data1;
+    u8 open_data2;
+    u8 open_data3;
+    u8 open_data4;
+#else
     u8 proximity;
     u8 work_mode;
     u8 power_mode;
     u8 curr_freq;
     u8 esd_0a_status;
+#endif
+
     u8 fw_esd_status;
     u8 landscape_mode;
     u16 curr_freq_noise;
@@ -516,6 +525,9 @@ struct chipone_ts_data {
 #ifdef TOUCHSCREEN_PM_BRL_SPI
     atomic_t pm_resume;
     wait_queue_head_t pm_wq;
+#endif
+#ifdef CONFIG_CTS_HARDWARE_STATUS
+	u8 open_status;
 #endif
 };
 
