@@ -1785,6 +1785,28 @@ free_map:
 
 static DEVICE_ATTR_RO(batt_id);
 
+static ssize_t cur_batt_id_show(struct device *dev,
+                struct device_attribute *attr, char *buf)
+{
+	char cur_batt_id[32]={0};
+	int rc;
+	struct qti_charger *chg = dev_get_drvdata(dev);
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	rc = qti_charger_read(chg, OEM_PROP_FG_BATTID,
+			(u32*)cur_batt_id, sizeof(cur_batt_id));
+	if (rc) {
+		pr_err("QTI: qti read fg battid failed, rc = %d\n", rc);
+	}
+	cur_batt_id[sizeof(cur_batt_id) - 1] = '\0';
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%s\n", cur_batt_id);
+}
+static DEVICE_ATTR(cur_batt_id, S_IRUGO, cur_batt_id_show, NULL);
+
 static ssize_t addr_store(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
@@ -3791,6 +3813,13 @@ static int qti_charger_init(struct qti_charger *chg)
 	}
 
 	rc = device_create_file(chg->dev,
+				&dev_attr_cur_batt_id);
+	if (rc) {
+		mmi_err(chg,
+			   "Couldn't create cur_batt_id\n");
+	}
+
+	rc = device_create_file(chg->dev,
 				&dev_attr_cid_status);
 	if (rc) {
 		mmi_err(chg,
@@ -3853,6 +3882,7 @@ static void qti_charger_deinit(struct qti_charger *chg)
 	device_remove_file(chg->dev, &dev_attr_wls_fod_curr);
 	device_remove_file(chg->dev, &dev_attr_wls_fod_gain);
 	device_remove_file(chg->dev, &dev_attr_batt_id);
+	device_remove_file(chg->dev, &dev_attr_cur_batt_id);
 	device_remove_file(chg->dev, &dev_attr_addr);
 	device_remove_file(chg->dev, &dev_attr_data);
 
