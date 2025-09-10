@@ -188,6 +188,8 @@
 
 #define PINCTRL_STYLUS_CLK_ACTIVE       "stylus_clk_active"
 #define PINCTRL_STYLUS_CLK_SUSPEND      "stylus_clk_suspend"
+#define PINCTRL_FOLD_STYLUS_CLK_ACTIVE       "stylus_fold_clk_active"
+#define PINCTRL_FOLD_STYLUS_CLK_SUSPEND      "stylus_fold_clk_suspend"
 
 #define kfree_safe(pbuf) do {\
     if (pbuf) {\

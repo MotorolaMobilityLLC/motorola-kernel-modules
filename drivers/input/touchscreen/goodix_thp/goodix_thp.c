@@ -2559,8 +2559,13 @@ static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
         }
         ts_info(ts_dev->dev, "success get pinctrl");
         /* stylus active state */
+        if (core_data->pdev->id == 0)
         core_data->stylus_clk_active = pinctrl_lookup_state(core_data->pinctrl,
                                 PINCTRL_STYLUS_CLK_ACTIVE);
+        else
+        core_data->stylus_clk_active = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_FOLD_STYLUS_CLK_ACTIVE);
+
         if (IS_ERR_OR_NULL(core_data->stylus_clk_active)) {
                 r = PTR_ERR(core_data->stylus_clk_active);
                 ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
@@ -2571,8 +2576,13 @@ static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
         ts_info(ts_dev->dev, "success get stylus avtive pinctrl state");
 
         /* stylus suspend state */
+        if (core_data->pdev->id == 0)
         core_data->stylus_clk_suspend = pinctrl_lookup_state(core_data->pinctrl,
                                 PINCTRL_STYLUS_CLK_SUSPEND);
+        else
+        core_data->stylus_clk_suspend = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_FOLD_STYLUS_CLK_SUSPEND);
+
         if (IS_ERR_OR_NULL(core_data->stylus_clk_suspend)) {
                 r = PTR_ERR(core_data->stylus_clk_suspend);
                 ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
