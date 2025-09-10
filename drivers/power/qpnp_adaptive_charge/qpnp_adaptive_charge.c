@@ -161,7 +161,7 @@ static void update(struct adap_chg_data *data)
 		/* If no lower limit is defined, we are in Auto Mode */
 		if (lower_limit == -1) {
 #ifdef ADAPTIVE_TOLERANCE_OPTIMIZATION
-			if (data->batt_capacity > (upper_limit + 2)) {
+			if (data->batt_capacity > (upper_limit + 1)) {
 #else
 			if (data->batt_capacity > upper_limit) {
 #endif
