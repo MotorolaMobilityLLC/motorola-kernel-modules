@@ -301,6 +301,7 @@ struct qti_charger {
 
 static struct qti_charger *this_chip = NULL;
 static BLOCKING_NOTIFIER_HEAD(qti_chg_notifier_list);
+static int mmi_get_batt_cap(char *value, int size);
 
 static int find_profile_id(struct qti_charger *chg)
 {
@@ -312,10 +313,15 @@ static int find_profile_id(struct qti_charger *chg)
 		const char *id;
 		const char *sn;
 	} *map_table;
+	char profile_id_names[50] = "profile-ids-map";
+	char batt_cap[20] = {0};
 
-	count = of_property_count_strings(chg->dev->of_node, "profile-ids-map");
+	if (mmi_get_batt_cap(batt_cap, sizeof(batt_cap)) == 0)
+		snprintf(profile_id_names, sizeof(profile_id_names), "profile-ids-map-%s", batt_cap);
+
+	count = of_property_count_strings(chg->dev->of_node, profile_id_names);
 	if (count <= 0 || (count % 2)) {
-		mmi_err(chg, "Invalid profile-ids-map in DT, rc=%d\n", count);
+		mmi_err(chg, "Invalid %s in DT, rc=%d\n", profile_id_names, count);
 		return -EINVAL;
 	}
 
@@ -325,11 +331,11 @@ static int find_profile_id(struct qti_charger *chg)
 	if (!map_table)
 		return -ENOMEM;
 
-	rc = of_property_read_string_array(chg->dev->of_node, "profile-ids-map",
+	rc = of_property_read_string_array(chg->dev->of_node, profile_id_names,
 					(const char **)map_table,
 					count);
 	if (rc < 0) {
-		mmi_err(chg, "Failed to get profile-ids-map, rc=%d\n", rc);
+		mmi_err(chg, "Failed to get %s, rc=%d\n", profile_id_names, rc);
 		profile_id = rc;
 		goto free_map;
 	}
@@ -357,7 +363,7 @@ static int find_profile_id(struct qti_charger *chg)
 						map_table[i].sn);
 		}
 	} else {
-		mmi_warn(chg, "No matched profile id in profile-ids-map\n");
+		mmi_warn(chg, "No matched profile id in %s\n", profile_id_names);
 	}
 
 free_map:
@@ -1748,10 +1754,15 @@ static ssize_t batt_id_show(struct device *dev,
 		const char *id;
 		const char *sn;
 	} *map_table;
+	char profile_id_names[50] = "profile-ids-map";
+	char batt_cap[20] = {0};
 
-	battsn_nums = of_property_count_strings(chg->dev->of_node, "profile-ids-map");
+	if (mmi_get_batt_cap(batt_cap, sizeof(batt_cap)) == 0)
+		snprintf(profile_id_names, sizeof(profile_id_names), "profile-ids-map-%s", batt_cap);
+
+	battsn_nums = of_property_count_strings(chg->dev->of_node, profile_id_names);
 	if (battsn_nums <= 0 || (battsn_nums % 2)) {
-		mmi_err(chg, "Invalid profile-ids-map in DT, rc=%d\n", battsn_nums);
+		mmi_err(chg, "Invalid %s in DT, rc=%d\n", profile_id_names, battsn_nums);
 		return -EINVAL;
 	}
 
@@ -1761,11 +1772,11 @@ static ssize_t batt_id_show(struct device *dev,
 	if (!map_table)
 		return -ENOMEM;
 
-	rc = of_property_read_string_array(chg->dev->of_node, "profile-ids-map",
+	rc = of_property_read_string_array(chg->dev->of_node, profile_id_names,
 					(const char **)map_table,
 					battsn_nums);
 	if (rc < 0) {
-		mmi_err(chg, "Failed to get profile-ids-map, rc=%d\n", rc);
+		mmi_err(chg, "Failed to get %s, rc=%d\n", profile_id_names, rc);
 		goto free_map;
 	}
 
@@ -3173,6 +3184,25 @@ static const struct power_supply_desc batt_psy_desc = {
 	.get_property		= battery_psy_get_prop,
 	.set_property		= battery_psy_set_prop,
 };
+
+static int mmi_get_batt_cap(char *value, int size)
+{
+	const char *bootargs_tmp = NULL;
+	int err = -1;
+	struct device_node *n = of_find_node_by_path("/chosen");
+
+	if (n == NULL || value== NULL)
+		goto err;
+
+	if (of_property_read_string(n, "mmi,batt_cap", &bootargs_tmp) == 0) {
+		strlcpy(value, bootargs_tmp, size);
+		err = 0;
+	}
+
+	of_node_put(n);
+err:
+	return err;
+}
 
 static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_flag)
 {
