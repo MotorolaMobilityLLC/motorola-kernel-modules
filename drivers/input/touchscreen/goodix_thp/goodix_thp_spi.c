@@ -1050,6 +1050,20 @@ static int goodix_spi_probe(struct spi_device *spi)
         spi->bits_per_word = ts_dev->board_data.spi_setting.bits_per_word;
         spi->max_speed_hz = ts_dev->board_data.spi_setting.spi_max_speed;
 
+        r = spi_setup(spi);
+        if (r) {
+                ts_err(&spi->dev, "failed setup spi speed to %d, ret %d",
+                                spi->max_speed_hz, r);
+                r = -EINVAL;
+                goto err_spi_buf;
+        }
+        ts_info(&spi->dev, "Setup mode: %d, %u bits/w, %u Hz max, can_dma: %d, spi->rt = %d",
+                (int)(spi->mode & (SPI_CPOL | SPI_CPHA)),
+                spi->bits_per_word,
+                spi->max_speed_hz,
+                spi->controller->can_dma != NULL,
+                spi->rt);
+
         /* init ts core device */
         pdev = kzalloc(sizeof(struct platform_device), GFP_KERNEL);
         if (!pdev) {
