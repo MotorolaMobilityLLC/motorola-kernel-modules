@@ -660,7 +660,7 @@ static void smart_batt_notify_flip_uevent(struct mmi_smart_battery *chip)
 	scnprintf(flip_soc_string, SMART_BATT_SHOW_MAX_SIZE,
 		"POWER_SUPPLY_FLIP_BATT_SOC=%d", chip->flip_batt_soc);
 	scnprintf(flip_voltage_string, SMART_BATT_SHOW_MAX_SIZE,
-		"POWER_SUPPLY_FLIP_VOLTAGE_NOW=%d", chip->flip_batt_voltage);
+		"POWER_SUPPLY_FLIP_VOLTAGE_NOW=%d", chip->flip_batt_voltage * 1000);
 	scnprintf(flip_temp_string, SMART_BATT_SHOW_MAX_SIZE,
 		"POWER_SUPPLY_FLIP_TEMP=%d", chip->flip_batt_temp);
 	scnprintf(flip_cycleCount_string, SMART_BATT_SHOW_MAX_SIZE,
