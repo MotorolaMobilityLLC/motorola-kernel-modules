@@ -347,7 +347,11 @@ static int dio8015_i2c_probe(struct i2c_client *client,
 	if (0x04 == chip_data) {
 		chip->chip_type = 0;
 		dev_info(chip->dev, "This is dio8015 ic,chip_type = %d\n", chip->chip_type);
-	}else if (0x00 == chip_data) {
+	}
+	else if (0x33 == chip_data) {
+		dev_info(chip->dev, "WL28661D CHIP ID matched!\n");
+	}
+	else if (0x00 == chip_data) {
 		ret = regmap_read(chip->regmap, DIO8015_REG_CHIPID2, &chip_data);
 		if (ret < 0) {
 			dev_err(chip->dev, "Failed to read CHIPID2 reg: %d\n", ret);
