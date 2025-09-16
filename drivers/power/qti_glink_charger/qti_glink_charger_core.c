@@ -3980,10 +3980,16 @@ static int qti_charger_parse_dt(struct qti_charger *chg)
 	int len;
 	u32 prev, val;
 
+	char df_sn_names[50] = "mmi,df-serialnum";
+	char batt_cap[20] = {0};
+
 	node = chg->dev->of_node;
 	dev_sn = mmi_get_battery_serialnumber();
 	if (!dev_sn) {
-		rc = of_property_read_string(node, "mmi,df-serialnum",
+		if (mmi_get_batt_cap(batt_cap, sizeof(batt_cap)) == 0)
+			snprintf(df_sn_names, sizeof(df_sn_names), "mmi,df-serialnum-%s", batt_cap);
+
+		rc = of_property_read_string(node, df_sn_names,
 						&df_sn);
 		if (!rc && df_sn) {
 			mmi_info(chg, "Default Serial Number %s\n", df_sn);
