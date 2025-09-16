@@ -1552,11 +1552,6 @@ static int cps8851_get_message(struct tcpc_device *tcpc, uint32_t *payload,
 				       payload);
 	}
 
-	/* Read complete, clear RX status alert bit */
-	if (chip_is_cps8851(chip))
-		tcpci_alert_status_clear(tcpc, TCPC_V10_REG_ALERT_RX_STATUS |
-										TCPC_V10_REG_RX_OVERFLOW);
-
 	return rv;
 }
 
