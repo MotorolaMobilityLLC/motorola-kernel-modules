@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Motorola Mobility LLC. All rights reserved.
+/* Copyright (c) 2012, Motorola Mobgit fetch ssh://elieleli@gerrit.mot.com:29418/home/repo/dev/platform/android/motorola/kernel/modules/modules refs/changes/94/3557494/2 && git cherry-pick FETCH_HEADility LLC. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -463,12 +463,22 @@ static int open_utags(struct blkdev *cb)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(CONFIG_MMI_UTAG_RW_BIO)
 	struct block_device *bdev = NULL;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	struct file *bdev_file = NULL;
+#endif
 
 	if (cb->bdev != NULL)
 		return 0;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	bdev_file = bdev_file_open_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb, NULL);
+	bdev = file_bdev(bdev_file);
+	cb->filep = bdev_file;
+	cb->size = i_size_read(file_inode(bdev_file));
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	bdev = blkdev_get_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb, NULL);
+	cb->size = i_size_read(bdev->bd_inode);
+	cb->filep = NULL;
 #else
 	bdev = blkdev_get_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb);
 #endif
@@ -2235,11 +2245,19 @@ static int utags_remove(struct platform_device *pdev)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	if (ctrl->main.bdev) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+		bdev_fput(ctrl->main.filep);
+#else
 		blkdev_put(ctrl->main.bdev, &ctrl->main);
+#endif
 		ctrl->main.bdev = NULL;
 	}
 	if (ctrl->backup.bdev) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+		bdev_fput(ctrl->backup.filep);
+#else
 		blkdev_put(ctrl->backup.bdev, &ctrl->backup);
+#endif
 		ctrl->backup.bdev = NULL;
 	}
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) || defined(CONFIG_MMI_UTAG_RW_BIO)
