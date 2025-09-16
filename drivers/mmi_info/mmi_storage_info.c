@@ -70,19 +70,19 @@ int mmi_storage_info_init(void)
 
 	for_each_property_of_node(n, p) {
 		if (!strcmp(p->name, "type") && p->value)
-			strlcpy(info->type, (char *)p->value,
+			strscpy(info->type, (char *)p->value,
 				sizeof(info->type));
 		if (!strcmp(p->name, "size") && p->value)
-			strlcpy(info->size, (char *)p->value,
+			strscpy(info->size, (char *)p->value,
 				sizeof(info->size));
 		if (!strcmp(p->name, "manufacturer") && p->value)
-			strlcpy(info->card_manufacturer, (char *)p->value,
+			strscpy(info->card_manufacturer, (char *)p->value,
 				sizeof(info->card_manufacturer));
 		if (!strcmp(p->name, "product") && p->value)
-			strlcpy(info->product_name, (char *)p->value,
+			strscpy(info->product_name, (char *)p->value,
 				sizeof(info->product_name));
 		if (!strcmp(p->name, "firmware") && p->value)
-			strlcpy(info->firmware_version, (char *)p->value,
+			strscpy(info->firmware_version, (char *)p->value,
 				sizeof(info->firmware_version));
 	}
 

@@ -39,20 +39,20 @@ static void mmi_bootarg_setup(void)
 	if (mmi_get_bootarg("androidboot.radio=", &s) == 0) {
 		if (kstrtouint(s, 16, &androidboot_radio) < 0)
 			androidboot_radio = 0;
-		strlcpy(androidboot_radio_str, s, RADIO_MAX_LEN);
+		strscpy(androidboot_radio_str, s, RADIO_MAX_LEN);
 	}
 
 	if (mmi_get_bootarg("androidboot.device=", &s) == 0)
-		strlcpy(androidboot_device, s, ANDROIDBOOT_DEVICE_MAX_LEN);
+		strscpy(androidboot_device, s, ANDROIDBOOT_DEVICE_MAX_LEN);
 
 	if (mmi_get_bootarg("androidboot.baseband=", &s) == 0)
-		strlcpy(baseband, s, BASEBAND_MAX_LEN);
+		strscpy(baseband, s, BASEBAND_MAX_LEN);
 
 	if (mmi_get_bootarg("androidboot.carrier=", &s) == 0)
-		strlcpy(carrier, s, CARRIER_MAX_LEN);
+		strscpy(carrier, s, CARRIER_MAX_LEN);
 
 	if (mmi_get_bootarg("androidboot.serialno=", &s) == 0)
-		strlcpy(serialno, s, SERIALNO_MAX_LEN);
+		strscpy(serialno, s, SERIALNO_MAX_LEN);
 }
 
 static int unitinfo_seq_show(struct seq_file *f, void *ptr)

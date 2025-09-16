@@ -78,10 +78,10 @@ static void mmi_bootarg_setup(void)
 	char *s;
 
 	if (mmi_get_bootarg("androidboot.bootreason=", &s) == 0)
-		strlcpy(bootreason, s, BOOTREASON_MAX_LEN);
+		strscpy(bootreason, s, BOOTREASON_MAX_LEN);
 
 	if (mmi_get_bootarg("androidboot.mode=", &s) == 0)
-		strlcpy(bootmode, s, BOOTMODE_MAX_LEN);
+		strscpy(bootmode, s, BOOTMODE_MAX_LEN);
 }
 
 /*
@@ -176,11 +176,11 @@ void bi_add_bl_build_sig(char *bld_sig)
 	pos = value - bld_sig;
 
 	ptr = bl_build_sigs[bl_build_sig_count].item;
-	strlcpy(ptr, bld_sig, pos+1);
+	strscpy(ptr, bld_sig, pos+1);
 	convert_to_upper(ptr);
 
 	ptr = bl_build_sigs[bl_build_sig_count].value;
-	strlcpy(ptr, value+1, MAX_BLD_SIG_VALUE);
+	strscpy(ptr, value+1, MAX_BLD_SIG_VALUE);
 
 	bl_build_sig_count++;
 }

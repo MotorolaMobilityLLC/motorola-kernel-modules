@@ -157,7 +157,7 @@ static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_fla
 		if (!bootargs_str)
 			goto putnode;
 	}
-	strlcpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
+	strscpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
 
 	idx = strnstr(bootargs_str, key, strlen(bootargs_str));
 	if (idx) {
@@ -204,9 +204,9 @@ static void mmi_of_populate_setup(void)
 	of_property_read_u32(n, "linux,serialhigh",
 		&mmi_chosen_data.system_serial_high);
 	if (of_property_read_string(n, "mmi,baseband", &temp) == 0)
-		strlcpy(mmi_chosen_data.baseband, temp, BASEBAND_MAX_LEN);
+		strscpy(mmi_chosen_data.baseband, temp, BASEBAND_MAX_LEN);
 	if (of_property_read_string(n, "linux,hardware", &temp) == 0)
-		strlcpy(mmi_chosen_data.system_hw, temp, SYSHW_MAX_LEN);
+		strscpy(mmi_chosen_data.system_hw, temp, SYSHW_MAX_LEN);
 
 	of_node_put(n);
 }

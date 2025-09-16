@@ -13,6 +13,7 @@
 #include <linux/mutex.h>
 #include <linux/mmi_relay.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 
 typedef struct _relay_node {
     struct list_head list;
@@ -192,11 +193,16 @@ static int mmi_relay_probe(struct platform_device *pdev)
     }
     return 0;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static void mmi_relay_remove(struct platform_device *pdev)
+#else
 static int mmi_relay_remove(struct platform_device *pdev)
+#endif
 {
     kfree(relay_dev);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
     return 0;
+#endif
 }
 
 static const struct of_device_id mmi_relay_mt[] = {
@@ -207,7 +213,11 @@ MODULE_DEVICE_TABLE(of, mmi_relay_mt);
 
 static struct platform_driver mmi_relay_driver = {
 	.probe = mmi_relay_probe,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	.remove_new = mmi_relay_remove,
+#else
 	.remove = mmi_relay_remove,
+#endif
 	.driver = {
 		.name = "mmi_relay",
 		.owner = THIS_MODULE,
