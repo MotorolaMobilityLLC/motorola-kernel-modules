@@ -75,6 +75,22 @@ ifeq ($(ENABLE_TP_GLOVE_MODE),true)
 	KERNEL_CFLAGS += CONFIG_GTP_GLOVE_MODE=y
 endif
 
+ifeq ($(TOUCHSCREEN_GOODIX_TIMING),true)
+	KERNEL_CFLAGS += CONFIG_TOUCHSCREEN_GOODIX_TIMING=y
+endif
+
+ifeq ($(GTP_MULTI_CONFIG),true)
+	KERNEL_CFLAGS += CONFIG_GTP_MULTI_CONFIG=y
+endif
+
+ifeq ($(GTP_CS_DELAY),true)
+	KERNEL_CFLAGS += CONFIG_GTP_CS_DELAY=y
+endif
+
+ifeq ($(GTP_KBUILD_SYMBOL),true)
+	KERNEL_CFLAGS += CONFIG_GTP_KBUILD_SYMBOL=y
+endif
+
 include $(CLEAR_VARS)
 LOCAL_MODULE := goodix_brl_u_mmi.ko
 LOCAL_MODULE_TAGS := optional
@@ -85,7 +101,12 @@ ifeq ($(GTP_USE_MMI_INFO),true)
 	KERNEL_CFLAGS += CONFIG_GTP_USE_MMI_INFO=y
 	LOCAL_REQUIRED_MODULES := mmi_info.ko
 endif
-ifneq ($(findstring touchscreen_mmi.ko,$(PRODUCT_PACKAGES)),)
+
+ifneq ($(findstring touchscreen_u_mmi.ko,$(PRODUCT_PACKAGES)),)
+	KERNEL_CFLAGS += CONFIG_INPUT_TOUCHSCREEN_MMI=y
+	LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/touchscreen_u_mmi.ko
+	LOCAL_REQUIRED_MODULES += touchscreen_u_mmi.ko
+else ifneq ($(findstring touchscreen_mmi.ko,$(PRODUCT_PACKAGES)),)
 	KERNEL_CFLAGS += CONFIG_INPUT_TOUCHSCREEN_MMI=y
 	LOCAL_ADDITIONAL_DEPENDENCIES += $(KERNEL_MODULES_OUT)/touchscreen_mmi.ko
 	LOCAL_REQUIRED_MODULES += touchscreen_mmi.ko

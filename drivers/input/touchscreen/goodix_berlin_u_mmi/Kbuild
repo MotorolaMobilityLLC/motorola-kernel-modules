@@ -104,6 +104,10 @@ ifneq ($(filter m y,$(CONFIG_GTP_USE_MMI_INFO)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_USE_MMI_INFO
 endif
 
+ifneq ($(filter m y,$(CONFIG_TOUCHSCREEN_GOODIX_TIMING)),)
+    EXTRA_CFLAGS += -DCONFIG_TOUCHSCREEN_GOODIX_TIMING
+endif
+
 ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
 	EXTRA_CFLAGS += -DCONFIG_BOARD_USES_DOUBLE_TAP_CTRL
 endif
@@ -195,6 +199,9 @@ else ifneq ($(filter oulu%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_OULU
 endif
 $(warning "goodix berlin EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
-
+ifneq ($(filter m y,$(CONFIG_GTP_KBUILD_SYMBOL)),)
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_u_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+else
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+endif
 KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers
