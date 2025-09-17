@@ -98,6 +98,7 @@ enum vindpm_track {
 #define MMI_HVDCP2_VOLTAGE_STANDARD  8000000
 #define MMI_HVDCP3_VOLTAGE_STANDARD  7500000
 #define QC3P_MSLEEP_1500DELAY        1500
+#define QC3P_MSLEEP_500DELAY         500
 #define QC3P_MSLEEP_300DELAY         300
 #define QC3P_MSLEEP_100DELAY         100
 #define QC3P_MSLEEP_30DELAY          30
@@ -1684,12 +1685,20 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 	if (ret)
 	    return ret;
 
+	dm_val = 2;
+	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6V
+	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
+	if (ret)
+		return ret;
+
+	msleep(QC3P_MSLEEP_1500DELAY);
+
 	dm_val = 1;
 	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 		return ret;
-	msleep(QC3P_MSLEEP_1500DELAY);
+	msleep(QC3P_MSLEEP_500DELAY);
 
 	/* dp 3.3v and dm 0.6v out 9V */
 	dp_val = 6;
