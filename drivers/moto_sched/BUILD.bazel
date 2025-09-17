@@ -1,4 +1,5 @@
 load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+load(":kernel_helpers.bzl", "get_kernel_headers")
 
 package(
     default_visibility = [
@@ -13,11 +14,7 @@ define_mgk_ko(
         "**/*.h",
         "Kbuild",
         "Makefile",
-    ]) + select({
-        "//build/bazel_mgk_rules:kernel_version_6.1"     : ["//kernel_device_modules-6.1:mtk_public_headers"],
-        "//build/bazel_mgk_rules:kernel_version_6.6"     : ["//kernel_device_modules-6.6:mtk_public_headers"],
-        "//conditions:default"                           : [],
-    }),
+    ]) + get_kernel_headers(),
 )
 
 filegroup(
