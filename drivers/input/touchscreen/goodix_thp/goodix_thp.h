@@ -291,6 +291,8 @@ enum {
         SVC_CMD_UPDATE_VERSION,
         SVC_CMD_HAL_INIT_FINISH = 36,
         SVC_CMD_OPEN_CIRCUIT = 38,
+        SVC_CMD_BATTERY,
+        SVC_CMD_PEN_INFO,
 };
 
 #define MAX_TSC_MSG_DATA_LEN 128
@@ -529,6 +531,7 @@ struct goodix_thp_core {
         bool esd_on;
         struct delayed_work esd_work;
         u8 open_status;
+        u8 uid_data[9];
 };
 
 extern bool debug_log_flag;

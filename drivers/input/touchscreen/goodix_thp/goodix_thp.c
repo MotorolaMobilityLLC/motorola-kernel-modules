@@ -28,7 +28,8 @@
 #define GOODIX_ESD_TICK_WRITE_DATA 0xAA
 
 bool debug_log_flag;
-static u8 ble_mac[6] = {0};
+u8 ble_mac[6] = {0};
+u8 battery_level = 0;
 
 static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);
@@ -683,6 +684,15 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
         case SVC_CMD_OPEN_CIRCUIT:
                 core_data->open_status = tsc_msg.value[0];
                 ts_info(ts_dev->dev, "recv open circuit %d", core_data->open_status);
+                break;
+        case SVC_CMD_BATTERY:
+                battery_level = tsc_msg.value[0];
+                kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
+                ts_info(ts_dev->dev, "recv battery %d", battery_level);
+                break;
+        case SVC_CMD_PEN_INFO:
+                memcpy(core_data->uid_data, &tsc_msg.value[0], sizeof(core_data->uid_data));
+                ts_info(ts_dev->dev, "recv pen info(uid):%*ph", 9, core_data->uid_data);
                 break;
         default:
                 ts_err(ts_dev->dev, "not support svc msg:0x%02x", tsc_msg.cmd);
@@ -2612,10 +2622,11 @@ static int ts_touch_info_uevent(const struct device *dev, struct kobj_uevent_env
     if (ret)
         return ret;
 
-    ret = add_uevent_var(env, "MAC=%02x:%02x:%02x:%02x:%02x:%02x",
+    ret = add_uevent_var(env, "MAC=%02x:%02x:%02x:%02x:%02x:%02x,BAT=%02x",
                         ble_mac[5], ble_mac[4],
                         ble_mac[3], ble_mac[2],
-                        ble_mac[1], ble_mac[0]);
+                        ble_mac[1], ble_mac[0],
+                        battery_level);
     if (ret)
         return ret;
 
