@@ -27,8 +27,8 @@
 
 
 bool debug_log_flag;
-static u8 ble_mac[6] = {0};
-static u8 battery_level = 0;
+u8 ble_mac[6] = {0};
+u8 battery_level = 0;
 
 static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);

@@ -127,6 +127,8 @@ static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NUL
 	} \
 }
 
+extern u8 ble_mac[6];
+extern u8 battery_level;
 
 static struct attribute *ext_attributes[MAX_ATTRS_ENTRIES];
 static struct attribute_group ext_attr_group = {
@@ -822,7 +824,7 @@ static ssize_t goodix_ts_pen_info_show(struct device *dev,
 	4: little endian, VID for example: 00 010111 111011 11 -> 0001 01111 1110 1111, 17e
 	   PID: 0003, SN: 000001
 	*/
-	return scnprintf(buf, PAGE_SIZE, "SN:%x%x%x%x%x%x VID:%x%x%x%x PID:%x%x%x%x\n",
+	return scnprintf(buf, PAGE_SIZE, "SN:%x%x%x%x%x%x VID:%x%x%x%x PID:%x%x%x%x MAC:%02x:%02x:%02x:%02x:%02x:%02x BAT:%02x\n",
 					((pen_info[3] & 0x0c) >> 2),
 					(((pen_info[3] & 0x03) << 2) | ((pen_info[2] & 0x30) >> 4)),
 					(pen_info[2] & 0x0f),
@@ -836,7 +838,11 @@ static ssize_t goodix_ts_pen_info_show(struct device *dev,
 					((pen_info[8] & 0x3c) >> 2),
 					((pen_info[8] & 0x03) << 2) | ((pen_info[7] & 0x30) >> 4),
 					(pen_info[7] & 0x0f),
-					((pen_info[6] & 0x3c) >> 2) /*PID end*/
+					((pen_info[6] & 0x3c) >> 2),
+					ble_mac[5], ble_mac[4],
+					ble_mac[3], ble_mac[2],
+					ble_mac[1], ble_mac[0],
+					battery_level/*PID end*/
 				);
 }
 
