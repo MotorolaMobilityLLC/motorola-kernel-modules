@@ -456,6 +456,31 @@ static DEVICE_ATTR(tcmd, 0664,
 		tcmd_show,
 		tcmd_store);
 
+static ssize_t tcmd_current_battid_show(struct device *dev,
+                struct device_attribute *attr, char *buf)
+{
+	char batt_id[32]={0};
+	int rc;
+	struct qti_charger *chg = dev_get_drvdata(dev);
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	rc = qti_charger_read(chg, OEM_PROP_TCMD_CURRENT_BATTID,
+			(u32*)batt_id, sizeof(batt_id));
+	if (rc) {
+		pr_err("QTI: qti read current battid failed, rc = %d\n", rc);
+	}
+	batt_id[sizeof(batt_id) - 1] = '\0';
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%s\n", batt_id);
+}
+
+static DEVICE_ATTR(tcmd_current_battid, S_IRUGO,
+		tcmd_current_battid_show,
+		NULL);
+
 static ssize_t force_pmic_icl_store(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
@@ -1178,6 +1203,13 @@ static int qti_charger_init(struct qti_charger *chg)
 	}
 
 	rc = device_create_file(chg->dev,
+				&dev_attr_tcmd_current_battid);
+	if (rc) {
+		mmi_err(chg,
+			   "Couldn't create tcmd_current_battid\n");
+	}
+
+	rc = device_create_file(chg->dev,
 				&dev_attr_force_pmic_icl);
 	if (rc) {
 		mmi_err(chg,
@@ -1282,6 +1314,7 @@ static void qti_charger_deinit(struct qti_charger *chg)
 	device_remove_file(chg->dev, &dev_attr_typec_reset);
 	device_remove_file(chg->dev, &dev_attr_cid_status);
 	device_remove_file(chg->dev, &dev_attr_tcmd);
+	device_remove_file(chg->dev, &dev_attr_tcmd_current_battid);
 	device_remove_file(chg->dev, &dev_attr_force_pmic_icl);
 	device_remove_file(chg->dev, &dev_attr_force_wls_en);
 	device_remove_file(chg->dev, &dev_attr_force_usb_suspend);
