@@ -498,6 +498,11 @@ static int goodix_thp_parse_dt(struct device_node *node,
             board_data->cpu_mask = 0xff;
         }
 
+        if (of_property_read_u32(node, "goodix,dev_id", &board_data->dev_id)) {
+            board_data->dev_id = 0;
+        }
+        ts_info(dev, "board_data->dev_id = %d", board_data->dev_id);
+
         board_data->stylus_mode_ctrl = of_property_read_bool(node,
                 "goodix,stylus_mode-ctrl");
         if (board_data->stylus_mode_ctrl)
@@ -1078,6 +1083,10 @@ static int goodix_spi_probe(struct spi_device *spi)
          */
         pdev->name = GOODIX_CORE_DRIVER_NAME;
         pdev->id = pdev_id++;
+        /* dtsi is 1 base, driver is 0 base.*/
+        if (ts_dev->board_data.dev_id > 0)
+            pdev->id = ts_dev->board_data.dev_id - 1;
+
         pdev->num_resources = 0;
         pdev->dev.platform_data = ts_dev;
         pdev->dev.release = goodix_pdev_release;

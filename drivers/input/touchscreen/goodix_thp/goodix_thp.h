@@ -364,6 +364,7 @@ struct goodix_thp_board_data {
         int irq_need_dev_resume_time; /*control setting of wait resume time*/
         u32 sched_priority;
         u32 cpu_mask;
+        u32 dev_id;
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
         int max_boost_count;
         int boost_timeout;
