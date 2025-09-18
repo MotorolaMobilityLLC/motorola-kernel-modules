@@ -46,7 +46,7 @@ struct mmi_lpm_dbg_dev {
 static struct mmi_lpm_dbg_dev mmi_lpm_dbg_dev;
 static DEFINE_MUTEX(send_uevent_mutex);
 
-static int long sleep_dbg = -1;
+static long sleep_dbg = -1;
 
 static int mmi_lpm_dbg_send_uevent(struct mmi_lpm_dbg_dev *dev_data) {
 	struct kobj_uevent_env *env;
@@ -216,6 +216,8 @@ int mmi_lpm_dbg_subsytem_sleep_call(struct notifier_block *notifier, unsigned lo
 			pr_info("%s invalid type %lu", __func__, event);
 	}
 
+	pr_debug("%s %lu slp %u", __func__, event, *time);
+
 	return NOTIFY_DONE;
 }
 
@@ -335,7 +337,7 @@ static ssize_t trigger_thresh_dbg_store(struct device_driver *driver,
 		return -EINVAL;
 	}
 
-	ret = kstrtol(buf, 10, (long* ) &mmi_lpm_dbg_dev.trigger_threshold);
+	ret = kstrtouint(buf, 10, &mmi_lpm_dbg_dev.trigger_threshold);
 	if (ret < 0)
 		pr_notice("kstrtol failed\n");
 
@@ -372,7 +374,7 @@ static ssize_t re_trigger_dbg_store(struct device_driver *driver,
 		return -EINVAL;
 	}
 
-	ret = kstrtol(buf, 10, (long* ) &mmi_lpm_dbg_dev.re_trigger_threshold);
+	ret = kstrtouint(buf, 10, &mmi_lpm_dbg_dev.re_trigger_threshold);
 	if (ret < 0)
 		pr_notice("kstrtol failed\n");
 
@@ -473,7 +475,6 @@ static int mmi_lpm_dbg_probe(struct platform_device *pdev)
 	struct mmi_lpm_dbg_dev *drvdata;
 	struct device_node *node;
 	int i;
-	int ret = 0;
 
 	drvdata = &mmi_lpm_dbg_dev;
 	//drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
@@ -512,8 +513,6 @@ static int mmi_lpm_dbg_probe(struct platform_device *pdev)
 			drvdata->check_work_delay,
 			drvdata->re_trigger_threshold);
 
-	of_node_put(node);
-
 	for(i = 0; i < MOD_MAX; i++)
 		drvdata->trigger_cnt[i] = 0;
 
@@ -530,8 +529,6 @@ static int mmi_lpm_dbg_probe(struct platform_device *pdev)
 	mmi_lpm_dbg_create_attr(drvdata->driver);
 
 	return 0;
-
-	return ret;
 }
 
 static int mmi_lpm_dbg_remove(struct platform_device *pdev)
