@@ -42,8 +42,8 @@
 
 #if IS_ENABLED(CONFIG_QCOM_STATS)
 #include <linux/soc/qcom/smem.h>
-#include "qrtr.h"
-
+//#include <net/qrtr/qrtr.h>
+extern int get_qrtr_wakeup_source(void);
 struct subsystem_data {
 	const char *name;
 	u32 smem_item;
@@ -223,12 +223,12 @@ static void record_sleep_stats(ktime_t sleep_time)
 		else if (desc->action && desc->action->name)
 			name = desc->action->name;
 
-		strlcpy(suspend_state[cur_idx].wakeup_name, name, MAX_WAKEUP_NAME_SIZE);
+		strscpy(suspend_state[cur_idx].wakeup_name, name, MAX_WAKEUP_NAME_SIZE);
 	}
 #if IS_ENABLED(CONFIG_QCOM_STATS)
 	else {
 		suspend_state[cur_idx].wakeup_irq = get_qrtr_wakeup_source();
-		strlcpy(suspend_state[cur_idx].wakeup_name, "qrtr", MAX_WAKEUP_NAME_SIZE);
+		strscpy(suspend_state[cur_idx].wakeup_name, "qrtr", MAX_WAKEUP_NAME_SIZE);
 	}
 #endif
 	cur_idx++;
