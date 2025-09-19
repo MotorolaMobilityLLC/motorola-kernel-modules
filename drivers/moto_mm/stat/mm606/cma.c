@@ -86,6 +86,7 @@ void vh_cma_alloc_finish(void *data, const char *name, unsigned long pfn,
 	s64 delta;
 	struct moto_stats_task_struct *tsk;
 	unsigned long old_ts;
+	unsigned long flags;
 
 	tsk = get_moto_stats_task_struct(current);
 	old_ts = tsk->stats_private_ts;
@@ -97,14 +98,14 @@ void vh_cma_alloc_finish(void *data, const char *name, unsigned long pfn,
 	cma_for_each_area(parse_cma_idx, &index);
 	cma_stat = stats[index.no];
 
-	spin_lock(&cma_stat->lock);
+	spin_lock_irqsave(&cma_stat->lock, flags);
 	if (delta < cma_stat->bound[LATENCY_LOW])
 		cma_stat->latency[LATENCY_LOW]++;
 	else if (delta < cma_stat->bound[LATENCY_MID])
 		cma_stat->latency[LATENCY_MID]++;
 	else
 		cma_stat->latency[LATENCY_HIGH]++;
-	spin_unlock(&cma_stat->lock);
+	spin_unlock_irqrestore(&cma_stat->lock, flags);
 }
 
 #define CMA_ATTR_RO(_name) \
