@@ -72,6 +72,7 @@ void vh_direct_reclaim_end(void *data, unsigned long nr_reclaimed)
 	int adj_lvl;
 	struct moto_stats_task_struct *tsk;
 	unsigned long old_ts;
+	unsigned long flags;
 
 	tsk = get_moto_stats_task_struct(current);
 	old_ts = tsk->direct_reclaim_ts;
@@ -90,7 +91,7 @@ void vh_direct_reclaim_end(void *data, unsigned long nr_reclaimed)
 		adj_lvl = OTHER;
 
 	stat = stats[adj_lvl];
-	spin_lock(&stat->lock);
+	spin_lock_irqsave(&stat->lock, flags);
 	if (delta < stat->latency_threshold[LATENCY_LOW])
 		stat->latency_count[LATENCY_LOW]++;
 	else if (delta < stat->latency_threshold[LATENCY_MID])
@@ -102,7 +103,7 @@ void vh_direct_reclaim_end(void *data, unsigned long nr_reclaimed)
 
 	stat->total_count++;
 	stat->total_time += delta;
-	spin_unlock(&stat->lock);
+	spin_unlock_irqrestore(&stat->lock, flags);
 }
 
 struct vendor_madvise_walk_private {
@@ -171,6 +172,7 @@ static ssize_t latency_threshold_store(struct kobject *kobj,
 {
 	unsigned long low, mid, high;
 	int ret;
+	unsigned long flags;
 
 	struct direct_reclaim_moto_stat *stat =
 		container_of(kobj, struct direct_reclaim_moto_stat, kobj);
@@ -187,11 +189,11 @@ static ssize_t latency_threshold_store(struct kobject *kobj,
 			low < mid < high.\n");
 		return -EINVAL;
 	}
-	spin_lock(&stat->lock);
+	spin_lock_irqsave(&stat->lock, flags);
 	stat->latency_threshold[LATENCY_LOW] = low;
 	stat->latency_threshold[LATENCY_MID] = mid;
 	stat->latency_threshold[LATENCY_HIGH] = high;
-	spin_unlock(&stat->lock);
+	spin_unlock_irqrestore(&stat->lock, flags);
 	return len;
 }
 DIRECT_RECLAIM_ATTR_RW(latency_threshold);
