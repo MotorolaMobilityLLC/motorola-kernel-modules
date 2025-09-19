@@ -49,13 +49,14 @@ void vh_compaction_end(__always_unused void *data,
 {
 	int delta;
 	int i;
+	unsigned long flags;
 
 	delta = jiffies_to_msecs(jiffies - ts);
 	WARN_ON_ONCE(delta < 0);
 	if (delta < 0)
 		return;
 
-	spin_lock(&stat.lock);
+	spin_lock_irqsave(&stat.lock, flags);
 	stat.total_count++;
 	stat.total_time += delta;
 	for (i = 0; i < THRESHOLD_CNT; i++) {
@@ -63,7 +64,7 @@ void vh_compaction_end(__always_unused void *data,
 			break;
 	}
 	stat.count[i]++;
-	spin_unlock(&stat.lock);
+	spin_unlock_irqrestore(&stat.lock, flags);
 }
 
 /********** sysfs *****************************/
@@ -71,14 +72,15 @@ static ssize_t mm_compaction_duration_threshold_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	int n;
+	unsigned long flags;
 
-	spin_lock(&stat.lock);
+	spin_lock_irqsave(&stat.lock, flags);
 	n = sysfs_emit(buf, "%lu %lu %lu %lu\n",
 			stat.thresholds[0],
 			stat.thresholds[1],
 			stat.thresholds[2],
 			stat.thresholds[3]);
-	spin_unlock(&stat.lock);
+	spin_unlock_irqrestore(&stat.lock, flags);
 	return n;
 }
 
@@ -87,6 +89,7 @@ static ssize_t mm_compaction_duration_threshold_store(struct kobject *kobj,
 {
 	int n;
 	unsigned long th[THRESHOLD_CNT];
+	unsigned long flags;
 
 	n = sscanf(buf, "%lu %lu %lu %lu",
 			&th[0], &th[1], &th[2], &th[3]);
@@ -101,9 +104,9 @@ static ssize_t mm_compaction_duration_threshold_store(struct kobject *kobj,
 		}
 	}
 
-	spin_lock(&stat.lock);
+	spin_lock_irqsave(&stat.lock, flags);
 	memcpy(stat.thresholds, th, sizeof(th));
-	spin_unlock(&stat.lock);
+	spin_unlock_irqrestore(&stat.lock, flags);
 
 	return len;
 }
@@ -113,8 +116,9 @@ static ssize_t mm_compaction_duration_show(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
 	int n;
+	unsigned long flags;
 
-	spin_lock(&stat.lock);
+	spin_lock_irqsave(&stat.lock, flags);
 	n = sysfs_emit(buf, "%ld %ld %lu %lu %lu %lu %lu\n",
 			stat.total_count,
 			stat.total_time,
@@ -123,7 +127,7 @@ static ssize_t mm_compaction_duration_show(struct kobject *kobj,
 			stat.count[2],
 			stat.count[3],
 			stat.count[4]);
-	spin_unlock(&stat.lock);
+	spin_unlock_irqrestore(&stat.lock, flags);
 	return n;
 }
 COMPACTION_ATTR_RO(mm_compaction_duration);
