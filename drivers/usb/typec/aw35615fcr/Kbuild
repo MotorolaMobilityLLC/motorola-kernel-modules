@@ -30,5 +30,5 @@ aw35615fcr_objs  += aw35615_driver.o \
 		vdm/vdm_callbacks.o \
 		vdm/DisplayPort/dp.o
 
-obj-m :=aw35615fcr.o
+obj-$(CONFIG_TCPC_AW35615FCR) :=aw35615fcr.o
 aw35615fcr-y := $(aw35615fcr_objs)
