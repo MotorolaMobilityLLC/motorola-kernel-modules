@@ -233,6 +233,7 @@ struct sc8989x_cfg_e {
 	int iboost;
 	int force_vindpm;
 	int vindpm;
+	int vindpm_track;
 };
 
 /* These default values will be applied if there's no property in dts */
@@ -259,6 +260,7 @@ static struct sc8989x_cfg_e sc8989x_default_cfg = {
 	.iboost = 7,
 	.force_vindpm = 0,
 	.vindpm = 18,
+	.vindpm_track = SC8989X_TRACK_250,
 };
 
 struct sc8989x_chip {
@@ -2658,8 +2660,9 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 			schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(500));
 			++(sc->retry_count);
 		}
+
 #if IS_ENABLED(CONFIG_WLC_WO_BOOST)
-		sc8989x_set_vindpm_track(sc, SC8989X_TRACK_250);
+		sc8989x_set_vindpm_track(sc, sc->cfg->vindpm_track);
 #else
 		sc8989x_set_vindpm_track(sc, SC8989X_TRACK_300);
 #endif
@@ -2716,6 +2719,7 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 		{"sc,sc8989x,votg", &(sc->cfg->votg)},
 		{"sc,sc8989x,iboost", &(sc->cfg->iboost)},
 		{"sc,sc8989x,vindpm", &(sc->cfg->vindpm)},
+		{"sc,vindpm-track", &(sc->cfg->vindpm_track)},
 	};
 
 	sc->mmi_hvdcp_support = of_property_read_bool(np, "mmi,hvdcp-support");
