@@ -197,6 +197,8 @@ else ifneq ($(filter cybert%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_CYBERT
 else ifneq ($(filter oulu%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_OULU
+else ifneq ($(filter naples%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_NAPLES
 endif
 $(warning "goodix berlin EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
 ifneq ($(filter m y,$(CONFIG_GTP_KBUILD_SYMBOL)),)
