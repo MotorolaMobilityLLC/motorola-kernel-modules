@@ -919,7 +919,7 @@ static int p61_probe(struct spi_device *spi)
 #endif
 
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
 	P61_DBG_MSG("%s chip select : %d , bus number = %d \n", __func__,
 		    spi->chip_select[0], spi->controller->bus_num);
 #else
