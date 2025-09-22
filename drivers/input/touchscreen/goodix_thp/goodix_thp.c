@@ -18,6 +18,10 @@
 
 #include "goodix_thp.h"
 #include "goodix_thp_mmi.h"
+#ifndef CREATE_TRACE_POINTS
+#define CREATE_TRACE_POINTS
+#endif
+#include "trace_touch.h"
 
 #define GOODIX_THP_MISC_DEVICE_NAME	"thp"
 #define PINCTRL_STATE_ACTIVE		"pmx_ts_active"
@@ -1510,6 +1514,8 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         u8 i;
         static int pre_flags = 0;
         struct thp_ts_device *tdev = core_data->ts_dev;
+        struct goodix_thp_board_data *board_data =
+                        &core_data->ts_dev->board_data;
 #if defined(CONFIG_ENABLE_GTP_PALM_CANCEL) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
         unsigned int tool_type;
 #endif
@@ -1664,6 +1670,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                                         data.touch[i].major);
                                 //	input_report_abs(input_dev, ABS_MT_TOUCH_MINOR,
                                 //				data.touch[i].minor);
+                                trace_touch_coord((int)(data.touch[i].x/board_data->resolution_boost), (int)(data.touch[i].y/board_data->resolution_boost));
                         }
                     }
                     input_report_key(input_dev, BTN_TOUCH, (data.touch_num > 0) ? 1 : 0);

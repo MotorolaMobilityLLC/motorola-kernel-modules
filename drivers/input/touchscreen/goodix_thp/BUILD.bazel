@@ -12,6 +12,7 @@ moto_ddk_module(
         "goodix_thp.h",
         "goodix_thp_config.h",
         "goodix_thp_mmi.h",
+        "trace_touch.h",
     ],
     local_defines = [
         "CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS",

@@ -534,6 +534,14 @@ static int goodix_thp_parse_dt(struct device_node *node,
         if (board_data->esd_enable)
             ts_info(dev, "support goodix ESD check");
 
+        r = of_property_read_u32(node, "mmi,resolution_boost",
+                              &board_data->resolution_boost);
+        if (r) {
+            ts_info(dev, "No resolution_boost, using default 1");
+            board_data->resolution_boost = 1;
+        }
+
+
         return 0;
 }
 #endif

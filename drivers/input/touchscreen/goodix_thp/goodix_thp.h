@@ -378,6 +378,7 @@ struct goodix_thp_board_data {
         int max_boost_count;
         int boost_timeout;
 #endif
+        int resolution_boost;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
