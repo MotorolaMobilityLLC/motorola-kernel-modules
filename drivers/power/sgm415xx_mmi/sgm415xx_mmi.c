@@ -1440,6 +1440,13 @@ static int sgm4154x_charger_get_property(struct power_supply *psy,
 			break;
 		}
 
+		if (is_pd_rdy(sgm) && (icl > 500)
+			&& (sgm->chg_type == POWER_SUPPLY_TYPE_USB))
+		{
+			val->intval = 2000000;
+			break;
+		}
+
 		if (sgm->psy_usb_type == POWER_SUPPLY_USB_TYPE_SDP)
 			val->intval = 500000;
 		else if (sgm->psy_usb_type == POWER_SUPPLY_USB_TYPE_CDP)

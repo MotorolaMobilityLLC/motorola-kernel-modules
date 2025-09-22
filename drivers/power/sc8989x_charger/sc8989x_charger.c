@@ -2276,6 +2276,13 @@ static int sc8989x_chg_get_property(struct power_supply *psy,
 			break;
 		}
 
+		if (is_pd_rdy(sc) && (icl > 500)
+			&& (sc->chg_type == POWER_SUPPLY_TYPE_USB))
+		{
+			val->intval = 2000000;
+			break;
+		}
+
 		if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_SDP)
 			val->intval = 500000;
 		else if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_CDP)
