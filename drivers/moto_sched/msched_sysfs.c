@@ -258,7 +258,11 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 	buffer[count] = '\0';
 	str = strstrip(buffer);
 	while ((token = strsep(&str, " ")) && *token && (cnt < OPT_STR_MAX)) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+		strscpy(opt_str[cnt], token, sizeof(opt_str[cnt]));
+#else
 		strlcpy(opt_str[cnt], token, sizeof(opt_str[cnt]));
+#endif
 		cnt += 1;
 	}
 
