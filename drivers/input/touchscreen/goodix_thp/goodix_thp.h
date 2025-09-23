@@ -231,6 +231,13 @@ enum pen_action_state {
     PEN_STATE_TOUCH
 };
 
+enum pen_message_type {
+    PEN_MESSAGE_BATTERY,
+    PEN_MESSAGE_BLE_MAC,
+    PEN_MESSAGE_PEN_INFO,
+    PEN_MESSAGE_PEN_CLOSE
+};
+
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
         uint32_t id;
@@ -532,7 +539,12 @@ struct goodix_thp_core {
         bool esd_on;
         struct delayed_work esd_work;
         u8 open_status;
-        u8 uid_data[9];
+
+        u8 uevent_message_type;
+        u8 pen_close;
+        u8 battery_level;
+        u8 ble_mac[6];
+        u8 pen_info[9];
 };
 
 extern bool debug_log_flag;

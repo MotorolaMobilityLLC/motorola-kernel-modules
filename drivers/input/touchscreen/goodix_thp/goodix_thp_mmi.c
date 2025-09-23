@@ -57,8 +57,6 @@ static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
-static ssize_t goodix_ts_pen_info_show(struct device *dev,
-		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -80,7 +78,6 @@ static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(ble_broadcast, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_ble_broadcast_store);
 static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NULL);
-static DEVICE_ATTR(pen_info, S_IRUGO, goodix_ts_pen_info_show, NULL);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -95,9 +92,6 @@ static DEVICE_ATTR(pen_info, S_IRUGO, goodix_ts_pen_info_show, NULL);
 #define NORMAL_DEFAULT_MODE 10
 #define NORMAL_SMALL_MODE 11
 #define NORMAL_BIG_MODE 12
-
-extern u8 ble_mac[6];
-extern u8 battery_level;
 
 #define ADD_ATTR(name) { \
 	if (idx < MAX_ATTRS_ENTRIES)  { \
@@ -157,7 +151,6 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
 		ADD_ATTR(stylus_mode);
-		ADD_ATTR(pen_info);
 	}
 
 	ADD_ATTR(fp_int);
@@ -922,59 +915,6 @@ static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 	hardware_status = core_data->open_status;
 	ts_info(core_data->ts_dev->dev, "Read touch hardware status = %d", hardware_status);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
-}
-
-static ssize_t goodix_ts_pen_info_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	u8 pen_info[9] = {0};
-	struct platform_device *pdev;
-	struct goodix_thp_core *core_data;
-
-	dev = MMI_DEV_TO_TS_DEV(dev);
-	GET_GOODIX_DATA(dev);
-
-	mutex_lock(&core_data->mode_lock);
-	memcpy(pen_info, &core_data->uid_data, sizeof(core_data->uid_data));
-	mutex_unlock(&core_data->mode_lock);
-
-	/*
-	SN:
-	00 000001 (SN end)
-	00 000000
-	00 000000
-	00 11 (VID end)  (SN start)(pad 00) 00 0000
-	00 111011
-	00 010111
-	00 0011(PID end)    (VID start) 00
-	00 000000
-	00 (PID start) 000000
-	1: first two bits 00 only for pad
-	2: SN 22bit, VID 16bit, PID 16bit
-	3: SN need to pad 00 for the highest two bits, make it for 6 bytes(24bit)
-	4: little endian, VID for example: 00 010111 111011 11 -> 0001 01111 1110 1111, 17e
-	   PID: 0003, SN: 000001
-	*/
-	return scnprintf(buf, PAGE_SIZE, "SN:%x%x%x%x%x%x VID:%x%x%x%x PID:%x%x%x%x MAC:%02x:%02x:%02x:%02x:%02x:%02x BAT:%02x\n",
-					((pen_info[3] & 0x0c) >> 2),
-					(((pen_info[3] & 0x03) << 2) | ((pen_info[2] & 0x30) >> 4)),
-					(pen_info[2] & 0x0f),
-					((pen_info[1] & 0x3c) >> 2),
-					(((pen_info[1] & 0x03) << 2) | ((pen_info[0] & 0x30) >> 4)),
-					(pen_info[0] & 0x0f), /*SN end*/
-					(((pen_info[6] & 0x03) << 2) | ((pen_info[5] & 0x30) >> 4)),
-					(pen_info[5] & 0x0f),
-					((pen_info[4] & 0x3c) >> 2),
-					((pen_info[4] & 0x03) << 2) | ((pen_info[3] & 0x30) >> 4),/*VID end*/
-					((pen_info[8] & 0x3c) >> 2),
-					((pen_info[8] & 0x03) << 2) | ((pen_info[7] & 0x30) >> 4),
-					(pen_info[7] & 0x0f),
-					((pen_info[6] & 0x3c) >> 2),
-					ble_mac[5], ble_mac[4],
-					ble_mac[3], ble_mac[2],
-					ble_mac[1], ble_mac[0],
-					battery_level/*PID end*/
-				);
 }
 
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
