@@ -942,6 +942,7 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	}
 	chg->chg_info.chrg_otg_enabled = info.chrg_otg_enabled;
 	chg->chg_info.lpd_present = chg->lpd_info.lpd_present;
+	chg->chg_info.cid_sts = chg->lpd_info.lpd_cid;
 	memcpy(chg_info, &chg->chg_info, sizeof(struct mmi_charger_info));
 
 	if (chg->wls_psy){

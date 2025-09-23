@@ -81,6 +81,7 @@ struct mmi_charger_info {
 	int chrg_present;
 	bool chrg_otg_enabled;
 	int lpd_present;
+	int cid_sts;
 	int vbus_present;
 };
 
