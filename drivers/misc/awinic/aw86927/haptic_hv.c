@@ -550,7 +550,7 @@ static void ram_vbat_comp(struct aw_haptic *aw_haptic, bool flag)
 			}
 			temp_gain = temp_gain * aw_haptic->upgain / 0x80;
 			aw_haptic->func->set_gain(aw_haptic, temp_gain);
-			aw_info("ram vbat comp open, gain: %d", temp_gain);
+			aw_info("ram vbat comp open, gain: %d, upgain: %d", temp_gain, aw_haptic->upgain);
 		} else {
 			aw_haptic->func->set_gain(aw_haptic, aw_haptic->upgain);
 			aw_info("ram vbat comp close");
@@ -2168,8 +2168,10 @@ static ssize_t activate_store(struct device *dev, struct device_attribute *attr,
 	aw_haptic->state = val;
 	aw_haptic->activate_mode = aw_haptic->info.mode;
 #ifdef CONFIG_MOTO_HAPTIC
-	if (0 == val)
+	if (0 == val) {
 		aw_haptic->gain = AW_DEFAULT_GAIN;
+		aw_haptic->upgain = AW_DEFAULT_GAIN;
+	}
 #endif
 	mutex_unlock(&aw_haptic->lock);
 	queue_work(aw_haptic->work_queue, &aw_haptic->vibrator_work);
@@ -3877,6 +3879,7 @@ static void haptic_init(struct aw_haptic *aw_haptic)
 	mutex_lock(&aw_haptic->lock);
 	aw_haptic->bullet_nr = 0;
 	aw_haptic->gun_type = 0xff;
+	aw_haptic->upgain = AW_DEFAULT_GAIN;
 	aw_haptic->activate_mode = aw_haptic->info.mode;
 	aw_haptic->func->play_mode(aw_haptic, AW_STANDBY_MODE);
 	if (aw_haptic->info.is_pwm_12k)
