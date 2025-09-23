@@ -239,6 +239,13 @@ enum pen_action_state {
 #define GTP_PEN_MODE		1
 #endif
 
+enum pen_message_type {
+    PEN_MESSAGE_BATTERY,
+    PEN_MESSAGE_BLE_MAC,
+    PEN_MESSAGE_PEN_INFO,
+    PEN_MESSAGE_PEN_CLOSE
+};
+
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
         uint32_t id;
@@ -537,7 +544,7 @@ struct goodix_thp_core {
         int *cpu_to_index_map;
         int qos_count;
 #endif
-        u8 uid_data[9];
+
 #ifdef GTP_PEN_NOTIFIER
 	int initialized;
 	int gtp_pen_detect_flag;
@@ -546,6 +553,11 @@ struct goodix_thp_core {
 #ifdef CONFIG_GTP_HARDWARE_STATUS
 	u8 open_status;
 #endif
+        u8 uevent_message_type;
+        u8 pen_close;
+        u8 battery_level;
+        u8 ble_mac[6];
+        u8 pen_info[9];
 };
 
 extern bool debug_log_flag;
