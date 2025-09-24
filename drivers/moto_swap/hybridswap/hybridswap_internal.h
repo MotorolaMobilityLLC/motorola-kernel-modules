@@ -19,7 +19,10 @@
 #include <linux/genhd.h>
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#include "../zram-6.12/zram_drv.h"
+#include "../zram-6.12/zram_drv_internal.h"
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include "../zram-6.6/zram_drv.h"
 #include "../zram-6.6/zram_drv_internal.h"
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
@@ -552,6 +555,12 @@ extern atomic_long_t page_fault_pause_cnt;
 extern struct cftype mem_cgroup_swapd_legacy_files[];
 extern bool zram_watermark_ok(void);
 extern void wake_all_swapd(void);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+extern void alloc_pages_slowpath_end_hook(void*data, gfp_t *gfp_mask,
+		unsigned int order, unsigned long alloc_start,
+		u64 stime, unsigned long did_some_progress,
+		unsigned long pages_reclaimed, int retry_loop_count);
+#endif
 extern void alloc_pages_slowpath_hook(void *data, gfp_t gfp_mask,
         unsigned int order, unsigned long delta);
 extern void rmqueue_hook(void *data, struct zone *preferred_zone,
