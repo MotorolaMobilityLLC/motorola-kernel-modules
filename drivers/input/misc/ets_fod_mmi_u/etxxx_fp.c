@@ -61,6 +61,9 @@
 #include <linux/input.h>
 #include <linux/fb.h>
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#include <linux/pinctrl/consumer.h>
+#endif
 
 #define EGIS_IOC_MAGIC 'E'
 #define EGIS_IOC_SENSOR_RESET             (_IO(EGIS_IOC_MAGIC, FP_SENSOR_RESET))
@@ -1354,8 +1357,11 @@ int 	egisfp_probe(struct platform_device *pdev)
 	INFO_PRINT(" %s : driver init \n", __func__);
 	//BUILD_BUG_ON(N_SPI_MINORS > 256);
 	//status = register_chrdev(EGIS_FP_MAJOR, EGIS_CHRD_DRIVER_NAME, &egisfp_fops);
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+	egisfp_class = class_create(EGIS_CLASS_NAME);
+#else
 	egisfp_class = class_create(THIS_MODULE, EGIS_CLASS_NAME);
+#endif
 	if (IS_ERR(egisfp_class))
 	{
 		ERROR_PRINT(" %s : class_create error \n", __func__);
