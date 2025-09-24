@@ -836,11 +836,16 @@ static inline int cps8851_init_cc_params(
 }
 
 #if CPS8851_SOFTWARE_TRIM_EN
+#define CPS8851_REG_UNLOCK               0x51
+#define CPS8851_REG_ZTX_SEL_DATA         0x09
+#define CPS8851_REG_SLEW_SEL_DATA        0x01
+#define CPS8851_REG_IBIAS_EN_DATA        0x01
+#define CPS8851_REG_LOCK                 0x00
 static int cps8851_trim(struct tcpc_device *tcpc)
 {
-	int ret;
+	int ret = 0, lock_ret = 0;
 	struct cps8851_chip *chip = NULL;
-	
+
 	if (tcpc == NULL) {
 		return -EINVAL;
 	}
@@ -850,14 +855,34 @@ static int cps8851_trim(struct tcpc_device *tcpc)
 	if (!chip_is_cps8851(chip))
 		return 0;
 
-	ret = cps8851_i2c_write8(tcpc, CPS8851_REG_PASSWORD, 0x51);
-	/* Modify TRIM values. */
-	ret += cps8851_i2c_write8(tcpc, CPS8851_REG_PD_OPT_ZTX_SEL, 0x09);
-	ret += cps8851_i2c_write8(tcpc, CPS8851_REG_PASSWORD, 0x00);
-
+	ret = cps8851_i2c_write8(tcpc, CPS8851_REG_PASSWORD, CPS8851_REG_UNLOCK);
 	if (ret < 0) {
-		dev_err(&tcpc->dev, "CPS8851 update trim value fail\n");
-		return -EIO;
+		dev_err(&tcpc->dev, "CPS8851 update trim value CPS8851_REG_UNLOCK fail\n");
+		goto lock;
+	}
+	/* Modify TRIM values. */
+	ret = cps8851_i2c_write8(tcpc, CPS8851_REG_PD_OPT_ZTX_SEL, CPS8851_REG_ZTX_SEL_DATA);
+	if (ret < 0) {
+		dev_err(&tcpc->dev, "CPS8851 update trim value CPS8851_REG_ZTX_SEL_DATA fail\n");
+		goto lock;
+	}
+	ret = cps8851_i2c_write8(tcpc, CPS8851_REG_PD_OPT_TX_SLEW_SEL, CPS8851_REG_SLEW_SEL_DATA);
+	if (ret < 0) {
+		dev_err(&tcpc->dev, "CPS8851 update trim value CPS8851_REG_SLEW_SEL_DATA fail\n");
+		goto lock;
+	}
+	ret = cps8851_i2c_write8(tcpc, CPS8851_REG_PD_OPT_DB_IBIAS_EN, CPS8851_REG_IBIAS_EN_DATA);
+	if (ret < 0) {
+		dev_err(&tcpc->dev, "CPS8851 update trim value CPS8851_REG_IBIAS_EN_DATA fail\n");
+		goto lock;
+	}
+lock:
+	lock_ret = cps8851_i2c_write8(tcpc, CPS8851_REG_PASSWORD, CPS8851_REG_LOCK);
+	if (lock_ret < 0) {
+		dev_err(&tcpc->dev, "CPS8851 update trim value CPS8851_REG_LOCK fail\n");
+		if (ret >= 0) {
+			ret = lock_ret;
+		}
 	}
 
 	return ret;
