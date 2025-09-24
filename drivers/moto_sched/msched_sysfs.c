@@ -19,6 +19,7 @@
 #include <linux/uaccess.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>
+#include <linux/string.h>
 
 #include "msched_sysfs.h"
 #include "msched_common.h"
@@ -258,7 +259,7 @@ static ssize_t proc_ux_task_write(struct file *file, const char __user *buf,
 	buffer[count] = '\0';
 	str = strstrip(buffer);
 	while ((token = strsep(&str, " ")) && *token && (cnt < OPT_STR_MAX)) {
-		strlcpy(opt_str[cnt], token, sizeof(opt_str[cnt]));
+		strscpy(opt_str[cnt], token, sizeof(opt_str[cnt]));
 		cnt += 1;
 	}
 
