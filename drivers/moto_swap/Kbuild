@@ -2,6 +2,20 @@ ifeq ($(ANDROID_BUILD_TOP),)
 ANDROID_BUILD_TOP := $(srctree)/..
 endif
 
+define is-greater-or-equal
+$(strip \
+	$(shell \
+		if [ $(VERSION) -gt $(1) ]; then \
+			echo 1; \
+		elif [ $(VERSION) -eq $(1) ] && [ $(PATCHLEVEL) -ge $(2) ]; then \
+			echo 1; \
+		else \
+			echo 0; \
+		fi \
+	) \
+)
+endef
+
 ZRAM_SRC = zram-$(VERSION).$(PATCHLEVEL)
 
 $(warning moto_swap - zram src folder = $(ZRAM_SRC))
@@ -12,6 +26,11 @@ EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP_ZRAM
 EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP
 EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP_SWAPD
 EXTRA_CFLAGS += -DCONFIG_HYBRIDSWAP_CORE
+endif
+
+ifeq ($(call is-greater-or-equal,6,12),1)
+EXTRA_CFLAGS += -DCONFIG_ZRAM_BACKEND_LZ4
+EXTRA_CFLAGS += -DCONFIG_ZRAM_BACKEND_LZO
 endif
 
 # add -Wall to try to catch everything we can.
@@ -44,5 +63,10 @@ moto_swap-objs += hybridswap/hybridswap_eswap.o
 
 moto_swap-objs += hybridswap/hybridswap_swapd.o
 moto_swap-objs += $(ZRAM_SRC)/zcomp.o
+
+ifeq ($(call is-greater-or-equal,6,12),1)
+moto_swap-objs += $(ZRAM_SRC)/backend_lzorle.o $(ZRAM_SRC)/backend_lzo.o
+moto_swap-objs += $(ZRAM_SRC)/backend_lz4.o
+endif
 
 obj-m += moto_swap.o

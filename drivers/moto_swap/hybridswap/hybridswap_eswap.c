@@ -16,6 +16,9 @@
 #include <linux/healthinfo/fg.h>
 #endif
 #include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#include <linux/vmalloc.h>
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <linux/sched/task_stack.h>
 #endif
@@ -4114,11 +4117,16 @@ bool hybridswap_reach_life_protect(void)
 
 void hybridswap_close_bdev(struct zram *zram, struct block_device *bdev, struct file *backing_dev)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	(void)zram;
+	(void)bdev;
+#else
 	if (zram && bdev)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 		blkdev_put(bdev, zram);
 #else
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE | FMODE_EXCL);
+#endif
 #endif
 
 	if (backing_dev)
@@ -4131,6 +4139,8 @@ struct file *hybridswap_open_bdev(const char *file_name)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
 	backing_dev = filp_open(file_name, O_RDWR|O_LARGEFILE, 0);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	backing_dev = filp_open_block(file_name, O_RDWR | O_LARGEFILE | O_EXCL, 0);
 #else
 	backing_dev = filp_open_block(file_name, O_RDWR|O_LARGEFILE, 0);
 #endif
@@ -4163,7 +4173,9 @@ int hybridswap_bind(struct zram *zram, const char *file_name)
 		return -EINVAL;
 
 	inode = backing_dev->f_mapping->host;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	bdev = I_BDEV(inode);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	bdev = blkdev_get_by_dev(inode->i_rdev,
 			BLK_OPEN_READ | BLK_OPEN_WRITE, zram, NULL);
 #else
@@ -4178,13 +4190,14 @@ int hybridswap_bind(struct zram *zram, const char *file_name)
 	}
 
 	nr_pages = (unsigned long)i_size_read(inode) >> PAGE_SHIFT;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	err = set_blocksize(bdev, PAGE_SIZE);
 	if (unlikely(err)) {
 		hybp(HYB_ERR,
 				"%s set blocksize failed! eno = %d\n", file_name, err);
 		goto out;
 	}
-
+#endif
 	zram->bdev = bdev;
 	zram->backing_dev = backing_dev;
 	zram->nr_pages = nr_pages;

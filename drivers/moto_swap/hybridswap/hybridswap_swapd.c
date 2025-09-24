@@ -98,7 +98,13 @@ static atomic64_t swapd_shrink_enabled = ATOMIC_LONG_INIT(0);
 static atomic_t swapd_enabled = ATOMIC_INIT(0);
 static unsigned long swapd_nap_jiffies = 1;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
+						  unsigned long nr_pages,
+						  gfp_t gfp_mask,
+						  unsigned int reclaim_options,
+						  int *swappiness);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 		unsigned long nr_pages,
 		gfp_t gfp_mask,
@@ -1505,7 +1511,10 @@ static unsigned long swapd_shrink_anon(pg_data_t *pgdat,
 
 			memcg_to_reclaim = reclaim_pages_this_cycle * hybs->can_reclaimed / total_can_reclaimed;
 			if (memcg_to_reclaim > 0) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+				memcg_nr_reclaimed = try_to_free_mem_cgroup_pages(memcg,
+						memcg_to_reclaim, GFP_KERNEL, MEMCG_RECLAIM_MAY_SWAP, NULL);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 				memcg_nr_reclaimed = try_to_free_mem_cgroup_pages(memcg,
 						memcg_to_reclaim, GFP_KERNEL, MEMCG_RECLAIM_MAY_SWAP);
 #else
@@ -1752,6 +1761,15 @@ static int swapd_cpu_online(unsigned int cpu)
 	}
 	return 0;
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+void alloc_pages_slowpath_end_hook(void*data, gfp_t *gfp_mask,
+		unsigned int order, unsigned long alloc_start,
+		u64 stime, unsigned long did_some_progress,
+		unsigned long pages_reclaimed, int retry_loop_count) {
+	alloc_pages_slowpath_hook(data, *gfp_mask, order, alloc_start);
+}
+#endif
 
 void alloc_pages_slowpath_hook(void *data, gfp_t gfp_flags,
 		unsigned int order, unsigned long delta)
