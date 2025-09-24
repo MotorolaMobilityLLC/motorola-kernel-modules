@@ -1,0 +1,51 @@
+# add -Wall to try to catch everything we can.
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+ifeq ($(DEVICE_MODULES_PATH),)
+DEVICE_MODULES_PATH = $(srctree)
+else
+LINUXINCLUDE := $(DEVCIE_MODULES_INCLUDE) $(LINUXINCLUDE)
+endif
+
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += \
+		-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
+
+obj-m := goodix_brl_thp.o
+goodix_brl_thp-objs := \
+					goodix_thp.o \
+					goodix_thp_spi.o \
+					goodix_thp_mmi.o \
+					goodix_thp_config.o
+
+ifneq ($(filter m y, $(CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS)),)
+	EXTRA_CFLAGS += -DCONFIG_DRM_PANEL_EVENT_NOTIFICATIONS
+endif
+
+ifneq ($(filter m y,$(CONFIG_GTP_LAST_TIME)),)
+	EXTRA_CFLAGS += -DCONFIG_GTP_LAST_TIME
+endif
+
+ifneq ($(filter m y,$(CONFIG_ENABLE_GTP_PALM_CANCEL)),)
+	EXTRA_CFLAGS += -DCONFIG_ENABLE_GTP_PALM_CANCEL
+endif
+
+ifneq ($(filter m y,$(CONFIG_INPUT_TOUCHSCREEN_MMI)),)
+	EXTRA_CFLAGS += -DCONFIG_INPUT_TOUCHSCREEN_MMI
+endif
+
+ifneq ($(filter m y,$(CONFIG_GTP_ENABLE_TOUCH_PALM_BY_ID)),)
+	EXTRA_CFLAGS += -DCONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID
+endif
+
+ifneq ($(filter m y,$(CONFIG_GTP_ENABLE_PM_QOS)),)
+    EXTRA_CFLAGS += -DCONFIG_TOUCHIRQ_UPDATE_QOS
+endif
+
+
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../touchscreen_u_mmi/$(GKI_OBJ_MODULE_DIR)/Module.symvers
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../mmi_info/$(GKI_OBJ_MODULE_DIR)/Module.symvers

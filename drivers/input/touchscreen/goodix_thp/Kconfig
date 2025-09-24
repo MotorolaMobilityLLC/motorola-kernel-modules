@@ -1,0 +1,9 @@
+#
+# Goodix touchscreen driver configuration
+#
+menuconfig TOUCHSCREEN_GOODIX_BRL_THP
+        tristate "Goodix berlin touchscreen"
+        default n
+        help
+          Say Y here if you have a Goodix berlin touch controller
+          to your system.
