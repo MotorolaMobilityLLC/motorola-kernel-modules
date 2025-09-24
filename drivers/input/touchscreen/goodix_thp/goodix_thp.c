@@ -742,6 +742,12 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 ts_info(ts_dev->dev, "recv open circuit %d", core_data->open_status);
                 break;
 #endif
+        case SVC_CMD_GET_PID:
+                core_data->quick_pid = tsc_msg.value[0];
+                core_data->uevent_message_type = PEN_MESSAGE_PEN_QPID;
+                kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
+                ts_debug(ts_dev->dev, "recv quick pid %d", core_data->quick_pid);
+                break;
         default:
                 ts_err(ts_dev->dev, "not support svc msg:0x%02x", tsc_msg.cmd);
                 break;
@@ -2645,6 +2651,10 @@ static int ts_touch_info_uevent(const struct device *dev, struct kobj_uevent_env
                         (pen_info[7] & 0x0f),
                         ((pen_info[6] & 0x3c) >> 2)/*PID end*/
                         );
+    if (ret)
+        return ret;
+
+    ret = add_uevent_var(env, "QPID=%02x", cd->quick_pid);
     if (ret)
         return ret;
 
