@@ -71,7 +71,8 @@ static char core_freq_count[3];
 
 static void clean_records(struct uid_record *records, int count)
 {
-	memset(records, 0, sizeof(struct uid_record) * count);
+        if(records != NULL)
+	    memset(records, 0, sizeof(struct uid_record) * count);
 }
 
 static int compare_total_power(const void *a, const void *b) {
@@ -85,6 +86,11 @@ void select_top_records(struct uid_record *records,
                           struct uid_record *top, int count, int size) {
 	int i;
 	int heap_size = size;
+	
+	if ((top == NULL) || (records == NULL)) {
+	        pr_err("%s: select_top_records failed\n", __func__);
+	        return;
+	}
 
 	if (count <= heap_size) {
 		memcpy(top, records, sizeof(struct uid_record) * count);
@@ -218,6 +224,7 @@ static ssize_t cpufreq_count_store(struct kobject *kobj, struct kobj_attribute *
 	int core_count = 0;
 	int val;
 	int num[5] = {0};
+	int i;
 
 	if (!str)
 		return n;
@@ -245,13 +252,13 @@ static ssize_t cpufreq_count_store(struct kobject *kobj, struct kobj_attribute *
 			goto _exit;
 		}
 
-		for (int i = 0; i < core_count; i++) {
+		for (i = 0; i < core_count; i++) {
 			count += num[i];
 		}
 
 		if (count == num[core_count]) {
 			core_num = core_count;
-			for (int i = 0; i < core_count; i++) {
+			for (i = 0; i < core_count; i++) {
 				core_freq_count[i] = num[i];
 			}
 			cpufreq_count = num[core_count];
