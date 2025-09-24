@@ -16,9 +16,6 @@
 #include <linux/healthinfo/fg.h>
 #endif
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-#include <linux/vmalloc.h>
-#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 #include <linux/sched/task_stack.h>
 #endif
@@ -4117,12 +4114,8 @@ bool hybridswap_reach_life_protect(void)
 
 void hybridswap_close_bdev(struct zram *zram, struct block_device *bdev, struct file *backing_dev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-      if (zram && bdev)
-	    bdev_fput(backing_dev);
-#else
+	if (zram && bdev)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
-      if (zram && bdev)
 		blkdev_put(bdev, zram);
 #else
 		blkdev_put(bdev, FMODE_READ | FMODE_WRITE | FMODE_EXCL);
@@ -4130,7 +4123,6 @@ void hybridswap_close_bdev(struct zram *zram, struct block_device *bdev, struct 
 
 	if (backing_dev)
 		filp_close(backing_dev, NULL);
-#endif
 }
 
 struct file *hybridswap_open_bdev(const char *file_name)
@@ -4158,45 +4150,6 @@ struct file *hybridswap_open_bdev(const char *file_name)
 	return backing_dev;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-int hybridswap_bind(struct zram *zram, const char *file_name)
-{
-	struct file *backing_dev = NULL;
-	struct inode *inode = NULL;
-	unsigned long nr_pages;
-	struct block_device *bdev = NULL;
-	int err;
-
-	backing_dev = bdev_file_open_by_path(file_name,
-			BLK_OPEN_READ | BLK_OPEN_WRITE, zram, NULL);
-	if (unlikely(IS_ERR(backing_dev))) {
-		hybp(HYB_ERR, "open the %s failed! eno = %ld\n",
-				file_name, PTR_ERR(backing_dev));
-		backing_dev = NULL;
-		return -EINVAL;
-	}
-
-	inode = backing_dev->f_mapping->host;
-	bdev = file_bdev(backing_dev);
-
-	nr_pages = (unsigned long)i_size_read(inode) >> PAGE_SHIFT;
-	err = set_blocksize(backing_dev, PAGE_SIZE);
-	if (unlikely(err)) {
-		hybp(HYB_ERR,
-				"%s set blocksize failed! eno = %d\n", file_name, err);
-		goto out;
-	}
-
-	zram->bdev = bdev;
-	zram->backing_dev = backing_dev;
-	zram->nr_pages = nr_pages;
-	return 0;
-
-out:
-	bdev_fput(backing_dev);
-	return err;
-}
-#elif
 int hybridswap_bind(struct zram *zram, const char *file_name)
 {
 	struct file *backing_dev = NULL;
@@ -4242,7 +4195,6 @@ out:
 
 	return err;
 }
-#endif
 
 static inline unsigned long fetch_original_used_swap(void)
 {

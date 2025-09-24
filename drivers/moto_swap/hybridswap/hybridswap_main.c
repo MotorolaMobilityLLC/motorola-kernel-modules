@@ -68,13 +68,7 @@ static bool hybridswap_enabled = false;
 DEFINE_MUTEX(reclaim_para_lock);
 DEFINE_PER_CPU(struct swapd_event_state, swapd_event_states);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
-						  unsigned long nr_pages,
-						  gfp_t gfp_mask,
-						  unsigned int reclaim_options,
-						  int *swappiness);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 extern unsigned long try_to_free_mem_cgroup_pages(struct mem_cgroup *memcg,
 		unsigned long nr_pages,
 		gfp_t gfp_mask,
@@ -365,10 +359,8 @@ static int register_all_hooks(void)
 	/* mem_cgroup_css_offline_hook */
 	REGISTER_HOOK(mem_cgroup_css_offline);
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	REGISTER_HOOK(alloc_pages_slowpath_end);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	/* For GKI reason we use alloc_pages_slowpath_hook rather than rmqueue_hook. Both are fine. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	/* alloc_pages_slowpath_hook */
 	REGISTER_HOOK(alloc_pages_slowpath);
 #else
@@ -395,10 +387,7 @@ ERROR_OUT(tune_swappiness):
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
 	UNREGISTER_HOOK(tune_scan_type);
 ERROR_OUT(tune_scan_type):
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	UNREGISTER_HOOK(alloc_pages_slowpath_end);
-ERROR_OUT(alloc_pages_slowpath_end):
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	UNREGISTER_HOOK(alloc_pages_slowpath);
 ERROR_OUT(alloc_pages_slowpath):
 #else
@@ -427,9 +416,7 @@ static void unregister_all_hook(void)
 	UNREGISTER_HOOK(mem_cgroup_id_remove);
 #endif
 #ifdef CONFIG_HYBRIDSWAP_SWAPD
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	UNREGISTER_HOOK(alloc_pages_slowpath_end);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	UNREGISTER_HOOK(alloc_pages_slowpath);
 #else
 	UNREGISTER_HOOK(rmqueue);
@@ -536,10 +523,7 @@ static ssize_t mem_cgroup_force_shrink_anon(struct kernfs_open_file *of,
 		nr_need_reclaim = memcg_inactive_anon_pages(memcg);
 
 	hybp(HYB_DEBUG, "FORCE SHRINK +\n");
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	nr_reclaimed = try_to_free_mem_cgroup_pages(memcg, nr_need_reclaim,
-			GFP_KERNEL, MEMCG_RECLAIM_MAY_SWAP, NULL);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 	nr_reclaimed = try_to_free_mem_cgroup_pages(memcg, nr_need_reclaim,
 			GFP_KERNEL, MEMCG_RECLAIM_MAY_SWAP);
 #else
