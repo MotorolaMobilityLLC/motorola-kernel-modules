@@ -1318,6 +1318,13 @@ static int sgm4154x_plug_out(struct charger_device *chg_dev)
 		return -EINVAL;
 	}
 
+	if(sgm->qc_dev){
+		adapter_dev_reset_chg_type(sgm->qc_dev);
+		sgm->pulse_cnt = 0;
+		sgm->qc_chg_type = 0;
+		sgm->qc_is_detect = false;
+	}
+
 	ret = sgm4154x_disable_charger(sgm);
 	if (ret) {
 		pr_err("%s: Failed to disable charging:%d\n", __func__, ret);
@@ -2287,7 +2294,13 @@ static int mmi_set_dp_dm(struct charger_device *chg_dev, int val)
 	}
 	switch (val) {
 	case DP_DM_DP_PULSE:
-		if (sgm->mmi_hvdcp_support) {
+		if (sgm->qc_dev) {
+			ret = adapter_dev_dp_dm(sgm->qc_dev, DP_DM_DP_PULSE);
+			if (ret < 0)
+				dev_err(sgm->dev, "qc protocol ic set vbus up failed\n");
+			else
+				sgm->pulse_cnt++;
+		} else if  (sgm->mmi_hvdcp_support) {
 			ret = sgm41542s_qc30_step_up_vbus(sgm);
 			if (ret)
 				dev_err(sgm->dev, "qc protocol ic set vbus up failed\n");
@@ -2297,7 +2310,13 @@ static int mmi_set_dp_dm(struct charger_device *chg_dev, int val)
 		}
 		break;
 	case DP_DM_DM_PULSE:
-		if (sgm->mmi_hvdcp_support) {
+		if (sgm->qc_dev) {
+			ret = adapter_dev_dp_dm(sgm->qc_dev, DP_DM_DM_PULSE);
+			if (ret < 0)
+				dev_err(sgm->dev, "qc protocol ic set vbus down failed\n");
+			else if (sgm->pulse_cnt > 0)
+				sgm->pulse_cnt--;
+		} else if (sgm->mmi_hvdcp_support) {
 			ret = sgm41542s_qc30_step_down_vbus(sgm);
 			if (ret)
 				dev_err(sgm->dev, "qc protocol ic set vbus down failed\n");
@@ -2370,13 +2389,19 @@ int mmi_config_qc_charger(struct charger_device *chg_dev)
 
 	pr_info("pulse_cnt=%d, vbus_uv=%d\n", sgm->pulse_cnt, vbus_uv);
 	if (vbus_uv < HVDCP_VOLTAGE_NOM && sgm->pulse_cnt < HVDCP_PULSE_COUNT_MAX) {
-		rc = sgm41542s_dp_dm(sgm->chg_dev, DP_DM_DP_PULSE);
+		if (sgm->qc_dev)
+			rc = adapter_dev_dp_dm(sgm->qc_dev, DP_DM_DP_PULSE);
+		else if (sgm->mmi_hvdcp_support)
+			rc = sgm41542s_dp_dm(sgm->chg_dev, DP_DM_DP_PULSE);
 		if (rc)
 			dev_err(sgm->dev, "qc protocol ic set vbus up failed\n");
 		else
 			sgm->pulse_cnt++;
 	} else if (vbus_uv > HVDCP_VOLTAGE_MAX && sgm->pulse_cnt > 0 ) {
-		rc = sgm41542s_dp_dm(sgm->chg_dev, DP_DM_DM_PULSE);
+		if (sgm->qc_dev)
+			rc = adapter_dev_dp_dm(sgm->qc_dev, DP_DM_DM_PULSE);
+		else if (sgm->mmi_hvdcp_support)
+			rc = sgm41542s_dp_dm(sgm->chg_dev, DP_DM_DM_PULSE);
 		if (rc)
 			dev_err(sgm->dev, "qc protocol ic set vbus down failed\n");
 		else {
@@ -2389,6 +2414,106 @@ int mmi_config_qc_charger(struct charger_device *chg_dev)
 	}
 	msleep(100);
 	return rc;
+}
+
+void get_qc_charger_type_func_work(struct work_struct *work)
+{
+	struct delayed_work *detect_qc_dwork = NULL;
+	struct sgm4154x_device * sgm;
+	bool early_notified = false;
+	bool need_retry = false;
+	bool m_chg_ready = false;
+	int early_chg_type = 0;
+	int count = 0;
+	int ret;
+	union power_supply_propval val;
+
+	detect_qc_dwork = container_of(work, struct delayed_work, work);
+	if(detect_qc_dwork == NULL) {
+		pr_info("Can't get charge_monitor_work\n");
+		return ;
+	}
+	sgm = container_of(detect_qc_dwork, struct sgm4154x_device, detect_qc_dwork);
+	if(sgm == NULL) {
+		pr_err("Can't get sgm4154x_device \n");
+		return ;
+	}
+
+	if (!sgm->qc_dev) {
+		pr_err("qc protocol ic dev is not ready, exit \n");
+		return;
+	}
+
+	adapter_dev_reset_chg_type(sgm->qc_dev);
+	pr_info("start qc detected \n");
+	sgm->qc_is_detect = true;
+
+	sgm4154x_set_ichrg_curr(sgm->chg_dev,1000000);
+
+	do{
+		m_chg_ready = false;
+		sgm->qc_chg_type = 0;
+		early_notified = false;
+		need_retry = false;
+		early_chg_type = 0;
+		adapter_dev_start_detection(sgm->qc_dev);
+		while((!m_chg_ready)&&(count<100)) {
+			ret = power_supply_get_property(sgm->charger, POWER_SUPPLY_PROP_ONLINE, &val);
+			if (val.intval <= 0) {
+			      pr_info("[%s] ONLINE: %d, skip detecting0,ret=%d\n",__func__, val.intval, ret);
+			      break;
+			}
+			msleep(30);
+			count++;
+			adapter_dev_is_charger_ready(sgm->qc_dev, &m_chg_ready);
+
+			if(!early_notified){
+			      adapter_dev_get_protocol(sgm->qc_dev, &early_chg_type);
+			}
+
+			if(early_chg_type == USB_TYPE_QC3P_18 || early_chg_type == USB_TYPE_QC3P_27){
+				pr_info("[%s] qc early type is QC3+: %d, skip detecting\n",__func__, early_chg_type);
+				break;
+			}
+				pr_info("qc waiting early type: 0x%x, detect ready: 0x%x, count: %d\n", early_chg_type, m_chg_ready, count);
+		}
+
+		adapter_dev_get_protocol(sgm->qc_dev, &sgm->qc_chg_type);
+
+		if(sgm->qc_chg_type == USB_TYPE_OCP && !need_retry){
+			need_retry = true;
+		} else {
+			need_retry = false;
+		}
+		ret = power_supply_get_property(sgm->charger, POWER_SUPPLY_PROP_ONLINE, &val);
+		if (val.intval) {
+			power_supply_changed(sgm->charger);
+		}
+		else {
+			pr_info("[%s] ONLINE: %d, skip detecting1\n",__func__, val.intval);
+			break;
+		}
+		pr_info("[%s] qc charge type is  0x%x\n",__func__, sgm->qc_chg_type);
+	}while(need_retry);
+
+	sgm->qc_is_detect = false;
+
+	if(sgm->qc_chg_type == USB_TYPE_QC20){
+		adapter_dev_dp_dm(sgm->qc_dev, DP_DM_FORCE_QC2_5V);
+		pr_info("Force set qc2 5V");
+		msleep(100);
+	}else if(sgm->qc_chg_type == USB_TYPE_QC30){
+		adapter_dev_dp_dm(sgm->qc_dev, DP_DM_FORCE_QC3_5V);
+		msleep(100);
+		sgm->pulse_cnt = 0;
+		pr_info("Force set qc3 5V");
+	}
+
+	if (sgm->qc_chg_type != USB_TYPE_QC3P_27) {
+		sgm4154x_set_ichrg_curr(sgm->chg_dev,3000000);
+	} else {
+		sgm4154x_set_ichrg_curr(sgm->chg_dev,500000);
+	}
 }
 
 void mmi_start_hvdcp_detect_work(struct work_struct *work)
@@ -2405,7 +2530,7 @@ void mmi_start_hvdcp_detect_work(struct work_struct *work)
 	}
 	sgm = container_of(mmi_hvdcp_detect_dwork, struct sgm4154x_device, mmi_hvdcp_detect_dwork);
 	if(sgm == NULL) {
-		pr_err("Cann't get mt6375_chg_data \n");
+		pr_err("Cann't get sgm4154x_chg_data \n");
 		return ;
 	}
 
@@ -2754,7 +2879,9 @@ static void charger_detect_work_func(struct work_struct *work)
 			sgm4154x_set_input_curr_lim(sgm->chg_dev, 3250000);
 		}
 #ifdef __SGM41542S_CHIP_ID__
-		if (sgm->mmi_hvdcp_support)
+		if (sgm->qc_dev)
+			schedule_delayed_work(&sgm->detect_qc_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER)); //for wait PD detected complete
+		else if (sgm->mmi_hvdcp_support)
 			schedule_delayed_work(&sgm->mmi_hvdcp_detect_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER));
 #endif
 		break;
@@ -3608,6 +3735,7 @@ static int sgm4154x_driver_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&sgm->retry_charger_detect_work, retry_charger_detect_work_func);
 	INIT_DELAYED_WORK(&sgm->power_supply_changed_delayed_work, power_supply_changed_delayed_work_func);
 #ifdef __SGM41542S_CHIP_ID__
+	INIT_DELAYED_WORK(&sgm->detect_qc_dwork, get_qc_charger_type_func_work);
 	INIT_DELAYED_WORK(&sgm->mmi_hvdcp_detect_dwork, mmi_start_hvdcp_detect_work);
 #endif
 	if (client->irq) {
@@ -3677,6 +3805,7 @@ static int sgm4154x_charger_remove(struct i2c_client *client)
 	struct sgm4154x_device *sgm = i2c_get_clientdata(client);
 
 #ifdef __SGM41542S_CHIP_ID__
+	cancel_delayed_work_sync(&sgm->detect_qc_dwork);
 	cancel_delayed_work_sync(&sgm->mmi_hvdcp_detect_dwork);
 #endif
 	//cancel_delayed_work_sync(&sgm->charge_monitor_work);

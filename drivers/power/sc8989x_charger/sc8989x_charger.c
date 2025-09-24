@@ -296,6 +296,8 @@ struct sc8989x_chip {
 	atomic_t attach;
 	struct adapter_device *pd_adapter;
 	struct mutex dpdm_lock;
+	/*for external qc protocol ic such as wt6670f*/
+	struct delayed_work detect_qc_dwork;
 	int pulse_cnt;
 	struct adapter_device *qc_dev;
 	bool	qc_is_detect;
@@ -1187,6 +1189,14 @@ static int sc8989x_plug_out(struct charger_device *chg_dev)
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
 
 	dev_info(sc->dev, "%s\n", __func__);
+
+	if(sc->qc_dev){
+		adapter_dev_reset_chg_type(sc->qc_dev);
+		sc->pulse_cnt = 0;
+		sc->qc_chg_type = 0;
+		sc->qc_is_detect = false;
+	}
+
 	sc8989x_field_write(sc, CONV_START, false);
 	ret = sc8989x_set_chg_enable(sc, false);
 	if (ret) {
@@ -1954,7 +1964,13 @@ static int mmi_set_dp_dm(struct charger_device *chg_dev, int val)
 	}
 	switch (val) {
 	case DP_DM_DP_PULSE:
-		if (sc->mmi_hvdcp_support) {
+		if (sc->qc_dev) {
+			ret = adapter_dev_dp_dm(sc->qc_dev, DP_DM_DP_PULSE);
+			if (ret < 0)
+				dev_err(sc->dev, "qc protocol ic set vbus up failed\n");
+			else
+				sc->pulse_cnt++;
+		} else if  (sc->mmi_hvdcp_support) {
 			ret = sc8989x_qc30_step_up_vbus(sc);
 			if (ret)
 				dev_err(sc->dev, "qc protocol ic set vbus up failed\n");
@@ -1964,7 +1980,13 @@ static int mmi_set_dp_dm(struct charger_device *chg_dev, int val)
 		}
 		break;
 	case DP_DM_DM_PULSE:
-		if (sc->mmi_hvdcp_support) {
+		if (sc->qc_dev) {
+			ret = adapter_dev_dp_dm(sc->qc_dev, DP_DM_DM_PULSE);
+			if (ret < 0)
+				dev_err(sc->dev, "qc protocol ic set vbus down failed\n");
+			else if (sc->pulse_cnt > 0)
+				sc->pulse_cnt--;
+		} else if (sc->mmi_hvdcp_support) {
 			ret = sc8989x_qc30_step_down_vbus(sc);
 			if (ret)
 				dev_err(sc->dev, "qc protocol ic set vbus down failed\n");
@@ -2045,13 +2067,19 @@ int mmi_config_qc_charger(struct charger_device *chg_dev)
 
 	pr_info("pulse_cnt=%d, vbus_uv=%d\n", sc->pulse_cnt, vbus_uv);
 	if (vbus_uv < HVDCP_VOLTAGE_NOM && sc->pulse_cnt < HVDCP_PULSE_COUNT_MAX) {
-		rc = sc8989x_dp_dm(sc->chg_dev, DP_DM_DP_PULSE);
+		if (sc->qc_dev)
+			rc = adapter_dev_dp_dm(sc->qc_dev, DP_DM_DP_PULSE);
+		else if (sc->mmi_hvdcp_support)
+			rc = sc8989x_dp_dm(sc->chg_dev, DP_DM_DP_PULSE);
 		if (rc)
 			dev_err(sc->dev, "qc protocol ic set vbus up failed\n");
 		else
 			sc->pulse_cnt++;
 	} else if (vbus_uv > HVDCP_VOLTAGE_MAX && sc->pulse_cnt > 0 ) {
-		rc = sc8989x_dp_dm(sc->chg_dev, DP_DM_DM_PULSE);
+		if (sc->qc_dev)
+			rc = adapter_dev_dp_dm(sc->qc_dev, DP_DM_DM_PULSE);
+		else if (sc->mmi_hvdcp_support)
+			rc = sc8989x_dp_dm(sc->chg_dev, DP_DM_DM_PULSE);
 		if (rc)
 			dev_err(sc->dev, "qc protocol ic set vbus down failed\n");
 		else {
@@ -2064,6 +2092,106 @@ int mmi_config_qc_charger(struct charger_device *chg_dev)
 	}
 	msleep(QC3P_MSLEEP_100DELAY);
 	return rc;
+}
+
+void get_qc_charger_type_func_work(struct work_struct *work)
+{
+	struct delayed_work *detect_qc_dwork = NULL;
+	struct sc8989x_chip *sc;
+	bool early_notified = false;
+	bool need_retry = false;
+	bool m_chg_ready = false;
+	int early_chg_type = 0;
+	int count = 0;
+	int ret;
+	union power_supply_propval val;
+
+	detect_qc_dwork = container_of(work, struct delayed_work, work);
+	if(detect_qc_dwork == NULL) {
+		pr_info("Can't get charge_monitor_work\n");
+		return ;
+	}
+	sc = container_of(detect_qc_dwork, struct sc8989x_chip, detect_qc_dwork);
+	if(sc == NULL) {
+		pr_err("Can't get sc8989x_chip \n");
+		return ;
+	}
+
+	if (!sc->qc_dev) {
+		pr_err("qc protocol ic dev is not ready, exit \n");
+		return;
+	}
+
+	adapter_dev_reset_chg_type(sc->qc_dev);
+	pr_info("start qc detected \n");
+	sc->qc_is_detect = true;
+
+	sc8989x_set_charging_current(sc->chg_dev,1000000);
+
+	do{
+		m_chg_ready = false;
+		sc->qc_chg_type = 0;
+		early_notified = false;
+		need_retry = false;
+		early_chg_type = 0;
+		adapter_dev_start_detection(sc->qc_dev);
+		while((!m_chg_ready)&&(count<100)) {
+			ret = power_supply_get_property(sc->psy, POWER_SUPPLY_PROP_ONLINE, &val);
+			if (val.intval <= 0) {
+			      pr_info("[%s] ONLINE: %d, skip detecting0,ret=%d\n",__func__, val.intval, ret);
+			      break;
+			}
+			msleep(30);
+			count++;
+			adapter_dev_is_charger_ready(sc->qc_dev, &m_chg_ready);
+
+			if(!early_notified){
+			      adapter_dev_get_protocol(sc->qc_dev, &early_chg_type);
+			}
+
+			if(early_chg_type == USB_TYPE_QC3P_18 || early_chg_type == USB_TYPE_QC3P_27){
+				pr_info("[%s] qc early type is QC3+: %d, skip detecting\n",__func__, early_chg_type);
+				break;
+			}
+				pr_info("qc waiting early type: 0x%x, detect ready: 0x%x, count: %d\n", early_chg_type, m_chg_ready, count);
+		}
+
+		adapter_dev_get_protocol(sc->qc_dev, &sc->qc_chg_type);
+
+		if(sc->qc_chg_type == USB_TYPE_OCP && !need_retry){
+			need_retry = true;
+		} else {
+			need_retry = false;
+		}
+		ret = power_supply_get_property(sc->psy, POWER_SUPPLY_PROP_ONLINE, &val);
+		if (val.intval) {
+			power_supply_changed(sc->psy);
+		}
+		else {
+			pr_info("[%s] ONLINE: %d, skip detecting1\n",__func__, val.intval);
+			break;
+		}
+		pr_info("[%s] qc charge type is  0x%x\n",__func__, sc->qc_chg_type);
+	}while(need_retry);
+
+	sc->qc_is_detect = false;
+
+	if(sc->qc_chg_type == USB_TYPE_QC20){
+		adapter_dev_dp_dm(sc->qc_dev, DP_DM_FORCE_QC2_5V);
+		pr_info("Force set qc2 5V");
+		msleep(100);
+	}else if(sc->qc_chg_type == USB_TYPE_QC30){
+		adapter_dev_dp_dm(sc->qc_dev, DP_DM_FORCE_QC3_5V);
+		msleep(100);
+		sc->pulse_cnt = 0;
+		pr_info("Force set qc3 5V");
+	}
+
+	if (sc->qc_chg_type != USB_TYPE_QC3P_27) {
+		sc8989x_set_charging_current(sc->chg_dev,3000000);
+	} else {
+		sc8989x_set_charging_current(sc->chg_dev,500000);
+	}
 }
 
 void mmi_start_hvdcp_detect_work(struct work_struct *work)
@@ -2080,7 +2208,7 @@ void mmi_start_hvdcp_detect_work(struct work_struct *work)
 	}
 	sc = container_of(mmi_hvdcp_detect_dwork, struct sc8989x_chip, mmi_hvdcp_detect_dwork);
 	if(sc == NULL) {
-		pr_err("Can't get mt6375_chg_data \n");
+		pr_err("Can't get sc8989x_chip \n");
 		return ;
 	}
 
@@ -2250,13 +2378,13 @@ static int mmi_hvdcp_detect_kthread(void *param)
 		if (kthread_should_stop())
 			break;
 
-		//down(&ddata->sem_dpdm);
+		//down(&sc->sem_dpdm);
 		pr_info("HVDCP: mmi_hvdcp_detect_kthread begin\n");
 		sc->mmi_hvdcp_trig_flag = false;
 		sc->qc_is_detect = true;
 		sc8989x_set_charging_current(sc->chg_dev,1000000);
-		//mt6375_chg_field_set(ddata, F_IAICR, 500);
-		//mt6375_chg_set_usbsw(ddata, USBSW_CHG);
+		//mt6375_chg_field_set(sc, F_IAICR, 500);
+		//mt6375_chg_set_usbsw(sc, USBSW_CHG);
 
 rerun:
 		//do qc2.0 detected
@@ -2581,7 +2709,9 @@ static int sc8989x_get_charger_type(struct sc8989x_chip *sc)
 		sc->chg_type = POWER_SUPPLY_TYPE_USB_DCP;
 		sc->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
 		dev_info(sc->dev, "%s: charger type: DCP\n", __func__);
-		if (sc->mmi_hvdcp_support)
+		if (sc->qc_dev)
+			schedule_delayed_work(&sc->detect_qc_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER)); //for wait PD detected complete
+		else if (sc->mmi_hvdcp_support)
 			schedule_delayed_work(&sc->mmi_hvdcp_detect_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER));
 		break;
 	case VBUS_STAT_UNKOWN:
@@ -3298,6 +3428,7 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	}
 
 	INIT_DELAYED_WORK(&sc->force_detect_dwork, sc8989x_force_detection_dwork_handler);
+	INIT_DELAYED_WORK(&sc->detect_qc_dwork, get_qc_charger_type_func_work);
 	INIT_DELAYED_WORK(&sc->mmi_hvdcp_detect_dwork, mmi_start_hvdcp_detect_work);
 #ifdef CONFIG_MTK_CHARGER_V4P19
 	INIT_DELAYED_WORK(&sc->psy_dwork, sc8989x_inform_psy_dwork_handler);
@@ -3386,6 +3517,7 @@ static int sc8989x_charger_remove(struct i2c_client *client)
 
 	if (sc) {
 		dev_info(sc->dev, "%s\n", __func__);
+		cancel_delayed_work_sync(&sc->detect_qc_dwork);
 		cancel_delayed_work_sync(&sc->mmi_hvdcp_detect_dwork);
 		kthread_stop(sc->mmi_hvdcp_authen_task);
 		mutex_destroy(&sc->dpdm_lock);

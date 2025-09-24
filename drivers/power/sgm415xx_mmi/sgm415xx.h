@@ -365,6 +365,8 @@ struct sgm4154x_device {
 
 #ifdef __SGM41542S_CHIP_ID__
 	struct mutex dpdm_lock;
+	/*for external qc protocol ic such as wt6670f*/
+	struct delayed_work detect_qc_dwork;
 	int pulse_cnt;
 	struct adapter_device *qc_dev;
 	bool	qc_is_detect;
