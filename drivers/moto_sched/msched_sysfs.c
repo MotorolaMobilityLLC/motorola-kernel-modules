@@ -131,7 +131,7 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 	char buffer[128];
 	size_t len = 0;
 
-	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d kernel=%d\n",
+	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d \n",
 			moto_sched_enabled,
 			is_enabled(UX_ENABLE_BASE),
 			is_enabled(UX_ENABLE_INTERACTION),
@@ -140,8 +140,7 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 			is_enabled(UX_ENABLE_AUDIO),
 			is_enabled(UX_ENABLE_CAMERA),
 			is_enabled(UX_ENABLE_KSWAPD),
-			is_enabled(UX_ENABLE_BOOST),
-			is_enabled(UX_ENABLE_KERNEL));
+			is_enabled(UX_ENABLE_BOOST));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
@@ -498,7 +497,8 @@ static ssize_t all_ux_tasks_read(struct file *file, char __user *buf,
         for_each_thread(p, t) {
 			ux_type = task_get_ux_type(t);
 			if (ux_type > 0) {
-				pr_info("%d:%d %s prio=%d ux_type=0x%x\n", t->tgid, t->pid, t->comm, t->prio, ux_type);
+				pr_info("%d:%d %s prio=%d ux_type=0x%x  parent=%d \n", t->tgid, t->pid, t->comm,
+				t->prio, ux_type, t->parent->pid);
 				ux_count++;
 			}
         }
