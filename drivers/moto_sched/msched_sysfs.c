@@ -443,7 +443,8 @@ static ssize_t all_ux_tasks_read(struct file *file, char __user *buf,
         for_each_thread(p, t) {
 			ux_type = task_get_ux_type(t);
 			if (ux_type > 0) {
-				pr_info("%d:%d %s prio=%d ux_type=0x%x\n", t->tgid, t->pid, t->comm, t->prio, ux_type);
+				pr_info("%d:%d %s prio=%d ux_type=0x%x  parent=%d \n", t->tgid, t->pid, t->comm,
+				t->prio, ux_type, t->parent->pid);
 				ux_count++;
 			}
         }
