@@ -36,7 +36,7 @@
 #define LOG_ERR(fmt, args...)    pr_err(DRIVER_NAME " [ERR]" "<%s:%d>"fmt, __func__, __LINE__, ##args)
 
 static int hall_sensor_probe(struct platform_device *pdev);
-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,12,0)
 static void hall_sensor_remove(struct platform_device *pdev);
 #else
 static int hall_sensor_remove(struct platform_device *pdev);
@@ -510,7 +510,7 @@ fail_for_mem:
 	return ret;
 }
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(6,6,0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,12,0)
 static void hall_sensor_remove(struct platform_device *pdev)
 #else
 static int hall_sensor_remove(struct platform_device *pdev)
@@ -567,7 +567,7 @@ static int hall_sensor_remove(struct platform_device *pdev)
 		kfree(hall_sensor_dev);
 
 	LOG_INFO("paltform rm\r\n");
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,12,0)
 	return 0;
 #endif
 }
