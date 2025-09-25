@@ -151,6 +151,8 @@ static inline bool task_in_top_app_group(struct task_struct *p)
 {
 	struct moto_task_struct *oem_data;
 	oem_data  = get_moto_task_struct(p);
+	if (IS_ERR_OR_NULL(oem_data))
+		return false;
 	// mio_log(" top %d:%d\n", oem_data->cgr_type, get_task_cgroup_id(p));
 	return ( oem_data->cgr_type == CGROUP_TOP_APP );
 }

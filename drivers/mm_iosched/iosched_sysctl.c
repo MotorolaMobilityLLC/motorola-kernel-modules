@@ -133,6 +133,8 @@ bool request_boost(struct mdd_data *dd, struct task_struct *tsk, bool is_sync, i
 	bool is_top = false;
 	/* only do synchronous now*/
 	oem_data  = get_moto_task_struct(tsk);
+	if (IS_ERR_OR_NULL(oem_data))
+		return false;
 	if ((system_pid <= 0)  && ( tsk->pid > 1000 ))
 	{
 		if ((tsk->parent) && (!strcmp(tsk->comm, "system_server"))) /* || (!strcmp(tsk->parent->comm, "main")))) */
@@ -231,6 +233,8 @@ static void oem_android_rvh_cpu_cgroup_attach(void *unused,
 	cgroup_taskset_for_each(task, css, tset)
 	{
 		oem_data  = get_moto_task_struct(task);
+		if (IS_ERR_OR_NULL(oem_data))
+			return;
 		oem_data->cgr_type = css->id;
 		// mio_log("task %d tgid %d, %d, top:%d ux:%x\n", task->pid, task->tgid, task->cred->uid.val, css->id, oem_data->ux_type);//, cgrptg->colocate,  cgrptg->groupid);
 		if ( task != task->group_leader)
@@ -259,6 +263,8 @@ static void oem_android_rvh_cpu_cgroup_attach(void *unused,
 	}
 	// cgroup_taskset_for_each(task, css, tset) {
 	// 	oem_data  = get_moto_task_struct(task);
+	// if (IS_ERR_OR_NULL(oem_data))
+	// 	return;
 	// 	oem_data->cgr_type = get_task_cgroup_id(task);
     // }
 
@@ -274,6 +280,8 @@ static void oem_android_rvh_wake_up_new_task(void *unused, struct task_struct *t
 	// if (task->parent && (system_pid == task->parent->pid))
 	{
 		oem_data  = get_moto_task_struct(task);
+		if (IS_ERR_OR_NULL(oem_data))
+			return;
 		// oem_data->cgr_type = CGROUP_TOP_APP;
 		oem_data->cgr_type = get_task_cgroup_id(task);
 	}
