@@ -235,7 +235,8 @@ enum pen_message_type {
     PEN_MESSAGE_BATTERY,
     PEN_MESSAGE_BLE_MAC,
     PEN_MESSAGE_PEN_INFO,
-    PEN_MESSAGE_PEN_CLOSE
+    PEN_MESSAGE_PEN_CLOSE,
+    PEN_MESSAGE_PEN_QPID
 };
 
 #pragma pack(push, 1)
@@ -300,6 +301,7 @@ enum {
         SVC_CMD_OPEN_CIRCUIT = 38,
         SVC_CMD_BATTERY,
         SVC_CMD_PEN_INFO,
+        SVC_CMD_GET_PID
 };
 
 #define MAX_TSC_MSG_DATA_LEN 128
@@ -545,6 +547,7 @@ struct goodix_thp_core {
         u8 battery_level;
         u8 ble_mac[6];
         u8 pen_info[9];
+        u8 quick_pid;
 };
 
 extern bool debug_log_flag;
