@@ -3898,7 +3898,11 @@ static void haptic_init(struct aw_haptic *aw_haptic)
 	mutex_unlock(&aw_haptic->lock);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static int aw_i2c_probe(struct i2c_client *i2c)
+#else
 static int aw_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *id)
+#endif
 {
 	int ret = 0;
 	struct aw_haptic *aw_haptic;
