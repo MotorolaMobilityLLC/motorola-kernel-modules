@@ -1548,7 +1548,8 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         }
 
         /* copy data from hal */
-        if (copy_from_user(&data, argp, sizeof(data))) {
+        if (copy_from_user(&data, argp,
+                        sizeof(struct thp_input_agent_ioctl_coor_data))) {
                 ts_err(tdev->dev, "Failed to copy_from_user().");
                 return -EFAULT;
         }

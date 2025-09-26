@@ -437,7 +437,6 @@ struct thp_input_agent_ioctl_coor_data {
         unsigned char hover_stat;			/* 0:normal stat;1:hover stat*/
         unsigned char large_touch_stat;		        /* 0:normal touch stat;1:large_touch_stat*/
         unsigned char ref_not_set;
-        struct timeval64 time_stamp;
         unsigned char stylus_key;
 };
 

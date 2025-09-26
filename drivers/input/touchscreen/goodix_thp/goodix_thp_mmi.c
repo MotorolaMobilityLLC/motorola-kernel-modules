@@ -124,9 +124,6 @@ static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NUL
 	} \
 }
 
-extern u8 ble_mac[6];
-extern u8 battery_level;
-
 static struct attribute *ext_attributes[MAX_ATTRS_ENTRIES];
 static struct attribute_group ext_attr_group = {
 	.attrs = ext_attributes,
@@ -710,7 +707,7 @@ static int goodix_clock_enable(struct goodix_thp_core *core_data, bool mode)
 int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
 {
 	int ret = 0;
-	u8 val[2];
+	u8 val[3];
 
 	val[0] = NOTIFY_TYPE_STYLUS_CTRL;
 
@@ -723,8 +720,34 @@ int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
 	} else {
 		val[1] = 0;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-		msleep(20);
+		msleep(50);
 		goodix_clock_enable(core_data, mode);
+
+		/* when exit stylus mode, need check if need restore game mode */
+		if (core_data->ts_dev->board_data.sample_ctrl && core_data->set_mode.sample) {
+			val[0] = NOTIFY_TYPE_GAME_MODE;
+			val[1] = core_data->set_mode.sample;
+			put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+			msleep(20);
+			ts_info(core_data->ts_dev->dev, "Restore game mode after exit stylus mode");
+
+			/* check if need restore high report rate */
+			if (core_data->ts_dev->board_data.interpolation_ctrl && core_data->set_mode.interpolation) {
+				val[0] = NOTIFY_TYPE_SWITCH_REPORT_RATE;
+				val[1] = ((core_data->set_mode.report_rate_mode) >> 8) & 0xFF;
+				val[2] = (core_data->set_mode.report_rate_mode) & 0xFF;
+				put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+				msleep(20);
+				ts_info(core_data->ts_dev->dev, "Success to restore %s interpolation mode",
+					core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_480HZ ? "REPORT_RATE_480HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_576HZ ? "REPORT_RATE_576HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
+					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
+				"Unsupported"))))));
+			}
+		}
 	}
 
 	ts_info(core_data->ts_dev->dev, "Success to %s stylus mode", mode ? "Enable" : "Disable");
@@ -764,7 +787,11 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 		goto exit;
 	}
 
-	if (core_data->power_on == 0) {
+	/* 1) If on screen on state, here can switch stylus mode directly,
+	* 2) If BLE enable stylus notify after IC resume done,
+	*     here will do the stylus mode switch or will do the stylus mode switch on post resume
+	*/
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
 		ts_info(tdev->dev, "The touch is in sleep state, restore the value when resume");
 		goto exit;
 	}
@@ -941,7 +968,7 @@ static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 	GET_GOODIX_DATA(dev);
 
 	hardware_status = core_data->open_status;
-	ts_info(core_data->ts_dev->dev, "Read touch hardware status = %d.\n", hardware_status);
+	ts_info(core_data->ts_dev->dev, "Read touch hardware status = %d", hardware_status);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
 }
 #endif
@@ -956,6 +983,10 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
 	/* restore data */
 	if (core_data->ts_dev->board_data.stylus_mode_ctrl && core_data->get_mode.stylus_mode) {
+		/* If BLE enable stylus notify before IC resume done,
+		* stylus_mode_store() will not switch to stylus mode,
+		* here will do the stylus mode switch
+		*/
 		ret = goodix_stylus_mode(core_data, core_data->get_mode.stylus_mode);
 		if (!ret) {
 			core_data->set_mode.stylus_mode = core_data->get_mode.stylus_mode;
