@@ -1,5 +1,5 @@
 load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
-load(":kernel_helpers.bzl", "get_kernel_headers")
+load("//motorola/kernel/modules:kernel_helpers.bzl", "get_kernel_headers")
 
 package(
     default_visibility = [
