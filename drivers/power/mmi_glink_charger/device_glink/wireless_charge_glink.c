@@ -96,7 +96,8 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 			wls_info.tx_ept);
 
 		mmi_info(this_root_chip, "Wireless dump info -3: rx_ept: %d, rx_ce: %d, "
-			"rx_rp: %d, rx_dietemp: %d, USB_OTG: %d, WLS_BOOST: %d, WLS_ICL_MA: %dmA, WLS_ICL_THERM_MA: %dmA, mc_st: %d",
+			"rx_rp: %d, rx_dietemp: %d, USB_OTG: %d, WLS_BOOST: %d, WLS_ICL_MA: %dmA, WLS_ICL_THERM_MA: %dmA, "
+			"mc_st: %d, vdd5v_st: %d",
 			wls_info.rx_ept,
 			wls_info.rx_ce,
 			wls_info.rx_rp,
@@ -105,7 +106,8 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 			wls_info.wls_boost,
 			wls_info.wls_icl_ma,
 			wls_info.wls_icl_therm_ma,
-			wls_info.wls_mc_st);
+			wls_info.wls_mc_st,
+			wls_info.vdd5v_st);
 
 
 		mmi_info(this_root_chip, "Wireless dump info -4: WLC Stand: tx_type %d, tx_power: %d, "

@@ -52,6 +52,7 @@ struct wls_dump
     u16  wls_icl_ma;
     u16  wls_icl_therm_ma;
     u16  wls_mc_st;
+    u16  vdd5v_st;
 };
 
 struct wireless_glink_dev {
