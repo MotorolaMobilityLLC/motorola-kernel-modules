@@ -46,6 +46,12 @@
 	} while (0)
 #define MAX_STR_LEN 64
 
+struct cutoff_zone {
+	int	cycle_l;
+	int	cycle_h;
+	int	shutdown_voltage;
+};
+
 struct mmi_battery_pack {
 	int	status;
 	int	voltage_now;
@@ -122,6 +128,9 @@ struct mmi_smart_battery {
 #ifdef CONFIG_MOTO_1800_CYCLE
 	struct ifc_ops  ifc_chg_ops;
 #endif
+	struct cutoff_zone *cutoff_zone;
+	int num_cutoff;
+	int current_cutoff_index;
 };
 
 #define SOC_JUMPS_DELAYED_WORK_TIME  60000
