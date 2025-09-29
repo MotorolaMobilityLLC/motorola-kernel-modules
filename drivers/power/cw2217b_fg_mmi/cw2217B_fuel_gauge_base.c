@@ -33,8 +33,6 @@
 #define REG_TEMP_MIN            0x0D
 #define REG_CURRENT_H           0x0E
 #define REG_CURRENT_L           0x0F
-#define REG_T_HOST_H            0xA0
-#define REG_T_HOST_L            0xA1
 #define REG_USER_CONF           0xA2
 #define REG_CYCLE_H             0xA4
 #define REG_CYCLE_L             0xA5
@@ -44,6 +42,12 @@
 #define REG_STB_CUR_L           0xA9
 #define REG_FW_VERSION          0xAB
 #define REG_BAT_PROFILE         0x10
+
+#define REG_CUT_OFF_VOLT        0xA0
+#define CUT_OFF_VOLT_LOWER_LIMIT     2800  //mV
+#define CUT_OFF_VOLT_UPPER_LIMIT     3600  //mV
+#define CUT_OFF_VOLT_BASE            2500  //mV
+#define CUT_OFF_VOLT_STEP            10  //mV
 
 #define CONFIG_MODE_RESTART     0x30
 #define CONFIG_MODE_ACTIVE      0x00
@@ -798,6 +802,54 @@ static int cw_get_fw_version(struct cw_battery *cw_bat)
 	return 0;
 }
 
+#define CW2217E_FW_VERSION 72
+static int cw_set_shutdown_threshold(struct gauge_device *gauge_dev, int shutdown_volt)
+{
+	struct cw_battery *cw_bat;
+	int ret = 0;
+	unsigned char reg_val = 0;
+	unsigned char now_shutdown_volt = 0;
+
+	if(gauge_dev == NULL)
+		return -ENOMEM;
+
+	cw_bat = dev_get_drvdata(&gauge_dev->dev);
+	if (cw_bat->fw_version != CW2217E_FW_VERSION ||
+		(shutdown_volt < CUT_OFF_VOLT_LOWER_LIMIT) ||
+		(shutdown_volt > CUT_OFF_VOLT_UPPER_LIMIT)) {
+		cw_err(cw_bat,"set shutdown volt(%d) is not allowed\n", shutdown_volt);
+		return -1;
+	}
+
+	ret = cw_read(cw_bat, REG_CUT_OFF_VOLT, &now_shutdown_volt);
+	if (ret < 0)
+		cw_err(cw_bat, "IIC read REG_CUT_OFF_VOLT error %d\n", ret);
+
+	reg_val = (shutdown_volt - CUT_OFF_VOLT_BASE)/CUT_OFF_VOLT_STEP;
+	if (now_shutdown_volt == reg_val) {
+		cw_info(cw_bat, "This shutdown voltage (%d mV) is the same as the current setting. No write needed.\n", shutdown_volt);
+		return 0;
+	}
+
+	ret = cw_write(cw_bat, REG_CUT_OFF_VOLT, &reg_val);
+	if (ret < 0)
+		cw_err(cw_bat, "IIC error %d\n", ret);
+
+	now_shutdown_volt = 0;
+	ret = cw_read(cw_bat, REG_CUT_OFF_VOLT, &now_shutdown_volt);
+	if (ret < 0)
+		cw_err(cw_bat, "IIC read REG_CUT_OFF_VOLT error %d\n", ret);
+	else if (now_shutdown_volt == reg_val) {
+		cw_info(cw_bat, "set shutdown_threshold to %d successfully\n", shutdown_volt);
+	} else {
+		cw_err(cw_bat, "Failed to set shutdown voltage. Wrote %d mV, but read back %d mV.\n",
+                       shutdown_volt, (now_shutdown_volt * CUT_OFF_VOLT_STEP + CUT_OFF_VOLT_BASE));
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static int cw_init_data(struct gauge_device *gauge_dev)
 {
 	int value = 0;
@@ -1150,6 +1202,7 @@ static struct gauge_ops cw_gauge_ops = {
 	.get_charge_counter = cw_get_charge_counter,
 	.get_cycle_count = cw_get_cycle_count,
 	.get_soh = cw_get_soh,
+	.set_shutdown_threshold = cw_set_shutdown_threshold,
 	//.set_charge_type = cw_set_charge_type,
 };
 

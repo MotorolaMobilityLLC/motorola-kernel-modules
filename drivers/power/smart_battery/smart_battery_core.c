@@ -685,6 +685,50 @@ static void smart_batt_notify_flip_uevent(struct mmi_smart_battery *chip)
 	return;
 }
 
+static inline bool is_between(int c, int min, int max)
+{
+	return ((c >= min) && (c <= max));
+}
+
+static int get_cutoff_index(struct cutoff_zone *cutoff_zone, int zone_count, int cycle_count)
+{
+	int i = 0;
+
+	if (IS_ERR_OR_NULL(cutoff_zone))
+		return 0;
+
+	for (i = 0; i < zone_count; i++) {
+		if (is_between(cycle_count, cutoff_zone[i].cycle_l, cutoff_zone[i].cycle_h)) {
+			return i;
+		}
+	}
+
+	return zone_count - 1;
+}
+
+static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
+{
+	if (IS_ERR_OR_NULL(chip))
+		return 0;
+
+	if (!IS_ERR_OR_NULL(chip->cutoff_zone) && chip->uisoc == 100 &&
+		(chip->current_cutoff_index < chip->num_cutoff) &&
+		mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING) {
+		if (!is_between(chip->combo_cycle_count,
+			chip->cutoff_zone[chip->current_cutoff_index].cycle_l,
+			chip->cutoff_zone[chip->current_cutoff_index].cycle_h)) {
+
+			chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
+			mmi_info(chip, "%s current_cutoff_index=%d, shutdownVoltage=%dmV",
+				__func__, chip->current_cutoff_index,
+				chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage);
+			smart_batt_set_shutdown_threshold(chip, chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage);
+		}
+	}
+
+	return 0;
+}
+
 static void smart_batt_update_thread(struct work_struct *work)
 {
 	struct delayed_work *delay_work;
@@ -750,6 +794,8 @@ static void smart_batt_update_thread(struct work_struct *work)
 
 	mmi_info(chip, "UISOC:%d, Volt:%d, Current:%d, Temperature:%d, Cycle_count:%d, Soh:%d\n",
 		chip->uisoc, chip->combo_voltage_now, chip->combo_current_now, chip->combo_batt_temp, chip->combo_cycle_count, chip->combo_soh);
+
+	smart_batt_shutdown_voltage(chip);
 
 	queue_delayed_work(chip->fg_workqueue, &chip->battery_delay_work, msecs_to_jiffies(work_intervals));
 }
@@ -887,7 +933,7 @@ static int smart_battery_resume(struct device *dev)
 static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 {
 	struct device_node *np = chip->dev->of_node;
-	int i, rc,val;
+	int i, rc, val, byte_len;
 	chip->sync_boardtemp_to_fg = of_property_read_bool(np , "mmi,sync_boardtemp_to_fg");
 
 	if (of_property_read_u32(np, "mmi,ui_full_soc", &chip ->ui_full_soc) < 0) {
@@ -936,6 +982,35 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 
 	mmi_info(chip,"vbatt_empty_mv=%d vbatt_empty_cold_mv=%d batt_cold_threshold=%d, vbatt_low_mv=%d vbatt_low_cold_mv=%d",
 		chip->vbatt_empty_mv,chip->vbatt_empty_cold_mv, chip->batt_cold_threshold, chip->vbatt_low_mv, chip->vbatt_low_cold_mv);
+
+	if (of_find_property(np, "cyclecount-shutdown-voltage-zones", &byte_len)) {
+		if ((byte_len / sizeof(u32)) % 3) {
+			mmi_info(chip, "DT error wrong cyclecount-shutdown-voltage-zones zones\n");
+			return -ENODEV;
+		}
+
+		chip->cutoff_zone = devm_kzalloc(chip->dev, byte_len, GFP_KERNEL);
+		if (chip->cutoff_zone == NULL)
+			return -ENOMEM;
+		chip->num_cutoff =
+			byte_len / sizeof(struct cutoff_zone);
+
+		rc = of_property_read_u32_array(np,
+				"cyclecount-shutdown-voltage-zones",
+				(u32 *)chip->cutoff_zone,
+				byte_len / sizeof(u32));
+		if (rc < 0) {
+			mmi_info(chip, "Couldn't read cyclecount-shutdown-voltage-zones rc = %d\n", rc);
+			return rc;
+		}
+
+		for (i = 0; i < chip->num_cutoff; i++) {
+			mmi_info(chip, "cyclecount-shutdown-voltage-zones: num %d, cycle_L:%d, cycle_H:%d, shutdownVoltage:%d", i,
+				 chip->cutoff_zone[i].cycle_l,
+				 chip->cutoff_zone[i].cycle_h,
+				 chip->cutoff_zone[i].shutdown_voltage);
+		}
+	}
 
 	chip->gauge_count = of_property_count_strings(np, "mmi,gauge_names");
 	if (chip->gauge_count < 0) {
