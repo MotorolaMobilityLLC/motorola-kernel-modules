@@ -1317,14 +1317,14 @@ static int sgm4154x_plug_out(struct charger_device *chg_dev)
 	if (!sgm) {
 		return -EINVAL;
 	}
-
+#ifdef __SGM41542S_CHIP_ID__
 	if(sgm->qc_dev){
 		adapter_dev_reset_chg_type(sgm->qc_dev);
 		sgm->pulse_cnt = 0;
 		sgm->qc_chg_type = 0;
 		sgm->qc_is_detect = false;
 	}
-
+#endif
 	ret = sgm4154x_disable_charger(sgm);
 	if (ret) {
 		pr_err("%s: Failed to disable charging:%d\n", __func__, ret);
