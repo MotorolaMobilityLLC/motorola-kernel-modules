@@ -37,6 +37,7 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/mmi_gauge_class.h>
+#include <linux/version.h>
 
 
 #define mmi_info	pr_info
@@ -3778,9 +3779,15 @@ static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)
 	return rtn;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+static int mmi_fg_probe(struct i2c_client *client)
+{
+	const struct i2c_device_id *id = i2c_client_get_device_id(client);
+#else
 static int mmi_fg_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
 {
+#endif
 	int ret;
 	struct mmi_fg_chip *mmi;
 	u8 *regs;
@@ -3956,9 +3963,9 @@ static struct i2c_driver mmi_fg_driver = {
 		.of_match_table = mmi_fg_match_table,
 		.pm     = &mmi_fg_pm_ops,
 	},
-	.id_table       = mmi_fg_id,
+	.id_table   = mmi_fg_id,
 
-	.probe          = mmi_fg_probe,
+	.probe      = mmi_fg_probe,
 	.remove		= mmi_fg_remove,
 	.shutdown	= mmi_fg_shutdown,
 

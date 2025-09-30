@@ -11,5 +11,7 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/nfg1000_fg_mmi
 
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include \
-		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/drivers/power/supply
 obj-m += nfg1000_fg_mmi.o

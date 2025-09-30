@@ -17,6 +17,7 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/mmi_gauge_class.h>
+#include <linux/version.h>
 
 static struct class *gauge_class;
 
@@ -395,7 +396,11 @@ static void __exit gauge_class_exit(void)
 
 static int __init gauge_class_init(void)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))
+	gauge_class = class_create("mmi_gauge");
+#else
 	gauge_class = class_create(THIS_MODULE, "mmi_gauge");
+#endif
 	if (IS_ERR(gauge_class)) {
 		pr_err("Unable to create mmi discrete charger class; errno = %ld\n",
 			PTR_ERR(gauge_class));

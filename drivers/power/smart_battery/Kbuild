@@ -9,7 +9,9 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/power/supply \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/smart_battery \
 		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include \
-		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/drivers/power/supply
 
 
 obj-m += smart_battery.o
