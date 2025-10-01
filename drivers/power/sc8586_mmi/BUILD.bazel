@@ -1,0 +1,21 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+load("//motorola/kernel/modules:kernel_helpers.bzl", "get_kernel_headers")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "sc8586_mmi",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+        "Makefile.include",
+    ]) + get_kernel_headers(),
+
+    outs = ["sc8586_mmi.ko"],
+)

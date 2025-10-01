@@ -1,0 +1,18 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+	ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
+#EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/sc8586_mmi \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/drivers/misc/mediatek/scp/include
+
+
+obj-m += sc8586_mmi.o
+sc8586_mmi-objs += sc8586_charger.o
+sc8586_mmi-objs += sc8586_dpdm_ctrl.o
