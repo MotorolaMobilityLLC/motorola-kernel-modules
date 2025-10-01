@@ -127,6 +127,10 @@ static int smart_batt_get_cycle_count(struct mmi_smart_battery *chip)
 			chip->flip_batt_cycle_count= battery->cycle_count;
 		}
 	}
+	if (chip->fake_cycle_count != 0) {
+		chip->combo_cycle_count = chip->fake_cycle_count;
+		mmi_info(chip, "Using fake cycle count: %d\n", chip->fake_cycle_count);
+	}
 
 	return chip->combo_cycle_count;
 }
@@ -157,6 +161,11 @@ static int smart_batt_get_temperature(struct mmi_smart_battery *chip)
 		avg_bat_temp = chip->flip_batt_temp;
 
 	chip->combo_batt_temp = avg_bat_temp;
+
+	if(chip->fake_temp != -EINVAL) {
+		chip->combo_batt_temp = chip->fake_temp;
+		mmi_info(chip, "Using fake battery temperature: %d\n", chip->fake_temp);
+	}
 
 	return chip->combo_batt_temp;
 }
@@ -403,10 +412,6 @@ static int batt_get_prop(struct power_supply *psy,
 		val->intval = mmi_get_batt_capacity_level(chip);
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
-		if (chip->fake_temp != -EINVAL) {
-			val->intval = chip->fake_temp;
-			break;
-		}
 		if (chip->combo_batt_temp == INVALID_TEMP) {
 			smart_batt_get_temperature(chip);
 		}
@@ -425,14 +430,7 @@ static int batt_get_prop(struct power_supply *psy,
 		val->intval = chip->combo_charge_counter* 1000;
 		break;
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-#ifdef CONFIG_MOTO_1200_CYCLE
-		if(chip->bat_cycle_count > 0)
-			val->intval = chip->bat_cycle_count;
-		else
-			val->intval = chip->combo_cycle_count;
-#else
 		val->intval = chip->combo_cycle_count;
-#endif
 		break;
 	case POWER_SUPPLY_PROP_HEALTH:
 		val->intval = mmi_batt_health_check();
@@ -481,6 +479,9 @@ static int batt_set_prop(struct power_supply *psy,
 		smart_batt_set_charge_type(chip, val->intval);
 		chip->is_ffc_charge = val->intval;
 		break;
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
+		chip->fake_cycle_count =  val->intval;
+		break;
 	default:
 		return -EINVAL;
 	}
@@ -496,6 +497,7 @@ static int batt_prop_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_TEMP:
 	case POWER_SUPPLY_PROP_CAPACITY:
 	case POWER_SUPPLY_PROP_TYPE:
+	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		return 1;
 	default:
 		break;
@@ -820,14 +822,13 @@ static int smart_batt_get_bat_name(struct mmi_smart_battery *chip)
 	return ret;
 }
 
-#ifdef CONFIG_MOTO_1200_CYCLE
 static int  tcmd_get_bat_cycle(void *input, int* val)
 {
 	int ret = 0;
 	struct mmi_smart_battery *chip = (struct mmi_smart_battery *)input;
 
-	if(chip->bat_cycle_count > 0)
-		*val = chip->bat_cycle_count;
+	if(chip->fake_cycle_count > 0)
+		*val = chip->fake_cycle_count;
 	else
 		*val = chip->combo_cycle_count;
 
@@ -839,16 +840,10 @@ static int  tcmd_set_bat_cycle(void *input, int val)
 	int ret = 0;
 	struct mmi_smart_battery *chip = (struct mmi_smart_battery *)input;
 
-	if (val == 0) {
-		chip->is_reset_battery_cycle = true;
-		chip->bat_cycle_count = 0;
-	} else {
-		chip->is_reset_battery_cycle = false;
-	}
+	chip->fake_cycle_count = val;
 
 	return ret;
 }
-#endif
 
 static int battery_tcmd_register(struct mmi_smart_battery *chip)
 {
@@ -861,11 +856,8 @@ static int battery_tcmd_register(struct mmi_smart_battery *chip)
 	chip->batt_tcmd_client.get_bat_voltage = tcmd_get_bat_voltage;
 	chip->batt_tcmd_client.get_bat_ocv= tcmd_get_bat_ocv;
 	chip->batt_tcmd_client.get_bat_id= tcmd_get_bat_id;
-#ifdef CONFIG_MOTO_1200_CYCLE
 	chip->batt_tcmd_client.get_bat_cycle = tcmd_get_bat_cycle;
 	chip->batt_tcmd_client.set_bat_cycle= tcmd_set_bat_cycle;
-#endif
-
 	ret = moto_chg_tcmd_register(&chip->batt_tcmd_client);
 
 	return ret;
@@ -1159,7 +1151,6 @@ static ssize_t manufacturing_date_store(struct device *dev,
 
 static DEVICE_ATTR(manufacturing_date, 0644, manufacturing_date_show, manufacturing_date_store);
 
-#ifdef CONFIG_MOTO_1200_CYCLE
 static ssize_t battery_cycle_show(struct device *dev,
 			struct device_attribute *attr,
 			char *buf)
@@ -1169,7 +1160,7 @@ static ssize_t battery_cycle_show(struct device *dev,
 		return -ENODEV;
 	}
 
-	return scnprintf(buf, SMART_BATT_SHOW_MAX_SIZE, "%d\n", this_chip->bat_cycle_count);
+	return scnprintf(buf, SMART_BATT_SHOW_MAX_SIZE, "%d\n", this_chip->fake_cycle_count);
 }
 
 static ssize_t battery_cycle_store(struct device *dev,
@@ -1190,22 +1181,19 @@ static ssize_t battery_cycle_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	this_chip->bat_cycle_count = battery_cycle;
+	this_chip->fake_cycle_count = battery_cycle;
 
 	return r ? r : count;
 }
 
 static DEVICE_ATTR(battery_cycle, 0644, battery_cycle_show, battery_cycle_store);
-#endif
 
 static struct attribute *  smart_batt_att[] = {
 	&dev_attr_work_interval_time.attr,
 	&dev_attr_state_of_health.attr,
 	&dev_attr_manufacturing_date.attr,
 	&dev_attr_first_usage_date.attr,
-#ifdef CONFIG_MOTO_1200_CYCLE
 	&dev_attr_battery_cycle.attr,
-#endif
 	&dev_attr_cur_batt_id.attr,
 	NULL,
 };
@@ -1305,10 +1293,7 @@ static int smart_battery_probe(struct platform_device *pdev)
 	chip->gauge_count = -ENODATA;
 	chip->get_gauge_done = false;
 	chip->battery = NULL;
-#ifdef CONFIG_MOTO_1200_CYCLE
-	chip->bat_cycle_count = 0;
-	chip->is_reset_battery_cycle = false;
-#endif
+
 	smart_battery_parse_dt(chip);
 	INIT_LIST_HEAD(&chip->battery_list);
 

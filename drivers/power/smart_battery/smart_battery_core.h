@@ -106,6 +106,7 @@ struct mmi_smart_battery {
 	int				vbat0_flag;
 	int				fake_soc;
 	int				fake_temp;
+	int				fake_cycle_count;
 	int				fake_soh;
 	int				work_interval_ms;
 	int				gauge_count;
@@ -118,10 +119,6 @@ struct mmi_smart_battery {
 	const char		**gauge_name_arry;
 	char			battName[MAX_STR_LEN];
 	struct mmi_battery_pack *battery;
-#ifdef CONFIG_MOTO_1200_CYCLE
-	int				bat_cycle_count;
-	bool			is_reset_battery_cycle;
-#endif
 #ifdef CONFIG_MOTO_1800_CYCLE
 	struct ifc_ops  ifc_chg_ops;
 #endif
