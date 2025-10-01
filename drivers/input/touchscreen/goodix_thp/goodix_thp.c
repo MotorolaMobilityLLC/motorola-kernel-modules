@@ -948,8 +948,8 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
                         ts_err(ts_dev->dev, "Failed to enable avdd:%d", r);
                         goto power_off;
                 }
-                usleep_range(15000, 15100);
         }
+        usleep_range(15000, 15100);
 
         if (ts_bdata->gpio_expander ) {
             /* for the expander gpio, the default sleep is not enough */
@@ -1769,7 +1769,7 @@ static long goodix_thp_input_agent_ioctl(struct file *filp, unsigned int cmd,
                 ret = goodix_thp_input_agent_ioctl_get_driver_state(cd, arg);
                 break;
         default:
-                ts_err(ts_dev->dev, "cmd unkown.");
+                ts_err(ts_dev->dev, "cmd unkown %d", cmd);
                 ret = -EINVAL;
         }
 

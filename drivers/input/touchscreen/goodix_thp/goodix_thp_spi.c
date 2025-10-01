@@ -401,12 +401,12 @@ static int goodix_thp_parse_dt(struct device_node *node,
         memset(board_data->iovdd_name, 0, sizeof(board_data->iovdd_name));
         r = of_property_read_string(node, "goodix,iovdd-name", &name_tmp);
         if (!r) {
-                ts_info(dev, "avdd name form dt: %s", name_tmp);
+                ts_info(dev, "iovdd name form dt: %s", name_tmp);
                 if (strlen(name_tmp) < sizeof(board_data->iovdd_name))
                         strncpy(board_data->iovdd_name,
                                 name_tmp, sizeof(board_data->iovdd_name));
                 else
-                        ts_info(dev, "invalied avdd name length: %ld > %ld",
+                        ts_info(dev, "invalied iovdd name length: %ld > %ld",
                                 strlen(name_tmp),
                                 sizeof(board_data->iovdd_name));
         }
@@ -1007,6 +1007,8 @@ static int goodix_spi_probe(struct spi_device *spi)
         struct thp_ts_device *ts_dev = NULL;
         static int pdev_id;
         int r = 0;
+        struct pinctrl *pinctrl1 = NULL;
+        struct pinctrl_state *pin_spi_default_mode = NULL;
 
         ts_info(&spi->dev, "IN");
 
@@ -1054,6 +1056,7 @@ static int goodix_spi_probe(struct spi_device *spi)
         spi->mode = ts_dev->board_data.spi_setting.spi_mode;
         spi->bits_per_word = ts_dev->board_data.spi_setting.bits_per_word;
         spi->max_speed_hz = ts_dev->board_data.spi_setting.spi_max_speed;
+        spi_setup(spi);
 
         /* init ts core device */
         pdev = kzalloc(sizeof(struct platform_device), GFP_KERNEL);
@@ -1076,6 +1079,28 @@ static int goodix_spi_probe(struct spi_device *spi)
         pdev->dev.platform_data = ts_dev;
         pdev->dev.release = goodix_pdev_release;
         spi_set_drvdata(spi, pdev);
+
+        /* get pinctrl handler from of node */
+        pinctrl1 = devm_pinctrl_get(&spi->dev);
+        if (IS_ERR_OR_NULL(pinctrl1)) {
+            ts_err(&spi->dev, "Failed to get pinctrl handler[need confirm]");
+            pinctrl1 = NULL;
+        } else {
+            ts_info(&spi->dev, "success get pinctrl");
+            pin_spi_default_mode = pinctrl_lookup_state(pinctrl1, "pmx_ts_spi_mode");
+        }
+        /* spi mode */
+        if (IS_ERR_OR_NULL(pin_spi_default_mode)) {
+            r = PTR_ERR(pin_spi_default_mode);
+            ts_err(&spi->dev, "Failed to get pinctrl state:%s, r:%d", "pmx_ts_spi_mode", r);
+            pin_spi_default_mode = NULL;
+        } else {
+            ts_info(&spi->dev, "success get pin spi mode pinctrl state");
+
+            r = pinctrl_select_state(pinctrl1,          pin_spi_default_mode);
+            if (r < 0)
+                ts_err(&spi->dev, "Failed to select pin_spi_default_mode, ret:%d", r);
+        }
 
         /* register platform device, then the goodix_thp_core
          * module will probe the touch deivce.
