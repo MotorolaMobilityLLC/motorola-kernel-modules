@@ -35,6 +35,7 @@
 #include <linux/regulator/machine.h>
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
+#include <linux/pinctrl/consumer.h>
 #include <linux/of_irq.h>
 #include <asm/io.h>
 #include <linux/power_supply.h>
@@ -1025,6 +1026,7 @@ retry_power_sequence:
 	}
 
 	dev_info(&client->dev, "%s: chip code = 0x%x\n", __func__, chip_code);
+	zinitix_printk("%s: chip code = 0x%x.\n",__func__, chip_code);
 	udelay(10);
 
 	//Link modify the flash size
@@ -4024,7 +4026,7 @@ static void zinitix_parse_cmcp_threshold_builtin(
 	dev_info(dev, "limit_file_name:%s", limit_file);
 
 	/* Open threshold file */
-	retval = request_firmware_nowait(THIS_MODULE, FW_ACTION_HOTPLUG,
+	retval = request_firmware_nowait(THIS_MODULE, FW_ACTION_UEVENT,
 			limit_file, dev, GFP_KERNEL, dev,
 			zinitix_cmcp_parse_threshold_file);
 	if (retval < 0) {
@@ -5155,7 +5157,11 @@ static int init_sec_factory(struct bt541_ts_info *info)
 		list_add_tail(&tsp_cmds[i].list, &factory_info->cmd_list_head);
 
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0))
+       sec_class = class_create("tsp");
+#else
 	sec_class = class_create(THIS_MODULE, "tsp");
+#endif
 
 	factory_ts_dev = device_create(sec_class, NULL, 0, info, "tsp");
 	if (unlikely(!factory_ts_dev)) {
@@ -5254,7 +5260,7 @@ static long ts_misc_fops_ioctl(struct file *filp,
 		break;
 
 	case TOUCH_IOCTL_SET_DEBUGMSG_STATE:
-		if (copy_from_user(&nval, argp, 4)) {
+		if (copy_from_user(&nval, argp, sizeof(nval))) {
 			pr_info("[zinitix_touch] error : copy_from_user\n");
 			return -1;
 		}
@@ -5387,7 +5393,7 @@ fail_hw_cal:
 			zinitix_debug_msg("misc device NULL?\n");
 			return -1;
 		}
-		if (copy_from_user(&nval, argp, 4)) {
+		if (copy_from_user(&nval, argp, sizeof(nval))) {
 			pr_info("[zinitix_touch] error : copy_from_user\r\n");
 			misc_info->work_state = NOTHING;
 			return -1;
@@ -5458,7 +5464,7 @@ fail_hw_cal:
 			return -1;
 		}
 
-		if (copy_from_user(&val, reg_ioctl.val, 4)) {
+		if (copy_from_user(&val, reg_ioctl.val, sizeof(val))) {
 			misc_info->work_state = NOTHING;
 			up(&misc_info->work_lock);
 			pr_info("[zinitix_touch] error : copy_from_user\n");
@@ -5787,6 +5793,7 @@ static int zinitix_init_gpio(struct bt541_ts_info* data,bool on )
 
 				err = gpio_direction_output(data->pdata->avdd_gpio, 0);
 				if (err) {
+					zinitix_printk("set_direction for avdd gpio failed \n");
 					dev_err(&data->client->dev,
 						"set_direction for avdd gpio failed\n");
 					goto err_avdd_gpio_req;
@@ -5809,6 +5816,7 @@ static int zinitix_init_gpio(struct bt541_ts_info* data,bool on )
 				if (err) {
 					dev_err(&data->client->dev,
 						"set_direction for avdd gpio failed\n");
+					zinitix_printk("set_direction for avdd gpio failed\n");
 					goto err_iovdd_gpio_req;
 				}
 			}
@@ -5999,8 +6007,12 @@ void bt541_register_callback(struct tsp_callbacks *cb)
 }
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 11 , 0) )
 static int bt541_ts_probe(struct i2c_client *client,
 		const struct i2c_device_id *i2c_id)
+#else
+static int bt541_ts_probe(struct i2c_client *client)
+#endif
 {
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 	struct bt541_ts_platform_data *pdata = NULL;
@@ -6025,6 +6037,7 @@ static int bt541_ts_probe(struct i2c_client *client,
 		ret = bt541_ts_probe_dt(np, &client->dev, pdata);
 		if (ret){
 			dev_err(&client->dev, "Error parsing dt %d\n", ret);
+			zinitix_printk("Error parsing dt\n");
 			goto err_no_platform_data;
 		}
 
@@ -6428,7 +6441,11 @@ err_no_platform_data:
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 11 , 0))
 static int bt541_ts_remove(struct i2c_client *client)
+#else
+static void bt541_ts_remove(struct i2c_client *client)
+#endif
 {
 	int err = 0;
 	struct bt541_ts_info *info = i2c_get_clientdata(client);
@@ -6495,7 +6512,9 @@ static int bt541_ts_remove(struct i2c_client *client)
 	up(&info->work_lock);
 	kfree(info);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 11 , 0))
 	return 0;
+#endif
 }
 
 /*void bt541_ts_shutdown(struct i2c_client *client)

@@ -1,0 +1,20 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module (
+    name = "zinitix_ztw62x_mmi",
+    srcs = [
+	"zinitix.c",
+	"zinitix_touch.h",
+	"zinitix_touch_zxt_firmware.h",
+	"zinitix_ts_mmi.c",
+	"zinitix_ts_mmi.h",
+    ],
+    local_defines = [
+       "CONFIG_INPUT_TOUCHSCREEN_MMI",
+       "CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS",
+    ],
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/input/touchscreen/touchscreen_mmi:touchscreen_mmi",
+	"//motorola/kernel/modules/drivers/mmi_info:mmi_info",
+    ],
+)

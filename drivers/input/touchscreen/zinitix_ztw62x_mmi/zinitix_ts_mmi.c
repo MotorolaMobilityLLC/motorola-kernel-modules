@@ -15,6 +15,7 @@
  */
 
 #include "zinitix_ts_mmi.h"
+#include <linux/vmalloc.h>
 
 #define ASSERT_PTR(p) if (p == NULL) { \
 		dev_err(dev, "Failed to get driver data"); \
