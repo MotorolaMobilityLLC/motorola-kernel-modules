@@ -14,4 +14,6 @@ source "motorola/kernel/modules/drivers/misc/sarsensor/semtech/sx937x/Kconfig"
 
 source "motorola/kernel/modules/drivers/moto_swap/Kconfig"
 
+source "motorola/kernel/modules/drivers/power/mmi_glink_charger/Kconfig"
+
 endmenu

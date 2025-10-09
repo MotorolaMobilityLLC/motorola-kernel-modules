@@ -23,6 +23,7 @@ filegroup(
          "//motorola/kernel/modules/drivers/misc/sarsensor/awinic/aw963xx:Kconfig",
          "//motorola/kernel/modules/drivers/misc/sarsensor/semtech/sx937x:Kconfig",
          "//motorola/kernel/modules/drivers/moto_swap:Kconfig",
+         "//motorola/kernel/modules/drivers/power/mmi_glink_charger:Kconfig",
          "//motorola/kernel/modules:Kconfig.moto",
     ],
 )

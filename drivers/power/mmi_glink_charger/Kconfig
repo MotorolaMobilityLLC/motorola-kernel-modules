@@ -1,0 +1,8 @@
+#
+# mmi_glink_charger driver configuration
+#
+
+config MMI_PHONE_CASE_SUPPORT
+    bool "Enable phone case support"
+    help
+      Say Y here if phone case support
