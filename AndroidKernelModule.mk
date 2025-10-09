@@ -16,6 +16,8 @@ ifeq ($(USE_NEW_DLKM_MK), true)
 ifneq (,$(findstring $(LOCAL_MODULE),$(BOARD_VENDOR_KERNEL_MODULES)))
 #Taro and beyond are using a new mechanisim to build kernel modules
 include device/qcom/common/dlkm/Build_external_kernelmodule.mk
+else ifneq (,$(findstring $(LOCAL_MODULE),$(BOARD_VENDOR_RAMDISK_KERNEL_MODULES)))
+include device/qcom/common/dlkm/Build_external_kernelmodule.mk
 endif
 else
 ifneq (,$(findstring gki,$(KERNEL_DEFCONFIG)))
