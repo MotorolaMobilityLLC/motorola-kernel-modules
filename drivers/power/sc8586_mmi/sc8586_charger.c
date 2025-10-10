@@ -1405,7 +1405,7 @@ static int sc8586_register_interrupt(struct sc8586_chip *sc)
     int ret = 0;
     if (!sc)
         return -EINVAL;
-    /*if (gpio_is_valid(sc->irq_gpio)) {
+    if (gpio_is_valid(sc->irq_gpio)) {
         ret = gpio_request_one(sc->irq_gpio, GPIOF_DIR_IN, "sc8586_irq");
         if (ret) {
             sc8586_err("failed to request sc8586_irq\n");
@@ -1419,10 +1419,10 @@ static int sc8586_register_interrupt(struct sc8586_chip *sc)
     } else {
         sc8586_err("irq gpio not provided\n");
         return -EINVAL;
-    }*/
+    }
 
-    if (sc->client->irq) {
-        ret = devm_request_threaded_irq(&sc->client->dev, sc->client->irq,
+    if (sc->irq) {
+        ret = devm_request_threaded_irq(&sc->client->dev, sc->irq,
                 NULL, sc8586_irq_handler,
                 IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
                 sc8586_irq_name[sc->mode], sc);
