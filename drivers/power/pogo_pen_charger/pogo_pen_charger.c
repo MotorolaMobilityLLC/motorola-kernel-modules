@@ -444,6 +444,36 @@ static DEVICE_ATTR(pen_exit_shipmode, 0200,
 		NULL,
 		pen_exit_shipmode_store);
 
+static ssize_t pen_report_uevent_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct pen_charger *chg = dev_get_drvdata(dev);
+	unsigned long r;
+	unsigned long mode;
+
+	if (!chg) {
+		pr_err("pen_report_uevent_store: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &mode);
+	if (r) {
+		pr_err("pen_report_uevent_store: Invalid charger suspend value = %lu\n", mode);
+		return -EINVAL;
+	}
+
+	pr_info("pen_report_uevent_store: enable = %lu\n",mode);
+	if (!!mode && (chg->charging_by_insert_trig ||chg->charging_by_insert_chg)) {
+		pen_charger_handle_event(chg, true);
+		pr_info("pen_report_uevent_store: report pen charging status\n");
+	}
+
+	return count;
+}
+static DEVICE_ATTR(pen_report_uevent, 0200,
+		NULL,
+		pen_report_uevent_store);
 
 static int pen_charger_probe(struct platform_device *pdev)
 {
@@ -498,6 +528,11 @@ static int pen_charger_probe(struct platform_device *pdev)
 	rc = device_create_file(dev, &dev_attr_pen_exit_shipmode);
 	if (rc) {
 		pr_err("couldn't create pen_exit_shipmode\n");
+		return rc;
+	}
+	rc = device_create_file(dev, &dev_attr_pen_report_uevent);
+	if (rc) {
+		pr_err("couldn't create pen_report_uevent\n");
 		return rc;
 	}
 
@@ -560,6 +595,7 @@ static int pen_charger_remove(struct platform_device *pdev)
         chg->chg_task = NULL;
     }
 
+	device_remove_file(dev, &dev_attr_pen_report_uevent);
 	device_remove_file(dev, &dev_attr_pen_exit_shipmode);
 	device_remove_file(dev, &dev_attr_pen_chg_enable);
 	device_remove_file(dev, &dev_attr_pen_chg_current);
