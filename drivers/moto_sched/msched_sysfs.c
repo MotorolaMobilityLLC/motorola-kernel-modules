@@ -131,7 +131,7 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 	char buffer[128];
 	size_t len = 0;
 
-	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d \n",
+	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d kernel=%d\n",
 			moto_sched_enabled,
 			is_enabled(UX_ENABLE_BASE),
 			is_enabled(UX_ENABLE_INTERACTION),
@@ -140,7 +140,8 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 			is_enabled(UX_ENABLE_AUDIO),
 			is_enabled(UX_ENABLE_CAMERA),
 			is_enabled(UX_ENABLE_KSWAPD),
-			is_enabled(UX_ENABLE_BOOST));
+			is_enabled(UX_ENABLE_BOOST),
+			is_enabled(UX_ENABLE_KERNEL));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
