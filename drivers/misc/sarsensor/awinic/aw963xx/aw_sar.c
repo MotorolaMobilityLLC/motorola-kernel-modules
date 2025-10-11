@@ -1,6 +1,8 @@
 #include "aw_sar_chip_interface.h"
 #include "aw_sar.h"
-
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+#include <linux/phone_case_detection_notify.h>
+#endif
 #define AW_SAR_I2C_NAME		"awinic_sar"
 #define AW_SAR_DRIVER_VERSION	"v0.1.5.14"
 #define USB_POWER_SUPPLY_NAME   "usb"
@@ -1788,7 +1790,7 @@ static int aw_sar_ps_notify_init(struct aw_sar *p_sar)
 			goto free_ps_notifier;
 		}
 	}
-	return AW_OK;
+	return ret;
 free_ps_notifier:
 	AWLOGE(p_sar->dev,"free_ps_notifier enter");
 	power_supply_unreg_notifier(&p_sar->ps_notif);
@@ -1796,6 +1798,62 @@ free_ps_notifier:
 }
 // AW_SAR_USB_PLUG_CAIL end
 
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+
+static void aw_sar_hall_notify_callback_work(struct work_struct *work)
+{
+    struct aw_sar *p_sar = container_of(work, struct aw_sar, hall_notify_work.work);
+
+    aw_sar_aot(p_sar);
+	AWLOGI(p_sar->dev,"calibration success");
+}
+static int aw_sar_hall_notify_callback(struct notifier_block *self,
+        unsigned long event, void *p)
+{
+    struct aw_sar *p_sar = container_of(self, struct aw_sar, hall_notif);
+    int present;
+
+    present = event;
+    AWLOGD(p_sar->dev,"hall_detection_notifier_callback,present=%d\n",present);
+    if (p_sar->hall_is_present != present) {
+        p_sar->hall_is_present = present;
+        AWLOGI(p_sar->dev,"hall_is_present=%d\n",p_sar->hall_is_present);
+		/* Delay calibration by 1 second (HZ) to debounce rapid attach/detach events from the Hall sensor. */
+        schedule_delayed_work(&p_sar->hall_notify_work, HZ);
+    } else {
+        AWLOGD(p_sar->dev,"hall present state not change\n");
+    }
+
+    return NOTIFY_DONE;
+}
+
+static int aw_sar_hall_notify_init(struct aw_sar *p_sar)
+{
+    int ret = 0;
+
+    INIT_DELAYED_WORK(&p_sar->hall_notify_work, aw_sar_hall_notify_callback_work);
+    p_sar->hall_notif.notifier_call = (notifier_fn_t)aw_sar_hall_notify_callback;
+    ret = phone_case_detection_register_client(&p_sar->hall_notif);
+    if (ret){
+	    AWLOGE(p_sar->dev,"Unable to register hall_nb: %d\n", ret);
+		return ret;
+
+
+	}
+    ret = phone_case_detection_get_hall_state();
+    if (ret < 0) {
+        AWLOGE(p_sar->dev,"hall not enabled rc=%d\n", ret);
+        phone_case_detection_unregister_client(&p_sar->hall_notif);
+	    return ret;
+    } else {
+        p_sar->hall_is_present = ret;
+        AWLOGI(p_sar->dev,"hall_notify_init:hall_is_present=%d\n",p_sar->hall_is_present);
+    }
+	AWLOGI(p_sar->dev,"aw_sar qiur1 1835 aw_sar_hall_notify_init end");
+
+	return ret;
+}
+#endif
 
 static int32_t aw_sar_platform_rsc_init(struct aw_sar *p_sar)
 {
@@ -1823,6 +1881,14 @@ static int32_t aw_sar_platform_rsc_init(struct aw_sar *p_sar)
 			goto free_usb_plug_cail;
 		}
 	}
+
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+    ret = aw_sar_hall_notify_init(p_sar);
+    if (ret < 0) {
+        AWLOGE(p_sar->dev, "error creating hall notify");
+		return ret;
+    }
+#endif
 
 	//The interrupt pin is set to internal pull-up and configured by DTS
 	if (p_sar->dts_info.use_inter_pull_up == true) {

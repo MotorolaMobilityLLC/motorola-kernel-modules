@@ -6,3 +6,8 @@ config USE_POWER_SUPPLY_ONLINE
     bool "Enable aw963xx power supply online"
     help
       Say Y here if aw963xx power supply online
+      
+config CAPSENSE_HALL_CAL
+    bool "Enable capsensor cal to detect hall"
+    help
+      Say Y here if capsensor calbration

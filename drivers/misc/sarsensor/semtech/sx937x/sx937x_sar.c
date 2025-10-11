@@ -35,6 +35,9 @@
 #include <linux/sensors.h>
 #include <linux/input/sx937x.h> 	/* main struct, interrupt,init,pointers */
 //#include "base.h"
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+#include <linux/phone_case_detection_notify.h>
+#endif
 
 #define LOG_TAG "[sar SX937x]: "
 
@@ -1428,13 +1431,14 @@ static int ps_notify_callback(struct notifier_block *self,
 		LOG_DBG("ps notification: event = %lu\n", event);
 		retval = ps_get_state(psy, &present);
 		if (retval) {
-			return retval;
+			LOG_ERR("psy get state failed, ret=%d\n", retval);
+			return NOTIFY_DONE;
 		}
 
 		if (event == PSY_EVENT_PROP_CHANGED) {
 			if (data->ps_is_present == present) {
 				LOG_DBG("ps present state not change\n");
-				return 0;
+				return NOTIFY_DONE;
 			}
 		}
 		data->ps_is_present = present;
@@ -1448,8 +1452,10 @@ static int ps_notify_callback(struct notifier_block *self,
 		LOG_DBG("phone ps notification: event = %lu\n", event);
 
 		retval = ps_get_state(psy, &present);
-		if (retval)
-			return retval;
+		if (retval) {
+			LOG_ERR("psy get state failed,ret=%d\n", retval);
+			return NOTIFY_DONE;
+		}
 
 		if (data->phone_is_present != present) {
 			data->phone_is_present = present;
@@ -1458,8 +1464,42 @@ static int ps_notify_callback(struct notifier_block *self,
 	}
 #endif
 
-	return 0;
+	return NOTIFY_DONE;
 }
+
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+static void hall_detection_notify_callback_work(struct work_struct *work)
+{
+    u32 temp = 0;
+    sx937x_i2c_read_16bit(global_sx937x, SX937X_GENERAL_SETUP, &temp);
+    if (temp & 0x000000FF) {
+        LOG_INFO("Hall state change, Going to force calibrate\n");
+        manual_offset_calibration(global_sx937x);
+    }
+}
+
+static int hall_detection_notifier_callback(struct notifier_block *self,
+                    unsigned long event, void *p)
+{
+    struct sx937x_platform_data *data =
+        container_of(self, struct sx937x_platform_data, hall_nb);
+    int present;
+
+    present = event;
+    LOG_INFO("hall_detection_notifier_callback,present=%d\n",present);
+
+    if (data->hall_is_present != present) {
+        data->hall_is_present = present;
+        LOG_INFO("hall_is_present=%d\n",data->hall_is_present);
+		/* Delay calibration by 1 second (HZ) to debounce rapid attach/detach events from the Hall sensor. */
+        schedule_delayed_work(&data->hall_notify_work, HZ);
+    } else {
+        LOG_DBG("hall present state not change\n");
+    }
+
+    return NOTIFY_DONE;
+}
+#endif
 
 #ifdef CONFIG_CAPSENSE_FLIP_CAL
 static void write_flip_regs(int num_regs, struct smtc_reg_data *regs)
@@ -1536,6 +1576,10 @@ static int sx937x_probe(struct i2c_client *client)
 #ifdef CONFIG_CAPSENSE_USB_CAL
 	struct power_supply *psy = NULL;
 #endif
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+    int rc;
+#endif
+
 	struct totalButtonInformation *pButtonInformationData = NULL;
 	struct i2c_adapter *adapter = to_i2c_adapter(client->dev.parent);
 
@@ -1777,6 +1821,29 @@ static int sx937x_probe(struct i2c_client *client)
 		} else
 			LOG_ERR("extcon not in dev tree!\n");
 #endif
+#endif
+
+#ifdef CONFIG_CAPSENSE_HALL_CAL
+
+        INIT_DELAYED_WORK(&pplatData->hall_notify_work, hall_detection_notify_callback_work);
+        pplatData->hall_nb.notifier_call = hall_detection_notifier_callback;
+        err = phone_case_detection_register_client(&pplatData->hall_nb);
+        if (err){
+            LOG_ERR("Unable to register hall_nb: %d\n", err);
+			return err;
+
+		}
+
+
+        rc = phone_case_detection_get_hall_state();
+        if (rc < 0) {
+            LOG_ERR("hall not enabled rc=%d\n", rc);
+            phone_case_detection_unregister_client(&pplatData->hall_nb);
+		    return rc;
+        } else {
+            pplatData->hall_is_present = rc;
+            LOG_INFO("sx937x_probe:hall_is_present=%d\n",pplatData->hall_is_present);
+        }
 #endif
 
 		sx93XX_IRQ_init(this);

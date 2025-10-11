@@ -12,3 +12,8 @@ config USE_POWER_SUPPLY_ONLINE
     bool "Enable sx937x power supply online"
     help
       Say Y here if sx937x power supply online
+
+config CAPSENSE_HALL_CAL
+    bool "Enable capsensor cal to detect hall"
+    help
+      Say Y here if capsensor calbration

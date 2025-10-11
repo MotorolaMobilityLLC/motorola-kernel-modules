@@ -17,5 +17,6 @@ moto_ddk_module(
     deps_ext = [
         "//soc-repo:drivers/soc/qcom/smem",
         "//motorola/kernel/modules/drivers/sensors:sensors_class",
+        "//motorola/kernel/modules/drivers/misc/hall:hall_phone_case",
     ],
 )
