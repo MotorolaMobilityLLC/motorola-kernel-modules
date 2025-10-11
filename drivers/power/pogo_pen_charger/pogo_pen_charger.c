@@ -33,6 +33,14 @@
 #define CHG_SHOW_MAX_SIZE 50
 #define CHG_START_DELAY_S 1
 
+enum charge_status {
+	PEN_STAT_NOT_CHARGING,
+	PEN_STAT_CHARGING_BY_ADAPTER,
+	PEN_STAT_CHARGING_BY_INSERT_PEN,
+	PEN_STAT_CHARGING_BY_PEN_AFTER_DETECT_CURRENT,
+	PEN_STAT_CHARGING_BY_INSERT_FULL_SOC_PEN,
+};
+
 struct pen_charger {
 	struct device		*dev;
 	int chg_ldswtch_en_gpio;
@@ -41,13 +49,14 @@ struct pen_charger {
 	int r_sns_milliohm;
 	int iterm_ma;
 	int chg_buffer_s;
+	int iterm_ma_insert_pen;
+	int chg_buffer_insert_pen_s;
 	int heartbeat_interval_s;
 	bool chg_to_iterm;
 	bool chg_is_present;
 	bool initialized;
 	bool pen_insert_flag;
-	bool charging_by_insert_trig;
-	bool charging_by_insert_chg;
+	enum charge_status charging_status;
 	bool exit_shipmode_trig;
 	struct notifier_block pen_notif;
 	struct notifier_block chg_psy_nb;
@@ -108,12 +117,20 @@ static int pen_charger_parse_dt(struct pen_charger *chg)
 	rc = of_property_read_u32(node, "mmi,charge-buffer-s", &chg->chg_buffer_s);
 	if (rc)
 		chg->chg_buffer_s = 7 * 60;
+	rc = of_property_read_u32(node, "mmi,charge-iterm-ma-insert-pen", &chg->iterm_ma_insert_pen);
+	if (rc)
+		chg->iterm_ma_insert_pen = 6;
+	rc = of_property_read_u32(node, "mmi,charge-buffer-insert-pen-s", &chg->chg_buffer_insert_pen_s);
+	if (rc)
+		chg->chg_buffer_insert_pen_s = 60;
+
 	rc = of_property_read_u32(node, "mmi,heartbeat-interval-s", &chg->heartbeat_interval_s);
 	if (rc)
 		chg->heartbeat_interval_s = 2 * 60;
 
-	pr_info("chg->iterm_ma: %d, chg->buffer_s: %d, chg->heartbeat_interval_s: %d\n",
-		chg->iterm_ma, chg->chg_buffer_s, chg->heartbeat_interval_s);
+	pr_info("iterm_ma(normal/insert): %d,%d, buffer_s(normal/insert): %d,%d, chg->heartbeat_interval_s: %d\n",
+		chg->iterm_ma, chg->iterm_ma_insert_pen, chg->chg_buffer_s,
+		chg->chg_buffer_insert_pen_s ,chg->heartbeat_interval_s);
 
 	return 0;
 }
@@ -253,6 +270,8 @@ static enum alarmtimer_restart chg_tmr_handler(struct alarm *alarm, ktime_t now)
 static int chg_thread_func(void *data) {
     struct pen_charger *chg = data;
     int pen_current_ma;
+    int iterm_ma;
+    int charge_iterm_s;
 
     while (1) {
         wait_event_interruptible(chg->chg_waitq,
@@ -265,7 +284,7 @@ static int chg_thread_func(void *data) {
 
 		if (chg->exit_shipmode_trig) {
 			chg->exit_shipmode_trig = false;
-			if (!chg->charging_by_insert_trig && !chg->charging_by_insert_chg) {
+			if (chg->charging_status == PEN_STAT_NOT_CHARGING) {
 				pr_info("Exit ship mode done \n");
 				start_charge(chg, false);
 				start_chg_timer(chg, false, 0);
@@ -276,15 +295,28 @@ static int chg_thread_func(void *data) {
 			goto exit;
 
 		pen_current_ma = read_pen_chg_current(chg);
-		if (pen_current_ma < chg->iterm_ma) {
+		if (chg->charging_status == PEN_STAT_CHARGING_BY_INSERT_PEN) {
+			chg->charging_status = PEN_STAT_CHARGING_BY_PEN_AFTER_DETECT_CURRENT;
+			if (pen_current_ma < chg->iterm_ma_insert_pen)
+				chg->charging_status = PEN_STAT_CHARGING_BY_INSERT_FULL_SOC_PEN;
+		}
+		if (chg->charging_status == PEN_STAT_CHARGING_BY_INSERT_FULL_SOC_PEN) {
+			iterm_ma = chg->iterm_ma_insert_pen;
+			charge_iterm_s = chg->chg_buffer_insert_pen_s;
+		} else {
+			iterm_ma = chg->iterm_ma;
+			charge_iterm_s = chg->chg_buffer_s;
+		}
+
+
+		if (pen_current_ma < iterm_ma) {
 			if (!chg->chg_to_iterm) {
-				pr_info("charge to iterm and charge buff time:%d \n",chg->chg_buffer_s);
+				pr_info("charge to iterm and charge buff time:%d \n",charge_iterm_s);
 				chg->chg_to_iterm = true;
-				start_chg_timer(chg, true, chg->chg_buffer_s);
+				start_chg_timer(chg, true, charge_iterm_s);
 			} else {
 				pr_info("charge Done\n");
-				chg->charging_by_insert_trig = false;
-				chg->charging_by_insert_chg = false;
+				chg->charging_status = PEN_STAT_NOT_CHARGING;
 				chg->chg_to_iterm = false;
 				start_charge(chg, false);
 				start_chg_timer(chg, false, 0);
@@ -323,15 +355,14 @@ static int pen_notifier_callback(struct notifier_block *self,
 
 	if (event == PEN_DETECTION_INSERT) {
 		chg->pen_insert_flag = true;
-		chg->charging_by_insert_trig = true;
+		chg->charging_status = PEN_STAT_CHARGING_BY_INSERT_PEN;
 		start_charge(chg, true);
 		start_chg_timer(chg, true, CHG_START_DELAY_S);
 		pen_charger_handle_event(chg, true);
 	} else if (event == PEN_DETECTION_PULL) {
 		chg->pen_insert_flag = false;
 		chg->chg_to_iterm = false;
-		chg->charging_by_insert_trig = false;
-		chg->charging_by_insert_chg = false;
+		chg->charging_status = PEN_STAT_NOT_CHARGING;
 		start_chg_timer(chg, false, 0);
 		start_charge(chg, false);
 		pen_charger_handle_event(chg, false);
@@ -390,21 +421,23 @@ static int charger_psy_notify_callback(struct notifier_block *nb,
 		if (!chg->pen_insert_flag) {
 			pr_info("pen not present\n");
 			return NOTIFY_DONE;
-		} else if (chg->charging_by_insert_trig) {
+		} else if (chg->charging_status == PEN_STAT_CHARGING_BY_INSERT_PEN
+		                 || chg->charging_status == PEN_STAT_CHARGING_BY_PEN_AFTER_DETECT_CURRENT
+		                 || chg->charging_status == PEN_STAT_CHARGING_BY_INSERT_FULL_SOC_PEN) {
 			pr_info("pen is charging by insert action\n");
 			return NOTIFY_DONE;
 		}
 
 		if (chg->chg_is_present) {
 			start_charge(chg, true);
-			chg->charging_by_insert_chg = true;
+			chg->charging_status = PEN_STAT_CHARGING_BY_ADAPTER;
 			start_chg_timer(chg, true, CHG_START_DELAY_S);
 			pen_charger_handle_event(chg, true);
 		} else {
 			chg->chg_to_iterm = false;
 			start_chg_timer(chg, false, 0);
 			start_charge(chg, false);
-			chg->charging_by_insert_chg = false;
+			chg->charging_status = PEN_STAT_NOT_CHARGING;
 			pen_charger_handle_event(chg, false);
 		}
 	}
@@ -464,7 +497,7 @@ static ssize_t pen_report_uevent_store(struct device *dev,
 	}
 
 	pr_info("pen_report_uevent_store: enable = %lu\n",mode);
-	if (!!mode && (chg->charging_by_insert_trig ||chg->charging_by_insert_chg)) {
+	if (!!mode && (chg->charging_status != PEN_STAT_NOT_CHARGING)) {
 		pen_charger_handle_event(chg, true);
 		pr_info("pen_report_uevent_store: report pen charging status\n");
 	}
