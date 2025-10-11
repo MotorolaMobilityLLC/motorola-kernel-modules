@@ -18,6 +18,7 @@
 #include <linux/regulator/consumer.h>
 #include <linux/module.h>
 #include <linux/backlight.h>
+#include <linux/version.h>
 #include "sm5350_align.h"
 
 #define SM5350_NAME "sm5350-bl"
@@ -537,8 +538,12 @@ static struct attribute_group sm5350_attribute_group = {
 	.attrs = sm5350_attributes
 };
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static int sm5350_probe(struct i2c_client *client)
+#else
 static int sm5350_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
+#endif
 {
 	struct sm5350_data *drvdata;
 	struct backlight_device *bl_dev;
@@ -622,13 +627,20 @@ err_out:
 	return err;
 }
 
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void sm5350_remove(struct i2c_client *client)
+#else
 static int sm5350_remove(struct i2c_client *client)
+#endif
 {
 	struct sm5350_data *drvdata = i2c_get_clientdata(client);
 
 	backlight_device_unregister(drvdata->bl_dev);
 	kfree(drvdata);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	return 0;
+#endif
 }
 
 static const struct i2c_device_id sm5350_id[] = {
