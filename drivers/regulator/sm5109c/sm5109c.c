@@ -18,6 +18,7 @@
 #include <linux/slab.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
+#include <linux/version.h>
 #include "sm5109c.h"
 
 #define LOG_TAG "LCM_BIAS_SM5109C"
@@ -212,12 +213,23 @@ err_enn_gpio_req:
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void sm5109c_i2c_remove(struct i2c_client *client)
+{
+	return;
+}
+#else
 static int sm5109c_i2c_remove(struct i2c_client *client)
 {
 	return 0;
 }
+#endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static int sm5109c_i2c_probe(struct i2c_client *client)
+#else
 static int sm5109c_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id)
+#endif
 {
 	int rc = 0;
 

@@ -1,3 +1,7 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+	ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
 EXTRA_CFLAGS += -Wall
-EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 obj-m	+= sm5109c.o
