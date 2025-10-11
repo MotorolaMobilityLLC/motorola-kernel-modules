@@ -997,11 +997,15 @@ static int comp_params_store(struct zram *zram, u32 prio, s32 level,
 	comp_params_reset(zram, prio);
 
 	if (dict_path) {
+#ifdef CONFIG_HYBRIDSWAP
+		sz = read_comp_algo_dictionary(&zram->params[prio].dict, dict_path);
+#else
 		sz = kernel_read_file_from_path(dict_path, 0,
 						&zram->params[prio].dict,
 						INT_MAX,
 						NULL,
 						READING_POLICY);
+#endif
 		if (sz < 0)
 			return -EINVAL;
 	}
