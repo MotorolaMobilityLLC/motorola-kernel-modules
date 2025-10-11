@@ -2218,6 +2218,7 @@ static int aw_sar_suspend(struct device *dev)
 			return 0;
 		}
 		aw_sar_mode_set(p_sar, p_sar->p_sar_para->p_platform_config->p_pm_chip_mode->suspend_set_mode);
+		aw_sar_disable_irq(p_sar);
 	}
 	/*wxm add start by 2023/12/5*/
 	if(p_sar->dts_info.monitor_esd_flag){
@@ -2243,6 +2244,7 @@ static int aw_sar_resume(struct device *dev)
 			p_sar->p_sar_para->p_platform_config->p_pm_chip_mode->p_resume_fn(p_sar);
 			return 0;
 		}
+		aw_sar_enable_irq(p_sar);
 		aw_sar_mode_set(p_sar, p_sar->p_sar_para->p_platform_config->p_pm_chip_mode->resume_set_mode);
 	}
 	/*wxm add start by 2023/12/5*/
