@@ -42,6 +42,7 @@ struct pehv_hal {
 	struct device *dev;
 	struct charger_device *chgdevs[MMI_CHGTYP_MAX];
 	struct power_supply *bat_psy;
+	struct power_supply *bat_manager_psy;
 };
 
 static inline int to_chgtyp(enum chg_idx idx)
@@ -193,6 +194,11 @@ int pehv_hal_init_hardware(struct chg_alg_device *alg)
 	if (IS_ERR_OR_NULL(hal->bat_psy)) {
 		ret = IS_ERR(hal->bat_psy) ? PTR_ERR(hal->bat_psy) : -ENODEV;
 		PEHV_ERR("get bat_psy fail(%d)\n", ret);
+	}
+	hal->bat_manager_psy = power_supply_get_by_name("battery");
+	if (IS_ERR_OR_NULL(hal->bat_manager_psy)) {
+		ret = IS_ERR(hal->bat_manager_psy) ? PTR_ERR(hal->bat_manager_psy) : -ENODEV;
+		PEHV_ERR("get bat_manager_psy fail(%d)\n", ret);
 	}
 	PEHV_INFO("successfully\n");
 	return 0;
@@ -424,16 +430,34 @@ int pehv_hal_get_soc(struct chg_alg_device *alg, u32 *soc)
 {
 	int ret = -EOPNOTSUPP;
 	union power_supply_propval val = {0,};
+	struct power_supply *psy = NULL;
 	struct pehv_hal *hal = chg_alg_dev_get_drv_hal_data(alg);
 
-	if (IS_ERR_OR_NULL(hal->bat_psy)) {
-	    hal->bat_psy = devm_power_supply_get_by_phandle(hal->dev, "gauge");
+#if IS_ENABLED(CONFIG_MTK_BATTERY_MANAGER)
+	PEHV_DBG("MTK battery is used.\n");
+	if (IS_ERR_OR_NULL(hal->bat_manager_psy)) {
+		PEHV_ERR("%s retry to get bat_manager_psy\n", __func__);
+		hal->bat_manager_psy = power_supply_get_by_name("battery");
+		if (IS_ERR_OR_NULL(hal->bat_manager_psy)) {
+			PEHV_ERR("%s Couldn't get bat_manager_psy\n", __func__);
+			goto out;
+		}
 	}
+	psy = hal->bat_manager_psy;
+#else
+	PEHV_DBG("MTK battery is not used.\n");
+	if (IS_ERR_OR_NULL(hal->bat_psy)) {
+		PEHV_ERR("%s retry to get bat_psy\n", __func__);
+		hal->bat_psy = devm_power_supply_get_by_phandle(hal->dev, "gauge");
+		if (IS_ERR_OR_NULL(hal->bat_psy)) {
+			PEHV_ERR("%s Couldn't get bat_psy\n", __func__);
+			goto out;
+		}
+	}
+	psy = hal->bat_psy;
+#endif
 
-	if (IS_ERR_OR_NULL(hal->bat_psy))
-		goto out;
-
-	ret = power_supply_get_property(hal->bat_psy,
+	ret = power_supply_get_property(psy,
 					POWER_SUPPLY_PROP_CAPACITY, &val);
 	if (ret < 0) {
 		PEHV_ERR("get soc fail(%d)\n", ret);
