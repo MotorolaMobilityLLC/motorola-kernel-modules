@@ -3245,8 +3245,7 @@ static int sc8989x_chg_get_property(struct power_supply *psy,
 		val->intval = sc->psy_usb_type;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
-		sc8989x_get_iindpm(sc, &data);
-		icl = data / 1000;
+		sc8989x_get_iindpm(sc, &icl);
 		if (is_pd_rdy(sc) && (icl > 500)
 			&& !(sc->chg_type == POWER_SUPPLY_TYPE_USB))
 		{
@@ -3271,8 +3270,7 @@ static int sc8989x_chg_get_property(struct power_supply *psy,
 			val->intval = 500000;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
-		sc8989x_get_iindpm(sc, &data);
-		icl = data / 1000;
+		sc8989x_get_iindpm(sc, &icl);
 		if (is_pd_rdy(sc) && (icl > 500)
 			&& !(sc->chg_type == POWER_SUPPLY_TYPE_USB))
 			val->intval = 9000000;
