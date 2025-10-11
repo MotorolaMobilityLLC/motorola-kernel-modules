@@ -421,7 +421,17 @@ static void android_vh_rwsem_wait_finish(void *unused, struct rw_semaphore *sem)
 }
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+static void android_vh_record_pcpu_rwsem_starttime(void *unused, struct percpu_rw_semaphore *sem, unsigned long settime_jiffies)
+{
+	if (unlikely(!locking_opt_enable()))
+		return;
+
+	if (sem == &cgroup_threadgroup_rwsem) {
+		lock_protect_update_starttime(current, settime_jiffies, "percpu_rwsem", sem);
+	}
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 static void android_vh_record_pcpu_rwsem_time_early(void *unused, unsigned long settime_jiffies, struct percpu_rw_semaphore *sem)
 {
 	if (unlikely(!locking_opt_enable()))
@@ -451,7 +461,9 @@ void register_rwsem_vendor_hooks(void)
 	register_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish, NULL);
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	register_trace_android_vh_record_pcpu_rwsem_starttime(android_vh_record_pcpu_rwsem_starttime, NULL);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
     register_trace_android_vh_record_pcpu_rwsem_time_early(android_vh_record_pcpu_rwsem_time_early, NULL);
 #endif
 }
@@ -471,8 +483,9 @@ void unregister_rwsem_vendor_hooks(void)
 	unregister_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wait_finish, NULL);
 	unregister_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish, NULL);
 #endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	unregister_trace_android_vh_record_pcpu_rwsem_starttime(android_vh_record_pcpu_rwsem_starttime, NULL);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
     unregister_trace_android_vh_record_pcpu_rwsem_time_early(android_vh_record_pcpu_rwsem_time_early, NULL);
 #endif
 }
