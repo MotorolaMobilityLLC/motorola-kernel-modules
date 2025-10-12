@@ -1,0 +1,17 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+	ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
+		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/power/cps4021_mmi \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/kernel-6.6/include \
+		-I$(ANDROID_BUILD_TOP)/kernel-6.6/include/linux/power
+
+obj-m += cps4021_mmi.o
+cps4021_mmi-objs += moto_wls_auth2.0.o
+cps4021_mmi-objs += wls_charger_cps4021.o
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../misc/hall/$(GKI_OBJ_MODULE_DIR)/Module.symvers

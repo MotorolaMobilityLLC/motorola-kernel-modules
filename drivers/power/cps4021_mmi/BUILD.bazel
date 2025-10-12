@@ -1,0 +1,26 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "cps4021_mmi",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+        "Makefile.include",
+    ]) + [
+        "//kernel_device_modules-6.6:mtk_public_headers",
+	"//motorola/kernel/modules:public_headers",
+    ],
+    deps = [
+        "//motorola/kernel/modules/drivers/misc/hall:moto_hall",
+    ],
+
+    outs = ["cps4021_mmi.ko"],
+)
