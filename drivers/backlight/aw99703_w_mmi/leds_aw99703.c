@@ -353,9 +353,7 @@ int  aw99703_set_brightness(struct aw99703_data *drvdata, int brt_val)
 	}
 
 	pr_info("%s brt_val is %d\n", __func__, brt_val);
-	if (brt_val >= 200) {
-		dump_stack();
-	}
+
 	if (drvdata->enable == false) {
 		if (brt_val == 0) {
 			//avoid duplicate standy
