@@ -1,0 +1,23 @@
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+
+package(
+    default_visibility = [
+        "//visibility:public",
+    ],
+)
+
+define_mgk_ko(
+    name = "nova_0flash_mmi_v2",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+    ]) + [
+        "//motorola/kernel/modules:public_headers",
+    ],
+    deps = [
+        "//motorola/kernel/modules/drivers/sensors:sensors_class",
+    ],
+    outs = ["nova_0flash_mmi_v2.ko"],
+)

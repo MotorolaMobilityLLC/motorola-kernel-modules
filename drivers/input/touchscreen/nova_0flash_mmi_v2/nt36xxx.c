@@ -199,6 +199,17 @@ const struct mtk_chip_config spi_ctrdata = {
 static bool time_flag = 1;
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#define NOVA_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio(np,name,idx)
+#else
+#define NOVA_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio_flags(np,name,idx,flags_ptr)
+#endif
+
+#ifdef NVT_SENSOR_EN
+extern int __attribute__ ((weak)) sensors_classdev_register(struct device *parent, struct sensors_classdev *sensors_cdev);
+extern void __attribute__ ((weak)) sensors_classdev_unregister(struct sensors_classdev *sensors_cdev);
+#endif
+
 /*******************************************************
 Description:
 	Novatek touchscreen irq enable/disable function.
@@ -1241,10 +1252,10 @@ static int32_t nvt_parse_dt(struct device *dev)
 #endif
 
 #if NVT_TOUCH_SUPPORT_HW_RST
-	ts->reset_gpio = of_get_named_gpio_flags(np, "novatek,reset-gpio", 0, &ts->reset_flags);
+	ts->reset_gpio = NOVA_GET_NAMED_GPIO(np, "novatek,reset-gpio", 0, &ts->reset_flags);
 	NVT_LOG("novatek,reset-gpio=%d\n", ts->reset_gpio);
 #endif
-	ts->irq_gpio = of_get_named_gpio_flags(np, "novatek,irq-gpio", 0, &ts->irq_flags);
+	ts->irq_gpio = NOVA_GET_NAMED_GPIO(np, "novatek,irq-gpio", 0, &ts->irq_flags);
 	NVT_LOG("novatek,irq-gpio=%d\n", ts->irq_gpio);
 
 	ret = of_property_read_u32(np, "novatek,swrst-n8-addr", &SWRST_N8_ADDR);
@@ -2375,7 +2386,11 @@ int32_t nvt_fw_class_init(bool create)
 			return ret;
 		}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,3,0)
 		touchscreen_class = class_create(THIS_MODULE, "touchscreen");
+#else
+		touchscreen_class = class_create("touchscreen");
+#endif
 		if (IS_ERR(touchscreen_class)) {
 			error = PTR_ERR(touchscreen_class);
 			touchscreen_class = NULL;
@@ -2622,15 +2637,22 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	spi_set_drvdata(client, ts);
 
 	//---prepare for spi parameter---
+	// 6.8.0
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0))
+	if (ts->client->controller->flags & SPI_CONTROLLER_HALF_DUPLEX) {
+#else
 	if (ts->client->master->flags & SPI_MASTER_HALF_DUPLEX) {
+#endif
 		NVT_ERR("Full duplex not supported by master\n");
 		ret = -EIO;
 		goto err_ckeck_full_duplex;
 	}
 	ts->client->bits_per_word = 8;
 	ts->client->mode = SPI_MODE_0;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
 	ts->client->chip_select = 0;
-
+#endif
 	ret = spi_setup(ts->client);
 	if (ret < 0) {
 		NVT_ERR("Failed to perform SPI setup\n");
@@ -3084,7 +3106,11 @@ Description:
 return:
 	Executive outcomes. 0---succeed.
 *******************************************************/
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void nvt_ts_remove(struct spi_device *client)
+#else
 static int32_t nvt_ts_remove(struct spi_device *client)
+#endif
 {
 	NVT_LOG("Removing driver...\n");
 
@@ -3162,7 +3188,9 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 		ts = NULL;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	return 0;
+#endif
 }
 
 static void nvt_ts_shutdown(struct spi_device *client)
