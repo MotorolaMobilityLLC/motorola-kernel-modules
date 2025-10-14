@@ -517,6 +517,7 @@ static int ili_spi_wrapper(u8 *txbuf, u32 wlen, u8 *rxbuf, u32 rlen, bool spi_ir
 			break;
 		}
 		#endif
+     	fallthrough;
 	case SPI_READ:
 		if (!ice && spi_irq) {
 			/* Check INT triggered by FW when sending cmds. */
@@ -582,7 +583,9 @@ int ili_core_spi_setup(int num)
 	ilits->spi->mode = SPI_MODE_0;
 	ilits->spi->bits_per_word = 8;
 	ilits->spi->max_speed_hz = freq[num];
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
 	ilits->spi->chip_select = 0;
+#endif
 #ifdef ILI_TOUCH_COMPATIBILITY
 	ilits->spi->cs_setup.value =1;
 	ilits->spi->cs_setup.unit =0;
@@ -602,12 +605,20 @@ int ili_core_spi_setup(int num)
 		return -ENODEV;
 	}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
 	ILI_INFO("name = %s, bus_num = %d,cs = %d, mode = %d, speed = %d\n",
 			ilits->spi->modalias,
-			ilits->spi->master->bus_num,
+			ilits->spi->controller->bus_num,
 			ilits->spi->chip_select,
 			ilits->spi->mode,
 			ilits->spi->max_speed_hz);
+#else
+	ILI_INFO("name = %s, bus_num = %d, mode = %d, speed = %d\n",
+			ilits->spi->modalias,
+			ilits->spi->controller->bus_num,
+			ilits->spi->mode,
+			ilits->spi->max_speed_hz);
+#endif
 	return 0;
 }
 
@@ -766,7 +777,11 @@ static int ilitek_spi_probe(struct spi_device *spi)
 		return -ENOMEM;
 	}
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 8, 0))
+	if (spi->controller->flags & SPI_CONTROLLER_HALF_DUPLEX) {
+#else
 	if (spi->master->flags & SPI_MASTER_HALF_DUPLEX) {
+#endif
 		ILI_ERR("Full duplex not supported by master\n");
 		return -EIO;
 	}
@@ -890,11 +905,18 @@ static int ilitek_spi_probe(struct spi_device *spi)
 	return info->hwif->plat_probe();
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void ilitek_spi_remove(struct spi_device *spi)
+{
+	ILI_INFO();
+}
+#else
 static int ilitek_spi_remove(struct spi_device *spi)
 {
 	ILI_INFO();
 	return 0;
 }
+#endif
 
 static struct spi_device_id tp_spi_id[] = {
 	{TDDI_DEV_ID, 0},

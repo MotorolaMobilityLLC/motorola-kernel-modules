@@ -1,3 +1,7 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+	ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
 # add -Wall to try to catch everything we can.
 EXTRA_CFLAGS += -Wall
 ifeq ($(DEVICE_MODULES_PATH),)
@@ -5,7 +9,8 @@ DEVICE_MODULES_PATH = $(srctree)
 endif
 $(warning DEVICE_MODULES_PATH=$(DEVICE_MODULES_PATH))
 EXTRA_CFLAGS += \
-		-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2/
+		-I$(DEVICE_MODULES_PATH)/drivers/gpu/drm/mediatek/mediatek_v2
+
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/ilitek_v3_mmi \
 		-I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/input/touchscreen/ilitek_v3_mmi/firmware

@@ -3543,6 +3543,7 @@ static long ilitek_node_ioctl(struct file *filp, unsigned int cmd, unsigned long
 			atomic_set(&ilits->ice_stat, DISABLE);
 			ilits->pll_clk_wakeup = true;
 		}
+		fallthrough;
 	default:
 		ret = -ENOTTY;
 		break;
@@ -4371,7 +4372,11 @@ int ilitek_sys_init(void)
 	} else {
 
 		/* set sysfs for firmware */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,3,0)
 		touchscreen_class = class_create(THIS_MODULE, "touchscreen");
+#else
+        touchscreen_class = class_create("touchscreen");
+#endif
 		if (IS_ERR(touchscreen_class)) {
 			ret = PTR_ERR(touchscreen_class);
 			touchscreen_class = NULL;

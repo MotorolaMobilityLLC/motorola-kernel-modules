@@ -26,6 +26,11 @@
 #define DTS_RESET_GPIO	"touch,reset-gpio"
 #define DTS_OF_NAME	"tchip,ilitek"
 
+#ifdef ILI_SENSOR_EN
+extern int __attribute__ ((weak)) sensors_classdev_register(struct device *parent, struct sensors_classdev *sensors_cdev);
+extern void __attribute__ ((weak)) sensors_classdev_unregister(struct sensors_classdev *sensors_cdev);
+#endif
+
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
 static int ili_disp_notifier_callback(struct notifier_block *nb, unsigned long value, void *v);
 
@@ -275,11 +280,22 @@ static void ilitek_plat_regulator_power_init(void)
 static int ilitek_plat_gpio_register(void)
 {
 	int ret = 0;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0))
 	u32 flag;
+#endif
 	struct device_node *dev_node = ilits->dev->of_node;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+	ilits->tp_int = of_get_named_gpio(dev_node, DTS_INT_GPIO, 0);
+#else
 	ilits->tp_int = of_get_named_gpio_flags(dev_node, DTS_INT_GPIO, 0, &flag);
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+	ilits->tp_rst = of_get_named_gpio(dev_node, DTS_RESET_GPIO, 0);
+#else
 	ilits->tp_rst = of_get_named_gpio_flags(dev_node, DTS_RESET_GPIO, 0, &flag);
+#endif
 
 	ILI_INFO("TP INT: %d\n", ilits->tp_int);
 	ILI_INFO("TP RESET: %d\n", ilits->tp_rst);
