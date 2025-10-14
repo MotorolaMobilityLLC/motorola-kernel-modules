@@ -110,8 +110,10 @@ bool rwsem_list_add(struct task_struct *tsk, struct list_head *entry, struct lis
 			if (waiter && waiter->task->prio > MAX_RT_PRIO && prio > task_get_mvp_prio(waiter->task, true)) {
 				cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 					"rwsem_list_add %d prio=%d(%d)index=%d\n", tsk->pid, prio, task_get_mvp_prio(waiter->task, true), index);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 				entry_waiter->handoff_set = waiter->handoff_set;
 				waiter->handoff_set = false;
+#endif
 				list_add(entry, waiter->list.prev);
 				return true;
 			}
@@ -453,7 +455,11 @@ void register_rwsem_vendor_hooks(void)
 #ifdef ENABLE_INHERITE
 	register_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
 	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 	register_trace_android_vh_record_rwsem_writer_owned(android_vh_rwsem_record_rwsem_writer_owned, NULL);
+#else
+	register_trace_android_vh_rwsem_set_owner(android_vh_rwsem_record_rwsem_writer_owned, NULL);
+#endif
 	register_trace_android_vh_record_rwsem_reader_owned(android_vh_rwsem_record_rwsem_reader_owned, NULL);
 	register_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
 	register_trace_android_vh_clear_rwsem_writer_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
@@ -476,7 +482,11 @@ void unregister_rwsem_vendor_hooks(void)
 #ifdef ENABLE_INHERITE
 	unregister_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
 	unregister_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 	unregister_trace_android_vh_record_rwsem_writer_owned(android_vh_rwsem_record_rwsem_writer_owned, NULL);
+#else
+	unregister_trace_android_vh_rwsem_set_owner(android_vh_rwsem_record_rwsem_writer_owned, NULL);
+#endif
 	unregister_trace_android_vh_record_rwsem_reader_owned(android_vh_rwsem_record_rwsem_reader_owned, NULL);
 	unregister_trace_android_vh_clear_rwsem_writer_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
 	unregister_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);

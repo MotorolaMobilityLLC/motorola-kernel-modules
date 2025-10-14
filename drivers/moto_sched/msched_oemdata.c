@@ -15,7 +15,6 @@
 #include <linux/sched/task.h>
 #include <linux/sched/cputime.h>
 #include <linux/minmax.h>
-#include <linux/align.h>
 #include <asm/cache.h>
 #include <linux/topology.h>
 #include <linux/vmalloc.h>
