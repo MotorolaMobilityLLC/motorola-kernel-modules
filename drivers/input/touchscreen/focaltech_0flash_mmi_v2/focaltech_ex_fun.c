@@ -1993,8 +1993,12 @@ static int fts_sysfs_class(void *_data, bool create)
 			return error;
 		}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,3,0)
 		touchscreen_class = class_create(THIS_MODULE, "touchscreen");
-		if (IS_ERR(touchscreen_class)) {
+#else
+        touchscreen_class = class_create("touchscreen");
+#endif
+        if (IS_ERR(touchscreen_class)) {
 			error = PTR_ERR(touchscreen_class);
 			touchscreen_class = NULL;
 			return error;

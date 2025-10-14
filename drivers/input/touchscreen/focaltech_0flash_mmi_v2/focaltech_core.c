@@ -37,6 +37,8 @@
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
 #include <linux/of_irq.h>
+#include <linux/pinctrl/consumer.h>
+#include <linux/version.h>
 #include "mtk_panel_ext.h"
 
 #include "focaltech_core.h"
@@ -88,6 +90,13 @@ enum touch_state {
 
 #define MTK_USB_DETECT_IN 1
 #define MTK_USB_DETECT_OUT 2
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#define FTS_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio(np,name,idx)
+#else
+#define FTS_GET_NAMED_GPIO(np,name,idx,flags_ptr) of_get_named_gpio_flags(np,name,idx,flags_ptr)
+#endif
+
 /*****************************************************************************
 * Global variable or extern global variabls/functions
 *****************************************************************************/
@@ -1735,7 +1744,7 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     }
 
     /* reset, irq gpio info */
-    pdata->reset_gpio = of_get_named_gpio_flags(np, "focaltech,reset-gpio",
+    pdata->reset_gpio = FTS_GET_NAMED_GPIO(np, "focaltech,reset-gpio",
                         0, &pdata->reset_gpio_flags);
     if (pdata->reset_gpio < 0)
         FTS_ERROR("Unable to get reset_gpio");
@@ -1744,7 +1753,7 @@ static int fts_parse_dt(struct device *dev, struct fts_ts_platform_data *pdata)
     if (pdata->report_gesture_key)
         FTS_INFO("Report tap gesture as key.");
 
-    pdata->irq_gpio = of_get_named_gpio_flags(np, "focaltech,irq-gpio",
+    pdata->irq_gpio = FTS_GET_NAMED_GPIO(np, "focaltech,irq-gpio",
                       0, &pdata->irq_gpio_flags);
     if (pdata->irq_gpio < 0)
         FTS_ERROR("Unable to get irq_gpio");
@@ -2336,8 +2345,9 @@ static int fts_fb_check_dt(struct device_node *np)
 static int fts_fb_check_dt(struct device_node *np)
 {
 	int ret = 0;
+#ifdef CONFIG_FTS_MULTI_IC_EN
 	int num_of_panel_supplier;
-
+#endif
 	if (!np)
 		return ret;
 
@@ -2720,7 +2730,7 @@ static int fts_ts_remove_entry(struct fts_ts_data *ts_data)
     return 0;
 }
 
-static void fts_gesture_type_store()
+static void fts_gesture_type_store(void)
 {
 	int ret = 0, gest_type = 0;
 
@@ -2961,7 +2971,9 @@ static int fts_ts_probe(struct spi_device *spi)
 
     spi->mode = SPI_MODE_0;
     spi->bits_per_word = 8;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 7, 0))
     spi->chip_select = 0;
+#endif
     ret = spi_setup(spi);
     if (ret) {
         FTS_ERROR("spi setup fail");
@@ -2998,10 +3010,17 @@ static int fts_ts_probe(struct spi_device *spi)
     return 0;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static void fts_ts_remove(struct spi_device *spi)
+{
+    fts_ts_remove_entry(spi_get_drvdata(spi));
+}
+#else
 static int fts_ts_remove(struct spi_device *spi)
 {
     return fts_ts_remove_entry(spi_get_drvdata(spi));
 }
+#endif
 
 static const struct spi_device_id fts_ts_id[] = {
     {FTS_DRIVER_NAME, 0},

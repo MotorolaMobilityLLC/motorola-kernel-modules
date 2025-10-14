@@ -121,6 +121,9 @@
 #define CFG_MTK_PANEL_NOTIFIER
 #endif /*CONFIG_MTK_PANEL_NOTIFICATIONS */
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0))
+#define PDE_DATA(x) pde_data(x)
+#endif
 
 /*****************************************************************************
 *  Alternative mode (When something goes wrong, the modules may be able to solve the problem.)
