@@ -364,12 +364,6 @@ static ssize_t aw963xx_operation_mode_get(void *data, char *buf)
 	else
 		len += snprintf(buf + len, PAGE_SIZE - len, "operation mode: Unconfirmed\n");
 
-	//Note: This code is designed to temporarily place platform interrupts during debugging
-	if (p_sar->irq_init.host_irq_stat == IRQ_DISABLE) {
-		enable_irq(p_sar->irq_init.to_irq);
-		p_sar->irq_init.host_irq_stat = IRQ_ENABLE;
-	}
-
 	return len;
 }
 
