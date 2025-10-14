@@ -768,7 +768,7 @@ int aw_request_apdo(struct tcpc_device *tcpc, AW_U16 apdo_vol, AW_U16 apdo_cur)
 	struct aw35615_chip *chip = tcpc_get_dev_data(tcpc);
 	AW_U8 i = 0;
 	AW_U8 apdo_num = 0;
-	AW_U8 retry = 10;
+	AW_U8 retry = 100;
 
 	if (chip->vendor_id != AW35615_VENDOR_ID) {
 		AW_LOG("AWINIC %s - Chip structure is NULL!\n", __func__);
@@ -843,7 +843,7 @@ int aw_request_apdo(struct tcpc_device *tcpc, AW_U16 apdo_vol, AW_U16 apdo_cur)
 			return 0;
 		}
 
-		usleep_range(10 * 1000, 10 * 1000);
+		usleep_range(1 * 1000, 2 * 1000);
 	}
 
 	return 1;
