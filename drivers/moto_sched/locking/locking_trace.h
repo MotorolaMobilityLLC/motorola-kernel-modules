@@ -97,11 +97,7 @@ TRACE_EVENT(lock_pi_start,
 		memcpy(__entry->waiter_comm, waiter->comm, TASK_COMM_LEN);
 		__entry->owner_pid = owner->pid;
 		memcpy(__entry->owner_comm, owner->comm, TASK_COMM_LEN);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-		__assign_str(lock_name);
-#else
 		__assign_str(lock_name, lock_name);
-#endif
 	),
 	TP_printk("lock=%s waiter=%d(%s) boosted owner=%d(%s)",
 		__get_str(lock_name),
@@ -124,11 +120,7 @@ TRACE_EVENT(lock_pi_finish,
 	TP_fast_assign(
 		__entry->owner_pid = owner->pid;
 		memcpy(__entry->owner_comm, owner->comm, TASK_COMM_LEN);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-		__assign_str(lock_name);
-#else
 		__assign_str(lock_name, lock_name);
-#endif
 	),
 	TP_printk("lock=%s owner=%d(%s) cleared",
 		__get_str(lock_name),

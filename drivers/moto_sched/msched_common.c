@@ -429,11 +429,7 @@ static void android_vh_binder_proc_transaction_finish(void *unused, struct binde
 
 void register_vendor_comm_hooks(void)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
-	register_trace_android_rvh_set_user_nice_locked(android_rvh_set_user_nice, NULL);
-#else
 	register_trace_android_rvh_set_user_nice(android_rvh_set_user_nice, NULL);
-#endif
 
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(5, 10, 0))
 	register_trace_android_vh_binder_priority_skip(probe_android_vh_binder_priority_skip, NULL);
