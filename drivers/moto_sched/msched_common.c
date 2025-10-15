@@ -247,6 +247,35 @@ void binder_ux_type_set(struct task_struct *task) {
 }
 EXPORT_SYMBOL(binder_ux_type_set);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long *nice)
+{
+	struct moto_task_struct *mts = get_moto_task_struct(p);
+	if (IS_ERR_OR_NULL(mts) || !nice || !p)
+		return;
+
+	if ((*nice < MIN_NICE || *nice > MAX_NICE) && !(*nice == 0xbeef || *nice == 0xbeee)) {
+		/* ADDED: Trace the disallowed request before returning */
+		trace_set_user_nice(p, *nice, false);
+		return;
+	}
+
+	if (!(*nice == 0xbeef || *nice == 0xbeee))
+		mts->nice_backup = *nice;
+
+	if (task_has_ux_type(p, UX_TYPE_INHERIT_LOCK) && (*nice != 0xbeee)) {
+		*nice = rlimit_to_nice(task_rlimit(p, RLIMIT_NICE));
+		if (unlikely(*nice > MAX_NICE)) {
+			pr_warn("%s: pid=%d RLIMIT_NICE=%ld is not set\n", "moto_sched", p->pid, *nice);
+			*nice = mts->nice_backup;
+		}
+	} else
+		*nice = mts->nice_backup;
+
+	/* ADDED: Trace the final values before the function exits */
+	trace_set_user_nice(p, *nice, true);
+}
+#else
 static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long *nice, bool *allowed)
 {
 	struct moto_task_struct *mts = get_moto_task_struct(p);
@@ -276,6 +305,7 @@ static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long 
 	/* ADDED: Trace the final values before the function exits */
 	trace_set_user_nice(p, *nice, *allowed);
 }
+#endif
 
 bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name) {
 	struct rq *rq = NULL;
