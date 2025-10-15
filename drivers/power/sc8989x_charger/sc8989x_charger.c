@@ -775,28 +775,79 @@ err:
 
 static void determine_initial_status(struct sc8989x_chip *sc);
 static int sc8989x_set_vindpm_track(struct sc8989x_chip *sc,enum vindpm_track track);
-__maybe_unused static int sc8989x_set_hiz(struct sc8989x_chip *sc, bool enable)
+static int sc8989x_set_vindpm(struct sc8989x_chip *sc, int volt_mv);
+static int sc8989x_normal_set_hiz(struct sc8989x_chip *sc, bool enable)
 {
 	int ret;
 	int reg_val = enable ? 1 : 0;
 
-	if (enable) {
-		if ((sc->qc_chg_type == USB_TYPE_QC3P_18)
-			|| (sc->qc_chg_type == USB_TYPE_QC3P_27)
-			|| (sc->qc_chg_type == USB_TYPE_QC3P_45)) {
-			dev_info(sc->dev, "[%s]Cannot set HIZ mode while QC3+ is active (type=%d)\n", __func__,sc->qc_chg_type);
-			return 0;
-		}
+	if (sc == NULL) {
+		return -EINVAL;
 	}
 	ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
 	if (!reg_val) {
 		atomic_set(&sc->vbus_good_flag, 1);
-		dev_err(sc->dev, "tcmd cancel  sc8989x_set_hiz");
+		dev_err(sc->dev, "tcmd cancel  sc8989x_normal_set_hiz");
 		msleep(300);
 		atomic_set(&sc->vbus_good_flag, 0);
 		sc8989x_set_vindpm_track(sc, SC8989X_TRACK_300);
 		determine_initial_status(sc);
 	}
+	return ret;
+}
+
+__maybe_unused static int sc8989x_set_hiz(struct sc8989x_chip *sc, bool enable)
+{
+	int ret = 0;
+	int uisoc = -1;
+	int bat_vol = 3450;
+	struct power_supply *bat_psy = NULL;
+	union power_supply_propval prop;
+
+	bat_psy = power_supply_get_by_name("battery");
+	if (bat_psy == NULL) {
+		dev_err(sc->dev, "[%s]psy is not rdy\n", __func__);
+		uisoc = -1;
+		bat_vol = 4001;
+	}
+
+	if (bat_psy) {
+		ret = power_supply_get_property(bat_psy,
+				POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
+		if (ret < 0) {
+			dev_err(sc->dev, "can't get battery vol!!!");
+			goto out;
+		}
+		bat_vol = prop.intval / 1000;
+
+		ret = power_supply_get_property(bat_psy,
+				POWER_SUPPLY_PROP_CAPACITY, &prop);
+		if (ret < 0) {
+			dev_err(sc->dev, "can't get uisoc!!!");
+			goto out;
+		}
+		uisoc = prop.intval;
+	}
+
+	dev_notice(sc->dev, "[Factory Test:%d][%s] uisoc:%d battery_voltage:%d\n",
+			is_factory_build(), __func__, uisoc, bat_vol);
+	if (is_factory_build() && (uisoc >= 65 || (uisoc == -1 && bat_vol > 4000))) {
+		ret = sc8989x_normal_set_hiz(sc, enable);
+		goto out;
+	} else {
+		if (enable) {
+			if ((sc->qc_chg_type == USB_TYPE_QC3P_18)
+				|| (sc->qc_chg_type == USB_TYPE_QC3P_27)
+				|| (sc->qc_chg_type == USB_TYPE_QC3P_45)) {
+				ret = sc8989x_set_vindpm(sc, 12000);
+				dev_info(sc->dev, "[%s]Cannot set HIZ mode while QC3+ is active (type=%d)\n", __func__,sc->qc_chg_type);
+				goto out;
+			}
+		}
+		ret = sc8989x_normal_set_hiz(sc, enable);
+	}
+out:
+	power_supply_put(bat_psy);
 	return ret;
 }
 
