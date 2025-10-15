@@ -2196,7 +2196,7 @@ static void sx937x_register_err(psx93XX_t this)
 		num_same_val = 0;
 		if(phen & 1<<ph) {
 			for(idx=1; idx<CHECK_TIMES; idx++) {
-				if(ph_useful[ph][idx] != 0 && ph_useful[ph][idx-1] == ph_useful[ph][idx]) {
+				if(ph_useful[ph][idx] != 0 && ph_useful[ph][idx-1] == ph_useful[ph][idx] && ph_useful[ph][idx] != 0x3FFFFC00) {
 					if(++num_same_val >= CHECK_TIMES-1) {
 						LOG_ERR("sx937x ph[%d] no change:%d %d %d\n",ph,ph_useful[ph][idx-2],ph_useful[ph][idx-1],ph_useful[ph][idx]);
 						sx937x_reinitialize(this);
