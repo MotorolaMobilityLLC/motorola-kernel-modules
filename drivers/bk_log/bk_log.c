@@ -244,12 +244,20 @@ static void __nocfi sysrq_crash(void *p, void *data)
 static int get_blkdev(struct bk_log *bk)
 {
 	dev_t dev;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	int err;
+#endif
 
 	if (bk->blkdev)
 		return 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
+	err = lookup_bdev(bk->partlabel_name, &dev);
+	if (err) {
+#else
 	dev = name_to_dev_t(bk->partlabel_name);
 	if (!dev) {
+#endif
 		pr_debug("Failed to get device %s!\n", bk->partlabel_name);
 		return -ENOTBLK;
 	}
