@@ -332,6 +332,9 @@ struct fts_ts_data {
 #ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
     bool palm_on;
 #endif
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+       bool force_stowed_mode;
+#endif
 };
 
 enum _FTS_BUS_TYPE {

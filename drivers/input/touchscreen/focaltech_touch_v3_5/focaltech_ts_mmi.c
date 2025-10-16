@@ -154,6 +154,15 @@ static ssize_t fts_stowed_store(struct device *dev,
 	mutex_lock(&ts_data->mode_lock);
 
 	ts_data->get_mode.stowed = mode;
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	if ((ts_data->force_stowed_mode) && (mode == 0x0)) {
+		FTS_INFO("Force touch enter stow mode has high priority");
+		ret = size;
+		goto exit;
+	}
+#endif
+
 	if (ts_data->set_mode.stowed == mode) {
 		FTS_DEBUG("The value = %lu is same, so not to write", mode);
 		ret = size;
@@ -499,6 +508,9 @@ static int fts_mmi_post_resume(struct device *dev)
 
 	if (pdata->stowed_mode_ctrl) {
 		ts_data->set_mode.stowed = 0;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+		ts_data->force_stowed_mode = false;
+#endif
 	}
 
 	mutex_unlock(&ts_data->mode_lock);
@@ -652,6 +664,41 @@ exit:
 	return size;
 }
 
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+static int fts_mmi_force_enter_standby_mode(struct device *dev)
+{
+	struct fts_ts_data *ts_data;
+	int ret = 0;
+
+	GET_TS_DATA(dev);
+
+	mutex_lock(&ts_data->mode_lock);
+	if (ts_data->set_mode.stowed == 0x01) {
+		FTS_INFO("Already on touch stowed state");
+		goto exit;
+	}
+
+	if ((atomic_read(&ts_data->post_suspended) == 0x01) && ts_data->gesture_support) {
+		ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_STANDBY);
+		if (ret < 0) {
+			FTS_ERROR("Failed to force enter stowed mode");
+			goto exit;
+		}
+		ts_data->set_mode.stowed = 0x01;
+		ts_data->force_stowed_mode = true;
+		FTS_INFO("Success force touch enter stowed mode");
+	} else {
+		FTS_INFO("Skip force touch enter stowed mode post_suspended:%d, gesture_enabled:%d",
+			atomic_read(&ts_data->post_suspended), ts_data->gesture_support);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&ts_data->mode_lock);
+	return ret;
+}
+#endif
+
 static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
 {
 	int idx = 0;
@@ -708,6 +755,10 @@ static struct ts_mmi_methods fts_mmi_methods = {
 	.post_resume = fts_mmi_post_resume,
 	.pre_suspend = fts_mmi_pre_suspend,
 	.post_suspend = fts_mmi_post_suspend,
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+    .force_enter_standby_mode = fts_mmi_force_enter_standby_mode,
+#endif
 };
 
 int fts_mmi_dev_register(struct fts_ts_data *ts_data) {
