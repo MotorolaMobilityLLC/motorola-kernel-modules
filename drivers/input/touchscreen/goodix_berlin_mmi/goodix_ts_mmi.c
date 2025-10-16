@@ -675,6 +675,15 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 
 	mutex_lock(&core_data->mode_lock);
 	core_data->get_mode.stowed = mode;
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	if ((core_data->force_stowed_mode) && (mode == 0x0)) {
+		ts_info("Force touch enter stow mode has high priority");
+		ret = size;
+		goto exit;
+	}
+#endif
+
 	if (core_data->set_mode.stowed == mode) {
 		ts_debug("The value = %lu is same, so not to write", mode);
 		ret = size;
@@ -1649,6 +1658,9 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 
 	if (core_data->board_data.stowed_mode_ctrl) {
 		core_data->set_mode.stowed = 0;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+		core_data->force_stowed_mode = false;
+#endif
 	}
 
 	if (core_data->board_data.pocket_mode_ctrl && core_data->get_mode.pocket_mode) {
@@ -1923,6 +1935,42 @@ exit:
 }
 #endif
 
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+static int goodix_ts_mmi_force_enter_standby_mode(struct device *dev)
+{
+	int ret = 0;
+	struct goodix_ts_core *core_data;
+	struct platform_device *pdev;
+
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	if (core_data->set_mode.stowed == 0x01) {
+		ts_info("Already on touch stowed state");
+		goto exit;
+	}
+
+	if ((atomic_read(&core_data->post_suspended) == 0x01) && core_data->gesture_enabled) {
+		ret = goodix_ts_send_cmd(core_data, ENTER_STOWED_MODE_CMD, 5, 0x01, 0x00);
+		if (ret < 0) {
+			ts_err("Failed to force enter stowed mode");
+			goto exit;
+		}
+		core_data->set_mode.stowed = 0x01;
+		core_data->force_stowed_mode = true;
+		ts_info("Success force touch enter stowed mode");
+	} else {
+		ts_info("Skip force touch enter stowed mode post_suspended:%d, gesture_enabled:%d",
+			atomic_read(&core_data->post_suspended), core_data->gesture_enabled);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+#endif
+
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
@@ -1957,6 +2005,10 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.post_suspend = goodix_ts_mmi_post_suspend,
 #ifdef CONFIG_GTP_FOD
 	.update_fod_mode = goodix_ts_mmi_update_fps_mode,
+#endif
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	.force_enter_standby_mode = goodix_ts_mmi_force_enter_standby_mode,
 #endif
 };
 
