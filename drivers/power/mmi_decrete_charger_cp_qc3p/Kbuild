@@ -8,7 +8,9 @@ EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include \
 		-I$(TOP)/motorola/kernel/modules/drivers/power/mmi_decrete_charger_cp_qc3p \
 		-I$(ANDROID_BUILD_TOP)/kernel-5.10/drivers/power/supply \
 		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply \
-		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/drivers/power/supply \
+		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.12/include
 
 obj-m += mmi_decrete_charger_cp_qc3p.o
 mmi_decrete_charger_cp_qc3p-objs += mmi_charger_class.o

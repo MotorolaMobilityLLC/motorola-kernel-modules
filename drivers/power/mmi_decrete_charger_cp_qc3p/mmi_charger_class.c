@@ -33,6 +33,7 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/ctype.h>
+#include <linux/version.h>
 #include "mmi_charger_class.h"
 
 static struct class *mmi_charger_class;
@@ -239,7 +240,11 @@ void mmi_charger_class_exit(void)
 
 int mmi_charger_class_init(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,3,0)
 	mmi_charger_class = class_create(THIS_MODULE, "mmi_charger");
+#else
+	mmi_charger_class = class_create("mmi_charger");
+#endif
 	if (IS_ERR(mmi_charger_class)) {
 		pr_err("Unable to create mmi charger class; error = %ld\n",
 			PTR_ERR(mmi_charger_class));

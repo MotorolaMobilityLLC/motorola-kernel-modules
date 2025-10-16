@@ -40,6 +40,7 @@
 #include <linux/platform_device.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
+#include <linux/version.h>
 #include "mmi_charger_class.h"
 #include "mmi_charger_core.h"
 #include "mmi_charger_policy.h"
@@ -1532,7 +1533,11 @@ cleanup:
 	return ret;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void mmi_chrg_manager_remove(struct platform_device *pdev)
+#else
 static int mmi_chrg_manager_remove(struct platform_device *pdev)
+#endif
 {
 	struct mmi_charger_manager *chip =  platform_get_drvdata(pdev);
 
@@ -1543,7 +1548,10 @@ static int mmi_chrg_manager_remove(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, NULL);
 	devm_kfree(&pdev->dev, chip);
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 1, 0))
 	return 0;
+#endif
 }
 
 #ifdef CONFIG_PM_SLEEP
