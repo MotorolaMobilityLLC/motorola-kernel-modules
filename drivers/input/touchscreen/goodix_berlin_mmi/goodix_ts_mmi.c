@@ -83,6 +83,10 @@ static ssize_t goodix_ts_vsync_store(struct device *dev,
 static ssize_t goodix_ts_fp_event_show(struct device *dev,
 	struct device_attribute *attr, char *buf);
 #endif
+static ssize_t goodix_ts_fp_int_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_fp_int_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -118,6 +122,8 @@ static DEVICE_ATTR(vsync, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(fp_event, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fp_event_show, NULL);
 #endif
+static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_fp_int_show, goodix_ts_fp_int_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -127,7 +133,7 @@ static DEVICE_ATTR(fp_event, (S_IRUGO | S_IWUSR | S_IWGRP),
 #define BIG_MODE   1
 #define SMALL_MODE    2
 #define DEFAULT_MODE   0
-#define MAX_ATTRS_ENTRIES 10
+#define MAX_ATTRS_ENTRIES 15
 
 #define NORMAL_DEFAULT_MODE 10
 #define NORMAL_SMALL_MODE 11
@@ -195,6 +201,7 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 #ifdef CONFIG_GTP_GHOST_LOG_CAPTURE
 	ADD_ATTR(log_trigger);
 #endif
+	ADD_ATTR(fp_int);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -1129,6 +1136,65 @@ static ssize_t goodix_ts_log_trigger_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", 0x01);
 }
 #endif
+
+static ssize_t goodix_ts_fp_int_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	bool bool_mode;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ts_info("Failed to convert value.");
+		return -EINVAL;
+	}
+
+	bool_mode = !!mode;
+	mutex_lock(&core_data->mode_lock);
+	core_data->get_mode.fp_int_state = bool_mode;
+	if (core_data->set_mode.fp_int_state == bool_mode) {
+		ts_info("The value = %d is same, so not to write", bool_mode);
+		ret = size;
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info("The touch is in power off state, ignore the value");
+		ret = size;
+		goto exit;
+	}
+
+	ret = goodix_ts_send_cmd(core_data, SET_FP_INT_CMD, 5, bool_mode, 0x00);
+	if (!ret)
+		core_data->set_mode.fp_int_state = bool_mode;
+	msleep(20);
+	ts_info("Success set fp int to %s", bool_mode ? "high" : "low");
+
+	ret = size;
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
+static ssize_t goodix_ts_fp_int_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info("fp_int_state = %d.",
+		core_data->set_mode.fp_int_state);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", core_data->set_mode.fp_int_state);
+}
 
 static int goodix_ts_mmi_methods_get_vendor(struct device *dev, void *cdata) {
 	return scnprintf(TO_CHARP(cdata), TS_MMI_MAX_VENDOR_LEN, "%s", "goodix");

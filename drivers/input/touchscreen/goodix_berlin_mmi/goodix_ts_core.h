@@ -528,6 +528,7 @@ struct goodix_mode_info {
 #endif
 	int stowed;
 	int pocket_mode;
+	int fp_int_state;
 };
 
 struct goodix_ts_core {
