@@ -65,6 +65,10 @@ static struct subsystem_data subsystems[] = {
 	{ "adsp_island", 613, 2 },
 	{ "slpi_island", 613, 3 },
 	{ "apss", 631, QCOM_SMEM_HOST_ANY },
+	{ "soccp", 607, 19},
+	{ "dcp", 607, 22},
+	{ "am", 679, 24},
+	{ "wm", 678, 23},
 };
 
 struct stats_data {
