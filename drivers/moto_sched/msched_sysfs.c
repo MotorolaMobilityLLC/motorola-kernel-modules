@@ -677,5 +677,8 @@ void moto_sched_proc_deinit(void)
 	remove_proc_entry("ux_scene", d_moto_sched);
 	remove_proc_entry("enabled", d_moto_sched);
 	remove_proc_entry(MOTO_SCHED_PROC_DIR, NULL);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+	unregister_moto_sched_ops();
+#endif
 }
 
