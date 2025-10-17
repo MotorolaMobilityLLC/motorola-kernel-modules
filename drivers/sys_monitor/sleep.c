@@ -43,6 +43,8 @@
 #if IS_ENABLED(CONFIG_QCOM_STATS)
 #include <linux/soc/qcom/smem.h>
 //#include <net/qrtr/qrtr.h>
+#define MAX_SUBSYS_COUNT 14
+
 extern int get_qrtr_wakeup_source(void);
 struct subsystem_data {
 	const char *name;
@@ -101,7 +103,7 @@ struct suspend_state {
 	unsigned int wakeup_irq;
 	uid_t wakeup_uid;
 	char wakeup_name[MAX_WAKEUP_NAME_SIZE];
-	struct subsys_state subsys_state[14];
+	struct subsys_state subsys_state[MAX_SUBSYS_COUNT];
 };
 
 static struct suspend_state suspend_state[SLEEP_REC_COUNT];
@@ -204,10 +206,12 @@ static void record_sleep_stats(ktime_t sleep_time)
 			       - stat->last_entered_at;
 		delta_duration = accumulated - prev_duration[i];
 		prev_duration[i] = accumulated;
-		suspend_state[cur_idx].subsys_state[j].sleep_time = delta_duration;
-		memcpy(suspend_state[cur_idx].subsys_state[j].name, subsystem->name, SUBSYS_NAME_LEN);
-		suspend_state[cur_idx].subsys_state[j].name[SUBSYS_NAME_LEN - 1] = '\0';
-		suspend_state[cur_idx].subsys_count = ++j;
+		if (j < MAX_SUBSYS_COUNT) {
+			suspend_state[cur_idx].subsys_state[j].sleep_time = delta_duration;
+			memcpy(suspend_state[cur_idx].subsys_state[j].name, subsystem->name, SUBSYS_NAME_LEN);
+			suspend_state[cur_idx].subsys_state[j].name[SUBSYS_NAME_LEN - 1] = '\0';
+			suspend_state[cur_idx].subsys_count = ++j;
+		}
 	}
 #endif
 
