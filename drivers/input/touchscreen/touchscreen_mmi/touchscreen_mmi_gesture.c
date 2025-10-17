@@ -705,7 +705,11 @@ int ts_mmi_cli_gesture_init(struct ts_mmi_dev *touch_cdev)
 		goto unregister_sensor_input_device;
 
 	/* export report gesture function to vendor */
+#ifdef CONFIG_THP_FOLD
+	touch_cdev->mdata->exports.report_cli_gesture = ts_mmi_cli_gesture_handler;
+#else
 	touch_cdev->mdata->exports.report_gesture = ts_mmi_cli_gesture_handler;
+#endif
 
 	return 0;
 

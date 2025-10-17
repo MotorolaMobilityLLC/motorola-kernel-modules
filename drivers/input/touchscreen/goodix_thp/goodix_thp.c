@@ -1113,6 +1113,11 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
                 mmi_event.evcode =4;
                 mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
                 mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
+#ifdef CONFIG_THP_FOLD
+                if (core_data->pdev->id)
+                    core_data->imports->report_cli_gesture(&mmi_event);
+                else
+#endif
                 core_data->imports->report_gesture(&mmi_event);
                 break;
         case 0x63: // C
@@ -1181,6 +1186,11 @@ static int goodix_thp_gesture_irq_handler(struct goodix_thp_core *core_data)
                 mmi_event.evcode =1;
                 mmi_event.evdata.x = le16_to_cpup((__le16 *)&temp_data[8]);
                 mmi_event.evdata.y = le16_to_cpup((__le16 *)&temp_data[10]);
+#ifdef CONFIG_THP_FOLD
+                if (core_data->pdev->id)
+                    core_data->imports->report_cli_gesture(&mmi_event);
+                else
+#endif
                 core_data->imports->report_gesture(&mmi_event);
                 break;
         default:

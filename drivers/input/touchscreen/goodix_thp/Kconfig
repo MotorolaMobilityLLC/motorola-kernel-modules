@@ -7,3 +7,8 @@ menuconfig TOUCHSCREEN_GOODIX_BRL_THP
         help
           Say Y here if you have a Goodix berlin touch controller
           to your system.
+
+config THP_FOLD
+    bool "Enable thp fold gesture"
+    help
+      Say Y here if support thp fold gesture
