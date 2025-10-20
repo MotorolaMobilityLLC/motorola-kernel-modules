@@ -1176,7 +1176,7 @@ static struct usb_function_instance *usbnet_alloc_inst(void)
 	}
 	opts->dev = dev;
 	net_dev = alloc_netdev(sizeof(struct usbnet_context),
-			   "usb%d", NET_NAME_UNKNOWN, usb_ether_setup);
+			   "tcmd%d", NET_NAME_UNKNOWN, usb_ether_setup);
 	if (!net_dev) {
 		pr_err("%s: alloc_netdev error\n", __func__);
 		kfree(opts);
