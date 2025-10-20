@@ -484,6 +484,7 @@ static void mmi_notify_charger_event(struct mmi_glink_chip *chip, int type)
 			scnprintf(event_string, CHG_SHOW_MAX_SIZE,
 				"POWER_SUPPLY_CHARGE_REAL_TYPE=%d",
 				chip->real_charger_type);
+			sysfs_notify(&batt_host->batt_psy->dev.kobj, NULL, "charge_real_type");
 			break;
 		case NOTIFY_EVENT_TYPE_BATTERY_SOH:
 			scnprintf(event_string, CHG_SHOW_MAX_SIZE,
@@ -535,7 +536,6 @@ int mmi_get_battery_charger_rate(struct mmi_glink_chip *charger)
 static void mmi_update_charger_event(struct mmi_glink_chip *chip)
 {
 	bool mmi_changed = false;
-	struct battery_host *batt_host = chip->batt_host;
 	int charger_rate = MMI_POWER_SUPPLY_CHARGE_RATE_NONE;
 	static int max_charger_rate = MMI_POWER_SUPPLY_CHARGE_RATE_NONE;
 	//int charger_type = 0;
@@ -580,7 +580,6 @@ static void mmi_update_charger_event(struct mmi_glink_chip *chip)
 		chip->real_charger_type = real_charger_type;
 		mmi_notify_charger_event(chip, NOTIFY_EVENT_TYPE_CHG_REAL_TYPE);
 		mmi_info(chip, "charger real type is %d\n", real_charger_type);
-		sysfs_notify(&batt_host->batt_psy->dev.kobj, NULL, "charge_real_type");
 	}
 
 	if (mmi_changed) {
