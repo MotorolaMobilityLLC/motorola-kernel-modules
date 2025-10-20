@@ -610,6 +610,53 @@ static ssize_t thermal_secondary_charge_control_limit_max_show(struct device *de
 }
 static DEVICE_ATTR(thermal_secondary_charge_control_limit_max, S_IRUGO, thermal_secondary_charge_control_limit_max_show, NULL);
 
+static ssize_t android_auto_mode_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct battery_host *batt_host = this_batt_host;
+	unsigned long r;
+	unsigned long android_auto_mode = 0;
+	pr_debug("Start android_auto_mode store\n");
+	if (!batt_host) {
+		pr_err("batt_host not valid\n");
+		return -ENODEV;
+	}
+
+	pr_debug("Current android_auto_mode = %d\n", batt_host->android_auto_mode);
+
+	r = kstrtoul(buf, 0, &android_auto_mode);
+	if (r) {
+		pr_err("Invalid android_auto_mode = %lu\n", android_auto_mode);
+		return -EINVAL;
+	}
+
+	batt_host->android_auto_mode = android_auto_mode;
+	pr_info("Now android_auto_mode changed to %d\n",
+		batt_host->android_auto_mode);
+	r = qti_charger_set_property(OEM_PROP_ANDROID_AUTO_MODE,
+						&batt_host->android_auto_mode,
+						sizeof(batt_host->android_auto_mode));
+
+	return r ? r : count;
+}
+
+static ssize_t android_auto_mode_show(struct device *dev,
+								struct device_attribute *attr,
+								char *buf)
+{
+	struct battery_host *batt_host = this_batt_host;
+
+	pr_debug("Start android_auto_mode show\n");
+	if (!batt_host) {
+		pr_err("batt_host not valid\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", batt_host->android_auto_mode);
+}
+static DEVICE_ATTR(android_auto_mode, 0644, android_auto_mode_show, android_auto_mode_store);
+
 static inline int primary_get_max_charge_cntl_limit(struct thermal_cooling_device *tcd,
                     unsigned long *state)
 {
@@ -833,7 +880,13 @@ void battery_supply_init(struct battery_host *batt_host)
 				&dev_attr_charge_real_type);
 	if (rc)
 		mmi_err(this_root_chip, "couldn't create charge_real_type\n");
-	mmi_info(this_root_chip, "battery supply is initialized\n");
+	
+	rc = device_create_file(&batt_psy->dev,
+				&dev_attr_android_auto_mode);
+	if (rc)
+		mmi_err(this_root_chip, "couldn't create android_auto_mode\n");
+		
+		mmi_info(this_root_chip, "battery supply is initialized\n");
 
 	thermal_charge_control_init(batt_host);
 	return;
@@ -865,6 +918,8 @@ void battery_supply_deinit(struct battery_host *batt_host)
 					&dev_attr_force_charging_disable);
 		device_remove_file(&batt_psy->dev,
 					&dev_attr_charge_real_type);
+		device_remove_file(&batt_psy->dev,
+					&dev_attr_android_auto_mode);		
 		sysfs_remove_group(&batt_psy->dev.kobj,
 					&power_supply_mmi_attr_group);
 		power_supply_put(batt_psy);
