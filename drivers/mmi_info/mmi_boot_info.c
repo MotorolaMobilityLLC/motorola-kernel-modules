@@ -170,7 +170,7 @@ void bi_add_bl_build_sig(char *bld_sig)
 	if (!bld_sig || (bl_build_sig_count >= MAX_BL_BUILD_SIG))
 		return;
 
-	value = (char *)memchr((void *)bld_sig, '=', MAX_BLD_SIG_ITEM);
+	value = (char *)memchr((void *)bld_sig, '=', strnlen(bld_sig, MAX_BLD_SIG_ITEM));
 	if (!value)
 		return;
 
