@@ -192,6 +192,12 @@
 #define SPI_DMA_TRANSFER_SPLIT		DISABLE
 #define SPRD_SYSFS_SUSPEND_RESUME	DISABLE
 
+#ifdef GKI_EN_FLAG
+#define GENERIC_KERNEL_IMAGE    ENABLE/*follow gki */
+#else
+#define GENERIC_KERNEL_IMAGE    DISABLE/*follow gki */
+#endif
+
 /* Path */
 #define DEBUG_DATA_FILE_SIZE		(10*K)
 #define DEBUG_DATA_FILE_PATH		"/sdcard/ILITEK_log.csv"

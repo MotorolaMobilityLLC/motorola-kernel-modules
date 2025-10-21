@@ -376,7 +376,11 @@ static int ilitek_i2c_probe(struct i2c_client *i2c, const struct i2c_device_id *
 		ilits->reset = TP_HW_RST_ONLY;
 
 	ilits->rst_edge_delay = 100;
+#if GENERIC_KERNEL_IMAGE
+	ilits->fw_open = REQUEST_FIRMWARE;
+#else
 	ilits->fw_open = FILP_OPEN;
+#endif
 	ilits->fw_upgrade_mode = UPGRADE_FLASH;
 	ilits->mp_move_code = ili_move_mp_code_flash;
 	ilits->gesture_move_code = ili_move_gesture_code_flash;
