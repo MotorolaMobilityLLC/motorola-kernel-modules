@@ -193,6 +193,10 @@ struct file_buffer {
 
 static int file_write(struct file_buffer *file, bool new_open)
 {
+#if GENERIC_KERNEL_IMAGE
+	ILI_ERR("GKI version not allow drivers to use filp_open\n");
+	return -1;
+#else
 	struct file *f = NULL;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t fs;
@@ -234,6 +238,7 @@ static int file_write(struct file_buffer *file, bool new_open)
 #endif
 	filp_close(f, NULL);
 	return 0;
+#endif
 }
 
 static int ilitek_debug_node_buff_control(bool open)

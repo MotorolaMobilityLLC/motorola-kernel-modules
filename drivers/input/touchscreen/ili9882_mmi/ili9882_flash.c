@@ -135,11 +135,15 @@ static int ilitek_tddi_fw_iram_read(u8 *buf, u32 start, int len)
 
 int ili_fw_dump_iram_data(u32 start, u32 end, bool save)
 {
+#if GENERIC_KERNEL_IMAGE
+	int tmp = debug_en;
+#else
 	struct file *f = NULL;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t old_fs;
 #endif
 	loff_t pos = 0;
+#endif
 	int i, ret, len;
 	u8 *fw_buf = NULL;
 
@@ -171,6 +175,13 @@ int ili_fw_dump_iram_data(u32 start, u32 end, bool save)
 	if (ret < 0)
 		goto out;
 
+#if GENERIC_KERNEL_IMAGE
+	ILI_ERR("GKI version not allow drivers to use filp_open\n");
+	ret = -1;
+	debug_en = DEBUG_ALL;
+	ili_dump_data(fw_buf, 8, len, 0, "IRAM");
+	debug_en = tmp;
+#else
 	f = filp_open(DUMP_IRAM_PATH, O_WRONLY | O_CREAT | O_TRUNC, 644);
 	if (ERR_ALLOC_MEM(f)) {
 		ILI_ERR("Failed to open the file at %ld.\n", PTR_ERR(f));
@@ -190,6 +201,7 @@ int ili_fw_dump_iram_data(u32 start, u32 end, bool save)
 #endif
 	filp_close(f, NULL);
 	ILI_INFO("Save iram data to %s\n", DUMP_IRAM_PATH);
+#endif
 
 out:
 	ili_ice_mode_ctrl(DISABLE, OFF);
@@ -494,24 +506,25 @@ static int ilitek_tddi_fw_read_flash_data(u32 start, u32 end, u8 *data, int len)
 
 int ili_fw_dump_flash_data(u32 start, u32 end, bool user)
 {
-	struct file *f = NULL;
+	u32 start_addr, end_addr;
+	int ret, length;
 	u8 *buf = NULL;
-
+#if GENERIC_KERNEL_IMAGE
+	int tmp = debug_en;
+#else
+	struct file *f = NULL;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t old_fs;
 #endif
 
 	loff_t pos = 0;
-	u32 start_addr, end_addr;
-	int ret, length;
-
 	f = filp_open(DUMP_FLASH_PATH, O_WRONLY | O_CREAT | O_TRUNC, 644);
 	if (ERR_ALLOC_MEM(f)) {
 		ILI_ERR("Failed to open the file at %ld.\n", PTR_ERR(f));
 		ret = -1;
 		goto out;
 	}
-
+#endif
 	ret = ili_ice_mode_ctrl(ENABLE, OFF);
 	if (ret < 0)
 		goto out;
@@ -539,6 +552,12 @@ int ili_fw_dump_flash_data(u32 start, u32 end, bool user)
 	if (ret < 0)
 		goto out;
 
+#if GENERIC_KERNEL_IMAGE
+	ILI_ERR("GKI version not allow drivers to use filp_open, dump flash data\n");
+	debug_en = DEBUG_ALL;
+	ili_dump_data(buf, 8, length, 0, "flash");
+	debug_en = tmp;
+#else
 	pos = 0;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	old_fs = get_fs();
@@ -549,10 +568,12 @@ int ili_fw_dump_flash_data(u32 start, u32 end, bool user)
 #elif (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
 	kernel_write(f, buf, length, &pos);
 #endif
-	filp_close(f, NULL);
-	ipio_vfree((void **)&buf);
-
+#endif
 out:
+#if (!GENERIC_KERNEL_IMAGE)
+	filp_close(f, NULL);
+#endif
+	ipio_vfree((void **)&buf);
 	ili_ice_mode_ctrl(DISABLE, OFF);
 	ILI_INFO("Dump flash %s\n", (ret < 0) ? "FAIL" : "SUCCESS");
 	return ret;
@@ -1203,13 +1224,13 @@ static int ilitek_tdd_fw_hex_open(u8 op, u8 *pfw)
 {
 	int ret =0, fsize = 0;
 	const struct firmware *fw = NULL;
+#if (!GENERIC_KERNEL_IMAGE)
 	struct file *f = NULL;
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t old_fs;
 #endif
-
 	loff_t pos = 0;
+#endif
 
 	ILI_INFO("Open file method = %s, path = %s\n",
 		op ? "FILP_OPEN" : "REQUEST_FIRMWARE",
@@ -1254,6 +1275,10 @@ static int ilitek_tdd_fw_hex_open(u8 op, u8 *pfw)
 		release_firmware(fw);
 		break;
 	case FILP_OPEN:
+#if GENERIC_KERNEL_IMAGE
+	ILI_ERR("GKI version not allow drivers to use filp_open\n");
+	return -1;
+#else
 		f = filp_open(ilits->md_fw_filp_path, O_RDONLY, 0644);
 		if (ERR_ALLOC_MEM(f)) {
 			ILI_ERR("Failed to open the file at %ld\n", PTR_ERR(f));
@@ -1298,6 +1323,7 @@ static int ilitek_tdd_fw_hex_open(u8 op, u8 *pfw)
 
 		filp_close(f, NULL);
 		ilits->tp_fw.size = fsize;
+#endif
 		break;
 	default:
 		ILI_ERR("Unknown open file method, %d\n", op);

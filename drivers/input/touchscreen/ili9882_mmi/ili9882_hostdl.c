@@ -196,7 +196,9 @@ static int ilitek_tddi_fw_iram_read(u8 *buf, u32 start, int len)
 
 int ili_fw_dump_iram_data(u32 start, u32 end, bool save)
 {
+#if (!GENERIC_KERNEL_IMAGE)
 	struct file *f = NULL;
+#endif
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t old_fs;
 #endif
@@ -231,6 +233,14 @@ int ili_fw_dump_iram_data(u32 start, u32 end, bool save)
 	}
 
 	if (save) {
+#if GENERIC_KERNEL_IMAGE
+			ILI_ERR("GKI version not allow drivers to use filp_open, dump IRAM data\n");
+			debug_en = DEBUG_ALL;
+			ili_dump_data(ilits->update_buf, 8, len, 0, "IRAM");
+			debug_en = tmp;
+			ret = -ENOMEM;
+			goto out;
+#else
 		f = filp_open(DUMP_IRAM_PATH, O_WRONLY | O_CREAT | O_TRUNC, 644);
 		if (ERR_ALLOC_MEM(f)) {
 			ILI_ERR("Failed to open the file at %ld.\n", PTR_ERR(f));
@@ -251,6 +261,7 @@ int ili_fw_dump_iram_data(u32 start, u32 end, bool save)
 #endif
 		filp_close(f, NULL);
 		ILI_INFO("Save iram data to %s\n", DUMP_IRAM_PATH);
+#endif
 	} else {
 		debug_en = DEBUG_ALL;
 		ili_dump_data(ilits->update_buf, 8, len, 0, "IRAM");
@@ -722,7 +733,9 @@ static int ilitek_tdd_fw_hex_open(u8 op, u8 *pfw)
 {
 	int ret =0, fsize = 0;
 	const struct firmware *fw = NULL;
+#if (!GENERIC_KERNEL_IMAGE)
 	struct file *f = NULL;
+#endif
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t old_fs;
 #endif
@@ -771,6 +784,10 @@ static int ilitek_tdd_fw_hex_open(u8 op, u8 *pfw)
 		release_firmware(fw);
 		break;
 	case FILP_OPEN:
+#if GENERIC_KERNEL_IMAGE
+		ILI_ERR("GKI version not allow drivers to use filp_open\n");
+		return -1;
+#else
 		f = filp_open(ilits->md_fw_filp_path, O_RDONLY, 0644);
 		if (ERR_ALLOC_MEM(f)) {
 			ILI_ERR("Failed to open the file, %ld\n", PTR_ERR(f));
@@ -813,6 +830,7 @@ static int ilitek_tdd_fw_hex_open(u8 op, u8 *pfw)
 #endif
 		filp_close(f, NULL);
 		ilits->tp_fw.size = fsize;
+#endif
 		break;
 	default:
 		ILI_ERR("Unknown open file method, %d\n", op);

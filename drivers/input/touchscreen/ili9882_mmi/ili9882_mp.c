@@ -798,6 +798,17 @@ static int ilitek_tddi_mp_ini_parser(const char *path)
 	int i, ret = 0, fsize = 0;
 	char *tmp = NULL;
 	const struct firmware *ini = NULL;
+#if GENERIC_KERNEL_IMAGE
+	ILI_ERR("GKI version not allow drivers to use filp_open\n");
+	path = ilits->md_ini_rq_path;
+	ILI_INFO("request path = %s\n", path);
+	if (request_firmware(&ini, path, ilits->dev) < 0) {
+		ILI_ERR("Request ini file failed\n");
+		return -EINVAL;
+	}
+
+	fsize = ini->size;
+#else
 	struct file *f = NULL;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t old_fs;
@@ -835,6 +846,7 @@ static int ilitek_tddi_mp_ini_parser(const char *path)
 	} else {
 		fsize = ini->size;
 	}
+#endif
 
 	ILI_INFO("ini file size = %d\n", fsize);
 	if (fsize <= 0) {
@@ -849,7 +861,9 @@ static int ilitek_tddi_mp_ini_parser(const char *path)
 		ret = -ENOMEM;
 		goto out;
 	}
-
+#if GENERIC_KERNEL_IMAGE
+	memcpy(tmp, ini->data, fsize);
+#else
 	if (f != NULL) {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 		old_fs = get_fs();
@@ -863,7 +877,7 @@ static int ilitek_tddi_mp_ini_parser(const char *path)
 	} else {
 		memcpy(tmp, ini->data, fsize);
 	}
-
+#endif
 	g_ini_items = 0;
 
 	/* Initialise ini strcture */
@@ -889,11 +903,14 @@ static int ilitek_tddi_mp_ini_parser(const char *path)
 	ILI_INFO("Parsed ini file done\n");
 out:
 	ipio_vfree((void **)&tmp);
-
+#if GENERIC_KERNEL_IMAGE
+	release_firmware(ini);
+#else
 	if (f != NULL)
 		filp_close(f, NULL);
 	else
 		release_firmware(ini);
+#endif
 
 	return ret;
 }
@@ -3077,7 +3094,9 @@ static int mp_show_result(bool lcm_on)
 	s32 *max_threshold = NULL, *min_threshold = NULL;
 	char *csv = NULL;
 	char *ret_pass_name = NULL, *ret_fail_name = NULL;
+#if (!GENERIC_KERNEL_IMAGE)
 	struct file *f = NULL;
+#endif
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 	mm_segment_t fs;
 #endif
@@ -3306,6 +3325,9 @@ static int mp_show_result(bool lcm_on)
 			snprintf(csv_name, (CSV_FILE_SIZE - csv_len), "%s/%s_%s.csv", CSV_LCM_OFF_PATH, get_date_time_str(), ret_pass_name);
 	}
 
+#if GENERIC_KERNEL_IMAGE
+	ILI_ERR("GKI version not allow drivers to use filp_open\n");
+#else
 	ILI_INFO("Open CSV : %s\n", csv_name);
 
 	if (f == NULL)
@@ -3337,6 +3359,7 @@ static int mp_show_result(bool lcm_on)
 	filp_close(f, NULL);
 
 	ILI_INFO("Writing Data into CSV succeed\n");
+#endif
 
 fail_open:
 	ipio_vfree((void **)&csv);
@@ -3682,7 +3705,9 @@ static void mp_copy_ret_to_apk(char *buf)
 		return;
 	}
 
+#if !GENERIC_KERNEL_IMAGE
 	len += snprintf(buf + len, PAGE_SIZE - len, "CSV path: %s\n\n", csv_name);
+#endif
 	for (seq = 0; seq < ri.count; seq++) {
 		i = ri.index[seq];
 		if (tItems[i].item_result == MP_DATA_FAIL) {
