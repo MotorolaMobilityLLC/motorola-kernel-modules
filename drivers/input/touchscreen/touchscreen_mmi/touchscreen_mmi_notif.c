@@ -50,6 +50,8 @@ static int ts_mmi_panel_off(struct ts_mmi_dev *touch_cdev) {
 	atomic_set(&touch_cdev->resume_should_stop, 1);
 
 	TRY_TO_CALL(pre_suspend);
+
+#if !defined(CONFIG_VANTAGE_DTB)
 	if (touch_cdev->pdata.gestures_enabled || touch_cdev->pdata.cli_gestures_enabled ||
 		touch_cdev->pdata.support_liquid_detection || touch_cdev->pdata.palm_enabled) {
 #if defined(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)
@@ -66,6 +68,8 @@ static int ts_mmi_panel_off(struct ts_mmi_dev *touch_cdev) {
 		}
 #endif
 	}
+#endif
+
 	if (IS_ACTIVE_MODE) {
 		/* IC power is off. IRQ pin status is floated. So disable IRQ. */
 		dev_info(DEV_MMI, "%s: try to enter Deepsleep mode\n", __func__);

@@ -327,7 +327,7 @@ static ssize_t pwr_store(struct device *dev,
 }
 static DEVICE_ATTR(pwr, (S_IWUSR | S_IWGRP), NULL, pwr_store);
 
-#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+#if defined(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL) && !defined(CONFIG_VANTAGE_DTB)
 /*
  * gesture value used to indicate which gesture mode type is enabled
  */
@@ -470,7 +470,7 @@ static struct attribute *sysfs_class_attrs[] = {
 	&dev_attr_poison_distance.attr,
 	&dev_attr_poison_trigger_distance.attr,
 #endif
-#ifdef CONFIG_BOARD_USES_DOUBLE_TAP_CTRL
+#if defined(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL) && !defined(CONFIG_VANTAGE_DTB)
 	&dev_attr_gesture.attr,
 #endif
 	&dev_attr_liquid_detection_ctl.attr,
