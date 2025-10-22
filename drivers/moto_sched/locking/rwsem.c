@@ -63,6 +63,17 @@ struct rwsem_waiter {
 
 static DEFINE_SPINLOCK(RWSEM_SPIN_LOCK);
 
+void reset_rwsem_owner_list(struct moto_task_struct *mts)
+{
+	unsigned long flags;
+	if(!mts)
+		return;
+
+	spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
+	list_del_init(&mts->owner_node);
+	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
+}
+
 static inline struct task_struct *rwsem_owner(struct rw_semaphore *sem)
 {
 	return (struct task_struct *)
