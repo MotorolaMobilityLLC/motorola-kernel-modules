@@ -2722,6 +2722,8 @@ rerun:
 			pr_err("HVDCP: Cann't detected qc20 hvdcp\n");
 			goto out;
 		}
+		sgm->qc_chg_type = charger_type;
+		charger_dev_notify(sgm->chg_dev, CHARGER_DEV_NOTIFY_CTD_DONE);
 
 		if (charger_type != USB_TYPE_QC20)
 			goto out;
@@ -2882,7 +2884,7 @@ static void charger_detect_work_func(struct work_struct *work)
 		if (sgm->qc_dev)
 			schedule_delayed_work(&sgm->detect_qc_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER)); //for wait PD detected complete
 		else if (sgm->mmi_hvdcp_support)
-			schedule_delayed_work(&sgm->mmi_hvdcp_detect_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER));
+			schedule_delayed_work(&sgm->mmi_hvdcp_detect_dwork, msecs_to_jiffies(0)); //start HVDCP detection immediately to reduce UI latency
 #endif
 		break;
 

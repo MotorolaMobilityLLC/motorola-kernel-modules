@@ -2444,6 +2444,8 @@ rerun:
 			pr_err("HVDCP: Can't detect qc20 hvdcp\n");
 			goto out;
 		}
+		sc->qc_chg_type = charger_type;
+		charger_dev_notify(sc->chg_dev, CHARGER_DEV_NOTIFY_CTD_DONE);
 
 		if (charger_type != USB_TYPE_QC20)
 			goto out;
@@ -2763,7 +2765,7 @@ static int sc8989x_get_charger_type(struct sc8989x_chip *sc)
 		if (sc->qc_dev)
 			schedule_delayed_work(&sc->detect_qc_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER)); //for wait PD detected complete
 		else if (sc->mmi_hvdcp_support)
-			schedule_delayed_work(&sc->mmi_hvdcp_detect_dwork, msecs_to_jiffies(MMI_HVDCP_DETECT_TIMER));
+			schedule_delayed_work(&sc->mmi_hvdcp_detect_dwork, msecs_to_jiffies(0)); //start HVDCP detection immediately to reduce UI latency
 		break;
 	case VBUS_STAT_UNKOWN:
 		sc->psy_usb_type = POWER_SUPPLY_USB_TYPE_SDP;
