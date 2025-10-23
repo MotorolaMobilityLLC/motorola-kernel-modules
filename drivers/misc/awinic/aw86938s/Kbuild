@@ -1,0 +1,13 @@
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
+
+ifneq ($(filter m y,$(CONFIG_AAC_RICHTAP_SUPPORT)),)
+	EXTRA_CFLAGS += -DCONFIG_AAC_RICHTAP_SUPPORT
+endif
+ifneq ($(filter m y,$(CONFIG_MOTO_HAPTIC)),)
+	EXTRA_CFLAGS += -DCONFIG_MOTO_HAPTIC
+endif
+
+aw86938s-y += aw869x.o aw869xx.o aw8671x.o aw8692x.o aw8693x.o aw8693xs.o haptic_hv.o
+obj-m += aw86938s.o
