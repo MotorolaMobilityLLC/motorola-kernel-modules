@@ -33,6 +33,9 @@
 #define TUNE_INACTIVE_SUPPORTED
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#define MM_NON_LINEAR_WMARK_SUPPORTED
+#endif
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -74,6 +77,12 @@ extern int moto_alloc_warn_ms;
 extern int mm_info_init(void);
 extern void mm_info_exit(void);
 #endif // defined(MM_INFO_SUPPORTED)
+
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+extern long wmark_high_delta_mb;
+extern int mm_init_adjust_zone_wmark_init(void);
+extern void mm_init_adjust_zone_wmark_exit(void);
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
 
 /* inline functions */
 static inline int get_task_cgroup_id(struct task_struct *task)
