@@ -52,9 +52,9 @@ enum {
 };
 
 static const char* sc8586_psy_name[] = {
-    [SC8586_STANDALONG] = "sc-cp-standalone",
-    [SC8586_MASTER] = "sc-cp-master",
-    [SC8586_SLAVE] = "sc-cp-slave",
+    [SC8586_STANDALONG] = "cp-standalone",
+    [SC8586_MASTER] = "cp-master",
+    [SC8586_SLAVE] = "cp-slave",
 };
 
 static const char* sc8586_irq_name[] = {
@@ -1313,7 +1313,6 @@ static inline int status_reg_to_charger(enum sc8586_notify notify)
 __maybe_unused
 static void sc8586_dump_check_cp_fault_status(struct sc8586_chip *sc)
 {
-    int ret;
     u8 flag = 0;
     int i,j,k;
 #ifdef CONFIG_MTK_CLASS
@@ -1323,7 +1322,7 @@ static void sc8586_dump_check_cp_fault_status(struct sc8586_chip *sc)
         return;
 
     for (i = 0; i <= 0x2B; i++) {
-        ret = sc8586_i2c_read_bytes(sc, i, 1, &flag);
+        sc8586_i2c_read_bytes(sc, i, 1, &flag);
         sc8586_info( "%s cp reg[0x%02x] = 0x%02x\n", __func__, i, flag);
         for (k=0; k < ARRAY_SIZE(cp_intr_flag); k++) {
             if (cp_intr_flag[k].reg == i){
@@ -1346,7 +1345,6 @@ static void sc8586_dump_check_cp_fault_status(struct sc8586_chip *sc)
 __maybe_unused
 static void cps2043_dump_check_cp_fault_status(struct sc8586_chip *sc)
 {
-    int ret;
     u8 flag = 0;
     int i,j,k;
 #ifdef CONFIG_MTK_CLASS
@@ -1355,7 +1353,7 @@ static void cps2043_dump_check_cp_fault_status(struct sc8586_chip *sc)
     if (!sc)
         return;
     for (i = 0; i <= 0x2B; i++) {
-        ret = sc8586_i2c_read_bytes(sc, i, 1, &flag);
+        sc8586_i2c_read_bytes(sc, i, 1, &flag);
         sc8586_err( "%s cp reg[0x%02x] = 0x%02x\n", __func__, i, flag);
         for (k=0; k < ARRAY_SIZE(cps_cp_intr_flag); k++) {
             if (cps_cp_intr_flag[k].reg == i){
@@ -1442,7 +1440,6 @@ static int sc8586_register_interrupt(struct sc8586_chip *sc)
 
 /************************psy start**************************************/
 static enum power_supply_property sc8586_charger_props[] = {
-    POWER_SUPPLY_PROP_ONLINE,
     POWER_SUPPLY_PROP_PRESENT,
     POWER_SUPPLY_PROP_VOLTAGE_NOW,
     POWER_SUPPLY_PROP_CURRENT_NOW,
@@ -1458,47 +1455,41 @@ static int sc8586_charger_get_property(struct power_supply *psy,
     struct sc8586_chip *sc = power_supply_get_drvdata(psy);
     int result;
     int ret;
-    if (!val)
-        return -EINVAL;
+
     switch (psp) {
-    case POWER_SUPPLY_PROP_ONLINE:
-        sc8586_check_charge_enabled(sc, &sc->charge_enabled);
-        val->intval = sc->charge_enabled;
-        break;
-    case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+    case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
         ret = sc8586_get_adc_data(sc, ADC_VBUS, &result);
-        if (!ret)
+        if (ret >= 0)
             sc->vbus_volt = result;
         val->intval = sc->vbus_volt;
         break;
     case POWER_SUPPLY_PROP_CURRENT_NOW:
         ret = sc8586_get_adc_data(sc, ADC_IBUS, &result);
-        if (!ret)
+        if (ret >= 0)
             sc->ibus_curr = result;
         val->intval = sc->ibus_curr;
         break;
-    case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
+    case POWER_SUPPLY_PROP_VOLTAGE_NOW:
         ret = sc8586_get_adc_data(sc, ADC_VBAT1, &result);
-        if (!ret)
+        if (ret >= 0)
             sc->vbat_volt = result;
         val->intval = sc->vbat_volt;
         break;
     case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
         ret = sc8586_get_adc_data(sc, ADC_IBAT, &result);
-        if (!ret)
+        if (ret >= 0)
             sc->ibat_curr = result;
         val->intval = sc->ibat_curr;
         break;
     case POWER_SUPPLY_PROP_TEMP:
         ret = sc8586_get_adc_data(sc, ADC_TDIE, &result);
-        if (!ret)
+        if (ret >= 0)
             sc->die_temp = result;
         val->intval = sc->die_temp;
         break;
     default:
         return -EINVAL;
     }
-
     return 0;
 }
 
@@ -1506,15 +1497,8 @@ static int sc8586_charger_set_property(struct power_supply *psy,
                     enum power_supply_property prop,
                     const union power_supply_propval *val)
 {
-    struct sc8586_chip *sc = power_supply_get_drvdata(psy);
-    if (!val)
-        return -EINVAL;
     switch (prop) {
-    case POWER_SUPPLY_PROP_ONLINE:
-        sc8586_enable_charge(sc, val->intval);
-        sc8586_info( "POWER_SUPPLY_PROP_ONLINE: %s\n",
-                val->intval ? "enable" : "disable");
-        break;
+
     default:
         return -EINVAL;
     }
@@ -1648,6 +1632,7 @@ static struct of_device_id sc8586_charger_match_table[] = {
         .data = &sc8586_mode_data[SC8586_MASTER], },
     {   .compatible = "sc,sc8586-slave",
         .data = &sc8586_mode_data[SC8586_SLAVE], },
+    {},
 };
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0))

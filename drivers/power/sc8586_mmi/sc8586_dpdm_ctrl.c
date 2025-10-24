@@ -55,12 +55,11 @@ static struct intr_flag dpdm_intr_flag[] = {
 __maybe_unused
 void sc8586_dump_check_dpdm_fault_status(struct sc8586_chip *sc)
 {
-    int ret;
     u8 flag = 0;
     int i,j,k;
 
     for (i = 0x34; i <= 0x3C; i++) {
-        ret = sc8586_i2c_read_bytes(sc, i, 1, &flag);
+        sc8586_i2c_read_bytes(sc, i, 1, &flag);
         sc8586_err( "%s dpdm reg[0x%02x] = 0x%02x\n", __func__, i, flag);
         for (k=0; k < ARRAY_SIZE(dpdm_intr_flag); k++) {
             if (dpdm_intr_flag[k].reg == i){

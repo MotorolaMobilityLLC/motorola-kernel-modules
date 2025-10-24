@@ -3,7 +3,7 @@ ifeq ($(ANDROID_BUILD_TOP),)
 endif
 
 # add -Wall to try to catch everything we can.
-#EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/include
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include \
 		-I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1/drivers/power/supply \
