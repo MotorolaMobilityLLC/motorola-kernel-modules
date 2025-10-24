@@ -76,6 +76,13 @@ enum battery_property_id {
 	BATT_RESISTANCE,
 	BATT_POWER_NOW,
 	BATT_POWER_AVG,
+	BATT_QCOM_BATTERY_CHARGE_CONTROL_EN, /* charge control limit enable */
+	BATT_CHARGE_CONTROL_START_THRESHOLD, /* recharge threshold */
+	BATT_CHARGE_CONTROL_END_THRESHOLD, /* charge threshold */
+	BATT_CURRENT_AVG, /**< ibatt in uA, negative is discharging >*/
+	BATT_BATTERY_CELL_COUNT, /* parallel battery pack count, MSB[15:8]: available parallel pack count LSB[7:0]: expected total parallel pack count*/
+	BATT_QNS_FV_MAX,
+	BATT_QNS_FCC_MAX,
 	BATT_PROP_MAX,
 };
 
@@ -203,6 +210,7 @@ static const int battery_prop_map[BATT_PROP_MAX] = {
 	[BATT_TTE_AVG]		= POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG,
 	[BATT_POWER_NOW]	= POWER_SUPPLY_PROP_POWER_NOW,
 	[BATT_POWER_AVG]	= POWER_SUPPLY_PROP_POWER_AVG,
+	[BATT_CURRENT_AVG]	= POWER_SUPPLY_PROP_CURRENT_AVG,
 };
 
 static const int usb_prop_map[USB_PROP_MAX] = {
