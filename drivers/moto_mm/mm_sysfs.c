@@ -28,6 +28,10 @@ int moto_mm_info_enabled = 0; // disabled by default because of overhead of hook
 int moto_alloc_warn_ms = 100; // 100ms by default
 #endif // defined(MM_INFO_SUPPORTED)
 
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+long wmark_high_delta_mb = 0;
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 struct proc_dir_entry *d_moto_mm;
 #endif
@@ -108,6 +112,48 @@ static ssize_t proc_alloc_warn_ms_read(struct file *file, char __user *buf,
 }
 #endif // defined(MM_INFO_SUPPORTED)
 
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+static ssize_t proc_wmark_high_delta_mb_write(struct file *file, const char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[13];
+	int err = 0, val = 0;
+
+	memset(buffer, 0, sizeof(buffer));
+
+	if (count > sizeof(buffer) - 1)
+		count = sizeof(buffer) - 1;
+
+	if (copy_from_user(buffer, buf, count))
+		return -EFAULT;
+
+	buffer[count] = '\0';
+	err = kstrtoint(strstrip(buffer), 10, &val);
+	if (err)
+		return err;
+
+	wmark_high_delta_mb = val;
+
+	if (wmark_high_delta_mb != 0)
+		mm_init_adjust_zone_wmark_init();
+	else
+		mm_init_adjust_zone_wmark_exit();
+
+	return count;
+}
+
+static ssize_t proc_wmark_high_delta_mb_read(struct file *file, char __user *buf,
+		size_t count, loff_t *ppos)
+{
+	char buffer[13];
+	size_t len = 0;
+
+	len = snprintf(buffer, sizeof(buffer), "%d\n", (int)wmark_high_delta_mb);
+
+	return simple_read_from_buffer(buf, count, ppos, buffer, len);
+}
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+
 #if defined(MM_INFO_SUPPORTED)
 static const struct proc_ops proc_mm_info_enabled_fops = {
 	.proc_write		= proc_mm_info_enabled_write,
@@ -119,6 +165,13 @@ static const struct proc_ops proc_alloc_warn_ms_fops = {
 	.proc_read		= proc_alloc_warn_ms_read,
 };
 #endif // defined(MM_INFO_SUPPORTED)
+
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+static const struct proc_ops proc_wmark_high_delta_mb_fops = {
+	.proc_write		= proc_wmark_high_delta_mb_write,
+	.proc_read		= proc_wmark_high_delta_mb_read,
+};
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
 
 int moto_mm_proc_init(void)
 {
@@ -146,7 +199,20 @@ int moto_mm_proc_init(void)
 	}
 #endif // defined(MM_INFO_SUPPORTED)
 
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+	proc_node = proc_create("wmark_high_delta_mb", 0666, d_moto_mm, &proc_wmark_high_delta_mb_fops);
+	if (!proc_node) {
+		pr_err("failed to create proc node wmark_high_delta_mb\n");
+		goto err_creat_init_adjust_zone_wmark_high;
+	}
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+
 	return 0;
+
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+	remove_proc_entry("wmark_high_delta_mb", d_moto_mm);
+err_creat_init_adjust_zone_wmark_high:
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
 
 #if defined(MM_INFO_SUPPORTED)
 	remove_proc_entry("alloc_warn_ms", NULL);
@@ -165,6 +231,9 @@ err_creat_d_moto_mm:
 
 void moto_mm_proc_deinit(void)
 {
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+	remove_proc_entry("wmark_high_delta_mb", d_moto_mm);
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
 #if defined(MM_INFO_SUPPORTED)
 	remove_proc_entry("alloc_warn_ms", d_moto_mm);
 	remove_proc_entry("mm_info_enabled", d_moto_mm);

@@ -98,12 +98,20 @@ static int __init moto_mm_init(void)
 		mm_info_init();
 #endif // defined(MM_INFO_SUPPORTED)
 
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+	if (wmark_high_delta_mb != 0)
+		mm_init_adjust_zone_wmark_init();
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+
 	pr_info("moto_mm_init succeed!\n");
 	return 0;
 }
 
 static void __exit moto_mm_exit(void)
 {
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+	mm_init_adjust_zone_wmark_exit();
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
 #if defined(MM_INFO_SUPPORTED)
 	mm_info_exit();
 #endif // defined(MM_INFO_SUPPORTED)
