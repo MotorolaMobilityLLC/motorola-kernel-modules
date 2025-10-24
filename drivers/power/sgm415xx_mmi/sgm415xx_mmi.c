@@ -2986,6 +2986,9 @@ static irqreturn_t sgm4154x_irq_handler_thread(int irq, void *private)
 	} else if (is_factory_build()) {
 		dev_info(sgm->dev, "%s: start get charger type\n", __func__);
 		schedule_delayed_work(&sgm->charge_detect_delayed_work, msecs_to_jiffies(200));
+	} else if (sgm-> first_boot) {
+		pr_info("[%s] first boot is %d,trigger bc12\n", __func__, sgm-> first_boot);
+		schedule_delayed_work(&sgm->retry_charger_detect_work, msecs_to_jiffies(100));
 	}
 	//power_supply_changed(sgm->charger);
 
