@@ -18,10 +18,14 @@
 #include <trace/hooks/vmscan.h>
 #include <trace/hooks/mm.h>
 #include <linux/swap.h>
+#include <linux/mmzone.h>
+#include <linux/memory-tiers.h>
 
 #include "mm_common.h"
 
 bool mm_info_initialized = false;
+bool mm_init_adjust_zone_wmark_initialized = false;
+
 
 #if defined(MM_INFO_SUPPORTED)
 // 5.15+
@@ -104,9 +108,69 @@ int mm_info_init(void)
 void mm_info_exit(void)
 {
 	if (!mm_info_initialized) return;
-	
+
 	unregister_mm_info_hooks();
 
 	mm_info_initialized = false;
 	pr_info("mm_info_exit succeed!\n");
+}
+
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+static void init_adjust_zone_wmark_hook(void *data, struct zone *zone, u64 interval)
+{
+	if (!zone) return;
+
+	if (zone_idx(zone) == ZONE_NORMAL) {
+		pr_info("init_adjust_zone_wmark_hook, high=%lumb. high_delta=%ldmb. \n",
+			(zone->_watermark[WMARK_HIGH] * 4 / 1024), wmark_high_delta_mb);
+		zone->_watermark[WMARK_HIGH] = low_wmark_pages(zone) + interval + wmark_high_delta_mb * 1024 / 4;
+	}
+}
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+
+int register_mm_init_adjust_zone_wmark_hooks(void)
+{
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+	int rc;
+
+	REGISTER_HOOK(init_adjust_zone_wmark);
+	return 0;
+
+ERROR_OUT(init_adjust_zone_wmark):
+	return rc;
+#else
+	return -1;
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+}
+
+void unregister_mm_init_adjust_zone_wmark_hooks(void)
+{
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+	UNREGISTER_HOOK(init_adjust_zone_wmark);
+#endif // defined(MM_NON_LINEAR_WMARK_SUPPORTED)
+}
+int mm_init_adjust_zone_wmark_init(void)
+{
+	int ret;
+
+	if (mm_init_adjust_zone_wmark_initialized) return 0;
+
+	ret = register_mm_init_adjust_zone_wmark_hooks();
+	if (ret != 0)
+		return ret;
+
+	mm_init_adjust_zone_wmark_initialized = true;
+	pr_info("moto_mm, mm_init_adjust_zone_wmark_init succeed!\n");
+
+	return 0;
+}
+
+void mm_init_adjust_zone_wmark_exit(void)
+{
+	if (!mm_init_adjust_zone_wmark_initialized) return;
+
+	unregister_mm_init_adjust_zone_wmark_hooks();
+
+	mm_init_adjust_zone_wmark_initialized = false;
+	pr_info("moto_mm, mm_init_adjust_zone_wmark_exit succeed!\n");
 }
