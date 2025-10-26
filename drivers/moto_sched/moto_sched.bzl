@@ -31,6 +31,17 @@ def define_modules():
             "CONFIG_MOTO_FUTEX_INHERIT": {
                 True: ["locking/futex.c"],
             },
+            "CONFIG_MOTO_ENABLE_MDPF": {
+                True: [
+                    "msched_trace.h",
+                    "msched_trace.c",
+                    "msched_uclamp.c",
+                    "msched_uclamp.h",
+                    "mdpf/mdpf_sysfs.c",
+                    "mdpf/mdpf_sysfs.h",
+                    "//common:kernel/sched/autogroup.h",
+                ],
+            }
         },
 
         includes = [

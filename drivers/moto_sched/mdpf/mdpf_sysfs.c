@@ -10,6 +10,7 @@
 #include <linux/uaccess.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>
+#include <linux/string.h>
 
 #include "mdpf_sysfs.h"
 #include "msched_common.h"
@@ -49,7 +50,7 @@ static ssize_t proc_mdpf_task_write(struct file *file, const char __user *buf,
 	buffer[count] = '\0';
 	str = strstrip(buffer);
 	while ((token = strsep(&str, " ")) && *token && (cnt < OPT_STR_MAX)) {
-		strlcpy(opt_str[cnt], token, sizeof(opt_str[cnt]));
+		strscpy(opt_str[cnt], token, sizeof(opt_str[cnt]));
 		cnt += 1;
 	}
 
@@ -145,7 +146,7 @@ static ssize_t is_tgid_system_ui_store(struct file *filp,
 		}
 	}
 
-	strlcpy(tgid_comm, p->comm, TASK_COMM_LEN);
+	strscpy(tgid_comm, p->comm, TASK_COMM_LEN);
 	put_task_struct(p);
 	rcu_read_unlock();
 
@@ -201,7 +202,7 @@ static ssize_t is_tgid_sf_store(struct file *filp,
 		}
 	}
 
-	strlcpy(tgid_comm, p->comm, TASK_COMM_LEN);
+	strscpy(tgid_comm, p->comm, TASK_COMM_LEN);
 	put_task_struct(p);
 	rcu_read_unlock();
 
