@@ -907,7 +907,7 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
 	if (sc->mmi_disable_mux)
 		return 0;
 
-	if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN) {
+	if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN) {
 	    sc-> otg_delay_mos_config = false;
         sc8586_field_read(sc, F_MODE, &ret);
 		if(ret == 7) {
@@ -915,9 +915,8 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
 			dev_err(sc->dev, "%s:mmi_mux dis cp otg reverse mode", __func__);
 	    }
     }
-    	if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN
-	    	    && typec_mos != MMI_DVCHG_MUX_DISABLE && wls_mos != MMI_DVCHG_MUX_DISABLE
-		        && wls_mos != MMI_DVCHG_MUX_MANUAL_OPEN) {
+        if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && typec_mos != MMI_DVCHG_MUX_DISABLE
+                && wls_mos != MMI_DVCHG_MUX_DISABLE && wls_mos != MMI_DVCHG_MUX_MANUAL_OPEN) {
             ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 0);
             if (ret < 0) {
                 dev_err(sc->dev, "%s:mmi_mux dis mos both fail ret=%d", __func__, ret);
@@ -933,15 +932,6 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
             }
             udelay(100);
         }
-        /*if (wls_mos == MMI_DVCHG_MUX_CLOSE) {
-            ret = regmap_update_bits(sc->regmap, SC8565_CHRGR_CTRL_1,
-                    SC8565_WPCGATE_EN, 0);
-            if (ret) {
-                dev_err(sc->dev, "%s:mmi_mux close wls mos fail ret=%d", __func__, ret);
-                return ret;
-            }
-            udelay(100);
-        }*/
 
         if (typec_mos == MMI_DVCHG_MUX_CHG_OPEN) {
             ret = sc8586_field_write(sc, F_OVPGATE_EN, 1);
@@ -965,47 +955,9 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
               dev_err(sc->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
               return ret;
             }
-
-#ifdef CONFIG_MOTO_CHANNEL_SWITCH
-        } else if (typec_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
-	        //reverse mode
-		    sc8586_field_write(sc, F_MODE, 7);
-
-            ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 1);
-            if (ret < 0) {
-                dev_err(sc->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
-                return ret;
-            }
-            udelay(100);
-
-            ret = sc8586_field_write(sc, F_OVPGATE_EN, 0);
-            if (ret < 0) {
-                dev_err(sc->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
-                return ret;
-            }
-#endif
         }
 
-        if (wls_mos == MMI_DVCHG_MUX_CHG_OPEN) {
-            /*ret = regmap_update_bits(sc->regmap, SC8565_CHRGR_CTRL_1,
-                    SC8565_WPCGATE_EN, SC8565_WPCGATE_EN);
-            if (ret) {
-                dev_err(sc->dev, "%s:mmi_mux  open wls mux fail ret=%d", __func__, ret);
-                return ret;
-            }*/
-#ifdef CONFIG_MOTO_CHANNEL_SWITCH
-        }else if (wls_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
-		//reverse mode
-		sc8586_field_write(sc, F_MODE, 7);
-
-		/*ret = regmap_update_bits(sc->regmap, SC8565_CHRGR_CTRL_1,
-                    SC8565_WPCGATE_EN, SC8565_WPCGATE_EN);
-            if (ret) {
-                dev_err(sc->dev, "%s:mmi_mux  open wls mux fail ret=%d", __func__, ret);
-                return ret;
-            }*/
-#endif
-        } else if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
+        if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
             ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 1);
             if (ret < 0) {
                 dev_err(sc->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
@@ -1017,13 +969,6 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
                 return ret;
             }
             mdelay(50);
-
-            /*ret = regmap_update_bits(sc->regmap, SC8565_CHRGR_CTRL_1,
-                    SC8565_WPCGATE_EN, SC8565_WPCGATE_EN);
-            if (ret) {
-                dev_err(sc->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
-                return ret;
-            }*/
         }
 
 	if (typec_mos == MMI_DVCHG_MUX_DISABLE) {
@@ -1037,21 +982,6 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
                 dev_err(sc->dev, "%s:mmi_mux close typec mos fail ret=%d", __func__, ret);
                 return ret;
             }
-	     udelay(1000);
-	}
-
-	if (wls_mos == MMI_DVCHG_MUX_DISABLE) {
-		ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 1);
-            if (ret < 0) {
-                dev_err(sc->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
-                return ret;
-            }
-	     /*ret = regmap_update_bits(sc->regmap, SC8565_CHRGR_CTRL_1,
-                    SC8565_WPCGATE_EN, 0);
-            if (ret) {
-                dev_err(sc->dev, "%s:mmi_mux close wls mos fail ret=%d", __func__, ret);
-                return ret;
-            }*/
 	     udelay(1000);
 	}
 
