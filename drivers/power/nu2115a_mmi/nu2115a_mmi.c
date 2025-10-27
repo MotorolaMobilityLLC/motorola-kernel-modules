@@ -822,28 +822,6 @@ static void nu2115_check_status_flags(struct nu2115 *chip)
 
 }
 
-/*
- * check ACDRV bit
- */
-static int __nu2115_check_acdrv_bit(struct nu2115 *chip)
-{
-	int ret;
-	u8 val = 0;
-
-	ret = __nu2115_read(chip, NU2115_REG_2F, &val);
-
-	if (ret >= 0) {
-		val = val & NU2115_DIS_ACDRV_MASK;
-		if (val) {
-			ret = __nu2115_update_bits(chip, NU2115_REG_2F,	NU2115_DIS_ACDRV_MASK, 0);
-			dev_err(chip->dev, "%s:set dis_acdrv = %d\n", __func__, val);
-			if (ret)
-				dev_err(chip->dev, "%s: disable dis_acdrv fail ret=%d", __func__, ret);
-		}
-	}
-
-	return ret;
-}
 
 static irqreturn_t nu2115_irq_handler(int irq, void *data)
 {
@@ -852,7 +830,6 @@ static irqreturn_t nu2115_irq_handler(int irq, void *data)
 	dev_err(chip->dev, "nu2115_irq_handler do\n");
 	mutex_lock(&chip->irq_lock);
 	nu2115_check_status_flags(chip);
-	__nu2115_check_acdrv_bit(chip);
 	mutex_unlock(&chip->irq_lock);
 
 	return IRQ_HANDLED;
@@ -1310,8 +1287,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 	struct nu2115 *bq  = charger_get_data(chg_dev);
 
 	if (typec_mos != MMI_DVCHG_MUX_OTG_OPEN && wls_mos != MMI_DVCHG_MUX_OTG_OPEN) {
-		ret = __nu2115_update_bits(bq, NU2115_REG_2F,
-			NU2115_EN_OTG_MASK, 0);
+		ret = __nu2115_write(bq, NU2115_REG_2F, NU2115_OTG_DISABLE);
 		if (ret < 0) {
 			dev_err(bq->dev, "%s:mmi_mux close en otg fail ret=%d", __func__, ret);
 			return ret;
@@ -1352,8 +1328,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 		}
 
 	} else if (typec_mos == MMI_DVCHG_MUX_OTG_OPEN) {
-		ret = __nu2115_update_bits(bq, NU2115_REG_2F,
-				NU2115_EN_OTG_MASK, NU2115_EN_OTG_MASK);
+		ret = __nu2115_write(bq, NU2115_REG_2F, NU2115_EN_OTG_MASK);
 		if (ret < 0) {
 			dev_err(bq->dev, "%s:mmi_mux  en otg fail ret=%d", __func__, ret);
 			return ret;
@@ -1369,8 +1344,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 		}
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	} else if (typec_mos == MMI_DVCHG_MUX_OTG_WLC_OPEN) {
-		ret = __nu2115_update_bits(bq, NU2115_REG_2F,
-				NU2115_EN_OTG_MASK, NU2115_EN_OTG_MASK);
+		ret = __nu2115_write(bq, NU2115_REG_2F, NU2115_EN_OTG_MASK);
 		if (ret < 0) {
 			dev_err(bq->dev, "%s:mmi_mux  en otg fail ret=%d", __func__, ret);
 			return ret;
@@ -1395,12 +1369,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 			return ret;
 		}
 	} else if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
-		ret = __nu2115_update_bits(bq, NU2115_REG_2F,
-				NU2115_EN_OTG_MASK, NU2115_EN_OTG_MASK);
-
-		ret = __nu2115_read(bq, NU2115_REG_2F, &val);
-		if (ret < 0)
-			dev_err(bq->dev, "%s:NU2115_REG_2F = 0x%02X\n", __func__,val);
+		ret = __nu2115_write(bq, NU2115_REG_2F, NU2115_EN_OTG_MASK);
 
 		ret = __nu2115_update_bits(bq, NU2115_REG_07,
 				NU2115_BUS_OVP_DIS_MASK, NU2115_BUS_OVP_DIS_MASK);
@@ -1443,7 +1412,6 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 	if (ret >= 0) {
 		dev_err(bq->dev, "%s:mmi_mux [Reg NU2115_REG_2F] = 0x%02X\n", __func__,val);
 	}
-	__nu2115_check_acdrv_bit(bq);
 
 	ret = __nu2115_read(bq, NU2115_REG_30, &val);
 	if (ret >= 0)
