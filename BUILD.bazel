@@ -25,6 +25,7 @@ filegroup(
          "//motorola/kernel/modules/drivers/moto_swap:Kconfig",
          "//motorola/kernel/modules/drivers/power/mmi_glink_charger:Kconfig",
          "//motorola/kernel/modules:Kconfig.moto",
+         "//motorola/kernel/modules/drivers/moto_sched:Kconfig",
     ],
 )
 

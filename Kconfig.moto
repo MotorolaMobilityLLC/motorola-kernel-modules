@@ -16,4 +16,6 @@ source "motorola/kernel/modules/drivers/moto_swap/Kconfig"
 
 source "motorola/kernel/modules/drivers/power/mmi_glink_charger/Kconfig"
 
+source "motorola/kernel/modules/drivers/moto_sched/Kconfig"
+
 endmenu
