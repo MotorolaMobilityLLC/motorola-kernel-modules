@@ -942,6 +942,19 @@ static int goodix_thp_set_ble_broadcast(struct thp_ts_device *tdev, u8 enable)
         return 0;
 }
 
+/* set device ID to touch FW */
+static int goodix_thp_set_device_id(struct thp_ts_device *tdev, u8 id)
+{
+        int ret;
+
+        ret = goodix_thp_send_cmd(tdev, 0x1F, id);
+        if (ret < 0) {
+                ts_err(tdev->dev, "failed to set device id to TP FW %d", id);
+                return ret;
+        }
+        return 0;
+}
+
 static int goodix_thp_reset(struct thp_ts_device *tdev, u32 delay_ms)
 {
         ts_info(tdev->dev, "reset %dms", delay_ms);
@@ -986,6 +999,7 @@ static const struct goodix_thp_hw_ops hw_spi_ops = {
         .get_version = goodix_thp_get_version,
         .set_fp_int_pin = goodix_thp_set_fp_int_pin,
         .set_ble_broadcast = goodix_thp_set_ble_broadcast,
+        .set_device_id = goodix_thp_set_device_id,
         .reset = goodix_thp_reset,
         .set_spi_speed = goodix_thp_set_spi_speed,
 };

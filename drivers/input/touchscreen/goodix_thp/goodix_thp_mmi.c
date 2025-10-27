@@ -57,6 +57,8 @@ static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_device_id_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -78,6 +80,8 @@ static DEVICE_ATTR(fp_int, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(ble_broadcast, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_ble_broadcast_store);
 static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NULL);
+static DEVICE_ATTR(device_id, (S_IRUGO | S_IWUSR | S_IWGRP),
+	NULL, goodix_ts_device_id_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -157,6 +161,7 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	ADD_ATTR(ble_broadcast);
 	ADD_ATTR(hardware_status);
+	ADD_ATTR(device_id);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -915,6 +920,60 @@ static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 	hardware_status = core_data->open_status;
 	ts_info(core_data->ts_dev->dev, "Read touch hardware status = %d", hardware_status);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
+}
+
+static ssize_t goodix_ts_device_id_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		ts_info(tdev->dev, "Failed to convert value.");
+		return -EINVAL;
+	}
+
+	if (mode > U8_MAX) {
+		ts_info(tdev->dev, "Invalid value %lu, it is out of range (0-255).", mode);
+		return -EINVAL;
+	}
+
+	mutex_lock(&core_data->mode_lock);
+
+	if (core_data->power_on == 0) {
+		ts_info(tdev->dev, "The touch is in sleep state, ignore the value");
+		ret = -EAGAIN;
+		goto exit;
+	}
+
+	ret = tdev->hw_ops->set_device_id(tdev, (u8)mode);
+	if (ret) {
+		ts_info(tdev->dev, "Failed to send device ID to TP FW %d", ret);
+		goto exit;
+	}
+
+	ts_info(tdev->dev, "Success send phone device ID to TP FW %ld", mode);
+	/*
+	* 20ms delay required after sending device ID to touch firmware.
+	* This allows the firmware to properly process the command and
+	* update its internal state before handling subsequent operations.
+	* This timing is based on firmware requirements documented in
+	* the touch controller datasheet.
+	*/
+	msleep(20);
+	ret = size;
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
 }
 
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
