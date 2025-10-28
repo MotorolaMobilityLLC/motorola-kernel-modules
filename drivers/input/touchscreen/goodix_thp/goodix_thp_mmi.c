@@ -59,6 +59,10 @@ static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_device_id_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_fw_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_fw_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -82,6 +86,8 @@ static DEVICE_ATTR(ble_broadcast, (S_IRUGO | S_IWUSR | S_IWGRP),
 static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NULL);
 static DEVICE_ATTR(device_id, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_device_id_store);
+static DEVICE_ATTR(fw_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_fw_mode_show, goodix_ts_fw_mode_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -162,6 +168,7 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 	ADD_ATTR(ble_broadcast);
 	ADD_ATTR(hardware_status);
 	ADD_ATTR(device_id);
+	ADD_ATTR(fw_mode);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -974,6 +981,41 @@ static ssize_t goodix_ts_device_id_store(struct device *dev,
 exit:
 	mutex_unlock(&core_data->mode_lock);
 	return ret;
+}
+
+static ssize_t goodix_ts_fw_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct thp_ts_device *tdev;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		pr_info("Failed to convert value.\n");
+		return -EINVAL;
+	}
+
+	ret = tdev->hw_ops->send_cmd(tdev, CMD_FW_MODE, mode);
+	msleep(20);
+
+	if (!ret)
+		ts_info(tdev->dev, "Set fw to %s mode", mode ? "THP" : "MCU");
+
+	ret = size;
+	return ret;
+}
+
+static ssize_t goodix_ts_fw_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", 0x01);
 }
 
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {

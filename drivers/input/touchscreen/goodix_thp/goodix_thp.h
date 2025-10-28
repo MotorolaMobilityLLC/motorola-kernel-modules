@@ -82,6 +82,7 @@
 #define CMD_RAWDATA                                     0x90
 #define CMD_TOUCH_REPORT                                0x91
 #define CMD_ACTIVE_SCAN_RATE                            0x9D
+#define CMD_FW_MODE                                     0x1E
 
 /* 9897 reg definition */
 #define REG_INT_REPORT_TYPE_FLAG_9897                   0x101A0
