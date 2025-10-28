@@ -18,6 +18,36 @@
 
 #include <linux/types.h>
 #include <linux/notifier.h>
+#if defined(CONFIG_MOT_QCOM_PANEL_NOTIFIER)
+#include <linux/soc/qcom/panel_event_notifier.h>
+enum fp_notify_panel_type {
+	FP_NOTIFY_PANEL_MAIN,
+	FP_NOTIFY_PANEL_FOLD,
+	FP_NOTIFY_PANEL_MAX,
+};
+
+struct fp_notify_panel_cfg {
+	char const *panel_name;
+	enum panel_event_notifier_tag tag;
+	enum panel_event_notifier_client client;
+	enum fp_notify_panel_type type;
+};
+
+static const struct fp_notify_panel_cfg notify_panel_cfg[] = {
+	{ .panel_name = "qcom,display-panels",
+		.tag = PANEL_EVENT_NOTIFICATION_PRIMARY,
+		.client = PANEL_EVENT_NOTIFIER_CLIENT_FPS_PRIMARY,
+		.type = FP_NOTIFY_PANEL_MAIN
+	},
+	{ .panel_name = "qcom,display-panels-fold",
+		.tag = PANEL_EVENT_NOTIFICATION_SECONDARY,
+		.client = PANEL_EVENT_NOTIFIER_CLIENT_FPS_FOLD,
+		.type = FP_NOTIFY_PANEL_FOLD
+	},
+	{},
+};
+
+#endif
 /**********************************************************/
 enum FP_MODE {
 	GF_IMAGE_MODE = 0,
@@ -170,10 +200,16 @@ struct gf_dev {
 #ifdef GF_FASYNC
 	struct fasync_struct *async;
 #endif
-	struct notifier_block notifier;
 	char fb_black;
 #if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
 	struct drm_panel *active_panel;
+	struct notifier_block notifier;
+#endif
+#if defined(CONFIG_MOT_QCOM_PANEL_NOTIFIER)
+	void			*notifier_cookie[FP_NOTIFY_PANEL_MAX];
+	int			last_event[FP_NOTIFY_PANEL_MAX];
+	int			panel_register_retry_cnt;
+	struct delayed_work		panel_register_work;
 #endif
 };
 

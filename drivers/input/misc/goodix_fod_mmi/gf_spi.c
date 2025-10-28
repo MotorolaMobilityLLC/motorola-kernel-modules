@@ -105,6 +105,7 @@ struct FPS_data {
 	struct notifier_block   relay_notif;
 } *fpsData;
 #endif
+
 static void gf_enable_irq(struct gf_dev *gf_dev)
 {
 	if (gf_dev->irq_enabled) {
@@ -735,11 +736,149 @@ static int drm_check_dt(struct gf_dev *gf_dev)
 	return -ENODEV;
 }
 #endif
+#if defined(CONFIG_MOT_QCOM_PANEL_NOTIFIER)
 
+#define FP_PANEL_REGISTER_DELAY_MS 500
+#define FP_PANEL_REGISTER_RETRY_CNT 20
+static void panel_event_notifier_callback(enum panel_event_notifier_tag tag,
+			struct panel_event_notification *notification, void *data)
+{
+	struct gf_dev *gf_dev = data;
+	int i;
+	const struct fp_notify_panel_cfg *cfg = NULL;
+	char msg = 0;
+
+	if (!notification) {
+		pr_debug("Invalid panel notification\n");
+		return;
+	}
+
+	for (i = 0; i < FP_NOTIFY_PANEL_MAX && i < ARRAY_SIZE(notify_panel_cfg); i++) {
+		cfg = &notify_panel_cfg[i];
+		if (cfg->tag == tag && gf_dev->notifier_cookie[cfg->type])
+			break;
+		else
+			cfg = NULL;
+	}
+	if (!cfg) {
+		pr_err("No matched panel cfg\n");
+		return;
+	}
+	pr_debug("panel: %s  received event %d\n", cfg->panel_name , notification->notif_type);
+
+	switch (notification->notif_type) {
+	case DRM_PANEL_EVENT_BLANK_LP:
+	case DRM_PANEL_EVENT_BLANK:
+		msg = GF_NET_EVENT_FB_BLACK;
+		gf_dev->fb_black = 1;
+		break;
+	case DRM_PANEL_EVENT_UNBLANK:
+		msg = GF_NET_EVENT_FB_UNBLACK;
+		gf_dev->fb_black = 0;
+		break;
+	default:
+		pr_debug("Ignore panel event: %d\n", notification->notif_type);
+		break;
+	}
+	if (msg >0){
+		pr_info("panel: %s  received event %d\n", cfg->panel_name , notification->notif_type);
+		if(gf_dev->last_event[cfg->type] != notification->notif_type) {
+#if defined(GF_NETLINK_ENABLE)
+			sendnlmsg(&msg);
+#elif defined(GF_FASYNC)
+			if (gf_dev->async)
+				kill_fasync(&gf_dev->async, SIGIO, POLL_IN);
+#endif
+		} else {
+			pr_info("panel: %s  received event is equal to last ignore", cfg->panel_name);
+		}
+		gf_dev->last_event[cfg->type] = notification->notif_type;
+	}
+}
+
+static int fp_register_panel_notifier(struct gf_dev *gf_dev,
+		const struct fp_notify_panel_cfg *cfg)
+{
+	struct device *dev = &gf_dev->spi->dev;
+	struct device_node *np = dev->of_node;
+	struct device_node *pnode;
+	struct drm_panel *panel, *active_panel = NULL;
+	void *cookie = NULL;
+	int i, count, rc;
+
+	count = of_count_phandle_with_args(np, cfg->panel_name, NULL);
+	if (count <= 0)
+		return 0;
+
+	for (i = 0; i < count; i++) {
+		pnode = of_parse_phandle(np, cfg->panel_name, i);
+		if (!pnode)
+			return -ENODEV;
+
+		panel = of_drm_find_panel(pnode);
+		of_node_put(pnode);
+		if (!IS_ERR(panel)) {
+			active_panel = panel;
+			break;
+		}
+	}
+
+	if (!active_panel) {
+		rc = PTR_ERR(panel);
+		if (rc != -EPROBE_DEFER)
+			pr_err( "Failed to find active panel: %s, rc=%d\n",
+				cfg->panel_name, rc);
+		return rc;
+	}
+
+	cookie = panel_event_notifier_register(
+			cfg->tag,
+			cfg->client,
+			active_panel,
+			panel_event_notifier_callback,
+			(void *)gf_dev);
+	if (IS_ERR(cookie)) {
+		rc = PTR_ERR(cookie);
+		pr_err( "Failed to register %s panel event notifier, rc=%d\n",
+			cfg->panel_name, rc);
+		return rc;
+	}
+
+	pr_debug("register %s panel notifier successful\n", cfg->panel_name);
+	gf_dev->notifier_cookie[cfg->type] = cookie;
+	return 0;
+}
+static void fp_panel_register_work(struct work_struct *work)
+{
+	struct gf_dev *gf_dev = container_of(work,
+					struct gf_dev,
+					panel_register_work.work);
+	int rc;
+	int i;
+
+	for (i = 0; i < FP_NOTIFY_PANEL_MAX && i < ARRAY_SIZE(notify_panel_cfg); i++) {
+		if (gf_dev->notifier_cookie[i])
+			continue;
+		rc = fp_register_panel_notifier(gf_dev, &notify_panel_cfg[i]);
+		if (rc == -EPROBE_DEFER &&
+			gf_dev->panel_register_retry_cnt < FP_PANEL_REGISTER_RETRY_CNT) {
+			schedule_delayed_work(&gf_dev->panel_register_work,
+					msecs_to_jiffies(FP_PANEL_REGISTER_DELAY_MS));
+			gf_dev->panel_register_retry_cnt++;
+		} else if (rc < 0) {
+			pr_err( "Error in registering panel %s, rc=%d\n",
+				notify_panel_cfg[i].panel_name, rc);
+		}
+	}
+}
+
+
+#endif
+#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
 static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 		unsigned long val, void *data)
 {
-#if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
+
 	struct gf_dev *gf_dev;
 	struct drm_panel_notifier *evdata = data;
 	int blank;
@@ -782,13 +921,13 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 			break;
 		}
 	}
-#endif
 	return NOTIFY_OK;
 }
 
 static struct notifier_block goodix_noti_block = {
 	.notifier_call = goodix_fb_state_chg_callback,
 };
+#endif
 
 static struct class *gf_class;
 #if defined(USE_SPI_BUS)
@@ -811,6 +950,13 @@ static int gf_probe(struct platform_device *pdev)
 #elif defined(USE_PLATFORM_BUS)
 	gf_dev->spi = pdev;
 	dev = &pdev->dev;
+#endif
+#if defined(CONFIG_MOT_QCOM_PANEL_NOTIFIER)
+	gf_dev->panel_register_retry_cnt = 0;
+	for (i =0;i < FP_NOTIFY_PANEL_MAX;i++) {
+		gf_dev->last_event[i] = -1;
+		gf_dev->notifier_cookie[i] = NULL;
+	}
 #endif
 	gf_dev->irq_gpio = -EINVAL;
 	gf_dev->reset_gpio = -EINVAL;
@@ -877,9 +1023,8 @@ static int gf_probe(struct platform_device *pdev)
 
 	spi_clock_set(gf_dev, 1000000);
 #endif
-
-	gf_dev->notifier = goodix_noti_block;
 #if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
+	gf_dev->notifier = goodix_noti_block;
 	gf_dev->active_panel = NULL;
 	status = drm_check_dt(gf_dev);
 	if (status >= 0) {
@@ -888,8 +1033,6 @@ static int gf_probe(struct platform_device *pdev)
 	} else {
 		pr_info("gf_probe drm_panel is NULL:  = %d\n", status);
 	}
-#else
-	fb_register_client(&gf_dev->notifier);
 #endif
 	gf_dev->irq = gf_irq_num(gf_dev);
 
@@ -905,6 +1048,11 @@ static int gf_probe(struct platform_device *pdev)
 	//gf_dev->irq_enabled = 1;
 	gf_disable_irq(gf_dev);
 	device_init_wakeup(dev, true);
+#if defined(CONFIG_MOT_QCOM_PANEL_NOTIFIER)
+	INIT_DELAYED_WORK(&gf_dev->panel_register_work, fp_panel_register_work);
+	schedule_delayed_work(&gf_dev->panel_register_work, msecs_to_jiffies(0));
+#endif
+
 #ifdef MMI_RELAY_MODULE
 	fpsData = FPS_init(dev);
 #endif
@@ -958,7 +1106,9 @@ static void gf_remove(struct platform_device *pdev)
 {
 	struct gf_dev *gf_dev = &gf;
 	struct device *dev = &gf_dev->spi->dev;
-
+#if defined(CONFIG_MOT_QCOM_PANEL_NOTIFIER)
+	int i = 0;
+#endif
 	sysfs_remove_group(&dev->kobj, &attribute_group);
 	device_init_wakeup(dev, false);
 	/* make sure ops on existing fds can abort cleanly */
@@ -975,14 +1125,22 @@ static void gf_remove(struct platform_device *pdev)
 	clear_bit(MINOR(gf_dev->devt), minors);
 	if (gf_dev->users == 0)
 		gf_cleanup(gf_dev);
+#if defined(CONFIG_MOT_QCOM_PANEL_NOTIFIER)
+	cancel_delayed_work(&gf_dev->panel_register_work);
+	for (i = 0; i < FP_NOTIFY_PANEL_MAX; i++) {
+		if (!gf_dev->notifier_cookie[i])
+			continue;
+		panel_event_notifier_unregister(gf_dev->notifier_cookie[i]);
+		gf_dev->notifier_cookie[i] = NULL;
+	}
+	gf_dev->panel_register_retry_cnt = 0;
+#endif
 #if defined(CONFIG_GOODIX_DRM_PANEL_NOTIFICATIONS)
 	if (gf_dev->active_panel)
 	{
 		drm_panel_notifier_unregister(gf_dev->active_panel, &gf_dev->notifier);
 		gf_dev->active_panel = NULL;
 	}
-#else
-	fb_unregister_client(&gf_dev->notifier);
 #endif
 	mutex_unlock(&device_list_lock);
 

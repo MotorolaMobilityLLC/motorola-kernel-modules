@@ -4,11 +4,12 @@ moto_ddk_module(
     name = "goodix_fod_mmi",
     srcs = ([
         "gf_spi.c",
-	"netlink.c",
-	"platform.c",
+        "netlink.c",
+        "platform.c",
         "gf_spi.h",
     ]),
-    local_defines = [
-        "CONFIG_DRM_PANEL_EVENT_NOTIFICATIONS",
+
+    deps_ext = [
+        "//soc-repo:drivers/soc/qcom/panel_event_notifier",
     ],
 )
