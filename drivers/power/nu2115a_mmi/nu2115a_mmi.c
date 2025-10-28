@@ -1256,33 +1256,13 @@ static int nu2115_enable_otg(struct charger_device *chg_dev, bool enable)
 {
 	struct nu2115 *chip = charger_get_data(chg_dev);
 	int ret = 0;
-	u8 val;
-	u8 val1;
 
 	dev_err(chip->dev, "%s enter\n", __func__);
 
 	if (enable)
-		val = NU2115_OTG_ENABLE;
+		ret = __nu2115_write(chip, NU2115_REG_2F, NU2115_EN_OTG_MASK);
 	else
-		val = NU2115_OTG_DISABLE;
-
-
-	ret = __nu2115_read(chip, NU2115_REG_2F, &val1);
-	if (ret >= 0) {
-		val1 = val1 & NU2115_EN_OTG_MASK;
-		if (val == val1) {
-			dev_err(chip->dev, "%s find otg bit no change, return.\n", __func__);
-			__nu2115_check_acdrv_bit(chip);
-			return ret;
-		}
-	}
-
-	val <<= NU2115_EN_OTG_SHIFT;
-
-	ret = __nu2115_update_bits(chip, NU2115_REG_2F,
-				NU2115_EN_OTG_MASK, val);
-
-	__nu2115_check_acdrv_bit(chip);
+		ret = __nu2115_write(chip, NU2115_REG_2F, NU2115_OTG_DISABLE);
 
 	return ret;
 }
