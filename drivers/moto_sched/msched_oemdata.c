@@ -169,9 +169,10 @@ int msched_oemdata_init(void)
 	if (!msched_task_struct_cachep)
 		return -ENOMEM;
 
+	register_oemdata_hooks();
+
     stop_machine(init_moto_struct_node_in_vendor_task_data, NULL, cpumask_of(raw_smp_processor_id()));
 
-	register_oemdata_hooks();
 	return 0;
 }
 

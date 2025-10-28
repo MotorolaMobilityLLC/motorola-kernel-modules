@@ -50,7 +50,8 @@ extern atomic64_t futex_high_count;
 
 static inline bool locking_opt_enable(void)
 {
-	return is_enabled(UX_ENABLE_LOCK);
+	// return is_enabled(UX_ENABLE_LOCK);
+	return true;
 }
 
 #ifdef CONFIG_MOTO_FUTEX_INHERIT
