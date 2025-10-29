@@ -15,7 +15,6 @@
 #include "goodix_thp_mmi.h"
 #include <linux/delay.h>
 #include <linux/input/mt.h>
-#include "goodix_thp_config.h"
 
 
 static ssize_t goodix_ts_edge_store(struct device *dev,
@@ -61,7 +60,13 @@ static ssize_t goodix_ts_device_id_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_fw_mode_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_fw_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_fw_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_stylus_report_rate_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_stylus_report_rate_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
@@ -88,6 +93,8 @@ static DEVICE_ATTR(device_id, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_device_id_store);
 static DEVICE_ATTR(fw_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fw_mode_show, goodix_ts_fw_mode_store);
+static DEVICE_ATTR(stylus_report_rate, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_stylus_report_rate_show, goodix_ts_stylus_report_rate_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -169,6 +176,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 	ADD_ATTR(hardware_status);
 	ADD_ATTR(device_id);
 	ADD_ATTR(fw_mode);
+
+	if (core_data->ts_dev->board_data.stylus_interpolation_ctrl)
+		ADD_ATTR(stylus_report_rate);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -725,7 +735,14 @@ static int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
 		goodix_clock_enable(core_data, mode);
 	}
 
-	ts_info(core_data->ts_dev->dev, "Success to %s stylus mode", mode ? "Enable" : "Disable");
+	if (core_data->ts_dev->board_data.stylus_interpolation_ctrl) {
+		ts_info(core_data->ts_dev->dev, "Success to %s stylus mode, Stylus tip report rate %dHZ",
+			mode ? "Enable" : "Disable",
+			core_data->rate_configs[core_data->current_stylus_rate_mode].report_rate);
+	} else {
+		ts_info(core_data->ts_dev->dev, "Success to %s stylus mode, Stylus tip report rate mode:%d",
+			mode ? "Enable" : "Disable", core_data->set_mode.stylus_report_rate_mode);
+	}
 	return ret;
 }
 
@@ -1018,6 +1035,80 @@ static ssize_t goodix_ts_fw_mode_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", 0x01);
 }
 
+static ssize_t goodix_ts_stylus_report_rate_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info(core_data->ts_dev->dev,
+			"Stylus report rate mode = %d.", core_data->set_mode.stylus_report_rate_mode);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", core_data->set_mode.stylus_report_rate_mode);
+}
+
+static ssize_t goodix_ts_stylus_report_rate_store(struct device *dev,
+			struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long value = 0;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+	struct thp_ts_device *tdev;
+	u8 val[3];
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		ts_err(tdev->dev, "Failed to convert value");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+
+	core_data->get_mode.stylus_report_rate_mode = value;
+	if (core_data->set_mode.stylus_report_rate_mode == value) {
+		ts_info(tdev->dev, "The value = %lu is same,so not write.", value);
+		ret = -EAGAIN;
+		goto exit;
+	}
+
+	if (core_data->power_on == 0) {
+		ts_info(tdev->dev, "The touch is in power off sleep state, restore the value when resume");
+		ret = -EAGAIN;
+		goto exit;
+	}
+
+	val[0] = NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE;
+	if (value == 1) {
+		/* switch stylus tip report rate to high */
+		core_data->current_stylus_rate_mode = 1;
+	} else {
+		/* switch stylus tip report rate to default */
+		core_data->current_stylus_rate_mode = 0;
+	}
+	val[1] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command >> 8) & 0xFF;
+	val[2] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command ) & 0xFF;
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+	core_data->set_mode.stylus_report_rate_mode = core_data->get_mode.stylus_report_rate_mode;
+	msleep(20);
+
+	ts_info(tdev->dev, "Success switch stylus tip report rate to %dHZ, is on stylus mode? %s",
+		core_data->rate_configs[core_data->current_stylus_rate_mode].report_rate,
+		core_data->set_mode.stylus_mode? "yes" : "no");
+	ret = size;
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 	struct device *dev = core_data->ts_dev->dev;
 	u8 val[3];
@@ -1058,6 +1149,21 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
 			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
 		"Unsupported"))))));
+	}
+
+	if (core_data->ts_dev->board_data.stylus_interpolation_ctrl && core_data->get_mode.stylus_report_rate_mode) {
+		val[0] = NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE;
+		/* switch stylus tip report rate to high */
+		core_data->current_stylus_rate_mode = 1;
+		val[1] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command >> 8) & 0xFF;
+		val[2] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command ) & 0xFF;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.stylus_report_rate_mode = core_data->get_mode.stylus_report_rate_mode;
+		msleep(20);
+		ts_info(dev, "Success switch stylus tip report rate to %dHZ, is on stylus mode? %s",
+			core_data->rate_configs[core_data->current_stylus_rate_mode].report_rate,
+			core_data->set_mode.stylus_mode? "yes" : "no");
 	}
 
 	if (core_data->ts_dev->board_data.sample_ctrl && core_data->get_mode.sample) {
@@ -1224,6 +1330,15 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev)
 			*/
 			core_data->get_mode.stylus_mode = 0x00;
 		}
+		mutex_unlock(&core_data->mode_lock);
+	}
+
+	if (core_data->ts_dev->board_data.stylus_interpolation_ctrl && core_data->set_mode.stylus_report_rate_mode) {
+		/* before suspend, we need clear current stylus rate mode,
+		* because stylus report rate will be cleaned after touch IC reset
+		*/
+		mutex_lock(&core_data->mode_lock);
+		core_data->current_stylus_rate_mode = 0;
 		mutex_unlock(&core_data->mode_lock);
 	}
 
