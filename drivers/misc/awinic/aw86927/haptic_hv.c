@@ -2159,10 +2159,12 @@ static ssize_t activate_store(struct device *dev, struct device_attribute *attr,
 		aw_err("ram init failed, not allow to play!");
 		return count;
 	}
+#ifdef CONFIG_AAC_RICHTAP_SUPPORT
 	if (atomic_read(&aw_haptic->richtap_rtp_mode)) {
 		aw_info("In richtap rtp mode");
 		return count;
 	}
+#endif
 	mutex_lock(&aw_haptic->lock);
 	aw_haptic->state = val;
 	aw_haptic->activate_mode = aw_haptic->info.mode;
