@@ -312,6 +312,7 @@ struct sc8989x_chip {
 	struct	semaphore sem_dpdm;
 	int	mmi_qc3p_power;
 	bool	mmi_qc3p_rerun_done;
+	int otg_enable;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -562,6 +563,11 @@ static int sc8989x_field_write(struct sc8989x_chip *sc,
 	enum sc8989x_fields field_id, int val)
 {
 	int ret;
+
+	if (field_id == DM_DRIVE || field_id == DP_DRIVE) {
+		if (sc->otg_enable)
+			return -1;
+	}
 
 	ret = regmap_field_write(sc->rmap_fields[field_id], val);
 	if (ret < 0) {
@@ -1573,6 +1579,15 @@ static int sc8989x_set_otg(struct charger_device *chg_dev, bool enable)
 	int ret;
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
 
+	/* UPM6920A: Reset DP/DM lines before changing OTG state.
+	 * This sequence of driving to 0V then Hi-Z is required to ensure the lines are fully released,
+	 * preventing issues with subsequent charger detection.
+	 */
+	if (sc->is_upm6920A) {
+		sc8989x_set_dpdm_0V(sc);
+		sc8989x_set_dpdm_hiz(sc);
+	}
+	sc->otg_enable = enable;
 	ret = sc8989x_set_otg_enable(sc, enable);
 	ret |= sc8989x_set_chg_enable(sc, !enable);
 
