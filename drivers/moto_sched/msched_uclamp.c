@@ -27,9 +27,6 @@ uclamp_tg_restrict_moto(struct task_struct *p, enum uclamp_id clamp_id) {
 	struct moto_task_struct *vp = get_moto_task_struct(p);
 	struct moto_task_struct *vbinder = get_moto_task_struct(p);
 
-	if (IS_ERR_OR_NULL(vp) || IS_ERR_OR_NULL(vbinder))
-		return uc_req;
-
 #if IS_ENABLED(CONFIG_UCLAMP_TASK_GROUP)
 	unsigned int tg_min, tg_max, value;
 
@@ -69,9 +66,6 @@ void rvh_uclamp_eff_get(void *data, struct task_struct *p, enum uclamp_id clamp_
 				  struct uclamp_se *uclamp_max, struct uclamp_se *uclamp_eff,
 				  int *ret) {
 	struct uclamp_se uc_req;
-	struct moto_task_struct *mts = get_moto_task_struct(p);
-	if (IS_ERR_OR_NULL(mts))
-			return;
 
 	if(is_enabled(UX_ENABLE_MDPF)) {
 		*ret = 1;
@@ -91,10 +85,10 @@ void rvh_uclamp_eff_get(void *data, struct task_struct *p, enum uclamp_id clamp_
 					(task_group_is_autogroup(task_group(p)) || task_group(p) == &root_task_group) ? 0 :
 						task_group(p)->uclamp[UCLAMP_MIN].value,
 					task_group(p)->uclamp[UCLAMP_MAX].value,
-					mts->uclamp_pi[UCLAMP_MIN],
-					mts->uclamp_pi[UCLAMP_MAX],
-					mts->uclamp[UCLAMP_MIN],
-					mts->uclamp[UCLAMP_MAX]);
+					get_moto_task_struct(p)->uclamp_pi[UCLAMP_MIN],
+					get_moto_task_struct(p)->uclamp_pi[UCLAMP_MAX],
+					get_moto_task_struct(p)->uclamp[UCLAMP_MIN],
+					get_moto_task_struct(p)->uclamp[UCLAMP_MAX]);
 			}
 
 			return;
@@ -111,10 +105,10 @@ void rvh_uclamp_eff_get(void *data, struct task_struct *p, enum uclamp_id clamp_
 				(task_group_is_autogroup(task_group(p)) || task_group(p) == &root_task_group) ? 0 :
 					task_group(p)->uclamp[UCLAMP_MIN].value,
 				task_group(p)->uclamp[UCLAMP_MAX].value,
-				mts->uclamp_pi[UCLAMP_MIN],
-				mts->uclamp_pi[UCLAMP_MAX],
-				mts->uclamp[UCLAMP_MIN],
-				mts->uclamp[UCLAMP_MAX]);
+				get_moto_task_struct(p)->uclamp_pi[UCLAMP_MIN],
+				get_moto_task_struct(p)->uclamp_pi[UCLAMP_MAX],
+				get_moto_task_struct(p)->uclamp[UCLAMP_MIN],
+				get_moto_task_struct(p)->uclamp[UCLAMP_MAX]);
 		}
 
 	}
@@ -229,8 +223,6 @@ void msched_uclamp_binder_set_priority_hook(struct task_struct *task) {
 
 	if (is_enabled(UX_ENABLE_MDPF)) {
 		struct moto_task_struct *mts = get_moto_task_struct(task);
-		if (IS_ERR_OR_NULL(mts))
-			return;
 		if(!mts->uclamp_active) {
 			mts->uclamp_active = true;
 			/* inherit uclamp */
@@ -245,8 +237,6 @@ void msched_uclamp_binder_restore_priority_hook(struct task_struct *task) {
 
 	if (is_enabled(UX_ENABLE_MDPF)) {
 		struct moto_task_struct *mts = get_moto_task_struct(task);
-		if (IS_ERR_OR_NULL(mts))
-			return;
 		if (mts->uclamp_active) {
 			set_uclamp_inheritance(task, NULL, mts->uclamp, VENDOR_INHERITANCE_BINDER);
 			mts->uclamp_active = false;
@@ -257,16 +247,12 @@ void msched_uclamp_binder_restore_priority_hook(struct task_struct *task) {
 static void rvh_rtmutex_prepare_setprio(void *data, struct task_struct *p, struct task_struct *pi_task) {
 	if(is_enabled(UX_ENABLE_MDPF)) {
 		struct moto_task_struct *mts = get_moto_task_struct(p);
-		if (IS_ERR_OR_NULL(mts))
-			return;
 		set_uclamp_inheritance(p, pi_task, mts->uclamp_pi, VENDOR_INHERITANCE_RTMUTEX);
 	}
 }
 
 static void rvh_sched_fork_init(void *unused, struct task_struct *p) {
 	struct moto_task_struct *mts = get_moto_task_struct(p);
-	if (IS_ERR_OR_NULL(mts))
-			return;
 	mts->uclamp[UCLAMP_MIN] = uclamp_none(UCLAMP_MIN);
 	mts->uclamp[UCLAMP_MAX] = uclamp_none(UCLAMP_MAX);
 	mts->uclamp_pi[UCLAMP_MIN] = uclamp_none(UCLAMP_MIN);

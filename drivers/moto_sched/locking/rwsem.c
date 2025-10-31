@@ -22,7 +22,6 @@
 #include <../kernel/sched/sched.h>
 #include "../msched_common.h"
 #include "locking_main.h"
-#include "locking_trace.h"
 
 #define ENABLE_REORDER_LIST 1
 #define ENABLE_INHERITE 1
@@ -61,19 +60,6 @@ struct rwsem_waiter {
 #define rwsem_first_waiter(sem) \
 	list_first_entry(&sem->wait_list, struct rwsem_waiter, list)
 
-static DEFINE_SPINLOCK(RWSEM_SPIN_LOCK);
-
-void reset_rwsem_owner_list(struct moto_task_struct *mts)
-{
-	unsigned long flags;
-	if(!mts)
-		return;
-
-	spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-	list_del_init(&mts->owner_node);
-	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
-}
-
 static inline struct task_struct *rwsem_owner(struct rw_semaphore *sem)
 {
 	return (struct task_struct *)
@@ -105,7 +91,6 @@ bool rwsem_list_add(struct task_struct *tsk, struct list_head *entry, struct lis
 	struct list_head *pos = NULL;
 	struct list_head *n = NULL;
 	struct rwsem_waiter *waiter = NULL;
-	struct rwsem_waiter *entry_waiter;
 	int index = 0;
 	int prio = 0;
 
@@ -114,17 +99,13 @@ bool rwsem_list_add(struct task_struct *tsk, struct list_head *entry, struct lis
 		return false;
 	}
 	prio = task_get_mvp_prio(current, true);
-	entry_waiter = list_entry(entry, struct rwsem_waiter, list);
+
 	if (prio > 0) {
 		list_for_each_safe(pos, n, head) {
 			waiter = list_entry(pos, struct rwsem_waiter, list);
 			if (waiter && waiter->task->prio > MAX_RT_PRIO && prio > task_get_mvp_prio(waiter->task, true)) {
 				cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 					"rwsem_list_add %d prio=%d(%d)index=%d\n", tsk->pid, prio, task_get_mvp_prio(waiter->task, true), index);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
-				entry_waiter->handoff_set = waiter->handoff_set;
-				waiter->handoff_set = false;
-#endif
 				list_add(entry, waiter->list.prev);
 				return true;
 			}
@@ -205,232 +186,53 @@ static void android_vh_alter_rwsem_list_add_handler(void *unused, struct rwsem_w
 #endif
 
 #ifdef ENABLE_INHERITE
-
-static void android_vh_rwsem_init(void *unused, struct rw_semaphore *sem)
+static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem)
 {
-	unsigned long flags;
-	struct list_head *owner_list;
+	struct task_struct *owner_ts = NULL;
+	long owner = atomic_long_read(&sem->owner);
+	bool boost = false;
 
-	if (unlikely(!locking_opt_enable()) || !sem)
+	if (unlikely(!locking_opt_enable() || !sem)) {
 		return;
+	}
 
-	owner_list = (struct list_head *)sem->android_oem_data1;
+	if (!current_is_important_ux() && (current->prio > 100)) {
+		return;
+	}
 
-	spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-	sem->android_vendor_data1 = 0;
-	INIT_LIST_HEAD(owner_list);
-	trace_locking_debug_trace(sem, __func__, "init", (unsigned long)owner_list->prev, (unsigned long)owner_list->next);
-	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
+	if (is_rwsem_reader_owned(sem)) {
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"is_rwsem_reader_owned, ignore! owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
+			atomic_long_read(&sem->count));
+		return;
+	}
+
+	owner_ts = rwsem_owner(sem);
+	if (!owner_ts) {
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"rwsem can't find owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
+			atomic_long_read(&sem->count));
+		return;
+	}
+
+	get_task_struct(owner_ts);
+	boost = lock_inherit_ux_type(owner_ts, current, "rwsem_wake");
+
+	if (boost && (atomic_long_read(&sem->owner) != owner || is_rwsem_reader_owned(sem))) {
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"rwsem owner status has been changed owner=%lx(%lx)\n",
+			atomic_long_read(&sem->owner), owner);
+		lock_clear_inherited_ux_type(owner_ts, "rwsem_wake_finish");
+	}
+	put_task_struct(owner_ts);
 }
 
-static void android_vh_rwsem_record_rwsem_reader_owned(void *unused, struct rw_semaphore *sem, struct list_head *wlist)
+static void android_vh_rwsem_wake_finish_handler(void *unused, struct rw_semaphore *sem)
 {
-	unsigned long flags;
-	struct list_head *owner_list;
-
-	// trace_locking_debug_trace(sem, __func__, "record", (unsigned long)owner_list->prev, (unsigned long)owner_list->next);
-
-	if (unlikely(!locking_opt_enable()) || !sem)
-		return;
-
-	owner_list = (struct list_head *)sem->android_oem_data1;
-
-	spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-	if (owner_list->prev == NULL || owner_list->next == NULL)
-		INIT_LIST_HEAD(owner_list);
-
-	if (wlist && !list_empty(wlist)) {
-		struct rwsem_waiter *waiter;
-
-		list_for_each_entry(waiter, wlist, list) {
-			if (waiter->task) {
-				struct moto_task_struct *vp = get_moto_task_struct(waiter->task);
-				if (IS_ERR_OR_NULL(vp))
-					continue;
-				if (list_empty(&vp->owner_node)) {
-					list_add_tail(&vp->owner_node, owner_list);
-					vp->owner = (u64)sem;
-					trace_locking_debug_trace(sem, __func__, "record rd owned", waiter->task->pid, 0);
-				}
-			}
-		}
-	}
-	else {
-		struct moto_task_struct *vp = get_moto_task_struct(current);
-		if (!IS_ERR_OR_NULL(vp)) {
-			if (list_empty(&vp->owner_node)) {
-				list_add_tail(&vp->owner_node, owner_list);
-				vp->owner = (u64)sem;
-				trace_locking_debug_trace(sem, __func__, "record rd owned", current->pid, 0);
-			}
-			if (sem->android_vendor_data1 && (!current_is_important_ux() && (current->prio > 100))) {
-				lock_inherit_ux_type(current, current, "rwsem_leak_boost");
-			}
-		}
-	}
-	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
-}
-
-static void android_vh_rwsem_record_rwsem_writer_owned(void *unused, struct rw_semaphore *sem)
-{
-	unsigned long flags;
-	struct moto_task_struct *vp = get_moto_task_struct(current);
-	struct list_head *owner_list;
-
-	// trace_locking_debug_trace(sem, __func__, "clear", (unsigned long)owner_list->prev, (unsigned long)owner_list->next);
-
-	if (unlikely(!locking_opt_enable()) || !sem)
-		return;
-
-	if (IS_ERR_OR_NULL(vp))
-		return;
-
-	owner_list = (struct list_head *)sem->android_oem_data1;
-
-	spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-	if (owner_list->prev == NULL || owner_list->next == NULL)
-		INIT_LIST_HEAD(owner_list);
-
-	if (list_empty(&vp->owner_node)) {
-		list_add_tail(&vp->owner_node, owner_list);
-		vp->owner = (u64)sem;
-		trace_locking_debug_trace(sem, __func__, "record wr owned", 0, 0);
-	}
-
-	if (sem->android_vendor_data1 && (!current_is_important_ux() && (current->prio > 100))) {
-		lock_inherit_ux_type(current, current, "rwsem_leak_boost");
-	}
-
-	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
-}
-
-static void android_vh_rwsem_clear_rwsem_owned(void *unused, struct rw_semaphore *sem)
-{
-	unsigned long flags;
-	struct moto_task_struct *vp = get_moto_task_struct(current);
-
-	if (unlikely(!locking_opt_enable()))
-		return;
-
-	if (IS_ERR_OR_NULL(vp))
-		return;
-
-	spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-
-	if (!list_empty(&vp->owner_node) && vp->owner == (u64)sem) {
-		list_del_init(&vp->owner_node);
-		vp->owner = 0;
-		trace_locking_debug_trace(sem, __func__, "clear owned", 0, 0);
-		lock_clear_inherited_ux_type(current, "clear_rwsem_own");
-	}
-
-	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
-}
-
-// Define a reasonable limit for how many waiters we'll boost in one go
-// to avoid excessive stack usage.
-#define MAX_WAITERS_TO_BOOST 16
-
-static void rwsem_wait_start(struct rw_semaphore *sem)
-{
-    unsigned long flags;
-    struct moto_task_struct *owner_vp = NULL;
-    struct rwsem_waiter *waiter = NULL;
-	struct task_struct *owner;
-    struct list_head *owner_list;
-
-    // Array to hold tasks for boosting outside the lock
-    struct task_struct *tasks_to_boost[MAX_WAITERS_TO_BOOST];
-    int boost_count = 0;
-    int i;
-	bool already_boosted = false;
-
-	if (!sem) {
+	if (unlikely(!locking_opt_enable())) {
 		return;
 	}
-	owner_list = (struct list_head *)sem->android_oem_data1;
-
-    // --- Part 1: Boost Owners (using your dedicated spinlock) ---
-    spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-
-	owner = rwsem_owner(sem);
-
-    list_for_each_entry(owner_vp, owner_list, owner_node) {
-		struct task_struct *owner_ts = owner_vp->task;
-		if (owner_ts) {
-			if (!already_boosted && owner_ts == owner) {
-				already_boosted = true;
-			}
-			// It's safe to call this here IF it doesn't sleep. Assuming it doesn't.
-			lock_inherit_ux_type(owner_ts, current, "rwsem_owner_boost");
-
-			boost_count++;
-		}
-    }
-
-	trace_locking_debug_trace(sem, __func__, "boosting owners", boost_count, 0);
-
-	boost_count = 0;
-
-	if (!already_boosted && owner) {
-		get_task_struct(owner);
-		lock_inherit_ux_type(owner, current, "rwsem_cowner_boost");
-		put_task_struct(owner);
-	}
-	// trace_locking_debug_trace(sem, __func__, "boosting waiters", 0, 0);
-
-    // --- Part 2: Safely collect waiters for boosting ---
-
-    list_for_each_entry(waiter, &sem->wait_list, list) {
-        if (waiter->task == current) {
-            break; // Stop at ourselves
-        }
-
-        if (waiter->task && boost_count < MAX_WAITERS_TO_BOOST) {
-            // Get a reference to the task and store it
-            get_task_struct(waiter->task);
-            tasks_to_boost[boost_count++] = waiter->task;
-        }
-    }
-
-    // --- Part 3: Perform the actual boosting outside the lock ---
-    if (boost_count > 0) {
-        trace_locking_debug_trace(sem, __func__, "boosting waiters", boost_count, 0);
-    }
-
-    // spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-
-    for (i = 0; i < boost_count; i++) {
-        lock_inherit_ux_type(tasks_to_boost[i], current, "rwsem_waiter_boost");
-        // Release the reference we took inside the lock
-        put_task_struct(tasks_to_boost[i]);
-    }
-
-	sem->android_vendor_data1 = 1;
-
-    spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
-}
-
-static void android_vh_rwsem_wake(void *unused, struct rw_semaphore *sem)
-{
-    if (unlikely(!locking_opt_enable()) || !sem || (!current_is_important_ux() && (current->prio > 100))) {
-        return;
-    }
-	rwsem_wait_start(sem);
-}
-
-static void android_vh_rwsem_wait_finish(void *unused, struct rw_semaphore *sem)
-{
-	unsigned long flags;
-    if (unlikely(!locking_opt_enable()) || !sem || (!current_is_important_ux() && (current->prio > 100))) {
-        return;
-    }
-
-    spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
-
-	sem->android_vendor_data1 = 0;
-
-    spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
+	lock_clear_inherited_ux_type(current, "rwsem_wake_finish");
 }
 #endif
 
@@ -456,7 +258,6 @@ static void android_vh_record_pcpu_rwsem_time_early(void *unused, unsigned long 
 }
 #endif
 
-
 void register_rwsem_vendor_hooks(void)
 {
 #ifdef ENABLE_REORDER_LIST
@@ -464,18 +265,8 @@ void register_rwsem_vendor_hooks(void)
 #endif
 
 #ifdef ENABLE_INHERITE
-	register_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
-	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
-	register_trace_android_vh_record_rwsem_writer_owned(android_vh_rwsem_record_rwsem_writer_owned, NULL);
-#else
-	register_trace_android_vh_rwsem_set_owner(android_vh_rwsem_record_rwsem_writer_owned, NULL);
-#endif
-	register_trace_android_vh_record_rwsem_reader_owned(android_vh_rwsem_record_rwsem_reader_owned, NULL);
-	register_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
-	register_trace_android_vh_clear_rwsem_writer_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
-	register_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wait_finish, NULL);
-	register_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish, NULL);
+	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake_handler, NULL);
+	register_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
@@ -491,18 +282,8 @@ void unregister_rwsem_vendor_hooks(void)
 	unregister_trace_android_vh_alter_rwsem_list_add(android_vh_alter_rwsem_list_add_handler, NULL);
 #endif
 #ifdef ENABLE_INHERITE
-	unregister_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
-	unregister_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
-	unregister_trace_android_vh_record_rwsem_writer_owned(android_vh_rwsem_record_rwsem_writer_owned, NULL);
-#else
-	unregister_trace_android_vh_rwsem_set_owner(android_vh_rwsem_record_rwsem_writer_owned, NULL);
-#endif
-	unregister_trace_android_vh_record_rwsem_reader_owned(android_vh_rwsem_record_rwsem_reader_owned, NULL);
-	unregister_trace_android_vh_clear_rwsem_writer_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
-	unregister_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
-	unregister_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wait_finish, NULL);
-	unregister_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish, NULL);
+	unregister_trace_android_vh_rwsem_wake(android_vh_rwsem_wake_handler, NULL);
+	unregister_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	unregister_trace_android_vh_record_pcpu_rwsem_starttime(android_vh_record_pcpu_rwsem_starttime, NULL);
