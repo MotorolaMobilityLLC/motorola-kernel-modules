@@ -1277,21 +1277,17 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         del_timer(&core_data->boost_timer);
 #endif
 
+        pm_wakeup_event(&core_data->pdev->dev, 3000);
         /*for check bus i2c/spi is ready or not*/
-        if ((core_data->suspended) && (core_data->pm_suspend)) {
-            r = wait_for_completion_timeout(
-                        &core_data->pm_completion,
-                        msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
-            if (!r) {
-                ts_err(ts_dev->dev, "Bus don't resume from pm(deep),timeout,skip irq");
-                return IRQ_HANDLED;
-            }
+        if (core_data->suspended) {
+                r = wait_event_interruptible_timeout(core_data->pm_wq, atomic_read(&core_data->pm_resume), msecs_to_jiffies(700));
+                if (!r) {
+                        ts_err(ts_dev->dev, "Bus don't resume from pm(deep),timeout,skip irq");
+                        return IRQ_HANDLED;
+                }
         }
 
         disable_irq_nosync(core_data->irq);
-        if (core_data->ws) {
-                __pm_stay_awake(core_data->ws);
-        }
 
         /*for qaulcomn to stop cpu go to C4 idle state*/
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
@@ -1355,10 +1351,6 @@ exit:
         }
 
 #endif
-
-        if (core_data->ws) {
-                __pm_relax(core_data->ws);
-        }
 
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
         if (index >= 0 && core_data->boost_infos && core_data->boost_count <= board_data->max_boost_count) {
@@ -2899,8 +2891,8 @@ static int goodix_thp_probe(struct platform_device *pdev)
         mutex_init(&core_data->irq_mutex);
         mutex_init(&core_data->irq_wake_mutex);
         init_waitqueue_head(&(core_data->frame_wq));
-        init_completion(&core_data->pm_completion);
-        core_data->pm_suspend = false;
+        init_waitqueue_head(&core_data->pm_wq);
+        atomic_set(&core_data->pm_resume, 1);
         /* gesture init */
         memset(core_data->gesture_type, 0xff, GESTURE_TYPE_LEN);
         memset(core_data->gesture_data, 0xff, GESTURE_KEY_DATA_LEN);
@@ -2991,18 +2983,6 @@ static int goodix_thp_probe(struct platform_device *pdev)
                         ts_err(tdev->dev, "failed get goodix stylus clock");
         }
 
-        /* irq wake lock */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0))
-        core_data->ws = wakeup_source_register(dev_name(tdev->dev));
-#else
-        core_data->ws = wakeup_source_register(tdev->dev, dev_name(tdev->dev));
-#endif
-        if (!core_data->ws) {
-                ts_err(tdev->dev, "failed to allocate goodix thp wakeup source");
-                r = -EINVAL;
-                goto err_wakeup_source_register_failed;
-        }
-
         /* PM QoS */
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
 
@@ -3050,6 +3030,8 @@ static int goodix_thp_probe(struct platform_device *pdev)
                 ts_err(tdev->dev, "goodix setup irq failed, r %d", r);
                 goto err_irq_setup;
         }
+        if (!core_data->pdev->dev.power.wakeup)
+                device_init_wakeup(&core_data->pdev->dev, true);
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
         core_data->pm_notif.notifier_call = goodix_thp_drm_notifier_callback;
 	if (mtk_disp_notifier_register("Touch", &core_data->pm_notif))
@@ -3083,7 +3065,6 @@ static int goodix_thp_probe(struct platform_device *pdev)
 
 err_irq_setup:
         goodix_thp_sysfs_exit(core_data);
-err_wakeup_source_register_failed:
 err_sysfs_init:
         goodix_thp_input_agent_exit(core_data);
 err_init_wrapper:
@@ -3111,6 +3092,7 @@ static int goodix_thp_remove(struct platform_device *pdev)
         ts_info(tdev->dev, "goodix_ts_mmi_dev_unregister");
         goodix_ts_mmi_dev_unregister(pdev);
 #endif
+        device_init_wakeup(&core_data->pdev->dev, false);
         goodix_thp_power_off(core_data);
         goodix_thp_sysfs_exit(core_data);
         goodix_thp_input_agent_exit(core_data);
@@ -3123,11 +3105,6 @@ static int goodix_thp_remove(struct platform_device *pdev)
         fb_unregister_client(&core_data->pm_notif);
 #endif
         kfree_safe(core_data->frame_mmap_list.buf);
-
-        /*free wakeup source*/
-        if (core_data->ws) {
-            wakeup_source_unregister(core_data->ws);
-        }
 
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
         goodix_cleanup_cpu_boost(core_data);

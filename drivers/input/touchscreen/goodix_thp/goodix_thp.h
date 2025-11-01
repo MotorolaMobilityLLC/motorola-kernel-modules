@@ -526,9 +526,8 @@ struct goodix_thp_core {
         /* touchscreen_mmi */
         struct ts_mmi_class_methods *imports;
         ktime_t last_event_time;
-        struct wakeup_source *ws;
-        struct completion pm_completion;
-        bool pm_suspend;
+	atomic_t pm_resume;
+	wait_queue_head_t pm_wq;
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
         struct pm_qos_request pm_qos_req;
         int pm_qos_value;

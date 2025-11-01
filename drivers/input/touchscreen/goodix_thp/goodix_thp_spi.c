@@ -1137,8 +1137,8 @@ static int goodix_spi_resume(struct device *dev)
         }
 
         ts_info(dev, "system resumes from pm_suspend");
-        core_data->pm_suspend = false;
-        complete(&core_data->pm_completion);
+        atomic_set(&core_data->pm_resume, 1);
+        wake_up_interruptible(&core_data->pm_wq);
         return 0;
 }
 
@@ -1157,8 +1157,7 @@ static int goodix_spi_suspend(struct device *dev)
         }
 
         ts_info(dev, "system enters into pm_suspend");
-        core_data->pm_suspend = true;
-        reinit_completion(&core_data->pm_completion);
+        atomic_set(&core_data->pm_resume, 0);
         return 0;
 }
 
