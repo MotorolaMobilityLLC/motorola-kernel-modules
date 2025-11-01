@@ -226,6 +226,7 @@ typedef enum {
         NOTIFY_TYPE_SWITCH_REPORT_RATE,
         NOTIFY_TYPE_SAVE_MOTO_DATA,
         NOTIFY_TYPE_SHIPMODE,
+        NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE,
 } NOTIFY_TYPE_T;
 
 enum pen_action_state {
@@ -344,6 +345,7 @@ struct goodix_mode_info {
         int stylus_mode;
         int fp_int_state;
         int charger_mode;
+        int stylus_report_rate_mode;
 };
 
 struct goodix_thp_board_data {
@@ -384,6 +386,7 @@ struct goodix_thp_board_data {
         int max_boost_count;
         int boost_timeout;
 #endif
+        bool stylus_interpolation_ctrl;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -559,6 +562,9 @@ struct goodix_thp_core {
         u8 ble_mac[6];
         u8 pen_info[9];
         u8 quick_pid;
+        struct stylus_report_rate_config *rate_configs;
+        u8 config_count;
+        u8 current_stylus_rate_mode;
 };
 
 extern bool debug_log_flag;

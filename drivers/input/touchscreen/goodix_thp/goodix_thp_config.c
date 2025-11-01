@@ -31,16 +31,16 @@ int parse_report_rate_config(struct device *dev)
 
 	/* read the basic config */
 	ret = of_property_read_u8(rate_node, "goodix,rate-config-count",
-                            &config->rate_config_count);
+		&config->rate_config_count);
 	if (ret) {
 		ts_err(dev, "Can't read rate config count");
 		goto out;
 	}
 
 	config->refresh_rate_ctrl = of_property_read_bool(rate_node,
-                                    "goodix,refresh-rate-ctrl");
+		"goodix,refresh-rate-ctrl");
 	config->interpolation_ctrl = of_property_read_bool(rate_node,
-                                    "goodix,interpolation-ctrl");
+		"goodix,interpolation-ctrl");
 
 	/* limit the max rate config count */
 	if (config->rate_config_count > MAX_REPORT_RATE_CONFIG) {
@@ -60,7 +60,7 @@ int parse_report_rate_config(struct device *dev)
 		struct report_rate_config *rate_info = &config->report_rate_info[i];
 
 		snprintf(prop_name, sizeof(prop_name),
-                "goodix,report-rate-config-%d", i);
+			"goodix,report-rate-config-%d", i);
 
 		ret = of_property_read_u8_array(rate_node, prop_name, raw_data, arry_size);
 		if (ret) {
@@ -84,6 +84,98 @@ int parse_report_rate_config(struct device *dev)
 out:
 	of_node_put(rate_node);
 	return ret;
+}
+
+/**
+* Analyze the configuration of the stylus point reporting rate
+* @dev: Device pointer
+* @config_count: output parameter, the number of configurations parsed
+* Return: Configure the array pointer. NULL indicates that the parsing failed
+*/
+struct stylus_report_rate_config *parse_stylus_report_rate_config(
+	struct device *dev, u8 *config_count)
+{
+	struct device_node *np = dev->of_node;
+	struct device_node *config_np;
+	const char *prop_name;
+	u8 count = 0;
+	int ret = 0;
+	int i;
+	struct stylus_report_rate_config *configs = NULL;
+	u8 raw_data[4];  // [report_rate_high, report_rate_low, command_high, command_low]
+
+	if (!np || !config_count) {
+		ts_err(dev, "Invalid parameters");
+		return NULL;
+	}
+
+	config_np = of_get_child_by_name(np, "goodix,stylus-report-rate-config");
+	if (!config_np) {
+		ts_err(dev, "No stylus report rate config found");
+		return NULL;
+	}
+
+	ret = of_property_read_u8(config_np, "goodix,rate-config-count", &count);
+	if (ret) {
+		ts_err(dev, "Failed to read rate-config-count: %d", ret);
+		goto out_put_node;
+	}
+
+	if (count == 0) {
+		ts_err(dev, "Invalid config count: 0");
+		goto out_put_node;
+	}
+
+	configs = kzalloc(sizeof(struct stylus_report_rate_config) * count, GFP_KERNEL);
+	if (!configs) {
+		ts_err(dev, "Failed to allocate memory for configs");
+		goto out_put_node;
+	}
+
+	for (i = 0; i < count; i++) {
+		prop_name = kasprintf(GFP_KERNEL, "goodix,stylus-report-rate-config-%d", i);
+		if (!prop_name) {
+			ts_err(dev, "Failed to allocate property name for config %d", i);
+			goto out_cleanup;
+		}
+
+		ret = of_property_read_u8_array(config_np, prop_name, raw_data, 4);
+		if (ret) {
+			ts_err(dev, "Can't read stylus config %s: %d", prop_name, ret);
+			kfree(prop_name);
+			goto out_cleanup;
+		}
+
+		kfree(prop_name);
+
+		configs[i].report_rate = (raw_data[0] << 8) | raw_data[1];
+		configs[i].command = (raw_data[2] << 8) | raw_data[3];
+
+		ts_info(dev, "Parsed config %d: report_rate=0x%04x (%dHz), command=0x%04x",
+			i, configs[i].report_rate, configs[i].report_rate,
+			configs[i].command);
+	}
+
+	*config_count = count;
+	ts_info(dev, "Successfully parsed %d stylus report rate configs", count);
+
+out_put_node:
+	of_node_put(config_np);
+	return configs;
+
+out_cleanup:
+	kfree(configs);
+	configs = NULL;
+	goto out_put_node;
+}
+
+/**
+* Release the memory of the configuration array
+* @configs: Configure array Pointers
+*/
+void free_stylus_report_rate_config(struct stylus_report_rate_config *configs)
+{
+	kfree(configs);
 }
 
 int goodix_thp_mmi_get_report_rate(struct goodix_thp_core *core_data)

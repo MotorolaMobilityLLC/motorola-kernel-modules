@@ -3024,6 +3024,14 @@ static int goodix_thp_probe(struct platform_device *pdev)
                   tdev->board_data.boost_timeout);
 #endif
 
+        if (core_data->ts_dev->board_data.stylus_interpolation_ctrl) {
+                core_data->rate_configs = parse_stylus_report_rate_config(tdev->dev, &core_data->config_count);
+                if (!core_data->rate_configs) {
+                        ts_err(tdev->dev, "Failed to parse stylus rate config");
+                        goto err_irq_setup;
+                }
+        }
+
         /* request irq */
         r = goodix_thp_irq_setup(core_data);
         if (r) {
@@ -3105,6 +3113,9 @@ static int goodix_thp_remove(struct platform_device *pdev)
         fb_unregister_client(&core_data->pm_notif);
 #endif
         kfree_safe(core_data->frame_mmap_list.buf);
+        if (core_data->ts_dev->board_data.stylus_interpolation_ctrl && core_data->rate_configs) {
+                free_stylus_report_rate_config(core_data->rate_configs);
+        }
 
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
         goodix_cleanup_cpu_boost(core_data);

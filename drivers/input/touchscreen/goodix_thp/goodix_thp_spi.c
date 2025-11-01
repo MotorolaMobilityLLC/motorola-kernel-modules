@@ -454,6 +454,11 @@ static int goodix_thp_parse_dt(struct device_node *node,
         if (board_data->interpolation_ctrl)
             ts_info(dev, "support goodix interpolation mode");
 
+        board_data->stylus_interpolation_ctrl = of_property_read_bool(node,
+                "goodix,stylus-interpolation-ctrl");
+        if (board_data->stylus_interpolation_ctrl)
+            ts_info(dev, "support goodix stylus interpolation mode");
+
         board_data->sample_ctrl = of_property_read_bool(node,
                 "goodix,sample-ctrl");
         if (board_data->sample_ctrl)
