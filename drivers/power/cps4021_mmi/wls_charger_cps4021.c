@@ -1497,7 +1497,7 @@ static void cps_epp_icl_on(void)
 	if (chip->factory_wls_en)
 		return;
 	cps_get_sys_op_mode(&mode_type);
-	if (mode_type == Sys_Op_Mode_EPP)
+	if (mode_type == Sys_Op_Mode_EPP || mode_type == Sys_Op_Mode_MOTO_WLC)
 	{
 		chip->mode_type = mode_type;
 		chip->wlc_tx_power = cps_wls_get_rx_neg_power() / 10;
@@ -2117,7 +2117,7 @@ static void cps_offset_detect_work(struct work_struct *work)
 				}
 			}
 		}
-	} else if(wls_mode == Sys_Op_Mode_EPP) {
+	} else if(wls_mode == Sys_Op_Mode_EPP || wls_mode == Sys_Op_Mode_MOTO_WLC) {
 		/*For EPP*/
 		chip->rx_vout = cps_wls_get_rx_vout();
 		chip->rx_vout_set = cps_wls_get_rx_vout_set();
@@ -2691,7 +2691,7 @@ static int wireless_fw_update(bool force)
     cps_wls_log(CPS_LOG_DEBG,"Wireless fw update chip_id=0x%X\n", chip->chip_id);
 
 	result = cps_get_fw_revision(&fw_revision);
-	if (!force && version == fw_revision) {
+	if (!force && version <= fw_revision) {
 	    cps_wls_log(CPS_LOG_DEBG,"%s bin version %x same as fw version %x,not need update fw\n",__func__,version,fw_revision);
 	    ret = CPS_WLS_SUCCESS;
 	    goto free_bug;
@@ -2860,9 +2860,6 @@ static int wireless_fw_update(bool force)
        ***************************************************************************************/
     cps_wls_program_cmd_send(SYS_RESET); /*reset all system*/
     msleep(100);
-
-    pr_err("%s: --->  SUCCESSFUL COMPLETION\n", __func__);
-    return CPS_WLS_SUCCESS;
 
 	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- Program successful\n", __func__);
 
@@ -3954,7 +3951,7 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
                 *icl = 1000000;
                 *vbus = 5000;
             }
-            else if (chg->mode_type == Sys_Op_Mode_EPP)
+            else if (chg->mode_type == Sys_Op_Mode_EPP || chg->mode_type == Sys_Op_Mode_MOTO_WLC)
             {
                 wls_power = cps_wls_get_rx_neg_power() / 10;
                 wls_voltage = cps_wls_get_rx_vout();
@@ -4099,7 +4096,7 @@ static void cps_epp_current_select(int  *icl, int *vbus)
 		}
 	} else {
 
-        if (chg->mode_type == Sys_Op_Mode_EPP)
+        if (chg->mode_type == Sys_Op_Mode_EPP || chg->mode_type == Sys_Op_Mode_MOTO_WLC)
         {
             wls_power = cps_wls_get_rx_neg_power() / 10;
             wls_voltage = cps_wls_get_rx_vout();
@@ -4642,9 +4639,10 @@ static int phone_case_detection_notifier_call(struct notifier_block *nb,
 
 static int cps_wls_chrg_probe(struct i2c_client *client)
 {
-     int ret=0;
+    int ret=0;
     char *name = NULL;
-     int rc = 0;
+    int rc = 0;
+	int int_flag = 0;
     cps_wls_log(CPS_LOG_ERR, "[%s] ---->start\n", __func__);
     chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
     if (!chip) {
@@ -4812,6 +4810,13 @@ static int cps_wls_chrg_probe(struct i2c_client *client)
 
     //Enable IC EPP mode as default
     cps_wls_mode_select("cps_wls_chrg_probe", true);
+
+    int_flag = cps_wls_get_int_flag();
+	cps_wls_log(CPS_LOG_DEBG, ">>>>>int_flag when probe = %x\n", int_flag);
+    if(int_flag > 0)
+    {
+        cps_wls_irq_handler(int_flag, (void*)chip);
+    }
 
     return ret;
 
