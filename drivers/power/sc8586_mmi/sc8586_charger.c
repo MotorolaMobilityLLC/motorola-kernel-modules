@@ -1242,7 +1242,7 @@ static ssize_t store_force_chg_auto_enable(struct device *dev, struct device_att
 
 	enable = simple_strtoul(buf, NULL, 0);
 	ret = sc8586_enable_charge(sc, enable);
-	if (ret) {
+	if (ret < 0) {
 		pr_err("sc8586 Couldn't %s charging rc=%d\n",
 			   enable ? "enable" : "disable", (int)ret);
 		return ret;
