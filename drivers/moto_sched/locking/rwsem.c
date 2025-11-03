@@ -350,6 +350,9 @@ static void rwsem_wait_start(struct rw_semaphore *sem)
 	}
 	owner_list = (struct list_head *)sem->android_oem_data1;
 
+	if (owner_list->prev == NULL || owner_list->next == NULL)
+		return;
+
     // --- Part 1: Boost Owners (using your dedicated spinlock) ---
     spin_lock_irqsave(&RWSEM_SPIN_LOCK, flags);
 
@@ -465,6 +468,10 @@ void register_rwsem_vendor_hooks(void)
 
 #ifdef ENABLE_INHERITE
 	register_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
+
+	register_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
+	register_trace_android_vh_clear_rwsem_writer_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
+
 	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 	register_trace_android_vh_record_rwsem_writer_owned(android_vh_rwsem_record_rwsem_writer_owned, NULL);
@@ -472,8 +479,6 @@ void register_rwsem_vendor_hooks(void)
 	register_trace_android_vh_rwsem_set_owner(android_vh_rwsem_record_rwsem_writer_owned, NULL);
 #endif
 	register_trace_android_vh_record_rwsem_reader_owned(android_vh_rwsem_record_rwsem_reader_owned, NULL);
-	register_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
-	register_trace_android_vh_clear_rwsem_writer_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
 	register_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wait_finish, NULL);
 	register_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish, NULL);
 #endif
