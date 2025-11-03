@@ -9,6 +9,7 @@
 #include <linux/mutex.h>
 #include <linux/of_device.h>
 #include <linux/workqueue.h>
+#include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 #include <linux/miscdevice.h>
@@ -105,7 +106,7 @@ static int mmi_stow_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static int mmi_stow_remove(struct platform_device *pdev)
+static void mmi_stow_remove(struct platform_device *pdev)
 {
 	struct mmi_stow_drvdata *drvdata = dev_get_drvdata(&pdev->dev);
 
@@ -113,7 +114,6 @@ static int mmi_stow_remove(struct platform_device *pdev)
 		gpio_free(drvdata->stow_gpio);
 	misc_deregister(&mmi_stow_misc);
 	dev_set_drvdata(&pdev->dev, NULL);
-	return 0;
 }
 
 static const struct of_device_id mmi_stow_match_table[] = {
