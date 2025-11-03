@@ -302,6 +302,7 @@ struct sc8989x_chip {
 	struct adapter_device *qc_dev;
 	bool	qc_is_detect;
 	int	qc_chg_type;
+	struct power_supply *batt_psy;
 
 	/*for software HVDCP detected*/
 	struct delayed_work mmi_hvdcp_detect_dwork;
@@ -2877,6 +2878,9 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 			sc8989x_set_dpdm_0V(sc);
 		}
 		sc8989x_set_dpdm_hiz(sc);
+		sc->qc_chg_type = 0;
+		if (sc->batt_psy)
+			power_supply_changed(sc->batt_psy);
 		//sc8989x_get_charger_type(sc);
 		power_supply_changed(sc->psy);
 	}
@@ -3558,6 +3562,12 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 		wake_up_process(sc->mmi_hvdcp_authen_task);
 	}
 
+	sc->batt_psy = power_supply_get_by_name("battery");
+	if (IS_ERR_OR_NULL(sc->batt_psy)) {
+		dev_err(sc->dev, "Failed to get battery power supply\n");
+		sc->batt_psy = NULL; // Ensure it's NULL on failure
+	}
+
 #if IS_ENABLED(CONFIG_OEM_DEVINFO)
 	FULL_PRODUCT_DEVICE_INFO(ID_SWITCH_CHARGER, "SC89890H");
 #endif
@@ -3590,6 +3600,8 @@ static int sc8989x_charger_remove(struct i2c_client *client)
 		sc8989x_destory_device_node(sc->dev);
 		charger_device_unregister(sc->chg_dev);
 		power_supply_put(sc->psy);
+		if (sc->batt_psy)
+			power_supply_put(sc->batt_psy);
 	}
 	return 0;
 }
