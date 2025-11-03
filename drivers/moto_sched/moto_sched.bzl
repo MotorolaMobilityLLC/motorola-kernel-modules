@@ -15,8 +15,12 @@ def define_modules():
             "msched_common.h",
             "msched_sysfs.c",
             "msched_sysfs.h",
+            "msched_oemdata.c",
+            "msched_oemdata.h",
             "locking/locking_main.c",
             "locking/locking_main.h",
+            "locking/locking_trace.c",
+            "locking/locking_trace.h",
         ],
 
         # Use the 'conditional_srcs' attribute to control which files are included
