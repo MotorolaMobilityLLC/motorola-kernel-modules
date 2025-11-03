@@ -199,6 +199,13 @@
     }\
 } while(0)
 
+#define CALC_ACTUAL_COORD(coord, factor) \
+    ((factor) == 16 ? (coord) >> 4 : \
+     (factor) == 8 ? (coord) >> 3 : \
+     (factor) == 4 ? (coord) >> 2 : \
+     (factor) == 1 ? (coord) : \
+     (factor) == 0 ? (coord) : (coord) / (factor))
+
 typedef enum {
         REQUEST_TYPE_FRAME = 1,
         REQUEST_TYPE_CMD,

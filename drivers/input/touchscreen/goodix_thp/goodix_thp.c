@@ -1531,6 +1531,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
 #endif
         int prev_state;
         int curr_state;
+        int scaling_factor = board_data->resolution_boost;
 
         if (arg == 0) {
                 ts_err(tdev->dev, "arg is null.");
@@ -1563,7 +1564,8 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                         }
                         // record enter pen hover state
                         ts_info(tdev->dev, "touch_health - pen_action=HOVER_ENTER x=%d y=%d",
-                                    stylus_data->x, stylus_data->y);
+                                    CALC_ACTUAL_COORD(stylus_data->x, scaling_factor),
+                                    CALC_ACTUAL_COORD(stylus_data->y, scaling_factor));
                         core_data->pen_state = PEN_STATE_HOVER;
                         core_data->pen_close = 1;
                         core_data->uevent_message_type = PEN_MESSAGE_PEN_CLOSE;
@@ -1578,7 +1580,9 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                         }
                         // record enter pen touch state
                         ts_info(tdev->dev, "touch_health - pen_action=DOWN x=%d y=%d pressure=%d",
-                                stylus_data->x, stylus_data->y, stylus_data->p);
+                                CALC_ACTUAL_COORD(stylus_data->x, scaling_factor),
+                                CALC_ACTUAL_COORD(stylus_data->y, scaling_factor),
+                                stylus_data->p);
                         core_data->pen_state = PEN_STATE_TOUCH;
                     }
                 }
@@ -1639,7 +1643,10 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                             if (curr_state) {
                                 // DOWN event：print coord and pressure
                                 ts_info(tdev->dev, "touch_health - Finger[%d] DOWN: x=%d, y=%d, pressure=%d",
-                                    i, data.touch[i].x, data.touch[i].y, data.touch[i].major);
+                                    i,
+                                    CALC_ACTUAL_COORD(data.touch[i].x, scaling_factor),
+                                    CALC_ACTUAL_COORD(data.touch[i].y, scaling_factor),
+                                    data.touch[i].major);
                             } else {
                                 // UP event
                                 ts_info(tdev->dev, "touch_health - Finger[%d] UP", i);
@@ -1680,7 +1687,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                                         data.touch[i].major);
                                 //	input_report_abs(input_dev, ABS_MT_TOUCH_MINOR,
                                 //				data.touch[i].minor);
-                                trace_touch_coord((int)(data.touch[i].x/board_data->resolution_boost), (int)(data.touch[i].y/board_data->resolution_boost));
+                                trace_touch_coord((int)(CALC_ACTUAL_COORD(data.touch[i].x, scaling_factor)), (int)(CALC_ACTUAL_COORD(data.touch[i].y, scaling_factor)));
                         }
                     }
                     input_report_key(input_dev, BTN_TOUCH, (data.touch_num > 0) ? 1 : 0);
