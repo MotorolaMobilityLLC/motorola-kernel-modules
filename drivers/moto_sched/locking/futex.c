@@ -300,8 +300,6 @@ void android_vh_alter_futex_plist_add_handler(void *unused, struct plist_node *n
 		return;
 
 	mts = get_moto_task_struct(current);
-	if (IS_ERR_OR_NULL(mts))
-		return;
 	if (mts->lkinfo.holder)
 		boost_holder(mts->lkinfo.holder, current);
 
