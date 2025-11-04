@@ -152,6 +152,7 @@ enum oem_property_type {
 	OEM_PROP_WLS_MC_EN,
 	OEM_PROP_PMIC_INFO,
 	OEM_PROP_TCMD_CURRENT_BATTID, // add prop to get current battid from adsp-fg
+	OEM_PROP_TCMD_CURRENT_FLIP_BATTID, // add prop to get current flip battid from soccp-fg
 	OEM_PROP_MAX,
 };
 
