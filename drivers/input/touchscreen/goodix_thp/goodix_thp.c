@@ -1532,6 +1532,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         int prev_state;
         int curr_state;
         int scaling_factor = board_data->resolution_boost;
+        static unsigned int prev_stylus_key = 0;
 
         if (arg == 0) {
                 ts_err(tdev->dev, "arg is null.");
@@ -1612,6 +1613,17 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 input_report_key(pen_dev, BTN_STYLUS2, data.stylus_key & 0x04);
                 input_report_key(pen_dev, BTN_STYLUS3, data.stylus_key & 0x08);
                 input_sync(pen_dev);
+
+                if (prev_stylus_key != data.stylus_key) {
+                    if ((prev_stylus_key & 0x02) != (data.stylus_key & 0x02)) {
+                        if (data.stylus_key & 0x02) {
+                            ts_info(tdev->dev, "touch_health - BTN_STYLUS DOWN");
+                        } else {
+                            ts_info(tdev->dev, "touch_health - BTN_STYLUS UP");
+                        }
+                    }
+                    prev_stylus_key = data.stylus_key;
+                }
         } else {
                 // --- release pen action detection start ---
                 if (core_data->pen_state == PEN_STATE_HOVER) {
@@ -1625,6 +1637,11 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                     core_data->pen_state = PEN_STATE_NONE;
                 }
                 // --- release pen action detection end ---
+
+                if (prev_stylus_key != 0) {
+                    ts_info(tdev->dev, "touch_health - PEN REMOVED, reset all stylus keys");
+                    prev_stylus_key = 0;
+                }
 
                 // release stylus
                 input_report_key(pen_dev, BTN_TOUCH, 0);
