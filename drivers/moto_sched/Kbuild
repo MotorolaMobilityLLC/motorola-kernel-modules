@@ -32,6 +32,11 @@ ifneq ($(filter m y,$(CONFIG_MOTO_FUTEX_INHERIT)),)
 	EXTRA_CFLAGS += -DCONFIG_MOTO_FUTEX_INHERIT
 endif
 
+ifneq ($(filter m y,$(CONFIG_MOTO_LOCKING_2)),)
+	EXTRA_CFLAGS += -DCONFIG_MOTO_LOCKING_2
+endif
+
+
 moto_sched-y := msched_main.o msched_sysfs.o msched_common.o msched_oemdata.o locking/locking_trace.o
 
 moto_sched-y += locking/locking_main.o

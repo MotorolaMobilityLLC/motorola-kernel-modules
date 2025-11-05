@@ -247,6 +247,7 @@ void binder_ux_type_set(struct task_struct *task) {
 }
 EXPORT_SYMBOL(binder_ux_type_set);
 
+#ifdef CONFIG_MOTO_LOCKING_2
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
 static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long *nice)
 {
@@ -314,6 +315,21 @@ static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long 
 	trace_set_user_nice(p, *nice, *allowed);
 }
 #endif
+#else
+// don't dup ux_type for UX_TYPE_SERVICEMANAGER as init was labeled.
+#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR)
+static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
+{
+	// Base feature: inherit task ux_type during fork for some native services.
+	int ux_type = task_get_ux_type(orig) & UX_TYPE_TO_DUP;
+	if (ux_type != 0) {
+		task_add_ux_type(task, ux_type);
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"copy ux_type %d from %d to %d\n", ux_type, orig->pid, task->pid);
+
+	}
+}
+#endif
 
 bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name) {
 	struct rq *rq = NULL;
@@ -345,9 +361,11 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 	//	waiter_wts->ux_type, owner_wts->ux_type);
 	task_rq_unlock(rq, owner, &flags);
 
+#ifdef CONFIG_MOTO_LOCKING_2
 	if (fair_policy(owner->policy)) {
 		set_user_nice(owner, 0xbeef); // trigger requeue even if task is already in queue
 	}
+#endif
 
 	return true;
 }
@@ -380,9 +398,11 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 
 	task_rq_unlock(rq, owner, &flags);
 
+#ifdef CONFIG_MOTO_LOCKING_2
 	if (fair_policy(owner->policy)) {
 		set_user_nice(owner, 0xbeee); // trigger requeue even if task is already in queue
 	}
+#endif
 
 	return true;
 }
@@ -467,7 +487,11 @@ static void android_vh_binder_proc_transaction_finish(void *unused, struct binde
 
 void register_vendor_comm_hooks(void)
 {
+#ifdef CONFIG_MOTO_LOCKING_2
 	register_trace_android_rvh_set_user_nice(android_rvh_set_user_nice, NULL);
+#else
+	register_trace_android_vh_dup_task_struct(android_vh_dup_task_struct, NULL);
+#endif
 
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(5, 10, 0))
 	register_trace_android_vh_binder_priority_skip(probe_android_vh_binder_priority_skip, NULL);

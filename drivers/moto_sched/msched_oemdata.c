@@ -27,6 +27,7 @@
 #include "msched_oemdata.h"
 #include "msched_common.h"
 
+#ifdef CONFIG_MOTO_LOCKING_2
 struct kmem_cache *msched_task_struct_cachep;
 EXPORT_SYMBOL(msched_task_struct_cachep);
 
@@ -182,3 +183,4 @@ void __maybe_unused msched_oemdata_deinit(void)
 	kmem_cache_destroy(msched_task_struct_cachep);
 }
 
+#endif

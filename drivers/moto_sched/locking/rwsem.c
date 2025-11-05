@@ -61,6 +61,7 @@ struct rwsem_waiter {
 #define rwsem_first_waiter(sem) \
 	list_first_entry(&sem->wait_list, struct rwsem_waiter, list)
 
+#ifdef CONFIG_MOTO_LOCKING_2
 static DEFINE_SPINLOCK(RWSEM_SPIN_LOCK);
 
 void reset_rwsem_owner_list(struct moto_task_struct *mts)
@@ -73,6 +74,7 @@ void reset_rwsem_owner_list(struct moto_task_struct *mts)
 	list_del_init(&mts->owner_node);
 	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
 }
+#endif
 
 static inline struct task_struct *rwsem_owner(struct rw_semaphore *sem)
 {
@@ -205,7 +207,7 @@ static void android_vh_alter_rwsem_list_add_handler(void *unused, struct rwsem_w
 #endif
 
 #ifdef ENABLE_INHERITE
-
+#ifdef CONFIG_MOTO_LOCKING_2
 static void android_vh_rwsem_init(void *unused, struct rw_semaphore *sem)
 {
 	unsigned long flags;
@@ -435,6 +437,56 @@ static void android_vh_rwsem_wait_finish(void *unused, struct rw_semaphore *sem)
 
     spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
 }
+#else
+static void android_vh_rwsem_wake_handler(void *unused, struct rw_semaphore *sem)
+{
+	struct task_struct *owner_ts = NULL;
+	long owner = atomic_long_read(&sem->owner);
+	bool boost = false;
+
+	if (unlikely(!locking_opt_enable() || !sem)) {
+		return;
+	}
+
+	if (!current_is_important_ux() && (current->prio > 100)) {
+		return;
+	}
+
+	if (is_rwsem_reader_owned(sem)) {
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"is_rwsem_reader_owned, ignore! owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
+			atomic_long_read(&sem->count));
+		return;
+	}
+
+	owner_ts = rwsem_owner(sem);
+	if (!owner_ts) {
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"rwsem can't find owner=%lx count=%lx\n", atomic_long_read(&sem->owner),
+			atomic_long_read(&sem->count));
+		return;
+	}
+
+	get_task_struct(owner_ts);
+	boost = lock_inherit_ux_type(owner_ts, current, "rwsem_wake");
+
+	if (boost && (atomic_long_read(&sem->owner) != owner || is_rwsem_reader_owned(sem))) {
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"rwsem owner status has been changed owner=%lx(%lx)\n",
+			atomic_long_read(&sem->owner), owner);
+		lock_clear_inherited_ux_type(owner_ts, "rwsem_wake_finish");
+	}
+	put_task_struct(owner_ts);
+}
+
+static void android_vh_rwsem_wake_finish_handler(void *unused, struct rw_semaphore *sem)
+{
+	if (unlikely(!locking_opt_enable())) {
+		return;
+	}
+	lock_clear_inherited_ux_type(current, "rwsem_wake_finish");
+}
+#endif
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
@@ -467,6 +519,7 @@ void register_rwsem_vendor_hooks(void)
 #endif
 
 #ifdef ENABLE_INHERITE
+#ifdef CONFIG_MOTO_LOCKING_2
 	register_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
 
 	register_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
@@ -481,6 +534,10 @@ void register_rwsem_vendor_hooks(void)
 	register_trace_android_vh_record_rwsem_reader_owned(android_vh_rwsem_record_rwsem_reader_owned, NULL);
 	register_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wait_finish, NULL);
 	register_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish, NULL);
+#else
+	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake_handler, NULL);
+	register_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
+#endif
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
@@ -496,6 +553,7 @@ void unregister_rwsem_vendor_hooks(void)
 	unregister_trace_android_vh_alter_rwsem_list_add(android_vh_alter_rwsem_list_add_handler, NULL);
 #endif
 #ifdef ENABLE_INHERITE
+#ifdef CONFIG_MOTO_LOCKING_2
 	unregister_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
 	unregister_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
@@ -508,6 +566,10 @@ void unregister_rwsem_vendor_hooks(void)
 	unregister_trace_android_vh_clear_rwsem_reader_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
 	unregister_trace_android_vh_rwsem_read_wait_finish(android_vh_rwsem_wait_finish, NULL);
 	unregister_trace_android_vh_rwsem_write_wait_finish(android_vh_rwsem_wait_finish, NULL);
+#else
+	unregister_trace_android_vh_rwsem_wake(android_vh_rwsem_wake_handler, NULL);
+	unregister_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
+#endif
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	unregister_trace_android_vh_record_pcpu_rwsem_starttime(android_vh_record_pcpu_rwsem_starttime, NULL);
