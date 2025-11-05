@@ -20,7 +20,6 @@ moto_ddk_module(
         "CONFIG_ENABLE_GTP_PALM_CANCEL",
         "CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID",
         "CONFIG_TOUCHIRQ_UPDATE_QOS",
-        "CONFIG_ENABLE_TOUCH_CPU_BOOST",
     ],
     deps_ext = [
         "//motorola/kernel/modules/drivers/input/touchscreen/touchscreen_mmi:touchscreen_mmi",
