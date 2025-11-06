@@ -48,12 +48,15 @@ extern atomic64_t futex_inherit_useless_times;
 extern atomic64_t futex_low_count;
 extern atomic64_t futex_high_count;
 
-extern bool locking_enabled;
+extern bool locking_inited;
 
 static inline bool locking_opt_enable(void)
 {
-	// return is_enabled(UX_ENABLE_LOCK);
-	return locking_enabled;
+#ifdef CONFIG_MOTO_LOCKING_2
+	return locking_inited;
+#else
+	return locking_inited && is_enabled(UX_ENABLE_LOCK);
+#endif
 }
 
 #ifdef CONFIG_MOTO_FUTEX_INHERIT
