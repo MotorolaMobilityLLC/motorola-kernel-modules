@@ -14,7 +14,9 @@
 #ifndef _MSCHED_OEMDATA_H_
 #define _MSCHED_OEMDATA_H_
 
+#ifdef CONFIG_MOTO_LOCKING_2
 int msched_oemdata_init(void);
 void msched_oemdata_deinit(void);
+#endif
 
 #endif

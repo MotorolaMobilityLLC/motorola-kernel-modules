@@ -323,6 +323,7 @@ void binder_ux_type_set(struct task_struct *task) {
 }
 EXPORT_SYMBOL(binder_ux_type_set);
 
+#ifdef CONFIG_MOTO_LOCKING_2
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
 static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long *nice)
 {
@@ -390,97 +391,85 @@ static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long 
 	trace_set_user_nice(p, *nice, *allowed);
 }
 #endif
-
+#else
 bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name) {
+	struct moto_task_struct *owner_wts;
+	struct moto_task_struct *waiter_wts;
 	struct rq *rq = NULL;
 	struct rq_flags flags;
 
 	if (!owner || !waiter) {
-		/* UPDATED: Replaced cond_trace_printk with the new generic trace event */
-		trace_locking_debug_trace(NULL, __func__, "empty_owner_or_waiter", 0, 0);
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"lock_inherit_ux_type empty!! %d \n", 0);
 		return false;
 	}
 
 	if (task_get_ux_depth(waiter) >= UX_DEPTH_MAX) {
-		/* UPDATED: Replaced cond_trace_printk */
-		trace_locking_debug_trace(NULL, __func__, "max_depth_reached", waiter->pid, owner->pid);
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"lock_inherit_ux_type max depth reached %d->%d\n",
+			waiter->pid, owner->pid);
 		return false;
 	}
 
-	/* ADDED: Trace event for lock inheritance start */
-	trace_lock_pi_start(owner, waiter, lock_name);
-
 	rq = task_rq_lock(owner, &flags);
 
+	owner_wts = (struct moto_task_struct *) owner->android_oem_data1;
+	waiter_wts = (struct moto_task_struct *) waiter->android_oem_data1;
+
 	task_set_ux_inherit_prio(owner, task_get_ux_depth(waiter) + 1);
-	/*
-	 * UPDATED: Replaced the main debug printk with the trace event.
-	 * We log the waiter's and owner's original ux_type for context.
-	 */
-	// trace_locking_debug_trace(NULL, __func__, lock_name,
-	//	waiter_wts->ux_type, owner_wts->ux_type);
+
+	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"lock_inherit_ux_type %s %d -> %d   ux_type %d -> %d  depth=%d\n",
+			lock_name, waiter->pid, owner->pid, waiter_wts->ux_type, owner_wts->ux_type,
+			waiter_wts->inherit_depth);
+
 	task_rq_unlock(rq, owner, &flags);
-
-	if (fair_policy(owner->policy)) {
-		set_user_nice(owner, 0xbeef); // trigger requeue even if task is already in queue
-	}
-
 	return true;
 }
 
 bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
-	struct moto_task_struct *owner_mts;
+	struct moto_task_struct *owner_wts;
 	struct rq *rq = NULL;
 	struct rq_flags flags;
 
 	if (!owner) {
 		return false;
 	}
-	owner_mts = get_moto_task_struct(owner);
-	if (IS_ERR_OR_NULL(owner_mts))
-		return false;
-
 	if (!task_has_ux_type(owner, UX_TYPE_INHERIT_LOCK)) {
 		return false;
 	}
 
-	/* ADDED: Trace event for lock inheritance clear */
-	trace_lock_pi_finish(owner, lock_name);
-
 	rq = task_rq_lock(owner, &flags);
+
+	owner_wts = get_moto_task_struct(owner);
 	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 			"lock_clear_inherited_ux_type %s  %d  ux_type %d cost=%llu\n", lock_name,
-			owner->pid, owner_mts->ux_type,
-			(jiffies_to_nsecs(jiffies) - owner_mts->inherit_start) / 1000000U);
+			owner->pid, owner_wts->ux_type,
+			(jiffies_to_nsecs(jiffies) - owner_wts->inherit_start) / 1000000U);
 	task_clr_inherit_type(owner);
 
 	task_rq_unlock(rq, owner, &flags);
-
-	if (fair_policy(owner->policy)) {
-		set_user_nice(owner, 0xbeee); // trigger requeue even if task is already in queue
-	}
-
 	return true;
 }
 
 void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settime_jiffies, char* lock_name, void *pointer) {
-	struct moto_task_struct *waiter_mts = get_moto_task_struct(tsk);
-	if (unlikely(!locking_opt_enable()) || IS_ERR_OR_NULL(waiter_mts) || !tsk)
+	struct moto_task_struct *waiter_wts = (struct moto_task_struct *) tsk->android_oem_data1;
+	if (unlikely(!locking_opt_enable()))
 		return;
 
 	if (unlikely(is_debuggable(DEBUG_LOCK))) {
 		if (settime_jiffies == 0) {
-			if (waiter_mts->boost_kernel_lock_depth == 0) {
-				printk(KERN_ERR "LOCK_PERF(%s)kernel boost mismatch(%d)!!", lock_name, waiter_mts->boost_kernel_lock_depth);
+			if (waiter_wts->boost_kernel_lock_depth == 0) {
+				printk(KERN_ERR "LOCK_PERF(%s)kernel boost mismatch(%d)!!", lock_name, waiter_wts->boost_kernel_lock_depth);
 			}
 			if (task_has_ux_type(tsk,UX_TYPE_KERNEL)) {
-				u64 sleep = (jiffies_to_nsecs(jiffies) - waiter_mts->boost_kernel_start) / 1000000U;
+				u64 sleep = (jiffies_to_nsecs(jiffies) - waiter_wts->boost_kernel_start) / 1000000U;
 				if (sleep > 40) {
 					cond_trace_printk(true,
-							"(%s) too long prio=%d locked=%d cost=%llu\n", lock_name, tsk->prio, waiter_mts->boost_kernel_lock_depth, sleep);
+							"(%s) too long prio=%d locked=%d cost=%llu\n", lock_name, tsk->prio, waiter_wts->boost_kernel_lock_depth, sleep);
 				}
 				if (sleep > 100) {
-					printk(KERN_ERR "LOCK_PERF (%s) running too long prio=%d locked=%d cost=%llu", lock_name, tsk->prio, waiter_mts->boost_kernel_lock_depth, sleep);
+					printk(KERN_ERR "LOCK_PERF (%s) running too long prio=%d locked=%d cost=%llu", lock_name, tsk->prio, waiter_wts->boost_kernel_lock_depth, sleep);
 				}
 				if (sleep > 500) {
 					dump_stack();
@@ -489,31 +478,48 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 				printk(KERN_ERR "LOCK_PERF rwsem didn't boost!!!");
 			}
 		} else {
-			if (waiter_mts->boost_kernel_lock_depth > 32) {
+			if (waiter_wts->boost_kernel_lock_depth > 32) {
 				cond_trace_printk(true,
-					"(%s)kernel boost mismatch(%d)!!", lock_name, waiter_mts->boost_kernel_lock_depth);
+					"(%s)kernel boost mismatch(%d)!!", lock_name, waiter_wts->boost_kernel_lock_depth);
 			}
 		}
 	}
 
 	if (settime_jiffies > 0) {
-		if (waiter_mts->boost_kernel_lock_depth == 0) {
+		if (waiter_wts->boost_kernel_lock_depth == 0) {
 			task_add_ux_type(tsk, UX_TYPE_KERNEL);
-			waiter_mts->boost_kernel_start = jiffies_to_nsecs(jiffies);
+			waiter_wts->boost_kernel_start = jiffies_to_nsecs(jiffies);
 		}
-		waiter_mts->boost_kernel_lock_depth++;
+		waiter_wts->boost_kernel_lock_depth++;
 	} else {
-		waiter_mts->boost_kernel_lock_depth--;
-		if (waiter_mts->boost_kernel_lock_depth < 0) {
+		waiter_wts->boost_kernel_lock_depth--;
+		if (waiter_wts->boost_kernel_lock_depth < 0) {
 			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
-					"(%s)kernel boost mismatch(%d)!!", lock_name, waiter_mts->boost_kernel_lock_depth);
-			waiter_mts->boost_kernel_lock_depth = 0;
+					"(%s)kernel boost mismatch(%d)!!", lock_name, waiter_wts->boost_kernel_lock_depth);
+			waiter_wts->boost_kernel_lock_depth = 0;
 		}
-		if (waiter_mts->boost_kernel_lock_depth == 0) {
+		if (waiter_wts->boost_kernel_lock_depth == 0) {
 			task_clr_ux_type(tsk, UX_TYPE_KERNEL);
 		}
 	}
 }
+
+// don't dup ux_type for UX_TYPE_SERVICEMANAGER as init was labeled.
+#define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR)
+static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
+{
+	// Base feature: inherit task ux_type during fork for some native services.
+	int ux_type = task_get_ux_type(orig) & UX_TYPE_TO_DUP;
+	if (ux_type != 0) {
+		task_add_ux_type(task, ux_type);
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
+			"copy ux_type %d from %d to %d\n", ux_type, orig->pid, task->pid);
+
+	}
+	msched_uclamp_vh_dup_task_struct(unused, task, orig);
+}
+#endif
+
 
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(5, 10, 0))
 static void probe_android_vh_binder_priority_skip(void *ignore, struct task_struct *task,
@@ -543,7 +549,11 @@ static void android_vh_binder_proc_transaction_finish(void *unused, struct binde
 
 void register_vendor_comm_hooks(void)
 {
+#ifdef CONFIG_MOTO_LOCKING_2
 	register_trace_android_rvh_set_user_nice(android_rvh_set_user_nice, NULL);
+#else
+	register_trace_android_vh_dup_task_struct(android_vh_dup_task_struct, NULL);
+#endif
 
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(5, 10, 0))
 	register_trace_android_vh_binder_priority_skip(probe_android_vh_binder_priority_skip, NULL);
