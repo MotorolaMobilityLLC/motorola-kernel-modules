@@ -25,7 +25,7 @@
 #include <linux/sched/walt.h>
 #endif
 
-#define VERION 2509029
+#define VERION 251105
 
 #define cond_trace_printk(cond, fmt, ...)	\
 do {										\
@@ -120,14 +120,16 @@ enum {
 
 /* Moto task struct */
 struct moto_task_struct {
+#ifdef CONFIG_MOTO_LOCKING_2
 	struct list_head owner_node;
-
+	u64				owner;
+	short			nice_backup;
 	struct task_struct *task;
+#endif
 
 	u8				inherit_depth;
 	u8				boost_kernel_lock_depth;
 	char			cgr_type;
-	short			nice_backup;
 	int				ux_type;
 
 	u64				inherit_start;
@@ -136,7 +138,6 @@ struct moto_task_struct {
 	u16				uclamp[UCLAMP_CNT];
 	u16				uclamp_pi[UCLAMP_CNT];
 	bool				uclamp_active;
-	u64				owner;
 };
 
 /* global vars and functions */
@@ -194,8 +195,7 @@ static inline unsigned long moto_task_util(struct task_struct *p)
 #endif
 }
 
-extern struct kmem_cache *msched_task_struct_cachep;
-
+#ifdef CONFIG_MOTO_LOCKING_2
 static inline struct moto_task_struct *get_moto_task_struct(struct task_struct *t)
 {
 	struct moto_task_struct *mts = NULL;
@@ -212,6 +212,12 @@ static inline struct moto_task_struct *get_moto_task_struct(struct task_struct *
 
 	return mts;
 }
+#else
+static inline struct moto_task_struct *get_moto_task_struct(struct task_struct *t)
+{
+	return (struct moto_task_struct *) t->android_oem_data1;
+}
+#endif
 
 static inline int task_get_ux_type(struct task_struct *p)
 {
