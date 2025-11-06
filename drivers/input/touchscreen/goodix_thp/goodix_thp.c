@@ -707,7 +707,10 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 memcpy(stylus_id, &tsc_msg.value[6], sizeof(stylus_id));
                 core_data->uevent_message_type = PEN_MESSAGE_BLE_MAC;
                 kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
-                ts_info(ts_dev->dev, "recv ble mac:%*ph, stylusID:%*ph", 6, core_data->ble_mac, 2, stylus_id);
+                ts_info(ts_dev->dev, "recv ble mac:%02x:%02x:%02x:%02x:%02x:%02x, stylusID:%02x:%02x",
+                        core_data->ble_mac[5], core_data->ble_mac[4], core_data->ble_mac[3],
+                        core_data->ble_mac[2], core_data->ble_mac[1], core_data->ble_mac[0],
+                        stylus_id[1], stylus_id[0]);
                 break;
         case SVC_CMD_GAME_FILTER:
                 ts_info(ts_dev->dev, "recv game filter:%*ph", tsc_msg.len, tsc_msg.value);
