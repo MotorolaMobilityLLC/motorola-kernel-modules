@@ -6,3 +6,8 @@ config MMI_PHONE_CASE_SUPPORT
     bool "Enable phone case support"
     help
       Say Y here if phone case support
+
+config MSC_BQ_PIN_SHORT_PANIC
+    bool "Triager kernel panic when BQ PIN_SHORT occur"
+    help
+      Say Y here if triager panic by BQ_PIN_SHORT

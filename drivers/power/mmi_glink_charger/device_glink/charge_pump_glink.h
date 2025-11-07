@@ -68,7 +68,8 @@ struct msc_bq_dev_info
 	s32 ibus_ma;
 	s32 vac1_mv;
 	s32 tsbat;
-	s32 tdie;	
+	s32 tdie;
+	s32 pin_short_cn;
 };
 
 struct charge_pump_dev_info

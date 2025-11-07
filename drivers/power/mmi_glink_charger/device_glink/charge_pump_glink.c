@@ -314,13 +314,14 @@ static int charge_pump_notify_handler(struct notifier_block *nb, unsigned long e
 		                                             charge_pump_info.msc_info.msc_bq_info.vac1_mv, charge_pump_info.msc_info.msc_bq_info.tsbat,
 		                                             charge_pump_info.msc_info.msc_bq_info.tdie);
 
-		    mmi_info(this_root_chip, "charge_pump_dev[bq%04x]-[%d]:  dischg %d, ovp %d, ocp %d, tflt %d,  wdt %d, ext_reverse %d, online %d",
+		    mmi_info(this_root_chip, "charge_pump_dev[bq%04x]-[%d]:  dischg %d, ovp %d, ocp %d, tflt %d,  wdt %d, ext_reverse %d, online %d, pin_short_cn %d",
 		                                             charge_pump_info.msc_info.msc_bq_info.chip_id,
 		                                             charge_pump_chip->dev_role, charge_pump_info.msc_info.msc_bq_info.dischg,
 		                                             charge_pump_info.msc_info.msc_bq_info.ovp, charge_pump_info.msc_info.msc_bq_info.ocp,
 		                                             charge_pump_info.msc_info.msc_bq_info.tflt, charge_pump_info.msc_info.msc_bq_info.wdt,
 		                                             charge_pump_info.msc_info.msc_bq_info.ext_reverse_en,
-		                                             charge_pump_info.msc_info.msc_bq_info.online);
+		                                             charge_pump_info.msc_info.msc_bq_info.online,
+		                                             charge_pump_info.msc_info.msc_bq_info.pin_short_cn);
 
 		    mmi_info(this_root_chip, "charge_pump_dev[bq%04x]-[%d]:  ce %d, hiz %d, acdrv1 %d, acdrv2 %d, reverse %d, bypass %d, sc41 %d,  sc21 %d",
 		                                             charge_pump_info.msc_info.msc_bq_info.chip_id,
@@ -329,6 +330,9 @@ static int charge_pump_notify_handler(struct notifier_block *nb, unsigned long e
 		                                             charge_pump_info.msc_info.msc_bq_info.acdrv2_en, charge_pump_info.msc_info.msc_bq_info.reverse_en,
 		                                             charge_pump_info.msc_info.msc_bq_info.bypass,
 		                                             charge_pump_info.msc_info.msc_bq_info.sc41, charge_pump_info.msc_info.msc_bq_info.sc21);
+#ifdef CONFIG_MSC_BQ_PIN_SHORT_PANIC
+			BUG_ON(charge_pump_info.msc_info.msc_bq_info.pin_short_cn > 8);
+#endif
 		    break;
              default:
 		    mmi_info(this_root_chip, "charge_pump_dev[0x%04x]-[%d]: chg_en %d, work_mode %d, ovpgate %d, manual_mode %d, otg_en %d, "
