@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config MOTO_UNKNOWN_REBOOT_DEBUG
+	bool "Moto unknown reboot debug"
+	default "n"
+	help
+	  When a reboot/shutdown is not initiated by Moto or init, trigger a crash.

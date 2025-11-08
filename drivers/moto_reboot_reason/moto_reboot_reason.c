@@ -31,6 +31,12 @@
 #include <linux/of_address.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/panic_notifier.h>
+#include <linux/sched.h>      /* current */
+#include <linux/cred.h>       /* current_cred() */
+
+
+static char *sys_restart_mode = "NULL";
+module_param(sys_restart_mode, charp, 0644);
 
 #define RESET_EXTRA_SW_BOOT_REASON     BIT(7)
 #define RESET_EXTRA_PANIC_REASON       BIT(3)
@@ -56,6 +62,8 @@ static struct moto_poweroff_reason extra_reasons[] = {
 	{}
 };
 
+static int reboot_moto_call;
+
 static int moto_reboot_reason_panic(struct notifier_block *this,
 		unsigned long event, void *ptr)
 {
@@ -68,6 +76,44 @@ static int moto_reboot_reason_panic(struct notifier_block *this,
 	pr_err("%s: save panic flag\n", __func__);
 
 	return NOTIFY_OK;
+}
+
+void moto_reboot_call_notifier(char *call_name)
+{
+	reboot_moto_call += 1;
+	pr_warn("%s: %s reboot_moto_call [%d]", __func__, call_name, reboot_moto_call);
+}
+EXPORT_SYMBOL(moto_reboot_call_notifier);
+
+static void check_reboot(void)
+{
+	int trigger_bug = 1;
+
+	pr_warn("%s:(%s pid=%d uid=%d) reboot_moto_call [%d]",
+			__func__, current->comm, current->pid,
+			current_cred()->uid.val, reboot_moto_call);
+
+	pr_warn("sys_restart_mode: %s", sys_restart_mode);
+
+	if(reboot_moto_call)
+		trigger_bug = 0;
+
+	if(!strncmp(current->comm, "init", 4))
+		trigger_bug = 0;
+
+	if(trigger_bug) {
+#ifdef CONFIG_MOTO_UNKNOWN_REBOOT_DEBUG
+		pr_err("kernel config unknown reboot debug, trigger crash");
+		BUG();
+#endif
+		if (!strcmp(sys_restart_mode, "panic")) {
+			pr_err("cmdline config unknown reboot debug, trigger crash");
+			BUG();
+		}
+		pr_err("unknown reboot, but no trigger crash");
+	}
+
+	return;
 }
 
 static int moto_reboot_reason_reboot(struct notifier_block *this,
@@ -83,6 +129,8 @@ static int moto_reboot_reason_reboot(struct notifier_block *this,
 			sizeof(val));
 
 	reboot->reboot_notify_status = 1;
+
+	check_reboot();
 
 	if (!cmd)
 		return NOTIFY_OK;
@@ -114,6 +162,9 @@ static int moto_reboot_reason_restart(struct notifier_block *this,
 			sizeof(val));
 
 	pr_warn("%s: record sw reboot flag during restart\n", __func__);
+
+	check_reboot();
+
 	return NOTIFY_OK;
 }
 
@@ -140,6 +191,7 @@ static int moto_reboot_reason_probe(struct platform_device *pdev)
 				       &reboot->panic_nb);
 
 	reboot->reboot_notify_status = 0;
+	reboot_moto_call = 0;
 
 	reboot->reboot_nb.notifier_call = moto_reboot_reason_reboot;
 	reboot->reboot_nb.priority = 255;
