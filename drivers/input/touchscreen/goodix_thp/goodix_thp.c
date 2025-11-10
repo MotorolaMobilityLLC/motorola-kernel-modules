@@ -18,6 +18,11 @@
 
 #include "goodix_thp.h"
 #include "goodix_thp_mmi.h"
+#include "goodix_thp_config.h"
+#ifndef CREATE_TRACE_POINTS
+#define CREATE_TRACE_POINTS
+#endif
+#include "trace_touch.h"
 
 #define GOODIX_THP_MISC_DEVICE_NAME	"thp"
 #define PINCTRL_STATE_ACTIVE		"pmx_ts_active"
@@ -28,7 +33,6 @@
 #define GOODIX_ESD_TICK_WRITE_DATA 0xAA
 
 bool debug_log_flag;
-static u8 ble_mac[6] = {0};
 
 static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);
@@ -664,10 +668,11 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 mutex_unlock(&core_data->frame_mutex);
                 break;
         case SVC_CMD_BLE_MAC:
-                memcpy(ble_mac, &tsc_msg.value[0], sizeof(ble_mac));
+                memcpy(core_data->ble_mac, &tsc_msg.value[0], sizeof(core_data->ble_mac));
                 memcpy(stylus_id, &tsc_msg.value[6], sizeof(stylus_id));
+                core_data->uevent_message_type = PEN_MESSAGE_BLE_MAC;
                 kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
-                ts_info(ts_dev->dev, "recv ble mac:%*ph, stylusID:%*ph", 6, ble_mac, 2, stylus_id);
+                ts_info(ts_dev->dev, "recv ble mac:%*ph, stylusID:%*ph", 6, core_data->ble_mac, 2, stylus_id);
                 break;
         case SVC_CMD_GAME_FILTER:
                 ts_info(ts_dev->dev, "recv game filter:%*ph", tsc_msg.len, tsc_msg.value);
@@ -683,6 +688,24 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
         case SVC_CMD_OPEN_CIRCUIT:
                 core_data->open_status = tsc_msg.value[0];
                 ts_info(ts_dev->dev, "recv open circuit %d", core_data->open_status);
+                break;
+        case SVC_CMD_BATTERY:
+                core_data->battery_level = tsc_msg.value[0];
+                core_data->uevent_message_type = PEN_MESSAGE_BATTERY;
+                kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
+                ts_info(ts_dev->dev, "recv battery %d", core_data->battery_level);
+                break;
+        case SVC_CMD_PEN_INFO:
+                memcpy(core_data->pen_info, &tsc_msg.value[0], sizeof(core_data->pen_info));
+                core_data->uevent_message_type = PEN_MESSAGE_PEN_INFO;
+                kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
+                ts_info(ts_dev->dev, "recv pen info(uid):%*ph", 9, core_data->pen_info);
+                break;
+        case SVC_CMD_GET_PID:
+                core_data->quick_pid = tsc_msg.value[0];
+                core_data->uevent_message_type = PEN_MESSAGE_PEN_QPID;
+                kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
+                ts_debug(ts_dev->dev, "recv quick pid %d", core_data->quick_pid);
                 break;
         default:
                 ts_err(ts_dev->dev, "not support svc msg:0x%02x", tsc_msg.cmd);
@@ -1492,6 +1515,8 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
         u8 i;
         static int pre_flags = 0;
         struct thp_ts_device *tdev = core_data->ts_dev;
+        struct goodix_thp_board_data *board_data =
+                        &core_data->ts_dev->board_data;
 #if defined(CONFIG_ENABLE_GTP_PALM_CANCEL) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
         unsigned int tool_type;
 #endif
@@ -1531,6 +1556,9 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                         ts_info(tdev->dev, "touch_health - pen_action=HOVER_ENTER x=%d y=%d",
                                     stylus_data->x, stylus_data->y);
                         core_data->pen_state = PEN_STATE_HOVER;
+                        core_data->pen_close = 1;
+                        core_data->uevent_message_type = PEN_MESSAGE_PEN_CLOSE;
+                        kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
                     }
                 } else if (is_touch) {
                     // pen touch state
@@ -1576,6 +1604,9 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 if (core_data->pen_state == PEN_STATE_HOVER) {
                     ts_info(tdev->dev, "touch_health - pen_action=HOVER_EXIT");
                     core_data->pen_state = PEN_STATE_NONE;
+                    core_data->pen_close = 0;
+                    core_data->uevent_message_type = PEN_MESSAGE_PEN_CLOSE;
+                    kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
                 } else if (core_data->pen_state == PEN_STATE_TOUCH) {
                     ts_info(tdev->dev, "touch_health - pen_action=UP");
                     core_data->pen_state = PEN_STATE_NONE;
@@ -1640,6 +1671,7 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                                         data.touch[i].major);
                                 //	input_report_abs(input_dev, ABS_MT_TOUCH_MINOR,
                                 //				data.touch[i].minor);
+                                trace_touch_coord((int)(data.touch[i].x/board_data->resolution_boost), (int)(data.touch[i].y/board_data->resolution_boost));
                         }
                     }
                     input_report_key(input_dev, BTN_TOUCH, (data.touch_num > 0) ? 1 : 0);
@@ -2592,6 +2624,9 @@ static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
         }
         ts_info(ts_dev->dev, "success get stylus suspend pinctrl state");
 
+        pinctrl_select_state(core_data->pinctrl, core_data->stylus_clk_suspend);
+        ts_info(ts_dev->dev, "set stylus suspend pinctrl state");
+
         return 0;
 exit_pinctrl_put:
         devm_pinctrl_put(core_data->pinctrl);
@@ -2603,6 +2638,9 @@ exit_pinctrl_put:
 static int ts_touch_info_uevent(const struct device *dev, struct kobj_uevent_env *env)
 {
     int ret = 0;
+    struct goodix_thp_core *cd = dev_get_drvdata(dev);
+    u8 *pen_info = cd->pen_info;
+    u8 *ble_mac = cd->ble_mac;
 
     ret = add_uevent_var(env, "UEVENT_TO=PEN_FRAMEWORK");
     if (ret)
@@ -2612,10 +2650,45 @@ static int ts_touch_info_uevent(const struct device *dev, struct kobj_uevent_env
     if (ret)
         return ret;
 
+    ret = add_uevent_var(env, "MESSAGE_TYPE=%02x", cd->uevent_message_type);
+    if (ret)
+        return ret;
+
+    ret = add_uevent_var(env, "PEN_CLOSE=%02x", cd->pen_close);
+    if (ret)
+        return ret;
+
+    ret = add_uevent_var(env, "BAT=%02x", cd->battery_level);
+    if (ret)
+        return ret;
+
     ret = add_uevent_var(env, "MAC=%02x:%02x:%02x:%02x:%02x:%02x",
                         ble_mac[5], ble_mac[4],
                         ble_mac[3], ble_mac[2],
                         ble_mac[1], ble_mac[0]);
+    if (ret)
+        return ret;
+
+    ret = add_uevent_var(env, "PEN_INFO=SN:%x%x%x%x%x%x VID:%x%x%x%x PID:%x%x%x%x",
+                        ((pen_info[3] & 0x0c) >> 2),
+                        (((pen_info[3] & 0x03) << 2) | ((pen_info[2] & 0x30) >> 4)),
+                        (pen_info[2] & 0x0f),
+                        ((pen_info[1] & 0x3c) >> 2),
+                        (((pen_info[1] & 0x03) << 2) | ((pen_info[0] & 0x30) >> 4)),
+                        (pen_info[0] & 0x0f), /*SN end*/
+                        (((pen_info[6] & 0x03) << 2) | ((pen_info[5] & 0x30) >> 4)),
+                        (pen_info[5] & 0x0f),
+                        ((pen_info[4] & 0x3c) >> 2),
+                        ((pen_info[4] & 0x03) << 2) | ((pen_info[3] & 0x30) >> 4),/*VID end*/
+                        ((pen_info[8] & 0x3c) >> 2),
+                        ((pen_info[8] & 0x03) << 2) | ((pen_info[7] & 0x30) >> 4),
+                        (pen_info[7] & 0x0f),
+                        ((pen_info[6] & 0x3c) >> 2)/*PID end*/
+                        );
+    if (ret)
+        return ret;
+
+    ret = add_uevent_var(env, "QPID=%02x", cd->quick_pid);
     if (ret)
         return ret;
 
@@ -2917,6 +2990,14 @@ static int goodix_thp_probe(struct platform_device *pdev)
                   tdev->board_data.boost_timeout);
 #endif
 
+        if (core_data->ts_dev->board_data.stylus_interpolation_ctrl) {
+                core_data->rate_configs = parse_stylus_report_rate_config(tdev->dev, &core_data->config_count);
+                if (!core_data->rate_configs) {
+                        ts_err(tdev->dev, "Failed to parse stylus rate config");
+                        goto err_irq_setup;
+                }
+        }
+
         /* request irq */
         r = goodix_thp_irq_setup(core_data);
         if (r) {
@@ -2989,6 +3070,9 @@ static int goodix_thp_remove(struct platform_device *pdev)
         fb_unregister_client(&core_data->pm_notif);
 #endif
         kfree_safe(core_data->frame_mmap_list.buf);
+        if (core_data->ts_dev->board_data.stylus_interpolation_ctrl && core_data->rate_configs) {
+                free_stylus_report_rate_config(core_data->rate_configs);
+        }
 
         /*free wakeup source*/
         if (core_data->ws) {

@@ -41,9 +41,19 @@ struct goodix_ic_report_rate_config {
 	struct report_rate_config report_rate_info[MAX_REPORT_RATE_CONFIG];
 };
 
+/* Stylus reporting Rate configuration structure */
+struct stylus_report_rate_config {
+	u16 report_rate;  // Reporting rate value
+	u16 command;      // Switch commands
+};
+
 extern struct goodix_ic_report_rate_config report_rate_config_info;
+extern struct stylus_report_rate_config *rate_configs;
 
 int goodix_thp_mmi_get_report_rate(struct goodix_thp_core *core_data);
 int parse_report_rate_config(struct device *dev);
+struct stylus_report_rate_config *parse_stylus_report_rate_config(
+	struct device *dev, u8 *config_count);
+void free_stylus_report_rate_config(struct stylus_report_rate_config *configs);
 
 #endif

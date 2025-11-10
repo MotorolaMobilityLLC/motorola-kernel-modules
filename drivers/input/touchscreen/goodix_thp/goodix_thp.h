@@ -82,6 +82,7 @@
 #define CMD_RAWDATA                                     0x90
 #define CMD_TOUCH_REPORT                                0x91
 #define CMD_ACTIVE_SCAN_RATE                            0x9D
+#define CMD_FW_MODE                                     0x1E
 
 /* 9897 reg definition */
 #define REG_INT_REPORT_TYPE_FLAG_9897                   0x101A0
@@ -223,12 +224,21 @@ typedef enum {
         NOTIFY_TYPE_ROTATION,
         NOTIFY_TYPE_SWITCH_REPORT_RATE,
         NOTIFY_TYPE_SAVE_MOTO_DATA,
+        NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE,
 } NOTIFY_TYPE_T;
 
 enum pen_action_state {
     PEN_STATE_NONE,
     PEN_STATE_HOVER,
     PEN_STATE_TOUCH
+};
+
+enum pen_message_type {
+    PEN_MESSAGE_BATTERY,
+    PEN_MESSAGE_BLE_MAC,
+    PEN_MESSAGE_PEN_INFO,
+    PEN_MESSAGE_PEN_CLOSE,
+    PEN_MESSAGE_PEN_QPID
 };
 
 #pragma pack(push, 1)
@@ -291,6 +301,9 @@ enum {
         SVC_CMD_UPDATE_VERSION,
         SVC_CMD_HAL_INIT_FINISH = 36,
         SVC_CMD_OPEN_CIRCUIT = 38,
+        SVC_CMD_BATTERY,
+        SVC_CMD_PEN_INFO,
+        SVC_CMD_GET_PID
 };
 
 #define MAX_TSC_MSG_DATA_LEN 128
@@ -324,6 +337,7 @@ struct goodix_mode_info {
         int stylus_mode;
         int fp_int_state;
         int charger_mode;
+        int stylus_report_rate_mode;
 };
 
 struct goodix_thp_board_data {
@@ -367,6 +381,8 @@ struct goodix_thp_board_data {
         int max_boost_count;
         int boost_timeout;
 #endif
+        int resolution_boost;
+        bool stylus_interpolation_ctrl;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)
@@ -435,6 +451,7 @@ struct goodix_thp_hw_ops {
         int (*get_version)(struct thp_ts_device *dev, u64 *version);
         int (*set_fp_int_pin)(struct thp_ts_device *dev, u8 level);
         int (*set_ble_broadcast)(struct thp_ts_device *dev, u8 enable);
+        int (*set_device_id)(struct thp_ts_device *dev, u8 id);
         int (*reset)(struct thp_ts_device *dev, u32 delay_ms);
         int (*set_spi_speed)(struct thp_ts_device *dev, u32 speed);
 };
@@ -529,6 +546,16 @@ struct goodix_thp_core {
         bool esd_on;
         struct delayed_work esd_work;
         u8 open_status;
+
+        u8 uevent_message_type;
+        u8 pen_close;
+        u8 battery_level;
+        u8 ble_mac[6];
+        u8 pen_info[9];
+        u8 quick_pid;
+        struct stylus_report_rate_config *rate_configs;
+        u8 config_count;
+        u8 current_stylus_rate_mode;
 };
 
 extern bool debug_log_flag;
