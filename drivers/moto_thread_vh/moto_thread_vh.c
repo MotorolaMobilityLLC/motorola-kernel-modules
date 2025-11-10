@@ -50,23 +50,12 @@ static void copy_process_hook(void *unused, struct task_struct *p, int nr_thread
 		pr_info("p->comm [%s] tgid[%d] pid[%d] nr_threads %d excends max_signal_threads %d",
 				p->comm, task_tgid_nr(p), task_pid_nr(p), p->signal->nr_threads, max_signal_threads);
 		max_signal_threads += 200;
-		if (p->signal->nr_threads >= 5000)
-		{
-			pr_err("p->comm [%s] tgid[%d] pid[%d] p->nr_threads %d excends 5000, need panic",
-					p->comm, task_tgid_nr(p), task_pid_nr(p), p->signal->nr_threads);
-			BUG();
-		}
 	}
 
 	if (nr_threads >= nr_thread_max_level) {
 		pr_info("current processes [%s] tgid [%d] pid[%d] nr_threads %d count exceeds current max level %d",
 				p->comm, task_tgid_nr(p), task_pid_nr(p), nr_threads, nr_thread_max_level);
 		nr_thread_max_level += 1000;
-		if (nr_threads >= 32000) {
-			pr_info("current processes [%s] tgid [%d] pid[%d] count exceeds current max level 32000, need panic",
-				p->comm, task_tgid_nr(p), task_pid_nr(p));
-			BUG();
-		}
 	}
 
 	return;
