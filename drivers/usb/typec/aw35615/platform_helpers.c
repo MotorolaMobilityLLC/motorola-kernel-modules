@@ -1021,7 +1021,7 @@ static irqreturn_t _aw_isr_intn(AW_S32 irq, void *dev_id)
 	if (!chip->queued) {
 		chip->queued = AW_TRUE;
 		pm_wakeup_event(&chip->client->dev, 1500);
-		cpu_latency_qos_update_request(&chip->pm_gos_request, 175);
+		/* cpu_latency_qos_update_request(&chip->pm_gos_request, 175); */
 		queue_work(chip->highpri_wq, &chip->sm_worker);
 	}
 
@@ -1041,7 +1041,7 @@ static enum alarmtimer_restart aw_sm_timer_callback(struct alarm *alarm, ktime_t
 	if (!chip->queued) {
 		chip->queued = AW_TRUE;
 		pm_wakeup_event(&chip->client->dev, 1500);
-		cpu_latency_qos_update_request(&chip->pm_gos_request, 175);
+		/* cpu_latency_qos_update_request(&chip->pm_gos_request, 175); */
 		queue_work(chip->highpri_wq, &chip->sm_worker);
 	}
 
@@ -1192,14 +1192,16 @@ static void work_function(struct work_struct *work)
 
 	down(&chip->suspend_lock);
 
+	cpu_latency_qos_update_request(&chip->pm_gos_request, 150);
 	/* Run the state machine */
 	core_state_machine(&chip->port);
+	cpu_latency_qos_update_request(&chip->pm_gos_request, PM_QOS_DEFAULT_VALUE);
+	chip->queued = AW_FALSE;
 
 	/* Double check the interrupt line before exiting */
 	if (platform_get_device_irq_state(chip->port.PortID)) {
 		queue_work(chip->highpri_wq, &chip->sm_worker);
 	} else {
-		chip->queued = AW_FALSE;
 		/* Scan through the timers to see if we need a timer callback */
 		timeout = core_get_next_timeout(&chip->port);
 
@@ -1229,7 +1231,7 @@ static void work_function(struct work_struct *work)
 		wake_unlock(&chip->aw35615_wakelock);
 #endif
 	}
-	cpu_latency_qos_update_request(&chip->pm_gos_request, PM_QOS_DEFAULT_VALUE);
+	/* cpu_latency_qos_update_request(&chip->pm_gos_request, PM_QOS_DEFAULT_VALUE); */
 }
 
 void stop_usb_host(struct aw35615_chip *chip)

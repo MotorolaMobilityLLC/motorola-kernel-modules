@@ -9,6 +9,7 @@
  * Function List :
  ******************************************************************************/
 #include <linux/delay.h>
+#include <uapi/linux/sched/types.h>
 #include "platform_helpers.h"
 #include "vendor_info.h"
 #include "aw35615_driver.h"
@@ -20,6 +21,10 @@
 
 void StateMachineTypeC(Port_t *port)
 {
+	struct sched_param sch_param = {.sched_priority = MAX_RT_PRIO - 2};
+
+	sched_setscheduler(current, SCHED_FIFO,&sch_param);
+
 	do {
 		if (!port->SMEnabled)
 			return;

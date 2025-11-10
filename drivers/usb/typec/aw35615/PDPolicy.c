@@ -2486,6 +2486,7 @@ void PolicySinkReady(Port_t *port)
 				break;
 			case CMTGetSinkCap:
 				SetPEState(port, peSinkGiveSinkCap);
+				port->PEIdle = AW_FALSE;
 				port->get_sink_cap_flag = AW_TRUE;
 				break;
 			case CMTGetSourceCap:
@@ -2525,6 +2526,7 @@ void PolicySinkReady(Port_t *port)
 				break;
 			case CMTGetSinkCapExt:
 				SetPEState(port, peGetSinkCapExt);
+				port->PEIdle = AW_FALSE;
 				break;
 			case CMTGetRevisonMessage:
 				SetPEState(port, peGiveRevisonMessage);
