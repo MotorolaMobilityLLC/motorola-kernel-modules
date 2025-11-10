@@ -49,7 +49,7 @@
 #define R_VBUS_CHARGER_1   330
 #define R_VBUS_CHARGER_2   39
 #define SPECIAL_TYPE_MAX_RETRY 1
-#define MAX_TRY  10
+#define MAX_TRY  100
 
 static struct proc_dir_entry *entry;
 static bool dump_reg_enable;
@@ -163,7 +163,7 @@ enum sc8989x_fields {
 	ADC_VBAT,
 	ADC_VSYS,
 	VBUS_GD,ADC_VBUS,
-	ADC_ICC,
+	BC_12_DONE, ADC_ICC,
 	VINDPM_STAT, IINDPM_STAT,
 	REG_RST, ICO_STAT, PN, NTC_PROFILE, DEV_VERSION,
 	VBAT_REG_LSB,
@@ -423,6 +423,7 @@ static const struct reg_field sc8989x_reg_fields[] = {
 	[VBUS_GD] = REG_FIELD(0x11, 7, 7),
 	[ADC_VBUS] = REG_FIELD(0x11, 0, 6),
 	/*reg12 */
+	[BC_12_DONE] = REG_FIELD(0x12, 7, 7),
 	[ADC_ICC] = REG_FIELD(0x12, 0, 6),
 	/*reg13 */
 	[VINDPM_STAT] = REG_FIELD(0x13, 7, 7),
@@ -2695,6 +2696,8 @@ static void sc8989x_force_detection_dwork_handler(struct work_struct *work)
 	}
 
 	sc->force_detect_count++;
+	if (sc->is_upm6920A)
+		return;
 	msleep(600);
 
 	sc8989x_get_charger_type(sc);
@@ -2725,10 +2728,18 @@ static int sc8989x_do_bc12(struct sc8989x_chip *sc)
 		ret = sc8989x_field_read(sc, VBUS_GD, &reg_val);
 		if (reg_val == 1) {
 			dev_info(sc->dev,"VBUS GD ,try %d times\n", tries);
-			schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(100));
+			/* For UPM6920A, this work only triggers the BC1.2 detection.
+			 * The result is handled asynchronously in the IRQ handler via the
+			 * BC_12_DONE interrupt. For other chips, this work handles both
+			 * triggering and polling for the result.
+			 */
+			if (sc->is_upm6920A)
+				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(150));
+			else
+				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(100));
 			break;
 		} else {
-			msleep(100);
+			msleep(10);
 			tries++;
 		}
 	}
@@ -2828,6 +2839,7 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 	int reg_val;
 	bool prev_vbus_gd;
 	int type;
+	bool bc12_done = 0;
 	struct sc8989x_chip *sc = (struct sc8989x_chip *)data;
 
 	if (sc == NULL) {
@@ -2835,6 +2847,13 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 	}
 
 	dev_info(sc->dev, "%s: sc8989x_irq_handler\n", __func__);
+	if (sc->is_upm6920A) {
+		ret = sc8989x_field_read(sc, BC_12_DONE, &reg_val);
+		if (ret) {
+			return IRQ_HANDLED;
+		}
+		bc12_done = !!reg_val;
+	}
 
 	ret = sc8989x_field_read(sc, VBUS_GD, &reg_val);
 	if (ret) {
@@ -2885,7 +2904,10 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		power_supply_changed(sc->psy);
 	}
 
-	//power_supply_changed(sc->psy);
+	if (bc12_done && sc->is_upm6920A) {
+		sc8989x_get_charger_type(sc);
+		power_supply_changed(sc->psy);
+	}
 
 	sc8989x_dump_register(sc);
 	return IRQ_HANDLED;
