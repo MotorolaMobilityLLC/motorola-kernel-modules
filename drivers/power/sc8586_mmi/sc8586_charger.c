@@ -407,8 +407,6 @@ static int sc8586_get_adc_data(struct sc8586_chip *sc,
     if(channel >= ADC_MAX_NUM)
         return -EINVAL;
 
-    sc8586_enable_adc(sc, true);
-    msleep(50);
     sc8586_field_write(sc, F_ADC_FREEZE, 1);
     ret = sc8586_i2c_read_bytes(sc, SC8586_REG1A + (channel << 1), 2, val);
     if (ret < 0) {
@@ -425,9 +423,6 @@ static int sc8586_get_adc_data(struct sc8586_chip *sc,
     sc8586_info("%s %d %d", __func__, channel, *result);
 
     sc8586_field_write(sc, F_ADC_FREEZE, 0);
-
-    if (sc->device_id != CPS2043_DEVICE_ID)
-        sc8586_enable_adc(sc, false);
 
     return ret;
 }
@@ -1707,6 +1702,8 @@ static int sc8586_charger_probe(struct i2c_client *client,
         goto err_register_sc_charger;
 	}
 #endif /* CONFIG_SOUTHCHIP_DVCHG_CLASS */
+
+    sc8586_enable_adc(sc, false);
     if (sc->mode == SC8586_MASTER) {
         sc8586_err( "sc8586[master] probe successfully!\n");
     } else if (sc->mode == SC8586_SLAVE) {
