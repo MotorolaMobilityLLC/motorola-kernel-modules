@@ -337,6 +337,11 @@ static int cts_tcs_spi_xtrans_1_cs(const struct cts_device *cts_dev, u8 *tx,
     u16 cmd_recv, cmd_send;
     int ret;
 
+    if (cts_dev->rtdata.suspended)
+    {
+        msleep(1);
+    }
+
     memset(&xfer[0], 0, sizeof(struct spi_transfer));
     // xfer[0].delay_usecs = 0;
     xfer[0].speed_hz = cts_dev->pdata->spi_speed * 1000u;
