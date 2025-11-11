@@ -524,10 +524,11 @@ EXPORT_SYMBOL(bm_ulog_enable_log);
 bool bm_ulog_is_enabled_by_cmd(void)
 {
 	struct bm_ulog_dev *bmdev = g_bmdev;
-	struct device_node *np = of_find_node_by_path("/chosen");
+	struct device_node *np = NULL;
 	bool rt = false;
 	const char *bootargs = NULL;
 	char *bm_ulog_enabled = NULL;
+	static int bm_ulog_en_rt = -1;
 
 	if (!bmdev) {
 		pr_err("BM ulog has not initialized yet\n");
@@ -539,6 +540,11 @@ bool bm_ulog_is_enabled_by_cmd(void)
 		return true;
 	}
 
+	if (bm_ulog_en_rt >= 0) {
+		return (bm_ulog_en_rt > 0);
+	}
+
+	np = of_find_node_by_path("/chosen");
 	if (!np) {
 		bm_info(bmdev, "np is null\n");
 		return false;
@@ -546,10 +552,13 @@ bool bm_ulog_is_enabled_by_cmd(void)
 
 	if (!of_property_read_string(np, "bootargs", &bootargs)) {
 		bm_ulog_enabled = strstr(bootargs, "bm_ulog_enabled=1");
-		bm_info(bmdev, "of_property_read_string bm_ulog_enabled=%s\n", bm_ulog_enabled);
 		if (bm_ulog_enabled) {
 			rt = true;
+			bm_ulog_en_rt = 1;
+		} else {
+			bm_ulog_en_rt = 0;
 		}
+		bm_info(bmdev, "of_property_read_string bm_ulog_enabled=%s bm_ulog_en_rt=%d\n", bm_ulog_enabled, bm_ulog_en_rt);
 	}
 
 	of_node_put(np);

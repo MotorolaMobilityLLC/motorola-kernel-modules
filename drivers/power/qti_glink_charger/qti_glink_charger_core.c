@@ -63,6 +63,7 @@
 #define RADIO_MAX_LEN 33
 
 #define ULOG_DURATION_MS		60000
+#define ULOG_PERIODIC_MS		1000
 
 static bool debug_enabled;
 module_param(debug_enabled, bool, 0600);
@@ -277,6 +278,10 @@ struct qti_charger {
 	bool				mosfet_supported;
 	int				mos_en_gpio;
 	bool				mosfet_is_enable;
+	ktime_t			bm_ulog_end_kt;
+	bool			chg_en_bm_ulog;
+	bool			secure_hardware;
+	bool			hw_cid0;
 
 	u32 *thermal_primary_levels;
 	u32 thermal_primary_fcc_ua;
@@ -863,6 +868,7 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 	int prev_lpd = 0;
 	static bool lpd_ulog_triggered = false;
 	static bool otg_ulog_triggered = false;
+	ktime_t ktime_now_ms = 0;
 
 	rc = qti_charger_read(chg, OEM_PROP_CHG_INFO,
 				&info,
@@ -919,6 +925,19 @@ static int qti_charger_get_chg_info(void *data, struct mmi_charger_info *chg_inf
 		if (otg_ulog_triggered && !lpd_ulog_triggered)
 			bm_ulog_enable_log(false, 0);
 		otg_ulog_triggered = false;
+	}
+
+	if (chg->chg_en_bm_ulog && info.chrg_present && !bm_ulog_is_enabled_by_cmd()) {
+		ktime_now_ms = ktime_to_ms(ktime_get_boottime());
+		if (chg->chg_info.chrg_present != info.chrg_present) {
+			bm_ulog_enable_log(true, ULOG_DURATION_MS);
+			chg->bm_ulog_end_kt = ktime_now_ms + ULOG_DURATION_MS;
+		} else if (!otg_ulog_triggered &&
+				!lpd_ulog_triggered &&
+				ktime_now_ms >= chg->bm_ulog_end_kt) {
+			bm_ulog_enable_log(true, ULOG_PERIODIC_MS);
+			chg->bm_ulog_end_kt = ktime_now_ms + ULOG_PERIODIC_MS;
+		}
 	}
 
 	chg->chg_info.chrg_mv = info.chrg_uv / 1000;
@@ -3323,6 +3342,77 @@ static int mmi_get_hw_revision(struct qti_charger *chg, u16 *hw_rev)
 	}
 }
 
+static int mmi_check_secure_hardware(struct qti_charger *chg)
+{
+	char *s = NULL;
+	int ret = 0;
+
+	if (!chg)
+		return -1;
+
+	if (mmi_get_bootarg("secure_hardware=", &s) == 0) {
+		if (s != NULL) {
+			mmi_info(chg, "secure_hardware=%s \n", s);
+			if (*s == '1') {
+				chg->secure_hardware = true;
+			} else {
+				chg->secure_hardware = false;
+			}
+			mmi_info(chg, "secure_hardware: %d\n", chg->secure_hardware);
+		} else {
+			mmi_err(chg, "Could not get secure_hardware\n");
+		}
+	} else {
+		mmi_err(chg, "Could not get bootarg\n");
+		ret = -1;
+	}
+
+	return ret;
+}
+
+static int mmi_check_hw_cid0(struct qti_charger *chg)
+{
+	char *s = NULL;
+	char cid_str[RADIO_MAX_LEN] = {0x00};
+	int len = 0;
+	int ret = 0;
+
+	if (!chg)
+		return -1;
+
+	if (mmi_get_bootarg("androidboot.cid=", &s) == 0) {
+		if (s != NULL) {
+			strlcpy(cid_str, s, RADIO_MAX_LEN);
+			len = strlen(cid_str);
+			switch(len) {
+				case 1: //androidboot.cid=0
+					chg->hw_cid0 = (cid_str[0] == '0');
+				break;
+				case 3: //androidboot.cid=0x0
+					chg->hw_cid0 = (strcmp(cid_str, "0x0") == 0);
+				break;
+				case 4: //androidboot.cid=0x00
+					chg->hw_cid0 = (strcmp(cid_str, "0x00") == 0);
+				break;
+				case 6: //androidboot.cid=0x0000
+					chg->hw_cid0 = (strcmp(cid_str, "0x0000") == 0);
+				break;
+				default:
+					break;
+			}
+			mmi_info(chg, "HW cid0: %d len=%d cid_str=%s\n", chg->hw_cid0, len, cid_str);
+		} else {
+			mmi_err(chg, "Could not get HW cid\n");
+			ret = -1;
+		}
+	} else {
+		mmi_err(chg, "Could not get bootarg\n");
+		ret = -1;
+	}
+
+	return ret;
+}
+
 static inline int primary_get_max_charge_cntl_limit(struct thermal_cooling_device *tcd,
                     unsigned long *state)
 {
@@ -3694,6 +3784,12 @@ static int qti_charger_init(struct qti_charger *chg)
 		mmi_err(chg, "Fail to get HW revision\n");
 		return rc;
 	}
+
+	rc = mmi_check_secure_hardware(chg);
+	if (chg->secure_hardware)
+		rc |= mmi_check_hw_cid0(chg);
+	if (rc == 0)
+		chg->chg_en_bm_ulog = !chg->secure_hardware || chg->hw_cid0;
 
 	rc = qti_charger_write_profile(chg);
 	if (rc) {
