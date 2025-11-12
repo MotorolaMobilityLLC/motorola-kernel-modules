@@ -765,6 +765,45 @@ exit:
 	mutex_unlock(&core_data->mode_lock);
 	return ret;
 }
+
+static int goodix_ts_mmi_exit_standby_mode(struct device *dev)
+{
+	int ret = 0;
+	struct goodix_ts_core *core_data;
+	struct platform_device *pdev;
+
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	if (core_data->set_mode.stowed == 0x0) {
+		ts_info("Not in stowed mode");
+		goto exit;
+	}
+
+	if (core_data->force_stowed_mode == false) {
+		ts_info("Not force stowed mode by touch");
+		goto exit;
+	}
+
+	if ((atomic_read(&core_data->post_suspended) == 0x01) && core_data->gesture_enabled) {
+		ret = goodix_ts_send_cmd(core_data, ENTER_STOWED_MODE_CMD, 5, 0x00, 0x00);
+		if (ret < 0) {
+			ts_err("Failed to exit stowed mode");
+			goto exit;
+		}
+		core_data->set_mode.stowed = 0x00;
+		core_data->force_stowed_mode = false;
+		ts_info("Success exit stowed mode");
+	} else {
+		ts_info("Skip exit stowed mode post_suspended:%d, gesture_enabled:%d",
+			atomic_read(&core_data->post_suspended), core_data->gesture_enabled);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
 #endif
 
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
@@ -795,6 +834,7 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.post_resume = goodix_ts_mmi_post_resume,
 #ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
 	.force_enter_standby_mode = goodix_ts_mmi_force_enter_standby_mode,
+	.exit_standby_mode = goodix_ts_mmi_exit_standby_mode,
 #endif
 };
 

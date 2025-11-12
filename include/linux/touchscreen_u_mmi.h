@@ -504,6 +504,7 @@ enum ts_mmi_work {
 	int	(*pre_suspend)(struct device *dev);
 	int	(*post_suspend)(struct device *dev);
 	int	(*force_enter_standby_mode)(struct device *dev);
+	int	(*exit_standby_mode)(struct device *dev);
 	/*
 	 * class exported methods
 	 */

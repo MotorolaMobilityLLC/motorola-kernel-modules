@@ -388,6 +388,8 @@ static ssize_t gesture_store(struct device *dev,
 #ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
 	if (touch_cdev->gesture_mode_type == 0x0) {
 		TRY_TO_CALL(force_enter_standby_mode);
+	} else {
+		TRY_TO_CALL(exit_standby_mode);
 	}
 #endif
 
