@@ -268,7 +268,7 @@ static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long 
 		unsigned long rlimit = task_rlimit(p, RLIMIT_NICE);
 		if (rlimit != 0) {
 			*nice = rlimit_to_nice(rlimit);
-			if (unlikely(*nice > MAX_NICE)) {
+			if (unlikely(*nice > MAX_NICE || *nice < MIN_NICE)) {
 				pr_warn("%s: pid=%d RLIMIT_NICE=%ld is not set\n", "moto_sched", p->pid, *nice);
 				*nice = mts->nice_backup;
 			}
@@ -302,7 +302,7 @@ static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long 
 		unsigned long rlimit = task_rlimit(p, RLIMIT_NICE);
 		if (rlimit != 0) {
 			*nice = rlimit_to_nice(rlimit);
-			if (unlikely(*nice > MAX_NICE)) {
+			if (unlikely(*nice > MAX_NICE || *nice < MIN_NICE)) {
 				pr_warn("%s: pid=%d RLIMIT_NICE=%ld is not set\n", "moto_sched", p->pid, *nice);
 				*nice = mts->nice_backup;
 			}
@@ -363,7 +363,9 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 
 #ifdef CONFIG_MOTO_LOCKING_2
 	if (fair_policy(owner->policy)) {
+		get_task_struct(owner);
 		set_user_nice(owner, 0xbeef); // trigger requeue even if task is already in queue
+		put_task_struct(owner);
 	}
 #endif
 
@@ -400,7 +402,9 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 
 #ifdef CONFIG_MOTO_LOCKING_2
 	if (fair_policy(owner->policy)) {
+		get_task_struct(owner);
 		set_user_nice(owner, 0xbeee); // trigger requeue even if task is already in queue
+		put_task_struct(owner);
 	}
 #endif
 
