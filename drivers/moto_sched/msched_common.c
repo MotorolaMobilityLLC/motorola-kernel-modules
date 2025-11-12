@@ -345,7 +345,7 @@ static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long 
 		unsigned long rlimit = task_rlimit(p, RLIMIT_NICE);
 		if (rlimit != 0) {
 			*nice = rlimit_to_nice(rlimit);
-			if (unlikely(*nice > MAX_NICE)) {
+			if (unlikely(*nice > MAX_NICE || *nice < MIN_NICE)) {
 				pr_warn("%s: pid=%d RLIMIT_NICE=%ld is not set\n", "moto_sched", p->pid, *nice);
 				*nice = mts->nice_backup;
 			}
@@ -379,7 +379,7 @@ static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long 
 		unsigned long rlimit = task_rlimit(p, RLIMIT_NICE);
 		if (rlimit != 0) {
 			*nice = rlimit_to_nice(rlimit);
-			if (unlikely(*nice > MAX_NICE)) {
+			if (unlikely(*nice > MAX_NICE || *nice < MIN_NICE)) {
 				pr_warn("%s: pid=%d RLIMIT_NICE=%ld is not set\n", "moto_sched", p->pid, *nice);
 				*nice = mts->nice_backup;
 			}
