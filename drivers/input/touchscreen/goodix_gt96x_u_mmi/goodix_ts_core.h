@@ -787,6 +787,10 @@ struct goodix_ts_core {
 	struct delayed_work work;
 	int ts_mmi_power_state;
 	struct spinlock irq_lock;
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	bool force_stowed_mode;
+#endif
 };
 
 struct goodix_device_resource {

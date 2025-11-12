@@ -150,6 +150,10 @@ ifneq ($(filter m y,$(CONFIG_TOUCH_HARDWARE_STATUS)),)
     EXTRA_CFLAGS += -DCONFIG_GTP_HARDWARE_STATUS
 endif
 
+ifneq ($(filter m y,$(CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY)),)
+    EXTRA_CFLAGS += -DCONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+endif
+
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
 USE_TARGET_PRODUCT := $(strip $(subst _factory,, $(TARGET_PRODUCT)))
 else

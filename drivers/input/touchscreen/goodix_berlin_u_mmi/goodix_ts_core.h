@@ -631,6 +631,10 @@ struct goodix_ts_core {
 #ifdef CONFIG_GTP_HARDWARE_STATUS
 	u8 open_status;
 #endif
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	bool force_stowed_mode;
+#endif
 };
 
 /* external module structures */
