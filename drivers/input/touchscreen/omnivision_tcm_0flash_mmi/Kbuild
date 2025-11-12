@@ -19,6 +19,10 @@ ifneq ($(filter m y, $(CONFIG_OVT_STOWED_MODE_SUPPORT)),)
 endif
 endif
 
+ifneq ($(filter m y, $(CONFIG_OVT_GLOVE_MODE_CTRL)),)
+	EXTRA_CFLAGS += -DOVT_GLOVE_MODE_CTRL
+endif
+
 obj-m := omnivision_tcm_0flash_mmi.o
 omnivision_tcm_0flash_mmi-objs += omnivision_tcm_core.o \
 			omnivision_tcm_touch.o \

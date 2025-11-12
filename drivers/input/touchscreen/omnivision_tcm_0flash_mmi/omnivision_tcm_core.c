@@ -539,6 +539,63 @@ static ssize_t gesture_enabled_dbg_store(struct device *dev,
 }
 #endif
 
+#ifdef OVT_GLOVE_MODE_CTRL
+int ovt_glove_mode(struct ovt_tcm_hcd *tcm_hcd)
+{
+	int retval = 0;
+	unsigned short glove_cmd = 0;
+
+	if (tcm_hcd == NULL) {
+		OVT_ERROR("tcm_hcd is null\n");
+        	return retval;
+    	}
+
+	glove_cmd = tcm_hcd->glove_enabled;
+
+	retval = tcm_hcd->set_dynamic_config(tcm_hcd, DC_ENABLE_GLOVE, glove_cmd);
+
+	if (retval < 0)
+		OVT_ERROR("Failed to set glove_cmd: 0x%hx\n", glove_cmd);
+	else
+		OVT_INFO("set glove_cmd: 0x%hx for mode:%d\n", glove_cmd, tcm_hcd->glove_enabled);
+
+	return retval;
+}
+
+static ssize_t sensitivity_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", g_tcm_hcd->glove_enabled);
+}
+
+static ssize_t sensitivity_store(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
+{
+	unsigned int value = 0;
+	struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+
+	OVT_INFO("glove mode enter\n");
+
+	if (kstrtouint(buf, 10, &value)) {
+		OVT_INFO("Failed to convert value\n");
+		return -EINVAL;
+	}
+
+	OVT_INFO("glove mode value=%d\n", value);
+
+	if (value == 0 || value == 1) {
+		tcm_hcd->glove_enabled = value;
+    		OVT_INFO("set glove_enabled: %d\n", tcm_hcd->glove_enabled);
+    		ovt_glove_mode(tcm_hcd);
+	} else {
+    		OVT_INFO("unsupported glove type %d, skip\n", value);
+	}
+
+	return count;
+}
+#endif
+
 #ifdef OVT_STOWED_MODE_SUPPORT
 static ssize_t stowed_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
@@ -611,6 +668,9 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RO(ic_ver),
 	__ATTR_RO(buildid),
 	__ATTR_RO(productinfo),
+#ifdef OVT_GLOVE_MODE_CTRL
+	__ATTR_RW(sensitivity),
+#endif
 #ifdef CONFIG_TP_LAST_TIME
 	__ATTR_RO(timestamp),
 #endif

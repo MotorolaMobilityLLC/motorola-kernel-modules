@@ -77,6 +77,10 @@ extern struct ovt_tcm_hcd *g_tcm_hcd;
 int ovt_tp_data_dump_capture(struct device *dev);
 #endif
 
+#ifdef OVT_GLOVE_MODE_CTRL
+int ovt_glove_mode(struct ovt_tcm_hcd *tcm_hcd);
+#endif
+
 #ifdef OVT_STOWED_MODE_SUPPORT
 extern int ovt_tcm_sleep(struct ovt_tcm_hcd *tcm_hcd, bool en);
 #endif
@@ -575,6 +579,9 @@ struct ovt_tcm_hcd {
 	bool in_hdl_mode;
 	bool is_detected;
 	int wakeup_gesture_enabled;
+#ifdef OVT_GLOVE_MODE_CTRL
+	int glove_enabled;/*1 = enabled, 0 = disabled */
+#endif
 	bool b_is_doing_test_flag;
     bool ovt_tcm_driver_removing;
 	unsigned char sensor_type;

@@ -1655,6 +1655,15 @@ int touch_resume(struct ovt_tcm_hcd *tcm_hcd)
 		}
 	}
 
+#ifdef OVT_GLOVE_MODE_CTRL
+	retval = ovt_glove_mode(tcm_hcd);
+	if (retval < 0) {
+		LOGE(tcm_hcd->pdev->dev.parent,
+					"Failed to set glove mode\n");
+		return retval;
+		}
+#endif
+
 	OVT_FUNC_EXIT();
 	return 0;
 }
