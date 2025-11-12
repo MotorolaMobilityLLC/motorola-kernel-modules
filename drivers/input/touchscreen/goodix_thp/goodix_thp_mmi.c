@@ -941,6 +941,11 @@ static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
+#ifdef CONFIG_THP_FOLD
+	if (core_data->pdev->id)
+		hardware_status = core_data->open_fold_status;
+	else
+#endif
 	hardware_status = core_data->open_status;
 	ts_info(core_data->ts_dev->dev, "Read touch hardware status = %d", hardware_status);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);

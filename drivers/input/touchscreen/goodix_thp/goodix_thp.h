@@ -554,6 +554,9 @@ struct goodix_thp_core {
         bool esd_on;
         struct delayed_work esd_work;
         u8 open_status;
+#ifdef CONFIG_THP_FOLD
+        u8 open_fold_status;
+#endif
 
         u8 uevent_message_type;
         u8 pen_close;

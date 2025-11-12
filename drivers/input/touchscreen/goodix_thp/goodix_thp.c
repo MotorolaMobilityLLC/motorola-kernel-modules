@@ -688,7 +688,17 @@ static long goodix_thp_ioctl_recv_tsc_msg(struct goodix_thp_core *core_data, uns
                 goodix_thp_esd_on(core_data, true);
                 break;
         case SVC_CMD_OPEN_CIRCUIT:
+#ifdef CONFIG_THP_FOLD
+                if (core_data->pdev->id)
+                    core_data->open_fold_status = tsc_msg.value[0];
+                else
+#endif
                 core_data->open_status = tsc_msg.value[0];
+#ifdef CONFIG_THP_FOLD
+                if (core_data->pdev->id)
+                    ts_info(ts_dev->dev, "recv fold open circuit %d", core_data->open_fold_status);
+                else
+#endif
                 ts_info(ts_dev->dev, "recv open circuit %d", core_data->open_status);
                 break;
         case SVC_CMD_BATTERY:
