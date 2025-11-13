@@ -13,9 +13,7 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/moto_sche
 
 ifneq ($(filter m y,$(CONFIG_MTK_SCHED_VIP_TASK)),)
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-6.1
-EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-6.6
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1
-EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.6
 CONFIG_MOTO_MUTEX_INHERIT := y
 CONFIG_MOTO_RWSEM_INHERIT := y
 endif
