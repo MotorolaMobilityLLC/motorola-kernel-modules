@@ -1881,6 +1881,7 @@ static int goodix_thp_input_agent_init(struct goodix_thp_core *core_data)
         else
                 sprintf(core_data->input_dev_name, "%s%d", GOODIX_THP_INPUT_DEVICE_NAME, core_data->pdev->id);
         input_dev->name = core_data->input_dev_name;
+        input_dev->phys = core_data->input_dev_name;
         input_dev->id.bustype = BUS_SPI;
         input_dev->id.product = 0xDEAD;
         input_dev->id.vendor = 0xBEEF;
