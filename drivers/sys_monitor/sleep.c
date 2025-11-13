@@ -14,6 +14,7 @@
 #define pr_fmt(fmt) "sys_monitor: " fmt
 
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
@@ -78,6 +79,23 @@ struct sleep_stats {
 	u64 last_entered_at;
 	u64 last_exited_at;
 	u64 accumulated;
+};
+#else
+#include <lpm_dbg_logger.h>
+
+struct subsystem_data {
+	const char *name;
+	u32 index;
+};
+
+static struct subsystem_data subsystems[] = {
+	{ "apss", 0 },
+	{ "spm26M", 1 },
+	{ "modem", 2 },
+	{ "2G", 3 },
+	{ "3G", 4 },
+	{ "4G", 5 },
+	{ "5G_FR1", 6 },
 };
 
 #endif
@@ -149,7 +167,7 @@ ssize_t sleep_state_show(struct kobject *kobj, struct kobj_attribute *attr, char
 					suspend_state[i].wakeup_irq, suspend_state[i].wakeup_name, suspend_state[i].wakeup_uid);
 		for (j = 0; j < suspend_state[i].subsys_count; j++) {
 			len += scnprintf(buf + len, PAGE_SIZE - len, "%s:%llu|",
-					suspend_state[i].subsys_state[j].name, suspend_state[i].subsys_state[j].sleep_time / 19200000L);
+					suspend_state[i].subsys_state[j].name, suspend_state[i].subsys_state[j].sleep_time);
 		}
 		len += scnprintf(buf + len, PAGE_SIZE - len, "\n");
 		once_len = len - once_len;
@@ -200,16 +218,21 @@ static void record_sleep_stats(ktime_t sleep_time)
 			       - stat->last_entered_at;
 		delta_duration = accumulated - prev_duration[i];
 		prev_duration[i] = accumulated;
-		suspend_state[cur_idx].subsys_state[j].sleep_time = delta_duration;
+		suspend_state[cur_idx].subsys_state[j].sleep_time = delta_duration / 19200000L;
 		memcpy(suspend_state[cur_idx].subsys_state[j].name, subsystem->name, SUBSYS_NAME_LEN);
 		suspend_state[cur_idx].subsys_state[j].name[SUBSYS_NAME_LEN - 1] = '\0';
 		suspend_state[cur_idx].subsys_count = ++j;
 	}
 #else
-	strlcpy(suspend_state[cur_idx].subsys_state[0].name, "dummy", SUBSYS_NAME_LEN);
-	suspend_state[cur_idx].subsys_state[0].sleep_time = 100000;
-	suspend_state[cur_idx].subsys_state[0].name[SUBSYS_NAME_LEN - 1] = '\0';
-	suspend_state[cur_idx].subsys_count = 1;
+	const int num_items = ARRAY_SIZE(subsystems);
+
+	for (int i = 0; i < num_items; i++) {
+		strscpy(suspend_state[cur_idx].subsys_state[i].name, subsystems[i].name, SUBSYS_NAME_LEN);
+		suspend_state[cur_idx].subsys_state[i].sleep_time = get_sys_lpm_sleep_time(subsystems[i].index);
+		suspend_state[cur_idx].subsys_state[i].name[SUBSYS_NAME_LEN - 1] = '\0';
+	}
+
+	suspend_state[cur_idx].subsys_count = num_items;
 #endif
 
 	suspend_state[cur_idx].sec = ktime_get_real_seconds() - sys_tz.tz_minuteswest * 60;
@@ -217,8 +240,9 @@ static void record_sleep_stats(ktime_t sleep_time)
 	suspend_state[cur_idx].charge_counter = get_battery_property(POWER_SUPPLY_PROP_CHARGE_COUNTER);
 	suspend_state[cur_idx].capacity = get_battery_property(POWER_SUPPLY_PROP_CAPACITY);
 	suspend_state[cur_idx].sleep_time = sleep_time / 1000;
-	suspend_state[cur_idx].wakeup_irq = 0;//pm_wakeup_irq();
-	suspend_state[cur_idx].wakeup_uid = net_wakeup_uid;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+	suspend_state[cur_idx].wakeup_irq = pm_wakeup_irq();
 	if (suspend_state[cur_idx].wakeup_irq) {
 		struct irq_desc *desc;
 		const char *name = "null";
@@ -228,9 +252,15 @@ static void record_sleep_stats(ktime_t sleep_time)
 		else if (desc->action && desc->action->name)
 			name = desc->action->name;
 
-		strlcpy(suspend_state[cur_idx].wakeup_name, name, MAX_WAKEUP_NAME_SIZE);
+		strscpy(suspend_state[cur_idx].wakeup_name, name, MAX_WAKEUP_NAME_SIZE);
 	}
+#else
+	/* To distinguish them from normal IRQ numbers, the indices of R12 are all incremented by 10000 */
+	suspend_state[cur_idx].wakeup_irq = get_wakeup_R12_index() + 10000;
+	strscpy(suspend_state[cur_idx].wakeup_name, get_wakeup_R12_source(), MAX_WAKEUP_NAME_SIZE);
+#endif
 
+	suspend_state[cur_idx].wakeup_uid = net_wakeup_uid;
 	cur_idx++;
 }
 
