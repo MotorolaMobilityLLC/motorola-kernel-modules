@@ -3811,6 +3811,9 @@ AW_U8 PolicySendData(Port_t *port, AW_U8 MessageType, void *data,
 		}
 #endif /* AW_HAVE_EXT_MSG */
 		SetPEState(port, nextState);
+#ifdef AW_HAVE_EXT_MSG
+		port->ExtTxOrRx = NoXfer;
+#endif
 		port->PolicySubIndex = subIndex;
 		TimerDisable(&port->ProtocolTimer);
 		Status = STAT_SUCCESS;
