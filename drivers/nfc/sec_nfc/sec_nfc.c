@@ -24,12 +24,17 @@
 #endif
 
 #define CONFIG_SEC_NFC_WAKE_LOCK
+/*#define CONFIG_NFC_SHUTDOWN_WORKAROUND*/
+//#define CONFIG_SEC_NFC_LOST_IRQ_WORKAROUND
+#include <linux/version.h>
 #include <linux/wait.h>
 #include <linux/delay.h>
 
+#include <linux/compat.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/io.h>
+#include <linux/interrupt.h>
 #include <linux/platform_device.h>
 #include <linux/mutex.h>
 #include <linux/module.h>
@@ -64,6 +69,21 @@ struct sec_nfc_i2c_info {};
 #include <linux/sched.h>
 #include <linux/i2c.h>
 #include "sec_nfc.h"
+
+//#define _SEC_DEBUG_
+
+#ifdef _SEC_DEBUG_
+#undef dev_dbg
+#undef dev_info
+#undef dev_warn
+#undef dev_notice
+
+#define dev_dbg dev_err
+#define dev_info dev_err
+#define dev_warn dev_err
+#define dev_notice dev_err
+
+#endif
 
 #define SEC_NFC_GET_INFO(dev) i2c_get_clientdata(to_i2c_client(dev))
 enum sec_nfc_irq {
@@ -136,11 +156,12 @@ static irqreturn_t sec_nfc_irq_thread_fn(int irq, void *dev_id)
     info->i2c_info.read_irq += SEC_NFC_READ_TIMES;
     mutex_unlock(&info->i2c_info.read_mutex);
 
+    dev_dbg(info->dev, "%s: wake_up_interruptible\n", __func__);
     wake_up_interruptible(&info->i2c_info.read_wait);
 #ifdef CONFIG_SEC_NFC_WAKE_LOCK
     wake_lock_timeout(&info->nfc_wake_lock, 2 * HZ);
 #endif
-
+    dev_dbg(info->dev, "%s: IRQ_HANDLED!\n", __func__);
     return IRQ_HANDLED;
 }
 
@@ -170,14 +191,36 @@ static ssize_t sec_nfc_read(struct file *file, char __user *buf,
         goto out;
     }
 
+#ifdef CONFIG_SEC_NFC_LOST_IRQ_WORKAROUND
+    {
+        //HAL would would try 3 times if there is error, if a fake IRQ was triggered, it would be ignored after 3 times of retries.
+        static int continued_irq_low_count = 0;
+        struct sec_nfc_platform_data *pdata = info->pdata;
+        if(gpio_get_value(pdata->irq) == 0) {
+            dev_warn(info->dev, "[NFC] irq-gpio state is low when reading, read_irq is %d, continued_count %d!\n",info->i2c_info.read_irq, continued_irq_low_count);
+            if(info->i2c_info.read_irq % SEC_NFC_READ_TIMES == 0){
+                continued_irq_low_count ++;
+                if(continued_irq_low_count >= 3){
+                    info->i2c_info.read_irq = SEC_NFC_NONE;
+                    dev_err(info->dev, "[NFC] reset read_irq since irq was low for 3 times!\n");
+                }
+                ret = -EAGAIN;
+                mutex_unlock(&info->i2c_info.read_mutex);
+                goto out;
+            }else{
+                dev_dbg(info->dev, "[NFC] continue to read even irq is low, since there is pending payload!\n");
+            }
+        }
+        continued_irq_low_count = 0;
+    }
+#endif
+
     irq = info->i2c_info.read_irq;
     mutex_unlock(&info->i2c_info.read_mutex);
     if (irq == SEC_NFC_NONE) {
-        if (file->f_flags & O_NONBLOCK) {
-            dev_err(info->dev, "it is nonblock\n");
+        dev_err(info->dev, "[NFC] read_irq is SEC_NFC_NONE, try again!\n");
             ret = -EAGAIN;
             goto out;
-        }
     }
 
     /* i2c recv */
@@ -208,8 +251,10 @@ static ssize_t sec_nfc_read(struct file *file, char __user *buf,
     if (info->i2c_info.read_irq >= SEC_NFC_INT)
         info->i2c_info.read_irq--;
 
-    if (info->i2c_info.read_irq == SEC_NFC_READ_TIMES)
+    if (info->i2c_info.read_irq > SEC_NFC_NONE &&
+        (info->i2c_info.read_irq % SEC_NFC_READ_TIMES == 0)){
         wake_up_interruptible(&info->i2c_info.read_wait);
+    }
 
     mutex_unlock(&info->i2c_info.read_mutex);
 
@@ -225,7 +270,7 @@ read_error:
     mutex_unlock(&info->i2c_info.read_mutex);
 out:
     mutex_unlock(&info->mutex);
-
+    dev_dbg(info->dev, "%s: leave: ret: %d, read_irq:%d\n", __func__, ret, info->i2c_info.read_irq);
     return ret;
 }
 
@@ -286,7 +331,7 @@ static ssize_t sec_nfc_write(struct file *file, const char __user *buf,
 
 out:
     mutex_unlock(&info->mutex);
-
+    dev_dbg(info->dev, "%s: exit, ret: %d\n", __func__, ret);
     return ret;
 }
 
@@ -296,9 +341,9 @@ static unsigned int sec_nfc_poll(struct file *file, poll_table *wait)
                                                 struct sec_nfc_info, miscdev);
     enum sec_nfc_irq irq;
 
-    int ret = 0;
+    unsigned int ret = 0;
 
-    dev_dbg(info->dev, "%s: info: %p\n", __func__, info);
+    dev_dbg(info->dev, "%s: info: %p, read_irq=%d\n", __func__, info, info->i2c_info.read_irq);
 
     mutex_lock(&info->mutex);
 
@@ -311,14 +356,40 @@ static unsigned int sec_nfc_poll(struct file *file, poll_table *wait)
     poll_wait(file, &info->i2c_info.read_wait, wait);
 
     mutex_lock(&info->i2c_info.read_mutex);
+
+#ifdef CONFIG_SEC_NFC_LOST_IRQ_WORKAROUND
+    {
+        //HAL would wait some time(depends on param tv.tv_usec for each select, norammly < 2000=2ms) for each poll,
+        //it means if IRQ is lost, interrupt will be trigger manually afer 3 retries (=6ms if tv.tv_usec=2000)
+        static int continued_irq_high_count = 0;
+        if (info->i2c_info.read_irq == SEC_NFC_NONE){
+            struct sec_nfc_platform_data *pdata = info->pdata;
+            if(gpio_get_value(pdata->irq) > 0) {
+                continued_irq_high_count ++;
+                dev_warn(info->dev, "[NFC] irq-gpio state is high but read_irq is NONE, count:%d!\n",continued_irq_high_count);
+                if(continued_irq_high_count < 3){
+                    mutex_unlock(&info->i2c_info.read_mutex);
+                    goto out;
+                }
+                dev_err(info->dev, "[NFC] irq-gpio state is high but read_irq is NONE for 3 times, trigger interrupt!\n");
+                info->i2c_info.read_irq += SEC_NFC_READ_TIMES;
+            }
+        }
+        if(continued_irq_high_count > 0){
+            dev_dbg(info->dev, "[NFC] reset continued_irq_high_count:%d!\n",continued_irq_high_count);
+        }
+        continued_irq_high_count = 0;
+    }
+#endif
+
     irq = info->i2c_info.read_irq;
-    if (irq == SEC_NFC_READ_TIMES)
+    if (irq > SEC_NFC_NONE && (irq%SEC_NFC_READ_TIMES == 0))
         ret = (POLLIN | POLLRDNORM);
     mutex_unlock(&info->i2c_info.read_mutex);
 
 out:
     mutex_unlock(&info->mutex);
-
+    dev_dbg(info->dev, "%s exit: ret=%d\n",__func__, ret);
     return ret;
 }
 
@@ -539,14 +610,14 @@ static void sec_nfc_set_mode(struct sec_nfc_info *info,
     } else {
 #ifdef CONFIG_SEC_ESE_COLDRESET
         int PW_OFF_DURATION = 20;
-        struct timespec t0, t1;
-        getnstimeofday(&t0);
+        struct timespec64 t0, t1;
+        ktime_get_real_ts64(&t0);
         mdelay(PW_OFF_DURATION);
 
         if (is_shutdown == false)
             gpio_set_value(pdata->ven, SEC_NFC_PW_ON);
 
-        getnstimeofday(&t1);
+        ktime_get_real_ts64(&t1);
         pr_err("DeepStby: PW_OFF duration (%d)ms, real PW_OFF duration is (%ld-%ld)ms\n",
                     PW_OFF_DURATION ,t0.tv_nsec*1000, t1.tv_nsec*1000);
         pr_err("DeepStby: enter DeepStby(PW_ON)\n");
@@ -600,13 +671,13 @@ int trig_cold_reset_id(int id)
 {
     int wakeup_delay = 20;
     int duration = 18;
-    struct timespec t0, t1, t2;
+    struct timespec64 t0, t1, t2;
     int isFirmHigh = 0;
 
     if (id == ESE_ID)
         mutex_lock(&coldreset_mutex);
 
-    getnstimeofday(&t0);
+    ktime_get_real_ts64(&t0);
     if (gpio_get_value(cold_reset_gpio_data.firm_gpio) == 1) {
         isFirmHigh = 1;
     } else {
@@ -614,11 +685,11 @@ int trig_cold_reset_id(int id)
         mdelay(wakeup_delay);
     }
 
-    getnstimeofday(&t1);
+    ktime_get_real_ts64(&t1);
     gpio_set_value(cold_reset_gpio_data.coldreset_gpio, SEC_NFC_COLDRESET_ON);
     mdelay(duration);
     gpio_set_value(cold_reset_gpio_data.coldreset_gpio, SEC_NFC_COLDRESET_OFF);
-    getnstimeofday(&t2);
+    ktime_get_real_ts64(&t2);
 
     if (isFirmHigh == 1)
         pr_err("COLDRESET: FW_PIN already high, do not FW_OFF\n");
@@ -797,6 +868,12 @@ static int sec_nfc_close(struct inode *inode, struct file *file)
 
     return 0;
 }
+static long sec_nfc_compat_ioctl(struct file *file, unsigned int cmd,
+                                                        unsigned long arg)
+{
+        unsigned long translated_arg = (unsigned long)compat_ptr(arg);
+        return sec_nfc_ioctl(file, cmd, translated_arg);
+}
 
 static const struct file_operations sec_nfc_fops = {
     .owner      = THIS_MODULE,
@@ -806,6 +883,7 @@ static const struct file_operations sec_nfc_fops = {
     .open       = sec_nfc_open,
     .release    = sec_nfc_close,
     .unlocked_ioctl = sec_nfc_ioctl,
+    .compat_ioctl   = sec_nfc_compat_ioctl,
 };
 
 #ifdef CONFIG_PM
@@ -1073,8 +1151,15 @@ typedef struct i2c_driver sec_nfc_driver_type;
 #define SEC_NFC_INIT(driver)    i2c_add_driver(driver)
 #define SEC_NFC_EXIT(driver)    i2c_del_driver(driver)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,0,0)
 static int sec_nfc_probe(struct i2c_client *client,
-                            const struct i2c_device_id *id)
+							const struct i2c_device_id *id)
+
+
+#else
+static int sec_nfc_probe(struct i2c_client *client)
+#endif
+
 {
     int ret = 0;
 
@@ -1087,19 +1172,20 @@ static int sec_nfc_probe(struct i2c_client *client,
 
     return ret;
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,0,0)
 static int sec_nfc_remove(struct i2c_client *client)
 {
     sec_nfc_i2c_remove(&client->dev);
     return __sec_nfc_remove(&client->dev);
 }
 
-static void sec_nfc_shutdown(struct i2c_client *client)
+#else
+static void sec_nfc_remove(struct i2c_client *client)
 {
-	struct sec_nfc_info *info = dev_get_drvdata(&client->dev);
-	dev_err(info->dev , "%s\n", __func__);
-	sec_nfc_set_mode(info, SEC_NFC_MODE_FIRMWARE);
+    sec_nfc_i2c_remove(&client->dev);
+    __sec_nfc_remove(&client->dev);
 }
+#endif
 
 #else /* CONFIG_SEC_NFC_IF_I2C */
 MODULE_DEVICE_TABLE(platform, sec_nfc_id_table);
@@ -1131,12 +1217,24 @@ static const struct of_device_id nfc_match_table[] = {
 #else /* CONFIG_OF */
 #define nfc_match_table NULL
 #endif
+#ifdef CONFIG_NFC_SHUTDOWN_WORKAROUND
+static void sec_nfc_shutdown(struct i2c_client *client)
+{
+    struct sec_nfc_info *info = dev_get_drvdata(&client->dev);
+
+    pr_info("%s : start\n", __func__);
+
+    sec_nfc_set_mode(info, SEC_NFC_MODE_FIRMWARE);
+}
+#endif
 
 static struct i2c_driver sec_nfc_driver = {
     .probe = sec_nfc_probe,
     .id_table = sec_nfc_id_table,
     .remove = sec_nfc_remove,
+#ifdef CONFIG_NFC_SHUTDOWN_WORKAROUND
     .shutdown = sec_nfc_shutdown,
+#endif
     .driver = {
         .name = SEC_NFC_DRIVER_NAME,
 #ifdef CONFIG_PM
