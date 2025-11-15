@@ -980,6 +980,54 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
 	     udelay(1000);
 	}
 
+#ifdef CONFIG_MOTO_WLS_CP_REVERSE
+    if (wls_mos == MMI_DVCHG_MUX_OTG_OPEN) {
+	        //reverse mode
+            sc8586_field_write(sc, F_MODE, 6);
+            dev_info(sc->dev, "%s:mmi_mux enable cp otg reverse boost mode", __func__);
+    	    sc-> otg_delay_mos_config = true;
+            ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 1);
+            if (ret < 0) {
+                dev_err(sc->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+                return ret;
+            }
+            udelay(100);
+
+           sc8586_enable_charge(sc, 1);
+
+            udelay(100);
+            ret = sc8586_field_write(sc, F_QB_EN, 1);
+            if (ret < 0) {
+                dev_err(sc->dev, "%s:mmi_mux set F_QB_EN fail ret=%d", __func__, ret);
+                return ret;
+            }
+    }
+
+    if (wls_mos != MMI_DVCHG_MUX_OTG_OPEN) {
+        sc8586_field_read(sc, F_MODE, &ret);
+		if(ret == 6) {
+            ret = sc8586_field_write(sc, F_CP_EN, 0);
+            if (ret < 0) {
+                dev_err(sc->dev, "%s:mmi_mux dis cp en ret=%d", __func__, ret);
+                return ret;
+            }
+	       	sc8586_field_write(sc, F_MODE, 0);
+            sc-> otg_delay_mos_config = false;
+			dev_info(sc->dev, "%s:mmi_mux dis cp otg reverse boost mode", __func__);
+            ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 0);
+            if (ret < 0) {
+                dev_err(sc->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+                return ret;
+            }
+            udelay(100);
+            ret = sc8586_field_write(sc, F_QB_EN, 0);
+            if (ret < 0) {
+                dev_err(sc->dev, "%s:mmi_mux set F_QB_EN fail ret=%d", __func__, ret);
+                return ret;
+            }
+	    }
+    }
+#endif
         ret = sc8586_i2c_read_bytes(sc, SC8586_REG0F, 1, &val);
        if (!ret)
                dev_err(sc->dev, "%s:mmi_mux Reg SC8565_CHRGR_CTRL_5 reg_0xF] = 0x%02X\n", __func__,val);

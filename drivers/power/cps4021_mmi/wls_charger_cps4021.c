@@ -187,6 +187,15 @@ typedef enum
 	CPS_TX_REG_MAX
 }cps_tx_reg_e;
 
+
+enum {
+	TX_FUNC_EN_PING = 0x01,
+	TX_FUNC_EN_FOD = 0x02,
+	TX_FUNC_EN_RP_24BIT_TYPE = 0x04,
+	TX_FUNC_EN_Q_FACTOR = 0x08,
+	TX_FUNC_EN_LP = 0x10,
+};
+
 typedef enum
 {
 	CPS_COMM_REG_CHIP_ID,
@@ -608,7 +617,6 @@ static u8 CPS4021_BOOTLOADER[0x800] = {
 };
 
 //-------------------I2C APT start--------------------
-
 static const struct regmap_config cps4021_regmap_config = {
     .reg_bits = 16,
     .val_bits = 8,
@@ -707,6 +715,46 @@ static int cps_wls_read_reg(int reg, int byte_len)
 
 read_fail:
     return CPS_WLS_FAIL;
+}
+
+int cps_wls_reg_check(void)
+{
+	cps_reg_s *cps_reg = NULL;
+	int ret = 0;
+	int i = 0;
+	int read_data = 0;
+
+	for (i = 0; i < CPS_COMM_REG_MAX; i++) {
+		cps_reg = (cps_reg_s*)(&cps_comm_reg[i]);
+		if ((int)cps_reg->reg_name != i) {
+			read_data = cps_wls_read_reg(cps_reg->reg_addr, cps_reg->reg_bytes_len);
+			cps_wls_log(CPS_LOG_DEBG, "cps_comm_reg Error: index=%d name=%d addr=0x%04x, data= 0x%04x\n",
+				i, (int)cps_reg->reg_name, (int)cps_reg->reg_addr, (int)read_data);
+			ret = -1;
+		}
+	}
+
+	for (i = 0; i < CPS_RX_REG_MAX; i++) {
+		cps_reg = (cps_reg_s*)(&cps_rx_reg[i]);
+		if ((int)cps_reg->reg_name != i) {
+			read_data = cps_wls_read_reg(cps_reg->reg_addr, cps_reg->reg_bytes_len);
+			cps_wls_log(CPS_LOG_DEBG, "cps_rx_reg Error: index=%d name=%d addr=0x%04x, data= 0x%04x\n",
+				i, (int)cps_reg->reg_name, (int)cps_reg->reg_addr, (int)read_data);
+			ret = -1;
+		}
+	}
+
+	for (i = 0; i < CPS_TX_REG_MAX; i++) {
+		cps_reg = (cps_reg_s*)(&cps_tx_reg[i]);
+		if ((int)cps_reg->reg_name != i) {
+			read_data = cps_wls_read_reg(cps_reg->reg_addr, cps_reg->reg_bytes_len);
+			cps_wls_log(CPS_LOG_DEBG, "cps_tx_reg Error: index=%d name=%d addr=0x%04x, data= 0x%04x\n",
+				i, (int)cps_reg->reg_name, (int)cps_reg->reg_addr, (int)read_data);
+			ret = -1;
+		}
+	}
+
+	return ret;
 }
 
 //*****************************for program************************
@@ -1028,14 +1076,14 @@ static uint16_t cps_wls_get_cmd(void)
     return cps_wls_read_reg(cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
 }
 
-#if 0
+
 static int cps_wls_set_fun_en(int value)
 {
     cps_reg_s *cps_reg;
     cps_reg = (cps_reg_s *)(&cps_comm_reg[CPS_COMM_REG_FUNC_EN]);
     return cps_wls_write_reg(cps_reg->reg_addr, value, (int)cps_reg->reg_bytes_len);
 }
-
+#if 0
 static uint16_t cps_wls_get_fun_en(void)
 {
     cps_reg_s *cps_reg;
@@ -1540,7 +1588,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
 {
 	int rc = 0;
 	Sys_Op_Mode mode_type = Sys_Op_Mode_INVALID;
-	uint8_t data[8] = {0};
+	uint8_t data[32] = {0};
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	Sys_Op_Mode sys_mode_type;
 	uint32_t temp = 0;
@@ -1743,19 +1791,13 @@ static int cps_wls_tx_irq_handler(int int_flag)
             }
         }
     }
-    /*if(int_flag & TX_INT_RPP_TO){
-         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_RPP_TO");
-    }
-    if(int_flag & TX_INT_CEP_TO){
-         cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_CEP_TO");
-    }*/
     if(int_flag & TX_INT_AC_DET){
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_AC_DET");
     }
-    /*if(int_flag & TX_INT_INIT){
+    if(int_flag & TX_INT_INIT_DONE){
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_INIT");
          CPS_TX_IRQ = true;
-    }*/
+    }
     if(int_flag & TX_INT_ASK_PKT)
     {
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_ASK_PKT");
@@ -3045,7 +3087,7 @@ static DEVICE_ATTR(get_tx_vrect, 0444, show_tx_vrect, NULL);
 
 static ssize_t show_tx_mode_vout(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    return sprintf(buf, "%d\n", cps_wls_get_tx_vrect());
+    return sprintf(buf, "%d\n", cps_wls_get_tx_vin());
 }
 static DEVICE_ATTR(tx_mode_vout, 0444, show_tx_mode_vout, NULL);
 
@@ -3053,7 +3095,8 @@ static void cps_wls_tx_mode(bool en)
 {
 	int retry = 0;
 	CPS_TX_IRQ = false;
- 	cps_wls_set_boost(en);
+	cps_wls_set_boost(en);
+
 #ifdef CONFIG_MOTO_WLS_CP_OTG_REVERSE_SWITCH
 	cps_wls_fw_set_boost(en);
 	msleep(50);//100ms
@@ -3068,21 +3111,24 @@ static void cps_wls_tx_mode(bool en)
 		/* bootst voltage need 10ms to stable and cps need 30ms to stable*/
 		msleep(100);
 		cps_wls_enable_tx_mode();
+
 		while (retry < 100 && CPS_TX_IRQ == false) {
 			msleep(1);
 			retry ++;
 		}
 		cps_wls_log(CPS_LOG_DEBG,"cps wait tx_mode %dms\n", retry);
-
+		cps_wls_set_fun_en(TX_FUNC_EN_PING);
 		CPS_TX_MODE = true;
 		chip->tx_mode = true;
+		cps_wls_reg_check();
 		sysfs_notify(&chip->dev->kobj, NULL, "tx_mode");
 	} else if((false == en) && (true == CPS_TX_MODE)){
 		cps_wls_log(CPS_LOG_ERR,"cps mmi_mux wls tx end\n");
+		cps_wls_reg_check();
+		cps_wls_set_fun_en(0);
 		cps_wls_disable_tx_mode();
-		//cps_wls_dump_FW_info();
 		mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_OTG, false);
-		 CPS_TX_MODE = false;
+		CPS_TX_MODE = false;
 		chip->rx_connected = false;
 		sysfs_notify(&chip->dev->kobj, NULL, "rx_connected");
 		chip->tx_mode = false;
@@ -3096,7 +3142,13 @@ static void cps_wls_tx_mode(bool en)
 
 static void cps_wls_tx_enable(bool en)
 {
-    cps_wls_tx_mode(en);
+    if (en) {
+        cps_wls_set_tx_en_pin("cps_wls_tx_mode", true);
+        cps_wls_tx_mode(true);
+    } else {
+        cps_wls_tx_mode(false);
+        cps_wls_set_tx_en_pin("cps_wls_tx_mode", false);
+    }
 }
 
 static ssize_t tx_mode_store(struct device *dev,
@@ -4815,7 +4867,15 @@ static int cps_wls_chrg_probe(struct i2c_client *client)
 	cps_wls_log(CPS_LOG_DEBG, ">>>>>int_flag when probe = %x\n", int_flag);
     if(int_flag > 0)
     {
-        cps_wls_irq_handler(int_flag, (void*)chip);
+        cps_wls_set_int_clr(int_flag);
+        if(cps_wls_get_sys_mode() == SYS_MODE_RX)
+        {
+            cps_wls_rx_irq_handler(int_flag);
+        }
+        else
+        {
+            cps_wls_tx_irq_handler(int_flag);
+        }
     }
 
     return ret;

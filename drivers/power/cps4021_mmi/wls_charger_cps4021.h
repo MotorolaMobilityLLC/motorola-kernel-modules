@@ -332,6 +332,8 @@ struct cps_wls_chrg_chip {
     struct delayed_work mc_icl_work;
     bool phone_case_support;
     struct notifier_block hall_nb;
+    uint32_t config_otg_vout; //uV
+	uint32_t config_otg_iout; //uA
 };
 
 typedef enum ept_reason
