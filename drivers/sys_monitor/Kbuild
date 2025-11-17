@@ -9,6 +9,7 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/sys_monitor
 
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm/modules/debug/v2
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm/modules/debug/v1
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm/modules/include
 
 obj-m += sys_monitor.o

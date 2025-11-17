@@ -191,11 +191,12 @@ ssize_t sleep_state_show(struct kobject *kobj, struct kobj_attribute *attr, char
 
 static void record_sleep_stats(ktime_t sleep_time)
 {
+        int i;
 #if IS_ENABLED(CONFIG_QCOM_STATS)
 	static uint64_t prev_duration[ARRAY_SIZE(subsystems)];
 	u64 accumulated;
 	uint64_t delta_duration;
-	int j, i;
+	int j;
 	struct subsystem_data *subsystem;
 	struct sleep_stats *stat;
 
@@ -226,7 +227,7 @@ static void record_sleep_stats(ktime_t sleep_time)
 #else
 	const int num_items = ARRAY_SIZE(subsystems);
 
-	for (int i = 0; i < num_items; i++) {
+	for (i = 0; i < num_items; i++) {
 		strscpy(suspend_state[cur_idx].subsys_state[i].name, subsystems[i].name, SUBSYS_NAME_LEN);
 		suspend_state[cur_idx].subsys_state[i].sleep_time = get_sys_lpm_sleep_time(subsystems[i].index);
 		suspend_state[cur_idx].subsys_state[i].name[SUBSYS_NAME_LEN - 1] = '\0';
