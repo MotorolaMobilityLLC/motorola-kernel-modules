@@ -30,6 +30,7 @@
 #define GOOIDX_INPUT_PHYS		"goodix_ts/input0"
 
 #define GOODIX_ESD_TICK_WRITE_DATA 0xAA
+#define GOODIX_ESD_CHECK_INTERVAL (8 * HZ)
 
 bool debug_log_flag;
 
@@ -73,7 +74,7 @@ static void goodix_thp_esd_on(struct goodix_thp_core *core_data, bool on)
 
         core_data->esd_on = on;
         if (on) {
-                schedule_delayed_work(&core_data->esd_work, 3 * HZ);
+                schedule_delayed_work(&core_data->esd_work, GOODIX_ESD_CHECK_INTERVAL);
         } else {
                 cancel_delayed_work(&core_data->esd_work);
         }
@@ -2450,6 +2451,8 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
         goodix_thp_set_irq_enable(core_data, IRQ_DISABLE_FLAG);
         core_data->suspended = 1;
         core_data->state_change_flag = 0;
+        if (core_data->esd_on)
+                cancel_delayed_work_sync(&core_data->esd_work);
 
         if (core_data->gesture_enable == 0) {
                 /* power off */
@@ -2495,6 +2498,8 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
 
         core_data->suspended = 0;
         core_data->state_change_flag = 1;
+        if (core_data->esd_on)
+                schedule_delayed_work(&core_data->esd_work, GOODIX_ESD_CHECK_INTERVAL);
 exit:
         goodix_thp_set_irq_enable(core_data, IRQ_ENABLE_FLAG);
         ts_info(ts_dev->dev, "Resume end");
@@ -2597,18 +2602,20 @@ static void goodix_thp_esd_work(struct work_struct *work)
         if (!core_data->esd_on || esd_addr == 0)
                 return;
 
-        ts_dev->hw_ops->read(ts_dev, esd_addr, &esd_value, 1);
-        if (esd_value == GOODIX_ESD_TICK_WRITE_DATA) {
-                ts_err(ts_dev->dev, "esd check failed, 0x%x", esd_value);
-                goodix_thp_power_off(core_data);
-                msleep(200);
-                goodix_thp_power_on(core_data);
-        } else {
-                esd_value = GOODIX_ESD_TICK_WRITE_DATA;
-                ts_dev->hw_ops->write(ts_dev, esd_addr, &esd_value, 1);
-        }
+        if (!core_data->suspended) { /* Don't perform SPI operations while suspended */
+                ts_dev->hw_ops->read(ts_dev, esd_addr, &esd_value, 1);
+                if (esd_value == GOODIX_ESD_TICK_WRITE_DATA) {
+                        ts_err(ts_dev->dev, "esd check failed, 0x%x", esd_value);
+                        goodix_thp_power_off(core_data);
+                        msleep(200);
+                        goodix_thp_power_on(core_data);
+                } else {
+                        esd_value = GOODIX_ESD_TICK_WRITE_DATA;
+                        ts_dev->hw_ops->write(ts_dev, esd_addr, &esd_value, 1);
+                }
 
-        schedule_delayed_work(dwork, 3 * HZ);
+                schedule_delayed_work(dwork, GOODIX_ESD_CHECK_INTERVAL);
+        }
 }
 
 static int goodix_thp_esd_init(struct goodix_thp_core *core_data)
