@@ -2164,14 +2164,13 @@ int mmi_config_qc_charger(struct charger_device *chg_dev)
 	return rc;
 }
 
-#define QC3_STEP 200000
-#define QC3P_STEP 20000
-int mmi_config_qc_charger_9V(struct charger_device *chg_dev)
+#define QC30_STEP 200000
+int mmi_config_qc30_charger_voltage(struct charger_device *chg_dev)
 {
 	int rc = 0;
 	int vbus_uv;
 	struct sc8989x_chip *sc;
-	int target_uV = 9000000;//9V
+	int target_uV = 6600000;//6.6V
 	int i;
 	int val;
 	int step;
@@ -2202,15 +2201,8 @@ int mmi_config_qc_charger_9V(struct charger_device *chg_dev)
 	}
 
 	pr_info("%s qc_chg_type=%d", __func__, sc->qc_chg_type );
-	if(sc->qc_chg_type == USB_TYPE_QC20){
-		adapter_dev_dp_dm(sc->qc_dev, DP_DM_FORCE_QC2_9V);
-		pr_info("Force set qc2 9V");
-		msleep(100);
-		return ret;
-	} else if (sc->qc_chg_type == USB_TYPE_QC30){
-		qc_step = QC3_STEP;
-	}else if (sc->qc_chg_type == USB_TYPE_QC3P_18 || sc->qc_chg_type ==  USB_TYPE_QC3P_27){
-		qc_step = QC3P_STEP;
+	if (sc->qc_chg_type == USB_TYPE_QC30) {
+		qc_step = QC30_STEP;
 	} else {
 		return ret;
 	}
@@ -2355,7 +2347,7 @@ void get_qc_charger_type_func_work(struct work_struct *work)
 		pr_info("Force set qc3 5V");
 	}
 
-	mmi_config_qc_charger_9V(sc->chg_dev);
+	mmi_config_qc30_charger_voltage(sc->chg_dev);
 
 	if (sc->qc_chg_type != USB_TYPE_QC3P_27) {
 		sc8989x_set_charging_current(sc->chg_dev,3000000);
