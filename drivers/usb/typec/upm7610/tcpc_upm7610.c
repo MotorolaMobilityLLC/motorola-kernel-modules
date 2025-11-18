@@ -22,6 +22,7 @@
 
 #include "inc/tcpci.h"
 #include "upm7610.h"
+#include "inc/tcpci_typec.h"
 
 #if IS_ENABLED(CONFIG_RT_REGMAP)
 #include <mt-plat/rt-regmap.h>
@@ -47,7 +48,26 @@ struct upm7610_chip {
 	int irq;
 	int chip_id;
 	int chip_func_sw;
+#if CONFIG_WATER_DETECTION
+	bool is_wet;
+	bool cc_open;
+	bool drp;
+	int toggle_cnt;
+	int wd_state;
+	unsigned wd_count;
+	ktime_t last_set_cc_toggle_time;
+	struct delayed_work	wd_work;
+	struct alarm wd_wakeup_timer;
+#endif
 };
+
+#define UPM7610_WD_CNT_THRESHOLD	5
+#define UPM7610_WD_INTERVAL			500 /* ms */
+#define UPM7610_WD_TRY_INTERVAL		200 /* ms */
+#define UPM7610_WD_OPEN_INTERVAL	20000 /* ms */
+
+#define UPM_WD_STATE_DRY			0
+#define UPM_WD_STATE_WET_PROTECTION	1
 
 #if IS_ENABLED(CONFIG_RT_REGMAP)
 RT_REG_DECL(TCPC_V10_REG_VID, 2, RT_NORMAL_WR_ONCE, {});
@@ -398,7 +418,7 @@ static int upm7610_rx_alert_mask(struct tcpc_device *tcpc)
 	int ret;
 	uint16_t mask;
 	struct upm7610_chip *chip = tcpc_get_dev_data(tcpc);
-	
+
 	UPM7610_INFO("upm7610: %s", __func__);
 
 	ret = upm7610_i2c_read16(tcpc, TCPC_V10_REG_ALERT_MASK);
@@ -563,15 +583,15 @@ static inline int upm7610_init_cc_params(
 			struct tcpc_device *tcpc, uint8_t cc_res)
 {
 	int rv = 0;
+
 	return rv;
 }
 
 static int upm7610_tcpc_init(struct tcpc_device *tcpc, bool sw_reset)
 {
 	int ret;
-	//bool retry_discard_old = false;
 	struct upm7610_chip *chip = tcpc_get_dev_data(tcpc);
-    	int data = 0;
+	int data = 0;
 	uint8_t tmp1 = 0;
 
 	UPM7610_INFO("\n");
@@ -602,11 +622,7 @@ static int upm7610_tcpc_init(struct tcpc_device *tcpc, bool sw_reset)
 	if (!sw_reset)
 		upm7610_set_clock_gating(tcpc, true);
 
-	//if (!(tcpc->tcpc_flags & TCPC_FLAGS_RETRY_CRC_DISCARD))
-	//retry_discard_old = true;
-
 	tcpci_alert_status_clear(tcpc, 0xffffffff);
-
 	upm7610_init_power_status_mask(tcpc);
 	upm7610_init_alert_mask(tcpc);
 	upm7610_init_fault_mask(tcpc);
@@ -670,8 +686,12 @@ static int upm7610_tcpc_init(struct tcpc_device *tcpc, bool sw_reset)
     upm7610_i2c_write8(tcpc, UPM7610_REG_HIDDEN_MODE, UPM7610_REG_HMODE_EXIT);
 #endif
 
-
 	mdelay(1);
+#if CONFIG_WATER_DETECTION
+	chip->wd_state = UPM_WD_STATE_DRY;
+	chip->wd_count = 0;
+	chip->is_wet = false;
+#endif
 
 	return 0;
 }
@@ -772,13 +792,11 @@ static int upm7610_get_cc(struct tcpc_device *tcpc, int *cc1, int *cc2)
 	if (role_ctrl < 0)
 		return role_ctrl;
 
-#if 0
 	if (status & TCPC_V10_REG_CC_STATUS_DRP_TOGGLING) {
 		*cc1 = TYPEC_CC_DRP_TOGGLING;
 		*cc2 = TYPEC_CC_DRP_TOGGLING;
 		return 0;
 	}
-#endif
 
 	*cc1 = TCPC_V10_REG_CC_STATUS_CC1(status);
 	*cc2 = TCPC_V10_REG_CC_STATUS_CC2(status);
@@ -820,6 +838,7 @@ static int upm7610_set_cc(struct tcpc_device *tcpc, int pull)
 	int ret;
 	uint8_t data;
 	int rp_lvl = TYPEC_CC_PULL_GET_RP_LVL(pull), pull1, pull2;
+	struct upm7610_chip *chip = tcpc_get_dev_data(tcpc);
 
 	UPM7610_INFO("pull = 0x%02X\n", pull);
 	pull = TYPEC_CC_PULL_GET_RES(pull);
@@ -827,6 +846,19 @@ static int upm7610_set_cc(struct tcpc_device *tcpc, int pull)
 		data = TCPC_V10_REG_ROLE_CTRL_RES_SET(
 				1, rp_lvl, TYPEC_CC_RD, TYPEC_CC_RD);
 
+#if CONFIG_WATER_DETECTION
+		if (chip->wd_count) {
+			if (ktime_ms_delta(ktime_get(),
+				chip->last_set_cc_toggle_time) > UPM7610_WD_INTERVAL) {
+				chip->wd_count = 0;
+			} else if (chip->wd_count >= UPM7610_WD_CNT_THRESHOLD){
+				chip->is_wet = true;
+				schedule_delayed_work(&chip->wd_work, 0);
+			}
+		}
+		++chip->wd_count;
+		chip->last_set_cc_toggle_time = ktime_get();
+#endif
 		ret = upm7610_i2c_write8(
 			tcpc, TCPC_V10_REG_ROLE_CTRL, data);
 
@@ -1092,6 +1124,31 @@ static int upm7610_set_bist_test_mode(struct tcpc_device *tcpc, bool en)
 }
 #endif /* CONFIG_USB_POWER_DELIVERY */
 
+
+#if CONFIG_WATER_DETECTION
+static int upm7610_is_water_detected(struct tcpc_device *tcpc)
+{
+	struct upm7610_chip *chip = tcpc_get_dev_data(tcpc);
+
+	return chip->is_wet;
+}
+
+static int upm7610_set_water_protection(struct tcpc_device *tcpc, bool en)
+{
+	struct upm7610_chip *chip = tcpc_get_dev_data(tcpc);
+
+	if (en) {
+		chip->wd_state = UPM_WD_STATE_WET_PROTECTION;
+		chip->cc_open = false;
+	} else {
+		chip->wd_state = UPM_WD_STATE_DRY;
+		chip->is_wet = false;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_WATER_DETECTION */
+
 static struct tcpc_ops upm7610_tcpc_ops = {
 	.init = upm7610_tcpc_init,
 	.alert_status_clear = upm7610_alert_status_clear,
@@ -1134,6 +1191,11 @@ static struct tcpc_ops upm7610_tcpc_ops = {
 #if CONFIG_USB_PD_RETRY_CRC_DISCARD
 	.retransmit = upm7610_retransmit,
 #endif	/* CONFIG_USB_PD_RETRY_CRC_DISCARD */
+#if CONFIG_WATER_DETECTION
+	.is_water_detected = upm7610_is_water_detected,
+	.set_water_protection = upm7610_set_water_protection,
+#endif /* CONFIG_WATER_DETECTION */
+
 };
 
 static int rt_parse_dt(struct upm7610_chip *chip, struct device *dev)
@@ -1295,6 +1357,9 @@ static int upm7610_tcpcdev_init(struct upm7610_chip *chip, struct device *dev)
 		dev_info(dev, "PD_REV20\n");
 #endif	/* CONFIG_USB_PD_REV30 */
 	chip->tcpc->tcpc_flags |= TCPC_FLAGS_ALERT_V10;
+#if CONFIG_WATER_DETECTION
+	chip->tcpc->tcpc_flags |= TCPC_FLAGS_WATER_DETECTION;
+#endif
 
 	return 0;
 }
@@ -1344,6 +1409,90 @@ static inline int upm7610_check_revision(struct i2c_client *client)
 
 	return did;
 }
+
+#if CONFIG_WATER_DETECTION
+static enum alarmtimer_restart upm7610_wd_wakeup(struct alarm *alarm,
+						ktime_t now)
+{
+	struct upm7610_chip *chip =
+		container_of(alarm, struct upm7610_chip, wd_wakeup_timer);
+
+	pm_wakeup_event(chip->dev, 500);
+	schedule_delayed_work(&chip->wd_work, 0);
+	return ALARMTIMER_NORESTART;
+}
+
+static void upm7610_wd_work(struct work_struct *work)
+{
+	struct upm7610_chip *chip = container_of(
+		work, struct upm7610_chip, wd_work.work);
+	u32 delay = 0;
+	int cc1, cc2;
+	int ret;
+
+	tcpci_lock_typec(chip->tcpc);
+	dev_info(chip->dev, "%s wd_state = %d, cnt=%d\n", __func__, chip->wd_state,
+		chip->wd_count);
+	switch (chip->wd_state)
+	{
+	case UPM_WD_STATE_DRY:
+		if (chip->is_wet) {
+			tcpc_typec_handle_wd(chip->tcpc, true);
+			delay = UPM7610_WD_OPEN_INTERVAL;
+		}
+		chip->toggle_cnt = 0;
+		chip->drp = 0;
+		break;
+	case UPM_WD_STATE_WET_PROTECTION:
+		if (chip->cc_open) {
+			/* Try to toggle the CC. */
+			chip->cc_open = false;
+			delay = UPM7610_WD_TRY_INTERVAL;
+			upm7610_set_cc(chip->tcpc, TYPEC_CC_DRP);
+			chip->drp = 1;
+			break;
+		}
+
+		if(chip->drp) {
+			ret = upm7610_get_cc(chip->tcpc, &cc1, &cc2);
+			if (ret < 0) {
+				delay = UPM7610_WD_TRY_INTERVAL;
+				break;
+			}
+			if (cc1 == TYPEC_CC_DRP_TOGGLING) {
+				chip->toggle_cnt++;
+				if  (chip->toggle_cnt >= 10) {
+					chip->is_wet = 0;
+					tcpc_typec_handle_wd(chip->tcpc, false);
+				} else {
+					delay = UPM7610_WD_TRY_INTERVAL;
+				}
+				break;
+			} else {
+				chip->toggle_cnt = 0;
+			}
+		}
+			/* Since the port remains wet, keep the CC open to prevent rusting */
+			chip->cc_open = true;
+			upm7610_set_cc(chip->tcpc, TYPEC_CC_OPEN);
+			chip->drp = 0;
+			delay = UPM7610_WD_OPEN_INTERVAL;
+
+		break;
+	default:
+		break;
+	}
+
+	chip->wd_count = 0;
+	tcpci_unlock_typec(chip->tcpc);
+
+	if (!delay)
+		return;
+
+	alarm_start_relative(&chip->wd_wakeup_timer,
+				     ktime_set(delay / MSEC_PER_SEC, (delay % MSEC_PER_SEC) * USEC_PER_SEC));
+}
+#endif /* CONFIG_WATER_DETECTION */
 
 static int upm7610_i2c_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
@@ -1402,6 +1551,10 @@ static int upm7610_i2c_probe(struct i2c_client *client,
 		pr_err("upm7610 init alert fail\n");
 		goto err_irq_init;
 	}
+#if CONFIG_WATER_DETECTION
+	INIT_DELAYED_WORK(&chip->wd_work, upm7610_wd_work);
+	alarm_init(&chip->wd_wakeup_timer, ALARM_REALTIME, upm7610_wd_wakeup);
+#endif
 
 	pr_info("%s probe OK!\n", __func__);
 	return 0;
@@ -1421,6 +1574,10 @@ static int upm7610_i2c_remove(struct i2c_client *client)
 	if (chip) {
 		tcpc_device_unregister(chip->dev, chip->tcpc);
 		upm7610_regmap_deinit(chip);
+#if CONFIG_WATER_DETECTION
+		cancel_delayed_work_sync(&chip->wd_work);
+		alarm_cancel(&chip->wd_wakeup_timer);
+#endif
 	}
 
 	return 0;
