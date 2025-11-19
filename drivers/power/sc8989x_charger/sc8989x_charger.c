@@ -3650,6 +3650,18 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 		dev_err(sc->dev, "%s psy register fail(%d)\n", __func__, ret);
 		goto err_psy;
 	}
+
+	if (sc->mmi_hvdcp_support) {
+		sc->mmi_hvdcp_authen_task = kthread_create(mmi_hvdcp_detect_kthread, sc, "mmi_hvdcp_authen");
+		if (IS_ERR(sc->mmi_hvdcp_authen_task)) {
+			ret = PTR_ERR(sc->mmi_hvdcp_authen_task);
+			dev_err(sc->dev, "Failed to create mmi_hvdcp_authen_task ret = %d\n", ret);
+			return ret;
+		}
+		init_waitqueue_head(&sc->mmi_hvdcp_wait_que);
+		wake_up_process(sc->mmi_hvdcp_authen_task);
+	}
+
 	ret = sc8989x_register_interrupt(sc);
 	if (ret < 0) {
 		dev_err(sc->dev, "%s register irq fail(%d)\n", __func__, ret);
@@ -3674,17 +3686,6 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	sc->mmi_charging_full = false;
 	determine_initial_status(sc);
 	sc8989x_dump_register(sc);
-
-	if (sc->mmi_hvdcp_support) {
-		sc->mmi_hvdcp_authen_task = kthread_create(mmi_hvdcp_detect_kthread, sc, "mmi_hvdcp_authen");
-		if (IS_ERR(sc->mmi_hvdcp_authen_task)) {
-			ret = PTR_ERR(sc->mmi_hvdcp_authen_task);
-			dev_err(sc->dev, "Failed to create mmi_hvdcp_authen_task ret = %d\n", ret);
-			return ret;
-		}
-		init_waitqueue_head(&sc->mmi_hvdcp_wait_que);
-		wake_up_process(sc->mmi_hvdcp_authen_task);
-	}
 
 	sc->batt_psy = power_supply_get_by_name("battery");
 	if (IS_ERR_OR_NULL(sc->batt_psy)) {
