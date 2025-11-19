@@ -548,16 +548,18 @@ static int pen_charger_probe(struct platform_device *pdev)
 		pr_err("Failed to register chg_psy notifier, rc=%d\n", rc);
 		return rc;
 	}
-
-	pen_present = pen_detection_status();
-	if (pen_present == PEN_DETECTION_INSERT)
-		chg->pen_insert_flag = true;
-	else if (pen_present == PEN_DETECTION_PULL)
-		chg->pen_insert_flag = false;
-	pr_info("pen_charger_probe pen insert = %d\n", chg->pen_insert_flag);
-
 	chg->initialized = true;
 	pr_info("pen_charger_probe done\n");
+
+	pen_present = pen_detection_status();
+	if (pen_present == PEN_DETECTION_INSERT) {
+		chg->pen_insert_flag = true;
+		chg->charging_status = PEN_STAT_CHARGING_BY_INSERT_PEN;
+		start_charge(chg, true);
+		start_chg_timer(chg, true, CHG_START_DELAY_S);
+	} else if (pen_present == PEN_DETECTION_PULL)
+		chg->pen_insert_flag = false;
+	pr_info("pen_charger_probe pen insert = %d\n", chg->pen_insert_flag);
 
 	return 0;
 }
