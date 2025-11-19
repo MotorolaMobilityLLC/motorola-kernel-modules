@@ -68,6 +68,8 @@ static bool shutdown_triggered = false;
 static struct mmi_glink_chip *this_chip = NULL;
 static struct mmi_glink_dev_dts_info *glink_dev_dts_list = NULL;
 
+void moto_reboot_call_notifier(char *call_name);
+
 enum {
 	MMI_POWER_SUPPLY_CHARGE_RATE_NONE = 0,
 	MMI_POWER_SUPPLY_CHARGE_RATE_NORMAL,
@@ -1057,6 +1059,7 @@ static void mmi_charger_heartbeat_work(struct work_struct *work)
 			} else if(!shutdown_triggered) {
 				mmi_err(chip, "Factory kill power off\n");
 				shutdown_triggered = true;
+				moto_reboot_call_notifier("mmi_charger_heartbeat_work1");
 #if (KERNEL_VERSION(5, 10, 0) > LINUX_VERSION_CODE) || defined(MMI_GKI_API_ALLOWANCE)
 				orderly_poweroff(true);
 #else
@@ -1071,6 +1074,7 @@ static void mmi_charger_heartbeat_work(struct work_struct *work)
 	if (chip->empty_vbat_shutdown_triggered && !shutdown_triggered) {
 		mmi_err(chip, "shutdown for empty battery voltage\n");
 		shutdown_triggered = true;
+		moto_reboot_call_notifier("mmi_charger_heartbeat_work2");
 #if (KERNEL_VERSION(5, 10, 0) > LINUX_VERSION_CODE) || defined(MMI_GKI_API_ALLOWANCE)
 		orderly_poweroff(true);
 #else

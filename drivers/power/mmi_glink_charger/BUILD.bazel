@@ -31,6 +31,7 @@ moto_ddk_module(
         "//motorola/kernel/modules/drivers/mmi_info:mmi_info",
         "//motorola/kernel/modules/drivers/power/qti_glink_charger_v2:qti_glink_charger_v2",
         "//motorola/kernel/modules/drivers/misc/hall:hall_phone_case",
+        "//motorola/kernel/modules/drivers/moto_reboot_reason:moto_reboot_reason",
         "//soc-repo:kernel/trace/qcom_ipc_logging",
     ],
 )
