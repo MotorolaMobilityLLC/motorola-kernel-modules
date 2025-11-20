@@ -377,7 +377,7 @@ static void rwsem_wait_start(struct rw_semaphore *sem)
 
 	boost_count = 0;
 
-	if (!already_boosted && owner) {
+	if (!already_boosted && owner && !is_rwsem_reader_owned(sem)) {
 		get_task_struct(owner);
 		lock_inherit_ux_type(owner, current, "rwsem_cowner_boost");
 		put_task_struct(owner);
