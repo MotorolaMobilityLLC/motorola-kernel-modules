@@ -30,7 +30,7 @@
 #include <linux/of_gpio.h>
 
 #include <linux/uaccess.h>
-
+#include <linux/mmi_device.h>
 #include <linux/ktime.h>
 #include <linux/timekeeping.h>
 
@@ -1197,6 +1197,15 @@ static int st54spi_probe(struct spi_device *spi)
 	unsigned long minor;
 	struct st54spi_bootmode  *tag = NULL;
 	struct device_node *boot_node = NULL;
+
+	// MOTO mmi device check start
+	if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+		pr_err("%s: mmi: device not supported\n", __func__);
+		return -ENODEV;
+	} else {
+		pr_info("%s: support device found\n", __func__);
+	}
+	// MOTO mmi device check end
 
 	boot_node = of_parse_phandle(spi->dev.of_node, "bootmode", 0);
 	if (!boot_node)
