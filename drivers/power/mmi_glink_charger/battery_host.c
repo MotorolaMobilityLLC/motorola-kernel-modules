@@ -511,6 +511,50 @@ free_map:
 
 static DEVICE_ATTR_RO(batt_id);
 
+static ssize_t cur_batt_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	char batt_id[32]={0};
+	int rc;
+
+	if (!this_root_chip) {
+		pr_err("mmi_glink_charger: chip not valid\n");
+		return -ENODEV;
+	}
+
+	rc = qti_charger_get_property(OEM_PROP_TCMD_CURRENT_BATTID,
+			batt_id, sizeof(batt_id));
+	if (rc) {
+		pr_err("QTI: qti read current battid failed, rc = %d\n", rc);
+		return rc;
+	}
+	batt_id[sizeof(batt_id) - 1] = '\0';
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%s\n", batt_id);
+}
+static DEVICE_ATTR_RO(cur_batt_id);
+
+static ssize_t cur_flip_batt_id_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	char batt_id[32]={0};
+	int rc;
+
+	if (!this_root_chip) {
+		pr_err("mmi_glink_charger: chip not valid\n");
+		return -ENODEV;
+	}
+
+	rc = qti_charger_get_property(OEM_PROP_TCMD_CURRENT_FLIP_BATTID,
+			batt_id, sizeof(batt_id));
+	if (rc) {
+		pr_err("QTI: qti read current flip battid failed, rc = %d\n", rc);
+		return rc;
+	}
+	batt_id[sizeof(batt_id) - 1] = '\0';
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%s\n", batt_id);
+}
+static DEVICE_ATTR_RO(cur_flip_batt_id);
+
 static ssize_t thermal_primary_charge_control_limit_store(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
@@ -890,6 +934,17 @@ void battery_supply_init(struct battery_host *batt_host)
 				&dev_attr_batt_id);
 	if (rc)
 		mmi_err(this_root_chip, "couldn't create batt_id\n");
+
+	rc = device_create_file(batt_psy->dev.parent,
+				&dev_attr_cur_batt_id);
+	if (rc)
+		mmi_err(this_root_chip, "couldn't create batt_id\n");
+
+	rc = device_create_file(batt_psy->dev.parent,
+				&dev_attr_cur_flip_batt_id);
+	if (rc)
+		mmi_err(this_root_chip, "couldn't create batt_id\n");
+
 	mmi_info(this_root_chip, "battery supply is initialized\n");
 
 	thermal_charge_control_init(batt_host);
@@ -924,6 +979,12 @@ void battery_supply_deinit(struct battery_host *batt_host)
 					&dev_attr_charge_real_type);
 		sysfs_remove_group(&batt_psy->dev.kobj,
 					&power_supply_mmi_attr_group);
+		device_remove_file(batt_psy->dev.parent,
+					&dev_attr_batt_id);
+		device_remove_file(batt_psy->dev.parent,
+					&dev_attr_cur_batt_id);
+		device_remove_file(batt_psy->dev.parent,
+					&dev_attr_cur_flip_batt_id);
 		power_supply_put(batt_psy);
 	}
 
