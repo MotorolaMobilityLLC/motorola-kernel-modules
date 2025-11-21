@@ -33,7 +33,9 @@
 #define GOODIX_ESD_CHECK_INTERVAL (8 * HZ)
 
 bool debug_log_flag;
-
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+bool main_suspend;
+#endif
 static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);
 static int goodix_thp_power_on(struct goodix_thp_core *core_data);
@@ -2518,6 +2520,10 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
 
         goodix_thp_set_irq_enable(core_data, IRQ_DISABLE_FLAG);
         core_data->suspended = 1;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+        if (core_data->pdev->id == 0)
+            main_suspend = true;
+#endif
         core_data->state_change_flag = 0;
         if (core_data->esd_on)
                 cancel_delayed_work_sync(&core_data->esd_work);
@@ -2565,6 +2571,10 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
         }
 
         core_data->suspended = 0;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+        if (core_data->pdev->id == 0)
+            main_suspend = false;
+#endif
         core_data->state_change_flag = 1;
         if (core_data->esd_on)
                 schedule_delayed_work(&core_data->esd_work, GOODIX_ESD_CHECK_INTERVAL);
@@ -2573,6 +2583,38 @@ exit:
         ts_info(ts_dev->dev, "Resume end");
         return 0;
 }
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+int goodix_thp_off_to_gesture(struct goodix_thp_core *core_data)
+{
+        int r = 0;
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        u16 gsx_data = ~core_data->gesture_enable;
+
+        ts_info(ts_dev->dev, "Resume start");
+
+        goodix_thp_set_irq_enable(core_data, IRQ_DISABLE_FLAG);
+            /* power on */
+        goodix_thp_power_on(core_data);
+        msleep(100);
+
+        core_data->suspended = 1;
+        /* send enter gesture cmd */
+        ts_info(ts_dev->dev, "enter gesture mode!");
+        /* send enter gesture cmd */
+        r = ts_dev->hw_ops->send_cmd(ts_dev, CMD_GESTURE, gsx_data);
+        if (r) {
+                ts_err(ts_dev->dev, "send enter gesture cmd failed, r %d", r);
+                goto exit;
+        }
+        goodix_thp_set_irq_enable(core_data, IRQ_ENABLE_FLAG);
+        goodix_thp_set_irq_wake_enable(core_data, IRQ_WAKE_ENABLE_FLAG);
+exit:
+        goodix_thp_force_release_all(core_data);
+        ts_info(ts_dev->dev, "Suspend end");
+        return r;
+}
+#endif
 #if IS_ENABLED(CONFIG_DRM_MEDIATEK)
 static int goodix_thp_drm_notifier_callback(struct notifier_block *nb,
 	unsigned long value, void *v)

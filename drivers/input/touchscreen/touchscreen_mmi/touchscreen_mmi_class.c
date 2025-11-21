@@ -344,6 +344,9 @@ static ssize_t gesture_store(struct device *dev,
 	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
 	unsigned int value = 0;
 	int err = 0;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	int ret = 0;
+#endif
 
 	mutex_lock(&touch_cdev->extif_mutex);
 	err = sscanf(buf, "%d", &value);
@@ -381,6 +384,17 @@ static ssize_t gesture_store(struct device *dev,
 			dev_info(dev, "%s: unsupport gesture mode type\n", __func__);
 			;
 	}
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+    /* hal call this function twice to set the single/double tap, so we handle the gesture after double tap event */
+    if (value > 0x21) {
+        if (touch_cdev->gesture_mode_type == 0x0) {
+            TRY_TO_CALL(force_enter_standby_mode);
+        } else {
+            TRY_TO_CALL(exit_standby_mode, touch_cdev->gesture_mode_type);
+        }
+    }
+#endif
+
 	mutex_unlock(&touch_cdev->extif_mutex);
 	dev_info(dev, "%s: gesture_mode_type = 0x%02x \n", __func__, touch_cdev->gesture_mode_type);
 

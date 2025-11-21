@@ -616,6 +616,13 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 
 	mutex_lock(&core_data->mode_lock);
 	core_data->get_mode.stowed = mode;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	if ((core_data->force_stowed_mode) && (mode == 0x0)) {
+		ts_info(tdev->dev, "Force touch enter stow mode has high priority");
+		ret = size;
+		goto exit;
+	}
+#endif
 	if (core_data->set_mode.stowed == mode) {
 		ts_info(tdev->dev, "The value = %lu is same, so not to write", mode);
 		ret = size;
@@ -1197,6 +1204,10 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 	if (core_data->ts_dev->board_data.stowed_mode_ctrl) {
 		core_data->set_mode.stowed = 0;
 	}
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	core_data->set_mode.stowed = 0;
+	core_data->force_stowed_mode = false;
+#endif
 
 	if (core_data->ts_dev->board_data.pocket_mode_ctrl && core_data->get_mode.pocket_mode) {
 		val[0] = NOTIFY_TYPE_POCKET_MODE;
@@ -1350,6 +1361,99 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev)
 	return 0;
 }
 
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+static int goodix_ts_mmi_force_enter_standby_mode(struct device *dev)
+{
+	int ret = 0;
+	struct goodix_thp_core *core_data;
+	struct platform_device *pdev;
+	u8 val[2];
+
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	if (core_data->set_mode.stowed == 0x01) {
+		ts_info(core_data->ts_dev->dev, "Already on touch stowed state");
+		goto exit;
+	}
+
+	if (core_data->suspended && core_data->gesture_enable) {
+		val[0] = NOTIFY_TYPE_STOW_MODE;
+		val[1] = 1;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		msleep(20);
+
+		core_data->set_mode.stowed = 0x01;
+		core_data->force_stowed_mode = true;
+		ts_info(core_data->ts_dev->dev, "Success force touch enter stowed mode");
+	} else {
+		ts_info(core_data->ts_dev->dev, "Skip force touch enter stowed mode suspended:%d, gesture_enabled:%d",
+			core_data->suspended, core_data->gesture_enable);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
+static int goodix_ts_mmi_exit_standby_mode(struct device *dev, u16 gesture)
+{
+	int ret = 0;
+	struct goodix_thp_core *core_data;
+	struct platform_device *pdev;
+	u16 gesture_type = 0;
+	u8 val[2];
+
+	GET_GOODIX_DATA(dev);
+
+	if (core_data->power_on == 0x0) {
+		if (gesture & TS_MMI_GESTURE_SINGLE) {
+			gesture_type = gesture_type | 0x1000;
+		}
+		if (gesture & TS_MMI_GESTURE_DOUBLE) {
+			gesture_type = gesture_type | 0x80;
+		}
+		if (core_data->pdev->id && core_data->gesture_enable != gesture_type && main_suspend) {
+			core_data->gesture_enable = gesture_type;
+			ts_info(core_data->ts_dev->dev, "exit power off, gesture_enabled:%d",	core_data->gesture_enable);
+			goodix_thp_off_to_gesture(core_data);
+		}
+		goto exit_off;
+	}
+	mutex_lock(&core_data->mode_lock);
+	if (core_data->set_mode.stowed == 0x0) {
+		ts_info(core_data->ts_dev->dev, "Not in stowed mode");
+		goto exit;
+	}
+
+	if (core_data->force_stowed_mode == false) {
+		ts_info(core_data->ts_dev->dev, "Not force stowed mode by touch");
+		goto exit;
+	}
+
+	if (core_data->suspended && core_data->gesture_enable) {
+		val[0] = NOTIFY_TYPE_STOW_MODE;
+		val[1] = 0;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		msleep(20);
+
+		core_data->set_mode.stowed = 0x00;
+		core_data->force_stowed_mode = false;
+		ts_info(core_data->ts_dev->dev, "Success exit stowed mode");
+	} else {
+		ts_info(core_data->ts_dev->dev, "Skip exit stowed mode suspended:%d, gesture_enabled:%d",
+			core_data->suspended, core_data->gesture_enable);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+exit_off:
+	return ret;
+}
+#endif
+
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
@@ -1358,6 +1462,10 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.extend_attribute_group = goodix_ts_mmi_extend_attribute_group,
 	.panel_state = goodix_ts_mmi_panel_state,
 	.pre_suspend = goodix_ts_mmi_pre_suspend,
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	.force_enter_standby_mode = goodix_ts_mmi_force_enter_standby_mode,
+	.exit_standby_mode = goodix_ts_mmi_exit_standby_mode,
+#endif
 };
 
 int goodix_ts_mmi_dev_register(struct platform_device *pdev) {

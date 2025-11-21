@@ -12,3 +12,8 @@ config THP_FOLD
     bool "Enable thp fold gesture"
     help
       Say Y here if support thp fold gesture
+
+config TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+    bool "Enable force enter standby mode"
+    help
+      Say Y here if support force enter standby mode

@@ -568,6 +568,9 @@ struct goodix_thp_core {
         u8 config_count;
         u8 current_stylus_rate_mode;
         size_t irq_trig_cnt;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+        bool force_stowed_mode;
+#endif
 };
 
 extern bool debug_log_flag;
@@ -606,5 +609,9 @@ u8 checksum8_u16(const u8 *data, u32 size);
 
 void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len);
 int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data);
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+extern bool main_suspend;
+int goodix_thp_off_to_gesture(struct goodix_thp_core *core_data);
+#endif
 
 #endif /* _GOODIX_THP_H_ */
