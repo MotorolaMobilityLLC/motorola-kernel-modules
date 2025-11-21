@@ -1248,6 +1248,12 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
                         &core_data->ts_dev->board_data;
         int cpu, index;
 #endif
+    static ktime_t last_time;
+    ktime_t current_time = ktime_get();
+    s64 delta = ktime_to_us(ktime_sub(current_time, last_time));
+    last_time = current_time;
+
+    //ts_info(ts_dev->dev, "IRQ latency: %lld us", delta);
 
         if (unlikely(!affinity_initialized)) {
             cpumask_clear(&cpumask);
@@ -1338,7 +1344,8 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         /* print frame index that write on FW  */
         cur_index = (read_data[5] << 8) | read_data[4];
         if ((cur_index != pre_index + 1) && (cur_index > pre_index))
-                ts_err(ts_dev->dev, "touch_health - frame cur_index:%d pre_index:%d", cur_index, pre_index);
+                ts_err(ts_dev->dev, "touch_health - frame cur_index:%d pre_index:%d, latency:%lldus",
+                                    cur_index, pre_index, delta);
         pre_index = cur_index;
 
 exit:
