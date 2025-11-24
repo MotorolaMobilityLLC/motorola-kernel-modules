@@ -135,6 +135,10 @@ static unsigned char delta_buf[DEBUG_DATA_FILE_SIZE] = {0};
 static struct class *touchscreen_class;
 static struct device *touchscreen_class_dev;
 
+#if defined(ILI_TP_VENDOR_EN)
+static char *panel_vendor_name;
+#endif
+
 int ili_str2hex(char *str)
 {
 	int strlen, result, intermed, intermedtop;
@@ -3980,12 +3984,46 @@ static ssize_t path_show(struct device *pDevice, struct device_attribute *pAttr,
 	return blen;
 }
 
+#ifdef ILI_TP_VENDOR_EN
+
+static void ili_get_vendor_panel(void)
+{
+	int rc;
+	struct device_node *chosen = of_find_node_by_name(NULL, "chosen");
+
+	if(chosen) {
+		rc = of_property_read_string(chosen, "mmi,panel_name", (const char **)&panel_vendor_name);
+		if (rc)
+			ILI_INFO("mmi,panel_name null\n");
+		else
+			ILI_DBG("panel_vendor_name=%s\n", panel_vendor_name);
+	}
+	else
+		ILI_INFO("chosen node null\n");
+
+}
+
+#endif
+
 /* Attribute: vendor (RO) */
 static ssize_t vendor_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
+#ifdef ILI_TP_VENDOR_EN
+	if (panel_vendor_name) {
+		char vendor_name[16] = {0};
+		const char *panel_name = strchr(panel_vendor_name, '_');
+		if (panel_name){
+			int len = panel_name - panel_vendor_name;
+			snprintf(vendor_name, sizeof(vendor_name), "%.*s", len, panel_vendor_name);
+			ILI_INFO("*** %s() vendor = ilitek_%s ***\n", __func__, vendor_name);
+			return scnprintf(buf, PAGE_SIZE, "ilitek_%s",vendor_name);
+		}
+	}
+#endif
 	ILI_INFO("*** %s() vendor = %s ***\n", __func__, "ilitek");
 	return scnprintf(buf, PAGE_SIZE, "ilitek");
+
 }
 
 static ssize_t buildid_show(struct device *dev,
@@ -4438,6 +4476,9 @@ void ili_node_init(void)
 	}
 
 	ilitek_sys_init();
+#ifdef ILI_TP_VENDOR_EN
+	ili_get_vendor_panel();
+#endif
 #ifdef ENABLE_TP_TM_ILI_LOG_CAPTURE
 	ili_log_capture_register_misc();
 #endif
