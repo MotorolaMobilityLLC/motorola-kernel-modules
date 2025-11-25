@@ -445,6 +445,52 @@ static DEVICE_ATTR(force_charging_disable, 0200,
 		NULL,
 		force_charging_disable_store);
 
+static ssize_t direct_power_supply_show(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	int state;
+	if (!this_root_chip) {
+		pr_err("mmi_glink_charger: chip not valid\n");
+		return -ENODEV;
+	}
+
+	state = this_root_chip->direct_power_supply;
+	mmi_info(this_root_chip, "direct charging_disable status: %d\n", state);
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", state);
+}
+
+static ssize_t direct_power_supply_store(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	unsigned long r;
+	unsigned long mode;
+
+	if (!this_root_chip) {
+		pr_err("mmi_glink_charger: chip not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &mode);
+	if (r) {
+		pr_err("mmi_charger: Invalid charger disable value = %lu\n", mode);
+		return -EINVAL;
+	}
+
+	mmi_vote_charging_disable("MMI_DIRECT", !!mode);
+	this_root_chip->direct_power_supply = !!mode;
+	cancel_delayed_work(&this_root_chip->heartbeat_work);
+	schedule_delayed_work(&this_root_chip->heartbeat_work, msecs_to_jiffies(0));
+	mmi_info(this_root_chip, "%s direct charging_disable\n", (mode)? "set" : "clear");
+
+	return count;
+}
+
+static DEVICE_ATTR(direct_power_supply, S_IRUGO|S_IWUSR|S_IWGRP,
+		direct_power_supply_show,
+		direct_power_supply_store);
+
 static ssize_t charge_real_type_show(struct device *dev,
 		struct device_attribute *attr,
 		char *buf)
@@ -945,6 +991,11 @@ void battery_supply_init(struct battery_host *batt_host)
 	if (rc)
 		mmi_err(this_root_chip, "couldn't create batt_id\n");
 
+	rc = device_create_file(batt_psy->dev.parent,
+				&dev_attr_direct_power_supply);
+	if (rc)
+		mmi_err(this_root_chip, "couldn't create direct_power_supply\n");
+
 	mmi_info(this_root_chip, "battery supply is initialized\n");
 
 	thermal_charge_control_init(batt_host);
@@ -985,6 +1036,8 @@ void battery_supply_deinit(struct battery_host *batt_host)
 					&dev_attr_cur_batt_id);
 		device_remove_file(batt_psy->dev.parent,
 					&dev_attr_cur_flip_batt_id);
+		device_remove_file(batt_psy->dev.parent,
+					&dev_attr_direct_power_supply);
 		power_supply_put(batt_psy);
 	}
 

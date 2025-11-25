@@ -194,6 +194,7 @@ struct mmi_glink_chip {
 	bool			factory_kill_armed;
 	bool			force_charger_disabled;
 	bool			force_charging_enabled;
+	bool			direct_power_supply;
 	bool			is_softbank;
 
 	bool			charging_disable;
