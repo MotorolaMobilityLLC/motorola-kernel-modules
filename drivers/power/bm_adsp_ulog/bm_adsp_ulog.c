@@ -91,6 +91,7 @@ struct bm_ulog_dev {
 	bool				disable_dynamic_open_ulog;
 	bool				ulog_enabled;
 	struct delayed_work		ulog_complete_work;
+	bool ulog_complete_work_init;
 };
 
 static struct bm_ulog_dev *g_bmdev = NULL;
@@ -492,7 +493,10 @@ int bm_ulog_enable_log(bool enable, unsigned int duration_ms)
 {
 	struct bm_ulog_dev *bmdev = g_bmdev;
 
-	if (!bmdev) {
+	if (IS_ERR_OR_NULL(bmdev) ||
+		IS_ERR_OR_NULL(bmdev->dev) ||
+		IS_ERR_OR_NULL(bmdev->bm_ulog_task) ||
+		!bmdev->ulog_complete_work_init) {
 		pr_err("BM ulog has not initialized yet\n");
 		return -ENODEV;
 	}
@@ -501,22 +505,19 @@ int bm_ulog_enable_log(bool enable, unsigned int duration_ms)
 
 	if (bmdev->ulog_enabled != enable) {
 		bmdev->ulog_enabled = enable;
-		if (bmdev->bm_ulog_task) {
-			wake_up_process(bmdev->bm_ulog_task);
-		}
+		wake_up_process(bmdev->bm_ulog_task);
 		pr_info("BM ulog is %s\n", enable? "enabled":"disabled");
 	}
 
-	if (bmdev->bm_ulog_task) {
-		pm_relax(bmdev->dev);
-		cancel_delayed_work(&bmdev->ulog_complete_work);
-		if (enable && duration_ms > 0) {
-			pr_info("BM ulog duration = %d\n", duration_ms);
-			pm_stay_awake(bmdev->dev);
-			schedule_delayed_work(&bmdev->ulog_complete_work,
-					msecs_to_jiffies(duration_ms));
-		}
+	pm_relax(bmdev->dev);
+	cancel_delayed_work(&bmdev->ulog_complete_work);
+	if (enable && duration_ms > 0) {
+		pr_info("BM ulog duration = %d\n", duration_ms);
+		pm_stay_awake(bmdev->dev);
+		schedule_delayed_work(&bmdev->ulog_complete_work,
+				msecs_to_jiffies(duration_ms));
 	}
+
 	return 0;
 }
 EXPORT_SYMBOL(bm_ulog_enable_log);
@@ -787,6 +788,7 @@ static int bm_ulog_probe(struct platform_device *pdev)
 		wake_up_process(bmdev->bm_ulog_task);
 		bm_info(bmdev, "Successed to create bm_ulog_task\n");
 		INIT_DELAYED_WORK(&bmdev->ulog_complete_work, bm_ulog_complete_work);
+		bmdev->ulog_complete_work_init = true;
 	}
 
 	bm_ulog_add_debugfs(bmdev);
