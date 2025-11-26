@@ -567,6 +567,7 @@ struct goodix_thp_core {
         struct stylus_report_rate_config *rate_configs;
         u8 config_count;
         u8 current_stylus_rate_mode;
+        size_t irq_trig_cnt;
 };
 
 extern bool debug_log_flag;

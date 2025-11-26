@@ -1259,12 +1259,13 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
                         &core_data->ts_dev->board_data;
         int cpu, index;
 #endif
-    static ktime_t last_time;
-    ktime_t current_time = ktime_get();
-    s64 delta = ktime_to_us(ktime_sub(current_time, last_time));
-    last_time = current_time;
+        static ktime_t last_time;
+        ktime_t current_time = ktime_get();
+        s64 delta = ktime_to_us(ktime_sub(current_time, last_time));
+        last_time = current_time;
 
-    //ts_info(ts_dev->dev, "IRQ latency: %lld us", delta);
+        //ts_info(ts_dev->dev, "IRQ latency: %lld us", delta);
+        core_data->irq_trig_cnt++;
 
         if (unlikely(!affinity_initialized)) {
             cpumask_clear(&cpumask);
@@ -1999,6 +2000,53 @@ static ssize_t goodix_thp_driver_info_show(struct device *dev,
 
 }
 
+/* show irq infomation */
+static ssize_t goodix_thp_irq_info_show(struct device *dev,
+                       struct device_attribute *attr,
+                       char *buf)
+{
+        struct goodix_thp_core *core_data = dev_get_drvdata(dev);
+        struct goodix_thp_board_data *ts_bdata = board_data(core_data);
+        struct irq_desc *desc;
+        size_t offset = 0;
+        int r;
+
+        r = snprintf(&buf[offset], PAGE_SIZE, "irq:%u\n", core_data->irq);
+        if (r < 0)
+                return -EINVAL;
+
+        offset += r;
+        r = snprintf(&buf[offset], PAGE_SIZE - offset, "state:%s\n",
+             (core_data->irq_state) ?
+             "enabled" : "disabled");
+        if (r < 0)
+                return -EINVAL;
+
+        desc = irq_to_desc(core_data->irq);
+        if (desc) {
+                offset += r;
+                r = snprintf(&buf[offset], PAGE_SIZE - offset, "disable-depth:%d\n",
+                        desc->depth);
+                if (r < 0)
+                return -EINVAL;
+        }
+
+        offset += r;
+        r = snprintf(&buf[offset], PAGE_SIZE - offset, "trigger-count:%zu\n",
+                core_data->irq_trig_cnt);
+        if (r < 0)
+                return -EINVAL;
+
+        offset += r;
+        r = snprintf(&buf[offset], PAGE_SIZE - offset, "irq gpio level:%s\n",
+                (gpio_get_value(ts_bdata->irq_gpio) ?"HIGH" : "LOW"));
+        if (r < 0)
+                return -EINVAL;
+
+        offset += r;
+        return offset;
+}
+
 /* Description: debug read
  */
 static ssize_t goodix_thp_debug_show(struct device *dev,
@@ -2410,6 +2458,7 @@ static DEVICE_ATTR(save_moto_data, S_IRUGO | S_IWUSR | S_IWGRP,
                                 goodix_thp_save_moto_data_show, goodix_thp_save_moto_data_store);
 static DEVICE_ATTR(esd_info, S_IRUGO | S_IWUSR | S_IWGRP,
                                 goodix_thp_esd_info_show, goodix_thp_esd_info_store);
+static DEVICE_ATTR(irq_info, S_IRUGO, goodix_thp_irq_info_show, NULL);
 
 static struct attribute *sysfs_attrs[] = {
         &dev_attr_scan_rate.attr,
@@ -2427,6 +2476,7 @@ static struct attribute *sysfs_attrs[] = {
         &dev_attr_special_area.attr,
         &dev_attr_save_moto_data.attr,
         &dev_attr_esd_info.attr,
+        &dev_attr_irq_info.attr,
         NULL,
 };
 
