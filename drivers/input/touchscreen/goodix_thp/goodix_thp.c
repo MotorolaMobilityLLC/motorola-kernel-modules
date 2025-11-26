@@ -144,7 +144,7 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
 
         mutex_lock(&core_data->frame_mutex);
         /* check for max limit */
-        if ((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head) {
+        if (unlikely((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head)) {
                 ts_err(ts_dev->dev, "touch_health - frame mmap buffer is full, overwriting oldest data");
                 list->head = (list->head + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT; // Overwrite the oldest data
         }
@@ -153,7 +153,7 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
         req_pkg->size = sizeof(req_pkg->request) + len;
         req_pkg->request.id = id++;
         req_pkg->request.type = type;
-        if (len > 0)
+        if (likely(len > 0))
                 memcpy(req_pkg->request.data, data, len);
         list->tail = (list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT;
 
@@ -962,7 +962,7 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
         int avdd_gpio = ts_bdata->avdd_gpio;
 
         ts_info(ts_dev->dev, "Device power on");
-        if (core_data->power_on) {
+        if (unlikely(core_data->power_on)) {
                 ts_info(ts_dev->dev, "device has already power on");
                 return 0;
         }
@@ -974,7 +974,7 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
             gpio_direction_output(iovdd_gpio, 1);
         } else if (core_data->iovdd) {
                 r = regulator_enable(core_data->iovdd);
-                if (r) {
+                if (unlikely(r)) {
                         ts_err(ts_dev->dev, "Failed to enable iovdd:%d", r);
                         goto power_off;
                 }
@@ -985,7 +985,7 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
             gpio_direction_output(avdd_gpio, 1);
         } else if (core_data->avdd) {
                 r = regulator_enable(core_data->avdd);
-                if (r) {
+                if (unlikely(r)) {
                         ts_err(ts_dev->dev, "Failed to enable avdd:%d", r);
                         goto power_off;
                 }
@@ -1026,7 +1026,7 @@ static void goodix_thp_power_off(struct goodix_thp_core *core_data)
         struct thp_ts_device *ts_dev = core_data->ts_dev;
 
         ts_info(ts_dev->dev, "Device power off");
-        if (core_data->power_on == 0) {
+        if (unlikely(core_data->power_on == 0)) {
                 ts_info(ts_dev->dev, "device has already power off");
                 return;
         }
@@ -1298,7 +1298,7 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
 #endif
 
         /*for check bus i2c/spi is ready or not*/
-        if ((core_data->suspended) && (core_data->pm_suspend)) {
+        if (unlikely(core_data->suspended && core_data->pm_suspend)) {
             r = wait_for_completion_timeout(
                         &core_data->pm_completion,
                         msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
@@ -1332,20 +1332,20 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
 
 #endif
 
-        if (core_data->reset_state) {
+        if (unlikely(core_data->reset_state)) {
                 ts_err(ts_dev->dev, "ignore this irq.");
                 goto exit;
         }
 
         /* suspend irq handler */
-        if (core_data->suspended && core_data->gesture_enable) {
+        if (unlikely(core_data->suspended && core_data->gesture_enable)) {
                 goodix_thp_gesture_irq_handler(core_data);
                 goto exit;
         }
 
         /* get frame */
         r = ts_dev->hw_ops->get_frame(ts_dev, read_data);
-        if (r < 0) {
+        if (unlikely(r < 0)) {
                 ts_err(ts_dev->dev, "failed to read frame, r %d", r);
                 goto exit;
         }
@@ -1355,7 +1355,7 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
 
         /* print frame index that write on FW  */
         cur_index = (read_data[5] << 8) | read_data[4];
-        if ((cur_index != pre_index + 1) && (cur_index > pre_index))
+        if (unlikely((cur_index != pre_index + 1) && (cur_index > pre_index)))
                 ts_err(ts_dev->dev, "touch_health - frame cur_index:%d pre_index:%d, latency:%lldus",
                                     cur_index, pre_index, delta);
         pre_index = cur_index;
@@ -2511,10 +2511,10 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
 
         ts_info(ts_dev->dev, "Suspend start");
 
-        if (core_data->suspended == 1) {
-		ts_info(ts_dev->dev, "Already in suspend mode, exit.");
-		goto exit;
-	}
+        if (unlikely(core_data->suspended == 1)) {
+                ts_info(ts_dev->dev, "Already in suspend mode, exit.");
+                goto exit;
+        }
 
         goodix_thp_set_irq_enable(core_data, IRQ_DISABLE_FLAG);
         core_data->suspended = 1;
@@ -2529,7 +2529,7 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
                 ts_info(ts_dev->dev, "enter gesture mode!");
                 /* send enter gesture cmd */
                 r = ts_dev->hw_ops->send_cmd(ts_dev, CMD_GESTURE, gsx_data);
-                if (r) {
+                if (unlikely(r)) {
                         ts_err(ts_dev->dev, "send enter gesture cmd failed, r %d", r);
                         goto exit;
                 }
@@ -2548,7 +2548,7 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
 
         ts_info(ts_dev->dev, "Resume start");
 
-        if (core_data->suspended == 0) {
+        if (unlikely(core_data->suspended == 0)) {
                 ts_info(ts_dev->dev, "Already in normal mode,exit.");
                 goto exit;
         }
