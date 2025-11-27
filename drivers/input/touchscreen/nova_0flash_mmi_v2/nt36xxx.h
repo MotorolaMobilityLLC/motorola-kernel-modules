@@ -210,6 +210,7 @@ struct nvt_sensor_platform_data {
 /* charger detect */
 #define USB_DETECT_IN 1
 #define USB_DETECT_OUT 2	//MTK
+#define USB_DETECT_NO_CHARGING 3
 #define CMD_CHARGER_ON (0x53)
 #define CMD_CHARGER_OFF (0x51)
 

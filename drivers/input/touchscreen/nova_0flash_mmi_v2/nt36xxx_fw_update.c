@@ -1238,9 +1238,11 @@ void Boot_Update_Firmware(struct work_struct *work)
 
 	mutex_unlock(&ts->lock);
 
-	if (ts->charger_detection) {
+	if (ts->charger_detection && ts->charger_detection->nvt_charger_notify_wq) {
 		queue_work(ts->charger_detection->nvt_charger_notify_wq, &ts->charger_detection->charger_notify_work);
 	}
+	else
+		NVT_LOG("charger_detection null, skip\n");
 
 #ifdef NOVATECH_PEN_NOTIFIER
 	if(!ts->fw_ready_flag)
