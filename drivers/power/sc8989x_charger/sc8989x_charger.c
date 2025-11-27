@@ -315,6 +315,7 @@ struct sc8989x_chip {
 	int	mmi_qc3p_power;
 	bool	mmi_qc3p_rerun_done;
 	int otg_enable;
+	int upm6920_iterm;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -3066,6 +3067,16 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 			dev_err(sc->dev, "%s not find\n", props[i].name);
 			continue;
 		}
+	}
+
+	ret = of_property_read_u32(np, "sc,upm6920,iterm", &sc->upm6920_iterm);
+	if (ret < 0) {
+		dev_err(sc->dev, "%s not find\n", "sc,upm6920,iterm");
+		sc->upm6920_iterm = 0;
+	}
+
+	if (sc->is_upm6920A && (sc->upm6920_iterm != 0)) {
+		sc->cfg->iterm = sc->upm6920_iterm;
 	}
 
 	return 0;
