@@ -736,44 +736,22 @@ static int mtk_sc8586_enable_chg(struct charger_device *chg_dev, bool en)
 
 static int mtk_sc8586_set_vbusovp(struct charger_device *chg_dev, u32 uV)
 {
-    struct sc8586_chip *sc = charger_get_data(chg_dev);
-    int mv;
-    mv = uV / 1000;
-
-    return sc8586_set_busovp_th(sc, mv);
+    return 0;
 }
 
 static int mtk_sc8586_set_ibusocp(struct charger_device *chg_dev, u32 uA)
 {
-    struct sc8586_chip *sc = charger_get_data(chg_dev);
-    int ma;
-    ma = uA / 1000;
-
-    return sc8586_set_busocp_th(sc, ma);
+    return 0;
 }
 
 static int mtk_sc8586_set_vbatovp(struct charger_device *chg_dev, u32 uV)
 {
-    struct sc8586_chip *sc = charger_get_data(chg_dev);
-    int ret;
-
-    ret = sc8586_set_batovp_th(sc, uV / 1000);
-    if (ret < 0)
-        return ret;
-
-    return ret;
+    return 0;
 }
 
 static int mtk_sc8586_set_ibatocp(struct charger_device *chg_dev, u32 uA)
 {
-    struct sc8586_chip *sc = charger_get_data(chg_dev);
-    int ret;
-
-    ret = sc8586_set_batocp_th(sc, uA / 1000);
-    if (ret < 0)
-        return ret;
-
-    return ret;
+    return 0;
 }
 
 static int mtk_sc8586_get_adc(struct charger_device *chg_dev, enum adc_channel chan,
@@ -824,14 +802,7 @@ static int mtk_sc8586_is_vbushigherr(struct charger_device *chg_dev, bool *err)
 
 static int mtk_sc8586_set_vbatovp_alarm(struct charger_device *chg_dev, u32 uV)
 {
-    struct sc8586_chip *sc = charger_get_data(chg_dev);
-    int ret;
-
-    ret = sc8586_set_vbatovp_alarm(sc, uV / 1000);
-    if (ret < 0)
-        return ret;
-
-    return ret;
+    return 0;
 }
 
 static int mtk_sc8586_reset_vbatovp_alarm(struct charger_device *chg_dev)
@@ -843,14 +814,7 @@ static int mtk_sc8586_reset_vbatovp_alarm(struct charger_device *chg_dev)
 
 static int mtk_sc8586_set_vbusovp_alarm(struct charger_device *chg_dev, u32 uV)
 {
-    struct sc8586_chip *sc = charger_get_data(chg_dev);
-    int ret;
-
-    ret = sc8586_set_vbusovp_alarm(sc, uV / 1000);
-    if (ret < 0)
-        return ret;
-
-    return ret;
+    return 0;
 }
 
 static int mtk_sc8586_reset_vbusovp_alarm(struct charger_device *chg_dev)
