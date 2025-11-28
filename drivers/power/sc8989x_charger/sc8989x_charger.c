@@ -166,10 +166,16 @@ enum sc8989x_fields {
 	BC_12_DONE, ADC_ICC,
 	VINDPM_STAT, IINDPM_STAT,
 	REG_RST, ICO_STAT, PN, NTC_PROFILE, DEV_VERSION,
+	CX_DP_DRIVE, CX_DM_DRIVE,
+	CX_OPT_HICCUP,
 	VBAT_REG_LSB,
+	CX_REG40,
+	CX_HS_OCP,
+	CX_TRILIM,
 	ADC_IBUS,
 	DP3P3V_DM0V_EN,
 	F_VINDPM_TRACK,
+	CX_RESET_INTER,
 	CFGINIT_BIT,
 	F_MAX_FIELDS,
 };
@@ -188,6 +194,7 @@ enum sc8989x_reg_range {
 	SC8989X_IBUS,
 	UPM6920A_ICHG,
 	UPM6920A_ITERM,
+	CX25890HQ_IINDPM,
 };
 
 enum attach_type {
@@ -285,6 +292,7 @@ struct sc8989x_chip {
 	int power_good;
 	int vbus_good;
 	int is_upm6920A;
+	int is_cx25890HQ;
 	uint8_t dev_id;
 	struct power_supply_desc psy_desc;
 	struct sc8989x_cfg_e *cfg;
@@ -316,6 +324,8 @@ struct sc8989x_chip {
 	bool	mmi_qc3p_rerun_done;
 	int otg_enable;
 	int upm6920_iterm;
+	int cx25890HQ_votg;
+	int cx_otg_trilmt_init;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -348,6 +358,7 @@ static const struct reg_range sc8989x_reg_range_ary[] = {
 	[SC8989X_IBUS] = SC8989X_CHG_RANGE(0, 6350, 50, 0, false),
 	[UPM6920A_ICHG] = SC8989X_CHG_RANGE(0, 5040, 64, 0, false),
 	[UPM6920A_ITERM] = SC8989X_CHG_RANGE(64, 1024, 64, 64, false),
+	[CX25890HQ_IINDPM] = SC8989X_CHG_RANGE(100, 3100, 50, 100, false),
 };
 
 //REGISTER
@@ -436,14 +447,26 @@ static const struct reg_field sc8989x_reg_fields[] = {
 	[PN] = REG_FIELD(0x14, 3, 5),
 	[NTC_PROFILE] = REG_FIELD(0x14, 2, 2),
 	[DEV_VERSION] = REG_FIELD(0x14, 0, 1),
+	/*reg15 */
+	[CX_DP_DRIVE] = REG_FIELD(0x15, 5, 7),
+	[CX_DM_DRIVE] = REG_FIELD(0x15, 2, 4),
+	/*reg17 */
+	[CX_OPT_HICCUP] = REG_FIELD(0x17, 7, 7),
 	/*reg40 */
 	[VBAT_REG_LSB] = REG_FIELD(0x40, 6, 6),
+	[CX_REG40] = REG_FIELD(0x40, 0, 7),
+	/*reg47 */
+	[CX_HS_OCP] = REG_FIELD(0x47, 4, 6),
+	/*reg84 */
+	[CX_TRILIM] = REG_FIELD(0x84, 0, 7),
 	/*reg86 */
 	[ADC_IBUS] = REG_FIELD(0x86, 1, 7),
 	/*reg83 */
 	[DP3P3V_DM0V_EN] = REG_FIELD(0x83, 5, 5),
 	/*reg85 */
 	[F_VINDPM_TRACK] = REG_FIELD(0x85, 1, 2),
+	/*reg89 */
+	[CX_RESET_INTER] = REG_FIELD(0x89, 0, 7),
 	/*regC4 */
 	[CFGINIT_BIT] = REG_FIELD(0xC4, 7, 7),
 };
@@ -627,6 +650,33 @@ int Charger_Detect_Release(struct sc8989x_chip *sc)
 
 }
 
+__maybe_unused static int cx25890hq_write_reg40(struct sc8989x_chip *sc, bool enable)
+{
+	int ret = 0;
+	int try_count = 10;
+	int val;
+
+	if (enable) {
+		while (try_count--)
+		{
+			sc8989x_field_write(sc, CX_REG40, 0x00);
+			sc8989x_field_write(sc, CX_REG40, 0x50);
+			sc8989x_field_write(sc, CX_REG40, 0x57);
+			sc8989x_field_write(sc, CX_REG40, 0x44);
+
+			ret = sc8989x_field_read(sc, CX_REG40, &val);
+			if (val == 0x03) {
+				ret = 1;
+				break;
+			}
+		}
+	} else {
+		ret = sc8989x_field_write(sc, CX_REG40, 0x00);
+	}
+
+	return ret;
+}
+
 static int sc8989x_set_key(struct sc8989x_chip *sc)
 {
 	if (sc == NULL) {
@@ -662,7 +712,7 @@ static int sc8989x_set_wa(struct sc8989x_chip *sc)
 		return -EINVAL;
 	}
 
-	if (sc->is_upm6920A) {
+	if (sc->is_upm6920A || sc->is_cx25890HQ) {
 		return 0;
 	}
 
@@ -708,7 +758,7 @@ __maybe_unused static int sc8989x_adc_ibus_en(struct sc8989x_chip *sc, bool en)
 		return -EINVAL;
 	}
 
-	if (sc->is_upm6920A) {
+	if (sc->is_upm6920A || sc->is_cx25890HQ) {
 		return 0;
 	}
 
@@ -865,6 +915,12 @@ static int sc8989x_set_iindpm(struct sc8989x_chip *sc, int curr_ma)
 {
 	int reg_val = val2reg(SC8989X_IINDPM, curr_ma);
 
+	if (sc->is_cx25890HQ) {
+		reg_val = val2reg(CX25890HQ_IINDPM, curr_ma);
+		if (reg_val >= 32)
+			reg_val += 3;
+	}
+
 	sc8989x_field_write(sc, EN_ILIM, 0);
 
 	return sc8989x_field_write(sc, IINDPM, reg_val);
@@ -880,21 +936,37 @@ static int sc8989x_get_iindpm(struct sc8989x_chip *sc, int *curr_ma)
 		return ret;
 	}
 
-	*curr_ma = reg2val(SC8989X_IINDPM, reg_val);
+	if (sc->is_cx25890HQ) {
+		if (reg_val >= 35)
+			reg_val -= 3;
+		*curr_ma = reg2val(CX25890HQ_IINDPM, reg_val);
+	} else {
+		*curr_ma = reg2val(SC8989X_IINDPM, reg_val);
+	}
 
 	return ret;
 }
 
 __maybe_unused static int sc8989x_set_dpdm_hiz(struct sc8989x_chip *sc)
 {
-	sc8989x_field_write(sc, DP_DRIVE, 0);
-	return sc8989x_field_write(sc, DM_DRIVE, 0);
+	if (sc->is_cx25890HQ) {
+		sc8989x_field_write(sc, CX_DP_DRIVE, 0);
+		return sc8989x_field_write(sc, CX_DM_DRIVE, 0);
+	} else {
+		sc8989x_field_write(sc, DP_DRIVE, 0);
+		return sc8989x_field_write(sc, DM_DRIVE, 0);
+	}
 }
 
 __maybe_unused static int sc8989x_set_dpdm_0V(struct sc8989x_chip *sc)
 {
-	sc8989x_field_write(sc, DP_DRIVE, 1);
-	return sc8989x_field_write(sc, DM_DRIVE, 1);
+	if (sc->is_cx25890HQ) {
+		sc8989x_field_write(sc, CX_DP_DRIVE, 1);
+		return sc8989x_field_write(sc, CX_DM_DRIVE, 1);
+	} else {
+		sc8989x_field_write(sc, DP_DRIVE, 1);
+		return sc8989x_field_write(sc, DM_DRIVE, 1);
+	}
 }
 
 static int sc8989x_set_chg_term(struct sc8989x_chip *sc, bool en)
@@ -938,6 +1010,18 @@ __maybe_unused static int sc8989x_check_chg_enabled(struct sc8989x_chip *sc, boo
 __maybe_unused static int sc8989x_set_otg_enable(struct sc8989x_chip *sc, bool enable)
 {
 	int reg_val = enable ? 1 : 0;
+
+	if (sc->is_cx25890HQ) {
+		cx25890hq_write_reg40(sc,true);
+		if(enable) {
+			sc8989x_field_read(sc, CX_TRILIM, &sc->cx_otg_trilmt_init);
+			sc8989x_field_write(sc, CX_TRILIM, 0x00);
+		} else {
+			sc8989x_field_write(sc, CX_TRILIM, sc->cx_otg_trilmt_init);
+		}
+
+		cx25890hq_write_reg40(sc,false);
+	}
 
 	return sc8989x_field_write(sc, OTG_CFG, reg_val);
 }
@@ -998,7 +1082,7 @@ static int sc8989x_set_term_curr(struct sc8989x_chip *sc, int curr_ma)
 		return -EINVAL;
 	}
 
-	if (sc->is_upm6920A) {
+	if (sc->is_upm6920A || sc->is_cx25890HQ) {
 		reg_val = val2reg(UPM6920A_ITERM, curr_ma);
 	} else {
 		reg_val = val2reg(SC8989X_ITERM, curr_ma);
@@ -1163,6 +1247,7 @@ static bool sc8989x_detect_device(struct sc8989x_chip *sc)
 {
 	int ret;
 	int val;
+	int dev_version;
 
 	if (sc == NULL) {
 		return false;
@@ -1176,8 +1261,12 @@ static bool sc8989x_detect_device(struct sc8989x_chip *sc)
 		return false;
 	}
 
+	ret = sc8989x_field_read(sc, DEV_VERSION, &dev_version);
+	dev_err(sc->dev, "dev_version = %d\n", dev_version);
 
-	if (val == UPM6920A_PN_NUM) {
+	if (val == UPM6920A_PN_NUM && dev_version == 0) {
+		sc->is_cx25890HQ = 1;
+	} else if (val == UPM6920A_PN_NUM) {
 		sc->is_upm6920A = 1;
 		regmap_write(sc->regmap, UPM6920A_REG_CFG_MODE, UPM6920A_CFG_MODE_ENABLE);
 		sc8989x_field_write(sc, CFGINIT_BIT,0);
@@ -1762,13 +1851,22 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 
 	/*dp and dm connected,dp 0.6V dm 0V*/
 	dp_val = 2;
-	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	if (sc->is_cx25890HQ){
+		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 0.6V
+	} else {
+		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	}
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 	    return ret;
 
 	dm_val = 2;
-	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6V
+	if (sc->is_cx25890HQ){
+		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0.6V
+	} else {
+		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6V
+	}
+
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 		return ret;
@@ -1776,7 +1874,12 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 	msleep(QC3P_MSLEEP_1500DELAY);
 
 	dm_val = 1;
-	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
+	if (sc->is_cx25890HQ){
+		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0V
+	} else {
+		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
+	}
+
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 		return ret;
@@ -1784,13 +1887,22 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 
 	/* dp 3.3v and dm 0.6v out 9V */
 	dp_val = 6;
-	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 3.3v
+	if (sc->is_cx25890HQ){
+		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 3.3v
+	} else {
+		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 3.3v
+	}
+
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 		return ret;
 
 	dm_val = 2;
-	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6v
+	if (sc->is_cx25890HQ){
+		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0.6v
+	} else {
+		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6v
+	}
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 		return ret;
@@ -3071,6 +3183,20 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 		sc->cfg->iterm = sc->upm6920_iterm;
 	}
 
+	ret = of_property_read_u32(np, "sc,cx25890HQ,votg", &sc->cx25890HQ_votg);
+	if (ret < 0) {
+		dev_err(sc->dev, "%s not find\n", "sc,cx25890HQ,votg");
+		sc->cx25890HQ_votg = 0;
+	}
+
+	if (sc->is_cx25890HQ) {
+		if (sc->cx25890HQ_votg != 0)
+			sc->cfg->votg = sc->cx25890HQ_votg;
+
+		/*The cx25890HQ must set auto dpdm en to 1*/
+		sc->cfg->auto_dpdm_en = 1;
+	}
+
 	return 0;
 }
 
@@ -3107,6 +3233,15 @@ static int sc8989x_init_device(struct sc8989x_chip *sc)
 
 	//reg reset;
 	sc8989x_field_write(sc, REG_RST, 1);
+
+	if (sc->is_cx25890HQ) {
+		cx25890hq_write_reg40(sc,true);
+		sc8989x_field_write(sc, CX_RESET_INTER, 0x83);
+		sc8989x_field_write(sc, CX_OPT_HICCUP, 1);
+		sc8989x_field_read(sc, CX_TRILIM, &sc->cx_otg_trilmt_init);
+		sc8989x_field_write(sc, CX_HS_OCP, 0);
+		cx25890hq_write_reg40(sc,false);
+	}
 
 	for (i = 0; i < ARRAY_SIZE(props); i++) {
 //		dev_info(sc->dev, "%d--->%d\n", props[i].field_id, props[i].conv_data);
