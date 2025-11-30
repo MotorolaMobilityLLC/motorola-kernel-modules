@@ -67,6 +67,7 @@ moto_swap-objs += $(ZRAM_SRC)/zcomp.o
 ifeq ($(call is-greater-or-equal,6,12),1)
 moto_swap-objs += $(ZRAM_SRC)/backend_lzorle.o $(ZRAM_SRC)/backend_lzo.o
 moto_swap-objs += $(ZRAM_SRC)/backend_lz4.o
+moto_swap-objs += $(ZRAM_SRC)/backend_zstd.o
 endif
 
 obj-m += moto_swap.o
