@@ -60,7 +60,7 @@
 #define Responds_To_Discov_SOP_UFP YES
 #define Responds_To_Discov_SOP_DFP YES
 #define Attempts_Discov_SOP YES
-#define Get_Manufacturer_Info NO
+#define Get_Manufacturer_Info YES
 
 /* USB Type-C Tab */
 #define Type_C_Implements_Try_SRC NO        /* only one shall be enabled by */

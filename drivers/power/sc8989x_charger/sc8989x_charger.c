@@ -288,6 +288,7 @@ struct sc8989x_chip {
 	int irq_gpio;
 	int irq;
 	struct delayed_work force_detect_dwork;
+	struct delayed_work ibus_enable_dwork;
 	int force_detect_count;
 	int power_good;
 	int vbus_good;
@@ -302,6 +303,7 @@ struct sc8989x_chip {
 	int retry_count;
 	atomic_t vbus_good_flag;
 	atomic_t attach;
+	atomic_t reset_vindpm;
 	struct adapter_device *pd_adapter;
 	struct mutex dpdm_lock;
 	/*for external qc protocol ic such as wt6670f*/
@@ -326,6 +328,9 @@ struct sc8989x_chip {
 	int upm6920_iterm;
 	int cx25890HQ_votg;
 	int cx_otg_trilmt_init;
+	bool ibus_dis;
+	bool disablehiz_isset_flg;
+	bool wait_hiz;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -471,6 +476,52 @@ static const struct reg_field sc8989x_reg_fields[] = {
 	[CFGINIT_BIT] = REG_FIELD(0xC4, 7, 7),
 };
 
+static int sc8989x_regmap_write(void *context, unsigned int reg,
+				       unsigned int val)
+{
+    struct sc8989x_chip *sc = context;
+    struct i2c_client *i2c = to_i2c_client(sc->dev);
+    int ret = 0;
+
+    if (val > 0xff || reg > 0xff)
+        return -EINVAL;
+
+    if (reg == 0x2) {
+        ret = i2c_smbus_read_byte_data(i2c, reg);
+        ret &= 0x2;
+        if (ret) {
+            val &= 0xFD;
+            dev_err(sc->dev, "bc12 do not finish, clear force dpdm bit, new val = 0x%x\n", val);
+        }
+    }
+
+    return i2c_smbus_write_byte_data(i2c, reg, val);
+}
+
+static int sc8989x_regmap_read(void *context, unsigned int reg,
+				      unsigned int *val)
+{
+	struct sc8989x_chip *sc = context;
+	struct i2c_client *i2c = to_i2c_client(sc->dev);
+	int ret;
+
+	if (reg > 0xff)
+		return -EINVAL;
+
+	ret = i2c_smbus_read_byte_data(i2c, reg);
+	if (ret < 0)
+		return ret;
+
+	*val = ret;
+
+	return 0;
+}
+
+static const struct regmap_bus sc8989x_regmap_bus = {
+	.reg_write = sc8989x_regmap_write,
+	.reg_read = sc8989x_regmap_read,
+};
+
 static const struct regmap_config sc8989x_regmap_config = {
 	.reg_bits = 8,
 	.val_bits = 8,
@@ -478,6 +529,7 @@ static const struct regmap_config sc8989x_regmap_config = {
 };
 
 static bool is_pd_rdy(struct sc8989x_chip *sc);
+static int sc8989x_get_vbus(struct charger_device *chgdev, u32 *vbus);
 
 /********************COMMON API***********************/
 static u8 val2reg(enum sc8989x_reg_range id, u32 val)
@@ -833,26 +885,107 @@ err:
 	return -EINVAL;
 }
 
+static bool is_apdo_rdy(struct sc8989x_chip *sc) {
+	int type = 0;
+
+	if (IS_ERR_OR_NULL(sc)) {
+		pr_err("%s: sc is ERR or NULL\n", __func__);
+		return false;
+	}
+
+	if (IS_ERR_OR_NULL(sc->pd_adapter)) {
+		sc->pd_adapter = get_adapter_by_name("pd_adapter");
+		if (IS_ERR_OR_NULL(sc->pd_adapter)) {
+			pr_err("%s: No pd adapter found\n", __func__);
+			return false;
+		}
+	}
+
+	type = adapter_dev_get_property(sc->pd_adapter, PD_TYPE);
+	pr_info("%s pd_type: %d,%d,%d\n", __func__, type, sc->psy_usb_type, sc->chg_type);
+
+	if (type == MTK_PD_CONNECT_PE_READY_SNK_APDO &&
+		sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_DCP &&
+		sc->chg_type == POWER_SUPPLY_TYPE_USB_DCP)
+		return true;
+	else
+		return false;
+}
+
 static void determine_initial_status(struct sc8989x_chip *sc);
 static int sc8989x_set_vindpm_track(struct sc8989x_chip *sc,enum vindpm_track track);
 static int sc8989x_set_vindpm(struct sc8989x_chip *sc, int volt_mv);
+static int sc8989x_get_iindpm(struct sc8989x_chip *sc, int *curr_ma);
+static int sc8989x_set_iindpm(struct sc8989x_chip *sc, int curr_ma);
 static int sc8989x_normal_set_hiz(struct sc8989x_chip *sc, bool enable)
 {
-	int ret;
+	int ret = 0;
 	int reg_val = enable ? 1 : 0;
+	int curr_ma;
+	int vbus_good;
 
 	if (sc == NULL) {
 		return -EINVAL;
 	}
-	ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
-	if (!reg_val) {
+	if (sc->is_upm6920A) {
+		if (reg_val) {
+			ret = sc8989x_field_read(sc, VBUS_GD, &vbus_good);
+			if (!vbus_good) {
+				sc->wait_hiz = 1;
+				dev_err(sc->dev, " power good not ready,dont hiz\n");
+				return ret;
+			}
+			ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+			dev_err(sc->dev, "sc8989x_normal_set_hiz\n");
+		} else {
+			sc->wait_hiz = 0;
+			if (sc->disablehiz_isset_flg) {
+				sc->disablehiz_isset_flg = false;
+				if (is_apdo_rdy(sc) == false) {
+					ret = sc8989x_get_iindpm(sc, &curr_ma);
+					if (curr_ma == 2000) {
+						sc8989x_set_iindpm(sc, 500);
+						ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+						msleep(5);
+						sc8989x_set_iindpm(sc, curr_ma);
+					} else {
+						ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+					}
+				}
+			} else {
+				ret = sc8989x_get_iindpm(sc, &curr_ma);
+				if (curr_ma == 2000) {
+					sc8989x_set_iindpm(sc, 500);
+					ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+					msleep(5);
+					sc8989x_set_iindpm(sc, curr_ma);
+				} else {
+					ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+				}
+			}
+		}
+	} else {
+		if (reg_val) {
+			ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+		} else {
+			if (sc->disablehiz_isset_flg) {
+				sc->disablehiz_isset_flg = false;
+				if (is_apdo_rdy(sc) == false)
+					ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+			} else {
+				ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+			}
+		}
+	}
+	//ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+	/*if (!reg_val) {
 		atomic_set(&sc->vbus_good_flag, 1);
 		dev_err(sc->dev, "tcmd cancel  sc8989x_normal_set_hiz");
 		msleep(300);
 		atomic_set(&sc->vbus_good_flag, 0);
 		sc8989x_set_vindpm_track(sc, SC8989X_TRACK_300);
 		determine_initial_status(sc);
-	}
+	}*/
 	return ret;
 }
 
@@ -1160,11 +1293,20 @@ static int sc8989x_get_vbat(struct sc8989x_chip *sc, int *volt_mv)
 
 static int sc8989x_set_vindpm(struct sc8989x_chip *sc, int volt_mv)
 {
-	int reg_val = val2reg(SC8989X_VINDPM, volt_mv);
+	int reg_val, ret;
 
-	sc8989x_field_write(sc, FORCE_VINDPM, 1);
+	if (sc->ibus_dis) {
+		volt_mv = 12000;
+	}
 
-	return sc8989x_field_write(sc, VINDPM, reg_val);
+	dev_err(sc->dev, "set_vindpm  = %d\n",volt_mv);
+	reg_val = val2reg(SC8989X_VINDPM, volt_mv);
+
+	ret = sc8989x_field_write(sc, FORCE_VINDPM, 1);
+
+	ret = sc8989x_field_write(sc, VINDPM, reg_val);
+
+	return ret;
 }
 
 static int sc8989x_get_vindpm(struct sc8989x_chip *sc, int *volt_mv)
@@ -1182,8 +1324,9 @@ static int sc8989x_get_vindpm(struct sc8989x_chip *sc, int *volt_mv)
 
 static int sc8989x_force_dpdm(struct sc8989x_chip *sc)
 {
-	int ret;
 	int val;
+#if 0
+	int ret;
 
 	dev_err(sc->dev, "sc8989x_force_dpdm\n");
 
@@ -1193,10 +1336,20 @@ static int sc8989x_force_dpdm(struct sc8989x_chip *sc)
 	}
 	val |= 0x02;
 	ret = regmap_write(sc->regmap, 0x02, val);
-
 	sc->power_good = 0;
 
 	return ret;
+#else
+	struct i2c_client *i2c = to_i2c_client(sc->dev);
+
+	val = i2c_smbus_read_byte_data(i2c, 0x2);
+	dev_err(sc->dev, "sc8989x_force_dpdm val=0x%x\n", val);
+	val |= 0x02;
+	i2c_smbus_write_byte_data(i2c, 0x2, val);
+	sc->power_good = 0;
+
+	return 0;
+#endif
 }
 
 static int sc8989x_get_charge_stat(struct sc8989x_chip *sc)
@@ -1274,6 +1427,7 @@ static bool sc8989x_detect_device(struct sc8989x_chip *sc)
 	}
 
 	sc->dev_id = val;
+	dev_info(sc->dev, "%s: part_no = %d", __func__, sc->dev_id);
 
 	return true;
 }
@@ -1642,6 +1796,7 @@ static int sc8989x_get_adc(struct charger_device *chg_dev,
 {
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);						
 	enum sc8989x_adc_channel sc_chan;
+	int val;
 
 	switch (chan) {
 	case ADC_CHANNEL_VBAT:
@@ -1660,6 +1815,23 @@ static int sc8989x_get_adc(struct charger_device *chg_dev,
 		return -95; 
 	}
 
+	if (sc->is_upm6920A) {
+		if (chan == ADC_CHANNEL_VBUS) {
+			sc8989x_get_vbus (sc->chg_dev, min);
+			dev_info(sc->dev, "%s sc8989x_get_vbus chan=%d, %d\n", __func__, chan, *min);
+			*max = *min;
+			return 0;
+		} else {
+			sc8989x_field_read(sc, EN_HIZ, &val);
+			if (val) {
+				dev_info(sc->dev, "%s hiz dont adc,chan=%d\n", __func__, chan);
+				*min = 0;
+				*max = *min;
+				return 0;
+			}
+		}
+	}
+
 	__sc8989x_get_adc(sc, sc_chan, min);
 	*min = *min * 1000;
 	*max = *min;
@@ -1676,14 +1848,15 @@ static int sc8989x_set_otg(struct charger_device *chg_dev, bool enable)
 	 * This sequence of driving to 0V then Hi-Z is required to ensure the lines are fully released,
 	 * preventing issues with subsequent charger detection.
 	 */
-	if (sc->is_upm6920A) {
-		sc8989x_set_dpdm_0V(sc);
-		sc8989x_set_dpdm_hiz(sc);
-	}
+	//if (sc->is_upm6920A) {
+		//sc8989x_set_dpdm_0V(sc);
+		//sc8989x_set_dpdm_hiz(sc);
+	//}
 	sc->otg_enable = enable;
+	if (sc->otg_enable)
+		sc8989x_set_hiz(sc, !enable);
 	ret = sc8989x_set_otg_enable(sc, enable);
 	ret |= sc8989x_set_chg_enable(sc, !enable);
-
 	dev_info(sc->dev, "%s OTG %s\n", enable ? "enable" : "disable",
 		!ret ? "successfully" : "failed");
 
@@ -2879,7 +3052,7 @@ __maybe_unused static int sc8989x_wait_power_good(struct sc8989x_chip *sc)
 			dev_info(sc->dev,"sc8989x_wait_power_good GD ,try %d times\n", tries);
 			break;
 		} else {
-			msleep(100);
+			msleep(10);
 			tries++;
 		}
 	}
@@ -2904,12 +3077,32 @@ static void sc8989x_force_detection_dwork_handler(struct work_struct *work)
 	}
 
 	sc->force_detect_count++;
-	if (sc->is_upm6920A)
+	//if (sc->is_upm6920A)
 		return;
 	msleep(600);
 
 	sc8989x_get_charger_type(sc);
 	power_supply_changed(sc->psy);
+}
+
+static int sc8989x_get_vbus_stat(struct sc8989x_chip *sc);
+static void upm6920a_ibus_enable_dwork(struct work_struct *work)
+{
+	int ret;
+	int type = 0;
+	struct sc8989x_chip *sc = container_of(work,
+				struct sc8989x_chip, ibus_enable_dwork.work);
+
+	atomic_set(&sc->reset_vindpm, 1);
+	sc->ibus_dis = 0;
+	ret = sc8989x_set_vindpm(sc, 4600);
+	dev_info(sc->dev,"ret=%d ibus_enabled vindpm_reset \n", ret);
+	if (!sc->is_upm6920A) {
+		type = sc8989x_get_vbus_stat(sc);
+		if (type == VBUS_STAT_NO_INPUT) {
+			schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(10));
+		}
+	}
 }
 
 static int sc8989x_get_vbus_stat(struct sc8989x_chip *sc)
@@ -2930,8 +3123,14 @@ static int sc8989x_do_bc12(struct sc8989x_chip *sc)
 	int ret = 0;
 	int reg_val;
 	int tries = 0;
+	int reset_vindpm = 0;
 
 	dev_info(sc->dev," sc8989x_do_bc12 \n");
+	reset_vindpm = atomic_read(&sc->reset_vindpm);
+	if (reset_vindpm == 0) {
+		ret = sc8989x_set_vindpm(sc, 12000);
+		sc->ibus_dis = 1;
+	}
 	while (tries < MAX_TRY) {
 		ret = sc8989x_field_read(sc, VBUS_GD, &reg_val);
 		if (reg_val == 1) {
@@ -2942,9 +3141,9 @@ static int sc8989x_do_bc12(struct sc8989x_chip *sc)
 			 * triggering and polling for the result.
 			 */
 			if (sc->is_upm6920A)
-				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(150));
+				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(80));
 			else
-				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(100));
+				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(80));
 			break;
 		} else {
 			msleep(10);
@@ -3030,6 +3229,13 @@ static int sc8989x_get_charger_type(struct sc8989x_chip *sc)
 		break;
 	}
 
+	if (sc->chg_type != POWER_SUPPLY_TYPE_UNKNOWN) {
+		if (sc->wait_hiz) {
+			sc->wait_hiz = 0;
+			ret = sc8989x_normal_set_hiz(sc,true);
+		}
+	}
+
 	sc8989x_set_chg_type(sc, reg_val);
 
 	if (reg_val == VBUS_STAT_SDP || reg_val == VBUS_STAT_CDP) {
@@ -3046,9 +3252,10 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 	int ret;
 	int reg_val;
 	bool prev_vbus_gd;
-	int type;
+	//int type;
 	bool bc12_done = 0;
 	struct sc8989x_chip *sc = (struct sc8989x_chip *)data;
+	bool pre_power_gd;
 
 	if (sc == NULL) {
 		return IRQ_HANDLED;
@@ -3076,8 +3283,18 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 	sc->vbus_good = !!reg_val;
 	dev_info(sc->dev, "%s: prev_vbus_gd:%d, vbus_gd:%d\n", __func__, prev_vbus_gd, sc->vbus_good);
 
+	ret = sc8989x_field_read(sc, PG_STAT, &reg_val);
+	if (ret) {
+		return IRQ_HANDLED;
+	}
+	pre_power_gd = sc->power_good;
+	sc->power_good = !!reg_val;
+	dev_info(sc->dev, "%s: pre_power_gd:%d, power_good:%d\n", __func__, pre_power_gd, sc->power_good);
 	if (!prev_vbus_gd && sc->vbus_good) {
-		sc->force_detect_count = 0;
+		dev_info(sc->dev, "%s: adapter/usb inserted\n", __func__);
+		ret = sc8989x_set_vindpm(sc, 12000);
+		schedule_delayed_work(&sc->ibus_enable_dwork, msecs_to_jiffies(1500));
+		/*sc->force_detect_count = 0;
 		type = sc8989x_get_vbus_stat(sc);
 		Charger_Detect_Init(sc);
 		sc->retry_count = 0;
@@ -3085,7 +3302,7 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		if ((type == VBUS_STAT_NO_INPUT) && (sc->retry_count <  SPECIAL_TYPE_MAX_RETRY)) {
 			schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(500));
 			++(sc->retry_count);
-		}
+		}*/
 
 #if IS_ENABLED(CONFIG_WLC_WO_BOOST)
 		sc8989x_set_vindpm_track(sc, sc->cfg->vindpm_track);
@@ -3101,8 +3318,15 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 #endif
 	} else if (prev_vbus_gd && !sc->vbus_good) {
 		dev_info(sc->dev, "%s: adapter/usb removed\n", __func__);
+		cancel_delayed_work(&sc->ibus_enable_dwork);
+		sc->ibus_dis = 0;
+		atomic_set(&sc->reset_vindpm, 0);
 		if (sc->is_upm6920A) {
-			sc8989x_set_dpdm_0V(sc);
+			if ((sc->qc_chg_type == USB_TYPE_QC3P_18)
+				|| (sc->qc_chg_type == USB_TYPE_QC3P_27)
+				|| (sc->qc_chg_type == USB_TYPE_QC3P_45)) {
+				sc8989x_set_dpdm_0V(sc);
+			}
 		}
 		sc8989x_set_dpdm_hiz(sc);
 		sc->qc_chg_type = 0;
@@ -3111,8 +3335,12 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		//sc8989x_get_charger_type(sc);
 		power_supply_changed(sc->psy);
 	}
-
-	if (bc12_done && sc->is_upm6920A) {
+	if (!sc->is_upm6920A) {
+		if (!pre_power_gd && sc->power_good && sc->vbus_good) {
+			bc12_done = 1;
+		}
+	}
+	if (bc12_done) {
 		sc8989x_get_charger_type(sc);
 		power_supply_changed(sc->psy);
 	}
@@ -3424,6 +3652,7 @@ static enum power_supply_property sc8989x_chg_psy_properties[] = {
 	POWER_SUPPLY_PROP_USB_TYPE,
 	POWER_SUPPLY_PROP_CURRENT_MAX,
 	POWER_SUPPLY_PROP_VOLTAGE_MAX,
+	POWER_SUPPLY_PROP_VOLTAGE_MIN,
 };
 
 static enum power_supply_usb_type sc8989x_chg_psy_usb_types[] = {
@@ -3447,6 +3676,7 @@ static int sc8989x_chg_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_STATUS:
 	case POWER_SUPPLY_PROP_ONLINE:
 	case POWER_SUPPLY_PROP_ENERGY_EMPTY:
+	case POWER_SUPPLY_PROP_VOLTAGE_MIN:
 		ret = 1;
 		break;
 
@@ -3666,6 +3896,10 @@ static int sc8989x_chg_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT:
 		ret = sc8989x_set_term_curr(sc, val->intval / 1000);
 		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MIN:
+		dev_info(sc->dev, "%s: %d, common charger\n", __func__, val->intval);
+		sc->disablehiz_isset_flg = val->intval;
+		break;
 	default:
 		ret = -EINVAL;
 		break;
@@ -3730,7 +3964,9 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	sc->client = client;
 	dev_info(sc->dev, "sc8989x_charger_probe start\n");
 
-	sc->regmap = devm_regmap_init_i2c(client, &sc8989x_regmap_config);
+	//sc->regmap = devm_regmap_init_i2c(client, &sc8989x_regmap_config);
+	sc->regmap = devm_regmap_init(sc->dev, &sc8989x_regmap_bus, sc,
+                                    &sc8989x_regmap_config);
 	if (IS_ERR(sc->regmap)) {
 		dev_err(sc->dev, "Failed to initialize regmap\n");
 		return -EINVAL;
@@ -3764,6 +4000,7 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&sc->force_detect_dwork, sc8989x_force_detection_dwork_handler);
 	INIT_DELAYED_WORK(&sc->detect_qc_dwork, get_qc_charger_type_func_work);
 	INIT_DELAYED_WORK(&sc->mmi_hvdcp_detect_dwork, mmi_start_hvdcp_detect_work);
+	INIT_DELAYED_WORK(&sc->ibus_enable_dwork, upm6920a_ibus_enable_dwork);
 #ifdef CONFIG_MTK_CHARGER_V4P19
 	INIT_DELAYED_WORK(&sc->psy_dwork, sc8989x_inform_psy_dwork_handler);
 #endif /*CONFIG_MTK_CHARGER_V4P19*/
@@ -3819,11 +4056,14 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	device_init_wakeup(sc->dev, 1);
 
 	dump_reg_enable = true;
+	sc->ibus_dis = 0;
 	entry = proc_create("dump_reg_ctrl", 0664, NULL, &dump_reg_ctrl_fops);
 	if (!entry) {
 		dev_err(sc->dev, "%s create proc directory failed\n", __func__);
 	}
 	sc->mmi_charging_full = false;
+	sc->power_good = 1;
+	sc->disablehiz_isset_flg = false;
 	determine_initial_status(sc);
 	sc8989x_dump_register(sc);
 

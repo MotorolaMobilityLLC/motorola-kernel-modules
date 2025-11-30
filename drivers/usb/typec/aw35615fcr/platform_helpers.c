@@ -2103,9 +2103,16 @@ void handle_core_event(AW_U32 event, AW_U8 portId, void *usr_ctx)
 				chip->port.SinkRequest.FVRDO.ObjectPosition,
 				chip->port.SrcCapsReceived[chip->port.SinkRequest.FVRDO.ObjectPosition - 1].FPDOSupply.Voltage * 50,
 				chip->port.SinkRequest.FVRDO.OpCurrent * 10);
-			tcpci_sink_vbus(chip->tcpc, TCP_VBUS_CTRL_PD | TCP_VBUS_CTRL_PD_DETECT,
-				chip->port.SrcCapsReceived[chip->port.SinkRequest.FVRDO.ObjectPosition - 1].FPDOSupply.Voltage * 50,
-				chip->port.SinkRequest.FVRDO.OpCurrent * 10);
+				if ((chip->port.SrcCapsReceived[chip->port.SinkRequest.FVRDO.ObjectPosition - 1].FPDOSupply.Voltage == 100) &&
+					(chip->port.SinkRequest.FVRDO.OpCurrent == 0)) {
+					tcpci_sink_vbus(chip->tcpc, TCP_VBUS_CTRL_PD_REQUEST,
+					chip->port.SrcCapsReceived[chip->port.SinkRequest.FVRDO.ObjectPosition - 1].FPDOSupply.Voltage * 50,
+					chip->port.SinkRequest.FVRDO.OpCurrent * 10);
+				} else {
+					tcpci_sink_vbus(chip->tcpc, TCP_VBUS_CTRL_PD | TCP_VBUS_CTRL_PD_DETECT,
+					chip->port.SrcCapsReceived[chip->port.SinkRequest.FVRDO.ObjectPosition - 1].FPDOSupply.Voltage * 50,
+					chip->port.SinkRequest.FVRDO.OpCurrent * 10);
+				}
 		}
 		break;
 	case DATA_ROLE:

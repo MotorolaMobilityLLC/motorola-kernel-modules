@@ -1814,7 +1814,7 @@ void PolicySourceEvaluatePRSwap(Port_t *port)
 			DeviceWrite(port, regControl4, 1, &port->Registers.Control4.byte);
 			port->Registers.Control5.VBUS_DIS_SEL = 1;
 			DeviceWrite(port, regControl5, 1, &port->Registers.Control5.byte[0]);
-			TimerStart(&port->PolicyStateTimer, 5);
+			TimerStart(&port->PolicyStateTimer, 10);
 			//port->PolicyIsSource = AW_FALSE;
 			//port->Registers.Switches.POWERROLE = port->PolicyIsSource;
 			//DeviceWrite(port, regSwitches1, 1, &port->Registers.Switches.byte[1]);
@@ -1830,7 +1830,7 @@ void PolicySourceEvaluatePRSwap(Port_t *port)
 		/* Wait on transition time */
 		if (TimerExpired(&port->PolicyStateTimer)) {
 			//AW_LOG("dis discharge\n");
-			platform_delay_10us(2000);  //vbus release time
+			platform_delay_10us(5000);  //vbus release time
 			port->Registers.Control4.EN_PAR_CFG = 1;
 			DeviceWrite(port, regControl4, 1, &port->Registers.Control4.byte);
 			port->Registers.Control5.VBUS_DIS_SEL = 0;
@@ -4445,7 +4445,9 @@ void processDMTBIST(Port_t *port)
 			port->Registers.Control.BIST_TMODE = 1;
 			DeviceWrite(port, regControl3, 1,
 					&port->Registers.Control.byte[3]);
-
+			AW_LOG("Slice1 = 0x%x\n", port->Registers.Slice.byte);
+			DeviceRead(port, regSlice, 1, &port->Registers.Slice.byte);
+			AW_LOG("Slice2 = 0x%x\n", port->Registers.Slice.byte);
 			port->SINK_Flag = 0;
 			port->SOURCE_Flag = 0;
 

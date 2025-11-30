@@ -653,7 +653,7 @@ static void cps8851_irq_work_handler(struct kthread_work *work)
 	tcpci_unlock_typec(chip->tcpc);
 #if CONFIG_USB_PD_CHECK_RX_PENDING_IF_SRTOUT
 	if (!completion_done(&chip->tcpc->alert_done)) {
-		//chip->tcpc->is_rx_event = false;
+		chip->tcpc->is_rx_event = false;
 		complete(&chip->tcpc->alert_done);
 	}
 #endif /* CONFIG_USB_PD_CHECK_RX_PENDING_IF_SRTOUT */
@@ -1307,9 +1307,11 @@ static int cps8851_set_cc(struct tcpc_device *tcpc, int pull)
 	int cc1, cc2;
 	int rp_lvl = TYPEC_CC_PULL_GET_RP_LVL(pull), pull1, pull2;
 	struct cps8851_chip *chip = tcpc_get_dev_data(tcpc);
+	static int pull_cache;
 
-	CPS8851_INFO("pull = 0x%02X\n", pull);
 	pull = TYPEC_CC_PULL_GET_RES(pull);
+	CPS8851_INFO("pull = 0x%02X, pull_cache = 0x%02X\n", pull, pull_cache);
+	pull_cache = pull;
 	if (pull == TYPEC_CC_DRP) {
 		data = TCPC_V10_REG_ROLE_CTRL_RES_SET(
 				1, rp_lvl, TYPEC_CC_RD, TYPEC_CC_RD);
@@ -1324,8 +1326,11 @@ static int cps8851_set_cc(struct tcpc_device *tcpc, int pull)
 					schedule_delayed_work(&chip->wd_work, 0);
 				}
 			}
-			++chip->wd_count;
-			chip->last_set_cc_toggle_time = ktime_get();
+			if (pull_cache != TYPEC_CC_DRP)
+			{
+				++chip->wd_count;
+				chip->last_set_cc_toggle_time = ktime_get();
+			}
 #endif
 		ret = cps8851_i2c_write8(
 			tcpc, TCPC_V10_REG_ROLE_CTRL, data);
