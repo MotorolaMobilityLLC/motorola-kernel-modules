@@ -328,7 +328,6 @@ static int qti_charger_write(struct qti_charger *chg, u32 property,
 		goto out;
 	} else {
 		rc = 0;
-		bm_ulog_print_log(OEM_BM_ULOG_SIZE);
 	}
 out:
 	mmi_dbg(chg, "Complete data write for property: %u\n", property);

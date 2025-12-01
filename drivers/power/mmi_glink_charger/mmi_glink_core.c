@@ -54,6 +54,8 @@
 #define HEARTBEAT_DISCHARGE_MS 100000
 #define HEARTBEAT_WAKEUP_INTRVAL_NS 70000000000
 #define OEM_BM_ULOG_SIZE		4096
+#define ULOG_DURATION_MS		60000
+
 static bool debug_enabled;
 module_param(debug_enabled, bool, 0600);
 MODULE_PARM_DESC(debug_enabled, "Enable debug for mmi glink charger driver");
@@ -724,6 +726,23 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 	if (charger_info->chrg_present != charger_info_update.chrg_present && !charger_info_update.chrg_present) {
 		qti_encrypt_authentication(chip);
 	}
+
+	if(chip->charger_present_dynamic_control_bm_ulog && !bm_ulog_is_enabled_by_cmd()) {
+		if(chip->charger_info.chrg_present){
+			bm_ulog_enable_log(true, 1000);
+			chip->bm_ulog_enabled = true;
+			//mmi_info(chip, "enable adsp log during chg present!\n");
+		}else if(!chip->charger_info.chrg_present && chip->bm_ulog_enabled) {
+			bm_ulog_enable_log(false, 0);
+			chip->bm_ulog_enabled = false;
+			//mmi_info(chip, "disable adsp log during chg not present!\n");
+		}
+	} else if (charger_info_update.chrg_present && !bm_ulog_is_enabled_by_cmd()) {
+		if (charger_info->chrg_present != charger_info_update.chrg_present) {
+			bm_ulog_enable_log(true, ULOG_DURATION_MS);
+		}
+	}
+
 	charger_info->chrg_present = charger_info_update.chrg_present;
 	if (!charger_info_update.chrg_present && charger_info_update.chrg_type != 0)
 		charger_info->chrg_present = 1;
@@ -755,20 +774,6 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 		charger_info->aicl_result_ma,
 		charger_info->chrg_stat,
 		charger_info->icm_sm_st);
-
-	bm_ulog_print_log(OEM_BM_ULOG_SIZE);
-
-	if(chip->charger_present_dynamic_control_bm_ulog && !bm_ulog_is_enabled_by_cmd()) {
-		if(chip->charger_info.chrg_present){
-			bm_ulog_enable_log(true, 1000);
-			chip->bm_ulog_enabled = true;
-			//mmi_info(chip, "enable adsp log during chg present!\n");
-		}else if(!chip->charger_info.chrg_present && chip->bm_ulog_enabled) {
-			bm_ulog_enable_log(false, 0);
-			chip->bm_ulog_enabled = false;
-			//mmi_info(chip, "disable adsp log during chg not present!\n");
-		}
-	}
 
 }
 
@@ -1388,14 +1393,14 @@ static int mmi_parse_dt(struct mmi_glink_chip *chip)
 	int rc, byte_len, i, chrg_idx = 0;
 	struct device_node *node = chip->dev->of_node, *child;
 
-        chip->enable_charging_limit =
-                of_property_read_bool(node, "mmi,enable-charging-limit");
+	chip->enable_charging_limit =
+			of_property_read_bool(node, "mmi,enable-charging-limit");
 
-        chip->enable_factory_poweroff =
-                of_property_read_bool(node, "mmi,enable-factory-poweroff");
+	chip->enable_factory_poweroff =
+			of_property_read_bool(node, "mmi,enable-factory-poweroff");
 
 	chip->factory_syspoweroff_wait =
-		of_property_read_bool(node, "mmi,factory-syspoweroff-wait");
+			of_property_read_bool(node, "mmi,factory-syspoweroff-wait");
 
 	chip->start_factory_kill_disabled =
 			of_property_read_bool(node, "mmi,start-factory-kill-disabled");
