@@ -2733,7 +2733,7 @@ static int wireless_fw_update(bool force)
     cps_wls_log(CPS_LOG_DEBG,"Wireless fw update chip_id=0x%X\n", chip->chip_id);
 
 	result = cps_get_fw_revision(&fw_revision);
-	if (!force && version <= fw_revision) {
+	if (!force && version == fw_revision) {
 	    cps_wls_log(CPS_LOG_DEBG,"%s bin version %x same as fw version %x,not need update fw\n",__func__,version,fw_revision);
 	    ret = CPS_WLS_SUCCESS;
 	    goto free_bug;
