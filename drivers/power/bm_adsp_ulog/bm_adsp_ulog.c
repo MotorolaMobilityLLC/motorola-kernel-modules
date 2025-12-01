@@ -90,6 +90,8 @@ struct bm_ulog_dev {
 	char				ulog_buffer[MAX_ULOG_READ_BUFFER_SIZE];
 	bool				disable_dynamic_open_ulog;
 	bool				ulog_enabled;
+	bool				secure_hardware;
+	bool				hw_cid0;
 	struct delayed_work		ulog_complete_work;
 };
 
@@ -496,6 +498,10 @@ int bm_ulog_enable_log(bool enable, unsigned int duration_ms)
 		pr_err("BM ulog has not initialized yet\n");
 		return -ENODEV;
 	}
+
+	if (bmdev->secure_hardware && !bmdev->hw_cid0)
+		return 0;
+
 	if (bmdev->disable_dynamic_open_ulog)
 		return 0;
 
@@ -528,6 +534,7 @@ bool bm_ulog_is_enabled_by_cmd(void)
 	bool rt = false;
 	const char *bootargs = NULL;
 	char *bm_ulog_enabled = NULL;
+	static int bm_ulog_en_rt = -1;
 
 	if (!bmdev) {
 		pr_err("BM ulog has not initialized yet\n");
@@ -537,6 +544,10 @@ bool bm_ulog_is_enabled_by_cmd(void)
 	if (bmdev && bmdev->debug_enabled && *bmdev->debug_enabled) {
 		bm_info(bmdev, "bmdev->bm_ulog_enabled is true\n");
 		return true;
+	}
+
+	if (bm_ulog_en_rt >= 0) {
+		return (bm_ulog_en_rt > 0);
 	}
 
 	if (!np) {
@@ -549,7 +560,11 @@ bool bm_ulog_is_enabled_by_cmd(void)
 		bm_info(bmdev, "of_property_read_string bm_ulog_enabled=%s\n", bm_ulog_enabled);
 		if (bm_ulog_enabled) {
 			rt = true;
+			bm_ulog_en_rt = 1;
+		} else {
+			bm_ulog_en_rt = 0;
 		}
+		bm_info(bmdev, "of_property_read_string bm_ulog_enabled=%s bm_ulog_en_rt=%d\n", bm_ulog_enabled, bm_ulog_en_rt);
 	}
 
 	of_node_put(np);
@@ -707,6 +722,123 @@ bool bm_ulog_is_bm_ulog_enabled(struct bm_ulog_dev *bmdev)
 	return rt;
 }
 
+static char *bootargs_str = NULL;
+static size_t bootargs_str_len = 0;
+static int mmi_get_bootarg_dt(char *key, char **value, char *prop, char *spl_flag)
+{
+	const char *bootargs_tmp = NULL;
+	char *idx = NULL;
+	char *kvpair = NULL;
+	int err = 1;
+	struct device_node *n = of_find_node_by_path("/chosen");
+	size_t bootargs_tmp_len = 0;
+
+	if (n == NULL)
+		goto err;
+
+	if (of_property_read_string(n, prop, &bootargs_tmp) != 0)
+		goto putnode;
+
+	bootargs_tmp_len = strlen(bootargs_tmp);
+	if (bootargs_tmp_len >= bootargs_str_len) {
+		if (bootargs_str)
+			kfree(bootargs_str);
+		bootargs_str = kzalloc(bootargs_tmp_len + 1, GFP_KERNEL);
+		if (!bootargs_str) {
+			err = -ENOMEM;
+			goto putnode;
+		}
+		bootargs_str_len = bootargs_tmp_len + 1;
+	} else {
+		memset(bootargs_str, '\0', bootargs_str_len);
+	}
+
+	strscpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
+
+	idx = strnstr(bootargs_str, key, strlen(bootargs_str));
+	if (idx) {
+		kvpair = strsep(&idx, " ");
+		if (kvpair)
+			if (strsep(&kvpair, "=")) {
+				*value = strsep(&kvpair, spl_flag);
+				if (*value)
+					err = 0;
+			}
+	}
+
+putnode:
+	of_node_put(n);
+err:
+	return err;
+}
+
+static int mmi_get_bootarg(char *key, char **value)
+{
+#ifdef CONFIG_BOOT_CONFIG
+	return mmi_get_bootarg_dt(key, value, "mmi,bootconfig", "\n");
+#else
+	return mmi_get_bootarg_dt(key, value, "bootargs", " ");
+#endif
+}
+
+static int mmi_check_secure_hardware(struct bm_ulog_dev *bmdev)
+{
+	char *s = NULL;
+	int ret = 0;
+
+	if (!bmdev) {
+		pr_err("BM ulog has not initialized yet\n");
+		return -1;
+	}
+
+	if (mmi_get_bootarg("secure_hardware=", &s) == 0) {
+		if (s != NULL) {
+			bm_info(bmdev, "secure_hardware=%s\n", s);
+			if (*s == '1') {
+				bmdev->secure_hardware = true;
+			} else {
+				bmdev->secure_hardware = false;
+			}
+			bm_info(bmdev, "secure_hardware: %d\n", bmdev->secure_hardware);
+		} else {
+			bm_info(bmdev, "Could not get secure_hardware\n");
+		}
+	} else {
+		bm_info(bmdev, "Could not get bootarg\n");
+		ret = -1;
+	}
+
+	return ret;
+}
+
+static int mmi_check_hw_cid0(struct bm_ulog_dev *bmdev)
+{
+	char *s = NULL;
+	unsigned long cid_val;
+	int ret = 0;
+
+	if (!bmdev) {
+		pr_err("BM ulog has not initialized yet\n");
+		return -1;
+	}
+
+	if (mmi_get_bootarg("androidboot.cid=", &s) == 0) {
+		if (s != NULL) {
+			if (kstrtoul(s, 0, &cid_val) == 0) {
+				bmdev->hw_cid0 = (cid_val == 0);
+			}
+			bm_info(bmdev, "HW cid0: %d, cid_str=%s\n", bmdev->hw_cid0, s);
+		} else {
+			bm_info(bmdev, "Could not get HW cid\n");
+			ret = -1;
+		}
+	} else {
+		bm_info(bmdev, "Could not get bootarg\n");
+		ret = -1;
+	}
+	return ret;
+}
+
 static int bm_ulog_probe(struct platform_device *pdev)
 {
 	int rc;
@@ -753,6 +885,15 @@ static int bm_ulog_probe(struct platform_device *pdev)
 	bmdev->ipc_log = ipc_log_context_create(BM_ULOG_PAGES, "bm_ulog", 0);
 	if (!bmdev->ipc_log)
 		dev_err(bmdev->dev, "Failed to create ipc log\n");
+
+	rc = mmi_check_secure_hardware(bmdev);
+	if (bmdev->secure_hardware) {
+		rc |= mmi_check_hw_cid0(bmdev);
+	}
+	if (!rc && bmdev->secure_hardware && !bmdev->hw_cid0) {
+		init_log_enabled = false;
+		bm_ulog_set_mask(bmdev, 0, 0);
+	}
 
 	if (init_log_enabled) {
 		int ulog_retry_cnt = 0;
@@ -803,6 +944,11 @@ static void bm_ulog_remove(struct platform_device *pdev)
 	if (rc < 0) {
 		pr_err("Error unregistering from pmic_glink, rc=%d\n", rc);
 		return;
+	}
+	if (bootargs_str) {
+		kfree(bootargs_str);
+		bootargs_str = NULL;
+		bootargs_str_len = 0;
 	}
 	g_bmdev = NULL;
 
