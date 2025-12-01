@@ -55,6 +55,10 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t goodix_ts_stowed_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+#endif
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 		goodix_ts_stowed_show, goodix_ts_stowed_store);
 
@@ -64,7 +68,9 @@ static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size);
 static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_pocket_mode_show, goodix_ts_pocket_mode_store);
-
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NULL);
+#endif
 static int goodix_ts_send_cmd(struct goodix_ts_core *core_data,
 		u8 cmd, u8 len, u8 subCmd, u8 subCmd2);
 
@@ -704,6 +710,23 @@ exit:
 	return size;
 }
 
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	u8 hardware_status = 0;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	hardware_status = core_data->open_status;
+	ts_info("Read touch hardware status = %d.\n", hardware_status);
+	return scnprintf(buf, PAGE_SIZE, "%d", hardware_status);
+}
+#endif
+
 static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
 {
 	int idx = 0;
@@ -714,6 +737,10 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 #ifdef CONFIG_GTP_LAST_TIME
 	ADD_ATTR(timestamp);
+#endif
+
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+	ADD_ATTR(hardware_status);
 #endif
 
 	if (core_data->board_data.stowed_mode_ctrl)

@@ -1261,6 +1261,7 @@ static int brl_esd_check(struct goodix_ts_core *cd)
 #define GOODIX_TOUCH_EVENT			0x80
 #define GOODIX_REQUEST_EVENT		0x40
 #define GOODIX_GESTURE_EVENT		0x20
+#define GOODIX_OPEN_EVENT		    0x10
 #define GOODIX_FP_EVENT				0x08
 #define GOODIX_PALM_FLAG			0x10
 
@@ -1433,6 +1434,10 @@ static int brl_event_handler(struct goodix_ts_core *cd,
 
 	event_status = pre_buf[0];
 	if (event_status & GOODIX_TOUCH_EVENT) {
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+		cd->open_status= !!(event_status & GOODIX_OPEN_EVENT);
+		ts_debug("Touch open state = 0x%02x", cd->open_status);
+#endif
 		ret = goodix_touch_handler(cd, ts_event, pre_buf);
 		if (ret < 0)
 			return ret;
