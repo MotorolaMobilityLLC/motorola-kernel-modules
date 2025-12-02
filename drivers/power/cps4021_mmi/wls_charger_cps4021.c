@@ -4867,15 +4867,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client)
 	cps_wls_log(CPS_LOG_DEBG, ">>>>>int_flag when probe = %x\n", int_flag);
     if(int_flag > 0)
     {
-        cps_wls_set_int_clr(int_flag);
-        if(cps_wls_get_sys_mode() == SYS_MODE_RX)
-        {
-            cps_wls_rx_irq_handler(int_flag);
-        }
-        else
-        {
-            cps_wls_tx_irq_handler(int_flag);
-        }
+        cps_wls_irq_handler(int_flag, (void*)chip);
     }
 
     return ret;
