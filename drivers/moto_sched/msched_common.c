@@ -64,6 +64,22 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		return true;
 	}
 
+	if (is_enabled(UX_ENABLE_KWORKER)) {
+            if (p && !p->mm && p->prio == 100
+                            && strncmp(p->comm, "kworker/", 8) == 0
+                            && strncmp(p->comm, "kworker/u", 9) != 0) {
+
+                int waker_prio = NICE_TO_PRIO(task_nice(current));
+                bool launcher_wake = current->pid == global_launcher_tgid;
+                bool top_task = task_in_top_app_group(current);
+
+                if ((top_task && waker_prio <= 110) || launcher_wake) {
+                        trace_sched_boost_ux_kworker(p, waker_prio, launcher_wake, top_task, ux_type);
+                        return true;
+                }
+             }
+        }
+
 	if (is_enabled(UX_ENABLE_KERNEL) && (ux_type & UX_TYPE_KERNEL))
 		return true;
 
@@ -234,7 +250,7 @@ static inline bool task_in_top_related_group(struct task_struct *p) {
 }
 
 static inline bool task_is_animator(struct task_struct *p) {
-	return task_has_ux_type(p, UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI|UX_TYPE_ANIMATOR);
+        return task_has_ux_type(p, UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI|UX_TYPE_ANIMATOR);
 }
 
 unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
