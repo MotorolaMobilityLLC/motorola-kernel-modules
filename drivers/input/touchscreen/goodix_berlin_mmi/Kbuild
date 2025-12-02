@@ -177,6 +177,8 @@ else ifneq ($(filter roadstr%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_ROADSTR
 else ifneq ($(filter marvel%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_MARVEL
+else ifneq ($(filter lhotse%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_LHOTSE
 endif
 $(warning "william EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
 
