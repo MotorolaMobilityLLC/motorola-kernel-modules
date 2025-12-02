@@ -29,9 +29,14 @@
 #include <linux/pen_detection_notify.h>
 #include <linux/kthread.h>
 #include <linux/wait.h>
+#include <linux/module.h>
 
 #define CHG_SHOW_MAX_SIZE 50
 #define CHG_START_DELAY_S 1
+
+static int pen_activated;
+module_param(pen_activated, int, 0444);
+MODULE_PARM_DESC(pen_activated, "pen activated status");
 
 enum charge_status {
 	PEN_STAT_NOT_CHARGING,
@@ -225,7 +230,8 @@ static void start_charge(struct pen_charger *chg, bool en)
 	pr_info("start_charge en = %d\n", en);
 	gpio_set_value(chg->chg_ldswtch_en_gpio, en);
 	gpio_set_value(chg->chg_boost_en_gpio, en);
-
+	if (en)
+		pen_activated = true;
 
 	pr_info("chg->chg_ldswtch_en_gpio  = %d\n", gpio_get_value(chg->chg_ldswtch_en_gpio));
 	pr_info("chg->chg_boost_en_gpio  = %d\n", gpio_get_value(chg->chg_boost_en_gpio));
