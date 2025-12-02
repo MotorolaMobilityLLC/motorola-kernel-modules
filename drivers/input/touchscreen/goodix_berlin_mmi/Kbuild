@@ -161,6 +161,8 @@ else ifneq ($(filter leap%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_LEAP
 else ifneq ($(filter mona%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_MONA
+else ifneq ($(filter lhotse%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_LHOTSE
 endif
 $(warning "william EXTRA_CFLAGS = $(EXTRA_CFLAGS)")
 

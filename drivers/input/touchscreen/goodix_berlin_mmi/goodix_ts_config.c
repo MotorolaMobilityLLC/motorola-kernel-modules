@@ -103,7 +103,7 @@ struct goodix_ic_report_rate_config report_rate_config_info = {
 			.command = 0x9D02,
 		},
 	}
-#elif defined(PRODUCT_LEAP)
+#elif defined(PRODUCT_LEAP) || defined(PRODUCT_LHOTSE)
 	.rate_config_count = 3,
 	.refresh_rate_ctrl = 1,
 	.interpolation_ctrl = 1,
