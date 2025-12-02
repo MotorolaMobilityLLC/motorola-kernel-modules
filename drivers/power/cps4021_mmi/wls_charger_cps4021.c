@@ -1825,7 +1825,8 @@ static void cps_rx_online_check(struct cps_wls_chrg_chip *chg)
     }
     if(chip->wls_online && !wls_online){
         chip->wls_online = false;
-        mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
+        if (chip->factory_wls_en == false)
+                mmi_mux_wls_chg_chan(MMI_MUX_CHANNEL_WLC_CHG, false);
         power_supply_changed(chip->wl_psy);
     }
 }
