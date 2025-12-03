@@ -29,7 +29,8 @@ struct focaltech_ic_report_rate_config report_rate_config_info = {
 			.command = 1,
 		},
 	}
-#elif defined(PRODUCT_SCOUT) || defined(PRODUCT_CYBERT) || defined(PRODUCT_FUJI) || defined(PRODUCT_NAPLES)
+#elif defined(PRODUCT_SCOUT) || defined(PRODUCT_CYBERT) || defined(PRODUCT_FUJI) \
+	|| defined(PRODUCT_NAPLES) || defined(PRODUCT_MASERA)
 	.rate_config_count = 2,
 	.refresh_rate_ctrl = 0,
 	.interpolation_ctrl = 1,
