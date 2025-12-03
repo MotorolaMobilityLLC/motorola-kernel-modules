@@ -31,6 +31,9 @@
 
 #define GOODIX_ESD_TICK_WRITE_DATA 0xAA
 #define GOODIX_ESD_CHECK_INTERVAL (8 * HZ)
+#define MAJOR_CONVERSION_SHIFT 5
+#define TOUCH_MAJOR_CLAMP_THRESHOLD 254
+#define TOUCH_MAJOR_MAX_VALUE 255
 
 bool debug_log_flag;
 #ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
@@ -1548,6 +1551,14 @@ static void goodix_thp_force_release_all(struct goodix_thp_core *core_data)
         core_data->pen_state = PEN_STATE_NONE;
 }
 
+/* Scale down pressure, ensure the result is > 0, and clamp to 255.*/
+static inline int convert_pressure_to_touch_major(int pressure)
+{
+        int shifted = pressure >> MAJOR_CONVERSION_SHIFT;
+
+        return (shifted >= TOUCH_MAJOR_CLAMP_THRESHOLD) ? TOUCH_MAJOR_MAX_VALUE : (shifted + 1);
+}
+
 static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *core_data, unsigned long arg)
 {
         long ret = 0;
@@ -1687,14 +1698,17 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                     for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
                         input_mt_slot(input_dev, i);
 
+                        //convert finger pressure to major
+                        data.touch[i].major = convert_pressure_to_touch_major(data.touch[i].p);
+
                         // --- check and print state change ---
                         prev_state = core_data->prev_finger_state[i];
                         curr_state = (data.touch[i].touch_valid != 0);
 
                         if (prev_state != curr_state) {
                             if (curr_state) {
-                                // DOWN event：print coord and pressure
-                                ts_info(tdev->dev, "touch_health - Finger[%d] DOWN: x=%d, y=%d, pressure=%d",
+                                // DOWN event：print finger coord and major
+                                ts_info(tdev->dev, "touch_health - Finger[%d] DOWN: x=%d, y=%d, major=%d",
                                     i,
                                     CALC_ACTUAL_COORD(data.touch[i].x, scaling_factor),
                                     CALC_ACTUAL_COORD(data.touch[i].y, scaling_factor),
