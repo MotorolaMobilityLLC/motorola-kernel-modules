@@ -499,8 +499,8 @@ int bm_ulog_enable_log(bool enable, unsigned int duration_ms)
 		return -ENODEV;
 	}
 
-	if (bmdev->secure_hardware && !bmdev->hw_cid0)
-		return 0;
+	//if (bmdev->secure_hardware && !bmdev->hw_cid0)
+	//	return 0;
 
 	if (bmdev->disable_dynamic_open_ulog)
 		return 0;
