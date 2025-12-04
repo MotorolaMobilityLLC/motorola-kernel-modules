@@ -93,6 +93,7 @@ struct bm_ulog_dev {
 	bool				secure_hardware;
 	bool				hw_cid0;
 	struct delayed_work		ulog_complete_work;
+	bool 				dynamic_debug_enabled;
 };
 
 static struct bm_ulog_dev *g_bmdev = NULL;
@@ -490,6 +491,27 @@ int bm_ulog_print_mask_log(enum bm_ulog_category_bitmap categories,
 }
 EXPORT_SYMBOL(bm_ulog_print_mask_log);
 
+void bm_ulog_set_dynamic_debug_enabled(bool enable)
+{
+    struct bm_ulog_dev *bmdev = g_bmdev;
+
+    if (!bmdev) {
+        pr_err("BM ulog has not initialized yet\n");
+        return;
+    }
+
+    if (!bmdev->debug_enabled) {
+        pr_err("BM ulog debug_enabled pointer is invalid\n");
+        return;
+    }
+
+    *bmdev->debug_enabled = enable;
+	bmdev->dynamic_debug_enabled = enable;
+
+    pr_info("BM ulog debug_enabled set to %s\n", enable ? "true" : "false");
+}
+EXPORT_SYMBOL(bm_ulog_set_dynamic_debug_enabled);
+
 int bm_ulog_enable_log(bool enable, unsigned int duration_ms)
 {
 	struct bm_ulog_dev *bmdev = g_bmdev;
@@ -541,10 +563,13 @@ bool bm_ulog_is_enabled_by_cmd(void)
 		return false;
 	}
 
-	if (bmdev && bmdev->debug_enabled && *bmdev->debug_enabled) {
-		bm_info(bmdev, "bmdev->bm_ulog_enabled is true\n");
-		return true;
-	}
+	// pr_err("Detect dynamic_debug_enabled is %d\n", bmdev->dynamic_debug_enabled);
+    if (!bmdev->dynamic_debug_enabled) {
+        if (bmdev && bmdev->debug_enabled && *bmdev->debug_enabled) {
+			bm_info(bmdev, "bmdev->bm_ulog_enabled is true\n");
+            return true;
+        }
+    }
 
 	if (bm_ulog_en_rt >= 0) {
 		return (bm_ulog_en_rt > 0);
@@ -909,6 +934,7 @@ static int bm_ulog_probe(struct platform_device *pdev)
 	}
 
 	debug_enabled = bm_ulog_is_bm_ulog_enabled(bmdev);
+	bmdev->dynamic_debug_enabled = false;
 	bm_info(bmdev, "bm_ulog_check_debug_enabled debug_enabled=%d\n", debug_enabled);
 	bmdev->bm_ulog_task = kthread_create(bm_ulog_kthread, bmdev, "bm_ulog_kthread");
 	if (IS_ERR_OR_NULL(bmdev->bm_ulog_task)) {

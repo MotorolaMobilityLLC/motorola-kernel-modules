@@ -729,11 +729,13 @@ static void mmi_get_charger_info(struct mmi_glink_chip *chip)
 
 	if(chip->charger_present_dynamic_control_bm_ulog && !bm_ulog_is_enabled_by_cmd()) {
 		if(chip->charger_info.chrg_present){
-			bm_ulog_enable_log(true, 1000);
+			// bm_ulog_enable_log(true, 1000);
+			bm_ulog_set_dynamic_debug_enabled(true);
 			chip->bm_ulog_enabled = true;
 			//mmi_info(chip, "enable adsp log during chg present!\n");
 		}else if(!chip->charger_info.chrg_present && chip->bm_ulog_enabled) {
-			bm_ulog_enable_log(false, 0);
+			// bm_ulog_enable_log(false, 0);
+			bm_ulog_set_dynamic_debug_enabled(false);
 			chip->bm_ulog_enabled = false;
 			//mmi_info(chip, "disable adsp log during chg not present!\n");
 		}

@@ -86,4 +86,5 @@ int bm_ulog_print_mask_log(enum bm_ulog_category_bitmap categories,
 		    enum bm_ulog_level_type level, u32 size);
 int bm_ulog_enable_log(bool enable, unsigned int duration_ms);
 bool bm_ulog_is_enabled_by_cmd(void);
+void bm_ulog_set_dynamic_debug_enabled(bool enabled);
 #endif /* __BM_ADSP_ULOG_H__ */
