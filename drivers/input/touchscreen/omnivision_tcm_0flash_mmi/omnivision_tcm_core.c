@@ -648,16 +648,19 @@ static ssize_t stowed_show(struct device *dev,
 static ssize_t ovt_dbg_data_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	int ret = 0;
-	ret = ovt_tp_data_dump_capture(dev);
-	if (0 == ret)
-		OVT_INFO("capture data succesful\n");
-	return ret;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", 0);
 }
 
 static ssize_t ovt_dbg_data_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
+	int ret = 0;
+
+	if (!buf || count <= 0)
+		return 0;
+	ret = ovt_tp_data_dump_capture(dev);
+	if (0 == ret)
+		OVT_INFO("capture data succesful\n");
 	return count;
 }
 #endif
