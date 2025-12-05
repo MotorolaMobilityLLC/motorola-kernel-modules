@@ -2604,7 +2604,7 @@ static int sc8989x_detected_qc20_hvdcp(struct sc8989x_chip *sc, int *charger_typ
 	int ret;
 	int vbus_voltage;
 
-	if (!sc) {
+	if (!sc || !charger_type) {
 		return -EINVAL;
 	}
 	//do qc2.0 detected
@@ -2629,6 +2629,7 @@ static int sc8989x_detected_qc20_hvdcp(struct sc8989x_chip *sc, int *charger_typ
 			dev_err(sc->dev, "Can't adjust qc20 hvdcp 5V\n");
 		}
 	} else {
+		*charger_type = USB_TYPE_UNKNOWN;
 		dev_info(sc->dev, "charger type is not HVDCP\n");
 		return ret;
 	}
@@ -2656,6 +2657,7 @@ static int mmi_hvdcp_detect_kthread(void *param)
 		pr_info("HVDCP: mmi_hvdcp_detect_kthread begin\n");
 		sc->mmi_hvdcp_trig_flag = false;
 		sc->qc_is_detect = true;
+		charger_type = USB_TYPE_UNKNOWN;
 		sc8989x_set_charging_current(sc->chg_dev,1000000);
 		//mt6375_chg_field_set(sc, F_IAICR, 500);
 		//mt6375_chg_set_usbsw(sc, USBSW_CHG);
