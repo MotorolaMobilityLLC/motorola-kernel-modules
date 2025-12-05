@@ -32,6 +32,7 @@ struct battery_info {
 	int batt_chg_counter;
 	int batt_fv_uv;
 	int batt_fcc_ua;
+	int batt_cutoff_mv;
 };
 
 struct battery_host {
