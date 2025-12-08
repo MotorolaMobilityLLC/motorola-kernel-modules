@@ -66,6 +66,9 @@ MOTO_WLS_AUTH_T motoauth;
 #define VBUS_VALID_MV 4100 //If vbus >= 4.1V,the vbus is valid.
 #define CPS_CHIP_ID 0x4021
 
+#define FW_UPDATE_MAX_RETRIES 3
+#define FW_UPDATE_RETRY_DELAY_MS 50
+
 #define WLC_ERROR_LEVEL	1
 #define WLC_INFO_LEVEL	2
 #define WLC_DEBUG_LEVEL	3
@@ -2741,179 +2744,234 @@ static int wireless_fw_update(bool force)
 	}
 
     msleep(10);
-    cps_wls_write_nbyte(0xFF84,0x7A8B,2);  /*write password*/
 
-    /*MCU reset and unmask all address*/
-    cps_wls_write_nbyte(0xFF80,0x08,1);
+	int retry_count = 0;
+	bool update_success = false;
 
-    cps_wls_write_unmask_all();
+	while (retry_count < FW_UPDATE_MAX_RETRIES && !update_success) {
+		if (retry_count > 0) {
+			cps_wls_log(CPS_LOG_ERR, "[%s] Retry firmware update, attempt %d\n", __func__, retry_count + 1);
+			msleep(FW_UPDATE_RETRY_DELAY_MS);
+		}
+		cps_wls_write_nbyte(0xFF84,0x7A8B,2);  /*write password*/
 
-    msleep(10);
-    /*Write analog register password*/
-    cps_wls_write_anaglog_password();
+		/*MCU reset and unmask all address*/
+		cps_wls_write_nbyte(0xFF80,0x08,1);
 
-    /*Set the I2C timeout to 1s*/
-    cps_wls_write_i2c_timeout();
+		cps_wls_write_unmask_all();
 
-    /*Write the bootloader code to the SRAM*/
-    cps_wls_write_nbyte(0xFF82,0x2000,2);
-    cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM HEX!\n", __func__);
-	ret = cps_wls_program_sram(0x0000, CPS4021_BOOTLOADER, 0x800);
-   if(ret == CPS_WLS_FAIL)
-    {
-        cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM BOOTLOADER FAIL!\n", __func__);
-         goto free_bug;
-    }
-    cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM BOOTLOADER!\n", __func__);
+		msleep(10);
+		/*Write analog register password*/
+		cps_wls_write_anaglog_password();
 
-    /*Enable remap function*/
-    cps_wls_write_remap_restart();
-	//=========================================================
-	// cali bootloader code
-	//=========================================================
-   msleep(10);
-    cps_wls_write_nbyte(0xFF84,0x7A8B,2);  /*write password*/
+		/*Set the I2C timeout to 1s*/
+		cps_wls_write_i2c_timeout();
 
-    /*unmask all address*/
-    cps_wls_write_unmask_all();
+		/*Write the bootloader code to the SRAM*/
+		cps_wls_write_nbyte(0xFF82,0x2000,2);
+		cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM HEX!\n", __func__);
+		ret = cps_wls_program_sram(0x0000, CPS4021_BOOTLOADER, 0x800);
+		if(ret == CPS_WLS_FAIL)
+		{
+			cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM BOOTLOADER FAIL!\n", __func__);
+			//goto free_bug;
+			retry_count++;
+			continue;
+		}
+		cps_wls_log(CPS_LOG_DEBG, "[%s] START LOAD SRAM BOOTLOADER!\n", __func__);
 
-    /*Set the I2C timeout to 1s*/
-    cps_wls_write_i2c_timeout();
+		/*Enable remap function*/
+		cps_wls_write_remap_restart();
+		//=========================================================
+		// cali bootloader code
+		//=========================================================
+		msleep(10);
+		cps_wls_write_nbyte(0xFF84,0x7A8B,2);  /*write password*/
 
-    cps_wls_program_cmd_send(CACL_CRC_TEST);/*Enable Bootloader verification*/
-    result = cps_wls_program_wait_cmd_done();
-    if (result != PASS)
-    {
-        cps_wls_log(CPS_LOG_ERR, "[%s]  ---> BOOTLOADER CRC FAIL\n", __func__);
-        goto free_bug;
-    }
-    cps_wls_log(CPS_LOG_DEBG, "[%s]  ---> LOAD BOOTLOADER SUCCESSFUL\n", __func__);
-	//=========================================================
-	// LOAD firmware to MTP
-	//=========================================================
-    memset(firmware_buf, 0, 0x8000);
-	memcpy(firmware_buf,fw->data,fw->size);
-    //ret = firmware_load(firmware_buf, &firmware_length); // load bootloader
-    if (ret != 0)
-    {
-        cps_wls_log(CPS_LOG_ERR, "[%s] ---- firmware get error %d\n", __func__, ret);
-        goto update_fail;
-    }
+		/*unmask all address*/
+		cps_wls_write_unmask_all();
 
-    cps_wls_log(CPS_LOG_DEBG, "[%s]  ---> START LOAD APP FIRMWARE \n", __func__);
-    buf0_flag = 0;
-    buf1_flag = 0;
-    cfg_buf_size = 256;
-    // cfg_buf_size = 1024;
-    addr = 0;
-    cps_wls_write_nbyte(0xFF82,0x2000,2);
-    cps_wls_write_nbyte(ADDR_BUF_SIZE, cfg_buf_size, 4);
+		/*Set the I2C timeout to 1s*/
+		cps_wls_write_i2c_timeout();
 
-    /*ERASER MTP*/
-    cps_wls_program_cmd_send(PGM_ERASER_0);
+		cps_wls_program_cmd_send(CACL_CRC_TEST);/*Enable Bootloader verification*/
+		result = cps_wls_program_wait_cmd_done();
+		if (result != PASS)
+		{
+			cps_wls_log(CPS_LOG_ERR, "[%s]  ---> BOOTLOADER CRC FAIL\n", __func__);
+			// goto free_bug;
+			retry_count++;
+			continue;
+		}
+		cps_wls_log(CPS_LOG_DEBG, "[%s]  ---> LOAD BOOTLOADER SUCCESSFUL\n", __func__);
+		//=========================================================
+		// LOAD firmware to MTP
+		//=========================================================
+		memset(firmware_buf, 0, 0x8000);
+		memcpy(firmware_buf,fw->data,fw->size);
+		//ret = firmware_load(firmware_buf, &firmware_length); // load bootloader
+		if (ret != 0)
+		{
+			cps_wls_log(CPS_LOG_ERR, "[%s] ---- firmware get error %d\n", __func__, ret);
+			// goto update_fail;
+			retry_count++;
+			continue;
+		}
 
-    result = cps_wls_program_wait_cmd_done();
-    if (result != PASS)
-    {
-        cps_wls_log(CPS_LOG_ERR, "[%s]  ---> ERASE MTP FAIL\n", __func__);
-        goto update_fail;
-    }
-    cps_wls_log(CPS_LOG_DEBG, "[%s]  ---> ERASE MTP SUCCESSFUL\n", __func__);
-    for (i = 0; i < (32 * 1024) / 4 / cfg_buf_size; i++)
-    //  for (i = 0; i < (32 * 1024) /cfg_buf_size; i++)
-    {
-        if (buf0_flag == 0)
-        {
-            cps_wls_program_sram(ADDR_BUFFER0, firmware_buf + addr, cfg_buf_size * 4);
-            addr = addr + cfg_buf_size * 4;
+		cps_wls_log(CPS_LOG_DEBG, "[%s]  ---> START LOAD APP FIRMWARE \n", __func__);
+		buf0_flag = 0;
+		buf1_flag = 0;
+		cfg_buf_size = 256;
+		// cfg_buf_size = 1024;
+		addr = 0;
+		cps_wls_write_nbyte(0xFF82,0x2000,2);
+		cps_wls_write_nbyte(ADDR_BUF_SIZE, cfg_buf_size, 4);
 
-            if (buf1_flag == 1)
-            {
-                result = cps_wls_program_wait_cmd_done();
-                if (result != PASS)
-                {
-                    pr_err("%s: ---> WRITE BUFFER1 DATA TO MTP FAIL\n", __func__);
-                    goto update_fail;
-                }
-                buf1_flag = 0;
-            }
-            cps_wls_program_cmd_send(PGM_BUFFER0);
-            buf0_flag = 1;
-            continue;
-        }
+		/*ERASER MTP*/
+		cps_wls_program_cmd_send(PGM_ERASER_0);
 
-        if (buf1_flag == 0)
-        {
-            cps_wls_program_sram(ADDR_BUFFER1, firmware_buf + addr, cfg_buf_size * 4);
-            addr = addr + cfg_buf_size * 4;
+		result = cps_wls_program_wait_cmd_done();
+		if (result != PASS)
+		{
+			cps_wls_log(CPS_LOG_ERR, "[%s]  ---> ERASE MTP FAIL\n", __func__);
+			// goto update_fail;
+			retry_count++;
+			continue;
+		}
+		cps_wls_log(CPS_LOG_DEBG, "[%s]  ---> ERASE MTP SUCCESSFUL\n", __func__);
 
-            if (buf0_flag == 1)
-            {
-                result = cps_wls_program_wait_cmd_done();
-                if (result != PASS)
-                {
-                    pr_err("%s: ---> WRITE BUFFER0 DATA TO MTP FAIL\n", __func__);
-                    goto update_fail;
-                }
-                buf0_flag = 0;
-            }
-            cps_wls_program_cmd_send(PGM_BUFFER1);
-            buf1_flag = 1;
-            continue;
-        }
-    }
+		bool write_error = false;
 
-    if (buf0_flag == 1)
-    {
-        result = cps_wls_program_wait_cmd_done();
-        if (result != PASS)
-        {
-            pr_err("%s: ---> WRITE BUFFER0 DATA TO MTP FAIL\n", __func__);
-            goto update_fail;
-        }
-        buf0_flag = 0;
-    }
+		for (i = 0; i < (32 * 1024) / 4 / cfg_buf_size; i++)
+		//  for (i = 0; i < (32 * 1024) /cfg_buf_size; i++)
+		{
+			if (buf0_flag == 0)
+			{
+				result = cps_wls_program_sram(ADDR_BUFFER0, firmware_buf + addr, cfg_buf_size * 4);
+				if (result != CPS_WLS_SUCCESS) {
+					pr_err("%s  ---> WRITE BUFFER0 DATA TO SRAM FAIL\n", __func__);
+					write_error = true;
+					break;
+				}
+				addr = addr + cfg_buf_size * 4;
 
-    if (buf1_flag == 1)
-    {
-        result = cps_wls_program_wait_cmd_done();
-        if (result != PASS)
-        {
-            pr_err("%s: ---> WRITE BUFFER1 DATA TO MTP FAIL\n", __func__);
-            goto update_fail;
-        }
-        buf1_flag = 0;
-    }
-    pr_err("%s: ---> WRITE APP FIRMWARE SUCCESSFUL\n", __func__);
-    msleep(10);
-         /***************************************************************************************
-                            *                          Step4, check app CRC                                       *
-         ***************************************************************************************/
+				if (buf1_flag == 1)
+				{
+					result = cps_wls_program_wait_cmd_done();
+					if (result != PASS)
+					{
+						pr_err("%s: ---> WRITE BUFFER1 DATA TO MTP FAIL\n", __func__);
+						// goto update_fail;
+						write_error = true;
+						break;
+					}
+					buf1_flag = 0;
+				}
+				cps_wls_program_cmd_send(PGM_BUFFER0);
+				buf0_flag = 1;
+				continue;
+			}
 
-    cps_wls_program_cmd_send(CACL_CRC_APP);
-    result = cps_wls_program_wait_cmd_done();
-    if (result != PASS)
-    {
-        pr_err("%s: ---> APP CRC FAIL\n", __func__);
-        goto update_fail;
-    }
-    pr_err("%s: ---> CHERK APP FIRMWARE CRC SUCCESSFUL\n", __func__);
-       /***************************************************************************************
-                         *                          Step5, write mcu start flag                                *
-       ***************************************************************************************/
-    cps_wls_program_cmd_send(SYS_RESET); /*reset all system*/
-    msleep(100);
+			if (buf1_flag == 0)
+			{
+				result = cps_wls_program_sram(ADDR_BUFFER1, firmware_buf + addr, cfg_buf_size * 4);
+				if (result != CPS_WLS_SUCCESS) {
+					pr_err("%s  ---> WRITE BUFFER1 DATA TO SRAM FAIL\n", __func__);
+					write_error = true;
+					break;
+				}
+				addr = addr + cfg_buf_size * 4;
 
-	cps_wls_log(CPS_LOG_DEBG, "[%s] ---- Program successful\n", __func__);
+				if (buf0_flag == 1)
+				{
+					result = cps_wls_program_wait_cmd_done();
+					if (result != PASS)
+					{
+						pr_err("%s: ---> WRITE BUFFER0 DATA TO MTP FAIL\n", __func__);
+						// goto update_fail;
+						write_error = true;
+						break;
+					}
+					buf0_flag = 0;
+				}
+				cps_wls_program_cmd_send(PGM_BUFFER1);
+				buf1_flag = 1;
+				continue;
+			}
+		}
 
-	result = cps_get_fw_revision(&fw_revision);
+		if (write_error) {
+			retry_count++;
+			continue;
+		}
 
-	if (version == fw_revision) {
-		cps_wls_log(CPS_LOG_DEBG, "%s update fw 0x%X successful \n", __func__, version);
-		ret = CPS_WLS_SUCCESS;
-	} else {
-		cps_wls_log(CPS_LOG_DEBG, "%s update fw 0x%X failed,fw_revision 0x%X\n", __func__, version, fw_revision);
-		ret = CPS_WLS_FAIL;
+		if (buf0_flag == 1)
+		{
+			result = cps_wls_program_wait_cmd_done();
+			if (result != PASS)
+			{
+				pr_err("%s: ---> WRITE BUFFER0 DATA TO MTP FAIL\n", __func__);
+				// goto update_fail;
+				retry_count++;
+				continue;
+			}
+			buf0_flag = 0;
+		}
+
+		if (buf1_flag == 1)
+		{
+			result = cps_wls_program_wait_cmd_done();
+			if (result != PASS)
+			{
+				pr_err("%s: ---> WRITE BUFFER1 DATA TO MTP FAIL\n", __func__);
+				// goto update_fail;
+				retry_count++;
+				continue;
+			}
+			buf1_flag = 0;
+		}
+		pr_err("%s: ---> WRITE APP FIRMWARE SUCCESSFUL\n", __func__);
+		msleep(10);
+			/***************************************************************************************
+								*                          Step4, check app CRC                                       *
+			***************************************************************************************/
+
+		cps_wls_program_cmd_send(CACL_CRC_APP);
+		result = cps_wls_program_wait_cmd_done();
+		if (result != PASS)
+		{
+			pr_err("%s: ---> APP CRC FAIL\n", __func__);
+			// goto update_fail;
+			retry_count++;
+			continue;
+		}
+		pr_err("%s: ---> CHERK APP FIRMWARE CRC SUCCESSFUL\n", __func__);
+		update_success = true;
+		/***************************************************************************************
+							 *                          Step5, write mcu start flag                                *
+		 ***************************************************************************************/
+		cps_wls_program_cmd_send(SYS_RESET); /*reset all system*/
+		msleep(100);
+
+		cps_wls_log(CPS_LOG_DEBG, "[%s] ---- Program successful\n", __func__);
+
+		result = cps_get_fw_revision(&fw_revision);
+
+		if (version == fw_revision) {
+			cps_wls_log(CPS_LOG_DEBG, "%s update fw 0x%X successful \n", __func__, version);
+			ret = CPS_WLS_SUCCESS;
+		} else {
+			cps_wls_log(CPS_LOG_DEBG, "%s update fw 0x%X failed,fw_revision 0x%X\n", __func__, version, fw_revision);
+			ret = CPS_WLS_FAIL;
+			retry_count++;
+			update_success = false;
+			continue;
+		}
+	}
+
+	if (!update_success) {
+		cps_wls_log(CPS_LOG_ERR, "[%s] ---- Firmware update failed after %d retries\n", __func__, FW_UPDATE_MAX_RETRIES);
+		goto update_fail;
 	}
 
 free_bug:
