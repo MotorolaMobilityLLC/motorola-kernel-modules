@@ -407,6 +407,7 @@ enum report_type {
 	REPORT_STATUS = 0x1b,
 	REPORT_PRINTF = 0x82,
 	REPORT_FW_PRINTF = 0x84,
+	REPORT_ABNORMAL_INFO = 0xE1,
 	REPORT_HDL_ROMBOOT = 0xfd,
 	REPORT_HDL_F35 = 0xfe,
 };
@@ -546,6 +547,19 @@ struct ovt_tcm_features {
 	unsigned char dual_firmware:1;
 	unsigned char byte_2_reserved:7;
 } __packed;
+
+typedef struct {
+    unsigned short chargerBit           : 1; // bit0
+    unsigned short gloveMode            : 1; // bit1
+    unsigned short frequencyShift       : 2; // bit2-3
+    unsigned short palmFlg              : 1; // bit4
+    unsigned short bendingMode          : 1; // bit5
+    unsigned short gndUnstable          : 1; // bit6
+    unsigned short waterMode            : 1; // bit7
+    unsigned short baselineFastRelaxCmd : 1; // bit8
+    unsigned short openTestDetect       : 1; // bit9
+    unsigned short reserved             : 7;
+} __attribute__((packed)) TCM_ABNORMAL_INFO_T;
 
 #ifdef CONFIG_SUPPORT_MULTI_FIRMWARE
 enum firmware_image_type {
