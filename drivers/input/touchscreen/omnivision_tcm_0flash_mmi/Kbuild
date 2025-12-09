@@ -17,6 +17,9 @@ ifneq ($(filter m y, $(CONFIG_BOARD_USES_DOUBLE_TAP_CTRL)),)
 ifneq ($(filter m y, $(CONFIG_OVT_STOWED_MODE_SUPPORT)),)
         EXTRA_CFLAGS += -DOVT_STOWED_MODE_SUPPORT
 endif
+ifneq ($(filter m y, $(CONFIG_OVT_POCKET_MODE_SUPPORT)),)
+        EXTRA_CFLAGS += -DOVT_POCKET_MODE_SUPPORT
+endif
 endif
 
 ifneq ($(filter m y, $(CONFIG_OVT_GLOVE_MODE_CTRL)),)
