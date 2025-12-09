@@ -106,6 +106,7 @@ enum vindpm_track {
 #define DPDM_DRIVE_3V3               6
 #define DPDM_DRIVE_0V6               2
 
+#define DEFAULT_HIZ_CUT_TIME_EXPRIE 300UL
 
 enum sc8989x_vbus_stat {
 	VBUS_STAT_NO_INPUT = 0,
@@ -294,6 +295,7 @@ struct sc8989x_chip {
 	int vbus_good;
 	int is_upm6920A;
 	int is_cx25890HQ;
+	int is_sc89890h;
 	uint8_t dev_id;
 	struct power_supply_desc psy_desc;
 	struct sc8989x_cfg_e *cfg;
@@ -331,6 +333,8 @@ struct sc8989x_chip {
 	bool ibus_dis;
 	bool disablehiz_isset_flg;
 	bool wait_hiz;
+	struct delayed_work hiz_cut_dwork;
+	bool hiz_cut_flag;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -912,6 +916,16 @@ static bool is_apdo_rdy(struct sc8989x_chip *sc) {
 		return false;
 }
 
+static irqreturn_t sc8989x_irq_handler(int irq, void *data);
+static void sc8989x_hiz_cut_dwork_handler(struct work_struct *work) {
+    struct sc8989x_chip *sc = container_of(work,
+                                    struct sc8989x_chip,
+                                    hiz_cut_dwork.work);
+    dev_info(sc->dev, "disable hiz cut end\n");
+    sc->hiz_cut_flag = false;
+    sc8989x_irq_handler(sc->irq, (void *)sc);
+}
+
 static void determine_initial_status(struct sc8989x_chip *sc);
 static int sc8989x_set_vindpm_track(struct sc8989x_chip *sc,enum vindpm_track track);
 static int sc8989x_set_vindpm(struct sc8989x_chip *sc, int volt_mv);
@@ -964,6 +978,33 @@ static int sc8989x_normal_set_hiz(struct sc8989x_chip *sc, bool enable)
 				}
 			}
 		}
+	} else if (sc->is_sc89890h){
+		int read_reg_val = 0;
+		int ret = sc8989x_field_read(sc, EN_HIZ, &read_reg_val);
+		if (ret < 0) {
+			dev_err(sc->dev, "%s: sc8989x read hiz fail: %d\n", __func__, ret);
+			return ret;
+		}
+		if (read_reg_val == reg_val) {
+			dev_info(sc->dev, "hiz already %d\n", reg_val);
+			return 0;
+		}
+		if (reg_val) {
+			if (sc->hiz_cut_flag) {
+			    dev_info(sc->dev, "disable hiz not end, after 300ms retry\n");
+			    return -EBUSY;
+			}
+		} else {
+			schedule_delayed_work(&sc->hiz_cut_dwork,msecs_to_jiffies(DEFAULT_HIZ_CUT_TIME_EXPRIE));
+			sc->hiz_cut_flag = true;
+			if (sc->disablehiz_isset_flg) {
+				sc->disablehiz_isset_flg = false;
+				if (is_apdo_rdy(sc) == false)
+					ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+				return ret;
+			}
+		}
+		ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
 	} else {
 		if (reg_val) {
 			ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
@@ -1424,6 +1465,8 @@ static bool sc8989x_detect_device(struct sc8989x_chip *sc)
 		regmap_write(sc->regmap, UPM6920A_REG_CFG_MODE, UPM6920A_CFG_MODE_ENABLE);
 		sc8989x_field_write(sc, CFGINIT_BIT,0);
 		regmap_write(sc->regmap, UPM6920A_REG_CFG_MODE, UPM6920A_CFG_MODE_DISABLE);
+	} else if (val == SC89890H_PN_NUM) {
+		sc->is_sc89890h = 1;
 	}
 
 	sc->dev_id = val;
@@ -3092,14 +3135,19 @@ static void upm6920a_ibus_enable_dwork(struct work_struct *work)
 	int type = 0;
 	struct sc8989x_chip *sc = container_of(work,
 				struct sc8989x_chip, ibus_enable_dwork.work);
+	int power_good;
 
 	atomic_set(&sc->reset_vindpm, 1);
 	sc->ibus_dis = 0;
 	ret = sc8989x_set_vindpm(sc, 4600);
-	dev_info(sc->dev,"ret=%d ibus_enabled vindpm_reset \n", ret);
+	ret = sc8989x_field_read(sc, PG_STAT, &power_good);
+	if (ret) {
+		return;
+	}
+	dev_info(sc->dev,"ret=%d,%d ibus_enabled vindpm_reset \n", ret, power_good);
 	if (!sc->is_upm6920A) {
 		type = sc8989x_get_vbus_stat(sc);
-		if (type == VBUS_STAT_NO_INPUT) {
+		if (power_good && type == VBUS_STAT_NO_INPUT) {
 			schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(10));
 		}
 	}
@@ -3268,6 +3316,11 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 			return IRQ_HANDLED;
 		}
 		bc12_done = !!reg_val;
+	} else if (sc->is_sc89890h) {
+	    if (sc->hiz_cut_flag) {
+		dev_info(sc->dev, "%s: sc8989x in the process of disable hiz\n", __func__);
+		return IRQ_HANDLED;
+	    }
 	}
 
 	ret = sc8989x_field_read(sc, VBUS_GD, &reg_val);
@@ -3322,9 +3375,8 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		sc->ibus_dis = 0;
 		atomic_set(&sc->reset_vindpm, 0);
 		if (sc->is_upm6920A) {
-			if ((sc->qc_chg_type == USB_TYPE_QC3P_18)
-				|| (sc->qc_chg_type == USB_TYPE_QC3P_27)
-				|| (sc->qc_chg_type == USB_TYPE_QC3P_45)) {
+			if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_DCP &&
+				sc->chg_type == POWER_SUPPLY_TYPE_USB_DCP) {
 				sc8989x_set_dpdm_0V(sc);
 			}
 		}
@@ -4001,6 +4053,8 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&sc->detect_qc_dwork, get_qc_charger_type_func_work);
 	INIT_DELAYED_WORK(&sc->mmi_hvdcp_detect_dwork, mmi_start_hvdcp_detect_work);
 	INIT_DELAYED_WORK(&sc->ibus_enable_dwork, upm6920a_ibus_enable_dwork);
+	INIT_DELAYED_WORK(&sc->hiz_cut_dwork, sc8989x_hiz_cut_dwork_handler);
+
 #ifdef CONFIG_MTK_CHARGER_V4P19
 	INIT_DELAYED_WORK(&sc->psy_dwork, sc8989x_inform_psy_dwork_handler);
 #endif /*CONFIG_MTK_CHARGER_V4P19*/
@@ -4064,6 +4118,7 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	sc->mmi_charging_full = false;
 	sc->power_good = 1;
 	sc->disablehiz_isset_flg = false;
+	sc->hiz_cut_flag = false;
 	determine_initial_status(sc);
 	sc8989x_dump_register(sc);
 
