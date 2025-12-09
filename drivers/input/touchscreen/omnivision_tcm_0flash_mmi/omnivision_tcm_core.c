@@ -643,6 +643,52 @@ static ssize_t stowed_show(struct device *dev,
 }
 #endif
 
+#ifdef OVT_POCKET_MODE_SUPPORT
+static ssize_t pocket_mode_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int mode = 0;
+	int ret = 0;
+	struct ovt_tcm_hcd *tcm_hcd = g_tcm_hcd;
+
+	ret = sscanf(buf, "%d", &mode);
+	if (ret < 0) {
+		OVT_INFO("Failed to convert value.\n");
+		return -EINVAL;
+	}
+
+	g_tcm_hcd->get_pocket = mode;
+	if (g_tcm_hcd->set_pocket == mode) {
+		OVT_INFO("Skip same pocket mode value :%d", mode);
+		ret = size;
+		return ret;
+	}
+
+	if (tcm_hcd->in_suspend && tcm_hcd->wakeup_gesture_enabled) {
+		ret = ovt_tcm_sleep(tcm_hcd, mode);
+		if (ret < 0)
+			OVT_INFO("failed to set pocket mode = %d", mode);
+		else {
+			OVT_INFO("Success to set pocket mode %d\n", mode);
+			g_tcm_hcd->set_pocket = g_tcm_hcd->get_pocket;
+			ret = size;
+		}
+	} else {
+		OVT_INFO("Skip pocket mode setting when suspended:%d, wakeable:%d", tcm_hcd->in_suspend,tcm_hcd->wakeup_gesture_enabled);
+		ret = size;
+	}
+
+
+	return ret;
+}
+
+static ssize_t pocket_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	OVT_INFO("pocket state = %d.\n", g_tcm_hcd->set_pocket);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", g_tcm_hcd->get_pocket);
+}
+#endif
 
 #ifdef CONFIG_OVT_LOG_CAPTURE
 static ssize_t ovt_dbg_data_show(struct device *dev,
@@ -683,6 +729,9 @@ static struct device_attribute touchscreen_attributes[] = {
 #endif
 #ifdef OVT_STOWED_MODE_SUPPORT
 	__ATTR_RW(stowed),
+#endif
+#ifdef OVT_POCKET_MODE_SUPPORT
+	__ATTR_RW(pocket_mode),
 #endif
 #ifdef CONFIG_OVT_LOG_CAPTURE
 	__ATTR(log_trigger, S_IRUGO | S_IWUSR | S_IWGRP, ovt_dbg_data_show, ovt_dbg_data_store),
@@ -5115,6 +5164,17 @@ static int ovt_disp_gesture_notifier_callback(struct notifier_block *nb, unsigne
 				else {
 					g_tcm_hcd->set_stowed = g_tcm_hcd->get_stowed;
 					OVT_INFO("Enable stowed mode when suspend\n");
+				}
+			}
+#endif
+#ifdef OVT_POCKET_MODE_SUPPORT
+			if (g_tcm_hcd->get_pocket) {
+				retval = ovt_tcm_sleep(g_tcm_hcd, 1);
+				if (retval < 0)
+					OVT_INFO("fail to enable pocket mode when supsend\n");
+				else {
+					g_tcm_hcd->set_pocket = g_tcm_hcd->get_pocket;
+					OVT_INFO("Enable pocket mode when suspend\n");
 				}
 			}
 #endif

@@ -81,7 +81,7 @@ int ovt_tp_data_dump_capture(struct device *dev);
 int ovt_glove_mode(struct ovt_tcm_hcd *tcm_hcd);
 #endif
 
-#ifdef OVT_STOWED_MODE_SUPPORT
+#if defined(OVT_STOWED_MODE_SUPPORT) || defined(OVT_POCKET_MODE_SUPPORT)
 extern int ovt_tcm_sleep(struct ovt_tcm_hcd *tcm_hcd, bool en);
 #endif
 
@@ -621,6 +621,10 @@ struct ovt_tcm_hcd {
 #ifdef OVT_STOWED_MODE_SUPPORT
 	int set_stowed;
 	int get_stowed;
+#endif
+#ifdef OVT_POCKET_MODE_SUPPORT
+	int set_pocket;
+	int get_pocket;
 #endif
 #ifdef CONFIG_TP_LAST_TIME
 	ktime_t last_event_time;

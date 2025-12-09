@@ -1593,6 +1593,17 @@ int ovt_gesture_suspend(struct ovt_tcm_hcd *tcm_hcd)
 			}
 		}
 #endif
+#ifdef OVT_POCKET_MODE_SUPPORT
+		if (g_tcm_hcd->get_pocket) {
+			retval = ovt_tcm_sleep(tcm_hcd, 1);
+			if (retval < 0)
+				OVT_INFO("fail to enable pocket mode when supsend\n");
+			else {
+				g_tcm_hcd->set_pocket = g_tcm_hcd->get_pocket;
+				OVT_INFO("Enable pocket mode when suspend\n");
+			}
+		}
+#endif
 #endif
 
 		//OVT_INFO("gesture enable mode:%d\n", tcm_hcd->wakeup_gesture_enabled);
@@ -1643,6 +1654,9 @@ int touch_resume(struct ovt_tcm_hcd *tcm_hcd)
 
 #ifdef OVT_STOWED_MODE_SUPPORT
 		g_tcm_hcd->set_stowed = 0;
+#endif
+#ifdef OVT_POCKET_MODE_SUPPORT
+		g_tcm_hcd->set_pocket = 0;
 #endif
 
 		retval = tcm_hcd->set_dynamic_config(tcm_hcd,
