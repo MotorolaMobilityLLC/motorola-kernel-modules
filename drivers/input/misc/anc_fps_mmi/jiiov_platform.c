@@ -27,6 +27,8 @@
 #include <linux/regulator/consumer.h>
 #include <net/sock.h>
 
+#include <linux/pinctrl/consumer.h>  // moto
+
 // clang-format off
 #include "jiiov_config.h"
 #include "jiiov_log.h"
@@ -809,7 +811,7 @@ static int anc_request_named_gpio(struct anc_data *p_data, const char *label, in
 
 static int anc_irq_init(struct anc_data *p_data) {
     int ret_val = -1;
-    int irqf = IRQF_TRIGGER_FALLING | IRQF_ONESHOT;  // IRQF_TRIGGER_FALLING or IRQF_TRIGGER_RISING
+    int irqf = IRQF_TRIGGER_RISING | IRQF_ONESHOT;  // moto: FALLING to RISING
 
     CHECK_PTR_PARAM(p_data);
 
@@ -1639,7 +1641,6 @@ static void anc_free(struct anc_data *p_data, struct device *dev) {
         return;
     }
 
-
     if (p_data) {
         devm_kfree(dev, p_data);
         p_data = NULL;
@@ -1659,7 +1660,7 @@ static int anc_create_device(struct anc_data *p_data) {
 
     CHECK_PTR_PARAM(p_data);
 
-    p_data->dev_class = class_create(THIS_MODULE, ANC_DEVICE_NAME);
+    p_data->dev_class = class_create(ANC_DEVICE_NAME);
     if (IS_ERR(p_data->dev_class)) {
         ANC_LOGE("class_create failed");
         return -ENODEV;
@@ -1879,15 +1880,18 @@ out_free:
     return ret_val;
 }
 
-static int anc_remove(anc_device_t *pdev) {
+static void anc_remove(anc_device_t *pdev) {
     struct anc_data *p_data = NULL;
 
-    CHECK_PTR_PARAM(pdev);
+    if (NULL == pdev) {
+        ANC_LOGW("pdev is null");
+        return;
+    }
 
     p_data = dev_get_drvdata(&pdev->dev);
     if (p_data == NULL) {
-        ANC_LOGE("get data handle failed");
-        return -EINVAL;
+        ANC_LOGW("get data handle failed");
+        return;
     }
 
     sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
@@ -1902,8 +1906,6 @@ static int anc_remove(anc_device_t *pdev) {
     custom_send_command(CUSTOM_COMMAND_DEINIT, NULL);
     anc_destroy_device(p_data);
     anc_free(p_data, &pdev->dev);
-
-    return 0;
 }
 
 static void anc_shutdown(anc_device_t *pdev) {
@@ -1938,7 +1940,7 @@ static anc_driver_t anc_driver = {
             .name = ANC_DEVICE_NAME,
             .owner = THIS_MODULE,
             .of_match_table = anc_of_match,
-#if defined(MTK_PLATFORM)
+#ifdef MTK_PLATFORM
             .bus = &spi_bus_type,
 #endif
         },

@@ -1,0 +1,14 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module(
+    name = "anc_fps_mmi",
+    srcs = [
+        "jiiov_log.h",
+        "jiiov_platform.h",
+        "custom.c",
+        "jiiov_config.h",
+        "jiiov_netlink.c",
+        "jiiov_netlink.h",
+        "jiiov_platform.c",
+    ],
+)
