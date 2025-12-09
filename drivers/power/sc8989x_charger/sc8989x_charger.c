@@ -2201,17 +2201,17 @@ static int sc8989x_detected_qc30_hvdcp(struct sc8989x_chip *sc, int *charger_typ
 			return -EINVAL;
 		*charger_type = USB_TYPE_QC30;
 		dev_info(sc->dev, "%s QC3.0 charger detected\n", __func__);
+
+		for (i = 0; i < 16; i++) {
+			ret = sc8989x_qc30_step_down_vbus(sc);
+			if (ret)
+				dev_err(sc->dev, "%s qc30 step down vbus error\n", __func__);
+		}
 	}
 
-	for (i = 0; i < 16; i++) {
-		ret = sc8989x_qc30_step_down_vbus(sc);
-		if (ret)
-			dev_err(sc->dev, "%s qc30 step down vbus error\n", __func__);
-	}
 
 	sc8989x_get_vbus(sc->chg_dev, &vbus_voltage);
 	dev_info(sc->dev, "%s vbus voltage now = %d after detected qc30\n", __func__,vbus_voltage);
-
 	return ret;
 }
 
@@ -2677,6 +2677,11 @@ void mmi_start_hvdcp_detect_work(struct work_struct *work)
 		return;
 	}
 
+	if (vbus_uv < HVDCP_VOLTAGE_MIN) {
+		pr_err("HVDCP: vbus_uv < 4V, exit qc detected\n");
+		return;
+	}
+
 	pr_info("HVDCP: mmi start hvdcp detect\n");
 	sc->mmi_hvdcp_trig_flag = true;
 	wake_up_interruptible(&sc->mmi_hvdcp_wait_que);
@@ -2819,6 +2824,7 @@ static int mmi_hvdcp_detect_kthread(void *param)
 	int ret;
 	int charger_type = USB_TYPE_UNKNOWN;
 	union power_supply_propval val;
+	int vbus_uv;
 
 	do {
 
@@ -2827,15 +2833,33 @@ static int mmi_hvdcp_detect_kthread(void *param)
 			break;
 
 		//down(&sc->sem_dpdm);
-		pr_info("HVDCP: mmi_hvdcp_detect_kthread begin\n");
 		sc->mmi_hvdcp_trig_flag = false;
-		sc->qc_is_detect = true;
 		charger_type = USB_TYPE_UNKNOWN;
 		sc8989x_set_charging_current(sc->chg_dev,1000000);
 		//mt6375_chg_field_set(sc, F_IAICR, 500);
 		//mt6375_chg_set_usbsw(sc, USBSW_CHG);
 
 rerun:
+		ret = sc8989x_get_vbus(sc->chg_dev, &vbus_uv);
+		if (ret < 0) {
+			pr_err("%s get vbus failed\n",__func__);
+			goto out;
+		}
+
+		if (is_pd_rdy(sc) || vbus_uv > MMI_HVDCP2_VOLTAGE_STANDARD) {
+			pr_info("HVDCP: pd adaptor ready, exit qc detected\n");
+			goto out;
+		}
+
+		if (vbus_uv < HVDCP_VOLTAGE_MIN) {
+			pr_err("HVDCP: vbus_uv < 4V, exit qc detected\n");
+			goto out;
+		}
+
+		sc->qc_is_detect = true;
+		Charger_Detect_Init(sc);
+		pr_info("HVDCP: mmi_hvdcp_detect_kthread begin\n");
+
 		//do qc2.0 detected
 		ret = sc8989x_detected_qc20_hvdcp(sc, &charger_type);
 		if (ret) {
@@ -2862,6 +2886,7 @@ rerun:
 					pr_info("HVDCP: Rerun detect hvdcp\n");
 					sc->mmi_qc3p_rerun_done = true;
 					//pull down dpdm for rerun HVDCP detected
+					sc8989x_set_dpdm_0V(sc);
 					msleep(QC3P_MSLEEP_100DELAY);
 					goto rerun;
 				} else {
@@ -3318,6 +3343,7 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 #endif
 	} else if (prev_vbus_gd && !sc->vbus_good) {
 		dev_info(sc->dev, "%s: adapter/usb removed\n", __func__);
+		Charger_Detect_Release(sc);
 		cancel_delayed_work(&sc->ibus_enable_dwork);
 		sc->ibus_dis = 0;
 		atomic_set(&sc->reset_vindpm, 0);
