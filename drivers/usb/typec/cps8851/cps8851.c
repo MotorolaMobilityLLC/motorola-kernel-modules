@@ -1311,7 +1311,6 @@ static int cps8851_set_cc(struct tcpc_device *tcpc, int pull)
 
 	pull = TYPEC_CC_PULL_GET_RES(pull);
 	CPS8851_INFO("pull = 0x%02X, pull_cache = 0x%02X\n", pull, pull_cache);
-	pull_cache = pull;
 	if (pull == TYPEC_CC_DRP) {
 		data = TCPC_V10_REG_ROLE_CTRL_RES_SET(
 				1, rp_lvl, TYPEC_CC_RD, TYPEC_CC_RD);
@@ -1378,7 +1377,7 @@ static int cps8851_set_cc(struct tcpc_device *tcpc, int pull)
 
 		ret = cps8851_i2c_write8(tcpc, TCPC_V10_REG_ROLE_CTRL, data);
 	}
-
+	pull_cache = pull;
 	return 0;
 }
 
