@@ -171,6 +171,33 @@ TRACE_EVENT(sched_boost_ux_kworker,
                   __entry->ux_type)
 );
 
+TRACE_EVENT(sched_wake_by_irq_kth,
+
+        TP_PROTO(struct task_struct *p),
+
+        TP_ARGS(p),
+
+        TP_STRUCT__entry(
+                __field(pid_t, pid)
+                __field(pid_t, tgid)
+                __field(int,   prio)
+                __array(char,  comm,        TASK_COMM_LEN)
+        ),
+
+        TP_fast_assign(
+                __entry->pid  = p->pid;
+                __entry->tgid = p->tgid;
+                __entry->prio = p->prio;
+
+                memcpy(__entry->comm,       p->comm,       TASK_COMM_LEN);
+        ),
+
+        TP_printk("pid=%d tgid=%d prio=%d comm=%s",
+                  __entry->pid,
+                  __entry->tgid,
+                  __entry->prio,
+                  __entry->comm)
+);
 #endif /* _TRACE_MSCHED_H */
 
 #undef TRACE_INCLUDE_PATH

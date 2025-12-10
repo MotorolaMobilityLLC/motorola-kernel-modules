@@ -27,6 +27,7 @@
 #include <trace/hooks/signal.h>
 #include <trace/hooks/binder.h>
 #include <kernel/sched/sched.h>
+#include <linux/interrupt.h>
 
 #include "msched_common.h"
 #include "locking/locking_main.h"
@@ -47,10 +48,22 @@ static inline bool task_in_top_app_group(struct task_struct *p)
 	return get_task_cgroup_id(p) == CGROUP_TOP_APP;
 #endif
 }
+static inline bool need_boost_kernel_irq_thread(struct task_struct *p)
+{
+
+	return p && !p->mm && in_interrupt();
+}
 
 static inline bool task_in_ux_related_group(struct task_struct *p)
 {
 	int ux_type = task_get_ux_type(p);
+
+	//interrupt thread
+	if (is_enabled(UX_ENABLE_IRQWTH) && need_boost_kernel_irq_thread(p)) {
+		if(trace_sched_wake_by_irq_kth_enabled())
+			trace_sched_wake_by_irq_kth(p);
+		return true;
+	}
 
 	if (is_enabled(UX_ENABLE_AUDIO) && is_scene(UX_SCENE_AUDIO)) {
 		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio <= 120)
