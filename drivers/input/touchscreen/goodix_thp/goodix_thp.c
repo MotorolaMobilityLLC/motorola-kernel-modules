@@ -26,6 +26,8 @@
 #define GOODIX_THP_MISC_DEVICE_NAME	"thp"
 #define PINCTRL_STATE_ACTIVE		"pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND		"pmx_ts_suspend"
+#define PINCTRL_STATE_FOLD_ACTIVE		"pmx_ts_fold_active"
+#define PINCTRL_STATE_FOLD_SUSPEND		"pmx_ts_fold_suspend"
 #define DEVICE_NAME			"input_agent"
 #define GOOIDX_INPUT_PHYS		"goodix_ts/input0"
 
@@ -2811,6 +2813,12 @@ static int goodix_ts_pinctrl_init(struct goodix_thp_core *core_data)
         ts_info(ts_dev->dev, "success get pinctrl");
 
         /* active state */
+#ifdef CONFIG_THP_FOLD
+        if (core_data->pdev->id > 0)
+        core_data->pin_sta_active = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_FOLD_ACTIVE);
+        else
+#endif
         core_data->pin_sta_active = pinctrl_lookup_state(core_data->pinctrl,
                                 PINCTRL_STATE_ACTIVE);
         if (IS_ERR_OR_NULL(core_data->pin_sta_active)) {
@@ -2823,6 +2831,12 @@ static int goodix_ts_pinctrl_init(struct goodix_thp_core *core_data)
         ts_info(dev, "success get active pinctrl state");
 
         /* suspend state */
+#ifdef CONFIG_THP_FOLD
+        if (core_data->pdev->id > 0)
+        core_data->pin_sta_suspend = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_FOLD_SUSPEND);
+        else
+#endif
         core_data->pin_sta_suspend = pinctrl_lookup_state(core_data->pinctrl,
                                 PINCTRL_STATE_SUSPEND);
         if (IS_ERR_OR_NULL(core_data->pin_sta_suspend)) {
