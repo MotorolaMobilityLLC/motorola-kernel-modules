@@ -54,12 +54,14 @@ static int __init moto_sched_init(void)
 	if (ret != 0)
 		return ret;
 
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 	ret = mdpf_proc_init();
 	if (ret != 0) {
 		pr_err("mdpf_proc_init failed!\n");
 		moto_sched_proc_deinit();
 		return ret;
 	}
+#endif
 
 	register_vendor_comm_hooks();
 	locking_opt_init();
