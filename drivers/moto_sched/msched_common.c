@@ -125,9 +125,9 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 	return false;
 }
 
+static DEFINE_MUTEX(ux_mutex);
 void task_ux_type_set(int pid, int ux_type) {
 	struct task_struct *ux_task = NULL;
-	static DEFINE_MUTEX(ux_mutex);
 
 	mutex_lock(&ux_mutex);
 	rcu_read_lock();
@@ -168,7 +168,6 @@ void task_ux_type_set(int pid, int ux_type) {
 
 void task_ux_type_clear(int pid, int ux_type) {
 	struct task_struct *ux_task = NULL;
-	static DEFINE_MUTEX(ux_mutex);
 
 	mutex_lock(&ux_mutex);
 	rcu_read_lock();

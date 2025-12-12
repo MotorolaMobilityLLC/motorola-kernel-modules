@@ -117,6 +117,7 @@ void rvh_uclamp_eff_get(void *data, struct task_struct *p, enum uclamp_id clamp_
 				mts->uclamp[UCLAMP_MAX]);
 		}
 
+		return;
 	}
 	*ret = 0;
 }
@@ -132,8 +133,14 @@ uclamp_eff_value_moto(struct task_struct *p, enum uclamp_id clamp_id) {
 	uc_max.user_defined = false;
 
 	/* Task currently refcounted: use back-annotated (effective) value */
-	if (p->uclamp[clamp_id].active)
+	if (p->uclamp[clamp_id].active) {
+	    if(clamp_id == UCLAMP_MIN) {
+	        cond_trace_printk(unlikely(is_debuggable(DEBUG_MDPF)),
+	            "uclamp_eff_value_moto: [p=%d]back-annotated (effective) value of UCLAMP_MIN is %d\n",
+	            p->pid, (unsigned int)p->uclamp[clamp_id].value);
+	    }
 		return (unsigned int)p->uclamp[clamp_id].value;
+	}
 
 	// This function will always return uc_eff
 	rvh_uclamp_eff_get(NULL, p, clamp_id, &uc_max, &uc_eff, &ret);
@@ -179,7 +186,7 @@ void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 
 		/* Inherit unclamp_min/max if they're inverted */
 
-		if (p_uclamp_min < pi_uclamp_min)
+		if (p_uclamp_min < pi_uclamp_min && pi_uclamp_min < SCHED_CAPACITY_SCALE)
 			uclamp_i[UCLAMP_MIN] = pi_uclamp_min;
 
 		if (p_uclamp_max < pi_uclamp_max || pi_uclamp_min > p_uclamp_max)
@@ -203,6 +210,7 @@ void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 }
 
 void msched_uclamp_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig) {
+#if 0		//disable this due to mdpf hal will set SCHED_FLAG_RESET_ON_FORK flag
 	enum uclamp_id clamp_id;
 
 	if (is_enabled(UX_ENABLE_MDPF)) {
@@ -221,6 +229,7 @@ void msched_uclamp_vh_dup_task_struct(void *unused, struct task_struct *task, st
 			}
 		}
 	}
+#endif
 }
 
 void msched_uclamp_binder_set_priority_hook(struct task_struct *task) {
