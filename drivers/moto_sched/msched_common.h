@@ -55,6 +55,7 @@ do {										\
 #define UX_ENABLE_BOOST				(1 << 7)
 #define UX_ENABLE_KERNEL			(1 << 8)
 #define UX_ENABLE_MDPF				(1 << 9)
+#define UX_ENABLE_KWORKER                       (1 << 10)
 #define UX_ENABLE_IRQWTH			(1 << 11)
 
 /* define for UX thread type, keep same as the define in java file */
