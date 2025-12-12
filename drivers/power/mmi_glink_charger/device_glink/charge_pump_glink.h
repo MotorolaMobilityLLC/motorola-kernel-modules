@@ -43,6 +43,26 @@ struct msc_sc_dev_info
 	s32 die_temp;
 };
 
+struct msc_cps_dev_info
+{
+	bool chg_en;
+	bool ovpgate;
+	bool manual;
+	bool otg_en;
+	s32 chip_id;
+	u8 chg_role;
+	u8 work_mode;
+	u8 int_stat;
+	s32 ibat_ma;
+	s32 ibus_ma;
+	s32 vbus_mv;
+	s32 vout_mv;
+	s32 vac_mv;
+	s32 vbat_mv;
+	s32 vusb_mv;
+	s32 die_temp;
+};
+
 struct msc_bq_dev_info
 {
 	bool dischg;
@@ -78,6 +98,7 @@ struct charge_pump_dev_info
     union {
         struct msc_sc_dev_info msc_sc_info;
         struct msc_bq_dev_info msc_bq_info;
+        struct msc_cps_dev_info msc_cps_info;
     } msc_info;
 };
 
