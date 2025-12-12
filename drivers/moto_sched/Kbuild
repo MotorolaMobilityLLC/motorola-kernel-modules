@@ -51,5 +51,5 @@ moto_sched-y += locking/locking_main.o
 moto_sched-$(CONFIG_MOTO_MUTEX_INHERIT) += locking/mutex.o
 moto_sched-$(CONFIG_MOTO_RWSEM_INHERIT) += locking/rwsem.o
 moto_sched-$(CONFIG_MOTO_FUTEX_INHERIT) += locking/futex.o
-moto_sched-y += msched_uclamp.o
+moto_sched-$(CONFIG_MOTO_ENABLE_MDPF) += msched_uclamp.o
 moto_sched-$(CONFIG_MOTO_ENABLE_MDPF) += mdpf/mdpf_sysfs.o

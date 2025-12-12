@@ -26,7 +26,9 @@
 
 #include "msched_oemdata.h"
 #include "msched_common.h"
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 #include "msched_uclamp.h"
+#endif
 
 #ifdef CONFIG_MOTO_LOCKING_2
 struct kmem_cache *msched_task_struct_cachep;
@@ -82,7 +84,9 @@ void android_vh_dup_task_struct_handler(void *unused,
 			"copy ux_type %d from %d to %d\n", ux_type, orig->pid, tsk->pid);
 	}
 
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_vh_dup_task_struct(unused, tsk, orig);
+#endif
 }
 
 void android_vh_free_task_handler(void *unused, struct task_struct *tsk)

@@ -33,7 +33,9 @@
 #include "locking/locking_trace.h"
 #define CREATE_TRACE_POINTS
 #include "msched_trace.h"
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 #include "msched_uclamp.h"
+#endif
 
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
@@ -277,7 +279,9 @@ void binder_inherit_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER) && current_is_important_ux()) {
 		task_add_ux_type(task, UX_TYPE_INHERIT_BINDER);
 	}
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_binder_set_priority_hook(task);
+#endif
 }
 EXPORT_SYMBOL(binder_inherit_ux_type);
 
@@ -285,7 +289,9 @@ void binder_clear_inherited_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER)) {
 		task_clr_ux_type(task, UX_TYPE_INHERIT_BINDER);
 	}
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_binder_restore_priority_hook(task);
+#endif
 }
 EXPORT_SYMBOL(binder_clear_inherited_ux_type);
 
@@ -419,7 +425,9 @@ static void android_vh_dup_task_struct(void *unused, struct task_struct *task, s
 			"copy ux_type %d from %d to %d\n", ux_type, orig->pid, task->pid);
 
 	}
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_vh_dup_task_struct(unused, task, orig);
+#endif
 }
 #endif
 
@@ -597,5 +605,7 @@ void register_vendor_comm_hooks(void)
 		android_vh_binder_proc_transaction_finish, NULL);
 #endif
 
+#ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_register_vendor_comm_hooks();
+#endif
 }
