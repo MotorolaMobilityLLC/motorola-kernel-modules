@@ -143,7 +143,7 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 			is_enabled(UX_ENABLE_KSWAPD),
 			is_enabled(UX_ENABLE_BOOST),
 			is_enabled(UX_ENABLE_KERNEL),
-			is_enabled(UX_ENABLE_MDPF));
+			is_enabled(UX_ENABLE_MDPF),
 			is_enabled(UX_ENABLE_IRQWTH));
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
