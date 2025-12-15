@@ -257,7 +257,7 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 		goto exit;
 	}
 
-	if (core_data->power_on == 0) {
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
 		ts_info(ts_dev->dev, "The touch is in sleep state, restore the value when resume");
 		ret = size;
 		goto exit;
@@ -306,7 +306,7 @@ static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 		return 0;
 	}
 
-	if (core_data->power_on == 0) {
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
 		ts_info(core_data->ts_dev->dev, "The touch is in sleep state, restore the value when resume");
 		return 0;
 	}
@@ -390,7 +390,7 @@ static int goodix_thp_mmi_set_report_rate(struct goodix_thp_core *core_data)
 		return 0;
 	}
 
-	if (core_data->power_on == 0) {
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
 		ts_info(dev, "The touch is in sleep state, restore the value when resume");
 		return 0;
 	}
@@ -486,7 +486,7 @@ static ssize_t goodix_ts_sample_store(struct device *dev,
 		goto exit;
 	}
 
-	if (core_data->power_on == 0) {
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
 		ts_info(tdev->dev, "The touch is in sleep state, restore the value when resume");
 		ret = size;
 		goto exit;
@@ -986,7 +986,7 @@ static ssize_t goodix_ts_device_id_store(struct device *dev,
 
 	if (core_data->power_on == 0) {
 		ts_info(tdev->dev, "The touch is in sleep state, ignore the value");
-		ret = -EAGAIN;
+		ret = size;
 		goto exit;
 	}
 
@@ -1086,13 +1086,13 @@ static ssize_t goodix_ts_stylus_report_rate_store(struct device *dev,
 	core_data->get_mode.stylus_report_rate_mode = value;
 	if (core_data->set_mode.stylus_report_rate_mode == value) {
 		ts_info(tdev->dev, "The value = %lu is same,so not write.", value);
-		ret = -EAGAIN;
+		ret = size;
 		goto exit;
 	}
 
-	if (core_data->power_on == 0) {
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
 		ts_info(tdev->dev, "The touch is in power off sleep state, restore the value when resume");
-		ret = -EAGAIN;
+		ret = size;
 		goto exit;
 	}
 
@@ -1143,26 +1143,6 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 		}
 	}
 
-	if (core_data->ts_dev->board_data.interpolation_ctrl && core_data->get_mode.interpolation) {
-		val[0] = NOTIFY_TYPE_SWITCH_REPORT_RATE;
-		val[1] = ((core_data->get_mode.report_rate_mode) >> 8) & 0xFF;
-		val[2] = (core_data->get_mode.report_rate_mode) & 0xFF;
-		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-
-		core_data->set_mode.interpolation = core_data->get_mode.interpolation;
-		core_data->set_mode.report_rate_mode = core_data->get_mode.report_rate_mode;
-		msleep(20);
-
-		ts_info(dev, "Success to %s interpolation mode",
-			core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
-			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
-			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_480HZ ? "REPORT_RATE_480HZ" :
-			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_576HZ ? "REPORT_RATE_576HZ" :
-			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
-			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
-		"Unsupported"))))));
-	}
-
 	if (core_data->ts_dev->board_data.stylus_interpolation_ctrl && core_data->get_mode.stylus_report_rate_mode) {
 		val[0] = NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE;
 		/* switch stylus tip report rate to high */
@@ -1186,6 +1166,26 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 		core_data->set_mode.sample = core_data->get_mode.sample;
 		msleep(20);
 		ts_info(dev, "Success to %d sample mode", core_data->get_mode.sample);
+	}
+
+	if (core_data->ts_dev->board_data.interpolation_ctrl && core_data->get_mode.interpolation) {
+		val[0] = NOTIFY_TYPE_SWITCH_REPORT_RATE;
+		val[1] = ((core_data->get_mode.report_rate_mode) >> 8) & 0xFF;
+		val[2] = (core_data->get_mode.report_rate_mode) & 0xFF;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.interpolation = core_data->get_mode.interpolation;
+		core_data->set_mode.report_rate_mode = core_data->get_mode.report_rate_mode;
+		msleep(20);
+
+		ts_info(dev, "Success to %s interpolation mode",
+			core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_480HZ ? "REPORT_RATE_480HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_576HZ ? "REPORT_RATE_576HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_720HZ ? "REPORT_RATE_720HZ" :
+			(core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_120HZ ? "REPORT_RATE_120/130HZ" :
+		"Unsupported"))))));
 	}
 
 	if (core_data->ts_dev->board_data.edge_ctrl) {
