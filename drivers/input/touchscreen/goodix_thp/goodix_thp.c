@@ -31,6 +31,8 @@ bool debug_log_flag;
 static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);
 static int goodix_thp_power_on(struct goodix_thp_core *core_data);
+static int goodix_ts_pinctrl_select_active(struct goodix_thp_core *core_data);
+static int goodix_ts_pinctrl_select_suspend(struct goodix_thp_core *core_data);
 
 #ifdef GTP_PEN_NOTIFIER
 static void set_pen_mode_boot(struct goodix_thp_core *cd)
@@ -995,6 +997,9 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
                 return 0;
         }
 
+        //config INT pin as input pull-up before power on
+        goodix_ts_pinctrl_select_active(core_data);
+
         if (iovdd_gpio > 0) {
             gpio_direction_output(iovdd_gpio, 1);
         } else if (core_data->iovdd) {
@@ -1019,6 +1024,9 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
         return 0;
 
 power_off:
+        //power on fail, restore INT pin state as input pull-down
+        goodix_ts_pinctrl_select_suspend(core_data);
+
         gpio_direction_output(ts_bdata->reset_gpio, 0);
         if (iovdd_gpio > 0) {
             gpio_direction_output(iovdd_gpio, 0);
@@ -1053,6 +1061,9 @@ static void goodix_thp_power_off(struct goodix_thp_core *core_data)
             regulator_disable(core_data->avdd);
         }
         core_data->power_on = 0;
+
+        //config INT pin as input pull-down after touch ic power off
+        goodix_ts_pinctrl_select_suspend(core_data);
 }
 
 static int goodix_thp_gpio_setup(struct goodix_thp_core *core_data)
@@ -2574,7 +2585,48 @@ int goodix_thp_exit_tui(void)
 }
 EXPORT_SYMBOL_GPL(goodix_thp_exit_tui);
 
-static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
+static int goodix_ts_pinctrl_select_active(struct goodix_thp_core *core_data)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        struct device *dev = ts_dev->dev;
+        int ret = 0;
+
+        if (core_data->pinctrl && core_data->pin_sta_active) {
+                ret = pinctrl_select_state(core_data->pinctrl, core_data->pin_sta_active);
+                if (ret < 0) {
+                        ts_err(dev, "Set active pin state error:%d", ret);
+                } else {
+                        ts_info(dev, "Set active pin state success:%d", ret);
+                }
+        }
+
+        return ret;
+}
+
+static int goodix_ts_pinctrl_select_suspend(struct goodix_thp_core *core_data)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        struct device *dev = ts_dev->dev;
+        int ret = 0;
+
+        if (core_data->pinctrl && core_data->pin_sta_suspend) {
+                ret = pinctrl_select_state(core_data->pinctrl, core_data->pin_sta_suspend);
+                if (ret < 0) {
+                        ts_err(dev, "Set suspend pin state error:%d", ret);
+                } else {
+                        ts_info(dev, "Set suspend pin state success:%d", ret);
+                }
+        }
+
+        return ret;
+}
+
+/**
+ * goodix_ts_pinctrl_init - Get pinctrl handler and pinctrl_state
+ * @core_data: pointer to touch core data
+ * return: 0 ok, <0 failed
+ */
+static int goodix_ts_pinctrl_init(struct goodix_thp_core *core_data)
 {
         struct thp_ts_device *ts_dev = core_data->ts_dev;
         struct device *dev = ts_dev->dev;
@@ -2587,6 +2639,51 @@ static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
                 core_data->pinctrl = NULL;
                 return -EINVAL;
         }
+        ts_info(ts_dev->dev, "success get pinctrl");
+
+        /* active state */
+        core_data->pin_sta_active = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_ACTIVE);
+        if (IS_ERR_OR_NULL(core_data->pin_sta_active)) {
+                r = PTR_ERR(core_data->pin_sta_active);
+                ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
+                                PINCTRL_STATE_ACTIVE, r);
+                core_data->pin_sta_active = NULL;
+                goto exit_pinctrl_put;
+        }
+        ts_info(dev, "success get active pinctrl state");
+
+        /* suspend state */
+        core_data->pin_sta_suspend = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_SUSPEND);
+        if (IS_ERR_OR_NULL(core_data->pin_sta_suspend)) {
+                r = PTR_ERR(core_data->pin_sta_suspend);
+                ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
+                                PINCTRL_STATE_SUSPEND, r);
+                core_data->pin_sta_suspend = NULL;
+                goto exit_pinctrl_put;
+        }
+        ts_info(dev, "success get suspend pinctrl state");
+
+        return 0;
+exit_pinctrl_put:
+        devm_pinctrl_put(core_data->pinctrl);
+        core_data->pinctrl = NULL;
+        return r;
+}
+
+static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        struct device *dev = ts_dev->dev;
+        int r = 0;
+
+        if (IS_ERR_OR_NULL(core_data->pinctrl)) {
+                ts_info(dev, "Failed to get pinctrl handler[need confirm]");
+                core_data->pinctrl = NULL;
+                return -EINVAL;
+        }
+
         ts_info(ts_dev->dev, "success get pinctrl");
         /* stylus active state */
         core_data->stylus_clk_active = pinctrl_lookup_state(core_data->pinctrl,
@@ -2941,6 +3038,18 @@ static int goodix_thp_probe(struct platform_device *pdev)
                 goto out;
         }
 
+        /* Pinctrl handle is optional. */
+        r = goodix_ts_pinctrl_init(core_data);
+        if (r)
+                ts_err(tdev->dev, "failed init pinctrl");
+
+        /* init stylus clock */
+        if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
+                r = goodix_ts_stylus_clk_init(core_data);
+                if (r)
+                        ts_err(tdev->dev, "failed get goodix stylus clock");
+        }
+
         /* power init & power on */
         r = goodix_thp_power_init(core_data);
         if (r < 0) {
@@ -3002,13 +3111,6 @@ static int goodix_thp_probe(struct platform_device *pdev)
         if (r) {
                 ts_err(tdev->dev, "failed to create sysfs, r %d", r);
                 goto err_sysfs_init;
-        }
-
-        /* init stylus clock */
-        if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
-                r = goodix_ts_stylus_clk_init(core_data);
-                if (r)
-                        ts_err(tdev->dev, "failed get goodix stylus clock");
         }
 
         /* PM QoS */
