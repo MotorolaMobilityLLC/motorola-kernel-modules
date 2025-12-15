@@ -543,7 +543,7 @@ static int goodix_thp_spi_read(struct thp_ts_device *dev, unsigned int addr,
         spi_message_init(&spi_msg);
         memset(&xfers, 0, sizeof(xfers));
 
-        if (dev->board_data.chip_type == CHIP_TYPE_9897) {
+        if (unlikely(dev->board_data.chip_type == CHIP_TYPE_9897)) {
                 tx_buf[0] = SPI_FLAG_RD; /* 0xF1 start read flag */
                 tx_buf[1] = (addr >> MOVE_24BIT) & MASK_8BIT;
                 tx_buf[2] = (addr >> MOVE_16BIT) & MASK_8BIT;
@@ -577,12 +577,12 @@ static int goodix_thp_spi_read(struct thp_ts_device *dev, unsigned int addr,
         }
 
         ret = spi_sync(spi, &spi_msg);
-        if (ret < 0) {
+        if (unlikely(ret < 0)) {
                 ts_err(&spi->dev, "Spi transfer error:%d", ret);
                 goto exit;
         }
 
-        if (dev->board_data.chip_type == CHIP_TYPE_9897)
+        if (unlikely(dev->board_data.chip_type == CHIP_TYPE_9897))
                 memcpy(data, &rx_buf[GOODIX_READ_WRITE_BYTE_OFFSET_GT9897], len);
         else
                 memcpy(data, &rx_buf[GOODIX_READ_WRITE_BYTE_OFFSET_GT9916], len);
@@ -626,7 +626,7 @@ static int goodix_thp_spi_write(struct thp_ts_device *dev, unsigned int addr,
         spi_message_add_tail(&xfers, &spi_msg);
 
         ret = spi_sync(spi, &spi_msg);
-        if (ret < 0)
+        if (unlikely(ret < 0))
                 ts_err(&spi->dev, "Spi transfer error:%d", ret);
 
         mutex_unlock(&dev->spi_mutex);
@@ -852,31 +852,31 @@ static int goodix_thp_get_frame(struct thp_ts_device *tdev, char *buf)
         int ret;
         int i;
 
-        if (!tdev) {
+        if (unlikely(!tdev)) {
                 ts_err(tdev->dev, "thp_ts_device null!");
                 return -EINVAL;
         }
 
-        if (addr == 0) {
+        if (unlikely(addr == 0)) {
                 ts_err(tdev->dev, "frame addr has not been assigned");
                 return -EINVAL;
         }
 
         ret = goodix_thp_spi_read(tdev, addr, buf, FRAME_HEAD_LEN);
-        if (ret < 0) {
+        if (unlikely(ret < 0)) {
                 ts_err(tdev->dev, "read frame head failed");
                 return ret;
         }
         for (i = 0; i < FRAME_HEAD_LEN - 2; i++)
                 cal_checksum += buf[i];
         checksum = le16_to_cpup((__le16 *)&buf[FRAME_HEAD_LEN - 2]);
-        if (checksum != cal_checksum) {
+        if (unlikely(checksum != cal_checksum)) {
                 ts_err(tdev->dev, "frame head checksum error, %*ph", FRAME_HEAD_LEN, buf);
                 return -EINVAL;
         }
 
         frame_len = le16_to_cpup((__le16 *)&buf[6]);
-        if (frame_len == 0 || frame_len > GOODIX_THP_MAX_FRAME_LEN) {
+        if (unlikely(frame_len == 0 || frame_len > GOODIX_THP_MAX_FRAME_LEN)) {
                 ts_err(tdev->dev, "invalid frame_len:%d", frame_len);
                 return -EINVAL;
         }
