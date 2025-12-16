@@ -223,8 +223,8 @@ int moto_auth_get_fsk_packet(uint8_t *data, int data_len)
 		motoauth_wls_log(MOTOAUTH_LOG_DEBG, " WLC_MOTO, NOTIFY_EVENT_WLS_WLC_CHANGE , WLS_WLC_ID %d", motoauth->WLS_WLC_ID);
 		motoauth_wls_set_status(motoauth->WLC_STATUS);
 		if (WLS_WLC_POWER_MAX <= 15) {
-			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_SN next");
-			motoauth_event_notify(MOTOAUTH_EVENT_TX_SN);
+			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To MOTOAUTH_EVENT_DONE");
+			motoauth_event_notify(MOTOAUTH_EVENT_DONE);
 		} else if (tx_id[0] == 0x01 && (tx_id[1] >> 4) == 0x5 && moto_auth_status == MOTO_AUTH_TX_ID) {
 			motoauth_wls_log(MOTOAUTH_LOG_DEBG, "To ask TX_CAP next");
 			motoauth_event_notify(MOTOAUTH_EVENT_TX_CAP);
