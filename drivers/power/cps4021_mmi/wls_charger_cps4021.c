@@ -1567,13 +1567,13 @@ static void cps_epp_icl_on(void)
 		}
 		if (chip->chg1_dev)
 		{
-			charger_dev_set_charging_current(chip->chg1_dev, 1500000);
+			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
 			charger_dev_set_input_current(chip->chg1_dev, icl);
 		}
 		else
 		{
 			cps_init_charge_hardware();
-			charger_dev_set_charging_current(chip->chg1_dev, 1500000);
+			charger_dev_set_charging_current(chip->chg1_dev, 3150000);
 			charger_dev_set_input_current(chip->chg1_dev, icl);
 		}
 
@@ -2488,9 +2488,8 @@ static int cps_wls_chrg_get_property(struct power_supply *psy,
                 val->intval = -1;
             break;
          case POWER_SUPPLY_PROP_POWER_NOW:
-            if (chip->rx_ldo_on || CPS_TX_MODE)
-                val->intval = cps_wls_get_rx_neg_power() / 10;
-            else
+            val->intval = cps_wls_get_rx_neg_power() / 10;
+            if(val->intval <= 0)
                 val->intval = -1;
             break;
         default:
@@ -4139,7 +4138,7 @@ int wlc_chg_start_mc_icl_work(struct cps_wls_chrg_chip *chg, Sys_Op_Mode op_mode
 	if (op_mode == Sys_Op_Mode_EPP) {
 		chg->mc_icl_max_uA = WLS_MC_EPP_ICL_DEFAULT;
 		charger_dev_set_input_current(chg->chg1_dev, chg->mc_icl_max_uA);
-		charger_dev_set_charging_current(chg->chg1_dev, 1500000);
+		charger_dev_set_charging_current(chg->chg1_dev, 3150000);
 	}
 	chg->ce_det_count = 0;
 	chg->mc_icl_state = MC_ICL_RUN;
