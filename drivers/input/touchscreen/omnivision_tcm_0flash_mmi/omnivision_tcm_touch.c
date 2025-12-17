@@ -96,7 +96,8 @@ enum touch_report_code {
 #if SUPPORT_KNUCKLE_DATA_REPORT
 	TOUCH_KNUCKLE_DATA = 0xca,
 #endif
-  TOUCH_REPORT_PALM_DETECTED = 200,
+	TOUCH_REPORT_GESTURE_COORDINATE = 199,
+	TOUCH_REPORT_PALM_DETECTED = 200,
 };
 
 struct object_data {
@@ -136,6 +137,7 @@ struct touch_data {
 	unsigned int fd_data;
 	unsigned int force_data;
 	unsigned int fingerprint_area_meet;
+	unsigned short gesture_six_points[12];
 #if SUPPORT_KNUCKLE_DATA_REPORT
 	unsigned char knuckle_data[KNUCKLE_DATA_SIZE];
 #endif
@@ -686,6 +688,15 @@ static int touch_parse_report(void)
 			bits = config_data[idx++];
 			offset += bits;
 			break;
+		case TOUCH_REPORT_GESTURE_COORDINATE:
+			bits = config_data[idx++];
+			secure_memcpy((unsigned char *)&touch_data->gesture_six_points[0], sizeof(touch_data->gesture_six_points),\
+				&tcm_hcd->report.buffer.buf[offset/8], bits / 8, bits / 8);
+			offset += bits;
+			if(touch_data->gesture_six_points[0] || touch_data->gesture_six_points[1])
+				OVT_INFO("double tap to wake up the coordinates=%hu,%hu\n", touch_data->gesture_six_points[0],\
+					touch_data->gesture_six_points[1]);
+			break;
 #if SUPPORT_KNUCKLE_DATA_REPORT
 		case TOUCH_KNUCKLE_DATA:
 			bits = config_data[idx++];
@@ -1148,6 +1159,8 @@ static int touch_set_report_config(void)
 #endif
 	touch_hcd->out.buf[idx++] = TOUCH_REPORT_PALM_DETECTED;
 	touch_hcd->out.buf[idx++] = 8;
+	touch_hcd->out.buf[idx++] = TOUCH_REPORT_GESTURE_COORDINATE;
+	touch_hcd->out.buf[idx++] = 192;
 	touch_hcd->out.buf[idx++] = TOUCH_FOREACH_ACTIVE_OBJECT;
 	touch_hcd->out.buf[idx++] = TOUCH_OBJECT_N_INDEX;
 	touch_hcd->out.buf[idx++] = 4;
