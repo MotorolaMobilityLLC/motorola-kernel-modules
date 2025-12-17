@@ -1462,10 +1462,12 @@ void aw_InitializeCore(struct aw35615_chip *chip)
 	chip->sink_reg_bist = 0x50;
 	chip->source_reg_bist = 0x65;
 	chip->lpd_check_enable = AW_TRUE;
-	chip->lpd_check_num_bak = 20;
-	chip->lpd_check_timer = 5000; /* unit ms */
+	chip->lpd_check_num_bak = 6;
+	chip->lpd_check_timer = 1000; /* unit ms */
 	chip->lpd_check_num = chip->lpd_check_num_bak;
 	chip->toggle_check_num = chip->lpd_check_num_bak;
+	chip->lpd_notice = AW_FALSE;
+	chip->lpd_wait_recovery = AW_FALSE;
 	AW_LOG(" Core is initialized!\n");
 }
 
@@ -2147,8 +2149,19 @@ void handle_core_event(AW_U32 event, AW_U8 portId, void *usr_ctx)
 		}
 
 		break;
-	case LPD_NOTICE:
-		AW_LOG("LPD_NOTICE event=0x%x", event);
+	case LPD_NOTICE_WATER:
+		if (!chip->lpd_notice) {
+			chip->lpd_notice = AW_TRUE;
+			tcpci_notify_wd_status(chip->tcpc, chip->lpd_notice);
+		}
+		AW_LOG("LPD_NOTICE_WATER event=0x%x", event);
+		break;
+	case LPD_NOTICE_NOWATER:
+		if (chip->lpd_notice) {
+			chip->lpd_notice = AW_FALSE;
+			tcpci_notify_wd_status(chip->tcpc, chip->lpd_notice);
+		}
+		AW_LOG("LPD_NOTICE_NOWATER event=0x%x", event);
 		break;
 	default:
 		//AW_LOG("aw35615 - default=0x%x", event);

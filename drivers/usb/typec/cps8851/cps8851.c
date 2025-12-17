@@ -2118,7 +2118,7 @@ static void cps8851_wd_work(struct work_struct *work)
 		} else {
 			/* Since the port remains wet, keep the CC open to prevent rusting */
 			chip->cc_open = true;
-			cps8851_set_cc(chip->tcpc, TYPEC_CC_OPEN);
+			cps8851_set_cc(chip->tcpc, TYPEC_CC_RD);
 			delay = CPS8851_WD_OPEN_INTERVAL;
 		}
 
