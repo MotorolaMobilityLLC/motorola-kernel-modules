@@ -247,7 +247,7 @@ void StateMachineUnattached(Port_t *port)
 	if (port->Registers.Status.I_CC1_LPD || port->Registers.Status.I_CC2_LPD) {
 		if (chip->lpd_check_enable) {
 			chip->lpd_check_enable = AW_FALSE;
-			hrtimer_start(&chip->lpd_timer, ktime_set(chip->lpd_check_timer / 1000, chip->lpd_check_timer * 1000000), HRTIMER_MODE_REL);
+			hrtimer_start(&chip->lpd_timer, ktime_set(chip->lpd_check_timer / 1000, 0), HRTIMER_MODE_REL);
 		}
 		if (chip->lpd_check_num > 0)
 			chip->lpd_check_num--;
@@ -262,16 +262,6 @@ void StateMachineUnattached(Port_t *port)
 		port->WaterCounter++;
 		AW_LOG("waterproof trigger count=%d\n",port->WaterCounter);
 #endif
-
-#ifdef AW_HAVE_LPD
-		if (chip->lpd_check_enable) {
-			chip->lpd_check_enable = AW_FALSE;
-			hrtimer_start(&chip->lpd_timer, ktime_set(chip->lpd_check_timer / 1000, chip->lpd_check_timer * 1000000), HRTIMER_MODE_REL);
-		}
-		if (chip->toggle_check_num > 0)
-			chip->toggle_check_num--;
-		AW_LOG("toggle_check_num = %d\n", chip->toggle_check_num);
-#endif /* AW_HAVE_LPD */
 
 		//TimerDisable(&port->LoopCountTimer);
 		DeviceRead(port, regStatus1a, 1, &port->Registers.Status.byte[1]);
@@ -1115,7 +1105,20 @@ void SetStateOnlySink(Port_t *port)
 
 void SetStateUnattached(Port_t *port)
 {
+#ifdef AW_HAVE_LPD
+	struct aw35615_chip *chip = aw35615_GetChip(port->PortID);
+#endif /* AW_HAVE_LPD */
 	AW_U8 i = 0;
+
+#ifdef AW_HAVE_LPD
+	if (chip->lpd_check_enable && chip->lpd_wait_recovery) {
+		AW_LOG("lpd recheck\n");
+		chip->lpd_check_enable = AW_FALSE;
+		chip->lpd_wait_recovery = AW_FALSE;
+		chip->lpd_check_num = chip->lpd_check_num_bak;
+		hrtimer_start(&chip->lpd_timer, ktime_set(chip->lpd_check_timer / 1000, 0), HRTIMER_MODE_REL);
+	}
+#endif /* AW_HAVE_LPD */
 
 	for (i = 0; i < AW_NUM_NO_WATERPROOF_TIMERS; ++i)
 		TimerDisable(port->Timers[i]);

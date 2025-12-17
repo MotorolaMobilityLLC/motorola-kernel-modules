@@ -30,6 +30,10 @@
 #define AW_KERNEL_VER_OVER_6_6_0
 #endif
 
+#if IS_ENABLED(CONFIG_MTK_TYPEC_WATER_DETECT)
+#define AW_HAVE_LPD
+#endif
+
 /* AW35615 Device ID */
 
 /* AW35615 I2C Configuration */

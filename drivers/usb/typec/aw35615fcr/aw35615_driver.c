@@ -26,6 +26,7 @@
 #include "../../drivers/misc/mediatek/typec/tcpc/inc/tcpci.h"
 #include "core.h"
 #include "TypeC.h"
+#include "vendor_info.h"
 
 #ifdef AW_DEBUG
 #include "dfs.h"
@@ -39,6 +40,8 @@ static struct aw_tcpm_ops_ptr aw_tcpm_ops;
 /******************************************************************************
  * Driver functions
  ******************************************************************************/
+
+#define AW35615_LPD_RECOVERY_DETE		(10000) /* time ms */
 
 int aw35615_alert_status_clear(struct tcpc_device *tcpc, uint32_t mask)
 {
@@ -381,14 +384,54 @@ static void aw35615_lpd_check_work(struct work_struct *work)
 		pr_err("AWINIC  %s - Chip structure is NULL!\n", __func__);
 		return;
 	}
-	if ((chip->lpd_check_num == 0) || (chip->toggle_check_num == 0)) {
-		AW_LOG("notify ldp\n");
-		notify_observers(LPD_NOTICE, chip->port.PortID);
+	AW_LOG("lpd_check_num = %d, lpd_check_enable=%d\n", chip->lpd_check_num, chip->lpd_check_enable);
+	if (chip->lpd_check_num == 0) {
+		if (!chip->lpd_check_enable) {
+			AW_LOG("notify ldp\n");
+			chip->lpd_check_enable = AW_TRUE;
+			chip->lpd_wait_recovery = AW_FALSE;
+			core_set_sink(&chip->port);
+			notify_observers(LPD_NOTICE_WATER, chip->port.PortID);
+			hrtimer_start(&chip->lpd_timer, ktime_set(AW35615_LPD_RECOVERY_DETE / 1000, 0), HRTIMER_MODE_REL);
+		} else {
+			chip->lpd_check_num = chip->lpd_check_num_bak;
+			if (chip->port.ConnState == Unattached) {
+				AW_LOG("cc unattached, cc recovery\n");
+				chip->lpd_check_enable = AW_FALSE;
+				core_set_try_snk(&chip->port);
+				chip->lpd_wait_recovery = AW_FALSE;
+				hrtimer_start(&chip->lpd_timer, ktime_set(chip->lpd_check_timer / 1000, 0), HRTIMER_MODE_REL);
+			} else {
+				AW_LOG("cc attached, waitting for lpd recovery\n");
+#ifdef AW_HAVE_DRP
+				chip->port.PortConfig.PortType = USBTypeC_DRP;
+				chip->port.PortConfig.SnkPreferred = AW_TRUE;
+				chip->port.PortConfig.SrcPreferred = AW_FALSE;
+				chip->port.PortConfig.audioAccSupport = AW_TRUE;
+				chip->port.PortConfig.poweredAccSupport = Type_C_Is_VCONN_Powered_Accessory;
+#endif /* AW_HAVE_DRP */
+				chip->lpd_wait_recovery = AW_TRUE;
+			}
+		}
+	} else {
+		chip->lpd_check_num = chip->lpd_check_num_bak;
+		chip->lpd_check_enable = AW_TRUE;
+		if (chip->port.ConnState == Unattached) {
+			AW_LOG("lpd recovery\n");
+			chip->lpd_wait_recovery = AW_FALSE;
+			notify_observers(LPD_NOTICE_NOWATER, chip->port.PortID);
+		} else if (chip->lpd_notice) {
+			AW_LOG("cc attached, maintain lpd\n");
+#ifdef AW_HAVE_DRP
+			chip->port.PortConfig.PortType = USBTypeC_DRP;
+			chip->port.PortConfig.SnkPreferred = AW_TRUE;
+			chip->port.PortConfig.SrcPreferred = AW_FALSE;
+			chip->port.PortConfig.audioAccSupport = AW_TRUE;
+			chip->port.PortConfig.poweredAccSupport = Type_C_Is_VCONN_Powered_Accessory;
+#endif /* AW_HAVE_DRP */
+			chip->lpd_wait_recovery = AW_TRUE;
+		}
 	}
-	AW_LOG("lpd_check_num = %d toggle_check_num = %d\n", chip->lpd_check_num, chip->toggle_check_num);
-	chip->lpd_check_num = chip->lpd_check_num_bak;
-	chip->toggle_check_num = chip->lpd_check_num_bak;
-	chip->lpd_check_enable = AW_TRUE;
 }
 
 static enum hrtimer_restart aw35615_lpd_timer_func(struct hrtimer *p_hrtimer)

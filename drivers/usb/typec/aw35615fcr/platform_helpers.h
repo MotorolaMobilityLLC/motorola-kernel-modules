@@ -51,7 +51,8 @@ typedef enum {
 	VBUS_DIS			= 0x16,
 	WATERPROOFING		= 0x17,
 	CC1_AND_CC2			= 0x18,
-	LPD_NOTICE			= 0x19,
+	LPD_NOTICE_WATER	= 0x19,
+	LPD_NOTICE_NOWATER	= 0x1a,
 	EVENT_ALL			= 0xFF,
 } Events_t;
 
