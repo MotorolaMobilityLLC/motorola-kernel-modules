@@ -252,6 +252,7 @@ extern int aw_get_source_apdo(struct tcpc_device *tcpc,
 		AW_U8 apdo_type, AW_U8 *cap_i, struct tcpm_power_cap_val *cap_val);
 extern int aw_pd_connected(struct tcpc_device *tcpc);
 extern int aw_pd_comm_capable(struct tcpc_device *tcpc);
+extern int aw_get_source_cap_ext(struct tcpc_device *tcpc, struct pd_source_cap_ext *src_cap_ext);
 
 struct aw_tcpm_ops_ptr {
 	int (*get_pps_status)(struct tcpc_device *tcpc, struct pd_pps_status *pps_status);
@@ -265,6 +266,7 @@ struct aw_tcpm_ops_ptr {
 	int (*request_dr_swap)(struct tcpc_device *tcpc, uint8_t role);
 	int (*request_pr_swap)(struct tcpc_device *tcpc, uint8_t role);
 	int (*pd_comm_capable)(struct tcpc_device *tcpc);
+	int (*get_source_cap_ext)(struct tcpc_device *tcpc, struct pd_source_cap_ext *src_cap_ext);
 };
 
 extern void tcpm_set_aw_ops(struct aw_tcpm_ops_ptr *pps_ops);

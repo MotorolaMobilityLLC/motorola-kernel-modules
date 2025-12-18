@@ -577,6 +577,7 @@ static int aw35615_probe(struct i2c_client *client, const struct i2c_device_id *
 	aw_tcpm_ops.pd_comm_capable = aw_pd_comm_capable;
 	aw_tcpm_ops.request_dr_swap = aw_request_dr_swap;
 	aw_tcpm_ops.request_pr_swap = aw_request_pr_swap;
+	aw_tcpm_ops.get_source_cap_ext = aw_get_source_cap_ext;
 	tcpm_set_aw_ops(&aw_tcpm_ops);
 
 	AW_LOG(" AWINIC Driver loaded successfully!\n");

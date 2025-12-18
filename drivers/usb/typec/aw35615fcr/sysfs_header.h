@@ -99,6 +99,7 @@ static const char PE_STATE_TBL[][30] = {
 	{"peGivePPSStatus"},
 	{"peGiveCountryInfo"},
 	{"peSourceGiveSourceCapExt"},
+	{"peGetSourceCapExt"},
 	{"peGiveVdm"},
 	{"peUfpVdmGetIdentity"},
 	{"peUfpVdmSendIdentity"},

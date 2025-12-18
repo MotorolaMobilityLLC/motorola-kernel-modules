@@ -502,6 +502,7 @@ typedef enum {
 	peGivePPSStatus,            /* Source provide PPS status */
 	peGiveCountryInfo,          /* Send country info */
 	peSourceGiveSourceCapExt,    /* Send source cap extended info */
+	peGetSourceCapExt,
 
 	/* VDM states */
 	peGiveVdm,
