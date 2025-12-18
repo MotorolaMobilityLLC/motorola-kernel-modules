@@ -984,6 +984,49 @@ int aw_pd_comm_capable(struct tcpc_device *tcpc)
 }
 EXPORT_SYMBOL(aw_pd_comm_capable);
 
+int aw_get_source_cap_ext(struct tcpc_device *tcpc, struct pd_source_cap_ext *src_cap_ext)
+{
+	struct aw35615_chip *chip = tcpc_get_dev_data(tcpc);
+	AW_U8 retry = 10;
+
+	if (src_cap_ext == NULL)
+		return -1;
+	if (chip->vendor_id != AW35615_VENDOR_ID) {
+		AW_LOG("AWINIC %s - Chip structure is NULL!\n", __func__);
+		return -1;
+	}
+
+	AW_LOG("enter\n");
+
+	chip->port.USBPDTxFlag = AW_TRUE;
+	chip->port.PDTransmitHeader.word = 0;
+	chip->port.PDTransmitHeader.MessageType = CMTGetSourceCapExt;
+	chip->port.PDTransmitHeader.NumDataObjects = 0;
+
+	while (retry--) {
+		if ((!chip->queued) && (chip->port.PolicyState == peSinkReady)) {
+			chip->queued = AW_TRUE;
+			queue_work(chip->highpri_wq, &chip->sm_worker);
+			usleep_range(4000, 5000);
+			AW_LOG("queue_work --> send pd message type CMTGetSourceCapExt\n");
+			do {
+				if ((chip->port.PolicyState == peSinkSendSoftReset) ||
+					(chip->port.PolicyState == peDisabled)) {
+					AW_LOG("CMTGetSourceCapExt fail\n");
+					return 1;
+				}
+				usleep_range(500, 1000);
+			} while (chip->port.PolicyState != peSinkReady);
+			memcpy(src_cap_ext, chip->port.SrcCapExt.byte, (sizeof(chip->port.SrcCapExt.byte) - 1));
+			return 0;
+		}
+		usleep_range(10 * 1000, 10 * 1000);
+	}
+
+	return 1;
+}
+EXPORT_SYMBOL(aw_get_source_cap_ext);
+
 /*******************************************************************************
  * Function:        aw_Sysfs_Handle_Read
  * Input:           output: Buffer to which the output will be written

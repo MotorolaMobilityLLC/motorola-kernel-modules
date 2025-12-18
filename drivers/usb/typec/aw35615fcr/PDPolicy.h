@@ -51,6 +51,7 @@ void PolicyGetBatteryStatus(Port_t *port);
 void PolicyGetBatteryCap(Port_t *port);
 void PolicyGetSinkCapExt(Port_t *port);
 void PolicyGetManufacturerInfo(Port_t *port);
+void PolicyGetSourceCapExt(Port_t *port);
 #endif
 #endif /* AW_HAVE_SRC || (AW_HAVE_SNK && AW_HAVE_ACCMODE) */
 

@@ -405,6 +405,9 @@ void USBPDPolicyEngine(Port_t *port)
 	case peGetManufacturerInfo:
 		PolicyGetManufacturerInfo(port);
 		break;
+	case peGetSourceCapExt:
+		PolicyGetSourceCapExt(port);
+		break;
 #endif
 	default:
 #ifdef AW_HAVE_VDM
@@ -2657,6 +2660,9 @@ void PolicySinkReady(Port_t *port)
 			case CMTGetPPSStatus:
 				SetPEState(port, peGetPPSStatus);
 				break;
+			case CMTGetSourceCapExt:
+				SetPEState(port, peGetSourceCapExt);
+				break;
 			default:
 				break;
 			}
@@ -4026,6 +4032,40 @@ void PolicySourceCapExtended(struct Port *port)
 	port->ExtChunkOffset = 0;
 }
 
+void PolicyGetSourceCapExt(struct Port *port)
+{
+	if (port == NULL)
+		return;
+
+	switch (port->PolicySubIndex) {
+	case 0:
+		if (PolicySendCommand(port, CMTGetSourceCapExt, peGetSourceCapExt, 1,
+					SOP_TYPE_SOP) == STAT_SUCCESS)
+			TimerStart(&port->PolicyStateTimer, tSenderResponse);
+		break;
+	default:
+		if (port->ProtocolMsgRx) {
+			port->ProtocolMsgRx = AW_FALSE;
+			if ((port->PolicyRxHeader.NumDataObjects > 0) &&
+				(port->PolicyRxHeader.Extended == 1) &&
+				(port->PolicyRxHeader.MessageType == EXTSourceCapExt)) {
+				memcpy(port->SrcCapExt.byte, port->ExtMsgBuffer, sizeof(port->SrcCapExt.byte));
+				SetPEState(port, peSinkReady);
+#ifdef AW_DEBUG
+				AW_LOG("0x%x\n", port->SrcCapExt.SprPDP);
+				AW_LOG("0x%x\n", port->SrcCapExt.EprPDP);
+#endif
+			} else {
+				SetPEState(port, peSinkSendSoftReset);
+			}
+		} else if (TimerExpired(&port->PolicyStateTimer)) {
+			SetPEState(port, peSinkReady);
+		} else {
+			port->PEIdle = AW_TRUE;
+		}
+		break;
+	}
+}
 #endif /* AW_HAVE_EXT */
 
 /* BIST Receive Mode */
