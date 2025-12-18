@@ -1658,9 +1658,13 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                     kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
                 } else if (core_data->pen_state == PEN_STATE_TOUCH) {
                     ts_info(tdev->dev, "touch_health - pen_action=UP");
-                    memset(core_data->pen_info, 0, sizeof(core_data->pen_info));
                     core_data->pen_state = PEN_STATE_NONE;
+                    core_data->pen_close = 0;
+                    core_data->uevent_message_type = PEN_MESSAGE_PEN_CLOSE;
+                    memset(core_data->pen_info, 0, sizeof(core_data->pen_info));
+                    kobject_uevent(&core_data->pdev->dev.kobj, KOBJ_CHANGE);
                 }
+
                 // --- release pen action detection end ---
 
                 if (prev_stylus_key != 0) {
