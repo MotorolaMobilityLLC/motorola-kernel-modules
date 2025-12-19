@@ -82,11 +82,11 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
                             && strncmp(p->comm, "kworker/", 8) == 0
                             && strncmp(p->comm, "kworker/u", 9) != 0) {
 
-                int waker_prio = NICE_TO_PRIO(task_nice(current));
+                int waker_prio = current->prio;
                 bool launcher_wake = current->pid == global_launcher_tgid;
                 bool top_task = task_in_top_app_group(current);
 
-                if ((top_task && waker_prio <= 110) || launcher_wake) {
+                if ((top_task && waker_prio <= 110) || launcher_wake || task_has_rt_policy(current)) {
                         trace_sched_boost_ux_kworker(p, waker_prio, launcher_wake, top_task, ux_type);
                         return true;
                 }
