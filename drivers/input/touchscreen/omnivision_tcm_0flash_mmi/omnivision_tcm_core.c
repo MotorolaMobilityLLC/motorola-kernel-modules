@@ -1508,18 +1508,21 @@ static void ovt_tcm_dispatch_report(struct ovt_tcm_hcd *tcm_hcd)
 	if (tcm_hcd->report.id == REPORT_TOUCH) {
 		if (tcm_hcd->report_touch)
 			tcm_hcd->report_touch();
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
 	} else if (tcm_hcd->report.id == REPORT_ABNORMAL_INFO) {
 		TCM_ABNORMAL_INFO_T *p_abnormal_info;
 		p_abnormal_info = (TCM_ABNORMAL_INFO_T *)tcm_hcd->report.buffer.buf;
-		LOGE(tcm_hcd->pdev->dev.parent, "chargerBit: :%d\n", p_abnormal_info->chargerBit);
-		LOGE(tcm_hcd->pdev->dev.parent, "gloveMode: :%d\n", p_abnormal_info->gloveMode);
-		LOGE(tcm_hcd->pdev->dev.parent, "frequencyShift: :%d\n", p_abnormal_info->frequencyShift);
-		LOGE(tcm_hcd->pdev->dev.parent, "palmFlg: :%d\n", p_abnormal_info->palmFlg);
-		LOGE(tcm_hcd->pdev->dev.parent, "bendingMode: :%d\n", p_abnormal_info->bendingMode);
-		LOGE(tcm_hcd->pdev->dev.parent, "gndUnstable : :%d\n", p_abnormal_info->gndUnstable );
-		LOGE(tcm_hcd->pdev->dev.parent, "waterMode: :%d\n", p_abnormal_info->waterMode);
-		LOGE(tcm_hcd->pdev->dev.parent, "baselineFastRelaxCmd: :%d\n", p_abnormal_info->baselineFastRelaxCmd);
-		LOGE(tcm_hcd->pdev->dev.parent, "openTestDetect: :%d\n", p_abnormal_info->openTestDetect);
+		tcm_hcd->palm_on = p_abnormal_info->palmFlg;
+		OVT_DEBUG("chargerBit: %d\n", p_abnormal_info->chargerBit);
+		OVT_DEBUG("gloveMode: %d\n", p_abnormal_info->gloveMode);
+		OVT_DEBUG("frequencyShift: %d\n", p_abnormal_info->frequencyShift);
+		OVT_DEBUG("palmFlg: %d\n", p_abnormal_info->palmFlg);
+		OVT_DEBUG("bendingMode: %d\n", p_abnormal_info->bendingMode);
+		OVT_DEBUG("gndUnstable: %d\n", p_abnormal_info->gndUnstable );
+		OVT_DEBUG("waterMode: %d\n", p_abnormal_info->waterMode);
+		OVT_DEBUG("baselineFastRelaxCmd: %d\n", p_abnormal_info->baselineFastRelaxCmd);
+		OVT_DEBUG("openTestDetect: %d\n", p_abnormal_info->openTestDetect);
+#endif
 	} else if (tcm_hcd->report.id == REPORT_FW_PRINTF) {
         int cpy_length;
 		if (tcm_hcd->report.buffer.data_length >= FW_LOG_BUFFER_SIZE - 1) {
