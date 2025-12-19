@@ -257,15 +257,34 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 		goto exit;
 	}
 
-	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
+	if ((core_data->power_on == 0) || (core_data->suspended == 1 && core_data->pdev->id == 0)) {
 		ts_info(ts_dev->dev, "The touch is in sleep state, restore the value when resume");
 		ret = size;
 		goto exit;
 	}
 
+#ifdef CONFIG_THP_FOLD
+	if (edge_cmd[0] == 0)
+		core_data->desk_mode = 0;
+	if (core_data->suspended == 1) {
+		if (main_suspend) {
+			val[0] = NOTIFY_TYPE_DESK_MODE;
+			val[1] = (u8)edge_cmd[0] ? 1 : 0;
+			val[2] = 0;
+			ts_info(ts_dev->dev, "Set desk mode %d", val[1]);
+			core_data->desk_mode = val[1];
+		} else	{
+			ts_info(ts_dev->dev, "The touch is inactive state, ignore");
+			ret = size;
+			goto exit;
+		}
+	} else
+#endif
+	{
 	val[0] = NOTIFY_TYPE_ROTATION;
 	val[1] = (u8)edge_cmd[0];
 	val[2] = (u8)edge_cmd[1];
+	}
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 	memcpy(core_data->set_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
 

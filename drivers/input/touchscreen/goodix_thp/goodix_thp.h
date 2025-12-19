@@ -232,6 +232,7 @@ typedef enum {
         NOTIFY_TYPE_SWITCH_REPORT_RATE,
         NOTIFY_TYPE_SAVE_MOTO_DATA,
         NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE,
+        NOTIFY_TYPE_DESK_MODE,
 } NOTIFY_TYPE_T;
 
 enum pen_action_state {
@@ -556,6 +557,7 @@ struct goodix_thp_core {
         u8 open_status;
 #ifdef CONFIG_THP_FOLD
         u8 open_fold_status;
+        u8 desk_mode;
 #endif
 
         u8 uevent_message_type;

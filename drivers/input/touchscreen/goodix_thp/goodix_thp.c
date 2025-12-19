@@ -2526,6 +2526,9 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
         int r = 0;
         struct thp_ts_device *ts_dev = core_data->ts_dev;
         u16 gsx_data = ~core_data->gesture_enable;
+#ifdef CONFIG_THP_FOLD
+        u8 val[3];
+#endif
 
         ts_info(ts_dev->dev, "Suspend start");
 
@@ -2557,6 +2560,16 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
                 }
                 goodix_thp_set_irq_enable(core_data, IRQ_ENABLE_FLAG);
                 goodix_thp_set_irq_wake_enable(core_data, IRQ_WAKE_ENABLE_FLAG);
+#ifdef CONFIG_THP_FOLD
+                if (core_data->pdev->id > 0 && core_data->desk_mode == 1) {
+                    val[0] = NOTIFY_TYPE_DESK_MODE;
+                    val[1] = core_data->desk_mode;
+                    val[2] = 0;
+                    put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+                    msleep(20);
+                    ts_info(ts_dev->dev, "Set desk mode %d", val[1]);
+                }
+#endif
         }
 exit:
         goodix_thp_force_release_all(core_data);
