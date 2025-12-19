@@ -548,6 +548,7 @@ struct ovt_tcm_features {
 	unsigned char byte_2_reserved:7;
 } __packed;
 
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
 typedef struct {
     unsigned short chargerBit           : 1; // bit0
     unsigned short gloveMode            : 1; // bit1
@@ -559,7 +560,8 @@ typedef struct {
     unsigned short baselineFastRelaxCmd : 1; // bit8
     unsigned short openTestDetect       : 1; // bit9
     unsigned short reserved             : 7;
-} __attribute__((packed)) TCM_ABNORMAL_INFO_T;
+} __packed TCM_ABNORMAL_INFO_T;
+#endif
 
 #ifdef CONFIG_SUPPORT_MULTI_FIRMWARE
 enum firmware_image_type {
@@ -618,6 +620,9 @@ struct ovt_tcm_hcd {
 	unsigned int func_roate_horizontal_level_en;
 	unsigned int func_face_detect_en;
 	unsigned int log_level;
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
+	bool palm_on;
+#endif
 #ifdef OVT_STOWED_MODE_SUPPORT
 	int set_stowed;
 	int get_stowed;

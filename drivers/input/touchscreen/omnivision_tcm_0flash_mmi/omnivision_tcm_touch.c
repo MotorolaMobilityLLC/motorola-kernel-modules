@@ -161,7 +161,9 @@ struct touch_hcd {
 	struct ovt_tcm_buffer resp;
 	struct ovt_tcm_hcd *tcm_hcd;
 };
-
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
+	unsigned int tool_type;
+#endif
 #ifdef OVT_TAP_SENSOR_EN
 #ifdef CONFIG_HAS_WAKELOCK
 static struct wake_lock gesture_wakelock;
@@ -220,8 +222,14 @@ static void touch_free_objects(void)
 		input_report_abs(touch_hcd->input_dev, ABS_MT_PRESSURE, 0);
 		input_report_abs(touch_hcd->input_dev, ABS_MT_TOUCH_MAJOR, 0);
 #endif
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
+		input_mt_report_slot_state(touch_hcd->input_dev,
+				tool_type, 0);
+#else
 		input_mt_report_slot_state(touch_hcd->input_dev,
 				MT_TOOL_FINGER, 0);
+#endif
+
 	}
 #endif
 	input_report_key(touch_hcd->input_dev,
@@ -766,6 +774,10 @@ static void touch_report(void)
 	touch_data = &touch_hcd->touch_data;
 	object_data = touch_hcd->touch_data.object_data;
 
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
+	tool_type=tcm_hcd->palm_on ? MT_TOOL_PALM : MT_TOOL_FINGER;
+#endif
+
 #if SUPPORT_FACE_DETECT
 	ovt_check_face_state(touch_data->fd_data);
 	touch_data->fd_data = FACE_STATUS_NONE;
@@ -821,8 +833,13 @@ static void touch_report(void)
 		case LIFT:
 #ifdef TYPE_B_PROTOCOL
 			input_mt_slot(touch_hcd->input_dev, idx);
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
+			input_mt_report_slot_state(touch_hcd->input_dev,
+					tool_type, 0);
+#else
 			input_mt_report_slot_state(touch_hcd->input_dev,
 					MT_TOOL_FINGER, 0);
+#endif
 			if (tcm_hcd->log_level > 2) OVT_INFO("LIFT, touch UP");
 #endif
 			break;
@@ -845,8 +862,13 @@ static void touch_report(void)
 				y = touch_hcd->input_params.max_y - y;
 #ifdef TYPE_B_PROTOCOL
 			input_mt_slot(touch_hcd->input_dev, idx);
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
+			input_mt_report_slot_state(touch_hcd->input_dev,
+					tool_type, 1);
+#else
 			input_mt_report_slot_state(touch_hcd->input_dev,
 					MT_TOOL_FINGER, 1);
+#endif
 #endif
 			input_report_key(touch_hcd->input_dev,
 					BTN_TOUCH, 1);
@@ -943,7 +965,10 @@ static int touch_set_input_params(void)
 	input_set_abs_params(touch_hcd->input_dev,
 			ABS_MT_TOUCH_MAJOR, 0, MAX_MAJOR_VALUE, 0, 0);
 #endif
-
+#ifdef CONFIG_ENABLE_TOUCH_PALM_CANCEL
+	input_set_abs_params(touch_hcd->input_dev, ABS_MT_TOOL_TYPE,
+			MT_TOOL_FINGER, MT_TOOL_PALM, 0, 0);
+#endif
 	input_mt_init_slots(touch_hcd->input_dev, touch_hcd->max_objects,
 			INPUT_MT_DIRECT);
 
