@@ -2275,6 +2275,11 @@ static int cps_wls_mode_select(char *str, bool mode)
 	return rt;
 }
 
+void wlc_chg_mc_modsel_work(struct work_struct *work)
+{
+	cps_wls_mode_select("wlc init", !chip->mc_status);
+}
+
 static int cps_wls_set_tx_en_pin(char *str, bool en)
 {
 	struct cps_wls_chrg_chip *chg = chip;
@@ -2292,21 +2297,7 @@ static int cps_wls_set_tx_en_pin(char *str, bool en)
 
 	return rt;
 }
-#if 0
-static int cps_wls_get_tx_en_pin(char *str)
-{
-	struct cps_wls_chrg_chip *chg = chip;
-	int status = 0;
 
-	if (chg && gpio_is_valid(chg->wls_tx_en)) {
-       status = gpio_get_value(chg->wls_tx_en);
-	}
-
-	cps_wls_log(CPS_LOG_DEBG, "[%s] cps_wls_get_tx_en_pin en:%d\n", str, status);
-
-	return status;
-}
-#endif
 static int cps_wls_set_mc_det(char *str, bool on)
 {
 	struct cps_wls_chrg_chip *chg = chip;
@@ -2403,7 +2394,7 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		chip->mc_icl_state = MC_ICL_IDLE;
 		chip->ce_det_count = 0;
 		chip->mcode = 0x00;
-		if (!chip->stop_epp_flag && !chip->mode_select_force && !chip->factory_wls_en)
+		if (!chip->stop_epp_flag && !chip->mode_select_force && !chip->factory_wls_en && !chip->mc_status)
 			cps_wls_mode_select("wls_det_irq_handler", true);
 
 		if (chip->rx_ldo_on) {
@@ -4724,6 +4715,29 @@ static void cps_init_charge_hardware(void)
 	}
 }
 
+static bool is_atm_mode(void)
+{
+	struct device_node *np = of_find_node_by_path("/chosen");
+	const char *mmi_bootconfig = NULL;
+	bool ret = false;
+
+	if (!IS_ERR_OR_NULL(np)) {
+		if (!of_property_read_string(np, "mmi,bootconfig", &mmi_bootconfig)) {
+			pr_debug("%s mmi_bootconfig=%s\n", __func__, mmi_bootconfig);
+			if (strstr(mmi_bootconfig, "androidboot.atm=enable"))
+				ret = true;
+			pr_info("%s %d\n", __func__, ret);
+		} else {
+			pr_err("%s mmi,bootconfig read failed\n", __func__);
+		}
+		of_node_put(np);
+	} else {
+		pr_err("%s chosen is error or null\n", __func__);
+	}
+
+	return ret;
+}
+
 static int phone_case_detection_notifier_call(struct notifier_block *nb,
 					unsigned long event, void *data)
 {
@@ -4744,6 +4758,7 @@ static int phone_case_detection_notifier_call(struct notifier_block *nb,
 	}
 	if (chip->mc_support) {
 			cps_wls_set_mc_det("wlc init", !chip->mc_status);
+			cps_wls_mode_select("phone_case_detection", !chip->mc_status);
 	}
 	cps_wls_log(CPS_LOG_DEBG, "%s mc_status=%d event=%ld\n", __func__, chip->mc_status, event);
 
@@ -4755,7 +4770,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client)
     int ret=0;
     char *name = NULL;
     int rc = 0;
-	int int_flag = 0;
+
     cps_wls_log(CPS_LOG_ERR, "[%s] ---->start\n", __func__);
     chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
     if (!chip) {
@@ -4901,10 +4916,14 @@ static int cps_wls_chrg_probe(struct i2c_client *client)
         }
    }
 
+    //Enable IC EPP mode as default
+    cps_wls_mode_select("cps_wls_chrg_probe", true);
+
     //support magnatic cover
     INIT_DELAYED_WORK(&chip->mc_icl_work, wlc_chg_mc_icl_work);
+    INIT_DELAYED_WORK(&chip->mc_modsel_work, wlc_chg_mc_modsel_work);
 
-	if (chip->phone_case_support) {
+	if (chip->phone_case_support && !is_atm_mode()) {
 		rc = phone_case_detection_get_hall_state();
 		if (rc == PHONE_CASE_DETECTION_MOUNTED) {
 			chip->mc_status = true;
@@ -4914,23 +4933,13 @@ static int cps_wls_chrg_probe(struct i2c_client *client)
 			cps_wls_log(CPS_LOG_ERR, "%s hall not enabled rc=%d\n", __func__, rc);
 		}
 		if (chip->mc_support) {
-				cps_wls_set_mc_det("wlc init", !chip->mc_status);
+			queue_delayed_work(chip->wls_wq, &chip->mc_modsel_work, msecs_to_jiffies(2000));
+			cps_wls_set_mc_det("wlc init", !chip->mc_status);
 		}
 		chip->hall_nb.notifier_call = phone_case_detection_notifier_call;
 		rc = phone_case_detection_register_client(&chip->hall_nb);
 		cps_wls_log(CPS_LOG_DEBG, "%s phone_case_detection_register_client rc=%d\n", __func__, rc);
 	}
-
-    //Enable IC EPP mode as default
-    cps_wls_mode_select("cps_wls_chrg_probe", true);
-
-    int_flag = cps_wls_get_int_flag();
-	cps_wls_log(CPS_LOG_DEBG, ">>>>>int_flag when probe = %x\n", int_flag);
-    if(int_flag > 0)
-    {
-        cps_wls_irq_handler(int_flag, (void*)chip);
-    }
-
     return ret;
 
 free_source:

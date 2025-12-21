@@ -330,6 +330,7 @@ struct cps_wls_chrg_chip {
     uint16_t mcode;
     bool mc_support;
     struct delayed_work mc_icl_work;
+    struct delayed_work mc_modsel_work;
     bool phone_case_support;
     struct notifier_block hall_nb;
 };
