@@ -253,7 +253,6 @@ struct mmi_fg_chip {
 
 	int mcu_auth_code;
 
-	const char **batt_serialnum_arry;
 	int battid_cnt;
 	int battid_alis_cnt;
 	struct battid_map *battid_table;
@@ -2040,14 +2039,14 @@ static bool nfg1000_ota_program_check_batt_params_chem_version(struct mmi_fg_chi
 
 	if (dev_sn && di->battid_cnt !=0 && di->batt_chem_version_cnt != 0) {
 		for (i = 0; i < di->battid_cnt; i++) {
-			if ((strnstr(dev_sn, di->batt_serialnum_arry[i], 10))) {
+			if ((strnstr(dev_sn, di->battid_table[i].battid, 10))) {
 				for (j = 0; j < ARRAY_SIZE(fg_manufac_name); j++) {
 					index = i * ARRAY_SIZE(fg_manufac_name) + j;
 					if ((index < di->batt_chem_version_cnt)
 						&& (fg_manufac_name[j] != di->batt_chem_version_arry[index])) {
 						sprintf(batt_params_bin_name,
 						"NFG1000A_battery_parameter_%s.bin",
-						di->batt_serialnum_arry[i]);
+						di->battid_table[i].battid);
 						mmi_info("Need to upgrading battery parameters: %s", batt_params_bin_name);
 						upgrade_status = true;
 						break;
@@ -3730,23 +3729,6 @@ static int mmi_parse_dt(struct mmi_fg_chip *mmi_fg)
 				else {
 					mmi_fg->battid_alis_cnt = count / 2;
 				}
-			}
-		}
-	}
-
-	count = of_property_count_strings(np, "batt_serialnums");
-	if (count > 0) {
-		mmi_info("battid_cnt=%d", count);
-		mmi_fg->battid_cnt = count;
-		mmi_fg->batt_serialnum_arry = devm_kzalloc(&mmi_fg->client->dev, count * sizeof(char *), GFP_KERNEL);
-		if (mmi_fg->batt_serialnum_arry) {
-			for (i = 0; i < mmi_fg->battid_cnt; i++) {
-				rc = of_property_read_string_index(np, "batt_serialnums", i,
-								    &mmi_fg->batt_serialnum_arry[i]);
-				if (rc < 0)
-					mmi_fg->battid_cnt = 0;
-				else
-					mmi_info("support serialnum[%d](%s)\n", i, mmi_fg->batt_serialnum_arry[i]);
 			}
 		}
 	}
