@@ -26,6 +26,7 @@
 #include <trace/hooks/sched.h>
 #include <trace/hooks/signal.h>
 #include <trace/hooks/binder.h>
+#include <trace/hooks/dtask.h>
 #include <kernel/sched/sched.h>
 #include <linux/interrupt.h>
 
@@ -35,6 +36,8 @@
 #define CREATE_TRACE_POINTS
 #include "msched_trace.h"
 #include "msched_uclamp.h"
+#include <linux/percpu-defs.h>
+#include <linux/preempt.h>
 
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
@@ -594,6 +597,90 @@ static void android_vh_binder_proc_transaction_finish(void *unused, struct binde
 }
 #endif
 
+#define per_cpu_sum(var)                                                \
+({                                                                      \
+	typeof(var) __sum = 0;                                          \
+	int cpu;                                                        \
+	compiletime_assert_atomic_type(__sum);                          \
+	for_each_possible_cpu(cpu)                                      \
+		__sum += per_cpu(var, cpu);                             \
+	__sum;                                                          \
+})
+
+static bool percpu_is_writer_waiting_locked(struct percpu_rw_semaphore *sem)
+{
+	return per_cpu_sum(*sem->read_count) != 0 && atomic_read(&sem->block);
+}
+
+static void android_vh_percpu_rwsem_down_read_preempt_handler(
+		void *unused,
+		struct percpu_rw_semaphore *sem,
+		bool try,
+		bool *ret)
+{
+	if (unlikely(!sem || !ret))
+		return;
+
+	if (!is_enabled(UX_ENABLE_PERCPU_RWSEM)) {
+		trace_percpu_rwsem_down_read_preempt(sem, try, *ret);
+		return;
+	}
+
+	if (!atomic_read(&sem->block)) {
+		return;
+	}
+
+	if (!percpu_is_writer_waiting_locked(sem)) {
+		return;
+	}
+
+	if (current->tgid == global_launcher_tgid &&
+		task_get_mvp_prio(current, true) == UX_PRIO_TOPAPP &&
+		strcmp(current->comm, "RenderThread") == 0)
+		goto allow;
+
+	if (strncmp(current->comm, "binder", 6) == 0) {
+		struct task_struct *t;
+
+		rcu_read_lock();
+		t = find_task_by_vpid(current->tgid);
+		if (t && task_has_rt_policy(t)) {
+			rcu_read_unlock();
+			goto allow;
+		}
+		rcu_read_unlock();
+	}
+	return;
+
+allow:
+	preempt_disable();
+	this_cpu_inc(*sem->read_count);
+	smp_mb();
+	*ret = true;
+	preempt_enable();
+	trace_percpu_rwsem_down_read_preempt(sem, try, *ret);
+}
+
+static void android_rvh_percpu_rwsem_wait_complete_handler(
+		void *unused,
+		struct percpu_rw_semaphore *sem,
+		long state,
+		bool *complete)
+{
+	if (unlikely(!sem || !complete))
+		return;
+
+	trace_percpu_rwsem_wait_complete(sem, state, *complete);
+}
+
+static void android_vh_percpu_rwsem_up_write_handler(
+		void *unused,
+		struct percpu_rw_semaphore *sem)
+{
+	trace_percpu_rwsem_up_write(sem);
+}
+
+
 void register_vendor_comm_hooks(void)
 {
 #ifdef CONFIG_MOTO_LOCKING_2
@@ -609,6 +696,12 @@ void register_vendor_comm_hooks(void)
 	register_trace_android_vh_binder_proc_transaction_finish(
 		android_vh_binder_proc_transaction_finish, NULL);
 #endif
+	register_trace_android_vh_percpu_rwsem_down_read(
+		android_vh_percpu_rwsem_down_read_preempt_handler, NULL);
+	register_trace_android_rvh_percpu_rwsem_wait_complete(
+		android_rvh_percpu_rwsem_wait_complete_handler, NULL);
+	register_trace_android_vh_percpu_rwsem_up_write(
+		android_vh_percpu_rwsem_up_write_handler, NULL);
 
 	msched_uclamp_register_vendor_comm_hooks();
 }
