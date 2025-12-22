@@ -177,8 +177,13 @@ int ili_ice_mode_read(u32 addr, u32 *data, int len)
 	if (ret < 0)
 		goto out;
 
-	if (len == sizeof(u8))
+	*data = 0;
+	if (len == 1)
 		*data = rxbuf[0];
+	else if (len == 2)
+		*data = (rxbuf[0] | rxbuf[1] << 8);
+	else if (len == 3)
+		*data = (rxbuf[0] | rxbuf[1] << 8 | rxbuf[2] << 16);
 	else
 		*data = (rxbuf[0] | rxbuf[1] << 8 | rxbuf[2] << 16 | rxbuf[3] << 24);
 
