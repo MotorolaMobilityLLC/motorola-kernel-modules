@@ -643,7 +643,8 @@ static int sc8989x_field_write(struct sc8989x_chip *sc,
 {
 	int ret;
 
-	if (field_id == DM_DRIVE || field_id == DP_DRIVE) {
+	if (field_id == DM_DRIVE || field_id == DP_DRIVE ||
+		field_id == CX_DM_DRIVE || field_id == CX_DP_DRIVE) {
 		if (sc->otg_enable)
 			return -1;
 	}
@@ -2024,7 +2025,7 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 
 	/*dp and dm connected,dp 0.6V dm 0V*/
 	dp_val = 2;
-	if (sc->is_cx25890HQ){
+	if (sc->is_cx25890HQ) {
 		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 0.6V
 	} else {
 		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
@@ -2034,7 +2035,7 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 	    return ret;
 
 	dm_val = 2;
-	if (sc->is_cx25890HQ){
+	if (sc->is_cx25890HQ) {
 		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0.6V
 	} else {
 		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6V
@@ -2047,7 +2048,7 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 	msleep(QC3P_MSLEEP_1500DELAY);
 
 	dm_val = 1;
-	if (sc->is_cx25890HQ){
+	if (sc->is_cx25890HQ) {
 		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0V
 	} else {
 		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
@@ -2060,7 +2061,7 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 
 	/* dp 3.3v and dm 0.6v out 9V */
 	dp_val = 6;
-	if (sc->is_cx25890HQ){
+	if (sc->is_cx25890HQ) {
 		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 3.3v
 	} else {
 		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 3.3v
@@ -2071,7 +2072,7 @@ static int sc8989x_enable_qc20_hvdcp_9v(struct sc8989x_chip *sc)
 		return ret;
 
 	dm_val = 2;
-	if (sc->is_cx25890HQ){
+	if (sc->is_cx25890HQ) {
 		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0.6v
 	} else {
 		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6v
@@ -2094,13 +2095,21 @@ static int sc8989x_adjust_qc20_hvdcp_5v(struct sc8989x_chip *sc)
 
 	/* dp 0.6v and dm 0v out 5V */
 	dp_val = 2;
-	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	if (sc->is_cx25890HQ){
+		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 0.6V
+	} else {
+		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	}
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 	    return ret;
 
 	dm_val = 1;
-	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
+	if (sc->is_cx25890HQ) {
+		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0V
+	} else {
+		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0V
+	}
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 		return ret;
@@ -2120,13 +2129,21 @@ static int sc8989x_qc30_step_up_vbus(struct sc8989x_chip *sc)
 
 	/*  dm 3.3v to dm 0.6v  step up 200mV when IC is QC3.0 mode*/
 	dp_val = 6;
-	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 3.3V
+	if (sc->is_cx25890HQ) {
+		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 3.3V
+	} else {
+		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 3.3V
+	}
 	if (ret)
 	    return ret;
 
 	udelay(QC3P_UDELAY_2500DELAY);
 	dp_val = 2;
-	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	if (sc->is_cx25890HQ) {
+		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 0.6V
+	} else {
+		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	}
 	if (ret)
 	    return ret;
 
@@ -2145,14 +2162,22 @@ static int sc8989x_qc30_step_down_vbus(struct sc8989x_chip *sc)
 
 	/* dp 0.6v and dm 0.6v step down 200mV when IC is QC3.0 mode*/
 	dm_val = 2;
-	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6v
+	if (sc->is_cx25890HQ) {
+		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 0.6v
+	} else {
+		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 0.6v
+	}
 	if (ret)
 		return ret;
 
 
 	udelay(QC3P_UDELAY_2500DELAY);
 	dm_val = 6;
-	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 3.3v
+	if (sc->is_cx25890HQ) {
+		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 3.3v
+	} else {
+		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 3.3v
+	}
 	if (ret)
 		return ret;
 	udelay(QC3P_UDELAY_2500DELAY);
@@ -2172,13 +2197,21 @@ static int sc8989x_detected_qc30_hvdcp(struct sc8989x_chip *sc, int *charger_typ
 
 	/* dp 0.6v and dm 3.3v entry QC3.0 mode */
 	dp_val = 2;
-	ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	if (sc->is_cx25890HQ) {
+		ret = sc8989x_field_write(sc, CX_DP_DRIVE, dp_val); //dp 0.6V
+	} else {
+		ret = sc8989x_field_write(sc, DP_DRIVE, dp_val); //dp 0.6V
+	}
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 	    return ret;
 
 	dm_val = 6;
-	ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 3.3v
+	if (sc->is_cx25890HQ) {
+		ret = sc8989x_field_write(sc, CX_DM_DRIVE, dm_val); //dm 3.3v
+	} else {
+		ret = sc8989x_field_write(sc, DM_DRIVE, dm_val); //dm 3.3v
+	}
 	dev_dbg(sc->dev, "%s: %d  ret=%d\n", __func__, __LINE__, ret);
 	if (ret)
 		return ret;
@@ -2904,10 +2937,18 @@ rerun:
 
 		if(sc->qc_chg_type == USB_TYPE_QC20) {
 			/* dp 3.3v and dm 0.6v out 9V */
-			ret = sc8989x_field_write(sc, DP_DRIVE, DPDM_DRIVE_3V3);
+			if (sc->is_cx25890HQ) {
+				ret = sc8989x_field_write(sc, CX_DP_DRIVE, DPDM_DRIVE_3V3);
+			} else {
+				ret = sc8989x_field_write(sc, DP_DRIVE, DPDM_DRIVE_3V3);
+			}
 			if (ret)
 				goto out;
-			ret = sc8989x_field_write(sc, DM_DRIVE, DPDM_DRIVE_0V6);
+			if (sc->is_cx25890HQ) {
+				ret = sc8989x_field_write(sc, CX_DM_DRIVE, DPDM_DRIVE_0V6);
+			} else {
+				ret = sc8989x_field_write(sc, DM_DRIVE, DPDM_DRIVE_0V6);
+			}
 			if (ret)
 				goto out;
 			dev_info(sc->dev,"Force set qc2 9V");
