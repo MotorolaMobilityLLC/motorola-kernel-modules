@@ -1795,6 +1795,10 @@ static void aw8693xs_parse_dt(struct device *dev, struct aw_haptic *aw_haptic,
 						"aw8693xs_is_enabled_track_en");
 	aw_info("track en = %d", aw_haptic->info.is_enabled_track_en);
 
+	aw_haptic->info.is_pwm_12k = of_property_read_bool(np,
+						"aw8693xs_is_pwm_12k");
+	aw_info("is_pwm_12k = %d", aw_haptic->info.is_pwm_12k);
+
 	aw_haptic->info.is_enabled_inter_brake = of_property_read_bool(np,
 						"aw8693xs_is_enabled_inter_brake");
 	aw_info("inter brake = %d", aw_haptic->info.is_enabled_inter_brake);
