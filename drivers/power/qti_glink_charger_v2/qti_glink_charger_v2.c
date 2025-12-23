@@ -949,10 +949,7 @@ static ssize_t typec_reset_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	if (reset)
-		mmi_warn(chg, "typec_reset triggered\n");
-	else
-		return count;
+	mmi_warn(chg, "typec_reset triggered:%d\n", reset);
 
 	r = qti_charger_write(chg, OEM_PROP_TYPEC_RESET,
 			&reset,
@@ -961,6 +958,35 @@ static ssize_t typec_reset_store(struct device *dev,
 	return r ? r : count;
 }
 static DEVICE_ATTR(typec_reset, S_IWUSR|S_IWGRP, NULL, typec_reset_store);
+
+static ssize_t typec_pwrsrc_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	int rc;
+	unsigned int current_ma = 0;
+	struct qti_charger *chg = this_chip;
+
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	rc = kstrtou32(buf, 0, &current_ma);
+	if (rc) {
+		pr_err("Invalid pwrsrc, rc=%d\n", rc);
+		return -EINVAL;
+	}
+
+	mmi_info(chg, "pwrsrc current = %d\n", current_ma);
+
+	rc = qti_charger_write(chg, OEM_PROP_TYPEC_PWRSRC_REQUEST,
+			&current_ma,
+			sizeof(current_ma));
+
+	return rc ? rc : count;
+}
+static DEVICE_ATTR(typec_pwrsrc, S_IWUSR|S_IWGRP, NULL, typec_pwrsrc_store);
 
 static ssize_t fg_operation_store(struct device *dev,
 		struct device_attribute *attr,
@@ -1327,6 +1353,11 @@ static int qti_charger_init(struct qti_charger *chg)
 			   "Couldn't create typec_reset\n");
 	}
 
+	rc = device_create_file(chg->dev, &dev_attr_typec_pwrsrc);
+	if (rc) {
+		mmi_err(chg, "Couldn't create typec_pwrsrc\n");
+	}
+
 	rc = device_create_file(chg->dev,
 				&dev_attr_fg_operation);
 	if (rc) {
@@ -1352,6 +1383,7 @@ static void qti_charger_shutdown(struct platform_device *pdev)
 static void qti_charger_deinit(struct qti_charger *chg)
 {
 	device_remove_file(chg->dev, &dev_attr_fg_operation);
+	device_remove_file(chg->dev, &dev_attr_typec_pwrsrc);
 	device_remove_file(chg->dev, &dev_attr_typec_reset);
 	device_remove_file(chg->dev, &dev_attr_cid_status);
 	device_remove_file(chg->dev, &dev_attr_tcmd_current_battid);
