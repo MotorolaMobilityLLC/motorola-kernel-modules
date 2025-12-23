@@ -3843,6 +3843,9 @@ static int sc8989x_chg_get_property(struct power_supply *psy,
 		else
 			val->intval = 5000000;
 		break;
+	case POWER_SUPPLY_PROP_VOLTAGE_MIN:
+                val->intval = sc->disablehiz_isset_flg;
+                break;
 	case POWER_SUPPLY_PROP_TYPE:
 #if IS_ENABLED(CONFIG_MOTO_WLC_ALG_SUPPORT)
 		tcpc_attach = atomic_read(&sc->attach);
