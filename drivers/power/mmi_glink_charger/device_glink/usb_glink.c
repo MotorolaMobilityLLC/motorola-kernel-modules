@@ -75,6 +75,35 @@ static ssize_t typec_reset_store(struct device *dev,
 }
 static DEVICE_ATTR(typec_reset, 0220, NULL, typec_reset_store);
 
+static ssize_t typec_pwrsrc_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	int rc;
+	unsigned int current_ma = 0;
+	struct usb_glink_dev *chip = this_chip;
+
+	if (!chip) {
+		mmi_err(chip->mmi_chip, "usb chip not valid\n");
+		return -ENODEV;
+	}
+
+	rc = kstrtou32(buf, 0, &current_ma);
+	if (rc) {
+		mmi_err(chip->mmi_chip, "Invalid pwrsrc, rc=%d\n", rc);
+		return -EINVAL;
+	}
+
+	mmi_info(chip->mmi_chip, "pwrsrc current = %d\n", current_ma);
+
+	rc = qti_charger_set_property(OEM_PROP_TYPEC_PWRSRC_REQUEST,
+			&current_ma,
+			sizeof(current_ma));
+
+	return rc ? rc : count;
+}
+static DEVICE_ATTR(typec_pwrsrc, 0220, NULL, typec_pwrsrc_store);
+
 static void glink_usb_notify_uevent(struct usb_glink_dev *chip, int event)
 {
 	char uevent_buf[CHG_SHOW_MAX_SIZE];
@@ -448,6 +477,12 @@ static int glink_usb_psy_init(struct usb_glink_dev *chip)
 	if (rc) {
 		mmi_err(chip->mmi_chip, "Couldn't create typec_reset\n");
 	}
+
+	rc = device_create_file(chip->usb_psy->dev.parent,
+			&dev_attr_typec_pwrsrc);
+	if (rc) {
+		mmi_err(chip->mmi_chip, "Couldn't create typec_pwrsrc\n");
+	}
 	return rc;
 }
 
@@ -503,6 +538,7 @@ static int glink_usb_deinit(struct usb_glink_dev *chip)
 			gpio_free(chip->otp_en_gpio);
 	}
 
+	device_remove_file(chip->mmi_chip->dev, &dev_attr_typec_pwrsrc);
 	device_remove_file(chip->mmi_chip->dev, &dev_attr_typec_reset);
 	device_remove_file(chip->mmi_chip->dev, &dev_attr_cid_status);
 	if (chip->batt_psy) {
