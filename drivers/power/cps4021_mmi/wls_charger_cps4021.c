@@ -1796,6 +1796,9 @@ static int cps_wls_tx_irq_handler(int int_flag)
     }
     if(int_flag & TX_INT_AC_DET){
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_AC_DET");
+         if (!chip->fw_uploading) {
+                cps_wls_tx_enable(false);
+        }
     }
     if(int_flag & TX_INT_INIT_DONE){
          cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  TX_INT_INIT");
