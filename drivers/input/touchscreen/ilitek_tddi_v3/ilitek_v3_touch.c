@@ -1356,6 +1356,8 @@ static void ilitek_tddi_touch_customer_data_parsing(u8 *buf)
 	struct ilitek_axis_info axis_info[MAX_TOUCH_NUM];
 	struct  ilitek_als_info als_info;
 	bool palmflag = false;
+	u8 open_check_status;
+	u8 open_check;
 	ilits->finger = 0;
 	if (ilits->rib.nCustomerType == POSITION_CUSTOMER_TYPE_AXIS && ilits->tp_data_format == DATA_FORMAT_DEMO) {
 		if (ilits->rib.nReportResolutionMode == POSITION_LOW_RESOLUTION) {
@@ -1510,6 +1512,16 @@ static void ilitek_tddi_touch_customer_data_parsing(u8 *buf)
 			for (i = 0; i < others; i++) {
 				ILI_DBG("Other Information byte[%d]:%02x\n", i, buf[index + P5_X_CUSTOMER_ALS_LENGTH + i]);
 			}
+		}
+	} else if(ilits->rib.nCustomerType == ilits->customertype_off && ilits->tp_data_format == DATA_FORMAT_DEMO){
+		if (ilits->rib.nReportResolutionMode == POSITION_HIGH_RESOLUTION) {
+			index = P5_X_DEMO_MODE_PACKET_LEN_HIGH_RESOLUTION - others - P5_X_INFO_CHECKSUM_LENGTH;
+			for (i = 0; i < others; i++) {
+				ILI_DBG("Other Information byte[%d]:%02x\n", i, buf[index + i]);
+			}
+			open_check = buf[index + 2];
+			open_check_status = (open_check >> 7) & 1;
+			ILI_DBG("Other byte[3] open_check_status = %u\n", open_check_status);
 		}
 	}
 }
