@@ -326,6 +326,7 @@ struct sc8989x_chip {
 	bool	mmi_qc3p_rerun_done;
 	int otg_enable;
 	int upm6920_iterm;
+	int upm6920A_votg;
 	int cx25890HQ_votg;
 	int cx_otg_trilmt_init;
 	bool ibus_dis;
@@ -3492,6 +3493,17 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 
 		/*The cx25890HQ must set auto dpdm en to 1*/
 		sc->cfg->auto_dpdm_en = 1;
+	}
+
+
+	ret = of_property_read_u32(np, "sc,upm6920A,votg", &sc->upm6920A_votg);
+	if (ret < 0) {
+		dev_err(sc->dev, "%s not find\n", "sc,upm6920A,votg");
+		sc->upm6920A_votg = 0;
+	}
+
+	if (sc->is_upm6920A && (sc->upm6920A_votg != 0)) {
+		sc->cfg->votg = sc->upm6920A_votg;
 	}
 
 	return 0;
