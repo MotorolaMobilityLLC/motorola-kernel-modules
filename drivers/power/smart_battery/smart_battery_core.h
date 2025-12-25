@@ -131,6 +131,8 @@ struct mmi_smart_battery {
 	struct cutoff_zone *cutoff_zone;
 	int num_cutoff;
 	int current_cutoff_index;
+	int batt_cold_shutdown_volt;
+	bool is_low_temp_shutdownVolt_active;
 };
 
 #define SOC_JUMPS_DELAYED_WORK_TIME  60000

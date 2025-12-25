@@ -706,26 +706,55 @@ static int get_cutoff_index(struct cutoff_zone *cutoff_zone, int zone_count, int
 	return zone_count - 1;
 }
 
+#define EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10 50
 static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 {
+	int shutdown_volt = 0;
+
 	if (IS_ERR_OR_NULL(chip))
 		return 0;
 
-	if (!IS_ERR_OR_NULL(chip->cutoff_zone) && chip->uisoc == 100 &&
-		(chip->current_cutoff_index < chip->num_cutoff) &&
-		mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING) {
-		if (!is_between(chip->combo_cycle_count,
-			chip->cutoff_zone[chip->current_cutoff_index].cycle_l,
-			chip->cutoff_zone[chip->current_cutoff_index].cycle_h)) {
+	if (!IS_ERR_OR_NULL(chip->cutoff_zone)) {
 
-			chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
-			mmi_info(chip, "%s current_cutoff_index=%d, shutdownVoltage=%dmV",
-				__func__, chip->current_cutoff_index,
-				chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage);
-			smart_batt_set_shutdown_threshold(chip, chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage);
+		if (chip->batt_cold_shutdown_volt != 0) {
+			if (!chip->is_low_temp_shutdownVolt_active &&
+				chip->combo_batt_temp <= chip->batt_cold_threshold &&
+				chip->uisoc <= 10 &&
+				mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
+				if (smart_batt_set_shutdown_threshold(chip, chip->batt_cold_shutdown_volt) >=0) {
+					mmi_info(chip, "battery temp lower than %d degrees, set shutdown_voltage to %dmv\n",
+						chip->batt_cold_threshold / 10, chip->batt_cold_shutdown_volt);
+					chip->is_low_temp_shutdownVolt_active = true;
+				}
+			}
+
+			if(chip->is_low_temp_shutdownVolt_active) {
+				if (chip->combo_batt_temp >= (chip->batt_cold_threshold + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
+					chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
+					shutdown_volt = chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage;
+					if (smart_batt_set_shutdown_threshold(chip, shutdown_volt) >=0) {
+						mmi_info(chip, "exit low temp environment, the power_off voltage set back to %dmv\n", shutdown_volt);
+						chip->is_low_temp_shutdownVolt_active = false;
+					}
+				}
+			}
+		}
+
+		if (chip->uisoc == 100 &&
+		     mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_CHARGING) {
+
+			if (!is_between(chip->combo_cycle_count,
+				chip->cutoff_zone[chip->current_cutoff_index].cycle_l,
+				chip->cutoff_zone[chip->current_cutoff_index].cycle_h)) {
+
+				chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
+				mmi_info(chip, "%s current_cutoff_index=%d, shutdownVoltage=%dmV",
+					__func__, chip->current_cutoff_index,
+					chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage);
+				smart_batt_set_shutdown_threshold(chip, chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage);
+			}
 		}
 	}
-
 	return 0;
 }
 
@@ -982,6 +1011,8 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 
 	mmi_info(chip,"vbatt_empty_mv=%d vbatt_empty_cold_mv=%d batt_cold_threshold=%d, vbatt_low_mv=%d vbatt_low_cold_mv=%d",
 		chip->vbatt_empty_mv,chip->vbatt_empty_cold_mv, chip->batt_cold_threshold, chip->vbatt_low_mv, chip->vbatt_low_cold_mv);
+
+	of_property_read_u32(np, "mmi,batt-cold-shutdown-volt", &chip->batt_cold_shutdown_volt);
 
 	if (of_find_property(np, "cyclecount-shutdown-voltage-zones", &byte_len)) {
 		if ((byte_len / sizeof(u32)) % 3) {
@@ -1413,8 +1444,13 @@ static int smart_battery_probe(struct platform_device *pdev)
 		goto cleanup;
 	}
 
-	if (chip->shutdown_threshold != -EINVAL)
+	if (!IS_ERR_OR_NULL(chip->cutoff_zone)) {
+		smart_batt_get_cycle_count(chip);
+		chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
+		smart_batt_set_shutdown_threshold(chip, chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage);
+	} else if (chip->shutdown_threshold != -EINVAL) {
 		smart_batt_set_shutdown_threshold(chip, chip->shutdown_threshold);
+	}
 
 	chip->fg_workqueue = create_singlethread_workqueue("smart_battery");
 	INIT_DELAYED_WORK(&chip->battery_delay_work, smart_batt_update_thread);
