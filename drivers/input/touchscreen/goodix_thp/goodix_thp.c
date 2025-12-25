@@ -1300,6 +1300,9 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         del_timer(&core_data->boost_timer);
 #endif
 
+        if (core_data->ws) {
+                __pm_stay_awake(core_data->ws);
+        }
         /*for check bus i2c/spi is ready or not*/
         if (unlikely(core_data->suspended && core_data->pm_suspend)) {
             r = wait_for_completion_timeout(
@@ -1307,14 +1310,14 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
                         msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
             if (!r) {
                 ts_err(ts_dev->dev, "Bus don't resume from pm(deep),timeout,skip irq");
+                if (core_data->ws) {
+                    __pm_relax(core_data->ws);
+                }
                 return IRQ_HANDLED;
             }
         }
 
         disable_irq_nosync(core_data->irq);
-        if (core_data->ws) {
-                __pm_stay_awake(core_data->ws);
-        }
 
         /*for qaulcomn to stop cpu go to C4 idle state*/
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
