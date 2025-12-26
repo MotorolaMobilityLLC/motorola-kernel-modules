@@ -204,7 +204,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	int prio = UX_PRIO_INVALID;
 
 	if (p->prio < 100)
-		return UX_PRIO_INVALID;
+		return UX_PRIO_OTHER;			/* Allow RT threads to be treated as important UX tasks to enable binder priority inheritance*/
 
 	// perf daemon
 	if (ux_type & UX_TYPE_PERF_DAEMON)
