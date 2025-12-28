@@ -102,7 +102,9 @@ struct stylus_report_rate_config *parse_stylus_report_rate_config(
 	int ret = 0;
 	int i;
 	struct stylus_report_rate_config *configs = NULL;
-	u8 raw_data[4];  // [report_rate_high, report_rate_low, command_high, command_low]
+	// [report_rate_high, report_rate_low, command_high, command_low
+	//  filter_high, filter_low, palm_area_high, palm_area_low]
+	u8 raw_data[8];
 
 	if (!np || !config_count) {
 		ts_err(dev, "Invalid parameters");
@@ -139,7 +141,7 @@ struct stylus_report_rate_config *parse_stylus_report_rate_config(
 			goto out_cleanup;
 		}
 
-		ret = of_property_read_u8_array(config_np, prop_name, raw_data, 4);
+		ret = of_property_read_u8_array(config_np, prop_name, raw_data, sizeof(raw_data));
 		if (ret) {
 			ts_err(dev, "Can't read stylus config %s: %d", prop_name, ret);
 			kfree(prop_name);
@@ -150,10 +152,12 @@ struct stylus_report_rate_config *parse_stylus_report_rate_config(
 
 		configs[i].report_rate = (raw_data[0] << 8) | raw_data[1];
 		configs[i].command = (raw_data[2] << 8) | raw_data[3];
+		configs[i].filter = (raw_data[4] << 8) | raw_data[5];
+		configs[i].palm_area = (raw_data[6] << 8) | raw_data[7];
 
-		ts_info(dev, "Parsed config %d: report_rate=0x%04x (%dHz), command=0x%04x",
+		ts_info(dev, "Parsed config %d: report_rate=0x%04x (%dHz), command=0x%04x, filter=0x%04x, palm_area=0x%04x",
 			i, configs[i].report_rate, configs[i].report_rate,
-			configs[i].command);
+			configs[i].command, configs[i].filter, configs[i].palm_area);
 	}
 
 	*config_count = count;
