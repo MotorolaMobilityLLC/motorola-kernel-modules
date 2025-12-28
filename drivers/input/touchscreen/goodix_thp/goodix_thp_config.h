@@ -45,6 +45,8 @@ struct goodix_ic_report_rate_config {
 struct stylus_report_rate_config {
 	u16 report_rate;  // Reporting rate value
 	u16 command;      // Switch commands
+	u16 filter;       // filter command
+	u16 palm_area;    // palm area command
 };
 
 extern struct goodix_ic_report_rate_config report_rate_config_info;
