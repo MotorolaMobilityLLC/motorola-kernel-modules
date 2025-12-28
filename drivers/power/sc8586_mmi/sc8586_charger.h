@@ -35,6 +35,7 @@ struct sc_reg_field {
                     .force_write = true,        \
                     }
 
+#define CONFIG_MTK_CLASS
 #define SC8586_DEVICE_ID                0x85
 #define SC8586_REG1A                    0x1A
 #define SC8586_REG0F                    0x0F
@@ -433,124 +434,17 @@ struct intr_flag {
     struct flag_bit bit[8];
 };
 
-/********************COMMON API***********************/
-__maybe_unused
-static u8 val2reg(enum sc8586_reg_range id, u32 val) {
-    int i;
-    u8 reg;
-    const struct reg_range *range = &sc8586_reg_range[id];
-
-    if (!range)
-        return val;
-
-    if (range->table) {
-        if (val <= range->table[0])
-            return 0;
-        for (i = 0; i < range->num_table - 1; i++) {
-            if (val == range->table[i]) {
-                return i;
-            }
-            if (val > range->table[i] && val < range->table[i + 1]) {
-                return range->round_up ? i + 1 : i;
-            }
-        }
-        return range->num_table - 1;
-    }
-    if (val <= range->min)
-        reg = (range->min - range->offset) / range->step;
-    else if (val >= range->max)
-        reg = (range->max - range->offset) / range->step;
-    else if (range->round_up)
-        reg = (val - range->offset) / range->step + 1;
-    else
-        reg = (val - range->offset) / range->step;
-    return reg;
-}
-
-__maybe_unused
-static u32 reg2val(enum sc8586_reg_range id, u8 reg) {
-    const struct reg_range *range = &sc8586_reg_range[id];
-    if (!range)
-        return reg;
-    return range->table ? range->table[reg] : range->offset + range->step * reg;
-}
-
 /*********************I2C API*********************/
-static int sc8586_i2c_write_bytes(struct sc8586_chip *sc, uint8_t reg, uint8_t len, uint8_t *val)
-{
-    struct i2c_client *i2c = to_i2c_client(sc->dev);
-
-    return i2c_smbus_write_i2c_block_data(i2c, reg, len, val);
-}
-
-static int sc8586_i2c_read_bytes(struct sc8586_chip *sc, uint8_t reg, uint8_t len, uint8_t *val)
-{
-    struct i2c_client *i2c = to_i2c_client(sc->dev);
-
-    return i2c_smbus_read_i2c_block_data(i2c, reg, len, val);
-}
-
-static int sc8586_i2c_write_byte(struct sc8586_chip *sc, uint8_t reg, uint8_t val)
-{
-    return sc8586_i2c_write_bytes(sc, reg, 1, &val);
-}
-
-static int sc8586_i2c_read_byte(struct sc8586_chip *sc, uint8_t reg, uint8_t *val)
-{
-    return sc8586_i2c_read_bytes(sc, reg, 1, val);
-}
-
-static int sc8586_field_read(struct sc8586_chip *sc,
-                            enum sc8586_fields field_id, int *val)
-{
-    int ret;
-    uint8_t reg_val = 0;
-
-    uint8_t mask = GENMASK(sc8586_reg_fields[field_id].msb, sc8586_reg_fields[field_id].lsb);
-
-
-    ret = sc8586_i2c_read_byte(sc, sc8586_reg_fields[field_id].reg, &reg_val);
-    if (ret < 0) {
-        sc8586_err("sc8586 read field %d fail: %d\n", field_id, ret);
-        return ret;
-    }
-
-    reg_val &= mask;
-    reg_val >>= sc8586_reg_fields[field_id].lsb;
-
-    *val = reg_val;
-
-
-    return ret;
-}
-
-static int sc8586_field_write(struct sc8586_chip *sc,
-                            enum sc8586_fields field_id, int val)
-{
-    int ret;
-    uint8_t reg_val = 0, tmp = 0;
-    uint8_t mask = GENMASK(sc8586_reg_fields[field_id].msb, sc8586_reg_fields[field_id].lsb);
-
-    ret = sc8586_i2c_read_byte(sc, sc8586_reg_fields[field_id].reg, &reg_val);
-    if (ret < 0) {
-        goto out;
-    }
-
-    tmp = reg_val & ~mask;
-    val <<= sc8586_reg_fields[field_id].lsb;
-    tmp |= val  & mask;
-
-    if (sc8586_reg_fields[field_id].force_write || tmp != reg_val) {
-        ret = sc8586_i2c_write_byte(sc, sc8586_reg_fields[field_id].reg, tmp);
-    }
-
-
-out:
-    if (ret < 0) {
-        sc8586_err("sc8586 write field %d fail: %d\n", field_id, ret);
-    }
-    return ret;
-}
+u8 val2reg(enum sc8586_reg_range id, u32 val);
+u32 reg2val(enum sc8586_reg_range id, u8 reg);
+int sc8586_i2c_write_bytes(struct sc8586_chip *sc, uint8_t reg, uint8_t len, uint8_t *val);
+int sc8586_i2c_read_bytes(struct sc8586_chip *sc, uint8_t reg, uint8_t len, uint8_t *val);
+int sc8586_i2c_write_byte(struct sc8586_chip *sc, uint8_t reg, uint8_t val);
+int sc8586_i2c_read_byte(struct sc8586_chip *sc, uint8_t reg, uint8_t *val);
+int sc8586_field_read(struct sc8586_chip *sc,
+                            enum sc8586_fields field_id, int *val);
+int sc8586_field_write(struct sc8586_chip *sc,
+                            enum sc8586_fields field_id, int val);
 
 void sc8586_dump_check_scp_fault_status(struct sc8586_chip *sc);
 int sc8586_get_scp_enable(struct sc8586_chip *sc);
