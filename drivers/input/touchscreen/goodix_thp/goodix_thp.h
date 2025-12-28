@@ -71,7 +71,7 @@
 
 #define GOODIX_THP_MAX_FRAME_LEN                        (10 * 1024)
 #define GOODIX_THP_MAX_TRANS_DATA_LEN                   (4096 * 32)
-#define GOODIX_THP_MAX_FRAME_BUF_COUNT                  20
+#define GOODIX_THP_MAX_FRAME_BUF_COUNT                  40
 #define GOODIX_THP_CUSTOM_INFO_LEN                      10
 #define GOODIX_MAX_STR_LABLE_LEN                        32
 #define GOODIX_THP_REQUEST_APP_SIZE                     12
@@ -227,6 +227,8 @@ typedef enum {
         NOTIFY_TYPE_SAVE_MOTO_DATA,
         NOTIFY_TYPE_SHIPMODE,
         NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE,
+        NOTIFY_TYPE_FILTER,
+        NOTIFY_TYPE_PALM_AREA,
 } NOTIFY_TYPE_T;
 
 enum pen_action_state {

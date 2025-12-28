@@ -988,6 +988,32 @@ static ssize_t goodix_ts_hardware_status_show(struct device *dev,
 }
 #endif
 
+void goodix_filter_mode(struct goodix_thp_core *core_data, int mode)
+{
+	u8 val[3];
+
+	if (core_data->rate_configs[mode].filter) {
+		val[0] = NOTIFY_TYPE_FILTER;
+		val[1] = (core_data->rate_configs[mode].filter >> 8) & 0xFF;
+		val[2] = (core_data->rate_configs[mode].filter ) & 0xFF;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		msleep(20);
+	}
+}
+
+void goodix_palm_area_mode(struct goodix_thp_core *core_data, int mode)
+{
+	u8 val[3];
+
+	if (core_data->rate_configs[mode].palm_area) {
+		val[0] = NOTIFY_TYPE_PALM_AREA;
+		val[1] = (core_data->rate_configs[mode].palm_area >> 8) & 0xFF;
+		val[2] = (core_data->rate_configs[mode].palm_area ) & 0xFF;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		msleep(20);
+	}
+}
+
 static ssize_t goodix_ts_stylus_report_rate_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -1039,10 +1065,13 @@ static ssize_t goodix_ts_stylus_report_rate_store(struct device *dev,
 
 	val[0] = NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE;
 	if (value == 1) {
-		/* switch stylus tip report rate to high */
+		/* switch stylus tip report rate to high and small filter*/
 		core_data->current_stylus_rate_mode = 1;
+	} else if (value == 2) {
+		/* switch stylus tip report rate to low 120hz and small filter */
+		core_data->current_stylus_rate_mode = 2;
 	} else {
-		/* switch stylus tip report rate to default */
+		/* switch stylus tip report rate to default and big filter*/
 		core_data->current_stylus_rate_mode = 0;
 	}
 	val[1] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command >> 8) & 0xFF;
@@ -1051,8 +1080,11 @@ static ssize_t goodix_ts_stylus_report_rate_store(struct device *dev,
 
 	core_data->set_mode.stylus_report_rate_mode = core_data->get_mode.stylus_report_rate_mode;
 	msleep(20);
+	goodix_filter_mode(core_data, core_data->current_stylus_rate_mode);
+	goodix_palm_area_mode(core_data, core_data->current_stylus_rate_mode);
 
-	ts_info(tdev->dev, "Success switch stylus tip report rate to %dHZ, is on stylus mode? %s",
+	ts_info(tdev->dev, "Success switch stylus tip report rate to mode %d %dHZ, is on stylus mode? %s",
+		core_data->current_stylus_rate_mode,
 		core_data->rate_configs[core_data->current_stylus_rate_mode].report_rate,
 		core_data->set_mode.stylus_mode? "yes" : "no");
 	ret = size;
@@ -1107,14 +1139,17 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 	if (core_data->ts_dev->board_data.stylus_interpolation_ctrl && core_data->get_mode.stylus_report_rate_mode) {
 		val[0] = NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE;
 		/* switch stylus tip report rate to high */
-		core_data->current_stylus_rate_mode = 1;
+		core_data->current_stylus_rate_mode = core_data->get_mode.stylus_report_rate_mode;
 		val[1] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command >> 8) & 0xFF;
 		val[2] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command ) & 0xFF;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 		core_data->set_mode.stylus_report_rate_mode = core_data->get_mode.stylus_report_rate_mode;
 		msleep(20);
-		ts_info(dev, "Success switch stylus tip report rate to %dHZ, is on stylus mode? %s",
+		goodix_filter_mode(core_data, core_data->current_stylus_rate_mode);
+		goodix_palm_area_mode(core_data, core_data->current_stylus_rate_mode);
+		ts_info(dev, "Success switch stylus tip report rate to mode %d %dHZ, is on stylus mode? %s",
+			core_data->current_stylus_rate_mode,
 			core_data->rate_configs[core_data->current_stylus_rate_mode].report_rate,
 			core_data->set_mode.stylus_mode? "yes" : "no");
 	}
