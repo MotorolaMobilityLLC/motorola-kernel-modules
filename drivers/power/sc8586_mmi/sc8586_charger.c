@@ -327,6 +327,7 @@ int sc8586_field_read(struct sc8586_chip *sc,
     if (NULL == val)
         return -EINVAL;
 
+    mutex_lock(&sc->field_rw_lock);
     mask = GENMASK(sc8586_reg_fields[field_id].msb, sc8586_reg_fields[field_id].lsb);
 
 
@@ -342,6 +343,7 @@ int sc8586_field_read(struct sc8586_chip *sc,
     *val = reg_val;
 
 out:
+    mutex_unlock(&sc->field_rw_lock);
     return ret;
 }
 
@@ -355,6 +357,7 @@ int sc8586_field_write(struct sc8586_chip *sc,
     if (IS_ERR_OR_NULL(sc))
         return PTR_ERR(sc);
 
+    mutex_lock(&sc->field_rw_lock);
     mask = GENMASK(sc8586_reg_fields[field_id].msb, sc8586_reg_fields[field_id].lsb);
 
     ret = sc8586_i2c_read_byte(sc, sc8586_reg_fields[field_id].reg, &reg_val);
@@ -377,6 +380,7 @@ out:
         sc8586_err("sc8586 write field %d fail: %d\n", field_id, ret);
     }
 
+    mutex_unlock(&sc->field_rw_lock);
     return ret;
 }
 
@@ -1783,6 +1787,8 @@ static int sc8586_charger_probe(struct i2c_client *client,
 
     i2c_set_clientdata(client, sc);
 
+    mutex_init(&sc->field_rw_lock);
+
     ret = sc8586_detect_device(sc);
     if (ret < 0) {
         sc8586_err( "%s detect device fail\n", __func__);
@@ -1889,6 +1895,7 @@ static void sc8586_charger_remove(struct i2c_client *client)
 
     if (sc->psy)
         power_supply_unregister(sc->psy);
+    mutex_destroy(&sc->field_rw_lock);
     //devm_kfree(&client->dev, sc);
 
 }
