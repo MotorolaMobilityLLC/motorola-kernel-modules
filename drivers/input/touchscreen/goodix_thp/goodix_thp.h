@@ -225,6 +225,8 @@ typedef enum {
         NOTIFY_TYPE_SWITCH_REPORT_RATE,
         NOTIFY_TYPE_SAVE_MOTO_DATA,
         NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE,
+        NOTIFY_TYPE_FILTER,
+        NOTIFY_TYPE_PALM_AREA,
 } NOTIFY_TYPE_T;
 
 enum pen_action_state {
