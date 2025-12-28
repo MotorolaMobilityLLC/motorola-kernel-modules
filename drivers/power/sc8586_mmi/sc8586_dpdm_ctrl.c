@@ -25,6 +25,7 @@
 #include <linux/bitops.h>
 #include <linux/math64.h>
 #include <linux/regmap.h>
+#include "sc8586_charger.h"
 
 #ifdef CONFIG_MTK_CLASS
 #include "charger_class.h"
@@ -39,7 +40,7 @@
 #include "dvchg_class.h"
 #endif /*CONFIG_SOUTHCHIP_DVCHG_CLASS*/
 
-#include "sc8586_charger.h"
+
 
 static struct intr_flag dpdm_intr_flag[] = {
     { .reg = 0x37, .len = 5, .bit = {
