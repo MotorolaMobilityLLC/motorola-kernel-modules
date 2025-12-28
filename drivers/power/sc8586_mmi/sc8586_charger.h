@@ -420,6 +420,7 @@ struct sc8586_chip {
     bool irq_disabled;
     bool resume_completed;
     struct mutex irq_complete;
+    struct mutex field_rw_lock;
 };
 
 struct flag_bit {
