@@ -1,0 +1,64 @@
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+define is-greater-or-equal
+$(strip \
+	$(shell \
+		if [ $(VERSION) -gt $(1) ]; then \
+			echo 1; \
+		elif [ $(VERSION) -eq $(1) ] && [ $(PATCHLEVEL) -ge $(2) ]; then \
+			echo 1; \
+		else \
+			echo 0; \
+		fi \
+	) \
+)
+endef
+
+define is-less-or-equal
+$(strip \
+	$(shell \
+		if [ $(VERSION) -lt $(1) ]; then \
+			echo 1; \
+		elif [ $(VERSION) -eq $(1) ] && [ $(PATCHLEVEL) -le $(2) ]; then \
+			echo 1; \
+		else \
+			echo 0; \
+		fi \
+	) \
+)
+
+ZRAM_SRC = zram-$(VERSION).$(PATCHLEVEL)
+
+$(warning moto_swap5 - zram src folder = $(ZRAM_SRC))
+
+ifeq ($(VERSION), 6)
+EXTRA_CFLAGS += -Wframe-larger-than=4096
+endif
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+
+ifneq ($(filter m y,$(CONFIG_VENDOR_ZRAM_WRITEBACK)),)
+EXTRA_CFLAGS += -DCONFIG_VENDOR_ZRAM_WRITEBACK
+endif
+
+ifneq ($(filter m y,$(CONFIG_ZRAM_EXT)),)
+EXTRA_CFLAGS += -DCONFIG_ZRAM_EXT
+endif
+
+moto_swap5-objs += $(ZRAM_SRC)/zram_drv.o
+moto_swap5-objs += $(ZRAM_SRC)/zcomp.o
+
+ifeq ($(call is-less-or-equal,6,1),1)
+moto_swap5-objs += $(ZRAM_SRC)/memcg.o
+endif
+
+ifeq ($(call is-greater-or-equal,6,6),1)
+moto_swap5-objs += $(ZRAM_SRC)/zram_ext.o
+moto_swap5-objs += $(ZRAM_SRC)/madvise.o
+endif
+
+obj-m += moto_swap5.o
