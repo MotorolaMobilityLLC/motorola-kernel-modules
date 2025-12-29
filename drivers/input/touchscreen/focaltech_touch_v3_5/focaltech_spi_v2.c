@@ -82,7 +82,15 @@ static int fts_spi_transfer(u8 *tx_buf, u8 *rx_buf, u32 len)
     spi_message_init(&msg);
     spi_message_add_tail(&xfer, &msg);
 
+#ifdef CONFIG_FTS_MANUAL_CS
+    gpio_set_value(fts_data->pdata->cs_gpio, 0);
+#endif
     ret = spi_sync(spi, &msg);
+
+#ifdef CONFIG_FTS_MANUAL_CS
+    gpio_set_value(fts_data->pdata->cs_gpio, 1);
+#endif
+
     if (ret) {
         FTS_ERROR("spi_sync fail,ret:%d", ret);
         return ret;
@@ -468,6 +476,12 @@ static int fts_ts_probe(struct spi_device *spi)
     struct fts_ts_data *ts_data = NULL;
 
     FTS_INFO("Touch Screen(SPI-2 BUS) driver prboe...");
+
+    if (spi->dev.of_node && !mmi_device_is_available(spi->dev.of_node)) {
+        FTS_ERROR("mmi: device not supported");
+        return -ENODEV;
+    }
+
     spi->mode = SPI_MODE_0;
     spi->bits_per_word = 8;
     ret = spi_setup(spi);

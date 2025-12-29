@@ -46,7 +46,10 @@ static ssize_t fts_mmi_pocket_mode_store(struct device *dev,
 			struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fts_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
-
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+static ssize_t fts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+#endif
 
 static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_sample_show, fts_sample_store);
@@ -55,7 +58,9 @@ static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 static DEVICE_ATTR(pocket_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_mmi_pocket_mode_show, fts_mmi_pocket_mode_store);
 static DEVICE_ATTR(timestamp, S_IRUGO, fts_ts_timestamp_show, NULL);
-
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+static DEVICE_ATTR(hardware_status, S_IRUGO, fts_hardware_status_show, NULL);
+#endif
 
 #define ADD_ATTR(name) { \
 	if (idx < MAX_ATTRS_ENTRIES)  { \
@@ -154,6 +159,15 @@ static ssize_t fts_stowed_store(struct device *dev,
 	mutex_lock(&ts_data->mode_lock);
 
 	ts_data->get_mode.stowed = mode;
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	if ((ts_data->force_stowed_mode) && (mode == 0x0)) {
+		FTS_INFO("Force touch enter stow mode has high priority");
+		ret = size;
+		goto exit;
+	}
+#endif
+
 	if (ts_data->set_mode.stowed == mode) {
 		FTS_DEBUG("The value = %lu is same, so not to write", mode);
 		ret = size;
@@ -196,6 +210,22 @@ static ssize_t fts_stowed_show(struct device *dev,
 	FTS_INFO("Stowed state = %d.\n", ts_data->set_mode.stowed);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts_data->set_mode.stowed);
 }
+
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+static ssize_t fts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data;
+	u8 hardware_status = 0;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	hardware_status = ts_data->open_status;
+	FTS_INFO("Read touch hardware status = %d.\n", hardware_status);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
+}
+#endif
 
 static int fts_mmi_methods_get_vendor(struct device *dev, void *cdata)
 {
@@ -499,6 +529,9 @@ static int fts_mmi_post_resume(struct device *dev)
 
 	if (pdata->stowed_mode_ctrl) {
 		ts_data->set_mode.stowed = 0;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+		ts_data->force_stowed_mode = false;
+#endif
 	}
 
 	mutex_unlock(&ts_data->mode_lock);
@@ -652,6 +685,79 @@ exit:
 	return size;
 }
 
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+static int fts_mmi_force_enter_standby_mode(struct device *dev)
+{
+	struct fts_ts_data *ts_data;
+	int ret = 0;
+
+	GET_TS_DATA(dev);
+
+	mutex_lock(&ts_data->mode_lock);
+	if (ts_data->set_mode.stowed == 0x01) {
+		FTS_INFO("Already on touch stowed state");
+		goto exit;
+	}
+
+	if ((atomic_read(&ts_data->post_suspended) == 0x01) && ts_data->gesture_support) {
+		ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_STANDBY);
+		if (ret < 0) {
+			FTS_ERROR("Failed to force enter stowed mode");
+			goto exit;
+		}
+		ts_data->set_mode.stowed = 0x01;
+		ts_data->force_stowed_mode = true;
+		FTS_INFO("Success force touch enter stowed mode");
+	} else {
+		FTS_INFO("Skip force touch enter stowed mode post_suspended:%d, gesture_enabled:%d",
+			atomic_read(&ts_data->post_suspended), ts_data->gesture_support);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&ts_data->mode_lock);
+	return ret;
+}
+
+static int fts_mmi_exit_standby_mode(struct device *dev)
+{
+	struct fts_ts_data *ts_data;
+	int ret = 0;
+
+	GET_TS_DATA(dev);
+
+	mutex_lock(&ts_data->mode_lock);
+	if (ts_data->set_mode.stowed == 0x0) {
+		FTS_INFO("Not in stowed mode");
+		goto exit;
+	}
+
+	if (ts_data->force_stowed_mode == false) {
+		FTS_INFO("Not force stowed mode by touch");
+		goto exit;
+	}
+
+	if ((atomic_read(&ts_data->post_suspended) == 0x01) && ts_data->gesture_support) {
+		ret = fts_write_reg(FTS_REG_POWER_MODE, FTS_REG_POWER_MODE_ACTIVE);
+		if (ret < 0) {
+			FTS_ERROR("Failed to exit stowed mode");
+			goto exit;
+		}
+		ts_data->set_mode.stowed = 0x00;
+		ts_data->force_stowed_mode = false;
+		FTS_INFO("Success exit stowed mode");
+	} else {
+		FTS_INFO("Skip exit stowed mode post_suspended:%d, gesture_support:%d",
+			atomic_read(&ts_data->post_suspended), ts_data->gesture_support);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&ts_data->mode_lock);
+	return ret;
+}
+#endif
+
 static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_group **group)
 {
 	int idx = 0;
@@ -671,6 +777,10 @@ static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_g
 
 	if (pdata->stowed_mode_ctrl)
 		ADD_ATTR(stowed);
+
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+	ADD_ATTR(hardware_status);
+#endif
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -708,6 +818,11 @@ static struct ts_mmi_methods fts_mmi_methods = {
 	.post_resume = fts_mmi_post_resume,
 	.pre_suspend = fts_mmi_pre_suspend,
 	.post_suspend = fts_mmi_post_suspend,
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	.force_enter_standby_mode = fts_mmi_force_enter_standby_mode,
+	.exit_standby_mode = fts_mmi_exit_standby_mode,
+#endif
 };
 
 int fts_mmi_dev_register(struct fts_ts_data *ts_data) {

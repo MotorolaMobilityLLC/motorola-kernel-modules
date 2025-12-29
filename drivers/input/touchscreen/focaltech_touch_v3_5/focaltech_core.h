@@ -64,6 +64,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/miscdevice.h>
 #include <linux/poll.h>
+#include <linux/mmi_device.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0))
 #include <linux/ktime.h>
 #include <linux/timekeeping.h>
@@ -180,6 +181,9 @@ struct fts_ts_platform_data {
     u32 irq_gpio_flags;
     u32 reset_gpio;
     u32 reset_gpio_flags;
+    u32 cs_gpio;
+    u32 cs_gpio_flags;
+    u32 iovcc_gpio;
     bool have_key;
     u32 key_number;
     u32 keys[FTS_MAX_KEYS];
@@ -193,6 +197,7 @@ struct fts_ts_platform_data {
     bool pocket_mode_ctrl;
     bool sample_ctrl;
     bool stowed_mode_ctrl;
+    bool tcmd_test_ctrl;
 };
 
 struct ts_event {
@@ -233,6 +238,8 @@ struct fts_ts_data {
     struct device *dev;
     struct input_dev *input_dev;
     struct input_dev *pen_dev;
+    struct device *class_dev;
+    dev_t class_dev_no;
     struct fts_ts_platform_data *pdata;
     struct ts_ic_info ic_info;
     struct workqueue_struct *ts_workqueue;
@@ -325,6 +332,12 @@ struct fts_ts_data {
 #ifdef CONFIG_ENABLE_FTS_PALM_CANCEL
     bool palm_on;
 #endif
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+       bool force_stowed_mode;
+#endif
+#ifdef CONFIG_FTS_HARDWARE_STATUS
+       u8 open_status;
+#endif
 };
 
 enum _FTS_BUS_TYPE {
@@ -414,6 +427,8 @@ bool fts_esdcheck_is_running(struct fts_ts_data *ts_data);
 
 
 /* Host test */
+int fts_test_init(struct fts_ts_data *ts_data);
+int fts_test_exit(struct fts_ts_data *ts_data);
 
 /* Point Report Check*/
 int fts_point_report_check_init(struct fts_ts_data *ts_data);
