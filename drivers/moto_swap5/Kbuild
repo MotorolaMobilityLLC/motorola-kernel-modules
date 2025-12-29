@@ -28,6 +28,7 @@ $(strip \
 		fi \
 	) \
 )
+endef
 
 ZRAM_SRC = zram-$(VERSION).$(PATCHLEVEL)
 
