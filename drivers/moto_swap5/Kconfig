@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+config ZRAM_EXT
+	bool "Enable ZRAM_EXT"
+	default y
+	help
+	  ZRAM_EXT for per-app swap.
