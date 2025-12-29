@@ -105,8 +105,20 @@ ifneq ($(filter m y,$(CONFIG_GTP_ENABLE_TOUCH_PALM_BY_ID)),)
     EXTRA_CFLAGS += -DCONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID
 endif
 
+ifneq ($(filter m y,$(CONFIG_GTP_MULTI_CONFIG)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_MULTI_CONFIG
+endif
+
 ifneq ($(filter m y,$(CONFIG_INPUT_GTP_PASSIVE_PEN_NOTIFIER)),)
 	EXTRA_CFLAGS += -DGTP_PEN_NOTIFIER
+endif
+
+ifneq ($(filter m y,$(CONFIG_TOUCH_HARDWARE_STATUS)),)
+    EXTRA_CFLAGS += -DCONFIG_GTP_HARDWARE_STATUS
+endif
+
+ifneq ($(filter m y,$(CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY)),)
+    EXTRA_CFLAGS += -DCONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
 endif
 
 ifneq ($(findstring _factory,$(TARGET_PRODUCT)),)
@@ -161,6 +173,10 @@ else ifneq ($(filter leap%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_LEAP
 else ifneq ($(filter mona%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_MONA
+else ifneq ($(filter roadstr%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_ROADSTR
+else ifneq ($(filter marvel%, $(USE_TARGET_PRODUCT)), )
+        EXTRA_CFLAGS += -DPRODUCT_MARVEL
 else ifneq ($(filter lhotse%, $(USE_TARGET_PRODUCT)), )
         EXTRA_CFLAGS += -DPRODUCT_LHOTSE
 endif

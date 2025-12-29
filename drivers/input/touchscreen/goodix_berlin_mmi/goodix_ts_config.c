@@ -18,25 +18,21 @@ struct goodix_ic_report_rate_config report_rate_config_info = {
 	|| defined(PRODUCT_ZEEKR) || defined(PRODUCT_LYNKCO) || defined(PRODUCT_BANGKK) \
 	|| defined(PRODUCT_EQE) || defined(PRODUCT_CTWO) || defined(PRODUCT_BOSTON) \
 	|| defined(PRODUCT_AVATRN) || defined(PRODUCT_CUSCO) || defined(PRODUCT_MONA) \
-	|| defined(PRODUCT_MALMO) || defined(PRODUCT_TANK)
-	.rate_config_count = 3,
+	|| defined(PRODUCT_MALMO) || defined(PRODUCT_TANK) || defined(PRODUCT_ROADSTR) \
+	|| defined(PRODUCT_MARVEL) || defined(PRODUCT_LHOTSE)
+	.rate_config_count = 2,
 	.refresh_rate_ctrl = 0,
 	.interpolation_ctrl = 1,
 	{
 		{
 			.interpolation_flag = 0,
-			.report_rate = 240,
-			.command = 0x9D01,
+			.report_rate = 130,
+			.command = 0x9D03,
 		},
 		{
 			.interpolation_flag = 1,
-			.report_rate = 360,
+			.report_rate = 300,
 			.command = 0x9D02,
-		},
-		{
-			.interpolation_flag = 2,
-			.report_rate = 120,
-			.command = 0x9D03,
 		},
 	}
 #elif defined(PRODUCT_HIPHIC)
@@ -103,7 +99,7 @@ struct goodix_ic_report_rate_config report_rate_config_info = {
 			.command = 0x9D02,
 		},
 	}
-#elif defined(PRODUCT_LEAP) || defined(PRODUCT_LHOTSE)
+#elif defined(PRODUCT_LEAP)
 	.rate_config_count = 3,
 	.refresh_rate_ctrl = 1,
 	.interpolation_ctrl = 1,

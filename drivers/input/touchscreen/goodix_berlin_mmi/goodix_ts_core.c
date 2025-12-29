@@ -957,6 +957,10 @@ static int goodix_parse_dt_resolution(struct device_node *node,
 	return 0;
 }
 
+#ifdef CONFIG_GTP_MULTI_CONFIG
+#define PRIM_PANEL_NAME	"mmi,panel_name"
+#endif
+
 /**
  * goodix_parse_dt - parse board data from dt
  * @dev: pointer to device
@@ -968,6 +972,13 @@ static int goodix_parse_dt(struct device_node *node,
 {
 	const char *name_tmp;
 	int r;
+#ifdef CONFIG_GTP_MULTI_CONFIG
+	struct device_node *chosen;
+	const char *supplier;
+	int num_of_panel_supplier;
+	struct goodix_ts_core *core_data = container_of(board_data,
+			struct goodix_ts_core, board_data);
+#endif
 
 	if (!board_data) {
 		ts_err("invalid board data");
@@ -983,6 +994,13 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->avdd_gpio = r;
 	}
 
+	if (of_property_read_bool(node, "goodix,avdd-set")) {
+		ts_info("goodix,avdd-set");
+		board_data->avdd_set = true;
+	} else {
+		board_data->avdd_set = false;
+	}
+
 	r = of_get_named_gpio(node, "goodix,iovdd-gpio", 0);
 	if (r < 0) {
 		ts_info("can't find iovdd-gpio, use other power supply");
@@ -990,6 +1008,15 @@ static int goodix_parse_dt(struct device_node *node,
 	} else {
 		ts_info("get iovdd-gpio[%d] from dt", r);
 		board_data->iovdd_gpio = r;
+	}
+
+	r = of_get_named_gpio(node, "goodix,iovdden-gpio", 0);
+	if (r < 0) {
+		ts_info("can't find iovdd-gpio, use other power supply");
+		board_data->iovdden_gpio = 0;
+	} else {
+		ts_info("get iovdd-gpio[%d] from dt", r);
+		board_data->iovdden_gpio = r;
 	}
 
 	r = of_get_named_gpio(node, "goodix,reset-gpio", 0);
@@ -1057,8 +1084,49 @@ static int goodix_parse_dt(struct device_node *node,
 		ts_info("config name from dt: %s", name_tmp);
 		strncpy(board_data->cfg_bin_name, name_tmp, sizeof(board_data->cfg_bin_name));
 	} else {
-		ts_info("can't find config name, use default: %s", TS_DEFAULT_CFG_BIN);
+#ifdef CONFIG_GTP_MULTI_CONFIG
 		strncpy(board_data->cfg_bin_name, TS_DEFAULT_CFG_BIN, sizeof(board_data->cfg_bin_name));
+
+		chosen = of_find_node_by_name(NULL, "chosen");
+		if (chosen) {
+			r = of_property_read_string(chosen, PRIM_PANEL_NAME,
+						(const char **)&supplier);
+			if (r) {
+				ts_info("%s: cannot read %s %d\n",
+						__func__, PRIM_PANEL_NAME, r);
+			} else {
+				ts_info("%s: %s %s",
+						__func__, PRIM_PANEL_NAME, supplier);
+			}
+		}
+
+		num_of_panel_supplier = of_property_count_strings(node, "goodix,panel-supplier");
+		ts_info("get goodix,panel-supplier count=%d", num_of_panel_supplier);
+		if (num_of_panel_supplier > 0) {
+			for (int j = 0; j < num_of_panel_supplier; j++) {
+				r = of_property_read_string_index(node, "goodix,panel-supplier", j, &board_data->panel_supplier);
+				if (r < 0) {
+					ts_info("cannot parse panel-supplier: %d\n", r);
+					break;
+				} else if (supplier && board_data->panel_supplier && strstr(supplier, board_data->panel_supplier)) {
+					ts_info("matched panel_supplier: %s", board_data->panel_supplier);
+					snprintf(board_data->cfg_bin_name, GOODIX_MAX_STR_LABLE_LEN, "%s_%s",
+						board_data->panel_supplier, TS_DEFAULT_CFG_BIN);
+					snprintf(board_data->fw_name, GOODIX_MAX_STR_LABLE_LEN, "%s_%s",
+						board_data->panel_supplier,TS_DEFAULT_FIRMWARE);
+					core_data->supplier = kstrdup(board_data->panel_supplier, GFP_KERNEL);
+					if (!core_data->supplier)
+						ts_err("Failed to allocate supplier.");
+					ts_info("Use firmware: %s, config: %s", board_data->fw_name, board_data->cfg_bin_name);
+					break;
+				}
+			}
+		} else
+#endif
+		{
+			ts_info("can't find config name, use default: %s", TS_DEFAULT_CFG_BIN);
+			strncpy(board_data->cfg_bin_name, TS_DEFAULT_CFG_BIN, sizeof(board_data->cfg_bin_name));
+		}
 	}
 
 	/* get xyz resolutions */
@@ -1162,6 +1230,12 @@ static int goodix_parse_dt(struct device_node *node,
 		board_data->gesture_wait_pm = false;
 	}
 
+	if (of_property_read_bool(node, "goodix,fw-upgrade-drv")) {
+		ts_info("fw_upgrade_drv");
+		board_data->fw_upgrade_drv = true;
+	} else {
+		board_data->fw_upgrade_drv = false;
+	}
 	return 0;
 }
 #endif
@@ -1481,7 +1555,10 @@ static int goodix_ts_power_init(struct goodix_ts_core *core_data)
 			ts_err("set avdd load fail");
 			return ret;
 		}
-		ret = regulator_set_voltage(core_data->avdd, 3000000, 3000000);
+		if (ts_bdata->avdd_set)
+			ret = regulator_set_voltage(core_data->avdd, 3300000, 3300000);
+		else
+			ret = regulator_set_voltage(core_data->avdd, 3000000, 3000000);
 		if (ret) {
 			ts_err("set avdd voltage fail");
 			return ret;
@@ -1697,6 +1774,15 @@ static int goodix_ts_gpio_setup(struct goodix_ts_core *core_data)
 				GPIOF_OUT_INIT_LOW, "ts_iovdd_gpio");
 		if (r < 0) {
 			ts_err("Failed to request iovdd-gpio, r:%d", r);
+			return r;
+		}
+	}
+
+	if (ts_bdata->iovdden_gpio > 0) {
+		r = devm_gpio_request_one(&core_data->pdev->dev, ts_bdata->iovdden_gpio,
+				GPIOF_OUT_INIT_LOW, "ts_iovdden_gpio");
+		if (r < 0) {
+			ts_err("Failed to request iovdden-gpio, r:%d", r);
 			return r;
 		}
 	}
@@ -2447,6 +2533,14 @@ static int goodix_later_init_thread(void *data)
 			UPDATE_MODE_BLOCK | UPDATE_MODE_SRC_REQUEST);
 	if (ret)
 		ts_err("failed do fw update");
+#else
+	if (cd->board_data.fw_upgrade_drv) {
+		ts_info("upgrade fw by drv");
+		ret = goodix_do_fw_update(cd->ic_configs[CONFIG_TYPE_NORMAL],
+				UPDATE_MODE_BLOCK | UPDATE_MODE_SRC_REQUEST);
+		if (ret)
+			ts_err("failed do fw update");
+	}
 #endif
 	/* setp3: get fw version and ic_info
 	 * at this step we believe that the ic is in normal mode,
@@ -2797,6 +2891,12 @@ static int goodix_ts_remove(struct platform_device *pdev)
 		goodix_ts_procfs_exit(core_data);
 		goodix_ts_power_off(core_data);
 	}
+#ifdef CONFIG_GTP_MULTI_CONFIG
+	if (core_data->supplier) {
+		kfree(core_data->supplier);
+		core_data->supplier = NULL;
+	}
+#endif
 
 	return 0;
 }

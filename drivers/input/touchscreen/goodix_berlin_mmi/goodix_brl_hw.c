@@ -188,9 +188,18 @@ static int brl_reset_after(struct goodix_ts_core *cd)
 static int brl_power_on(struct goodix_ts_core *cd, bool on)
 {
 	int ret = 0;
-	int iovdd_gpio = cd->board_data.iovdd_gpio;
-	int avdd_gpio = cd->board_data.avdd_gpio;
-	int reset_gpio = cd->board_data.reset_gpio;
+	int iovdd_gpio = 0;
+	int avdd_gpio = 0;
+	int reset_gpio = 0;
+	int iovdden_gpio = 0;
+
+	if(!cd)
+		return 0;
+
+	iovdd_gpio = cd->board_data.iovdd_gpio;
+	avdd_gpio = cd->board_data.avdd_gpio;
+	reset_gpio = cd->board_data.reset_gpio;
+	iovdden_gpio = cd->board_data.iovdden_gpio;
 
 	if (on) {
 		if (iovdd_gpio > 0) {
@@ -200,6 +209,9 @@ static int brl_power_on(struct goodix_ts_core *cd, bool on)
 			if (ret < 0) {
 				ts_err("Failed to enable iovdd:%d", ret);
 				goto power_off;
+			}
+	              if (iovdden_gpio > 0){
+				gpio_direction_output(iovdden_gpio, 1);
 			}
 		}
 		usleep_range(3000, 3100);
@@ -226,8 +238,12 @@ power_off:
 	gpio_direction_output(reset_gpio, 0);
 	if (iovdd_gpio > 0)
 		gpio_direction_output(iovdd_gpio, 0);
-	else if (cd->iovdd)
+	else if (cd->iovdd){
+              if (iovdden_gpio > 0){
+		    gpio_direction_output(iovdden_gpio, 0);
+		}
 		regulator_disable(cd->iovdd);
+	}
 	if (avdd_gpio > 0)
 		gpio_direction_output(avdd_gpio, 0);
 	else if (cd->avdd)
@@ -1035,6 +1051,7 @@ static int brl_esd_check(struct goodix_ts_core *cd)
 #define GOODIX_TOUCH_EVENT			0x80
 #define GOODIX_REQUEST_EVENT		0x40
 #define GOODIX_GESTURE_EVENT		0x20
+#define GOODIX_OPEN_EVENT		    0x10
 #define POINT_TYPE_STYLUS_HOVER		0x01
 #define POINT_TYPE_STYLUS			0x03
 #if defined(CONFIG_MOTO_DDA_PASSIVESTYLUS) || defined(CONFIG_ENABLE_GTP_PALM_CANCEL_BY_ID)
@@ -1469,6 +1486,10 @@ static int brl_event_handler(struct goodix_ts_core *cd,
 
 	event_status = pre_buf[0];
 	if (event_status & GOODIX_TOUCH_EVENT) {
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+		cd->open_status= !!(event_status & GOODIX_OPEN_EVENT);
+		ts_debug("Touch open state = 0x%02x", cd->open_status);
+#endif
 		return goodix_touch_handler(cd, ts_event,
 					    pre_buf, pre_read_len);
 

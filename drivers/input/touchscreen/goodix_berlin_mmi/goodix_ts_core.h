@@ -304,6 +304,7 @@ struct goodix_ts_board_data {
 	int irq_gpio;
 	int avdd_gpio;
 	int iovdd_gpio;
+	int iovdden_gpio;
 	unsigned int  irq_flags;
 
 	unsigned int swap_axis;
@@ -330,6 +331,11 @@ struct goodix_ts_board_data {
 	bool stowed_mode_ctrl;
 	bool gesture_wait_pm;
 	bool pocket_mode_ctrl;
+	bool fw_upgrade_drv;
+	bool avdd_set;
+#ifdef CONFIG_GTP_MULTI_CONFIG
+	const char *panel_supplier;
+#endif
 };
 
 enum goodix_fw_update_mode {
@@ -620,6 +626,12 @@ struct goodix_ts_core {
 #endif
 #ifdef CONFIG_ENABLE_GTP_VIRTUAL_FOD
 	atomic_t fp_event;
+#endif
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+	u8 open_status;
+#endif
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	bool force_stowed_mode;
 #endif
 };
 

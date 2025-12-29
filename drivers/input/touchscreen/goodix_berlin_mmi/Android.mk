@@ -10,7 +10,7 @@ ifeq ($(DRM_PANEL_NOTIFICATIONS),true)
 endif
 
 ifeq ($(TOUCHSCREEN_GOODIX_BRL_SPI),true)
-ifeq ($(call is-board-platform-in-list,taro kalama parrot crow pineapple blair sun), true)
+ifeq ($(call is-board-platform-in-list,taro kalama parrot crow pineapple blair sun kera volcano), true)
 	KBUILD_OPTIONS += CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI=y
 else
 	KERNEL_CFLAGS += CONFIG_TOUCHSCREEN_GOODIX_BRL_SPI=y
@@ -84,8 +84,24 @@ ifeq ($(ENABLE_GTP_PALM_CANCEL),true)
 	KBUILD_OPTIONS += CONFIG_ENABLE_GTP_PALM_CANCEL=y
 endif
 
+ifeq ($(ENABLE_GTP_MULTI_CONFIG),true)
+	KBUILD_OPTIONS += CONFIG_GTP_MULTI_CONFIG=y
+endif
+
 ifeq ($(BOARD_KERNEL_VARIANT),perf)
 	KBUILD_OPTIONS += CONFIG_BUILD_KERNEL_VARIANT_PERF=y
+endif
+
+ifeq ($(BOARD_KERNEL_VARIANT),gki)
+	KBUILD_OPTIONS += CONFIG_BUILD_KERNEL_VARIANT_PERF=y
+endif
+
+ifeq ($(TOUCH_HARDWARE_STATUS),true)
+	KBUILD_OPTIONS += CONFIG_TOUCH_HARDWARE_STATUS=y
+endif
+
+ifeq ($(TOUCHCLASS_MMI_FORCE_ENTER_STANDBY),true)
+    KBUILD_OPTIONS += CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY=y
 endif
 
 include $(CLEAR_VARS)

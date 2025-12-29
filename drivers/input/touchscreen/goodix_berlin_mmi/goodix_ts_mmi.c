@@ -47,6 +47,10 @@ static ssize_t goodix_ts_stylus_mode_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_sensitivity_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+#endif
 #ifdef CONFIG_GTP_LAST_TIME
 static ssize_t goodix_ts_timestamp_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
@@ -94,6 +98,9 @@ static DEVICE_ATTR(stylus_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_stylus_mode_show, goodix_ts_stylus_mode_store);
 static DEVICE_ATTR(sensitivity, (S_IRUGO | S_IWUSR | S_IWGRP),
 	NULL, goodix_ts_sensitivity_store);
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static DEVICE_ATTR(hardware_status, S_IRUGO, goodix_ts_hardware_status_show, NULL);
+#endif
 #ifdef CONFIG_GTP_LAST_TIME
 static DEVICE_ATTR(timestamp, S_IRUGO, goodix_ts_timestamp_show, NULL);
 #endif
@@ -173,7 +180,9 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->board_data.stowed_mode_ctrl)
 		ADD_ATTR(stowed);
-
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+	ADD_ATTR(hardware_status);
+#endif
 	if (core_data->board_data.pocket_mode_ctrl)
 		ADD_ATTR(pocket_mode);
 
@@ -666,6 +675,15 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 
 	mutex_lock(&core_data->mode_lock);
 	core_data->get_mode.stowed = mode;
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	if ((core_data->force_stowed_mode) && (mode == 0x0)) {
+		ts_info("Force touch enter stow mode has high priority");
+		ret = size;
+		goto exit;
+	}
+#endif
+
 	if (core_data->set_mode.stowed == mode) {
 		ts_debug("The value = %lu is same, so not to write", mode);
 		ret = size;
@@ -937,6 +955,23 @@ static ssize_t goodix_ts_vsync_store(struct device *dev,
 exit:
 	mutex_unlock(&core_data->mode_lock);
 	return size;
+}
+#endif
+
+#ifdef CONFIG_GTP_HARDWARE_STATUS
+static ssize_t goodix_ts_hardware_status_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_ts_core *core_data;
+	u8 hardware_status = 0;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	hardware_status = core_data->open_status;
+	ts_info("Read touch hardware status = %d.\n", hardware_status);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", hardware_status);
 }
 #endif
 
@@ -1293,8 +1328,11 @@ static int goodix_ts_firmware_update(struct device *dev, char *fwname) {
 	if (core_data->set_fw_name)
 		core_data->set_fw_name(fwname);
 
-	ret = goodix_do_fw_update(core_data->ic_configs[CONFIG_TYPE_NORMAL],
-				UPDATE_MODE_SRC_REQUEST | UPDATE_MODE_BLOCK | UPDATE_MODE_FORCE);
+	if (false == core_data->board_data.fw_upgrade_drv) {
+		ts_info("upgrade fw by sh");
+		ret = goodix_do_fw_update(core_data->ic_configs[CONFIG_TYPE_NORMAL],
+					UPDATE_MODE_SRC_REQUEST | UPDATE_MODE_BLOCK | UPDATE_MODE_FORCE);
+	}
 	if (ret)
 		ts_err("failed do fw update");
 
@@ -1321,13 +1359,13 @@ static int goodix_ts_mmi_methods_power(struct device *dev, int on) {
 static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 {
 	int ret = 0;
-	int timeout = 50;
+	int timeout = 100;
 	struct platform_device *pdev;
 	struct goodix_ts_core *core_data;
 
 	GET_GOODIX_DATA(dev);
 
-	/* 5000ms timeout */
+	/* 10s timeout */
 	while (core_data->init_stage < CORE_INIT_STAGE2 && timeout--)
 		msleep(100);
 
@@ -1620,6 +1658,9 @@ static int goodix_ts_mmi_post_resume(struct device *dev) {
 
 	if (core_data->board_data.stowed_mode_ctrl) {
 		core_data->set_mode.stowed = 0;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+		core_data->force_stowed_mode = false;
+#endif
 	}
 
 	if (core_data->board_data.pocket_mode_ctrl && core_data->get_mode.pocket_mode) {
@@ -1894,6 +1935,42 @@ exit:
 }
 #endif
 
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+static int goodix_ts_mmi_force_enter_standby_mode(struct device *dev)
+{
+	int ret = 0;
+	struct goodix_ts_core *core_data;
+	struct platform_device *pdev;
+
+	GET_GOODIX_DATA(dev);
+
+	mutex_lock(&core_data->mode_lock);
+	if (core_data->set_mode.stowed == 0x01) {
+		ts_info("Already on touch stowed state");
+		goto exit;
+	}
+
+	if ((atomic_read(&core_data->post_suspended) == 0x01) && core_data->gesture_enabled) {
+		ret = goodix_ts_send_cmd(core_data, ENTER_STOWED_MODE_CMD, 5, 0x01, 0x00);
+		if (ret < 0) {
+			ts_err("Failed to force enter stowed mode");
+			goto exit;
+		}
+		core_data->set_mode.stowed = 0x01;
+		core_data->force_stowed_mode = true;
+		ts_info("Success force touch enter stowed mode");
+	} else {
+		ts_info("Skip force touch enter stowed mode post_suspended:%d, gesture_enabled:%d",
+			atomic_read(&core_data->post_suspended), core_data->gesture_enabled);
+		goto exit;
+	}
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+#endif
+
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
@@ -1928,6 +2005,10 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.post_suspend = goodix_ts_mmi_post_suspend,
 #ifdef CONFIG_GTP_FOD
 	.update_fod_mode = goodix_ts_mmi_update_fps_mode,
+#endif
+
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+	.force_enter_standby_mode = goodix_ts_mmi_force_enter_standby_mode,
 #endif
 };
 
