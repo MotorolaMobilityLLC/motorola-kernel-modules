@@ -197,6 +197,7 @@ static ssize_t state_sync_store(struct device *dev,
 					NOTIFY_EVENT_TYPE_POWER_WATT_DESIGN);
 		mmi_notify_charger_event(this_chip,
 					NOTIFY_EVENT_TYPE_CHG_REAL_TYPE);
+		mmi_glink_notifier(DEV_USB, this_chip);
 		mutex_unlock(&this_chip->charger_lock);
 		cancel_delayed_work(&this_chip->heartbeat_work);
 		schedule_delayed_work(&this_chip->heartbeat_work,
