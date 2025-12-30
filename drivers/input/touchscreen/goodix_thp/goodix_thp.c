@@ -31,12 +31,18 @@
 #define GOOIDX_INPUT_PHYS		"goodix_ts/input0"
 
 #define GOODIX_ESD_TICK_WRITE_DATA 0xAA
+#define GOODIX_ESD_CHECK_INTERVAL (8 * HZ)
+#define MAJOR_CONVERSION_SHIFT 5
+#define TOUCH_MAJOR_CLAMP_THRESHOLD 254
+#define TOUCH_MAJOR_MAX_VALUE 255
 
 bool debug_log_flag;
 
 static int goodix_thp_suspend(struct goodix_thp_core *core_data);
 static int goodix_thp_resume(struct goodix_thp_core *core_data);
 static int goodix_thp_power_on(struct goodix_thp_core *core_data);
+static int goodix_ts_pinctrl_select_active(struct goodix_thp_core *core_data);
+static int goodix_ts_pinctrl_select_suspend(struct goodix_thp_core *core_data);
 
 static int goodix_thp_spi_trans(struct goodix_thp_core *cd,
                         char *tx_buf, char *rx_buf, unsigned int len)
@@ -74,7 +80,7 @@ static void goodix_thp_esd_on(struct goodix_thp_core *core_data, bool on)
 
         core_data->esd_on = on;
         if (on) {
-                schedule_delayed_work(&core_data->esd_work, 3 * HZ);
+                schedule_delayed_work(&core_data->esd_work, GOODIX_ESD_CHECK_INTERVAL);
         } else {
                 cancel_delayed_work(&core_data->esd_work);
         }
@@ -142,7 +148,7 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
 
         mutex_lock(&core_data->frame_mutex);
         /* check for max limit */
-        if ((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head) {
+        if (unlikely((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head)) {
                 ts_err(ts_dev->dev, "touch_health - frame mmap buffer is full, overwriting oldest data");
                 list->head = (list->head + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT; // Overwrite the oldest data
         }
@@ -151,7 +157,7 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
         req_pkg->size = sizeof(req_pkg->request) + len;
         req_pkg->request.id = id++;
         req_pkg->request.type = type;
-        if (len > 0)
+        if (likely(len > 0))
                 memcpy(req_pkg->request.data, data, len);
         list->tail = (list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT;
 
@@ -947,16 +953,18 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
         int avdd_gpio = ts_bdata->avdd_gpio;
 
         ts_info(ts_dev->dev, "Device power on");
-        if (core_data->power_on) {
+        if (unlikely(core_data->power_on)) {
                 ts_info(ts_dev->dev, "device has already power on");
                 return 0;
         }
+
+        goodix_ts_pinctrl_select_active(core_data);
 
         if (iovdd_gpio > 0) {
             gpio_direction_output(iovdd_gpio, 1);
         } else if (core_data->iovdd) {
                 r = regulator_enable(core_data->iovdd);
-                if (r) {
+                if (unlikely(r)) {
                         ts_err(ts_dev->dev, "Failed to enable iovdd:%d", r);
                         goto power_off;
                 }
@@ -967,7 +975,7 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
             gpio_direction_output(avdd_gpio, 1);
         } else if (core_data->avdd) {
                 r = regulator_enable(core_data->avdd);
-                if (r) {
+                if (unlikely(r)) {
                         ts_err(ts_dev->dev, "Failed to enable avdd:%d", r);
                         goto power_off;
                 }
@@ -984,6 +992,8 @@ static int goodix_thp_power_on(struct goodix_thp_core *core_data)
         return 0;
 
 power_off:
+        goodix_ts_pinctrl_select_suspend(core_data);
+
         gpio_direction_output(ts_bdata->reset_gpio, 0);
         if (iovdd_gpio > 0) {
             gpio_direction_output(iovdd_gpio, 0);
@@ -1005,7 +1015,7 @@ static void goodix_thp_power_off(struct goodix_thp_core *core_data)
         struct thp_ts_device *ts_dev = core_data->ts_dev;
 
         ts_info(ts_dev->dev, "Device power off");
-        if (core_data->power_on == 0) {
+        if (unlikely(core_data->power_on == 0)) {
                 ts_info(ts_dev->dev, "device has already power off");
                 return;
         }
@@ -1022,6 +1032,7 @@ static void goodix_thp_power_off(struct goodix_thp_core *core_data)
             regulator_disable(core_data->avdd);
         }
         core_data->power_on = 0;
+        goodix_ts_pinctrl_select_suspend(core_data);
 }
 
 static int goodix_thp_gpio_setup(struct goodix_thp_core *core_data)
@@ -1256,21 +1267,24 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         del_timer(&core_data->boost_timer);
 #endif
 
+        if (core_data->ws) {
+                __pm_stay_awake(core_data->ws);
+        }
         /*for check bus i2c/spi is ready or not*/
-        if ((core_data->suspended) && (core_data->pm_suspend)) {
+        if (unlikely(core_data->suspended && core_data->pm_suspend)) {
             r = wait_for_completion_timeout(
                         &core_data->pm_completion,
                         msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
             if (!r) {
                 ts_err(ts_dev->dev, "Bus don't resume from pm(deep),timeout,skip irq");
+                if (core_data->ws) {
+                    __pm_relax(core_data->ws);
+                }
                 return IRQ_HANDLED;
             }
         }
 
         disable_irq_nosync(core_data->irq);
-        if (core_data->ws) {
-                __pm_stay_awake(core_data->ws);
-        }
 
         /*for qaulcomn to stop cpu go to C4 idle state*/
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
@@ -1291,20 +1305,20 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
 
 #endif
 
-        if (core_data->reset_state) {
+        if (unlikely(core_data->reset_state)) {
                 ts_err(ts_dev->dev, "ignore this irq.");
                 goto exit;
         }
 
         /* suspend irq handler */
-        if (core_data->suspended && core_data->gesture_enable) {
+        if (unlikely(core_data->suspended && core_data->gesture_enable)) {
                 goodix_thp_gesture_irq_handler(core_data);
                 goto exit;
         }
 
         /* get frame */
         r = ts_dev->hw_ops->get_frame(ts_dev, read_data);
-        if (r < 0) {
+        if (unlikely(r < 0)) {
                 ts_err(ts_dev->dev, "failed to read frame, r %d", r);
                 goto exit;
         }
@@ -1314,7 +1328,7 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
 
         /* print frame index that write on FW  */
         cur_index = (read_data[5] << 8) | read_data[4];
-        if ((cur_index != pre_index + 1) && (cur_index > pre_index))
+        if (unlikely((cur_index != pre_index + 1) && (cur_index > pre_index)))
                 ts_err(ts_dev->dev, "touch_health - frame cur_index:%d pre_index:%d", cur_index, pre_index);
         pre_index = cur_index;
 
@@ -1504,6 +1518,12 @@ static void goodix_thp_force_release_all(struct goodix_thp_core *core_data)
         core_data->pen_state = PEN_STATE_NONE;
 }
 
+static inline int convert_pressure_to_touch_major(int pressure)
+{
+        int shifted = pressure >> MAJOR_CONVERSION_SHIFT;
+
+        return (shifted >= TOUCH_MAJOR_CLAMP_THRESHOLD) ? TOUCH_MAJOR_MAX_VALUE : (shifted + 1);
+}
 static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *core_data, unsigned long arg)
 {
         long ret = 0;
@@ -1621,6 +1641,9 @@ static long goodix_thp_input_agent_ioctl_set_coordinate(struct goodix_thp_core *
                 if (data.ref_not_set == 0) {
                     for (i = 0; i < INPUT_AGENT_MAX_FINGERS; i++) {
                         input_mt_slot(input_dev, i);
+
+                        //convert finger pressure to major
+                        data.touch[i].major = convert_pressure_to_touch_major(data.touch[i].p);
 
                         // --- check and print state change ---
                         prev_state = core_data->prev_finger_state[i];
@@ -2395,14 +2418,16 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
 
         ts_info(ts_dev->dev, "Suspend start");
 
-        if (core_data->suspended == 1) {
-		ts_info(ts_dev->dev, "Already in suspend mode, exit.");
-		goto exit;
-	}
+        if (unlikely(core_data->suspended == 1)) {
+                ts_info(ts_dev->dev, "Already in suspend mode, exit.");
+                goto exit;
+        }
 
         goodix_thp_set_irq_enable(core_data, IRQ_DISABLE_FLAG);
         core_data->suspended = 1;
         core_data->state_change_flag = 0;
+        if (core_data->esd_on)
+                cancel_delayed_work_sync(&core_data->esd_work);
 
         if (core_data->gesture_enable == 0) {
                 /* power off */
@@ -2411,7 +2436,7 @@ static int goodix_thp_suspend(struct goodix_thp_core *core_data)
                 ts_info(ts_dev->dev, "enter gesture mode!");
                 /* send enter gesture cmd */
                 r = ts_dev->hw_ops->send_cmd(ts_dev, CMD_GESTURE, gsx_data);
-                if (r) {
+                if (unlikely(r)) {
                         ts_err(ts_dev->dev, "send enter gesture cmd failed, r %d", r);
                         goto exit;
                 }
@@ -2430,7 +2455,7 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
 
         ts_info(ts_dev->dev, "Resume start");
 
-        if (core_data->suspended == 0) {
+        if (unlikely(core_data->suspended == 0)) {
                 ts_info(ts_dev->dev, "Already in normal mode,exit.");
                 goto exit;
         }
@@ -2448,6 +2473,8 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
 
         core_data->suspended = 0;
         core_data->state_change_flag = 1;
+        if (core_data->esd_on)
+                schedule_delayed_work(&core_data->esd_work, GOODIX_ESD_CHECK_INTERVAL);
 exit:
         goodix_thp_set_irq_enable(core_data, IRQ_ENABLE_FLAG);
         ts_info(ts_dev->dev, "Resume end");
@@ -2550,18 +2577,20 @@ static void goodix_thp_esd_work(struct work_struct *work)
         if (!core_data->esd_on || esd_addr == 0)
                 return;
 
-        ts_dev->hw_ops->read(ts_dev, esd_addr, &esd_value, 1);
-        if (esd_value == GOODIX_ESD_TICK_WRITE_DATA) {
-                ts_err(ts_dev->dev, "esd check failed, 0x%x", esd_value);
-                goodix_thp_power_off(core_data);
-                msleep(200);
-                goodix_thp_power_on(core_data);
-        } else {
-                esd_value = GOODIX_ESD_TICK_WRITE_DATA;
-                ts_dev->hw_ops->write(ts_dev, esd_addr, &esd_value, 1);
-        }
+        if (!core_data->suspended) { /* Don't perform SPI operations while suspended */
+                ts_dev->hw_ops->read(ts_dev, esd_addr, &esd_value, 1);
+                if (esd_value == GOODIX_ESD_TICK_WRITE_DATA) {
+                        ts_err(ts_dev->dev, "esd check failed, 0x%x", esd_value);
+                        goodix_thp_power_off(core_data);
+                        msleep(200);
+                        goodix_thp_power_on(core_data);
+                } else {
+                        esd_value = GOODIX_ESD_TICK_WRITE_DATA;
+                        ts_dev->hw_ops->write(ts_dev, esd_addr, &esd_value, 1);
+                }
 
-        schedule_delayed_work(dwork, 3 * HZ);
+                schedule_delayed_work(dwork, GOODIX_ESD_CHECK_INTERVAL);
+        }
 }
 
 static int goodix_thp_esd_init(struct goodix_thp_core *core_data)
@@ -2575,6 +2604,106 @@ static int goodix_thp_esd_init(struct goodix_thp_core *core_data)
 
         return 0;
 }
+
+static int goodix_ts_pinctrl_select_active(struct goodix_thp_core *core_data)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        struct device *dev = ts_dev->dev;
+        int ret = 0;
+
+        if (core_data->pinctrl && core_data->pin_sta_active) {
+                ret = pinctrl_select_state(core_data->pinctrl, core_data->pin_sta_active);
+                if (ret < 0) {
+                        ts_err(dev, "Set active pin state error:%d", ret);
+                } else {
+                        ts_info(dev, "Set active pin state success:%d", ret);
+                }
+        }
+
+        return ret;
+}
+
+static int goodix_ts_pinctrl_select_suspend(struct goodix_thp_core *core_data)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        struct device *dev = ts_dev->dev;
+        int ret = 0;
+
+        if (core_data->pinctrl && core_data->pin_sta_suspend) {
+                ret = pinctrl_select_state(core_data->pinctrl, core_data->pin_sta_suspend);
+                if (ret < 0) {
+                        ts_err(dev, "Set suspend pin state error:%d", ret);
+                } else {
+                        ts_info(dev, "Set suspend pin state success:%d", ret);
+                }
+        }
+
+        return ret;
+}
+
+/**
+ * goodix_ts_pinctrl_init - Get pinctrl handler and pinctrl_state
+ * @core_data: pointer to touch core data
+ * return: 0 ok, <0 failed
+ */
+static int goodix_ts_pinctrl_init(struct goodix_thp_core *core_data)
+{
+        struct thp_ts_device *ts_dev = core_data->ts_dev;
+        struct device *dev = ts_dev->dev;
+        int r = 0;
+
+        /* get pinctrl handler from of node */
+        core_data->pinctrl = devm_pinctrl_get(dev);
+        if (IS_ERR_OR_NULL(core_data->pinctrl)) {
+                ts_err(ts_dev->dev, "Failed to get pinctrl handler[need confirm]");
+                core_data->pinctrl = NULL;
+                return -EINVAL;
+        }
+        ts_info(ts_dev->dev, "success get pinctrl");
+
+        /* active state */
+#ifdef CONFIG_THP_FOLD
+        if (core_data->pdev->id > 0)
+        core_data->pin_sta_active = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_FOLD_ACTIVE);
+        else
+#endif
+        core_data->pin_sta_active = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_ACTIVE);
+        if (IS_ERR_OR_NULL(core_data->pin_sta_active)) {
+                r = PTR_ERR(core_data->pin_sta_active);
+                ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
+                                PINCTRL_STATE_ACTIVE, r);
+                core_data->pin_sta_active = NULL;
+                goto exit_pinctrl_put;
+        }
+        ts_info(dev, "success get active pinctrl state");
+
+        /* suspend state */
+#ifdef CONFIG_THP_FOLD
+        if (core_data->pdev->id > 0)
+        core_data->pin_sta_suspend = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_FOLD_SUSPEND);
+        else
+#endif
+        core_data->pin_sta_suspend = pinctrl_lookup_state(core_data->pinctrl,
+                                PINCTRL_STATE_SUSPEND);
+        if (IS_ERR_OR_NULL(core_data->pin_sta_suspend)) {
+                r = PTR_ERR(core_data->pin_sta_suspend);
+                ts_err(ts_dev->dev, "Failed to get pinctrl state:%s, r:%d",
+                                PINCTRL_STATE_SUSPEND, r);
+                core_data->pin_sta_suspend = NULL;
+                goto exit_pinctrl_put;
+        }
+        ts_info(dev, "success get suspend pinctrl state");
+
+        return 0;
+exit_pinctrl_put:
+        devm_pinctrl_put(core_data->pinctrl);
+        core_data->pinctrl = NULL;
+        return r;
+}
+
 
 static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
 {
@@ -2873,6 +3002,18 @@ static int goodix_thp_probe(struct platform_device *pdev)
                 goto out;
         }
 
+        /* Pinctrl handle is optional. */
+        r = goodix_ts_pinctrl_init(core_data);
+        if (r)
+                ts_err(tdev->dev, "failed init pinctrl");
+
+        /* init stylus clock */
+        if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
+                r = goodix_ts_stylus_clk_init(core_data);
+                if (r)
+                        ts_err(tdev->dev, "failed get goodix stylus clock");
+        }
+
         /* power init & power on */
         r = goodix_thp_power_init(core_data);
         if (r < 0) {
@@ -2934,13 +3075,6 @@ static int goodix_thp_probe(struct platform_device *pdev)
         if (r) {
                 ts_err(tdev->dev, "failed to create sysfs, r %d", r);
                 goto err_sysfs_init;
-        }
-
-        /* init stylus clock */
-        if (core_data->ts_dev->board_data.stylus_mode_ctrl) {
-                r = goodix_ts_stylus_clk_init(core_data);
-                if (r)
-                        ts_err(tdev->dev, "failed get goodix stylus clock");
         }
 
         /* irq wake lock */
