@@ -25,6 +25,7 @@
 #include <linux/of_gpio.h>
 
 #define ULOG_DURATION_MS	60000
+#define LPD_FLAG_MAX 0x40
 
 static struct usb_glink_dev *this_chip = NULL;
 static int glink_usb_init(struct usb_glink_dev *chip);
@@ -121,6 +122,10 @@ static void glink_usb_notify_uevent(struct usb_glink_dev *chip, int event)
 		scnprintf(uevent_buf, CHG_SHOW_MAX_SIZE,
 				"POWER_SUPPLY_LPD_PRESENT=%s",
 				chip->usb_info.lpd_st? "true" : "false");
+	} else if (event == NOTIFY_EVENT_USB_LPD_FLAG) {
+		scnprintf(uevent_buf, CHG_SHOW_MAX_SIZE,
+				"POWER_SUPPLY_LPD_STATUS=%d",
+				chip->usb_info.lpd_flag);
 	} else if (event == NOTIFY_EVENT_USB_CID_STATUS) {
 		scnprintf(uevent_buf, CHG_SHOW_MAX_SIZE,
 				"POWER_SUPPLY_CID_STATUS=%d",
@@ -189,14 +194,15 @@ static void glink_usb_work(struct work_struct *work)
 			bm_ulog_enable_log(true, ULOG_DURATION_MS);
 		lpd_ulog_triggered = true;
 		mmi_err(chip->mmi_chip, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cc1=%d, cc2=%d,"
-				" dp=%d, dm=%d\n",
+				" dp=%d, dm=%d, stat=%#x\n",
 				usb_info.lpd_st,
 				usb_info.lpd_rsbu1,
 				usb_info.lpd_rsbu2,
 				usb_info.lpd_cc1,
 				usb_info.lpd_cc2,
 				usb_info.lpd_dp,
-				usb_info.lpd_dm);
+				usb_info.lpd_dm,
+				usb_info.lpd_flag);
 		mmi_err(chip->mmi_chip, "CID: present=%d, conn=%d, ptype=%d, pd=%d, legacy=%d,"
 				" vbus=%d, otg=%d\n",
 				usb_info.cid_st,
@@ -212,14 +218,15 @@ static void glink_usb_work(struct work_struct *work)
 			bm_ulog_enable_log(false, 0);
 		lpd_ulog_triggered = false;
 		mmi_warn(chip->mmi_chip, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cc1=%d, cc2=%d,"
-				" dp=%d, dm=%d\n",
+				" dp=%d, dm=%d, stat=%#x\n",
 				usb_info.lpd_st,
 				usb_info.lpd_rsbu1,
 				usb_info.lpd_rsbu2,
 				usb_info.lpd_cc1,
 				usb_info.lpd_cc2,
 				usb_info.lpd_dp,
-				usb_info.lpd_dm);
+				usb_info.lpd_dm,
+				usb_info.lpd_flag);
 		mmi_warn(chip->mmi_chip, "CID: present=%d, conn=%d, ptype=%d, pd=%d, legacy=%d,"
 				" vbus=%d, otg=%d\n",
 				usb_info.cid_st,
@@ -231,14 +238,15 @@ static void glink_usb_work(struct work_struct *work)
 				usb_info.otg_st);
 	} else {
 		mmi_info(chip->mmi_chip, "LPD: present=%d, rsbu1=%d, rsbu2=%d, cc1=%d, cc2=%d,"
-				" dp=%d, dm=%d\n",
+				" dp=%d, dm=%d, stat=%#x\n",
 				usb_info.lpd_st,
 				usb_info.lpd_rsbu1,
 				usb_info.lpd_rsbu2,
 				usb_info.lpd_cc1,
 				usb_info.lpd_cc2,
 				usb_info.lpd_dp,
-				usb_info.lpd_dm);
+				usb_info.lpd_dm,
+				usb_info.lpd_flag);
 		mmi_info(chip->mmi_chip, "CID: present=%d, conn=%d, ptype=%d, pd=%d, legacy=%d,"
 				" vbus=%d, otg=%d\n",
 				usb_info.cid_st,
@@ -269,6 +277,10 @@ static void glink_usb_work(struct work_struct *work)
 //				NOTIFY_EVENT_LPD_STATUS,
 //				(void *)&(usb_info.lpd_st));
 		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_LPD_STATUS);
+		if (usb_info.lpd_flag > 0 && usb_info.lpd_flag < LPD_FLAG_MAX) {
+		    chip->usb_info.lpd_flag = usb_info.lpd_flag;
+			glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_LPD_FLAG);
+		}
 	}
 
 	if (usb_info.cid_st != chip->usb_info.cid_st) {

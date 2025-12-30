@@ -17,6 +17,7 @@ enum {
 	NOTIFY_EVENT_USB_LPD_STATUS,
 	NOTIFY_EVENT_USB_CID_STATUS,
 	NOTIFY_EVENT_USB_VBUS_STATUS,
+	NOTIFY_EVENT_USB_LPD_FLAG,
 };
 
 enum {
@@ -70,6 +71,7 @@ struct usb_info {
 	int lpd_cc2;
 	int lpd_dp;
 	int lpd_dm;
+	int lpd_flag;
 };
 
 struct usb_glink_dev {
