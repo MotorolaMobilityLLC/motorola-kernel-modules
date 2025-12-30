@@ -1,20 +1,5 @@
-load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+load(":moto_swap.bzl", "define_modules")
 
-package(
-    default_visibility = [
-        "//visibility:public",
-    ],
-)
+exports_files(["Kconfig"])
 
-define_mgk_ko(
-    name = "moto_swap",
-    srcs = glob([
-        "*.c",
-        "*.h",
-        "**/*.c",
-        "**/*.h",
-        "Kbuild",
-        "Makefile",
-    ]),
-    outs = ["moto_swap5.ko"],
-)
+define_modules()

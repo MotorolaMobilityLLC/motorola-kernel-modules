@@ -41,6 +41,9 @@
 #ifdef CONFIG_HYBRIDSWAP
 #include "../hybridswap/hybridswap.h"
 #endif
+#ifdef CONFIG_ZRAM_EXT
+#include "zram_ext.h"
+#endif
 
 #ifdef CONFIG_HYBRIDSWAP_CORE
 #define page_memcg(page) folio_memcg(page_folio(page))
@@ -63,26 +66,10 @@ static size_t huge_class_size;
 
 static const struct block_device_operations zram_devops;
 
-static void zram_free_page(struct zram *zram, size_t index);
+//static void zram_free_page(struct zram *zram, size_t index);
 static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 			  struct bio *parent);
 
-static int zram_slot_trylock(struct zram *zram, u32 index)
-{
-	return spin_trylock(&zram->table[index].lock);
-}
-
-static unsigned long zram_get_element(struct zram *zram, u32 index)
-{
-	return zram->table[index].element;
-}
-
-static inline bool zram_allocated(struct zram *zram, u32 index)
-{
-	return zram_get_obj_size(zram, index) ||
-			zram_test_flag(zram, index, ZRAM_SAME) ||
-			zram_test_flag(zram, index, ZRAM_WB);
-}
 
 #if PAGE_SIZE != 4096
 static inline bool is_partial_io(struct bio_vec *bvec)
@@ -97,44 +84,6 @@ static inline bool is_partial_io(struct bio_vec *bvec)
 }
 #endif
 
-static inline void zram_set_priority(struct zram *zram, u32 index, u32 prio)
-{
-	prio &= ZRAM_COMP_PRIORITY_MASK;
-	/*
-	 * Clear previous priority value first, in case if we recompress
-	 * further an already recompressed page
-	 */
-	zram->table[index].flags &= ~(ZRAM_COMP_PRIORITY_MASK <<
-				      ZRAM_COMP_PRIORITY_BIT1);
-	zram->table[index].flags |= (prio << ZRAM_COMP_PRIORITY_BIT1);
-}
-
-static inline u32 zram_get_priority(struct zram *zram, u32 index)
-{
-	u32 prio = zram->table[index].flags >> ZRAM_COMP_PRIORITY_BIT1;
-
-	return prio & ZRAM_COMP_PRIORITY_MASK;
-}
-
-static void zram_accessed(struct zram *zram, u32 index)
-{
-	zram_clear_flag(zram, index, ZRAM_IDLE);
-#ifdef CONFIG_ZRAM_TRACK_ENTRY_ACTIME
-	zram->table[index].ac_time = ktime_get_boottime();
-#endif
-}
-
-static inline void update_used_max(struct zram *zram,
-					const unsigned long pages)
-{
-	unsigned long cur_max = atomic_long_read(&zram->stats.max_used_pages);
-
-	do {
-		if (cur_max >= pages)
-			return;
-	} while (!atomic_long_try_cmpxchg(&zram->stats.max_used_pages,
-					  &cur_max, pages));
-}
 
 static inline void zram_fill_page(void *ptr, unsigned long len,
 					unsigned long value)
@@ -305,7 +254,7 @@ out:
 	return rv;
 }
 
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 static ssize_t writeback_limit_enable_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
@@ -388,6 +337,9 @@ static void reset_bdev(struct zram *zram)
 	zram->disk->fops = &zram_devops;
 	kvfree(zram->bitmap);
 	zram->bitmap = NULL;
+#ifdef CONFIG_ZRAM_EXT
+	deinit_zram_ext(zram);
+#endif
 }
 
 static ssize_t backing_dev_show(struct device *dev,
@@ -472,11 +424,17 @@ static ssize_t backing_dev_store(struct device *dev,
 	}
 
 	bitmap_sz = BITS_TO_LONGS(nr_pages) * sizeof(long);
+#ifdef CONFIG_ZRAM_EXT
+	err = init_zram_ext(zram, nr_pages, bitmap_sz);
+	if (err)
+		goto out;
+#else
 	bitmap = kvzalloc(bitmap_sz, GFP_KERNEL);
 	if (!bitmap) {
 		err = -ENOMEM;
 		goto out;
 	}
+#endif
 
 	reset_bdev(zram);
 
@@ -503,6 +461,7 @@ out:
 	return err;
 }
 
+#ifndef CONFIG_ZRAM_EXT
 static unsigned long alloc_block_bdev(struct zram *zram)
 {
 	unsigned long blk_idx = 1;
@@ -778,6 +737,7 @@ static int read_from_bdev(struct zram *zram, struct page *page,
 	read_from_bdev_async(zram, page, entry, parent);
 	return 0;
 }
+#endif
 #else
 #ifdef CONFIG_HYBRIDSWAP_CORE
 static void reset_bdev(struct zram *zram)
@@ -814,6 +774,12 @@ static void zram_debugfs_create(void)
 static void zram_debugfs_destroy(void)
 {
 	debugfs_remove_recursive(zram_debugfs_root);
+}
+
+static void zram_accessed(struct zram *zram, u32 index)
+{
+	zram_clear_flag(zram, index, ZRAM_IDLE);
+	zram->table[index].ac_time = ktime_get_boottime();
 }
 
 static ssize_t read_block_state(struct file *file, char __user *buf,
@@ -899,6 +865,10 @@ static void zram_debugfs_unregister(struct zram *zram)
 #else
 static void zram_debugfs_create(void) {};
 static void zram_debugfs_destroy(void) {};
+static void zram_accessed(struct zram *zram, u32 index)
+{
+	zram_clear_flag(zram, index, ZRAM_IDLE);
+};
 static void zram_debugfs_register(struct zram *zram) {};
 static void zram_debugfs_unregister(struct zram *zram) {};
 #endif
@@ -1228,12 +1198,17 @@ static ssize_t mm_stat_show(struct device *dev,
 			atomic_long_read(&pool_stats.pages_compacted),
 			(u64)atomic64_read(&zram->stats.huge_pages),
 			(u64)atomic64_read(&zram->stats.huge_pages_since));
+#ifdef CONFIG_ZRAM_EXT
+	ret += zram_error_count_show(zram, buf + ret, PAGE_SIZE - ret);
+#endif
 	up_read(&zram->init_lock);
 
 	return ret;
 }
 
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
+
+#ifndef CONFIG_ZRAM_EXT
 #define FOUR_K(x) ((x) * (1 << (PAGE_SHIFT - 12)))
 static ssize_t bd_stat_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -1251,6 +1226,7 @@ static ssize_t bd_stat_show(struct device *dev,
 
 	return ret;
 }
+#endif
 #endif
 
 static ssize_t debug_stat_show(struct device *dev,
@@ -1273,8 +1249,13 @@ static ssize_t debug_stat_show(struct device *dev,
 
 static DEVICE_ATTR_RO(io_stat);
 static DEVICE_ATTR_RO(mm_stat);
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
+#ifdef CONFIG_ZRAM_EXT
+static DEVICE_ATTR_RW(bd_stat);
+#else
 static DEVICE_ATTR_RO(bd_stat);
+#endif
+
 #endif
 static DEVICE_ATTR_RO(debug_stat);
 
@@ -1324,7 +1305,7 @@ static bool zram_meta_alloc(struct zram *zram, u64 disksize)
  * caller should hold this table index entry's bit_spinlock to
  * indicate this index entry is accessing.
  */
-static void zram_free_page(struct zram *zram, size_t index)
+void zram_free_page(struct zram *zram, size_t index)
 {
 	unsigned long handle;
 
@@ -1493,9 +1474,14 @@ static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 		 * device.
 		 */
 		zram_slot_unlock(zram, index);
-
+		ZRAM_CTX("fallback read_from_bdev, index =%lu", (unsigned long)index);
+		ZRAM_WARN_IF_ATOMIC_WAIT();
+#ifdef CONFIG_ZRAM_EXT
+		ret = try_read_from_bdev(zram, page, index, parent, false);
+#else
 		ret = read_from_bdev(zram, page, zram_get_element(zram, index),
 				     parent);
+#endif
 	}
 
 	/* Should NEVER happen. Return bio error if it does. */
@@ -2341,9 +2327,14 @@ static DEVICE_ATTR_WO(mem_used_max);
 static DEVICE_ATTR_WO(idle);
 static DEVICE_ATTR_RW(max_comp_streams);
 static DEVICE_ATTR_RW(comp_algorithm);
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+#ifdef CONFIG_ZRAM_EXT
+static DEVICE_ATTR_RO(zram_ext_version);
+#endif
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 static DEVICE_ATTR_RW(backing_dev);
+#ifndef CONFIG_ZRAM_EXT
 static DEVICE_ATTR_WO(writeback);
+#endif
 static DEVICE_ATTR_RW(writeback_limit);
 static DEVICE_ATTR_RW(writeback_limit_enable);
 #endif
@@ -2382,15 +2373,20 @@ static struct attribute *zram_disk_attrs[] = {
 	&dev_attr_idle.attr,
 	&dev_attr_max_comp_streams.attr,
 	&dev_attr_comp_algorithm.attr,
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+#ifdef CONFIG_ZRAM_EXT
+	&dev_attr_zram_ext_version.attr,
+#endif
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	&dev_attr_backing_dev.attr,
+#ifndef CONFIG_ZRAM_EXT
 	&dev_attr_writeback.attr,
+#endif
 	&dev_attr_writeback_limit.attr,
 	&dev_attr_writeback_limit_enable.attr,
 #endif
 	&dev_attr_io_stat.attr,
 	&dev_attr_mm_stat.attr,
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	&dev_attr_bd_stat.attr,
 #endif
 	&dev_attr_debug_stat.attr,
@@ -2465,8 +2461,11 @@ static int zram_add(void)
 	device_id = ret;
 
 	init_rwsem(&zram->init_lock);
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_WRITEBACK
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	spin_lock_init(&zram->wb_limit_lock);
+#endif
+#ifdef CONFIG_ZRAM_EXT
+	spin_lock_init(&zram->refcount_lock);
 #endif
 
 	/* gendisk structure */

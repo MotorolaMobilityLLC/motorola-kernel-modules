@@ -28,6 +28,7 @@ $(strip \
 		fi \
 	) \
 )
+endef
 
 ZRAM_SRC = zram-$(VERSION).$(PATCHLEVEL)
 
@@ -35,6 +36,8 @@ $(warning moto_swap5 - zram src folder = $(ZRAM_SRC))
 
 ifeq ($(VERSION), 6)
 EXTRA_CFLAGS += -Wframe-larger-than=4096
+EXTRA_CFLAGS += -DCONFIG_VENDOR_ZRAM_WRITEBACK
+EXTRA_CFLAGS += -DCONFIG_ZRAM_EXT
 endif
 
 ifeq ($(call is-greater-or-equal,6,12),1)
@@ -53,6 +56,11 @@ endif
 
 ifneq ($(filter m y,$(CONFIG_ZRAM_EXT)),)
 EXTRA_CFLAGS += -DCONFIG_ZRAM_EXT
+endif
+
+ifeq ($(call is-greater-or-equal,6,6),1)
+moto_swap5-objs += $(ZRAM_SRC)/zram_ext.o
+moto_swap5-objs += $(ZRAM_SRC)/madvise.o
 endif
 
 moto_swap5-objs += $(ZRAM_SRC)/zram_drv.o

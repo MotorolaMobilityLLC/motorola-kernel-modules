@@ -18,7 +18,10 @@
 #include "backend_lz4hc.h"
 #include "backend_zstd.h"
 #include "backend_deflate.h"
+
+#if IS_ENABLED(CONFIG_ZRAM_BACKEND_842)
 #include "backend_842.h"
+#endif
 
 static const struct zcomp_ops *backends[] = {
 #if IS_ENABLED(CONFIG_ZRAM_BACKEND_LZO)
@@ -48,6 +51,12 @@ static void zcomp_strm_free(struct zcomp *comp, struct zcomp_strm *zstrm)
 	comp->ops->destroy_ctx(&zstrm->ctx);
 	vfree(zstrm->buffer);
 	zstrm->buffer = NULL;
+#ifdef CONFIG_ZRAM_EXT
+	if (zstrm->tmpbuf) {
+		free_pages((unsigned long)zstrm->tmpbuf, 1);
+		zstrm->tmpbuf = NULL;
+	}
+#endif
 }
 
 static int zcomp_strm_init(struct zcomp *comp, struct zcomp_strm *zstrm)
@@ -67,6 +76,13 @@ static int zcomp_strm_init(struct zcomp *comp, struct zcomp_strm *zstrm)
 		zcomp_strm_free(comp, zstrm);
 		return -ENOMEM;
 	}
+#ifdef CONFIG_ZRAM_EXT
+	zstrm->tmpbuf = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, 1);
+	if (!zstrm->tmpbuf) {
+		zcomp_strm_free(comp, zstrm);
+		return -ENOMEM;
+	}
+#endif
 	return 0;
 }
 
