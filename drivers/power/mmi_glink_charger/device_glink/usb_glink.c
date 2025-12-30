@@ -595,6 +595,26 @@ static int glink_usb_notify(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 
+static int glink_mmi_notify(struct notifier_block *nb, unsigned long event, void *data)
+{
+	struct usb_glink_dev *chip =
+		container_of(nb, struct usb_glink_dev, usb_mmi_nb);
+
+	if (!chip) {
+		mmi_err(chip->mmi_chip, "called before usb_info valid!\n");
+		return NOTIFY_DONE;
+	}
+
+	if (event == DEV_USB) {
+		mmi_info(chip->mmi_chip, "usb info update after boot_complete: %d\n",
+			chip->usb_info.lpd_st);
+		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_CID_STATUS);
+		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_LPD_STATUS);
+		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_LPD_FLAG);
+	}
+	return NOTIFY_DONE;
+}
+
 struct glink_device *usb_glink_device_register(struct mmi_glink_chip *chip, struct mmi_glink_dev_dts_info *dev_dts)
 {
 	struct usb_glink_dev *usb_chip = NULL;
@@ -616,6 +636,8 @@ struct glink_device *usb_glink_device_register(struct mmi_glink_chip *chip, stru
 	usb_chip->dev = glink_dev;
 	usb_chip->mmi_chip = chip;
 	usb_chip->usb_nb.notifier_call = glink_usb_notify;
+	usb_chip->usb_mmi_nb.notifier_call = glink_mmi_notify;
+	mmi_glink_register_notifier(&usb_chip->usb_mmi_nb);
 	rc = power_supply_reg_notifier(&usb_chip->usb_nb);
 	if (rc) {
 		mmi_err(chip, "Failed to register usb_psy_notifier: %d\n", rc);

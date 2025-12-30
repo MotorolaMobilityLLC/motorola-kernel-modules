@@ -81,6 +81,7 @@ struct usb_glink_dev {
 	struct glink_device *dev;
 	struct mmi_glink_chip *mmi_chip;
 	struct notifier_block	usb_nb;
+	struct notifier_block	usb_mmi_nb;
 
 	int otp_en_gpio;
 	bool therm_supported;
