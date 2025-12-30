@@ -177,6 +177,7 @@ enum sc8989x_fields {
 	F_VINDPM_TRACK,
 	CX_RESET_INTER,
 	CFGINIT_BIT,
+	CFGINIT2_BIT,
 	F_MAX_FIELDS,
 };
 
@@ -475,6 +476,8 @@ static const struct reg_field sc8989x_reg_fields[] = {
 	[CX_RESET_INTER] = REG_FIELD(0x89, 0, 7),
 	/*regC4 */
 	[CFGINIT_BIT] = REG_FIELD(0xC4, 7, 7),
+	/*regCB */
+	[CFGINIT2_BIT] = REG_FIELD(0xCB, 0, 3),
 };
 
 static int sc8989x_regmap_write(void *context, unsigned int reg,
@@ -1403,6 +1406,7 @@ static bool sc8989x_detect_device(struct sc8989x_chip *sc)
 	int ret;
 	int val;
 	int dev_version;
+	int cfginit2_value = 0;
 
 	if (sc == NULL) {
 		return false;
@@ -1425,11 +1429,13 @@ static bool sc8989x_detect_device(struct sc8989x_chip *sc)
 		sc->is_upm6920A = 1;
 		regmap_write(sc->regmap, UPM6920A_REG_CFG_MODE, UPM6920A_CFG_MODE_ENABLE);
 		sc8989x_field_write(sc, CFGINIT_BIT,0);
+		sc8989x_field_write(sc, CFGINIT2_BIT, 0x05);
+		sc8989x_field_read(sc, CFGINIT2_BIT, &cfginit2_value);
 		regmap_write(sc->regmap, UPM6920A_REG_CFG_MODE, UPM6920A_CFG_MODE_DISABLE);
 	}
 
 	sc->dev_id = val;
-	dev_info(sc->dev, "%s: part_no = %d", __func__, sc->dev_id);
+	dev_info(sc->dev, "%s: part_no = %d, cfginit2_value=0x%x", __func__, sc->dev_id, cfginit2_value);
 
 	return true;
 }
