@@ -7,7 +7,7 @@ package(
 )
 
 define_mgk_ko(
-    name = "moto_swap",
+    name = "moto_swap5",
     srcs = glob([
         "*.c",
         "*.h",
