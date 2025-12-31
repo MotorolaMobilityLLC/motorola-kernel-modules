@@ -67,7 +67,7 @@
 
 #define GOODIX_THP_MAX_FRAME_LEN                        (10 * 1024)
 #define GOODIX_THP_MAX_TRANS_DATA_LEN                   (4096 * 32)
-#define GOODIX_THP_MAX_FRAME_BUF_COUNT                  20
+#define GOODIX_THP_MAX_FRAME_BUF_COUNT                  40
 #define GOODIX_THP_CUSTOM_INFO_LEN                      10
 #define GOODIX_MAX_STR_LABLE_LEN                        32
 #define GOODIX_THP_REQUEST_APP_SIZE                     12
