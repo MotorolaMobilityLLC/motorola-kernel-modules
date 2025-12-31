@@ -23,13 +23,36 @@
 
 #define zram_clear_flag(zram, index, flag) (zram->table[index].flags &= ~BIT(flag))
 
-#define zram_set_element(zram, index, element) (zram->table[index].element = element)
-
+static inline void zram_set_element(struct zram *zram, u32 index,
+						unsigned long element)
+{
+	zram->table[index].element = element;
+}
 #define zram_get_obj_size(zram, index) (zram->table[index].flags & (BIT(ZRAM_FLAG_SHIFT) - 1))
 
 #define zram_set_obj_size(zram, index, size) do {\
 	unsigned long flags = zram->table[index].flags >> ZRAM_FLAG_SHIFT; \
 	zram->table[index].flags = (flags << ZRAM_FLAG_SHIFT) | size; \
 } while(0)
+
+enum zram_oem_funcs_cmds {
+	ZRAM_APP_LAUNCH_NOTIFY,
+	ZRAM_ADD_TO_WRITEBACK_LIST,
+	ZRAM_WRITEBACK_LIST,
+	ZRAM_FLUSH_WRITEBACK_BUFFER,
+	ZRAM_GET_ENTRY_TYPE,
+	ZRAM_MARK_ENTRY_NON_LRU,
+	ZRAM_PREFETCH_ENTRY,
+};
+enum zram_entry_type {
+	ZRAM_WB_TYPE = 1,
+	ZRAM_WB_HUGE_TYPE,
+	ZRAM_SAME_TYPE,
+	ZRAM_HUGE_TYPE,
+};
+
+typedef unsigned long (*zram_oem_func)(int, void *, unsigned long);
+extern zram_oem_func zram_oem_fn;
+extern unsigned long zram_oem_fn_nocfi(int cmd, void *priv, unsigned long param);
 
 #endif
