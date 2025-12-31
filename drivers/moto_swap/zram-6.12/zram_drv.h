@@ -111,6 +111,7 @@ struct zram {
 	struct zram_table_entry *table;
 	struct zs_pool *mem_pool;
 	struct zcomp *comps[ZRAM_MAX_COMPS];
+	struct zcomp_params params[ZRAM_MAX_COMPS];
 	struct gendisk *disk;
 	/* Prevent concurrent execution of device init */
 	struct rw_semaphore init_lock;
@@ -153,5 +154,6 @@ struct zram {
 #ifdef CONFIG_HYBRIDSWAP_CORE
 	struct hyb_info *infos;
 #endif
+	atomic_t pp_in_progress;
 };
 #endif
