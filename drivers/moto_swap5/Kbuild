@@ -36,6 +36,9 @@ $(warning moto_swap5 - zram src folder = $(ZRAM_SRC))
 
 ifeq ($(VERSION), 6)
 EXTRA_CFLAGS += -Wframe-larger-than=4096
+EXTRA_CFLAGS += -DCONFIG_ZRAM_EXT
+EXTRA_CFLAGS += -DCONFIG_VENDOR_ZRAM_WRITEBACK
+EXTRA_CFLAGS += -DCONFIG_VENDOR_ZRAM_MEMORY_TRACKING
 endif
 
 # add -Wall to try to catch everything we can.
