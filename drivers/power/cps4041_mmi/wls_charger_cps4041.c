@@ -1924,7 +1924,6 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 	int sys_mode = 0x00;
 	static ktime_t acdet_ktime = 0;
 	int acdet_time_out = 0;
-	bool otg_en = false;
 
 	cps_wls_log(CPS_LOG_DEBG, "[%s] IRQ triggered\n", __func__);
 	mutex_lock(&chip->irq_lock);
@@ -1968,10 +1967,7 @@ static irqreturn_t cps_wls_irq_handler(int irq, void *dev_id)
 				//set time out to 5000ms as default
 				backpower_mode_timeout_work_start(chip, 5000);
 			} else if (CPS_TX_MODE == 0) {
-				if (!IS_ERR_OR_NULL(chip->chg1_dev)) {
-					charger_dev_is_otg_enabled(chip->chg1_dev, &otg_en);
-				}
-				if (otg_en)
+				if (!chip->factory_version)
 					cps_wls_low_power_mode(true);
 			}
 			break;
@@ -3346,6 +3342,10 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 		pr_err("%s chosen is error or null\n", __func__);
 	}
 
+#if IS_ENABLED(CONFIG_POWER_SUPPLY_FACTORY_BUILD)
+	chip->factory_version = true;
+#endif
+	pr_info("%s factory_version=%d\n", __func__, chip->factory_version);
 	boot_node = of_parse_phandle(node, "bootmode", 0);
 	if (!boot_node)
 		cps_wls_log(CPS_LOG_ERR, "%s: failed to get boot mode phandle\n", __func__);

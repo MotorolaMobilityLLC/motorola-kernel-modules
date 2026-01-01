@@ -365,6 +365,7 @@ struct cps_wls_chrg_chip {
 	bool rx_vout_change_done;
 	uint32_t bootmode;
 	bool secure_hardware;
+	bool factory_version;
 	struct thermal_cooling_device *tcd;
 	bool ntc_thermal;
 	bool tx_ept_flag;
