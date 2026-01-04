@@ -35,6 +35,9 @@ struct zcomp_strm {
 	/* compression buffer */
 	void *buffer;
 	struct zcomp_ctx ctx;
+#ifdef CONFIG_ZRAM_EXT
+	void *tmpbuf;
+#endif
 };
 
 struct zcomp_req {
