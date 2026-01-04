@@ -417,8 +417,6 @@ static void zram_read_done_work(struct work_struct *work)
 	unsigned long chunk_idx = blk_to_chunk_idx(blk_idx);
 	int errno = blk_status_to_errno(bio->bi_status);
 
-	ZRAM_CTX("read done work , errno=%d, chunk=%lu", errno,chunk_idx);
-	ZRAM_MIGHT_SLEEP();
 	if (dst_page) {
 		if (errno)
 			bio_chain->bi_status = bio->bi_status;
@@ -522,8 +520,6 @@ int try_read_from_bdev(struct zram *zram, struct page *page,
 	pin_chunk_bdev(zram, chunk_idx);
 	/* Do not block-wait on concurrent read; just return -EBUSY. */
     if (test_and_set_bit(chunk_idx, zram->read_bitmap) && wait) {
-		ZRAM_CTX("hook_read_work wait path, index =%u, chunk=%lu", index,chunk_idx);
-		ZRAM_WARN_IF_ATOMIC_WAIT();
 		ret = zram_hook_read_work(zram, page, handle, chunk_idx);
 		unpin_chunk_bdev(zram, chunk_idx);
 		zram_slot_unlock(zram, index);
@@ -531,8 +527,6 @@ int try_read_from_bdev(struct zram *zram, struct page *page,
 	}
 	zram_slot_unlock(zram, index);
 	if (!zram_read_from_bdev(zram, page, handle, parent)) {
-		ZRAM_CTX("submit readbio, index =%u, chunk=%lu", index,chunk_idx);
-		ZRAM_WARN_IF_ATOMIC_WAIT();
 		clear_bit(chunk_idx, zram->read_bitmap);
 		unpin_chunk_bdev(zram, chunk_idx);
 		return -EBUSY;
