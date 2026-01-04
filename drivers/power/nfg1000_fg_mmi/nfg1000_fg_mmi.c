@@ -276,6 +276,8 @@ struct mmi_fg_chip {
 static int fg_get_capacity(struct gauge_device *gauge_dev, int *soc);
 int fg_get_voltage_now(struct gauge_device *gauge_dev, int *mV);
 int fg_get_temp(struct gauge_device *gauge_dev, int *temp);
+static int fg_read_rm(struct mmi_fg_chip *mmi);
+static int fg_read_fcc(struct mmi_fg_chip *mmi);
 
 static int __fg_write_word(struct i2c_client *client, u8 reg, u16 val)
 {
@@ -2412,13 +2414,28 @@ static int fg_read_rsoc(struct mmi_fg_chip *mmi)
 {
 	int ret;
 	u16 soc = 0;
+	int remaining_capacity = -ENODATA;
+	int full_charge_capacity = -ENODATA;
 
 	ret = fg_read_word(mmi, mmi->regs[BQ_FG_REG_SOC], &soc);
 	if (ret < 0) {
 		mmi_err("could not read RSOC, ret = %d\n", ret);
 		return ret;
 	}
-	mmi_info("RSOC = %d", soc);
+	mmi_info("RSOC = %d\n", soc);
+
+	remaining_capacity = fg_read_rm(mmi);
+	full_charge_capacity = fg_read_fcc(mmi);
+
+	if (remaining_capacity >= 0 && full_charge_capacity > 0) {
+		soc = MIN((remaining_capacity * 10000 / full_charge_capacity), 10000);
+		mmi->batt_soc = soc;
+		mmi_info("remaining_capacity=%d, full_charge_capacity=%d, hi_prec_soc = %d\n",
+			remaining_capacity, full_charge_capacity, soc);
+	} else {
+		soc = mmi->batt_soc;
+		mmi_err("Read hi_prec_soc failed, use pre_soc.\n");
+	}
 
 	return soc;
 
