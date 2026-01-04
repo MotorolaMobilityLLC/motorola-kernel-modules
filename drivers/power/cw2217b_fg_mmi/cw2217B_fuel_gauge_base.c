@@ -349,10 +349,8 @@ static int cw_get_capacity(struct gauge_device *gauge_dev, int *soc)
 		return ret;
 	cw_bat->ic_soc_h = reg_val[0];
 	cw_bat->ic_soc_l = reg_val[1];
-	cw_bat->raw_soc = cw_bat->ic_soc_h;
 
-	 //if ((soc_h * 256 + soc_l) * 100 /256) > 70)
-	//	cw_bat->raw_soc ++;
+	cw_bat->raw_soc = (cw_bat->ic_soc_h * 256 + cw_bat->ic_soc_l ) * 100 / 256;
 
 	*soc = cw_bat->raw_soc;
 	 cw_info(cw_bat, "soc=%d\n", *soc);
@@ -773,7 +771,7 @@ static int cw_get_charge_counter(struct gauge_device *gauge_dev, int *charge_cou
 	int full_capacity;
 
 	full_capacity = (cw_bat->fcc_design * cw_bat->soh) / 100;
-	*charge_counter = div_s64(full_capacity * cw_bat->raw_soc, 100);
+	*charge_counter = div_s64(full_capacity * cw_bat->raw_soc, 10000);
 	cw_bat->charge_counter = *charge_counter;
 	cw_info(cw_bat, "charge_counter=%d\n", *charge_counter);
 
@@ -1143,7 +1141,7 @@ static int cw_battery_get_property(struct power_supply *psy,
 	cw_bat = power_supply_get_drvdata(psy);
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CAPACITY:
-		val->intval = cw_bat->raw_soc;
+		val->intval = cw_bat->raw_soc / 100;
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
 		val->intval = cw_bat->present;
