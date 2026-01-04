@@ -1341,7 +1341,10 @@ static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 			  struct bio *parent)
 {
 	int ret;
-
+#ifdef CONFIG_ZRAM_EXT
+	unsigned long timeout= jiffies + usecs_to_jiffies(100);
+retry:
+#endif
 	zram_slot_lock(zram, index);
 
 #ifdef CONFIG_HYBRIDSWAP_CORE
@@ -1357,9 +1360,7 @@ static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 		return ret;
 	}
 #endif
-#ifdef CONFIG_ZRAM_EXT
 
-#endif
 	if (!zram_test_flag(zram, index, ZRAM_WB)) {
 		/* Slot should be locked through out the function call */
 		ret = zram_read_from_zspool(zram, page, index);
@@ -1370,10 +1371,10 @@ static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 		 * device.
 		 */
 		zram_slot_unlock(zram, index);
-		ZRAM_CTX("fallback read_from_bdev, index =%lu", (unsigned long)index);
-		ZRAM_WARN_IF_ATOMIC_WAIT();
 #ifdef CONFIG_ZRAM_EXT
-		ret = try_read_from_bdev(zram, page, index, parent, false);
+		ret = try_read_from_bdev(zram, page, index, parent, time_before(jiffies,timeout));
+		if (ret== -ENOENT || ret == -EBUSY)
+			goto retry;
 #else
 		ret = read_from_bdev(zram, page, zram_get_element(zram, index),
 				     parent);
