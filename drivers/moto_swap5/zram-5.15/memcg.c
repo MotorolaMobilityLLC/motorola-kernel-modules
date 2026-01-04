@@ -89,7 +89,7 @@ static void mem_cgroup_alloc_hook(void *data, struct mem_cgroup *memcg)
     if (MEMCG_OEM_PTR(memcg))
         return;
 
-    oem = kmem_cache_zalloc(memcg_oem_cache, GFP_KERNEL);
+    oem = kmem_cache_zalloc(memcg_oem_cache, GFP_ATOMIC);
     if (!oem)
         return;
 
