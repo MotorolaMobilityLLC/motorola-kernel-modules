@@ -301,6 +301,74 @@ TRACE_EVENT(sched_wake_by_irq_kth,
                   __entry->prio,
                   __entry->comm)
 );
+
+TRACE_EVENT(sched_percpu_rwsem_hold_time,
+
+        TP_PROTO(struct task_struct *p, unsigned long hold_time),
+
+        TP_ARGS(p, hold_time),
+
+        TP_STRUCT__entry(
+                __field(pid_t, pid)
+                __field(pid_t, tgid)
+                __field(int,   prio)
+                __array(char,  comm,        TASK_COMM_LEN)
+                __field(unsigned long,   hold_time)
+        ),
+
+        TP_fast_assign(
+                __entry->pid  = p->pid;
+                __entry->tgid = p->tgid;
+                __entry->prio = p->prio;
+                __entry->hold_time = hold_time;
+
+                memcpy(__entry->comm,       p->comm,       TASK_COMM_LEN);
+        ),
+
+        TP_printk("pid=%d tgid=%d prio=%d comm=%s hold_time=%lu",
+                  __entry->pid,
+                  __entry->tgid,
+                  __entry->prio,
+                  __entry->comm,
+                  __entry->hold_time)
+);
+
+TRACE_EVENT(sched_percpu_rwsem_starttime,
+
+        TP_PROTO(struct task_struct *p, unsigned char depth, bool acquire, int ux_type, int mvp_prio),
+
+        TP_ARGS(p, depth, acquire, ux_type, mvp_prio),
+
+        TP_STRUCT__entry(
+                __field(pid_t, pid)
+                __field(int,   prio)
+                __array(char,  comm,        TASK_COMM_LEN)
+                __field(unsigned char,   depth)
+                __field(bool,   acquire)
+                __field(int,   ux_type)
+                __field(int,   mvp_prio)
+
+        ),
+
+        TP_fast_assign(
+                __entry->pid  = p->pid;
+                __entry->prio = p->prio;
+                memcpy(__entry->comm,       p->comm,       TASK_COMM_LEN);
+                __entry->depth = depth;
+                __entry->acquire = acquire;
+                __entry->ux_type = ux_type;
+                __entry->mvp_prio = mvp_prio;
+        ),
+
+        TP_printk("pid=%d prio=%d comm=%s depth=%d acquire=%d ux_type=%d mvp=%d",
+                  __entry->pid,
+                  __entry->prio,
+                  __entry->comm,
+                  __entry->depth,
+                  __entry->acquire,
+                  __entry->ux_type,
+                  __entry->mvp_prio)
+);
 #endif /* _TRACE_MSCHED_H */
 
 #undef TRACE_INCLUDE_PATH
