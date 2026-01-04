@@ -747,6 +747,21 @@ __maybe_unused static int sc8586_enable_charge(struct sc8586_chip *sc, bool en)
     return ret;
 }
 
+__maybe_unused static void init_cps2043_reg(struct sc8586_chip *sc)
+ {
+    sc8586_info("%s:in\n", __func__);
+
+    sc8586_i2c_write_byte(sc, 0x01, 0x50);
+    sc8586_i2c_write_byte(sc, 0x02, 0x80);
+    sc8586_i2c_write_byte(sc, 0x05, 0xa1);
+    sc8586_i2c_write_byte(sc, 0x06, 0x3c);
+    sc8586_i2c_write_byte(sc, 0x07, 0x20);
+    sc8586_i2c_write_byte(sc, 0x08, 0x04);
+    sc8586_i2c_write_byte(sc, 0x09, 0x04);
+    sc8586_i2c_write_byte(sc, 0x0c, 0x18);
+    sc8586_i2c_write_byte(sc, 0x0f, 0x00);
+ }
+
 __maybe_unused static int sc8586_init_device(struct sc8586_chip *sc)
 {
     int ret = 0;
@@ -792,8 +807,11 @@ __maybe_unused static int sc8586_init_device(struct sc8586_chip *sc)
     }
     msleep(10);
 
-    for (i = 0; i < ARRAY_SIZE(props); i++) {
-        ret = sc8586_field_write(sc, props[i].field_id, props[i].conv_data);
+    if (sc->device_id == CPS2043_DEVICE_ID) {
+        init_cps2043_reg(sc);
+    } else {
+        for (i = 0; i < ARRAY_SIZE(props); i++)
+            ret = sc8586_field_write(sc, props[i].field_id, props[i].conv_data);
     }
 
     if (sc->mode == SC8586_SLAVE) {
@@ -802,19 +820,6 @@ __maybe_unused static int sc8586_init_device(struct sc8586_chip *sc)
             sc8586_err("%s Failed to set vbus in range(%d)\n", __func__, ret);
         }
     }
-
-    if (sc->device_id == CPS2043_DEVICE_ID) {
-        sc8586_err("%s cps2043_manual_check_dis=1(%d)\n", __func__, ret);
-        sc8586_i2c_write_byte(sc, 0x01, 0x47);
-        sc8586_i2c_write_byte(sc, 0x03, 0x0d);
-        sc8586_i2c_write_byte(sc, 0x05, 0xc9);
-        sc8586_i2c_write_byte(sc, 0x06, 0x30);
-        sc8586_i2c_write_byte(sc, 0x07, 0x20);
-        sc8586_i2c_write_byte(sc, 0x08, 0x07);
-        sc8586_i2c_write_byte(sc, 0x09, 0x07);
-        sc8586_i2c_write_byte(sc, 0x0c, 0x10);
-        sc8586_i2c_write_byte(sc, 0x0f, 0x00);
-     }
 
     sc8586_enable_adc(sc, true);
     //sc8586_set_fc_func_enable(sc, true);
@@ -1508,16 +1513,16 @@ static irqreturn_t sc8586_irq_handler(int irq, void *data)
 
     if (sc->device_id == CPS2043_DEVICE_ID)
         cps2043_dump_check_cp_fault_status(sc);
-    else
+    else {
         sc8586_dump_check_cp_fault_status(sc);
-    //scp_block_enable = sc8586_get_scp_enable(sc);
-    if (scp_block_enable)
-        sc8586_dump_check_scp_fault_status(sc);
+        //scp_block_enable = sc8586_get_scp_enable(sc);
+        if (scp_block_enable)
+            sc8586_dump_check_scp_fault_status(sc);
 
-    dpdm_block_enable = sc8586_get_dpdm_enable(sc);
-    if (dpdm_block_enable)
-        sc8586_dump_check_dpdm_fault_status(sc);
-
+        dpdm_block_enable = sc8586_get_dpdm_enable(sc);
+        if (dpdm_block_enable)
+            sc8586_dump_check_dpdm_fault_status(sc);
+    }
     power_supply_changed(sc->psy);
 
     return IRQ_HANDLED;
