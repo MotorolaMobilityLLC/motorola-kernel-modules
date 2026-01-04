@@ -96,9 +96,6 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
              }
         }
 
-	if (is_enabled(UX_ENABLE_KERNEL) && (ux_type & UX_TYPE_KERNEL))
-		return true;
-
 	if (is_heavy_scene()) {
 		// audio client app
 		if (is_enabled(UX_ENABLE_AUDIO) && is_scene(UX_SCENE_AUDIO)
@@ -230,6 +227,8 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	// inherit lock & binder
 	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER|UX_TYPE_INHERIT_LOCK)))
 		prio = UX_PRIO_OTHER;
+	else if (is_enabled(UX_ENABLE_KERNEL) && (ux_type & UX_TYPE_KERNEL))
+		prio = UX_PRIO_OTHER;
 	// others high & others low but small tasks.
 	else if (task_in_ux_related_group(p) && (p->prio <= moto_boost_prio || moto_task_util(p) < moto_boost_task_util))
 		prio = UX_PRIO_OTHER;
@@ -354,75 +353,7 @@ void binder_ux_type_set(struct task_struct *task) {
 }
 EXPORT_SYMBOL(binder_ux_type_set);
 
-#ifdef CONFIG_MOTO_LOCKING_2
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
-static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long *nice)
-{
-	struct moto_task_struct *mts = get_moto_task_struct(p);
-	if (IS_ERR_OR_NULL(mts) || !nice || !p)
-		return;
-
-	if ((*nice < MIN_NICE || *nice > MAX_NICE) && !(*nice == 0xbeef || *nice == 0xbeee)) {
-		/* ADDED: Trace the disallowed request before returning */
-		trace_set_user_nice(p, *nice, false);
-		return;
-	}
-
-	if (!(*nice == 0xbeef || *nice == 0xbeee))
-		mts->nice_backup = *nice;
-
-	if (task_has_ux_type(p, UX_TYPE_INHERIT_LOCK) && (*nice != 0xbeee)) {
-		unsigned long rlimit = task_rlimit(p, RLIMIT_NICE);
-		if (rlimit != 0) {
-			*nice = rlimit_to_nice(rlimit);
-			if (unlikely(*nice > MAX_NICE || *nice < MIN_NICE)) {
-				pr_warn("%s: pid=%d RLIMIT_NICE=%ld is not set\n", "moto_sched", p->pid, *nice);
-				*nice = mts->nice_backup;
-			}
-		} else
-			*nice = mts->nice_backup;
-	} else
-		*nice = mts->nice_backup;
-
-	/* ADDED: Trace the final values before the function exits */
-	trace_set_user_nice(p, *nice, true);
-}
-#else
-static void android_rvh_set_user_nice(void *ignore, struct task_struct *p, long *nice, bool *allowed)
-{
-	struct moto_task_struct *mts = get_moto_task_struct(p);
-	if (IS_ERR_OR_NULL(mts) || !nice || !p || !allowed)
-		return;
-
-	if ((*nice < MIN_NICE || *nice > MAX_NICE) && !(*nice == 0xbeef || *nice == 0xbeee)) {
-		*allowed = false;
-		/* ADDED: Trace the disallowed request before returning */
-		trace_set_user_nice(p, *nice, *allowed);
-		return;
-	} else
-		*allowed = true;
-
-	if (!(*nice == 0xbeef || *nice == 0xbeee))
-		mts->nice_backup = *nice;
-
-	if (task_has_ux_type(p, UX_TYPE_INHERIT_LOCK) && (*nice != 0xbeee)) {
-		unsigned long rlimit = task_rlimit(p, RLIMIT_NICE);
-		if (rlimit != 0) {
-			*nice = rlimit_to_nice(rlimit);
-			if (unlikely(*nice > MAX_NICE || *nice < MIN_NICE)) {
-				pr_warn("%s: pid=%d RLIMIT_NICE=%ld is not set\n", "moto_sched", p->pid, *nice);
-				*nice = mts->nice_backup;
-			}
-		} else
-			*nice = mts->nice_backup;
-	} else
-		*nice = mts->nice_backup;
-
-	/* ADDED: Trace the final values before the function exits */
-	trace_set_user_nice(p, *nice, *allowed);
-}
-#endif
-#else
+#ifndef CONFIG_MOTO_LOCKING_2
 // don't dup ux_type for UX_TYPE_SERVICEMANAGER as init was labeled.
 #define UX_TYPE_TO_DUP (UX_TYPE_AUDIOSERVICE|UX_TYPE_NATIVESERVICE|UX_TYPE_CAMERASERVICE|UX_TYPE_ANIMATOR)
 static void android_vh_dup_task_struct(void *unused, struct task_struct *task, struct task_struct *orig)
@@ -439,9 +370,47 @@ static void android_vh_dup_task_struct(void *unused, struct task_struct *task, s
 }
 #endif
 
+bool resched_ux_type(struct task_struct *owner) {
+	struct rq *rq;
+	struct rq_flags rf;
+	bool queued = false;
+	bool running = false;
+
+	if (unlikely(!owner))
+		return false;
+
+	if (fair_policy(owner->policy)) {
+		get_task_struct(owner);
+
+		rq = task_rq_lock(owner, &rf);
+		update_rq_clock(rq);
+
+		queued = task_on_rq_queued(owner);
+		running = task_current(rq, owner);
+
+		if (queued)
+			deactivate_task(rq, owner, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
+		if (running)
+			put_prev_task(rq, owner);
+
+		if (queued)
+			activate_task(rq, owner, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK);
+		if (running)
+			set_next_task(rq, owner);
+
+		resched_curr(rq);
+
+		task_rq_unlock(rq, owner, &rf);
+		put_task_struct(owner);
+	}
+
+	return true;
+}
+
 bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name) {
 	struct rq *rq = NULL;
 	struct rq_flags flags;
+	bool ret = true;
 
 	if (!owner || !waiter) {
 		/* UPDATED: Replaced cond_trace_printk with the new generic trace event */
@@ -470,20 +439,17 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 	task_rq_unlock(rq, owner, &flags);
 
 #ifdef CONFIG_MOTO_LOCKING_2
-	if (fair_policy(owner->policy)) {
-		get_task_struct(owner);
-		set_user_nice(owner, 0xbeef); // trigger requeue even if task is already in queue
-		put_task_struct(owner);
-	}
+	ret = resched_ux_type(owner);
 #endif
 
-	return true;
+	return ret;
 }
 
 bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 	struct moto_task_struct *owner_mts;
 	struct rq *rq = NULL;
 	struct rq_flags flags;
+	bool ret = true;
 
 	if (!owner) {
 		return false;
@@ -509,18 +475,16 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 	task_rq_unlock(rq, owner, &flags);
 
 #ifdef CONFIG_MOTO_LOCKING_2
-	if (fair_policy(owner->policy)) {
-		get_task_struct(owner);
-		set_user_nice(owner, 0xbeee); // trigger requeue even if task is already in queue
-		put_task_struct(owner);
-	}
+	ret = resched_ux_type(owner);
 #endif
 
-	return true;
+	return ret;
 }
 
 void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settime_jiffies, char* lock_name, void *pointer) {
 	struct moto_task_struct *waiter_mts = get_moto_task_struct(tsk);
+	bool acquire = (bool)!!settime_jiffies;
+
 	if (unlikely(!locking_opt_enable()) || IS_ERR_OR_NULL(waiter_mts) || !tsk)
 		return;
 
@@ -552,23 +516,33 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 		}
 	}
 
-	if (settime_jiffies > 0) {
+	if (acquire) {
 		if (waiter_mts->boost_kernel_lock_depth == 0) {
 			task_add_ux_type(tsk, UX_TYPE_KERNEL);
 			waiter_mts->boost_kernel_start = jiffies_to_nsecs(jiffies);
+			resched_ux_type(tsk);
 		}
 		waiter_mts->boost_kernel_lock_depth++;
+		trace_sched_percpu_rwsem_starttime(tsk, waiter_mts->boost_kernel_lock_depth, acquire, task_get_ux_type(tsk), task_get_mvp_prio(tsk, true));
 	} else {
-		waiter_mts->boost_kernel_lock_depth--;
-		if (waiter_mts->boost_kernel_lock_depth < 0) {
+		if (waiter_mts->boost_kernel_lock_depth == 0) {
 			cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 					"(%s)kernel boost mismatch(%d)!!", lock_name, waiter_mts->boost_kernel_lock_depth);
-			waiter_mts->boost_kernel_lock_depth = 0;
-		}
-		if (waiter_mts->boost_kernel_lock_depth == 0) {
-			task_clr_ux_type(tsk, UX_TYPE_KERNEL);
+		} else {
+			waiter_mts->boost_kernel_lock_depth--;
+			if(trace_sched_percpu_rwsem_hold_time_enabled()) {
+				u64 lock_hold_time_ms = (jiffies_to_nsecs(jiffies) - waiter_mts->boost_kernel_start) / 1000000U;
+				trace_sched_percpu_rwsem_hold_time(tsk, lock_hold_time_ms);
+			}
+
+			if (waiter_mts->boost_kernel_lock_depth == 0) {
+				task_clr_ux_type(tsk, UX_TYPE_KERNEL);
+				trace_sched_percpu_rwsem_starttime(tsk, waiter_mts->boost_kernel_lock_depth, acquire, task_get_ux_type(tsk), task_get_mvp_prio(tsk, true));
+				resched_ux_type(tsk);
+			}
 		}
 	}
+
 }
 
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(5, 10, 0))
@@ -683,9 +657,7 @@ static void android_vh_percpu_rwsem_up_write_handler(
 
 void register_vendor_comm_hooks(void)
 {
-#ifdef CONFIG_MOTO_LOCKING_2
-	register_trace_android_rvh_set_user_nice(android_rvh_set_user_nice, NULL);
-#else
+#ifndef CONFIG_MOTO_LOCKING_2
 	register_trace_android_vh_dup_task_struct(android_vh_dup_task_struct, NULL);
 #endif
 
