@@ -64,10 +64,8 @@ static int zram_madvise_pmd_entry(pmd_t *pmd, unsigned long addr,
 		if (list) {
 			if (swp_swapcount(entry) > 1)
 				continue;
-			ZRAM_CTX("request_writeback, offset =%lu", ((unsigned long)swp_offset(entry)));
 			zram_request_writeback(zram, list, swp_offset(entry));
 		} else {
-			ZRAM_CTX("request_prefetch, offset =%lu", ((unsigned long)swp_offset(entry)));
 			zram_request_prefetch(zram, swp_offset(entry));
 		}
 	}
