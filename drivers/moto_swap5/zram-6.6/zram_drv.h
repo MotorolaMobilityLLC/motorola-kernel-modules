@@ -25,32 +25,6 @@
 #include <linux/interrupt.h>
 #include <linux/printk.h>
 
-#define ZRAM_CTX(fmt, ...)                                              \
-    do {                                                                \
-        pr_debug("[zram-ctx] " fmt                                      \
-                " | in_atomic=%d in_irq=%d in_softirq=%d "              \
-                " irqs_disabled=%d preempt=%x\n",                       \
-                ##__VA_ARGS__,                                          \
-                (int)in_atomic(), (int)in_irq(), (int)in_softirq(),                    \
-                (int)irqs_disabled(), preempt_count());                      \
-    } while (0)
-
-#define ZRAM_MIGHT_SLEEP()                                              \
-    do {                                                                \
-        ZRAM_CTX("might_sleep");                                        \
-        might_sleep();                                                  \
-    } while (0)
-
-#define ZRAM_MIGHT_SLEEP_IF(cond)                                       \
-    do {                                                                \
-        if (cond) {                                                     \
-            ZRAM_CTX("might_sleep_if(cond)");                           \
-            might_sleep();                                              \
-        }                                                               \
-    } while (0)
-
-#define ZRAM_WARN_IF_ATOMIC_WAIT()                                      \
-    WARN_ON_ONCE(in_atomic() || in_interrupt() || irqs_disabled())
 
 #define SECTORS_PER_PAGE_SHIFT	(PAGE_SHIFT - SECTOR_SHIFT)
 #define SECTORS_PER_PAGE	(1 << SECTORS_PER_PAGE_SHIFT)
