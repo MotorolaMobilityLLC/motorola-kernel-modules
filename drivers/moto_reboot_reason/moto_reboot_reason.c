@@ -62,6 +62,8 @@ static struct moto_poweroff_reason extra_reasons[] = {
 	{}
 };
 
+static char *reboot_white_list[] = { "init", "ufs_ffu_device", NULL};
+
 static int reboot_moto_call;
 
 static int moto_reboot_reason_panic(struct notifier_block *this,
@@ -88,6 +90,7 @@ EXPORT_SYMBOL(moto_reboot_call_notifier);
 static void check_reboot(void)
 {
 	int trigger_bug = 1;
+	int i = 0;
 
 	pr_warn("%s:(%s pid=%d uid=%d) reboot_moto_call [%d]",
 			__func__, current->comm, current->pid,
@@ -95,11 +98,17 @@ static void check_reboot(void)
 
 	pr_warn("sys_restart_mode: %s", sys_restart_mode);
 
-	if(reboot_moto_call)
+	if(reboot_moto_call) {
 		trigger_bug = 0;
-
-	if(!strncmp(current->comm, "init", 4))
-		trigger_bug = 0;
+	} else {
+		while (reboot_white_list[i] != NULL) {
+			if(!strncmp(current->comm, reboot_white_list[i], strlen(reboot_white_list[i]))) {
+				trigger_bug = 0;
+				break;
+			}
+			i++;
+		}
+	}
 
 	if(trigger_bug) {
 #ifdef CONFIG_MOTO_UNKNOWN_REBOOT_DEBUG
