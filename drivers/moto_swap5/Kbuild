@@ -44,6 +44,7 @@ endif
 ifeq ($(call is-greater-or-equal,6,12),1)
 EXTRA_CFLAGS += -DCONFIG_ZRAM_BACKEND_LZ4
 EXTRA_CFLAGS += -DCONFIG_ZRAM_BACKEND_LZO
+EXTRA_CFLAGS += -DCONFIG_ZRAM_BACKEND_ZSTD
 endif
 
 # add -Wall to try to catch everything we can.
@@ -74,6 +75,7 @@ endif
 ifeq ($(call is-greater-or-equal,6,12),1)
 moto_swap5-objs += $(ZRAM_SRC)/backend_lzorle.o $(ZRAM_SRC)/backend_lzo.o
 moto_swap5-objs += $(ZRAM_SRC)/backend_lz4.o
+moto_swap5-objs += $(ZRAM_SRC)/backend_zstd.o
 endif
 
 obj-m += moto_swap5.o
