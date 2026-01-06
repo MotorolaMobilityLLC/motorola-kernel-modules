@@ -1174,8 +1174,8 @@ void SetStateUnattached(Port_t *port)
 #ifdef AW_HAVE_LPD
 	port->Registers.MaskAdv.M_CC1_LPD = 0;
 	port->Registers.MaskAdv.M_CC2_LPD = 0;
-	port->Registers.MaskAdv.M_CC1_OV = 0;
-	port->Registers.MaskAdv.M_CC2_OV = 0;
+	port->Registers.MaskAdv.M_CC1_OV = 1;
+	port->Registers.MaskAdv.M_CC2_OV = 1;
 #endif /* AW_HAVE_LPD */
 	DeviceWrite(port, regMaska, 2, &port->Registers.MaskAdv.byte[0]);
 
