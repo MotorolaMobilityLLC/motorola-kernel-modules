@@ -4426,9 +4426,6 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
 
     chip->mc_support = of_property_read_bool(node, "wlc-mc-support");
     cps_wls_log(CPS_LOG_ERR,"wls-mc-support is %d \n", chip->mc_support);
-    /*For get phone case hall senser status*/
-    chip->phone_case_support = of_property_read_bool(node, "wlc-phone-case-support");
-    cps_wls_log(CPS_LOG_ERR,"wlc-phone-case-supportis %d \n", chip->phone_case_support);
 
     return 0;
 }
@@ -5454,6 +5451,7 @@ static void cps_init_charge_hardware()
 	}
 }
 
+#ifdef CONFIG_MOTO_PHONE_CASE_SUPPORT
 static int phone_case_detection_notifier_call(struct notifier_block *nb,
 					unsigned long event, void *data)
 {
@@ -5479,13 +5477,16 @@ static int phone_case_detection_notifier_call(struct notifier_block *nb,
 
 	return NOTIFY_OK;
 }
+#endif
 
 static int cps_wls_chrg_probe(struct i2c_client *client,
                 const struct i2c_device_id *id)
 {
      int ret=0;
     char *name = NULL;
-     int rc = 0;
+#ifdef CONFIG_MOTO_PHONE_CASE_SUPPORT
+	int rc = 0;
+#endif
     cps_wls_log(CPS_LOG_ERR, "[%s] ---->start\n", __func__);
     chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
     if (!chip) {
@@ -5634,23 +5635,22 @@ static int cps_wls_chrg_probe(struct i2c_client *client,
     //support magnatic cover
     INIT_DELAYED_WORK(&chip->mc_icl_work, wlc_chg_mc_icl_work);
 
-	if (chip->phone_case_support) {
-		rc = phone_case_detection_get_hall_state();
-		if (rc == PHONE_CASE_DETECTION_MOUNTED) {
-			chip->mc_status = true;
-		} else if (rc == PHONE_CASE_DETECTION_UNMOUNTED) {
-			chip->mc_status = false;
-		} else {
-			cps_wls_log(CPS_LOG_ERR, "%s hall not enabled rc=%d\n", __func__, rc);
-		}
-		if (chip->mc_support) {
-				cps_wls_set_mc_det("wlc init", !chip->mc_status);
-		}
-		chip->hall_nb.notifier_call = phone_case_detection_notifier_call;
-		rc = phone_case_detection_register_client(&chip->hall_nb);
-		cps_wls_log(CPS_LOG_DEBG, "%s phone_case_detection_register_client rc=%d\n", __func__, rc);
+#ifdef CONFIG_MOTO_PHONE_CASE_SUPPORT
+	rc = phone_case_detection_get_hall_state();
+	if (rc == PHONE_CASE_DETECTION_MOUNTED) {
+		chip->mc_status = true;
+	} else if (rc == PHONE_CASE_DETECTION_UNMOUNTED) {
+		chip->mc_status = false;
+	} else {
+		cps_wls_log(CPS_LOG_ERR, "%s hall not enabled rc=%d\n", __func__, rc);
 	}
-
+	if (chip->mc_support) {
+			cps_wls_set_mc_det("wlc init", !chip->mc_status);
+	}
+	chip->hall_nb.notifier_call = phone_case_detection_notifier_call;
+	rc = phone_case_detection_register_client(&chip->hall_nb);
+	cps_wls_log(CPS_LOG_DEBG, "%s phone_case_detection_register_client rc=%d\n", __func__, rc);
+#endif
     //Enable IC EPP mode as default
     cps_wls_mode_select("cps_wls_chrg_probe", true);
 
