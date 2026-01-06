@@ -62,6 +62,7 @@ endif
 
 ifneq ($(filter m y, $(CONFIG_OMN_LOG_CAPTURE)),)
         EXTRA_CFLAGS += -DCONFIG_OVT_LOG_CAPTURE
+		omnivision_tcm_0flash_mmi-objs += ts_log_capture.o
 endif
 
 ifneq ($(filter m y,$(CONFIG_OVT_PANEL_GESTURE_NOTIFY_SUPPORT)),)

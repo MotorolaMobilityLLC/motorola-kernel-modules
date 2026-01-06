@@ -75,6 +75,10 @@ extern struct ovt_tcm_hcd *g_tcm_hcd;
 
 #ifdef CONFIG_OVT_LOG_CAPTURE
 int ovt_tp_data_dump_capture(struct device *dev);
+extern void ts_clear_kfifo(void);
+extern void ts_put_fifo_with_discard(char *log_buf, int len);
+extern int ts_log_capture_register_misc(void);
+extern int ts_log_capture_unregister_misc(void);
 #endif
 
 #ifdef OVT_GLOVE_MODE_CTRL

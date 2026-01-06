@@ -1477,6 +1477,13 @@ int touch_init(struct ovt_tcm_hcd *tcm_hcd)
     }
 #endif
 
+#ifdef CONFIG_OVT_LOG_CAPTURE
+	retval= ts_log_capture_register_misc();
+	if(retval<0) {
+		OVT_ERROR("ts_log_capture_register_misc failed\n");
+	}
+#endif
+
     OVT_INFO("end");
     return 0;
 

@@ -83,6 +83,9 @@
 #define OVT_CHIP_NAME_PRIMARY "primary"
 
 struct ovt_tcm_hcd *g_tcm_hcd;
+#ifdef CONFIG_OVT_LOG_CAPTURE
+struct device *ts_class_dev;
+#endif
 #if SPEED_UP_RESUME
 static void speedup_resume(struct work_struct *work);
 #endif
@@ -691,13 +694,13 @@ static ssize_t pocket_mode_show(struct device *dev,
 #endif
 
 #ifdef CONFIG_OVT_LOG_CAPTURE
-static ssize_t ovt_dbg_data_show(struct device *dev,
+static ssize_t log_trigger_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
-	return scnprintf(buf, PAGE_SIZE, "%d\n", 0);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", 1);
 }
 
-static ssize_t ovt_dbg_data_store(struct device *dev,
+static ssize_t log_trigger_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int ret = 0;
@@ -734,7 +737,7 @@ static struct device_attribute touchscreen_attributes[] = {
 	__ATTR_RW(pocket_mode),
 #endif
 #ifdef CONFIG_OVT_LOG_CAPTURE
-	__ATTR(log_trigger, S_IRUGO | S_IWUSR | S_IWGRP, ovt_dbg_data_show, ovt_dbg_data_store),
+	__ATTR(log_trigger, S_IRUGO | S_IWUSR | S_IWGRP, log_trigger_show, log_trigger_store),
 #endif
 	__ATTR_RW(log_level),
 	__ATTR_NULL
@@ -747,7 +750,7 @@ static int ovt_sysfs_touchscreen_class(bool create)
 	struct device_attribute *attrs = touchscreen_attributes;
 	int i, error = 0;
 	static struct class *touchscreen_class;
-	static struct device *ts_class_dev;
+	//static struct device *ts_class_dev;
 	dev_t devno;
 
 	if(!tcm_hcd) {
@@ -5699,6 +5702,10 @@ static int ovt_tcm_remove(struct platform_device *pdev)
 #ifdef CONFIG_OVT_CHARGER_DETECT
 	if (tcm_hcd->notifier_charger.notifier_call)
 		power_supply_unreg_notifier(&tcm_hcd->notifier_charger);
+#endif
+
+#ifdef CONFIG_OVT_LOG_CAPTURE
+	ts_log_capture_unregister_misc();
 #endif
 
 #ifdef WATCHDOG_SW
