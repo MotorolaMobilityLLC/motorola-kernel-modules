@@ -45,6 +45,7 @@
 #include <linux/vmalloc.h>
 #ifdef CONFIG_OVT_LOG_CAPTURE
 #include <linux/sysfs.h>
+#include <linux/kobject.h>
 #endif
 
 #include "omnivision_tcm_core.h"
@@ -206,6 +207,10 @@ struct testing_hcd {
 
 };
 
+#ifdef CONFIG_OVT_LOG_CAPTURE
+extern struct device *ts_class_dev;
+#endif
+
 DECLARE_COMPLETION(report_complete);
 
 DECLARE_COMPLETION(testing_remove_complete);
@@ -341,8 +346,7 @@ int ovt_tp_rawdata_capture(struct device *dev)
 	unsigned char *report_data_buf;
 	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
 	struct ovt_tcm_app_info *app_info;
-	char line_buf[1024];
-
+	char line_buf[4*1024]={0};
 	mutex_lock(&tcm_hcd->extif_mutex);
 
 	OVT_INFO("capture rawdata start\n");
@@ -358,15 +362,24 @@ int ovt_tp_rawdata_capture(struct device *dev)
 	cols = le2_to_uint(app_info->num_of_image_cols);
 	report_data_buf = testing_hcd->report.buf;
 	data_value = 0;
+
 	for (i = 0; i < rows; i++) {
-		count = 0;
+		if (count >= sizeof(line_buf) - 1) {
+			OVT_INFO("line_buf overflow! total count: %d, buf size: %zu\n", count, sizeof(line_buf));
+			break;
+		}
 		count += scnprintf(line_buf + count, sizeof(line_buf) - count, ROW_NUM_FORMAT_STR, i);
 		for (j = 0; j < cols; j++) {
 			data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
 			count += scnprintf(line_buf + count, sizeof(line_buf) - count, DATA_FORMAT_STR, data_value);
 		}
-		OVT_INFO("%s\n", line_buf);
+		if (count < sizeof(line_buf) - 1) {
+        	count += scnprintf(line_buf + count, sizeof(line_buf) - count, "\n");
+    	}
 	}
+	ts_put_fifo_with_discard(line_buf, count);
+
+	sysfs_notify(&ts_class_dev->kobj, NULL, "log_trigger");
 
 	mutex_unlock(&tcm_hcd->extif_mutex);
 
@@ -382,7 +395,7 @@ int ovt_tp_diffdata_capture(struct device *dev)
 	unsigned char *report_data_buf;
 	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
 	struct ovt_tcm_app_info *app_info;
-	char line_buf[1024];
+	char line_buf[4*1024]={0};
 
 	mutex_lock(&tcm_hcd->extif_mutex);
 
@@ -399,15 +412,23 @@ int ovt_tp_diffdata_capture(struct device *dev)
 	cols = le2_to_uint(app_info->num_of_image_cols);
 	report_data_buf = testing_hcd->report.buf;
 	data_value = 0;
+
 	for (i = 0; i < rows; i++) {
-		count = 0;
+		if (count >= sizeof(line_buf) - 1) {
+			OVT_INFO("line_buf overflow! total count: %d, buf size: %zu\n", count, sizeof(line_buf));
+			break;
+		}
 		count += scnprintf(line_buf + count, sizeof(line_buf) - count, ROW_NUM_FORMAT_STR, i);
 		for (j = 0; j < cols; j++) {
 			data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
 			count += scnprintf(line_buf + count, sizeof(line_buf) - count, DATA_FORMAT_STR, data_value);
 		}
-		OVT_INFO("%s\n", line_buf);
+		if (count < sizeof(line_buf) - 1) {
+			count += scnprintf(line_buf + count, sizeof(line_buf) - count, "\n");
+		}
 	}
+
+	ts_put_fifo_with_discard(line_buf, count);
 
 	mutex_unlock(&tcm_hcd->extif_mutex);
 
@@ -417,7 +438,7 @@ int ovt_tp_diffdata_capture(struct device *dev)
 int ovt_tp_data_dump_capture(struct device *dev)
 {
 	int ret = 0;
-
+	ts_clear_kfifo();
 	ret = ovt_tp_diffdata_capture(dev);
 
 	ret = ovt_tp_rawdata_capture(dev);
