@@ -10,8 +10,6 @@
 
 #include "locking_main.h"
 
-bool locking_enabled = false;
-
 int locking_opt_init(void)
 {
 	int ret = 0;
@@ -27,8 +25,6 @@ int locking_opt_init(void)
 #ifdef CONFIG_MOTO_FUTEX_INHERIT
 	register_futex_vendor_hooks();
 #endif
-
-	locking_enabled = true;
 
 	return ret;
 }
