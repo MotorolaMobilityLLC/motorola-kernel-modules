@@ -10,7 +10,7 @@
 
 #include "locking_main.h"
 
-bool locking_inited = false;
+bool locking_enabled = false;
 
 int locking_opt_init(void)
 {
@@ -28,7 +28,7 @@ int locking_opt_init(void)
 	register_futex_vendor_hooks();
 #endif
 
-	locking_inited = true;
+	locking_enabled = true;
 
 	return ret;
 }
