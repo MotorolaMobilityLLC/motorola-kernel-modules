@@ -1042,24 +1042,7 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
                 dev_err(sc->dev, "%s:mmi_mux open typec mos fail ret=%d", __func__, ret);
                 return ret;
             }
-        } else if (typec_mos == MMI_DVCHG_MUX_OTG_OPEN) {
-	        //reverse mode
-            sc8586_field_write(sc, F_MODE, 7);
-    	    sc-> otg_delay_mos_config = true;
-            ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 1);
-            if (ret < 0) {
-                dev_err(sc->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
-                return ret;
-            }
-            udelay(100);
-
-            ret = sc8586_field_write(sc, F_OVPGATE_EN, 1);
-            if (ret < 0) {
-              dev_err(sc->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
-              return ret;
-            }
         }
-
         if (wls_mos == MMI_DVCHG_MUX_MANUAL_OPEN) {
             ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 1);
             if (ret < 0) {
@@ -1136,6 +1119,23 @@ static int sc858x_config_mux(struct sc8586_chip *sc,
 	    }
     }
 #endif
+    if (typec_mos == MMI_DVCHG_MUX_OTG_OPEN) {
+        //reverse mode
+        sc8586_field_write(sc, F_MODE, 7);
+        sc-> otg_delay_mos_config = true;
+        ret = sc8586_field_write(sc, F_ACDRV_MANUAL_EN, 1);
+        if (ret < 0) {
+            dev_err(sc->dev, "%s:mmi_mux set acdrv manual fail ret=%d", __func__, ret);
+            return ret;
+        }
+        udelay(100);
+
+        ret = sc8586_field_write(sc, F_OVPGATE_EN, 1);
+        if (ret < 0) {
+            dev_err(sc->dev, "%s:mmi_mux enable otg typec mos fail ret=%d", __func__, ret);
+            return ret;
+        }
+    }
         ret = sc8586_i2c_read_bytes(sc, SC8586_REG0F, 1, &val);
        if (!ret)
                dev_err(sc->dev, "%s:mmi_mux Reg SC8565_CHRGR_CTRL_5 reg_0xF] = 0x%02X\n", __func__,val);
