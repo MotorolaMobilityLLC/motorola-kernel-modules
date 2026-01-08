@@ -121,7 +121,7 @@ static void glink_usb_notify_uevent(struct usb_glink_dev *chip, int event)
 	if (event == NOTIFY_EVENT_USB_LPD_STATUS) {
 		scnprintf(uevent_buf, CHG_SHOW_MAX_SIZE,
 				"POWER_SUPPLY_LPD_PRESENT=%s",
-				chip->usb_info.lpd_st? "true" : "false");
+				chip->usb_info.lpd_st > 0 ? "true" : "false");
 	} else if (event == NOTIFY_EVENT_USB_LPD_FLAG) {
 		scnprintf(uevent_buf, CHG_SHOW_MAX_SIZE,
 				"POWER_SUPPLY_LPD_STATUS=%d",
@@ -608,9 +608,12 @@ static int glink_mmi_notify(struct notifier_block *nb, unsigned long event, void
 	if (event == DEV_USB) {
 		mmi_info(chip->mmi_chip, "usb info update after boot_complete: %d\n",
 			chip->usb_info.lpd_st);
+		/* No need to notify if the lpd_st is still the default value (-1). */
+		if (chip->usb_info.lpd_st != -1) {
 		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_CID_STATUS);
 		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_LPD_STATUS);
 		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_LPD_FLAG);
+		}
 	}
 	return NOTIFY_DONE;
 }
