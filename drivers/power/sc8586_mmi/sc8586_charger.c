@@ -752,6 +752,7 @@ __maybe_unused static void init_cps2043_reg(struct sc8586_chip *sc)
     sc8586_info("%s:in\n", __func__);
 
     sc8586_i2c_write_byte(sc, 0x01, 0x50);
+    sc8586_i2c_write_byte(sc, 0x03, 0x0b);
     sc8586_i2c_write_byte(sc, 0x02, 0x80);
     sc8586_i2c_write_byte(sc, 0x05, 0xa1);
     sc8586_i2c_write_byte(sc, 0x06, 0x3c);
