@@ -207,7 +207,7 @@ static int fm_ctrl_probe(struct platform_device *pdev)
 }
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 static void fm_ctrl_remove(struct platform_device *pdev)
-#elif
+#else
 static int fm_ctrl_remove(struct platform_device *pdev)
 #endif
 {
