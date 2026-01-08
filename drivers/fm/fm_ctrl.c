@@ -25,6 +25,7 @@
 #include <linux/platform_device.h>
 #include <linux/of.h>
 #include <linux/pinctrl/consumer.h>
+#include <linux/version.h>
 
 
 #define DRIVER_VERSION "0.0.1"
@@ -204,11 +205,17 @@ static int fm_ctrl_probe(struct platform_device *pdev)
 
 	return ret;
 }
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+static void fm_ctrl_remove(struct platform_device *pdev)
+#elif
 static int fm_ctrl_remove(struct platform_device *pdev)
+#endif
 {
 	device_init_wakeup(&pdev->dev, 0);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0)
 	return 0;
+#endif
 }
 
 
