@@ -663,6 +663,7 @@ err_parse_dt:
 
 }
 
+#ifdef KERNEL_OVER_6_1
 static void foursemi_i2c_remove(struct i2c_client *i2c)
 {
 	struct foursemi *foursemi = i2c_get_clientdata(i2c);
@@ -704,6 +705,49 @@ static void foursemi_i2c_remove(struct i2c_client *i2c)
 	pr_info("exit\n");
 	return;
 }
+#else
+static int foursemi_i2c_remove(struct i2c_client *i2c)
+{
+	struct foursemi *foursemi = i2c_get_clientdata(i2c);
+
+	pr_info("enter \n");
+
+	if (foursemi->name == FS3001_A1 || foursemi->name == FS3001_A2 || foursemi->name == FS3001_A3)
+	{
+		pr_info("remove fs3001\n");
+		cancel_delayed_work_sync(&foursemi->fs3001->ram_work);
+		cancel_work_sync(&foursemi->fs3001->haptic_audio.work);
+		hrtimer_cancel(&foursemi->fs3001->haptic_audio.timer);
+		if (foursemi->fs3001->isUsedIntn)
+			cancel_work_sync(&foursemi->fs3001->rtp_work);
+		cancel_work_sync(&foursemi->fs3001->long_vibrate_work);
+#ifdef FS_HAPSTREAM
+		proc_remove(foursemi->fs3001->fs_config_proc);
+		free_pages((unsigned long)foursemi->fs3001->start_buf, HAPSTREAM_MMAP_PAGE_ORDER);
+		foursemi->fs3001->start_buf = NULL;
+#endif
+		hrtimer_cancel(&foursemi->fs3001->timer);
+		mutex_destroy(&foursemi->fs3001->lock);
+		mutex_destroy(&foursemi->fs3001->rtp_lock);
+		mutex_destroy(&foursemi->fs3001->haptic_audio.lock);
+		sysfs_remove_group(&foursemi->fs3001->i2c->dev.kobj,&fs3001_vibrator_attribute_group);
+		devm_free_irq(&i2c->dev, gpio_to_irq(foursemi->fs3001->irq_gpio),foursemi->fs3001);
+#ifdef TIMED_OUTPUT
+		timed_output_dev_unregister(&foursemi->fs3001->vib_dev);
+#endif
+		devm_kfree(&i2c->dev, foursemi->fs3001);
+		foursemi->fs3001 = NULL;
+	}
+	else
+	{
+		pr_err("%s:no chip\n",FSERROR);
+		return 0;
+	}
+
+	pr_info("exit\n");
+	return 0;
+}
+#endif
 
 static const struct i2c_device_id foursemi_i2c_id[] = 
 {

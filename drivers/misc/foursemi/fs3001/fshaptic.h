@@ -57,6 +57,11 @@
 #define FS_READ_BIN_FLEXBALLY
 #define FS_OSC_COARSE_CALI
 
+
+#if KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
+#define KERNEL_OVER_6_1
+#endif
+
 //enum
 enum foursemi_chip_name
 {
