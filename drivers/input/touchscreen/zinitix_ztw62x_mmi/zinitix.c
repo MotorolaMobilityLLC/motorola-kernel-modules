@@ -41,6 +41,9 @@
 #include <linux/power_supply.h>
 
 #include <linux/kernel.h>
+#include <linux/sysfs.h>
+#include <linux/device.h>
+#include <linux/mutex.h>
 #include <linux/hrtimer.h>
 #include <linux/proc_fs.h>
 #include <linux/string.h>
@@ -173,6 +176,13 @@ struct reg_ioctl {
 #define BT541_RECALL_FACTORY_CMD	0x000f
 
 #define BT541_THRESHOLD			0x0020
+
+/* Additional threshold registers (contiguous addresses) */
+#define ZINITIX_THRESHOLD_0             0x0020
+#define ZINITIX_THRESHOLD_1             0x0021
+#define ZINITIX_THRESHOLD_2             0x0022
+#define ZINITIX_THRESHOLD_3             0x0023
+#define ZINITIX_THRESHOLD_4             0x0024
 
 #define BT541_DEBUG_REG			0x0115 /* 0~7 */
 
@@ -483,6 +493,7 @@ retry:
 	/* for setup tx transaction. */
 	udelay(DELAY_FOR_TRANSCATION);
 	ret = i2c_master_recv(client , values , length);
+
 	if (ret < 0)
 		return ret;
 
@@ -513,6 +524,20 @@ static inline s32 write_data(struct i2c_client *client,
 
 	udelay(DELAY_FOR_POST_TRANSCATION);
 	return length;
+}
+
+static int zinitix_get_u16_reg(struct bt541_ts_info *bt541, u16 vreg)
+{
+	struct i2c_client *client = bt541->client;
+	int error;
+	__le16 val;
+
+	error = read_data(client, vreg, (void *)&val, 2);
+
+	if (error < 0)
+		return error;
+
+	return le16_to_cpu(val);
 }
 
 static inline s32 write_reg(struct i2c_client *client, u16 reg, u16 value)
@@ -4930,6 +4955,107 @@ static ssize_t short_data_show(struct device *dev,
 	return snprintf(buf, ZINITIX_MAX_PRBUF_SIZE, "%s", csv_buffer);
 }
 
+/* --------------------------- Sysfs: threshold ------------------------------
++ * Single multiplexed attribute to read/write threshold registers 0x0020..0x0024.
++ *
++ * Usage:
++ *   # Read 0x0023
++ *   echo 0x0023 > $devnode/threshold
++ *   cat  $devnode/threshold               # prints decimal value
++ *
++ *   # Write 0x0023 = 0x00F0
++ *   echo "0x0023=0x00F0" | sudo tee $devnode/threshold
++ *   # or :
++ *   echo "0x0023 64"   | sudo tee $devnode/threshold
++ * -------------------------------------------------------------------------- */
+
+
+static inline bool zinitix_threshold_reg_valid(u16 reg)
+{
+    return reg >= ZINITIX_THRESHOLD_0 && reg <= ZINITIX_THRESHOLD_4;
+}
+
+static ssize_t threshold_show(struct device *dev,
+                              struct device_attribute *attr, char *buf)
+{
+    struct bt541_ts_info *bt541 = dev_get_drvdata(dev);
+    struct i2c_client *client = bt541->client;
+    u16 reg;
+    int val;
+
+    mutex_lock(&bt541->sysfs_lock);
+    reg = bt541->threshold_sel_reg ? bt541->threshold_sel_reg : ZINITIX_THRESHOLD_0;
+    mutex_unlock(&bt541->sysfs_lock);
+
+    if (!zinitix_threshold_reg_valid(reg))
+        return -EINVAL;
+
+    /* Read the 16-bit register value */
+    val = zinitix_get_u16_reg(bt541, reg);
+    dev_info(&client->dev,"ZINITIX THRESHOLD READ SUCCESS val=%d, reg=%d\n", val, reg);
+    if (val < 0)
+        return -EIO;
+    return sysfs_emit(buf, "%u\n", val); /* decimal ASCII as per sysfs docs */
+}
+
+static ssize_t threshold_store(struct device *dev,
+                               struct device_attribute *attr,
+                               const char *buf, size_t count)
+{
+    struct bt541_ts_info *bt541 = dev_get_drvdata(dev);
+    struct i2c_client *client = bt541->client;
+    unsigned int addr, value;
+    int parsed = 0, err;
+    char tmp[64];
+    size_t n;
+    char *eq;
+
+    /* Trim trailing newline if present */
+    n = min(count, sizeof(tmp) - 1);
+    memcpy(tmp, buf, n);
+    tmp[n] = ' ';
+
+    /* Try "addr=value" form first */
+    eq = strchr(tmp, '=');
+    if (eq) {
+        *eq = ' ';
+        err = kstrtouint(tmp, 0, &addr);
+        if (err)
+            return err;
+        err = kstrtouint(eq + 1, 0, &value);
+        if (err)
+            return err;
+        parsed = 2;
+    } else {
+        /* Try "addr value" or single "addr" (select only) */
+        if (sscanf(tmp, "%x %x", &addr, &value) == 2 ||
+            sscanf(tmp, "%u %u", &addr, &value) == 2)
+            parsed = 2;
+        else if (sscanf(tmp, "%x", &addr) == 1 ||
+                 sscanf(tmp, "%u", &addr) == 1)
+            parsed = 1;
+    }
+
+    if (!parsed)
+        return -EINVAL;
+    if (!zinitix_threshold_reg_valid((u16)addr))
+        return -EINVAL;
+
+    mutex_lock(&bt541->sysfs_lock);
+    bt541->threshold_sel_reg = (u16)addr;   /* select for subsequent read */
+    mutex_unlock(&bt541->sysfs_lock);
+
+    if (parsed == 2) {
+        if (value > 0xFFFF)
+            return -ERANGE;
+        err = write_reg(bt541->client, (u16)addr, (u16)value);
+        dev_info(&client->dev,"ZINITIX THRESHOLD WRITE SUCCESS  val=%d, reg=%d\n", value, addr);
+        if (err)
+            return err;
+    }
+    return count;
+}
+
 static DEVICE_ATTR(cmd, S_IWUSR | S_IWGRP, NULL, store_cmd);
 static DEVICE_ATTR(cmd_status, S_IRUGO, show_cmd_status, NULL);
 static DEVICE_ATTR(cmd_result, S_IRUSR | S_IRGRP, show_cmd_result, NULL);
@@ -4937,6 +5063,7 @@ static DEVICE_ATTR(easy_wakeup_gesture, 0664, show_easy_wakeup_gesture, store_ea
 static DEVICE_ATTR(bigobject_off, 0664, show_bigobject_off, store_bigobject_off);
 static DEVICE_ATTR(raw_data, S_IRUSR | S_IRGRP, raw_data_show, NULL);
 static DEVICE_ATTR(short_data, S_IRUSR | S_IRGRP, short_data_show, NULL);
+static DEVICE_ATTR(threshold, 0664, threshold_show, threshold_store);
 
 static struct attribute *touchscreen_attributes[] = {
 	&dev_attr_cmd.attr,
@@ -4946,6 +5073,7 @@ static struct attribute *touchscreen_attributes[] = {
 	&dev_attr_bigobject_off.attr,
 	&dev_attr_raw_data.attr,
 	&dev_attr_short_data.attr,
+	&dev_attr_threshold.attr,
 	NULL,
 };
 
@@ -5210,6 +5338,7 @@ static int init_sec_factory(struct bt541_ts_info *info)
 #endif
 
 	mutex_init(&factory_info->cmd_lock);
+	mutex_init(&info->sysfs_lock);
 	factory_info->cmd_is_running = false;
 
 	info->factory_info = factory_info;

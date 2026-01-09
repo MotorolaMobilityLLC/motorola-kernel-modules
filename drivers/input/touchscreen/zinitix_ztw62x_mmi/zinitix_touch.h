@@ -331,6 +331,9 @@ struct bt541_ts_info {
 	atomic_t get_stowed_state;
 	int ic_power_state;
 	struct mutex mode_lock;
+        /* sysfs threshold multiplexer state */
+        u16 threshold_sel_reg;    /* selected register for reads */
+        struct mutex sysfs_lock;  /* serialize sysfs operations */
 };
 
 extern int zinitix_hw_reset( struct bt541_ts_info* data,bool on );
