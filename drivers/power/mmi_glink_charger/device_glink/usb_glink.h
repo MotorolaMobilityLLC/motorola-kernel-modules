@@ -17,6 +17,16 @@ enum {
 	NOTIFY_EVENT_USB_LPD_STATUS,
 	NOTIFY_EVENT_USB_CID_STATUS,
 	NOTIFY_EVENT_USB_VBUS_STATUS,
+	NOTIFY_EVENT_USB_OTG_STATUS,
+};
+
+enum typec_reset_type
+{
+    TYPEC_RESET_ROLE_DEFAULT = 0,
+    TYPEC_RESET_ROLE_TRY_SNK = 1,
+    TYPEC_RESET_ROLE_TRY_SRC = 2,
+    TYPEC_RESET_ROLE_SNK_ONLY = 3,
+    TYPEC_RESET_ROLE_SRC_ONLY = 4,
 };
 
 enum {
@@ -92,6 +102,9 @@ struct usb_glink_dev {
 
 	bool init_done;
 	bool init_lpd_done;
+
+	u32 otg_boost_limit_vph_mv;
+	u32 otg_boost_recover_vph_mv;
 };
 
 struct glink_device *usb_glink_device_register(struct mmi_glink_chip *chip, struct mmi_glink_dev_dts_info *dev_dts);

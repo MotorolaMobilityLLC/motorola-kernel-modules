@@ -125,6 +125,10 @@ static void glink_usb_notify_uevent(struct usb_glink_dev *chip, int event)
 		scnprintf(uevent_buf, CHG_SHOW_MAX_SIZE,
 				"POWER_SUPPLY_CID_STATUS=%d",
 				chip->usb_info.cid_st);
+	} else if (event == NOTIFY_EVENT_USB_OTG_STATUS) {
+		scnprintf(uevent_buf, CHG_SHOW_MAX_SIZE,
+				"POWER_SUPPLY_OTG_STATUS=%d",
+				chip->usb_info.otg_st);
 	} else {
 		mmi_err(chip->mmi_chip, "Invalid usb notify event: %d\n", event);
 		return;
@@ -156,6 +160,10 @@ static bool glink_usb_check_usb_info(struct usb_glink_dev *chip, struct usb_info
 static void glink_usb_work(struct work_struct *work)
 {
 	int rc;
+	u32 vph_mv = 0;
+	unsigned int reset_type = 0;
+	struct mmi_pmic_info pmic_info;
+	static bool otg_boost_limited = false;
 	struct usb_info usb_info = {0};
 	static bool lpd_ulog_triggered = false;
 	static bool otg_ulog_triggered = false;
@@ -285,8 +293,51 @@ static void glink_usb_work(struct work_struct *work)
 		mmi_info(chip->mmi_chip, "OTG status transit: %d -> %d\n",
 				chip->usb_info.otg_st, !!usb_info.otg_st);
 		chip->usb_info.otg_st = usb_info.otg_st;
+		glink_usb_notify_uevent(chip, NOTIFY_EVENT_USB_OTG_STATUS);
 	}
 	chip->usb_info = usb_info;
+
+	if (chip->otg_boost_limit_vph_mv <= 0 ||
+	    chip->otg_boost_recover_vph_mv <= 0) {
+		return;
+	}
+
+	rc = qti_charger_get_property(OEM_PROP_PMIC_INFO,
+				&pmic_info,
+				sizeof(struct mmi_pmic_info));
+	if (rc) {
+		mmi_warn(chip->mmi_chip, "failed to read pmic info\n");
+		pmic_info = chip->mmi_chip->pmic_info;
+	}
+	vph_mv = pmic_info.pmic_vph_uv / 1000;
+	if (usb_info.otg_st && vph_mv <= chip->otg_boost_limit_vph_mv) {
+		reset_type = TYPEC_RESET_ROLE_SNK_ONLY;
+		rc = qti_charger_set_property(OEM_PROP_TYPEC_RESET,
+				&reset_type,
+				sizeof(reset_type));
+		if (!rc) {
+			otg_boost_limited = true;
+			mmi_warn(chip->mmi_chip,
+				"OTG boost limited for low vph: %dmV\n", vph_mv);
+		}
+	} else if (otg_boost_limited && usb_info.cid_st == 0) {
+		otg_boost_limited = false;
+		mmi_warn(chip->mmi_chip, "OTG boost recovered for otg cable removal\n");
+	} else if (otg_boost_limited && vph_mv > chip->otg_boost_recover_vph_mv) {
+		otg_boost_limited = false;
+		reset_type = TYPEC_RESET_ROLE_TRY_SNK;
+		rc = qti_charger_set_property(OEM_PROP_TYPEC_RESET,
+				&reset_type,
+				sizeof(reset_type));
+		if (!rc) {
+			mmi_warn(chip->mmi_chip,
+				"OTG boost recovered for normal vph: %dmV\n", vph_mv);
+		}
+	}
+
+	if (otg_boost_limited || usb_info.otg_st) {
+		schedule_delayed_work(&chip->usb_work, msecs_to_jiffies(5000));
+	}
 }
 
 static int usb_therm_get_max_state(struct thermal_cooling_device *cdev,
@@ -417,7 +468,8 @@ static int glink_usb_therm_init(struct usb_glink_dev *chip)
 static int glink_usb_lpd_init(struct usb_glink_dev *chip)
 {
 	int rc;
-	struct device_node *node, *child;
+	struct device_node *node = NULL;
+	struct device_node *child = NULL;
 	const char *temp_string;
 
 	if (!chip || !chip->mmi_chip) {
@@ -432,24 +484,45 @@ static int glink_usb_lpd_init(struct usb_glink_dev *chip)
 			mmi_err(chip->mmi_chip, "Failed to read psy-name\n");
 			return rc;
 		}
-		if (!strcmp(temp_string, "usb_info")) {
-			rc = of_property_read_u32(child,
-					"lpd-mitigate-mode",
-					&chip->lpd_mitigate_mode);
-			if (rc || chip->lpd_mitigate_mode != LPD_MITIGATE_DISABLE)
-				chip->lpd_mitigate_mode = LPD_MITIGATE_SNK;
-
-			rc = qti_charger_set_property(OEM_PROP_LPD_MITIGATE_MODE,
-					&chip->lpd_mitigate_mode,
-					sizeof(chip->lpd_mitigate_mode));
-			if (rc) {
-				mmi_err(chip->mmi_chip, "Set lpd mitigate mode failed, rc=%d", rc);
-				return rc;
-			}
-			mmi_info(chip->mmi_chip, "Init lpd mitigate mode done");
+		if (!strcmp(temp_string, "usb_info"))
 			break;
-		}
 	}
+	if (!child) {
+		mmi_err(chip->mmi_chip, "Failed to find usb info node\n");
+		return -ENODEV;
+	}
+
+	rc = of_property_read_u32(child,
+				"otg-boost-limit-vph-mv",
+				&chip->otg_boost_limit_vph_mv);
+	rc += of_property_read_u32(child,
+				"otg-boost-recover-vph-mv",
+				&chip->otg_boost_recover_vph_mv);
+	if (rc || chip->otg_boost_limit_vph_mv >= chip->otg_boost_recover_vph_mv) {
+		chip->otg_boost_limit_vph_mv = 0;
+		chip->otg_boost_recover_vph_mv = 0;
+		mmi_warn(chip->mmi_chip, "Invalid otg boost limit vph threshold\n");
+	} else {
+		mmi_info(chip->mmi_chip, "otg boost limit vph threshold: %d-%dmV",
+			chip->otg_boost_limit_vph_mv, chip->otg_boost_recover_vph_mv);
+	}
+
+	rc = of_property_read_u32(child,
+				"lpd-mitigate-mode",
+				&chip->lpd_mitigate_mode);
+	if (rc || chip->lpd_mitigate_mode != LPD_MITIGATE_DISABLE)
+		chip->lpd_mitigate_mode = LPD_MITIGATE_SNK;
+
+	of_node_put(child);
+
+	rc = qti_charger_set_property(OEM_PROP_LPD_MITIGATE_MODE,
+				&chip->lpd_mitigate_mode,
+				sizeof(chip->lpd_mitigate_mode));
+	if (rc) {
+		mmi_err(chip->mmi_chip, "Set lpd mitigate mode failed, rc=%d", rc);
+		return rc;
+	}
+	mmi_info(chip->mmi_chip, "Init lpd mitigate mode done");
 
 	return 0;
 }
