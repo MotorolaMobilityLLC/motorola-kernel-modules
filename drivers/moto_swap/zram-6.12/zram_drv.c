@@ -2127,7 +2127,7 @@ static void __maybe_unused zram_copy_failure_handler(struct qpace_event_descript
 
 static int zram_qpace_comp(void *unused)
 {
-	bool triggered_compress;
+	size_t triggered_compress;
 	int n_entries_consumed;
 
 	while (!kthread_should_stop()) {
@@ -2150,7 +2150,7 @@ static int zram_qpace_comp(void *unused)
 			goto wait_for_comp_request;
 		}
 
-		qpace_wait_for_tr_consumption(COMPRESS_RING, false);
+		qpace_wait_for_tr_consumption(COMPRESS_RING, triggered_compress, false);
 
 		pr_debug("compression done\n");
 
