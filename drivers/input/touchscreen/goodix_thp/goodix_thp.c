@@ -276,7 +276,7 @@ static long goodix_thp_ioctl_set_reset_value(struct goodix_thp_core *core_data, 
 
         ts_info(ts_dev->dev, "set reset status %ld", reset);
 
-        gpio_set_value(ts->ts_dev->board_data.reset_gpio, !!reset);
+        gpio_direction_output(ts->ts_dev->board_data.reset_gpio, !!reset);
 
         ts->frame_waitq_state = WAIT_STATE;
         ts->reset_state = !reset;
