@@ -2554,12 +2554,20 @@ int mmi_config_qc30_charger_voltage(struct charger_device *chg_dev)
 				ret = adapter_dev_dp_dm(sc->qc_dev, DP_DM_DM_PULSE);
 				if (ret < 0)
 					dev_err(sc->dev, "qc protocol ic set vbus down failed\n");
+			} else {
+				ret = sc8989x_qc30_step_down_vbus(sc);
+				if (ret)
+					pr_err("HVDCP: %s qc3p step down vbus error\n", __func__);
 			}
 		} else {
 			if (sc->qc_dev) {
 				ret = adapter_dev_dp_dm(sc->qc_dev, DP_DM_DP_PULSE);
 				if (ret < 0)
 					dev_err(sc->dev, "qc protocol ic set vbus up failed\n");
+			} else {
+				ret = sc8989x_qc30_step_up_vbus(sc);
+				if (ret)
+					pr_err("HVDCP: %s qc3p step up vbus error\n", __func__);
 			}
 		}
 		mdelay(10);
@@ -2974,6 +2982,8 @@ rerun:
 out:
 
 		sc->qc_is_detect = false;
+		mmi_config_qc30_charger_voltage(sc->chg_dev);
+
 		pr_info("HVDCP: mmi_hvdcp_detect_kthread end\n");
 	}while(!kthread_should_stop());
 
