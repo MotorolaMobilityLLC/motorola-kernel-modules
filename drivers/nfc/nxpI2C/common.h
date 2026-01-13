@@ -67,7 +67,7 @@
 /* Retry count for normal write */
 #define NO_RETRY			(1)
 /* Maximum retry count for standby writes */
-#define MAX_RETRY_COUNT			(3)
+#define MAX_RETRY_COUNT			(4)
 #define MAX_WRITE_IRQ_COUNT		(5)
 #define MAX_IRQ_WAIT_TIME		(90)
 #define WAKEUP_SRC_TIMEOUT		(2000)

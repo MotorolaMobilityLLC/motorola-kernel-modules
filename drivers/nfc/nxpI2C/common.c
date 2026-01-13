@@ -308,11 +308,15 @@ static int nfc_ioctl_power_states(struct nfc_dev *nfc_dev, unsigned long arg)
  */
 unsigned int nfc_ioctl_nfcc_info(struct file *filp, unsigned long arg)
 {
-	unsigned int r = 0;
+	unsigned int r = 0, ret = 0;
 	struct nfc_dev *nfc_dev = filp->private_data;
 
 	r = nfc_dev->nqx_info.i;
-	pr_err("nfc : %s r = %d\n", __func__, r);
+	if (0 == r) {
+		ret = nfcc_hw_check(nfc_dev);
+		r = nfc_dev->nqx_info.i;
+	}
+	pr_err("nfc : %s r = %d\n ret = %d", __func__, r, ret);
 
 	return r;
 }
