@@ -323,7 +323,7 @@ static void mark_idle(struct zram *zram, ktime_t cutoff)
 		zram_slot_lock(zram, index);
 		if (zram_allocated(zram, index) &&
 				!zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_VENDOR_ZRAM_MEMORY_TRACKING
 			is_idle = !cutoff || ktime_after(cutoff, zram->table[index].ac_time);
 #endif
 			if (is_idle)
@@ -347,7 +347,7 @@ static ssize_t idle_store(struct device *dev,
 		 */
 		u64 age_sec;
 
-		if (IS_ENABLED(CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING) && !kstrtoull(buf, 0, &age_sec))
+		if (IS_ENABLED(CONFIG_VENDOR_ZRAM_MEMORY_TRACKING) && !kstrtoull(buf, 0, &age_sec))
 			cutoff_time = ktime_sub(ktime_get_boottime(),
 					ns_to_ktime(age_sec * NSEC_PER_SEC));
 		else
@@ -376,6 +376,30 @@ out:
 static int zram_wbd(void *);
 static struct zram *g_zram;
 static bool is_app_launch;
+atomic_t am_app_launch = ATOMIC_INIT(0);
+
+static inline bool skip_zram_write(struct zram *zram, u32 index)
+{
+    /*
+     * Throttle ZRAM writes during app launch to improve performance,
+     * BUT we must allow the following critical writes:
+     *
+     * 1. kswapd: Must proceed to reclaim memory and prevent OOM.
+     * 2. index 0 (Swap Header): 'mkswap' writes the swap signature to
+     *    index 0. Blocking this leads to 'swapon' failure (Swap total = 0).
+     */
+    if (atomic_read(&am_app_launch) && !current_is_kswapd() && index != 0)
+        return true;
+
+    zram_slot_lock(zram, index);
+    if (zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
+        zram_slot_unlock(zram, index);
+        pr_info("zram is under wb at index=%d\n", index);
+        return true;
+    }
+    zram_slot_unlock(zram, index);
+    return false;
+}
 
 static void fallocate_block(struct zram *zram, unsigned long blk_idx)
 {
@@ -574,6 +598,126 @@ static ssize_t writeback_limit_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", val);
 }
 
+static void init_wb_pid(struct zram *zram)
+{
+    mutex_init(&zram->wb_pid_lock);
+    atomic_set(&zram->wb_pid, 0);
+    atomic_set(&zram->wb_pid_abort, 0);
+}
+
+static void deinit_wb_pid(struct zram *zram)
+{
+    /* send abort signal */
+    atomic_set(&zram->wb_pid_abort, 1);
+    
+    mutex_lock(&zram->wb_pid_lock);
+    atomic_set(&zram->wb_pid, 0);
+    mutex_unlock(&zram->wb_pid_lock);
+
+    mutex_destroy(&zram->wb_pid_lock);
+}
+
+static ssize_t writeback_pid_store(struct device *dev,
+                                   struct device_attribute *attr,
+                                   const char *buf, size_t len)
+{
+    struct zram *zram = dev_to_zram(dev);
+    pid_t pid;
+    int ret;
+    struct task_struct *task = NULL;
+    struct pid *pid_struct = NULL;
+    
+    ret = kstrtoint(buf, 10, &pid);
+    if (ret < 0)
+        return ret;
+    
+    if (pid == 0) {
+        /* abort current operation, other thread in upper layer exec "echo 0 > writeback_pid" */
+        atomic_set(&zram->wb_pid_abort, 1);
+        pr_info("moto_swap: Abort signal sent for pid=%d\n",
+                atomic_read(&zram->wb_pid));
+        return len;
+    }
+    
+	if (!mutex_trylock(&zram->wb_pid_lock)) {
+        pr_warn("moto_swap: Writeback already in progress for pid=%d\n",
+                atomic_read(&zram->wb_pid));
+        return -EBUSY;
+    }
+
+    atomic_set(&zram->wb_pid_abort, 0);
+    atomic_set(&zram->wb_pid, pid);
+
+    rcu_read_lock();
+    pid_struct = find_vpid(pid);
+    if (pid_struct)
+        task = pid_task(pid_struct, PIDTYPE_PID);
+    if (task)
+        get_task_struct(task);
+    rcu_read_unlock();
+
+    if (!task) {
+        pr_warn("moto_swap: Task with pid=%d not found\n", pid);
+        ret = -ESRCH;
+        goto cleanup;
+    }
+
+    if (atomic_read(&zram->wb_pid_abort)) {
+        pr_info("moto_swap: Abort signal sent for pid=%d\n", pid);
+        ret = -ECANCELED;
+        goto cleanup;
+    }
+
+    ret = zram_perform_task_eswapout(zram, task);
+ 
+cleanup:
+    if (task) {
+        put_task_struct(task);
+        task = NULL;
+    }
+
+    atomic_set(&zram->wb_pid, 0);
+    mutex_unlock(&zram->wb_pid_lock);
+
+    if (ret == -ECANCELED) 
+        return len;
+    else if (ret < 0)
+        return ret;
+
+    return len;
+}
+
+static ssize_t writeback_pid_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+    struct zram *zram = dev_to_zram(dev);
+    return sprintf(buf, "%d\n", atomic_read(&zram->wb_pid));
+}
+
+static ssize_t am_app_launch_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", atomic_read(&am_app_launch));
+}
+
+static ssize_t am_app_launch_store(struct device *dev,
+                                   struct device_attribute *attr,
+                                   const char *buf, size_t len)
+{
+    int ret, new_val, old_val;
+
+    ret = kstrtoint(buf, 10, &new_val);
+    if (ret < 0 || (new_val != 0 && new_val != 1))
+        return -EINVAL;
+
+    old_val = atomic_xchg(&am_app_launch, new_val);
+
+    if(old_val != new_val)
+        zram_writeback_oem_func(ZRAM_APP_LAUNCH_NOTIFY, NULL, new_val);
+
+    return len;
+}
+
 static void reset_bdev(struct zram *zram)
 {
 	struct block_device *bdev;
@@ -592,6 +736,7 @@ static void reset_bdev(struct zram *zram)
 	zram->bitmap = NULL;
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	deinit_lru_writeback(zram);
+	deinit_wb_pid(zram);
 #endif
 }
 
@@ -1723,7 +1868,7 @@ static int zram_writeback_list(struct list_head *list)
 			return -EINVAL;
 		}
 
-        if (!is_app_launch && zram_wb_available(zram)) {
+        if (!is_app_launch && zram_wb_available(zram) && !atomic_read(&zram->wb_pid_abort)) {
             int ret = zram_writeback_index(zram, index, &zram->buf, true);
             if (ret) {
                 pr_err("%s: zram_writeback_index failed for index %u with error %d\n",
@@ -1735,7 +1880,7 @@ static int zram_writeback_list(struct list_head *list)
             }
         }
 		else {
-			pr_info("%s: app launch & wb unavailable. Attempting flush for index %u.\n", __func__, index);
+			pr_info("%s: app launch & wb unavailable & wb pid aborted. Attempting flush for index %u.\n", __func__, index);
 			return -EINVAL;
 		}
 
@@ -3167,6 +3312,11 @@ static int __zram_bvec_write(struct zram *zram, struct bio_vec *bvec,
 	struct mem_cgroup *memcg;
 #endif
 
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
+	if (skip_zram_write(zram, index))
+		return -EBUSY;
+#endif
+
 	mem = kmap_atomic(page);
 	if (page_same_filled(mem, &element)) {
 		kunmap_atomic(mem);
@@ -3678,9 +3828,6 @@ static const struct block_device_operations zram_devops = {
 	.submit_bio = zram_submit_bio,
 	.swap_slot_free_notify = zram_slot_free_notify,
 	.rw_page = zram_rw_page,
-// #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
-// 	.android_oem_data1 = (u64)zram_writeback_oem_func,
-// #endif
 	.owner = THIS_MODULE
 };
 
@@ -3701,6 +3848,8 @@ static DEVICE_ATTR_RW(backing_dev);
 static DEVICE_ATTR_WO(writeback);
 static DEVICE_ATTR_RW(writeback_limit);
 static DEVICE_ATTR_RW(writeback_limit_enable);
+static DEVICE_ATTR_RW(writeback_pid);
+static DEVICE_ATTR_RW(am_app_launch);
 #endif
 
 static struct attribute *zram_disk_attrs[] = {
@@ -3721,6 +3870,8 @@ static struct attribute *zram_disk_attrs[] = {
 	&dev_attr_writeback.attr,
 	&dev_attr_writeback_limit.attr,
 	&dev_attr_writeback_limit_enable.attr,
+	&dev_attr_writeback_pid.attr,
+	&dev_attr_am_app_launch.attr,
 #endif
 	&dev_attr_io_stat.attr,
 	&dev_attr_mm_stat.attr,
@@ -3817,6 +3968,9 @@ static int zram_add(void)
 	spin_lock_init(&zram->wb_table_lock);
 	spin_lock_init(&zram->bitmap_lock);
 	mutex_init(&zram->blk_bitmap_lock);
+
+	/* writeback according to pid */
+	init_wb_pid(zram);
 #endif
 
 	/* gendisk structure */
@@ -3908,6 +4062,7 @@ static int zram_remove(struct zram *zram)
 
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	stop_lru_writeback(zram);
+	deinit_wb_pid(zram);
 #endif
 	zram_debugfs_unregister(zram);
 
@@ -4034,7 +4189,7 @@ static int __init zram_init(void)
 	BUILD_BUG_ON(__NR_ZRAM_PAGEFLAGS > BITS_PER_LONG);
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	struct zram *zram_instance = NULL;
-	extern int memcg_shrink_init(struct zram *zram);
+	extern int zram_shrink_init(struct zram *zram);
 #endif
 	ret = cpuhp_setup_state_multi(CPUHP_ZCOMP_PREPARE, "block/zram:prepare",
 				      zcomp_cpu_up_prepare, zcomp_cpu_dead);
@@ -4074,7 +4229,7 @@ static int __init zram_init(void)
 	}
 
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
-	ret = memcg_shrink_init(zram_instance);
+	ret = zram_shrink_init(zram_instance);
 	if (ret)
 		goto out_error;
 #endif
