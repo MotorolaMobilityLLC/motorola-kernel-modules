@@ -53,16 +53,12 @@ ifneq ($(filter m y,$(CONFIG_ZRAM_EXT)),)
 EXTRA_CFLAGS += -DCONFIG_ZRAM_EXT
 endif
 
-moto_swap5-objs += $(ZRAM_SRC)/zram_drv.o
-moto_swap5-objs += $(ZRAM_SRC)/zcomp.o
-
-ifeq ($(call is-less-or-equal,6,1),1)
-moto_swap5-objs += $(ZRAM_SRC)/memcg.o
-endif
-
 ifeq ($(call is-greater-or-equal,6,6),1)
-moto_swap5-objs += $(ZRAM_SRC)/zram_ext.o
 moto_swap5-objs += $(ZRAM_SRC)/madvise.o
 endif
+
+moto_swap5-objs += $(ZRAM_SRC)/zram_ext.o
+moto_swap5-objs += $(ZRAM_SRC)/zram_drv.o
+moto_swap5-objs += $(ZRAM_SRC)/zcomp.o
 
 obj-m += moto_swap5.o
