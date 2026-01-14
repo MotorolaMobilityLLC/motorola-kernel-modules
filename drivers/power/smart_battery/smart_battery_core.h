@@ -122,6 +122,10 @@ struct mmi_smart_battery {
 	int				vbatt_low_mv;
 	int				vbatt_low_cold_mv;
 	int				batt_cold_threshold;
+	int				heavyLoad_dischg_cnt;
+	int				lightLoad_dischg_cnt;
+	bool				force_rsoc_zero_flag;
+	bool				enable_raise_battempty_threshold;
 	const char		**gauge_name_arry;
 	char			battName[MAX_STR_LEN];
 	struct mmi_battery_pack *battery;
