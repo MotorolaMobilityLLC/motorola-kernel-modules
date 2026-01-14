@@ -57,12 +57,6 @@ enum zram_pageflags {
 	ZRAM_UNDER_PPR,
 	ZRAM_LRU,
 
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	ZRAM_BATCHING_OUT,
-	ZRAM_FROM_HYBRIDSWAP,
-	ZRAM_MCGID_CLEAR,
-	ZRAM_IN_BD, /* zram stored in back device */
-#endif
 	__NR_ZRAM_PAGEFLAGS,
 };
 
@@ -195,8 +189,8 @@ struct zram {
 	 * zram is claimed so open request will be failed
 	 */
 	bool claim; /* Protected by disk->open_mutex */
+    struct file *backing_dev;
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
-	struct file *backing_dev;
 	spinlock_t wb_limit_lock;
 	bool wb_limit_enable;
 	u64 bd_wb_limit;
@@ -222,6 +216,11 @@ struct zram {
 	struct mutex blk_bitmap_lock;
 	unsigned long *read_req_bitmap;
 	struct zram_writeback_buffer *buf;
+
+	/* writeback according to pid */
+	struct mutex wb_pid_lock;
+	atomic_t wb_pid; // the pid of the current operation, 0 indicates no operation
+	atomic_t wb_pid_abort; // Flag to signal abortion of the current operation
 #endif
 };
 #endif
