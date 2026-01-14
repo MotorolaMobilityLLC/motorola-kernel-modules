@@ -197,6 +197,8 @@ enum sc8989x_reg_range {
 	UPM6920A_ICHG,
 	UPM6920A_ITERM,
 	CX25890HQ_IINDPM,
+	CX25890HQ_ICHG,
+	CX25890HQ_ITERM,
 };
 
 enum attach_type {
@@ -330,6 +332,7 @@ struct sc8989x_chip {
 	bool	mmi_qc3p_rerun_done;
 	int otg_enable;
 	int upm6920_iterm;
+	int cx25890HQ_iterm;
 	int upm6920A_votg;
 	int cx25890HQ_votg;
 	int cx_otg_trilmt_init;
@@ -371,6 +374,8 @@ static const struct reg_range sc8989x_reg_range_ary[] = {
 	[UPM6920A_ICHG] = SC8989X_CHG_RANGE(0, 5040, 64, 0, false),
 	[UPM6920A_ITERM] = SC8989X_CHG_RANGE(64, 1024, 64, 64, false),
 	[CX25890HQ_IINDPM] = SC8989X_CHG_RANGE(100, 3100, 50, 100, false),
+	[CX25890HQ_ICHG] = SC8989X_CHG_RANGE(0, 5056, 64, 0, false),
+	[CX25890HQ_ITERM] = SC8989X_CHG_RANGE(64, 1024, 64, 64, false),
 };
 
 //REGISTER
@@ -745,7 +750,7 @@ static int sc8989x_set_key(struct sc8989x_chip *sc)
 		return -EINVAL;
 	}
 
-	if (sc->is_upm6920A) {
+	if (sc->is_upm6920A || sc->is_cx25890HQ) {
 		return 0;
 	}
 	regmap_write(sc->regmap, SC8989X_REG7D, SC8989X_KEY1);
@@ -797,7 +802,7 @@ __maybe_unused static int sc8989x_set_vbat_lsb(struct sc8989x_chip *sc, bool en)
 		return -EINVAL;
 	}
 
-	if (sc->is_upm6920A) {
+	if (sc->is_upm6920A || sc->is_cx25890HQ) {
 		return 0;
 	}
 
@@ -1225,6 +1230,8 @@ static int sc8989x_set_ichg(struct sc8989x_chip *sc, int curr_ma)
 
 	if (sc->is_upm6920A) {
 		reg_val = val2reg(UPM6920A_ICHG, curr_ma);
+	} else if (sc->is_cx25890HQ) {
+		reg_val = val2reg(CX25890HQ_ICHG, curr_ma);
 	} else {
 		reg_val = val2reg(SC8989X_ICHG, curr_ma);
 	}
@@ -1249,6 +1256,9 @@ static int sc8989x_get_ichg(struct sc8989x_chip *sc, int *curr_ma)
 	if (sc->is_upm6920A) {
 		*curr_ma = reg2val(UPM6920A_ICHG, reg_val);
 		return ret;
+	} else if (sc->is_cx25890HQ) {
+		*curr_ma = reg2val(CX25890HQ_ICHG, reg_val);
+		return ret;
 	}
 
 	*curr_ma = reg2val(SC8989X_ICHG, reg_val);
@@ -1264,8 +1274,10 @@ static int sc8989x_set_term_curr(struct sc8989x_chip *sc, int curr_ma)
 		return -EINVAL;
 	}
 
-	if (sc->is_upm6920A || sc->is_cx25890HQ) {
+	if (sc->is_upm6920A) {
 		reg_val = val2reg(UPM6920A_ITERM, curr_ma);
+	} else if (sc->is_cx25890HQ) {
+		reg_val = val2reg(CX25890HQ_ITERM, curr_ma);
 	} else {
 		reg_val = val2reg(SC8989X_ITERM, curr_ma);
 	}
@@ -1288,6 +1300,8 @@ static int sc8989x_get_term_curr(struct sc8989x_chip *sc, int *curr_ma)
 
 	if (sc->is_upm6920A) {
 		*curr_ma = reg2val(UPM6920A_ITERM, reg_val);
+	} else if (sc->is_cx25890HQ) {
+		*curr_ma = reg2val(CX25890HQ_ITERM, reg_val);
 	} else {
 		*curr_ma = reg2val(SC8989X_ITERM, reg_val);
 	}
@@ -3560,6 +3574,16 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 
 	if (sc->is_upm6920A && (sc->upm6920_iterm != 0)) {
 		sc->cfg->iterm = sc->upm6920_iterm;
+	}
+
+	ret = of_property_read_u32(np, "sc,cx25890HQ,iterm", &sc->cx25890HQ_iterm);
+	if (ret < 0) {
+		dev_err(sc->dev, "%s not find\n", "sc,cx25890HQ,iterm");
+		sc->cx25890HQ_iterm = 0;
+	}
+
+	if (sc->is_cx25890HQ && (sc->cx25890HQ_iterm != 0)) {
+		sc->cfg->iterm = sc->cx25890HQ_iterm;
 	}
 
 	ret = of_property_read_u32(np, "sc,cx25890HQ,votg", &sc->cx25890HQ_votg);
