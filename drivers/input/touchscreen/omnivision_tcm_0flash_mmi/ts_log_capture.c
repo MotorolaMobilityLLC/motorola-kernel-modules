@@ -19,7 +19,7 @@
 #include <linux/poll.h>
 #include "omnivision_tcm_core.h"
 
-#define LOG_FIFO_SIZE 8192
+#define LOG_FIFO_SIZE 8192*16
 #define TP_LOG_DEVICE_NAME "tp_tools"
 
 struct ts_log {
