@@ -340,13 +340,23 @@ void ovt_format_frame_data_to_print_buf(int frame_cnt, int frame_size, int rows,
 int ovt_tp_rawdata_capture(struct device *dev)
 {
 	int retval;
+	int frame_idx = 0;
 	int count = 0;
 	int rows, cols, i, j;
-	int data_value;
+	int data_value = 0;
+	int str_size = 100*1024;
+	unsigned char *line_buf;
+	unsigned char *frame_data;
 	unsigned char *report_data_buf;
 	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
 	struct ovt_tcm_app_info *app_info;
-	char line_buf[4*1024]={0};
+
+	line_buf = vmalloc(str_size);
+	if (!line_buf) {
+			LOGE(tcm_hcd->pdev->dev.parent,
+				"can not alloc buffer for line_buf\n");
+			return -1;
+	}
 	mutex_lock(&tcm_hcd->extif_mutex);
 
 	OVT_INFO("capture rawdata start\n");
@@ -354,34 +364,35 @@ int ovt_tp_rawdata_capture(struct device *dev)
 	if (retval < 0) {
 		LOGE(tcm_hcd->pdev->dev.parent,
 				"Failed to do raw_data test\n");
+		vfree(line_buf);
+		mutex_unlock(&tcm_hcd->extif_mutex);
 		return -ENOMEM;
 	}
-
 	app_info = &tcm_hcd->app_info;
 	rows = le2_to_uint(app_info->num_of_image_rows);
 	cols = le2_to_uint(app_info->num_of_image_cols);
-	report_data_buf = testing_hcd->report.buf;
-	data_value = 0;
 
-	for (i = 0; i < rows; i++) {
-		if (count >= sizeof(line_buf) - 1) {
-			OVT_INFO("line_buf overflow! total count: %d, buf size: %zu\n", count, sizeof(line_buf));
-			break;
+	frame_data = testing_hcd->report.buf;
+	while (frame_idx < raw_delta_frame_cnt) {
+		count = 0;
+		report_data_buf = frame_data + frame_idx * (rows * cols * 2);
+		count += scnprintf(line_buf + count, str_size - count, "frame_idx = %d\n", frame_idx);
+		for (i = 0; i < rows; i++) {
+			for (j = 0; j < cols; j++) {
+				data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
+				count += scnprintf(line_buf + count, str_size - count, DATA_FORMAT_STR, data_value);
+			}
+			count += scnprintf(line_buf + count, str_size - count, "\n");
 		}
-		count += scnprintf(line_buf + count, sizeof(line_buf) - count, ROW_NUM_FORMAT_STR, i);
-		for (j = 0; j < cols; j++) {
-			data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
-			count += scnprintf(line_buf + count, sizeof(line_buf) - count, DATA_FORMAT_STR, data_value);
-		}
-		if (count < sizeof(line_buf) - 1) {
-        	count += scnprintf(line_buf + count, sizeof(line_buf) - count, "\n");
-    	}
+		ts_put_fifo_with_discard(line_buf, count);
+		frame_idx++;
 	}
-	ts_put_fifo_with_discard(line_buf, count);
 
 	sysfs_notify(&ts_class_dev->kobj, NULL, "log_trigger");
 
 	mutex_unlock(&tcm_hcd->extif_mutex);
+
+	vfree(line_buf);
 
 	return 0;
 }
@@ -389,14 +400,23 @@ int ovt_tp_rawdata_capture(struct device *dev)
 int ovt_tp_diffdata_capture(struct device *dev)
 {
 	int retval;
+	int frame_idx = 0;
 	int count = 0;
 	int rows, cols, i, j;
-	int data_value;
+	int data_value = 0;
+	int str_size = 100*1024;
+	unsigned char *line_buf;
+	unsigned char *frame_data;
 	unsigned char *report_data_buf;
 	struct ovt_tcm_hcd *tcm_hcd = testing_hcd->tcm_hcd;
 	struct ovt_tcm_app_info *app_info;
-	char line_buf[4*1024]={0};
 
+	line_buf = vmalloc(str_size);
+	if (!line_buf) {
+			LOGE(tcm_hcd->pdev->dev.parent,
+				"can not alloc buffer for line_buf\n");
+			return -1;
+	}
 	mutex_lock(&tcm_hcd->extif_mutex);
 
 	OVT_INFO("capture diffdata start\n");
@@ -404,6 +424,8 @@ int ovt_tp_diffdata_capture(struct device *dev)
 	if (retval < 0) {
 		LOGE(tcm_hcd->pdev->dev.parent,
 				"Failed to do delta test\n");
+		vfree(line_buf);
+		mutex_unlock(&tcm_hcd->extif_mutex);
 		return -ENOMEM;
 	}
 
@@ -411,26 +433,26 @@ int ovt_tp_diffdata_capture(struct device *dev)
 	rows = le2_to_uint(app_info->num_of_image_rows);
 	cols = le2_to_uint(app_info->num_of_image_cols);
 	report_data_buf = testing_hcd->report.buf;
-	data_value = 0;
+	frame_data = testing_hcd->report.buf;
 
-	for (i = 0; i < rows; i++) {
-		if (count >= sizeof(line_buf) - 1) {
-			OVT_INFO("line_buf overflow! total count: %d, buf size: %zu\n", count, sizeof(line_buf));
-			break;
+	while (frame_idx < raw_delta_frame_cnt) {
+		count = 0;
+		report_data_buf = frame_data + frame_idx * (rows * cols * 2);
+		count += scnprintf(line_buf + count, str_size - count, "frame_idx = %d\n", frame_idx);
+		for (i = 0; i < rows; i++) {
+			for (j = 0; j < cols; j++) {
+				data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
+				count += scnprintf(line_buf + count, str_size - count, DATA_FORMAT_STR, data_value);
+			}
+			count += scnprintf(line_buf + count, str_size - count, "\n");
 		}
-		count += scnprintf(line_buf + count, sizeof(line_buf) - count, ROW_NUM_FORMAT_STR, i);
-		for (j = 0; j < cols; j++) {
-			data_value = (short)le2_to_uint(&report_data_buf[(i * cols + j) * 2]);
-			count += scnprintf(line_buf + count, sizeof(line_buf) - count, DATA_FORMAT_STR, data_value);
-		}
-		if (count < sizeof(line_buf) - 1) {
-			count += scnprintf(line_buf + count, sizeof(line_buf) - count, "\n");
-		}
+		ts_put_fifo_with_discard(line_buf, count);
+		frame_idx++;
 	}
 
-	ts_put_fifo_with_discard(line_buf, count);
-
 	mutex_unlock(&tcm_hcd->extif_mutex);
+
+	vfree(line_buf);
 
 	return 0;
 }
@@ -440,8 +462,7 @@ int ovt_tp_data_dump_capture(struct device *dev)
 	int ret = 0;
 	ts_clear_kfifo();
 	ret = ovt_tp_diffdata_capture(dev);
-
-	ret = ovt_tp_rawdata_capture(dev);
+	ret |= ovt_tp_rawdata_capture(dev);
 
 	return ret;
 }
