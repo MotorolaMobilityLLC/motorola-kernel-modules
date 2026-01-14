@@ -649,7 +649,7 @@ static long goodix_thp_ioctl_enter_resume(struct goodix_thp_core *core_data)
                 ts_err(ts_dev->dev, "failed, r %d", r);
 
         //restore param after IC reset
-        goodix_ts_mmi_post_resume(cd);
+        schedule_delayed_work(&core_data->post_resume_work, 0);
 
         return r;
 }
@@ -3158,6 +3158,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
         core_data->frame_wait_time = GOODIX_THP_DEFATULT_WAIT_FRAME_TIME;
         //initialize pen action state
         core_data->pen_state = PEN_STATE_NONE;
+        INIT_DELAYED_WORK(&core_data->post_resume_work, goodix_ts_mmi_post_resume);
 
         /* get GPIO resource*/
         r = goodix_thp_gpio_setup(core_data);

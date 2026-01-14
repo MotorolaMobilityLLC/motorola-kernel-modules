@@ -1172,11 +1172,15 @@ exit:
 	return ret;
 }
 
-int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
+void goodix_ts_mmi_post_resume(struct work_struct *work) {
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct goodix_thp_core *core_data =
+        container_of(dwork, struct goodix_thp_core, post_resume_work);
 	struct device *dev = core_data->ts_dev->dev;
 	u8 val[3];
 	int ret = 0;
 
+	ts_info(core_data->ts_dev->dev, "post_resume enter");
 	mutex_lock(&core_data->mode_lock);
 	/* All IC status are cleared after reset */
 	memset(&core_data->set_mode, 0 , sizeof(core_data->set_mode));
@@ -1285,8 +1289,7 @@ int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data) {
 	}
 
 	mutex_unlock(&core_data->mode_lock);
-
-	return 0;
+	ts_info(core_data->ts_dev->dev, "post_resume exit");
 }
 
 static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)
@@ -1368,6 +1371,8 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 	}
 
 	if (val[1]) {
+		ts_info(tdev, "screen on, cancel post_resume_work sync");
+		cancel_delayed_work_sync(&core_data->post_resume_work);
 		ts_info(tdev, "Send screen on cmd");
 	}
 	else {

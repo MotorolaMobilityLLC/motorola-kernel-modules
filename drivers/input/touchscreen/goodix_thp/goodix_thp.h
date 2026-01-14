@@ -67,7 +67,7 @@
 
 #define GOODIX_THP_MAX_FRAME_LEN                        (10 * 1024)
 #define GOODIX_THP_MAX_TRANS_DATA_LEN                   (4096 * 32)
-#define GOODIX_THP_MAX_FRAME_BUF_COUNT                  40
+#define GOODIX_THP_MAX_FRAME_BUF_COUNT                  20
 #define GOODIX_THP_CUSTOM_INFO_LEN                      10
 #define GOODIX_MAX_STR_LABLE_LEN                        32
 #define GOODIX_THP_REQUEST_APP_SIZE                     12
@@ -556,6 +556,7 @@ struct goodix_thp_core {
 #endif
         bool esd_on;
         struct delayed_work esd_work;
+        struct delayed_work post_resume_work;
         u8 open_status;
 #ifdef CONFIG_THP_FOLD
         u8 open_fold_status;
@@ -612,7 +613,7 @@ u8 checksum_u8(u8 *data, u32 size);
 u8 checksum8_u16(const u8 *data, u32 size);
 
 void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len);
-int goodix_ts_mmi_post_resume(struct goodix_thp_core *core_data);
+void goodix_ts_mmi_post_resume(struct work_struct *work);
 #ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
 extern bool main_suspend;
 int goodix_thp_off_to_gesture(struct goodix_thp_core *core_data);
