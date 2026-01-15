@@ -761,6 +761,9 @@ __maybe_unused static void init_cps2043_reg(struct sc8586_chip *sc)
     sc8586_i2c_write_byte(sc, 0x09, 0x04);
     sc8586_i2c_write_byte(sc, 0x0c, 0x18);
     sc8586_i2c_write_byte(sc, 0x0f, 0x00);
+
+    if ((sc->cfg.mode) != 0)
+        sc8586_field_write(sc, F_MODE, sc->cfg.mode);
  }
 
 __maybe_unused static int sc8586_init_device(struct sc8586_chip *sc)
