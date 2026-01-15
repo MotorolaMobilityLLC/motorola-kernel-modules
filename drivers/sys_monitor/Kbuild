@@ -12,6 +12,10 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-$(VERSION).$(PATCHL
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm/modules/debug/v1
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm/modules/include
 
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm_legacy/modules/platform/v1/suspend_v1
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm_legacy/modules/debug/v1
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-$(VERSION).$(PATCHLEVEL)/drivers/misc/mediatek/lpm_legacy/modules/include
+
 obj-m += sys_monitor.o
 
 sys_monitor-y := main.o sleep.o
