@@ -89,7 +89,7 @@
 #include <linux/fb.h>
 #endif
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 #include "mtk_panel_ext.h"
 #include "mtk_disp_notify.h"
 #endif
@@ -1168,7 +1168,7 @@ struct ilitek_ts_data {
 	struct mtk_chip_config spi_ctrl;
 #endif
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 	struct notifier_block disp_notifier;
 #endif
 #ifdef CONFIG_FB

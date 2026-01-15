@@ -31,7 +31,7 @@ extern int __attribute__ ((weak)) sensors_classdev_register(struct device *paren
 extern void __attribute__ ((weak)) sensors_classdev_unregister(struct sensors_classdev *sensors_cdev);
 #endif
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 static int ili_disp_notifier_callback(struct notifier_block *nb, unsigned long value, void *v);
 
 static int ili_tp_power_on_reinit(void)
@@ -470,7 +470,7 @@ int ili_irq_register(int type)
 	return ret;
 }
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 static int ili_disp_notifier_callback(struct notifier_block *nb,
 	unsigned long value, void *v)
 {
@@ -872,7 +872,7 @@ void ili_gesture_state_switch(void)
 
 static void ilitek_plat_sleep_init(void)
 {
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 	int ret;
 	void **mtk_ret = NULL;
 
@@ -925,7 +925,7 @@ static void ilitek_plat_sleep_init(void)
 	register_early_suspend(&ilits->early_suspend);
 #endif
 
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 err_register_disp_notif_failed:
 	ret = mtk_disp_notifier_unregister(&ilits->disp_notifier);
 	if (ret)
@@ -1034,7 +1034,7 @@ static int ilitek_tp_pm_resume(struct device *dev)
 static int ilitek_plat_remove(void)
 {
 	ILI_INFO("remove plat dev\n");
-#if IS_ENABLED(CONFIG_DRM_MEDIATEK)
+#if IS_ENABLED(CONFIG_DRM_MEDIATEK_V2)
 	if (ilits && mtk_disp_notifier_unregister(&ilits->disp_notifier))
 		ILI_ERR("Error unregistering disp_notifier\n");
 #endif
