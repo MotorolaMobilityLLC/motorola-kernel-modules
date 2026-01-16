@@ -34,7 +34,10 @@
 
 /* main struct, interrupt,init,pointers */
 #include <linux/input/sx9325_sar.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 #include "base.h"
+#endif
 
 #define IDLE 0
 #define ACTIVE 1
@@ -207,9 +210,16 @@ static int manual_offset_calibration(psx93XX_t this)
  * brief sysfs show function for manual calibration which currently just
  * returns register value.
  */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t manual_offset_calibration_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t manual_offset_calibration_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	u8 reg_value = 0;
 	psx93XX_t this = sx9325_sar_ptr;
@@ -220,9 +230,15 @@ static ssize_t manual_offset_calibration_show(struct class *class,
 }
 
 /* brief sysfs store function for manual calibration */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t manual_offset_calibration_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t manual_offset_calibration_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	psx93XX_t this = sx9325_sar_ptr;
 	unsigned long val;
@@ -633,8 +649,11 @@ static void sx9325_platform_data_of_init(struct i2c_client *client,
 	u32 scan_period, sensor_en, raw_data_channel;
 	u32 cap_channel_top, cap_channel_bottom;
 	int ret;
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	client->irq = of_get_gpio(np, 0);
+#else
+	client->irq = of_get_named_gpio(np, "semtech,irq", 0);
+#endif
 	pplatData->irq_gpio = client->irq;
 
 	ret = of_property_read_u32(np, "cap,use_channel", &sensor_en);
@@ -677,16 +696,28 @@ static void sx9325_platform_data_of_init(struct i2c_client *client,
 
 	pplatData->pbuttonInformation = &smtcButtonInformation;
 }
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t capsense_reset_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t capsense_reset_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	return snprintf(buf, 8, "%d\n", programming_done);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t capsense_reset_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t capsense_reset_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	psx93XX_t this = sx9325_sar_ptr;
 	psx9325_t pDevice = NULL;
@@ -710,17 +741,28 @@ static ssize_t capsense_reset_store(struct class *class,
 
 	return count;
 }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t capsense_enable_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t capsense_enable_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	return snprintf(buf, 8, "%d\n", mEnabled);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t capsense_enable_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t capsense_enable_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	psx93XX_t this = sx9325_sar_ptr;
 	psx9325_t pDevice = NULL;
@@ -802,10 +844,15 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 }
 #endif
 
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t reg_dump_show(struct class *class,
 		struct class_attribute *attr,
 		char *buf)
+#else
+static ssize_t reg_dump_show(const struct class *class,
+		const struct class_attribute *attr,
+		char *buf)
+#endif
 {
 	u16 i = 0;
 	u8 reg_value = 0;
@@ -893,9 +940,15 @@ static ssize_t reg_dump_show(struct class *class,
 	return (p-buf);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t reg_dump_store(struct class *class,
 		struct class_attribute *attr,
 		const char *buf, size_t count)
+#else
+static ssize_t reg_dump_store(const struct class *class,
+		const struct class_attribute *attr,
+		const char *buf, size_t count)
+#endif
 {
 	psx93XX_t this = sx9325_sar_ptr;
 	unsigned int val, reg, opt;
@@ -921,9 +974,15 @@ static ssize_t reg_dump_store(struct class *class,
 	return count;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static ssize_t sx932x_trigger_rawdata_log_store(struct class *class,
         struct class_attribute *attr,
         const char *buf, size_t count)
+#else
+static ssize_t sx932x_trigger_rawdata_log_store(const struct class *class,
+        const struct class_attribute *attr,
+        const char *buf, size_t count)
+#endif
 {
     psx93XX_t this = sx9325_sar_ptr;
     if (strncmp(buf, "1", 1) == 0)
@@ -1051,7 +1110,9 @@ static struct class_attribute capsense_class_attributes[] = {
 #endif
 static struct class capsense_class = {
 	.name			= "capsense",
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	.owner			= THIS_MODULE,
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
 	.class_groups           = capsense_class_groups,
 #else
@@ -1066,8 +1127,13 @@ static struct class capsense_class = {
  * param id pointer to i2c_device_id
  * return Whether probe was successful
  */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static int sx9325_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
+#else
+static int sx9325_probe(struct i2c_client *client)
+#endif
 {
 	psx93XX_t this = 0;
 	psx9325_t pDevice = 0;
@@ -1193,9 +1259,10 @@ static int sx9325_probe(struct i2c_client *client,
 			LOG_ERR("Create fsys class failed (%d)\n", ret);
 			return ret;
 		}
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 		/*restore sys/class/capsense label*/
 		kobject_uevent(&capsense_class.p->subsys.kobj, KOBJ_CHANGE);
+#endif
 #ifdef USE_SENSORS_CLASS
 		sensors_capsensor_top_cdev.sensors_enable =
 							capsensor_set_enable;
@@ -1316,7 +1383,11 @@ err_vdd_defer:
  * param client Pointer to i2c_client struct
  * return Value from sx93XX_sar_remove()
  */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static int sx9325_remove(struct i2c_client *client)
+#else
+static void sx9325_remove(struct i2c_client *client)
+#endif
 {
 	psx9325_platform_data_t pplatData = 0;
 	psx9325_t pDevice = 0;
@@ -1355,7 +1426,9 @@ static int sx9325_remove(struct i2c_client *client)
 			pplatData->exit_platform_hw();
 		kfree(this->pDevice);
 	}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 	return sx93XX_sar_remove(this);
+#endif
 }
 
 #if defined(USE_KERNEL_SUSPEND)
