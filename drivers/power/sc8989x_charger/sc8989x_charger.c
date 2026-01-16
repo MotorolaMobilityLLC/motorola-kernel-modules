@@ -314,6 +314,7 @@ struct sc8989x_chip {
 	int pulse_cnt;
 	struct adapter_device *qc_dev;
 	bool	qc_is_detect;
+	bool	qc_is_start_detect;
 	int	qc_chg_type;
 	struct power_supply *batt_psy;
 
@@ -1901,11 +1902,14 @@ static int sc8989x_set_otg(struct charger_device *chg_dev, bool enable)
 	 * This sequence of driving to 0V then Hi-Z is required to ensure the lines are fully released,
 	 * preventing issues with subsequent charger detection.
 	 */
-	//if (sc->is_upm6920A) {
-		//sc8989x_set_dpdm_0V(sc);
-		//sc8989x_set_dpdm_hiz(sc);
-	//}
 	sc->otg_enable = enable;
+	if (enable && (sc->is_upm6920A || sc->is_sc89890h)
+		 && sc->qc_is_start_detect)  {
+		sc8989x_set_dpdm_0V(sc);
+		sc8989x_set_dpdm_hiz(sc);
+		dev_info(sc->dev, "QC detection was active, resetting DP/DM to Hi-Z before enabling OTG\n");
+	}
+
 	if (sc->otg_enable)
 		sc8989x_set_hiz(sc, !enable);
 	ret = sc8989x_set_otg_enable(sc, enable);
@@ -2926,6 +2930,7 @@ static int mmi_hvdcp_detect_kthread(void *param)
 			break;
 
 		//down(&sc->sem_dpdm);
+		sc->qc_is_start_detect = true;
 		sc->mmi_hvdcp_trig_flag = false;
 		charger_type = USB_TYPE_UNKNOWN;
 		sc8989x_set_charging_current(sc->chg_dev,1000000);
@@ -3028,7 +3033,13 @@ out:
 
 		sc->qc_is_detect = false;
 		mmi_config_qc30_charger_voltage(sc->chg_dev);
-
+		if ((sc->qc_chg_type != USB_TYPE_QC3P_18 )
+			&& (sc->qc_chg_type != USB_TYPE_QC3P_27)
+			&& (sc->qc_chg_type != USB_TYPE_QC3P_45)) {
+			sc8989x_set_dpdm_0V(sc);
+			sc8989x_set_dpdm_hiz(sc);
+		}
+		sc->qc_is_start_detect = false;
 		pr_info("HVDCP: mmi_hvdcp_detect_kthread end\n");
 	}while(!kthread_should_stop());
 
@@ -3460,7 +3471,7 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		cancel_delayed_work(&sc->ibus_enable_dwork);
 		sc->ibus_dis = 0;
 		atomic_set(&sc->reset_vindpm, 0);
-		if (sc->is_upm6920A) {
+		if (sc->is_upm6920A || sc->is_sc89890h) {
 			if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_DCP &&
 				sc->chg_type == POWER_SUPPLY_TYPE_USB_DCP) {
 				sc8989x_set_dpdm_0V(sc);
@@ -4163,6 +4174,7 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 		goto err_nodev;
 	}
 
+	sc->qc_is_start_detect = false;
 	sc->cfg = &sc8989x_default_cfg;
 	ret = sc8989x_parse_dt(sc);
 	if (ret < 0) {
