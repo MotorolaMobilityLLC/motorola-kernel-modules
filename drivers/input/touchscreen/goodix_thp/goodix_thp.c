@@ -1321,8 +1321,6 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
             }
         }
 
-        disable_irq_nosync(core_data->irq);
-
         /*for qaulcomn to stop cpu go to C4 idle state*/
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
 
@@ -1371,8 +1369,6 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
         pre_index = cur_index;
 
 exit:
-        enable_irq(core_data->irq);
-
 #ifdef CONFIG_TOUCHIRQ_UPDATE_QOS
 
         if (PM_QOS_TOUCH_WAKEUP_VALUE == core_data->pm_qos_value) {
