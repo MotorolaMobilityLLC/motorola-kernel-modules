@@ -762,9 +762,9 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 #define DISCHG_CURRENT_500MA		(-1)*500*1000
 #define VOLTAGE_3P2V		3200*1000
 #define TAPER_CNT			3
-#define VOLTAGE_100MV		100*1000
+#define HEAVYLOAD_VBAT_DELTA		50*1000
 
-static bool smart_batt_raise_battempty_threshold(struct mmi_smart_battery *chip)
+static bool smart_batt_raise_battempty_threshold(struct mmi_smart_battery *chip, int vbatt_empty)
 {
 	bool raise_battempty_volt = false;
 
@@ -773,6 +773,8 @@ static bool smart_batt_raise_battempty_threshold(struct mmi_smart_battery *chip)
 		if (chip->combo_current_now < DISCHG_CURRENT_1A) {
 			chip->heavyLoad_dischg_cnt ++;
 			chip->lightLoad_dischg_cnt = 0;
+			if (chip->combo_voltage_now < (vbatt_empty + HEAVYLOAD_VBAT_DELTA) && chip->heavyLoad_dischg_cnt < TAPER_CNT)
+				chip->force_zero_level = FORCE_ZERO_IMMEDIATELY;
 			mmi_info(chip, "heavyLoad_dischg_cnt=%d\n", chip->heavyLoad_dischg_cnt);
 		}
 		else if (chip->combo_current_now > DISCHG_CURRENT_500MA) {
@@ -787,10 +789,10 @@ static bool smart_batt_raise_battempty_threshold(struct mmi_smart_battery *chip)
 	else {
 		chip->heavyLoad_dischg_cnt = 0;
 		chip->lightLoad_dischg_cnt = 0;
-		chip->force_rsoc_zero_flag = false;
+		chip->force_zero_level = FORCE_ZERO_NONE;
 	}
 
-	if (chip->heavyLoad_dischg_cnt >= TAPER_CNT) {
+	if (chip->heavyLoad_dischg_cnt >= TAPER_CNT || chip->force_zero_level == FORCE_ZERO_IMMEDIATELY) {
 		mmi_info(chip, "vbat empty need to raise\n");
 		raise_battempty_volt = true;
 	}
@@ -833,23 +835,29 @@ static void smart_batt_update_thread(struct work_struct *work)
 		vbatt_low = chip->vbatt_low_mv * 1000;
 	}
 
-	if (smart_batt_raise_battempty_threshold(chip) == true) {
-		vbatt_empty += VOLTAGE_100MV;
+	if (smart_batt_raise_battempty_threshold(chip, vbatt_empty) == true) {
+		vbatt_empty += HEAVYLOAD_VBAT_DELTA;
 		mmi_info(chip, "vbat empty voltage=%d\n", vbatt_empty);
 	}
 
 	if (chip->combo_voltage_now < vbatt_empty) {
 		vbatt_empty_count ++;
-		if (vbatt_empty_count >= TAPER_CNT) {
+		if (vbatt_empty_count >= TAPER_CNT && chip->force_zero_level != FORCE_ZERO_IMMEDIATELY) {
 			rsoc = 0;
-			chip->force_rsoc_zero_flag = true;
-			mmi_info(chip, "vbat reach to empty, Force UISOC=0\n");
+			chip->force_zero_level = FORCE_ZERO_QUICKLY;
+			mmi_info(chip, "vbat reach to empty, Force UISOC=0 quickly\n");
+		}
+
+		if (chip->force_zero_level == FORCE_ZERO_IMMEDIATELY) {
+			rsoc = 0;
+			mmi_info(chip, "vbat reach to empty, Force UISOC=0 immediately\n");
 		}
 	}
-	else if(chip->force_rsoc_zero_flag == false)
+	else if(chip->force_zero_level == FORCE_ZERO_NONE)
 		vbatt_empty_count = 0;
 
-	rsoc = smart_batt_monotonic_soc(chip, rsoc, &work_intervals);
+	if (chip->force_zero_level != FORCE_ZERO_IMMEDIATELY)
+		rsoc = smart_batt_monotonic_soc(chip, rsoc, &work_intervals);
 
 	if (chip->combo_voltage_now < vbatt_low)
 		work_intervals = QUEUS_DELAYED_WORK_TIME_LOW_VOL;
