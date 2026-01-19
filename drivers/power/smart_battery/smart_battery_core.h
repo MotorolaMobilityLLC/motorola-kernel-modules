@@ -124,7 +124,7 @@ struct mmi_smart_battery {
 	int				batt_cold_threshold;
 	int				heavyLoad_dischg_cnt;
 	int				lightLoad_dischg_cnt;
-	bool				force_rsoc_zero_flag;
+	int				force_zero_level;
 	bool				enable_raise_battempty_threshold;
 	const char		**gauge_name_arry;
 	char			battName[MAX_STR_LEN];
@@ -137,6 +137,12 @@ struct mmi_smart_battery {
 	int current_cutoff_index;
 	int batt_cold_shutdown_volt;
 	bool is_low_temp_shutdownVolt_active;
+};
+
+enum {
+	FORCE_ZERO_NONE = 0,
+	FORCE_ZERO_QUICKLY,
+	FORCE_ZERO_IMMEDIATELY,
 };
 
 #define SOC_JUMPS_DELAYED_WORK_TIME  60000
