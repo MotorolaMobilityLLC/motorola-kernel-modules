@@ -68,6 +68,8 @@ struct zram_request {
 	u32 index[MAX_REQ_IDX];
 };
 
+extern atomic_t am_app_launch;
+
 extern ssize_t zram_ext_version_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 
