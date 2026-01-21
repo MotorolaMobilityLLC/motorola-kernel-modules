@@ -45,6 +45,7 @@
 
 #define FTS_CMD_REPORT_RATE_ADDR          0x8E
 #define FTS_CMD_SAMPLE_SWITCH             0x8A
+#define FTS_CMD_SENSITIVITY_ADDR          0xC0
 #define FTS_ACTIVE_LAST_TIME              10
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
 //extern int ts_mmi_dev_register(struct device *parent, struct ts_mmi_methods *mdata);
@@ -71,6 +72,10 @@ static ssize_t fts_sample_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fts_sample_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
+static ssize_t fts_sensitivity_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t fts_sensitivity_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
 static ssize_t fts_stowed_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
 static ssize_t fts_stowed_show(struct device *dev,
@@ -83,6 +88,8 @@ static DEVICE_ATTR(interpolation, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_interpolation_show, fts_interpolation_store);
 static DEVICE_ATTR(sample, (S_IRUGO | S_IWUSR | S_IWGRP),
 	fts_sample_show, fts_sample_store);
+static DEVICE_ATTR(sensitivity, (S_IRUGO | S_IWUSR | S_IWGRP),
+	fts_sensitivity_show, fts_sensitivity_store);
 static DEVICE_ATTR(stowed, (S_IWUSR | S_IWGRP | S_IRUGO),
 	fts_stowed_show, fts_stowed_store);
 
@@ -401,6 +408,66 @@ static ssize_t fts_sample_show(struct device *dev,
 
 	FTS_INFO("sample = %d.\n", ts_data->set_mode.sample);
 	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts_data->set_mode.sample);
+}
+
+static ssize_t fts_sensitivity_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long mode = 0;
+	struct fts_ts_data *ts_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	ret = kstrtoul(buf, 0, &mode);
+	if (ret < 0) {
+		FTS_INFO("Failed to convert value.\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&ts_data->mode_lock);
+
+	if (mode >= 1) mode = 1;
+
+	ts_data->get_mode.sensitivity = mode;
+	if (ts_data->set_mode.sensitivity == mode) {
+		FTS_DEBUG("The value = %lu is same, so not to write", mode);
+		ret = size;
+		goto exit;
+	}
+
+	if (ts_data->power_disabled) {
+		FTS_DEBUG("The touch is in sleep state, restore the value when resume\n");
+		ret = size;
+		goto exit;
+	}
+
+	ret = fts_write_reg(FTS_CMD_SENSITIVITY_ADDR, mode);
+	if (ret < 0) {
+		FTS_ERROR("failed to set report rate, mode = %lu", mode);
+		goto exit;
+	}
+
+	ts_data->set_mode.sensitivity = mode;
+	FTS_INFO("Success to set %lu\n", mode);
+
+	ret = size;
+exit:
+	mutex_unlock(&ts_data->mode_lock);
+	return ret;
+}
+
+static ssize_t fts_sensitivity_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct fts_ts_data *ts_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_TS_DATA(dev);
+
+	FTS_INFO("sensitivity = %d.\n", ts_data->set_mode.sensitivity);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x", ts_data->set_mode.sensitivity);
 }
 
 static ssize_t fts_stowed_store(struct device *dev,
@@ -875,6 +942,15 @@ exit:
 		}
 	}
 
+	if (pdata->sensitivity_ctrl && ts_data->get_mode.sensitivity) {
+		ret = fts_write_reg(FTS_CMD_SENSITIVITY_ADDR, ts_data->get_mode.sensitivity);
+		if (ret >= 0) {
+			ts_data->set_mode.sensitivity = ts_data->get_mode.sensitivity;
+			msleep(20);
+			FTS_INFO("Success to set sensitivity mode = %d\n", ts_data->get_mode.sensitivity);
+		}
+	}
+
 	if (pdata->stowed_mode_ctrl) {
 		ts_data->set_mode.stowed = 0;
 	}
@@ -1090,6 +1166,9 @@ static int fts_mmi_extend_attribute_group(struct device *dev, struct attribute_g
 
 	if (pdata->sample_ctrl)
 		ADD_ATTR(sample);
+
+	if (pdata->sensitivity_ctrl)
+		ADD_ATTR(sensitivity);
 
 	if (pdata->stowed_mode_ctrl)
 		ADD_ATTR(stowed);

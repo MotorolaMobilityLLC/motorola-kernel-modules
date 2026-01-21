@@ -183,6 +183,7 @@ struct fts_ts_platform_data {
     bool interpolation_ctrl;
     bool report_rate_ctrl;
     bool sample_ctrl;
+    bool sensitivity_ctrl;
     bool stowed_mode_ctrl;
 };
 
@@ -226,6 +227,7 @@ struct fts_mode_info {
     int pocket_mode;
     int interpolation;
     int sample;
+    int sensitivity;
     int report_rate_mode;
     int edge_mode[2];
     int stowed;
