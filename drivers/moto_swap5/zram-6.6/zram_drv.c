@@ -34,12 +34,11 @@
 #include <linux/debugfs.h>
 #include <linux/cpuhotplug.h>
 #include <linux/part_stat.h>
+#include <linux/swap.h>
 
 #include "zram_drv.h"
 #include "zram_drv_internal.h"
-#ifdef CONFIG_HYBRIDSWAP
-#include "../hybridswap/hybridswap.h"
-#endif
+
 #ifdef CONFIG_ZRAM_EXT
 #include "zram_ext.h"
 #endif
@@ -61,6 +60,8 @@ static size_t huge_class_size;
 
 static const struct block_device_operations zram_devops;
 
+atomic_t am_app_launch = ATOMIC_INIT(0);
+
 //static void zram_free_page(struct zram *zram, size_t index);
 static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 			  struct bio *parent);
@@ -79,6 +80,28 @@ static inline bool is_partial_io(struct bio_vec *bvec)
 }
 #endif
 
+static inline bool skip_zram_write(struct zram *zram, u32 index)
+{
+    /*
+     * Throttle ZRAM writes during app launch to improve performance,
+     * BUT we must allow the following critical writes:
+     *
+     * 1. kswapd: Must proceed to reclaim memory and prevent OOM.
+     * 2. index 0 (Swap Header): 'mkswap' writes the swap signature to
+     *    index 0. Blocking this leads to 'swapon' failure (Swap total = 0).
+     */
+    if (atomic_read(&am_app_launch) && !current_is_kswapd() && index != 0)
+        return true;
+
+    zram_slot_lock(zram, index);
+    if (zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
+        zram_slot_unlock(zram, index);
+        pr_info("zram is under wb at index=%d\n", index);
+        return true;
+    }
+    zram_slot_unlock(zram, index);
+    return false;
+}
 
 static inline void zram_fill_page(void *ptr, unsigned long len,
 					unsigned long value)
@@ -187,7 +210,7 @@ static void mark_idle(struct zram *zram, ktime_t cutoff)
 		zram_slot_lock(zram, index);
 		if (zram_allocated(zram, index) &&
 				!zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_VENDOR_ZRAM_MEMORY_TRACKING
 			is_idle = !cutoff || ktime_after(cutoff, zram->table[index].ac_time);
 #endif
 			if (is_idle)
@@ -211,7 +234,7 @@ static ssize_t idle_store(struct device *dev,
 		 */
 		u64 age_sec;
 
-		if (IS_ENABLED(CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING) && !kstrtoull(buf, 0, &age_sec))
+		if (IS_ENABLED(CONFIG_VENDOR_ZRAM_MEMORY_TRACKING) && !kstrtoull(buf, 0, &age_sec))
 			cutoff_time = ktime_sub(ktime_get_boottime(),
 					ns_to_ktime(age_sec * NSEC_PER_SEC));
 		else
@@ -304,6 +327,27 @@ static ssize_t writeback_limit_show(struct device *dev,
 	up_read(&zram->init_lock);
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", val);
+}
+
+static ssize_t am_app_launch_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", atomic_read(&am_app_launch));
+}
+
+static ssize_t am_app_launch_store(struct device *dev,
+                                   struct device_attribute *attr,
+                                   const char *buf, size_t len)
+{
+    int ret, new_val;
+
+    ret = kstrtoint(buf, 10, &new_val);
+    if (ret < 0 || (new_val != 0 && new_val != 1))
+        return -EINVAL;
+
+    atomic_set(&am_app_launch, new_val);
+
+    return len;
 }
 
 static void reset_bdev(struct zram *zram)
@@ -725,24 +769,8 @@ static int read_from_bdev(struct zram *zram, struct page *page,
 }
 #endif
 #else
-#ifdef CONFIG_HYBRIDSWAP_CORE
-static void reset_bdev(struct zram *zram)
-{
-	struct block_device *bdev;
-
-	if (!zram->backing_dev)
-		return;
-
-	bdev = zram->bdev;
-	blkdev_put(bdev, zram);
-	/* hope filp_close flush all of IO */
-	filp_close(zram->backing_dev, NULL);
-	zram->backing_dev = NULL;
-	zram->bdev = NULL;
-}
-#else
 static inline void reset_bdev(struct zram *zram) {};
-#endif
+
 static int read_from_bdev(struct zram *zram, struct page *page,
 			unsigned long entry, struct bio *parent)
 {
@@ -752,7 +780,7 @@ static int read_from_bdev(struct zram *zram, struct page *page,
 void free_block_bdev(struct zram *zram, unsigned long blk_idx) {};
 #endif
 
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_VENDOR_ZRAM_MEMORY_TRACKING
 
 static struct dentry *zram_debugfs_root;
 
@@ -1190,7 +1218,7 @@ void zram_free_page(struct zram *zram, size_t index)
 {
 	unsigned long handle;
 
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_VENDOR_ZRAM_MEMORY_TRACKING
 	zram->table[index].ac_time = 0;
 #endif
 	if (zram_test_flag(zram, index, ZRAM_IDLE))
@@ -1205,9 +1233,6 @@ void zram_free_page(struct zram *zram, size_t index)
 		zram_clear_flag(zram, index, ZRAM_INCOMPRESSIBLE);
 
 	zram_set_priority(zram, index, 0);
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	hybridswap_untrack(zram, index);
-#endif
 
 	if (zram_test_flag(zram, index, ZRAM_WB)) {
 		zram_clear_flag(zram, index, ZRAM_WB);
@@ -1299,44 +1324,6 @@ static int zram_read_from_zspool(struct zram *zram, struct page *page,
 	return ret;
 }
 
-#ifdef CONFIG_HYBRIDSWAP_CORE
-struct hybridswap_work {
-	struct work_struct work;
-	struct zram *zram;
-	u32 index;
-	int error;
-};
-
-static void hybridswap_page_fault_sync_read(struct work_struct *work)
-{
-	struct hybridswap_work *hw = container_of(work, struct hybridswap_work, work);
-	struct zram *zram = hw->zram;
-	u32 index = hw->index;
-	zram_slot_lock(zram, index);
-	hw->error = hybridswap_page_fault(zram, index);
-	zram_slot_unlock(zram, index);
-}
-
-int hybridswap_page_fault_sync(struct zram *zram, u32 index)
-{
-	struct hybridswap_work work;
-
-	if (!zram_test_flag(zram, index, ZRAM_WB))
-		return 0;
-
-	zram_slot_unlock(zram, index);
-	work.zram = zram;
-	work.index = index;
-
-	INIT_WORK_ONSTACK(&work.work, hybridswap_page_fault_sync_read);
-	queue_work(system_unbound_wq, &work.work);
-	flush_work(&work.work);
-	destroy_work_on_stack(&work.work);
-	zram_slot_lock(zram, index);
-	return work.error;
-}
-#endif
-
 static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 			  struct bio *parent)
 {
@@ -1346,20 +1333,6 @@ static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 retry:
 #endif
 	zram_slot_lock(zram, index);
-
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	if (!parent)
-		ret = hybridswap_page_fault(zram, index);
-	else
-		ret = hybridswap_page_fault_sync(zram, index);
-
-	if (unlikely(ret)) {
-		pr_err("search in hybridswap failed! err=%d, page=%u\n",
-				ret, index);
-		zram_slot_unlock(zram, index);
-		return ret;
-	}
-#endif
 
 	if (!zram_test_flag(zram, index, ZRAM_WB)) {
 		/* Slot should be locked through out the function call */
@@ -1426,7 +1399,7 @@ static int zram_write_page(struct zram *zram, struct page *page, u32 index)
 	unsigned long element = 0;
 	enum zram_pageflags flags = 0;
 
-#ifdef CONFIG_HYBRIDSWAP_CORE
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	if (skip_zram_write(zram, index))
 		return -EBUSY;
 #endif
@@ -1540,9 +1513,6 @@ out:
 		zram_set_obj_size(zram, index, comp_len);
 	}
 
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	hybridswap_record(zram, index, page_memcg(page));
-#endif
 	zram_slot_unlock(zram, index);
 
 	/* Update stats */
@@ -1982,13 +1952,6 @@ static void zram_slot_free_notify(struct block_device *bdev,
 		return;
 	}
 
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	if (!hybridswap_delete(zram, index)) {
-		zram_slot_unlock(zram, index);
-		atomic64_inc(&zram->stats.miss_free);
-		return;
-	}
-#endif
 	zram_free_page(zram, index);
 	zram_slot_unlock(zram, index);
 }
@@ -2166,24 +2129,7 @@ static DEVICE_ATTR_WO(writeback);
 #endif
 static DEVICE_ATTR_RW(writeback_limit);
 static DEVICE_ATTR_RW(writeback_limit_enable);
-#endif
-#ifdef CONFIG_HYBRIDSWAP
-static DEVICE_ATTR_RO(hybridswap_vmstat);
-static DEVICE_ATTR_RW(hybridswap_loglevel);
-static DEVICE_ATTR_RW(hybridswap_enable);
-#endif
-#ifdef CONFIG_HYBRIDSWAP_SWAPD
-static DEVICE_ATTR_RW(hybridswap_swapd_pause);
-#endif
-#ifdef CONFIG_HYBRIDSWAP_CORE
-static DEVICE_ATTR_RW(hybridswap_core_enable);
-static DEVICE_ATTR_RW(hybridswap_loop_device);
-static DEVICE_ATTR_RW(hybridswap_dev_life);
-static DEVICE_ATTR_RW(hybridswap_quota_day);
-static DEVICE_ATTR_RO(hybridswap_report);
-static DEVICE_ATTR_RO(hybridswap_stat_snap);
-static DEVICE_ATTR_RO(hybridswap_meminfo);
-static DEVICE_ATTR_RW(hybridswap_zram_increase);
+static DEVICE_ATTR_RW(am_app_launch);
 #endif
 
 #ifdef CONFIG_ZRAM_MULTI_COMP
@@ -2211,6 +2157,7 @@ static struct attribute *zram_disk_attrs[] = {
 #endif
 	&dev_attr_writeback_limit.attr,
 	&dev_attr_writeback_limit_enable.attr,
+	&dev_attr_am_app_launch.attr,
 #endif
 	&dev_attr_io_stat.attr,
 	&dev_attr_mm_stat.attr,
@@ -2221,24 +2168,6 @@ static struct attribute *zram_disk_attrs[] = {
 #ifdef CONFIG_ZRAM_MULTI_COMP
 	&dev_attr_recomp_algorithm.attr,
 	&dev_attr_recompress.attr,
-#endif
-#ifdef CONFIG_HYBRIDSWAP
-	&dev_attr_hybridswap_vmstat.attr,
-	&dev_attr_hybridswap_loglevel.attr,
-	&dev_attr_hybridswap_enable.attr,
-#endif
-#ifdef CONFIG_HYBRIDSWAP_SWAPD
-	&dev_attr_hybridswap_swapd_pause.attr,
-#endif
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	&dev_attr_hybridswap_core_enable.attr,
-	&dev_attr_hybridswap_report.attr,
-	&dev_attr_hybridswap_meminfo.attr,
-	&dev_attr_hybridswap_stat_snap.attr,
-	&dev_attr_hybridswap_loop_device.attr,
-	&dev_attr_hybridswap_dev_life.attr,
-	&dev_attr_hybridswap_quota_day.attr,
-	&dev_attr_hybridswap_zram_increase.attr,
 #endif
 	NULL,
 };
@@ -2505,11 +2434,6 @@ static int __init zram_init(void)
 		num_devices--;
 	}
 
-#ifdef CONFIG_HYBRIDSWAP
-	ret = hybridswap_pre_init();
-	if (ret)
-		goto out_error;
-#endif
 	return 0;
 
 out_error:

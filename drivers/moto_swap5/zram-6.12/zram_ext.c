@@ -950,7 +950,7 @@ int zram_writeback_list(struct zram *zram, struct list_head *list)
 		req = list_last_entry(list, struct zram_request, list);
 		while (req->first < req->last) {
 			index = req->index[req->first++];
-			if (ret || /*am_app_launch ||*/ !zram_wb_available(zram)) {
+			if (ret || atomic_read(&am_app_launch) || !zram_wb_available(zram)) {
 				ret = -EBUSY;
 				zram_slot_lock(zram, index);
 				zram_clear_flag(zram, index, ZRAM_IDLE);
