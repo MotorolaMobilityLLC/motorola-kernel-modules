@@ -288,7 +288,6 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 	memcpy(core_data->set_mode.edge_mode, edge_cmd, sizeof(edge_cmd));
 
-	msleep(20);
 	ret = size;
 	ts_info(ts_dev->dev, "Success to set edge = %02x, rotation = %02x", edge_cmd[1], edge_cmd[0]);
 exit:
@@ -335,7 +334,6 @@ static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 	core_data->set_mode.charger_mode = mode;
-	msleep(20);
 	ts_info(core_data->ts_dev->dev, "Success to %s charger mode", mode ? "enable" : "disable");
 	return 0;
 }
@@ -379,7 +377,6 @@ static ssize_t goodix_ts_log_trigger_store(struct device *dev,
 	if (buf[0] == '1' || buf[0] == 1) {
 		ts_info(core_data->ts_dev->dev, "dump rep log");
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, 1);
-		msleep(20);
 	}
 
 	return count;
@@ -420,7 +417,6 @@ static int goodix_thp_mmi_set_report_rate(struct goodix_thp_core *core_data)
 	val[2] = mode & 0xFF;
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
-	msleep(20);
 	core_data->set_mode.report_rate_mode = mode;
 
 	ts_info(dev, "Success to set %s", mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
@@ -516,6 +512,7 @@ static ssize_t goodix_ts_sample_store(struct device *dev,
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 	core_data->set_mode.sample = mode;
+	//add delay for enter or exit game mode cmd 0xC2
 	msleep(20);
 	ts_info(tdev->dev, "Success to %s game mode", mode ? "enable" : "disable");
 
@@ -605,7 +602,6 @@ static ssize_t goodix_ts_pocket_mode_store(struct device *dev,
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 	core_data->set_mode.pocket_mode = core_data->get_mode.pocket_mode;
-	msleep(20);
 
 	ts_info(tdev->dev, "Success to %s pocket mode", core_data->get_mode.pocket_mode ? "enable" : "disable");
 exit:
@@ -652,6 +648,7 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 		val[0] = NOTIFY_TYPE_STOW_MODE;
 		val[1] = mode ? 1 : 0;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		//add delay for enter or exit suspend mode cmd 0x97
 		msleep(20);
 	} else {
 		ts_info(tdev->dev, "Skip stowed mode setting power_on:%d.", core_data->power_on);
@@ -750,13 +747,16 @@ static int goodix_stylus_mode(struct goodix_thp_core *core_data, int mode)
 
 	if (mode) {
 		goodix_clock_enable(core_data, mode);
+		//add delay after stylus clock enable
 		msleep(50);
 		val[1] = 1;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		//add delay after enable stylus mode cmd 0xA4
 		msleep(20);
 	} else {
 		val[1] = 0;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+		//add delay after disable stylus mode cmd 0xA4
 		msleep(50);
 		goodix_clock_enable(core_data, mode);
 	}
@@ -828,7 +828,6 @@ static ssize_t goodix_ts_stylus_mode_store(struct device *dev,
 				val[1] = ((core_data->set_mode.report_rate_mode) >> 8) & 0xFF;
 				val[2] = (core_data->set_mode.report_rate_mode) & 0xFF;
 				put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-				msleep(20);
 				ts_info(tdev->dev, "Success to restore %s interpolation mode",
 					core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
 					(core_data->set_mode.report_rate_mode == REPORT_RATE_CMD_360HZ ? "REPORT_RATE_300/360HZ" :
@@ -896,7 +895,6 @@ static ssize_t goodix_ts_fp_int_store(struct device *dev,
 	ret = tdev->hw_ops->set_fp_int_pin(tdev, mode);
 	if (!ret)
 		core_data->set_mode.fp_int_state = mode;
-	msleep(20);
 	ts_info(tdev->dev, "Success set fp int to %s", mode ? "high" : "low");
 
 	ret = size;
@@ -950,7 +948,6 @@ static ssize_t goodix_ts_ble_broadcast_store(struct device *dev,
 	if (!ret)
 		ts_info(tdev->dev, "Success %s ble broadcast", mode ? "start" : "stop");
 
-	msleep(20);
 	ret = size;
 exit:
 	mutex_unlock(&core_data->mode_lock);
@@ -1016,14 +1013,6 @@ static ssize_t goodix_ts_device_id_store(struct device *dev,
 	}
 
 	ts_info(tdev->dev, "Success send phone device ID to TP FW %ld", mode);
-	/*
-	* 20ms delay required after sending device ID to touch firmware.
-	* This allows the firmware to properly process the command and
-	* update its internal state before handling subsequent operations.
-	* This timing is based on firmware requirements documented in
-	* the touch controller datasheet.
-	*/
-	msleep(20);
 	ret = size;
 
 exit:
@@ -1075,7 +1064,6 @@ void goodix_filter_mode(struct goodix_thp_core *core_data, int mode)
 		val[1] = (core_data->rate_configs[mode].filter >> 8) & 0xFF;
 		val[2] = (core_data->rate_configs[mode].filter ) & 0xFF;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-		msleep(20);
 	}
 }
 
@@ -1088,7 +1076,6 @@ void goodix_palm_area_mode(struct goodix_thp_core *core_data, int mode)
 		val[1] = (core_data->rate_configs[mode].palm_area >> 8) & 0xFF;
 		val[2] = (core_data->rate_configs[mode].palm_area ) & 0xFF;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-		msleep(20);
 	}
 }
 
@@ -1157,7 +1144,6 @@ static ssize_t goodix_ts_stylus_report_rate_store(struct device *dev,
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 	core_data->set_mode.stylus_report_rate_mode = core_data->get_mode.stylus_report_rate_mode;
-	msleep(20);
 	goodix_filter_mode(core_data, core_data->current_stylus_rate_mode);
 	goodix_palm_area_mode(core_data, core_data->current_stylus_rate_mode);
 
@@ -1207,7 +1193,6 @@ void goodix_ts_mmi_post_resume(struct work_struct *work) {
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 		core_data->set_mode.stylus_report_rate_mode = core_data->get_mode.stylus_report_rate_mode;
-		msleep(20);
 		goodix_filter_mode(core_data, core_data->current_stylus_rate_mode);
 		goodix_palm_area_mode(core_data, core_data->current_stylus_rate_mode);
 		ts_info(dev, "Success switch stylus tip report rate to mode %d %dHZ, is on stylus mode? %s",
@@ -1234,7 +1219,6 @@ void goodix_ts_mmi_post_resume(struct work_struct *work) {
 
 		core_data->set_mode.interpolation = core_data->get_mode.interpolation;
 		core_data->set_mode.report_rate_mode = core_data->get_mode.report_rate_mode;
-		msleep(20);
 
 		ts_info(dev, "Success to %s interpolation mode",
 			core_data->get_mode.report_rate_mode == REPORT_RATE_CMD_240HZ ? "REPORT_RATE_240HZ" :
@@ -1254,7 +1238,6 @@ void goodix_ts_mmi_post_resume(struct work_struct *work) {
 
 		memcpy(core_data->set_mode.edge_mode, core_data->get_mode.edge_mode,
 				sizeof(core_data->get_mode.edge_mode));
-		msleep(20);
 		ts_info(dev, "Success to set edge area = %02x, rotation = %02x",
 			core_data->get_mode.edge_mode[1], core_data->get_mode.edge_mode[0]);
 	}
@@ -1271,7 +1254,6 @@ void goodix_ts_mmi_post_resume(struct work_struct *work) {
 		val[0] = NOTIFY_TYPE_POCKET_MODE;
 		val[1] = core_data->get_mode.pocket_mode;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-		msleep(20);
 
 		core_data->set_mode.pocket_mode = core_data->get_mode.pocket_mode;
 		ts_info(dev, "Success to %s pocket mode", core_data->get_mode.pocket_mode ? "Enable" : "Disable");
@@ -1283,7 +1265,6 @@ void goodix_ts_mmi_post_resume(struct work_struct *work) {
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
 
 		core_data->set_mode.charger_mode = core_data->get_mode.charger_mode;
-		msleep(20);
 		ts_info(core_data->ts_dev->dev, "Success to %s charger mode",
 			core_data->get_mode.charger_mode ? "enable" : "disable");
 	}
@@ -1319,7 +1300,6 @@ static int goodix_berlin_gesture_setup(struct goodix_thp_core *core_data)
 
 	ts_info(dev, "Send enable gesture mode 0x%x 0x%x", val[1], val[2]);
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-	msleep(20);
 
 	return 0;
 }
@@ -1334,7 +1314,6 @@ static int goodix_berlin_gesture_clean(struct goodix_thp_core *core_data)
 
 	ts_info(core_data->ts_dev->dev, "Send cmd to clean gesture mode");
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-	msleep(20);
 
 	return 0;
 }
@@ -1356,7 +1335,6 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 	case TS_MMI_PM_GESTURE:
 		goodix_berlin_gesture_setup(core_data);
 		val[1] = 0;
-		msleep(16);
 		break;
 	case TS_MMI_PM_DEEPSLEEP:
 		goodix_berlin_gesture_clean(core_data);
@@ -1379,7 +1357,6 @@ static int goodix_ts_mmi_panel_state(struct device *dev,
 		ts_info(tdev, "Send screen off cmd");
 	}
 	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
-	msleep(20);
 
 	return 0;
 }
