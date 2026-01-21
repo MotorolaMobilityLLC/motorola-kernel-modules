@@ -318,7 +318,7 @@ static void zram_process_madvise_return_error(void *data,
 static void zram_madvise_pageout_bypass(void *data,
 		struct mm_struct *mm, bool pageout, int *ret)
 {
-	if (pageout && rwsem_is_contended(&mm->mmap_lock))
+	if (atomic_read(&am_app_launch) || (pageout && rwsem_is_contended(&mm->mmap_lock)))
 		*ret = -EBUSY;
 }
 
