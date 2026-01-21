@@ -62,12 +62,7 @@ enum zram_pageflags {
 
 	ZRAM_COMP_PRIORITY_BIT1, /* First bit of comp priority index */
 	ZRAM_COMP_PRIORITY_BIT2, /* Second bit of comp priority index */
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	ZRAM_BATCHING_OUT,
-	ZRAM_FROM_HYBRIDSWAP,
-	ZRAM_MCGID_CLEAR,
-	ZRAM_IN_BD, /* zram stored in back device */
-#endif
+
 	__NR_ZRAM_PAGEFLAGS,
 };
 
@@ -80,7 +75,7 @@ struct zram_table_entry {
 		unsigned long element;
 	};
 	unsigned long flags;
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_VENDOR_ZRAM_MEMORY_TRACKING
 	ktime_t ac_time;
 #endif
 };
@@ -165,17 +160,8 @@ struct zram {
 	unsigned long *bitmap;
 	unsigned long nr_pages;
 #endif
-#ifdef CONFIG_HYBRIDSWAP_ZRAM_MEMORY_TRACKING
+#ifdef CONFIG_VENDOR_ZRAM_MEMORY_TRACKING
 	struct dentry *debugfs_dir;
-#endif
-#if (defined CONFIG_HYBRIDSWAP_CORE)
-	struct block_device *bdev;
-	unsigned int old_block_size;
-	unsigned long nr_pages;
-	unsigned long increase_nr_pages;
-#endif
-#ifdef CONFIG_HYBRIDSWAP_CORE
-	struct hyb_info *infos;
 #endif
 #ifdef CONFIG_ZRAM_EXT
 	struct task_struct *prefetchd;
