@@ -15,6 +15,7 @@
 
 #include <linux/time.h>
 #include <linux/time64.h>
+#include <linux/irq.h>
 
 #include "goodix_thp.h"
 #include "goodix_thp_mmi.h"
@@ -2043,8 +2044,8 @@ static ssize_t goodix_thp_irq_info_show(struct device *dev,
         desc = irq_to_desc(core_data->irq);
         if (desc) {
                 offset += r;
-                r = snprintf(&buf[offset], PAGE_SIZE - offset, "disable-depth:%d\n",
-                        desc->depth);
+                r = snprintf(&buf[offset], PAGE_SIZE - offset, "disable-depth:%d\nirq disable:%s\n",
+                        desc->depth, (desc->status_use_accessors & IRQ_DISABLE_UNLAZY ?"unlazy" : "lazy"));
                 if (r < 0)
                 return -EINVAL;
         }
