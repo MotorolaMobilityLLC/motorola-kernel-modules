@@ -1478,6 +1478,7 @@ static int goodix_thp_pen_input_dev_init(struct goodix_thp_core *core_data)
         else
                 sprintf(core_data->pen_dev_name, "%s%d", GOODIX_THP_STYLUS_INPUT_DEVICE_NAME, core_data->pdev->id);
         pen_dev->name = core_data->pen_dev_name;
+        pen_dev->phys = core_data->pen_dev_name;
         pen_dev->id.bustype = BUS_SPI;
         pen_dev->id.product = 0x0210 + core_data->pdev->id;
         pen_dev->id.vendor = 0x27C6;
