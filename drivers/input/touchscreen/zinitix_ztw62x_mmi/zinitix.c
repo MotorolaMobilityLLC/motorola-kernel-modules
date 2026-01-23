@@ -3337,9 +3337,11 @@ static void fw_update(void *device_data)
 {
 	struct bt541_ts_info *info = (struct bt541_ts_info *)device_data;
 	struct i2c_client *client = info->client;
+	struct capa_info *cap = &(info->cap_info);
 	int ret = 0;
 	char result[16] = {0};
 	u8 *fw_file_buf = NULL;
+	uint8_t reg_version = 0x00;
 
 	set_default_result(info);
 
@@ -3362,12 +3364,28 @@ static void fw_update(void *device_data)
 
 		dev_info(&client->dev, "ums fw is loaded!!\n");
 		info->checkUMSmode = true;
+
+		//reg_version is the fw version of the bin file
+		reg_version = fw_file_buf[60];
+		dev_info(&client->dev,"Firmware Bin : reg_version 0x%x\n",reg_version);
+		dev_info(&client->dev,"existing Firmware reg_data_version: 0x%0x\n",cap->reg_data_version);
+
+		//comparing existing firmware and new firmware bin file versions
+		if(reg_version == cap->reg_data_version){
+			dev_info(&client->dev,"Firmware matched\n");
+			break;
+		}
+		else
+			dev_info(&client->dev,"Firmware not matched\n");
+
 		ret = ts_upgrade_sequence((u8 *)fw_file_buf);
 		info->checkUMSmode = false;
 		if(ret<0) {
 			dev_err(&client->dev, "fw upgrade fail!!\n");
 			goto error_upgrade;
 		}
+		else
+			dev_info(&client->dev,"After Upgrade reg_data_version: 0x%0x\n",cap->reg_data_version);
 		break;
 
 	default:
