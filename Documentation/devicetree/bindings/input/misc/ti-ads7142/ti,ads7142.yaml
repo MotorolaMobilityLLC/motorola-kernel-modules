@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/iio/adc/ti,ads7142.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Texas Instruments ADS7142 adc driver device tree bindings
+
+maintainers:
+  - József Horváth <info@ministro.hu>
+
+description: |
+  This document is for describing the required device tree parameters
+   for ads7142 adc
+  The required parameters for proper operation are described below.
+
+  Datasheet: https://www.ti.com/lit/ds/symlink/ads7142.pdf
+
+properties:
+  compatible:
+    const: ti,ads7142
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    description: |
+      The BUSY/PDY pin is used as interrupt line in autonomous monitoring mode.
+    maxItems: 1
+
+  avdd-supply:
+    description: Regulator for the reference voltage
+
+  dvdd-supply: true
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 0
+
+  "#io-channel-cells":
+    const: 1
+
+patternProperties:
+  "^channel@[0-1]$":
+    $ref: "adc.yaml"
+    type: object
+    description: |
+      Represents the external channels which are connected to the ADC.
+    properties:
+      reg:
+        description: |
+          The channel number.
+        items:
+          minimum: 0
+          maximum: 1
+
+    required:
+      - reg
+
+    additionalProperties: false
+
+required:
+  - compatible
+  - "#io-channel-cells"
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c {
+      #address-cells = <1>;
+      #size-cells = <0>;
+      adc@1f {
+        compatible = "ti,ads7142";
+        reg = <0x1f>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        #io-channel-cells = <1>;
+
+        avdd-supply = <&vdd_3v3_reg>;
+        dvdd-supply = <&vdd_1v8_reg>;
+
+        interrupt-parent = <&gpio>;
+        interrupts = <7 2>;
+
+        channel@0 {
+          reg = <0>;
+        };
+
+        channel@1 {
+          reg = <1>;
+        };
+      };
+    };
+...
+
