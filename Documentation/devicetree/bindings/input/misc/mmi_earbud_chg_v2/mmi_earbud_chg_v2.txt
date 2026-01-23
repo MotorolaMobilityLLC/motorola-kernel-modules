@@ -1,0 +1,56 @@
+MMI earbud V2 is advanced version of V1
+modified V1 to adopt V2
+
+v1:
+ Read ADC data from PM gpio line..
+ No support to control buds using UART
+ GPIO's are direct Base charging enable/disable
+ HALL sensor to detect lip Open/Close
+
+v2:
+ Read ADC data from ads7142 using i2c interface
+ UART support to control buds
+ PM gpio to control either control buds or charging
+ HALL sensor to detect lip Open/Close
+
+Device tree nodes
+
+enable-uart-chg-gpios - GPIO to enable uart
+enable-lchg-gpios     - GPIO to enable Left charging
+enable-rchg-gpios     - GPIO to enable Right Charging
+
+chg-irq-gpios - HALL interrupt pin control
+
+
+example:
+ mmi_earbud_chg {
+                compatible = "mmi,earbud_chg";
+                pinctrl-names = "chg_active", "chg_suspend";
+                pinctrl-0 = <&enable_chg_active &enable_lchg_active &enable_rchg_active>;
+                pinctrl-1 = <&enable_chg_suspend &enable_lchg_suspend &enable_rchg_suspend>;
+                status = "ok";
+
+                // Need to disable this for charging, Enable for UART communication
+                enable-uart-chg-gpios  = <&tlmm 102 0x00>;
+                enable-lchg-gpios = <&pmw6100_gpios 3 0>;
+                enable-rchg-gpios = <&pmw6100_gpios 5 0>;
+
+                chg-irq-gpios = <&tlmm 121 0x2008>; // HALL sensor interrupt
+                interrupt-parent = <&tlmm>;
+
+                mmi,hb-interval = <60000>;
+                mmi,t-ichg = <3000>;
+        };
+
+ADC config:
+        ads7142@18 {
+                compatible = "ti,ads7142";
+                reg = <0x18>;
+                status = "ok";
+                channel@0 {
+                        reg = <0>;
+                };
+                channel@1 {
+                        reg = <1>;
+                };
+        };
