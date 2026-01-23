@@ -332,6 +332,7 @@ struct sc8989x_chip {
 	bool	mmi_qc3p_rerun_done;
 	int otg_enable;
 	int upm6920_iterm;
+	int icharge_default_value;
 	int cx25890HQ_iterm;
 	int upm6920A_votg;
 	int cx25890HQ_votg;
@@ -361,7 +362,7 @@ static const u32 sc8989x_iboost[] = {
 
 static const struct reg_range sc8989x_reg_range_ary[] = {
 	[SC8989X_IINDPM] = SC8989X_CHG_RANGE(100, 3250, 50, 100, false),
-	[SC8989X_ICHG] = SC8989X_CHG_RANGE(0, 5040, 60, 0, false),
+	[SC8989X_ICHG] = SC8989X_CHG_RANGE(0, 4000, 60, 0, false),
 	[SC8989X_ITERM] = SC8989X_CHG_RANGE(30, 930, 60, 30, false),
 	[SC8989X_VBAT_REG] = SC8989X_CHG_RANGE(3840, 4848, 16, 3840, false),
 	[SC8989X_VINDPM] = SC8989X_CHG_RANGE(3900, 15300, 100, 2600, false),
@@ -371,7 +372,7 @@ static const struct reg_range sc8989x_reg_range_ary[] = {
 	[SC8989X_VBUS] = SC8989X_CHG_RANGE(2600, 15300, 100, 2600, false),
 	[SC8989X_ICC] = SC8989X_CHG_RANGE(0, 6350, 50, 0, false),
 	[SC8989X_IBUS] = SC8989X_CHG_RANGE(0, 6350, 50, 0, false),
-	[UPM6920A_ICHG] = SC8989X_CHG_RANGE(0, 5040, 64, 0, false),
+	[UPM6920A_ICHG] = SC8989X_CHG_RANGE(0, 4000, 64, 0, false),
 	[UPM6920A_ITERM] = SC8989X_CHG_RANGE(64, 1024, 64, 64, false),
 	[CX25890HQ_IINDPM] = SC8989X_CHG_RANGE(100, 3100, 50, 100, false),
 	[CX25890HQ_ICHG] = SC8989X_CHG_RANGE(0, 5056, 64, 0, false),
@@ -2682,7 +2683,11 @@ void get_qc_charger_type_func_work(struct work_struct *work)
 	pr_info("start qc detected \n");
 	sc->qc_is_detect = true;
 
-	sc8989x_set_charging_current(sc->chg_dev,1000000);
+	if (sc->icharge_default_value > 0) {
+		sc8989x_set_charging_current(sc->chg_dev,sc->icharge_default_value);
+	} else {
+		sc8989x_set_charging_current(sc->chg_dev,1000000);
+	}
 
 	do{
 		m_chg_ready = false;
@@ -2947,7 +2952,11 @@ static int mmi_hvdcp_detect_kthread(void *param)
 		sc->qc_is_start_detect = true;
 		sc->mmi_hvdcp_trig_flag = false;
 		charger_type = USB_TYPE_UNKNOWN;
-		sc8989x_set_charging_current(sc->chg_dev,1000000);
+		if (sc->icharge_default_value > 0) {
+			sc8989x_set_charging_current(sc->chg_dev,sc->icharge_default_value);
+		} else {
+			sc8989x_set_charging_current(sc->chg_dev,1000000);
+		}
 		//mt6375_chg_field_set(sc, F_IAICR, 500);
 		//mt6375_chg_set_usbsw(sc, USBSW_CHG);
 
@@ -3474,7 +3483,11 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 #else
 		sc8989x_set_vindpm_track(sc, SC8989X_TRACK_300);
 #endif
-		sc8989x_set_charging_current(sc->chg_dev,1000000);
+		if (sc->icharge_default_value > 0) {
+			sc8989x_set_charging_current(sc->chg_dev,sc->icharge_default_value);
+		} else {
+			sc8989x_set_charging_current(sc->chg_dev,1000000);
+		}
 		dev_info(sc->dev, "%s: set icc 1000ma\n", __func__);
 #if IS_ENABLED(CONFIG_FACTORY_BUILD)
 		ret = sc8989x_set_chg_enable(sc, false);
@@ -3578,6 +3591,12 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 		sc->cfg->iterm = sc->upm6920_iterm;
 	}
 
+	ret = of_property_read_u32(np, "sc,sc8989x,icharge", &sc->icharge_default_value);
+	if (ret < 0) {
+		dev_err(sc->dev, "%s not find\n", "sc,sc8989x,icharge");
+		sc->icharge_default_value = 0;
+	}
+
 	ret = of_property_read_u32(np, "sc,cx25890HQ,iterm", &sc->cx25890HQ_iterm);
 	if (ret < 0) {
 		dev_err(sc->dev, "%s not find\n", "sc,cx25890HQ,iterm");
@@ -3649,6 +3668,9 @@ static int sc8989x_init_device(struct sc8989x_chip *sc)
 
 	//reg reset;
 	sc8989x_field_write(sc, REG_RST, 1);
+	if (sc->icharge_default_value > 0) {
+		sc8989x_set_ichg(sc, sc->icharge_default_value / 1000);
+	}
 
 	if (sc->is_cx25890HQ) {
 		cx25890hq_write_reg40(sc,true);
