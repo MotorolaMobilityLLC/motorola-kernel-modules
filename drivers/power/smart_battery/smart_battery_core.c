@@ -773,9 +773,10 @@ static bool smart_batt_raise_battempty_threshold(struct mmi_smart_battery *chip,
 		if (chip->combo_current_now < DISCHG_CURRENT_1A) {
 			chip->heavyLoad_dischg_cnt ++;
 			chip->lightLoad_dischg_cnt = 0;
-			if (chip->combo_voltage_now < (vbatt_empty + HEAVYLOAD_VBAT_DELTA) && chip->heavyLoad_dischg_cnt < TAPER_CNT)
+			if (chip->combo_voltage_now < (vbatt_empty + HEAVYLOAD_VBAT_DELTA) &&
+				(chip->combo_batt_temp < 0 || chip->heavyLoad_dischg_cnt < TAPER_CNT))
 				chip->force_zero_level = FORCE_ZERO_IMMEDIATELY;
-			mmi_info(chip, "heavyLoad_dischg_cnt=%d\n", chip->heavyLoad_dischg_cnt);
+			mmi_info(chip, "heavyLoad_dischg_cnt=%d, Tbat = %d\n", chip->heavyLoad_dischg_cnt, chip->combo_batt_temp);
 		}
 		else if (chip->combo_current_now > DISCHG_CURRENT_500MA) {
 			chip->lightLoad_dischg_cnt ++;
