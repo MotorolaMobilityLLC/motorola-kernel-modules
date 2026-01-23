@@ -209,6 +209,9 @@ struct reg_ioctl {
 #define BT541_POINT_STATUS_REG		0x0080
 #define BT541_ICON_STATUS_REG		0x00AA
 
+#define BT541_INTERNAL_FLAG_REG		0x0017
+#define BT541_DISABLE_LARGE_PALM_EVENT	0xCA04
+
 #define BT541_AFE_FREQUENCY		0x0100
 #define BT541_DND_N_COUNT		0x0122
 #define BT541_DND_U_COUNT		0x0135
@@ -1968,6 +1971,11 @@ retry_init:
 
 	if (read_data(client, BT541_AFE_FREQUENCY,
 					(u8 *)&cap->afe_frequency, 2) < 0)
+		goto fail_init;
+
+	if(pdata->large_palm_disable &&
+			(write_reg(info->client, BT541_INTERNAL_FLAG_REG,
+				   BT541_DISABLE_LARGE_PALM_EVENT) < 0))
 		goto fail_init;
 
 	zinitix_debug_msg("AFE frequency = %d\n", cap->afe_frequency);
@@ -5885,6 +5893,8 @@ static int bt541_ts_probe_dt(struct device_node *np,
 		return ret;
 	} else
 		pdata->orientation = (u8) temp;
+
+	pdata->large_palm_disable = of_property_read_bool(np, "zinitix,large-palm-disable");
 
 	pdata->tsp_vendor1 = of_get_named_gpio(np, "zinitix,vendor1", 0);
 	pdata->tsp_vendor2 = of_get_named_gpio(np, "zinitix,vendor2", 0);

@@ -177,6 +177,7 @@ struct bt541_ts_platform_data {
 	u16		y_resolution;
 	u16		page_size;
 	u8		orientation;
+	bool		large_palm_disable;
 	const char      *pname;
 #ifdef USE_TSP_TA_CALLBACKS
 	void (*register_cb) (struct tsp_callbacks *);
