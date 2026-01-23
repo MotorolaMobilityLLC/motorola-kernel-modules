@@ -66,6 +66,8 @@ static size_t huge_class_size;
 
 static const struct block_device_operations zram_devops;
 
+atomic_t am_app_launch = ATOMIC_INIT(0);
+
 //static void zram_free_page(struct zram *zram, size_t index);
 static int zram_read_page(struct zram *zram, struct page *page, u32 index,
 			  struct bio *parent);
@@ -323,6 +325,27 @@ static ssize_t writeback_limit_show(struct device *dev,
 	up_read(&zram->init_lock);
 
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", val);
+}
+
+static ssize_t am_app_launch_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", atomic_read(&am_app_launch));
+}
+
+static ssize_t am_app_launch_store(struct device *dev,
+                                   struct device_attribute *attr,
+                                   const char *buf, size_t len)
+{
+    int ret, new_val;
+
+    ret = kstrtoint(buf, 10, &new_val);
+    if (ret < 0 || (new_val != 0 && new_val != 1))
+        return -EINVAL;
+
+    atomic_set(&am_app_launch, new_val);
+
+    return len;
 }
 
 static void reset_bdev(struct zram *zram)
@@ -2341,6 +2364,7 @@ static DEVICE_ATTR_WO(writeback);
 #endif
 static DEVICE_ATTR_RW(writeback_limit);
 static DEVICE_ATTR_RW(writeback_limit_enable);
+static DEVICE_ATTR_RW(am_app_launch);
 #endif
 #ifdef CONFIG_HYBRIDSWAP
 static DEVICE_ATTR_RO(hybridswap_vmstat);
@@ -2387,6 +2411,7 @@ static struct attribute *zram_disk_attrs[] = {
 #endif
 	&dev_attr_writeback_limit.attr,
 	&dev_attr_writeback_limit_enable.attr,
+	&dev_attr_am_app_launch.attr,
 #endif
 	&dev_attr_io_stat.attr,
 	&dev_attr_mm_stat.attr,
