@@ -556,7 +556,7 @@ struct ovt_tcm_features {
 typedef struct {
     unsigned short chargerBit           : 1; // bit0
     unsigned short gloveMode            : 1; // bit1
-    unsigned short frequencyShift       : 2; // bit2-3
+    unsigned short frequencyShift       : 1; // bit2
     unsigned short palmFlg              : 1; // bit4
     unsigned short bendingMode          : 1; // bit5
     unsigned short gndUnstable          : 1; // bit6
