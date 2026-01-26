@@ -3046,8 +3046,10 @@ rerun:
 out:
 
 		sc->qc_is_detect = false;
-		mmi_config_qc30_charger_voltage(sc->chg_dev);
-		if ((sc->qc_chg_type != USB_TYPE_QC3P_18 )
+		if ((sc->qc_chg_type == USB_TYPE_QC30)
+			&& (sc->only_buck_qc_support)) {
+			mmi_config_qc30_charger_voltage(sc->chg_dev);
+		} else if ((sc->qc_chg_type != USB_TYPE_QC3P_18 )
 			&& (sc->qc_chg_type != USB_TYPE_QC3P_27)
 			&& (sc->qc_chg_type != USB_TYPE_QC3P_45)) {
 			sc8989x_set_dpdm_0V(sc);
