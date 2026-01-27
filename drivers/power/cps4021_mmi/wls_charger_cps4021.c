@@ -3983,12 +3983,22 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
     *cable_ready = true;
     *icl = 400000;
     *vbus = 5000;
+#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
+    int batt_soc = 0;
+    batt_soc = cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY);
+#endif
     cps_wls_log(CPS_LOG_ERR, "%s start icl=%d vbus=%d mode_type:%d,mc_status:%d,real_mode_type:%d\n",
 			__func__, *icl, *vbus, chg->mode_type,chg->mc_status, mode_type);
     if (chg->mc_support && chg->mc_status) {
 		chg->mode_type = mode_type;
 		wls_power = cps_wls_get_rx_neg_power() / 10;
 		if (chg->moto_stand || chg->mcode == MOTO_TX_MCODE) {
+#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
+            if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
+                wls_power = WLS_RX_CAP_10W;
+                cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
+            }
+#endif
 			if (wls_power == WLS_RX_CAP_15W) {
 				*icl = 1500000;
 				*vbus = 10000;
@@ -4061,6 +4071,12 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
                 wls_voltage = cps_wls_get_rx_vout();
                 cps_wls_log(CPS_LOG_DEBG, "%s cps4021 power:%dW vout:%dmV",
                                 __func__, wls_power, wls_voltage);
+#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
+                if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
+                    wls_power = WLS_RX_CAP_10W;
+                    cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
+                }
+#endif
                 if (wls_power >= WLS_RX_CAP_15W)
                 {
                     chg->MaxV = 10000;
@@ -4149,14 +4165,23 @@ static void cps_epp_current_select(int  *icl, int *vbus)
 
     *icl = 400000;
     *vbus = 5000;
-
+#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
+	int batt_soc = 0;
+    batt_soc = cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY);
+#endif
     cps_wls_log(CPS_LOG_ERR, "%s start icl=%d vbus=%d mode_type:%d,mc_status:%d\n",
 			__func__, *icl, *vbus, chg->mode_type,chg->mc_status);
     if (chg->mc_support && chg->mc_status) {
 		wls_power = cps_wls_get_rx_neg_power() / 10;
 		if (chg->moto_stand || chg->mcode == MOTO_TX_MCODE) {
+#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
+            if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
+                wls_power = WLS_RX_CAP_10W;
+                cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
+			}
+#endif
 			if (wls_power == WLS_RX_CAP_15W) {
-				*icl = 1500000;
+                *icl = 1500000;
 				*vbus = 10000;
 			} else if (wls_power == WLS_RX_CAP_10W) {
 				*icl = 1000000;
@@ -4206,6 +4231,12 @@ static void cps_epp_current_select(int  *icl, int *vbus)
             wls_voltage = cps_wls_get_rx_vout();
             cps_wls_log(CPS_LOG_DEBG, "%s cps4021 power:%dW vout:%dmV",
                             __func__, wls_power, wls_voltage);
+#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
+            if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
+                wls_power = WLS_RX_CAP_10W;
+                cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
+			}
+#endif
             if (wls_power >= WLS_RX_CAP_15W)
             {
                 chg->MaxV = 10000;
