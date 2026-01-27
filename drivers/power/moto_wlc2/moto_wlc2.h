@@ -9,6 +9,7 @@
 #define FORCE_FW_UPDATE 2
 #define VBUS_VALID_MV 4600 //If vbus >= 4.6V,the vbus is valid.
 
+#define RX_ONLINE_CHECK_MS 500
 #define WLC_V_CHARGER_MIN 4600000 /* 4.6 V */
 /*wireless input current and charging current*/
 #define WIRELESS_CHARGER_MAX_CURRENT			3000000
@@ -393,6 +394,7 @@ struct moto_wlc {
 	struct delayed_work offset_detect_work;
 	struct delayed_work mode_switch_work;
 	struct delayed_work dump_info_work;
+	struct delayed_work rx_online_check;
 };
 
 extern int wlc_hal_init_hardware(struct chg_alg_device *alg);
@@ -451,6 +453,7 @@ extern int wls_chg_notify_otg_plugin(struct moto_wlc *wlc, bool on);
 extern void wlc_chg_mc_icl_work(struct work_struct *work);
 extern void wlc_chg_dump_info_work(struct work_struct *work);
 
+extern int wls_chg_power_off(struct moto_wlc *wlc);
 extern int wls_device_node_create(struct device *dev);
 extern void wls_device_fw_update_work(struct work_struct *work);
 extern int wls_device_tcmd_register(struct moto_wlc *wlc);
@@ -458,6 +461,7 @@ extern int wls_device_update_light_fan(struct moto_wlc *wlc);
 extern void wls_device_light_fan_work(struct work_struct *work);
 extern int wls_device_uisoc_change(struct moto_wlc *wlc, int uisoc);
 extern void wls_device_offset_detect_work(struct work_struct *work);
+extern void wlc_chg_rx_online_check(struct work_struct *work);
 extern int wls_device_init_light_fan(struct moto_wlc *wlc);
 extern void wls_device_mode_switch_work(struct work_struct *work);
 extern int wls_device_start_mode_switch(struct moto_wlc *wlc, char *str, int op_mode);

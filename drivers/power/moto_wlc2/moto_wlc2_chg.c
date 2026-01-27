@@ -105,6 +105,7 @@ int wls_chg_power_on(struct moto_wlc *wlc)
 		if (rt == 0) {
 			wlc->wls_online = true;
 			power_supply_changed(wlc->wls_psy);
+			mod_delayed_work(wlc->wls_wq, &wlc->rx_online_check, msecs_to_jiffies(RX_ONLINE_CHECK_MS));
 		}
 	}
 

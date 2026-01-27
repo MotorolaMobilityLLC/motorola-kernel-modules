@@ -308,6 +308,61 @@ bool wls_device_check_iout(struct moto_wlc *wlc, int target_current, int current
 	return !skip_rod && (current_now < target_current);
 }
 
+void wlc_chg_rx_online_check(struct work_struct *work)
+{
+	struct moto_wlc *wlc =
+		container_of((struct delayed_work*)work, struct moto_wlc, rx_online_check);
+	int chip_id = 0;
+	int sys_mode = 0;
+	int vbus = 0;
+	bool rx_power = false;
+	static int rx_power_cnt = 0;
+
+	if (IS_ERR_OR_NULL(wlc))
+		return;
+
+	vbus = wlc_hal_get_vbus(wlc->alg) / 1000;
+	wlc_info("%s vbus:%dmV\n", __func__, vbus);
+	if(vbus > VBUS_VALID_MV) {
+		wlc_info("%s: Rx power on, LDO on\n", __func__);
+		return;
+	}
+
+	wls_rx_get_chip_id(wlc->wls_dev, &chip_id);
+	wls_rx_get_sys_mode(wlc->wls_dev, &sys_mode);
+	wlc_info("%s: sys_mode = %d, chip_id = %d\n", __func__, sys_mode, chip_id);
+	if (chip_id == wlc->config.chip_id && sys_mode == SYS_MODE_RX) {
+		rx_power = true;
+		rx_power_cnt = 0;
+	} else {
+		rx_power = false;
+		rx_power_cnt++;
+	}
+
+	if (rx_power) {
+		wlc_info("%s: Rx power on, Re-check after 500ms\n", __func__);
+		queue_delayed_work(wlc->wls_wq, &wlc->rx_online_check, msecs_to_jiffies(RX_ONLINE_CHECK_MS));
+		return;
+	} else {
+		if (rx_power_cnt > 1) {
+			wlc_info("%s: Rx power off\n", __func__);
+			rx_power_cnt = 0;
+			wlc->ctl.bpp_icl_done = false;
+			wlc->ctl.mc_icl_state = MC_ICL_IDLE;
+			wlc->ctl.ce_det_count = 0;
+			wlc->data.mcode = 0x00;
+			wls_chg_power_off(wlc);
+			wls_chg_notify_st_changed(wlc, WLC_DISCONNECTED);
+
+			return ;
+		} else {
+			queue_delayed_work(wlc->wls_wq, &wlc->rx_online_check, msecs_to_jiffies(RX_ONLINE_CHECK_MS));
+			wlc_info("%s: Re-check after 500ms\n", __func__);
+			return;
+		}
+	}
+}
+
 #define OFFSET_DETECT_TIME_DELAY_DEFAULT_MS 1000
 
 void wls_device_offset_detect_work(struct work_struct *work)
