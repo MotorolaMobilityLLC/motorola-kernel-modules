@@ -33,10 +33,6 @@
 
 #include <trace/events/signal.h>
 
-#define CREATE_TRACE_POINTS
-#include <trace/events/mmi_sigprint.h>
-
-static struct tracepoint * tracepoint_signal_generate = NULL;
 #define STORE_SIGINFO(_errno, _code, info)			\
 	do {							\
 		if (info == SEND_SIG_NOINFO ||			\
@@ -58,8 +54,11 @@ static struct tracepoint * tracepoint_signal_generate = NULL;
 
 static const char stat_nam[] = TASK_STATE_TO_CHAR_STR;
 
+#ifdef CONFIG_MOTO_MMISIG_KPROBE
+static struct tracepoint * tracepoint_signal_generate = NULL;
 typedef unsigned long(*kallsyms_lookup_name_func_t)(const char *name);
 static kallsyms_lookup_name_func_t kallsyms_lookup_name_func;
+#endif
 
 /*
  * This portion of the code can be used as template if user want to add specific
@@ -121,7 +120,7 @@ static void probe_death_signal(void *ignore, int sig, struct kernel_siginfo *inf
 	if (sig_fatal(task, sig) && result == TRACE_SIGNAL_DELIVERED) {
 		signal = task->signal;
 		group = _group ||
-			(signal->flags & (SIGNAL_GROUP_EXIT | SIGNAL_GROUP_COREDUMP));
+			(signal->flags & SIGNAL_GROUP_EXIT);
 
 		/*
 		 * kernel log reduction
@@ -129,7 +128,7 @@ static void probe_death_signal(void *ignore, int sig, struct kernel_siginfo *inf
 		 * skip if the target thread is already dead
 		 */
 		if (sig == SIGRTMIN ||
-		    (task->state & (TASK_DEAD | EXIT_DEAD | EXIT_ZOMBIE)))
+		    (task->__state & (TASK_DEAD | EXIT_DEAD | EXIT_ZOMBIE)))
 			return;
 		/*
 		 * Global init gets no signals it doesn't want.
@@ -152,7 +151,7 @@ static void probe_death_signal(void *ignore, int sig, struct kernel_siginfo *inf
 		if (group && (task != task->group_leader))
 			return;
 
-		state = task->state ? __ffs(task->state) + 1 : 0;
+		state = task->__state ? __ffs(task->__state) + 1 : 0;
 		pr_info("[signal][%d:%s]send death sig %d to[%d:%s:%c]\n",
 			 current->pid, current->comm,
 			 sig, task->pid, task->comm,
@@ -167,7 +166,7 @@ static void probe_death_signal(void *ignore, int sig, struct kernel_siginfo *inf
 		if (_group && (task != task->group_leader))
 			return;
 
-		state = task->state ? __ffs(task->state) + 1 : 0;
+		state = task->__state ? __ffs(task->__state) + 1 : 0;
 		pr_info("[signal][%d:%s]send %s sig %d to[%d:%s:%c]\n",
 			 current->pid, current->comm,
 			 (sig == SIGCONT) ? "continue" : "stop",
@@ -178,6 +177,7 @@ static void probe_death_signal(void *ignore, int sig, struct kernel_siginfo *inf
 
 static int __init init_signal_log(void)
 {
+#ifdef CONFIG_MOTO_MMISIG_KPROBE
 	int ret = -1;
 	struct kprobe kp = {
 		.symbol_name = "kallsyms_lookup_name",
@@ -201,7 +201,9 @@ static int __init init_signal_log(void)
 		return -ENXIO;
 	}
 	tracepoint_probe_register(tracepoint_signal_generate, probe_death_signal, NULL);
-
+#else
+	register_trace_signal_generate(probe_death_signal, NULL);
+#endif
 	// Code example if extra debug msg needed to add.
 	/*
 	register_trace_signal_deliver(probe_signal_deliver, NULL);
@@ -212,8 +214,12 @@ static int __init init_signal_log(void)
 
 static void exit_signal_log(void)
 {
+#ifdef CONFIG_MOTO_MMISIG_KPROBE
 	if (tracepoint_signal_generate)
 		tracepoint_probe_unregister(tracepoint_signal_generate, probe_death_signal, NULL);
+#else
+	unregister_trace_signal_generate(probe_death_signal, NULL);
+#endif
 }
 
 module_init(init_signal_log);
