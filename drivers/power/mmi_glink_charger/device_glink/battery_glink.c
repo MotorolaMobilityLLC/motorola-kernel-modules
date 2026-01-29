@@ -447,8 +447,25 @@ static int battery_notify_handler(struct notifier_block *nb, unsigned long event
 	struct battery_glink_dev *batt_chip =
 			container_of(nb, struct battery_glink_dev, batt_nb);
 
+	static int battid_set_flag = 0;
+
 	if (!this_root_chip || !batt_chip)
 		return -ENODEV;
+
+	if ((battid_set_flag == 0) && (batt_chip->batt_role == BATT_MAIN))
+	{
+		rc = qti_charger_set_property(OEM_PROP_MAIN_BATT_ID,
+					&batt_chip->batt_id, sizeof(batt_chip->batt_id));
+
+		if (rc) {
+			mmi_err(this_root_chip, "Failed to write main batt_id, rc=%d\n", rc);
+		} else {
+			battid_set_flag = 1;
+			mmi_dbg(this_root_chip, "Main battery, batt sn: %s, batt id %d\n",
+						batt_chip->batt_sn,
+						batt_chip->batt_id);
+		}
+	}
 
 	mmi_dbg(this_root_chip, "batt_role %d, notify-dev %ld", batt_chip->batt_role, event);
 	if (event == DEV_BATT || event == DEV_ALL) {
