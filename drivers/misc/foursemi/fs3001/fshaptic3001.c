@@ -4099,16 +4099,6 @@ static ssize_t fs3001_auto_brake_store(struct device *dev, struct device_attribu
 	return count;
 }
 
-static ssize_t rtp_interface_show(struct device *dev,struct device_attribute *attr, char *buf)
-{
-	return 0;
-}
-
-static ssize_t rtp_interface_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	return count;
-}
-
 static ssize_t fs3001_strength_show(struct device *dev,struct device_attribute *attr, char *buf)
 {
 	unsigned char reg = 0;
@@ -4208,7 +4198,6 @@ static DEVICE_ATTR(effect_id, 0644, fs3001_effect_id_show, fs3001_effect_id_stor
 static DEVICE_ATTR(buf_size, 0644, fs3001_buf_size_show, fs3001_buf_size_store);
 static DEVICE_ATTR(Qos_time, 0644, fs3001_Qos_time_show, fs3001_Qos_time_store);
 static DEVICE_ATTR(auto_brake, 0644, fs3001_auto_brake_show, fs3001_auto_brake_store);
-static DEVICE_ATTR(rtp_interface, 0644, rtp_interface_show, rtp_interface_store);
 static DEVICE_ATTR(strength, 0644, fs3001_strength_show, fs3001_strength_store);
 
 
@@ -4254,7 +4243,6 @@ static struct attribute *fs3001_vibrator_attributes[] =
 	&dev_attr_buf_size.attr,
 	&dev_attr_Qos_time.attr,
 	&dev_attr_auto_brake.attr,
-	&dev_attr_rtp_interface.attr,
 	&dev_attr_strength.attr,
 	NULL
 };
