@@ -1337,9 +1337,10 @@ static int capsensor_set_enable(struct sensors_classdev *sensors_cdev,
 					MotoTopApproach_ENABLE_FLAG = 1;
 					temp = temp | 0x00FF;
 				}
-				LOG_DBG("set reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
+				LOG_INFO("set reg 0x%x val 0x%x\n", SX937X_GENERAL_SETUP, temp);
 				sx937x_i2c_write_16bit(this->bus, SX937X_GENERAL_SETUP, temp);
 				buttons[i].enabled = true;
+				LOG_INFO("report input\n");
 				input_report_abs(buttons[i].input_dev, ABS_DISTANCE, 0);
 				input_sync(buttons[i].input_dev);
 
