@@ -1020,6 +1020,45 @@ static int sc8989x_normal_set_hiz(struct sc8989x_chip *sc, bool enable)
 			}
 		}
 		ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+	} if (sc->is_cx25890HQ) {
+		if (reg_val) {
+			ret = sc8989x_field_read(sc, VBUS_GD, &vbus_good);
+			if (!vbus_good) {
+				sc->wait_hiz = 1;
+				dev_err(sc->dev, " power good not ready,dont hiz\n");
+				return ret;
+			}
+			ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+			dev_err(sc->dev, "sc8989x_normal_set_hiz\n");
+		} else {
+			sc->wait_hiz = 0;
+			if (sc->disablehiz_isset_flg) {
+				sc->disablehiz_isset_flg = false;
+				if (is_apdo_rdy(sc) == false) {
+					ret = sc8989x_get_iindpm(sc, &curr_ma);
+					if ((curr_ma == 2000) || (curr_ma == 2200)) {
+						sc8989x_set_iindpm(sc, 500);
+						ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+						msleep(5);
+						sc8989x_set_iindpm(sc, curr_ma);
+					} else {
+						ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+					}
+				} else {
+					dev_err(sc->dev, "sc8989x_normal_set_hiz is pdo rdy\n");
+				}
+			} else {
+				ret = sc8989x_get_iindpm(sc, &curr_ma);
+				if ((curr_ma == 2000) || (curr_ma == 2200)) {
+					sc8989x_set_iindpm(sc, 500);
+					ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+					msleep(5);
+					sc8989x_set_iindpm(sc, curr_ma);
+				} else {
+					ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
+				}
+			}
+		}
 	} else {
 		if (reg_val) {
 			ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
@@ -1888,7 +1927,7 @@ static int sc8989x_get_adc(struct charger_device *chg_dev,
 		return -95; 
 	}
 
-	if (sc->is_upm6920A) {
+	if (sc->is_upm6920A || sc->is_cx25890HQ) {
 		if (chan == ADC_CHANNEL_VBUS) {
 			sc8989x_get_vbus (sc->chg_dev, min);
 			dev_info(sc->dev, "%s sc8989x_get_vbus chan=%d, %d\n", __func__, chan, *min);
@@ -3237,6 +3276,11 @@ static void sc8989x_force_detection_dwork_handler(struct work_struct *work)
 	struct sc8989x_chip *sc = container_of(work,
 				struct sc8989x_chip, force_detect_dwork.work);
 
+	if (sc->is_cx25890HQ && (sc->chg_type != POWER_SUPPLY_TYPE_UNKNOWN)) {
+		dev_info(sc->dev," auto dpdm bc1.2 done, can't do force dpdm.\n");
+		return;
+	}
+
 	Charger_Detect_Init(sc);
 	ret = sc8989x_force_dpdm(sc);
 	if (ret) {
@@ -3315,6 +3359,8 @@ static int sc8989x_do_bc12(struct sc8989x_chip *sc)
 			 */
 			if (sc->is_upm6920A)
 				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(80));
+			else if (sc->is_cx25890HQ)
+				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(400));
 			else
 				schedule_delayed_work(&sc->force_detect_dwork, msecs_to_jiffies(80));
 			break;
@@ -3624,7 +3670,6 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 		/*The cx25890HQ must set auto dpdm en to 1*/
 		sc->cfg->auto_dpdm_en = 1;
 	}
-
 
 	ret = of_property_read_u32(np, "sc,upm6920A,votg", &sc->upm6920A_votg);
 	if (ret < 0) {

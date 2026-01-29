@@ -2131,6 +2131,15 @@ void handle_core_event(AW_U32 event, AW_U8 portId, void *usr_ctx)
 				tcpci_notify_pd_state(chip->tcpc, PD_CONNECT_PE_READY_SRC_PD30);
 			}
 		}
+		if (chip->port.PolicyState == peSourceReady || chip->port.PolicyState == peSinkReady) {
+			chip->tcpc->pd_port.pe_data.explicit_contract = true;
+		} else if (chip->port.PolicyState == peSourceTransitionDefault ||
+			chip->port.PolicyState == peSinkTransitionDefault || chip->port.PolicyState == peSinkEvaluateCaps ||
+			chip->port.PolicyState == peSinkStartup || chip->port.PolicyState == peSourceStartup ||
+			chip->port.PolicyState == peSinkSoftReset || chip->port.PolicyState == peSinkSendSoftReset ||
+			chip->port.PolicyState == peSourceSoftReset || chip->port.PolicyState == peSourceSendSoftReset) {
+			chip->tcpc->pd_port.pe_data.explicit_contract = false;
+		}
 		break;
 	case PD_NO_CONTRACT:
 		AW_LOG("PD_NO_CONTRACT PE_ST=%s\n", PE_STATE_TBL[chip->port.PolicyState]);
