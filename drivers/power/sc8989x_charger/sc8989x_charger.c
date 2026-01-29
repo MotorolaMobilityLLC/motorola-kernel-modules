@@ -1918,7 +1918,7 @@ static int sc8989x_set_otg(struct charger_device *chg_dev, bool enable)
 	 * preventing issues with subsequent charger detection.
 	 */
 	sc->otg_enable = enable;
-	if (enable && (sc->is_upm6920A || sc->is_sc89890h)
+	if (enable && (sc->is_upm6920A || sc->is_sc89890h || sc->is_cx25890HQ)
 		 && sc->qc_is_start_detect)  {
 		sc8989x_set_dpdm_0V(sc);
 		sc8989x_set_dpdm_hiz(sc);
@@ -3500,7 +3500,7 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		cancel_delayed_work(&sc->ibus_enable_dwork);
 		sc->ibus_dis = 0;
 		atomic_set(&sc->reset_vindpm, 0);
-		if (sc->is_upm6920A || sc->is_sc89890h) {
+		if (sc->is_upm6920A || sc->is_sc89890h || sc->is_cx25890HQ) {
 			if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_DCP &&
 				sc->chg_type == POWER_SUPPLY_TYPE_USB_DCP) {
 				sc8989x_set_dpdm_0V(sc);
