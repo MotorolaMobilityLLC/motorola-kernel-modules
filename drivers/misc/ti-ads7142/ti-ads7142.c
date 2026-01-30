@@ -15,6 +15,7 @@
 #include <linux/iio/buffer.h>
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/triggered_buffer.h>
+#include <linux/iio/kfifo_buf.h>
 
 #define TI_ADS7142_NAME					"ads7142"
 
@@ -648,7 +649,7 @@ static int ti_ads7142_buffered_collect(struct iio_dev *indio_dev,
 
 	return ret;
 }
-
+#ifdef ENABLE_IIO_BUFFERING
 static int ti_ads7142_buffered_abort(struct iio_dev *indio_dev)
 {
 	struct ti_ads7142_priv *priv = iio_priv(indio_dev);
@@ -660,7 +661,7 @@ static int ti_ads7142_buffered_abort(struct iio_dev *indio_dev)
 
 	return ret;
 }
-
+#endif
 static int ti_ads7142_manual_read(struct iio_dev *indio_dev,
 				  int address, int *val)
 {
@@ -1032,7 +1033,7 @@ static const struct iio_info ti_ads7142_iio_info = {
 	.read_event_config	= ti_ads7142_read_event_config,
 	.write_event_config	= ti_ads7142_write_event_config,
 };
-
+#ifdef ENABLE_IIO_BUFFERING
 static int ti_ads7142_triggered_buffer_preenable(struct iio_dev *indio_dev)
 {
 	struct ti_ads7142_priv *priv = iio_priv(indio_dev);
@@ -1149,7 +1150,6 @@ static irqreturn_t ti_ads7142_trigger_handler(int irq, void *p)
 
 	return IRQ_HANDLED;
 }
-
 static int ti_ads7142_get_buffer_mode(struct iio_dev *indio_dev,
 				      const struct iio_chan_spec *chan)
 {
@@ -1199,6 +1199,7 @@ static const struct iio_chan_spec_ext_info ti_ads7142_ext_info[] = {
 	},
 	{ },
 };
+#endif
 
 static int ti_ads7142_parse_channel_config(struct device *dev,
 					   struct iio_dev *indio_dev)
@@ -1264,7 +1265,7 @@ static int ti_ads7142_parse_channel_config(struct device *dev,
 		iio_channel->channel = ads_channel->channel;
 		iio_channel->event_spec = ti_ads7142_events;
 		iio_channel->num_event_specs = ARRAY_SIZE(ti_ads7142_events);
-		iio_channel->ext_info = ti_ads7142_ext_info;
+//		iio_channel->ext_info = ti_ads7142_ext_info;
 
 		ads_channel->config.high_threshold = TI_ADS7142_THRESHOLD_MSK;
 		channel_index++;
@@ -1289,8 +1290,7 @@ static void ti_ads7142_regulators_disable(void *data)
 		regulator_disable(priv->dvdd);
 }
 
-static int ti_ads7142_probe(struct i2c_client *client,
-			    const struct i2c_device_id *id)
+static int ti_ads7142_probe(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev;
 	struct ti_ads7142_priv *priv;
@@ -1302,7 +1302,6 @@ static int ti_ads7142_probe(struct i2c_client *client,
 
 	i2c_set_clientdata(client, indio_dev);
 	priv = iio_priv(indio_dev);
-
 	/**
 	 * starting from v5.9-rc1 iio_device_alloc
 	 *  sets indio_dev->dev.parent, but older versions not :(
@@ -1357,14 +1356,15 @@ static int ti_ads7142_probe(struct i2c_client *client,
 		priv->irq_present = true;
 	}
 
+#ifdef ENABLE_IIO_BUFFERING
 	ret = devm_iio_triggered_buffer_setup(&client->dev,
-					      indio_dev,
-					      &iio_pollfunc_store_time,
-					      &ti_ads7142_trigger_handler,
-					      &ti_ads7142_triggered_buffer_ops);
+						indio_dev,
+						&iio_pollfunc_store_time,
+						&ti_ads7142_trigger_handler,
+						&ti_ads7142_triggered_buffer_ops);
 	if (ret)
 		goto final;
-
+#endif
 	ret = devm_iio_device_register(&client->dev, indio_dev);
 	if (ret) {
 		dev_err(&client->dev, "Failed to register iio device");
