@@ -294,6 +294,29 @@ static struct zram *g_zram;
 static bool is_app_launch;
 atomic_t am_app_launch = ATOMIC_INIT(0);
 
+static inline bool skip_zram_write(struct zram *zram, u32 index)
+{
+    /*
+     * Throttle ZRAM writes during app launch to improve performance,
+     * BUT we must allow the following critical writes:
+     *
+     * 1. kswapd: Must proceed to reclaim memory and prevent OOM.
+     * 2. index 0 (Swap Header): 'mkswap' writes the swap signature to
+     *    index 0. Blocking this leads to 'swapon' failure (Swap total = 0).
+     */
+    if (atomic_read(&am_app_launch) && !current_is_kswapd() && index != 0)
+        return true;
+
+    zram_slot_lock(zram, index);
+    if (zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
+        zram_slot_unlock(zram, index);
+        pr_info("zram is under wb at index=%d\n", index);
+        return true;
+    }
+    zram_slot_unlock(zram, index);
+    return false;
+}
+
 static void fallocate_block(struct zram *zram, unsigned long blk_idx)
 {
 	struct block_device *bdev = zram->bdev;
@@ -3217,6 +3240,11 @@ static int __zram_bvec_write(struct zram *zram, struct bio_vec *bvec,
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	unsigned long irq_flags;
 	struct mem_cgroup *memcg;
+#endif
+
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
+	if (skip_zram_write(zram, index))
+		return -EBUSY;
 #endif
 
 	mem = kmap_atomic(page);
