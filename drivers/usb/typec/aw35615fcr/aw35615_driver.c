@@ -40,8 +40,9 @@ static struct aw_tcpm_ops_ptr aw_tcpm_ops;
 /******************************************************************************
  * Driver functions
  ******************************************************************************/
-
+#define AW35615_LPD_LONGER_THRESHOLD            (6)     /* the number of continuous liquid feedings */
 #define AW35615_LPD_RECOVERY_DETE		(10000) /* time ms */
+#define AW35615_LPD_RECOVERY_L_DETE		(30000) /* time ms */
 
 int aw35615_alert_status_clear(struct tcpc_device *tcpc, uint32_t mask)
 {
@@ -379,12 +380,14 @@ static void aw35615_lpd_check_work(struct work_struct *work)
 {
 	struct aw35615_chip *chip =
 			container_of(work, struct aw35615_chip, lpd_check_work);
+	AW_U32 aw35615_recovery_time = AW35615_LPD_RECOVERY_DETE;
 
 	if (!chip) {
 		pr_err("AWINIC  %s - Chip structure is NULL!\n", __func__);
 		return;
 	}
-	AW_LOG("lpd_check_num = %d, lpd_check_enable=%d\n", chip->lpd_check_num, chip->lpd_check_enable);
+	AW_LOG("lpd_check_num = %d, lpd_check_enable=%d, lpd_recovery_num=%d\n",
+		chip->lpd_check_num, chip->lpd_check_enable, chip->lpd_recovery_num);
 	if (chip->lpd_check_num == 0) {
 		if (!chip->lpd_check_enable) {
 			AW_LOG("notify ldp\n");
@@ -392,7 +395,12 @@ static void aw35615_lpd_check_work(struct work_struct *work)
 			chip->lpd_wait_recovery = AW_FALSE;
 			core_set_sink(&chip->port);
 			notify_observers(LPD_NOTICE_WATER, chip->port.PortID);
-			hrtimer_start(&chip->lpd_timer, ktime_set(AW35615_LPD_RECOVERY_DETE / 1000, 0), HRTIMER_MODE_REL);
+			if (chip->lpd_recovery_num < AW35615_LPD_LONGER_THRESHOLD) {
+				chip->lpd_recovery_num ++;
+			} else {
+				aw35615_recovery_time = AW35615_LPD_RECOVERY_L_DETE;
+			}
+			hrtimer_start(&chip->lpd_timer, ktime_set(aw35615_recovery_time / 1000, 0), HRTIMER_MODE_REL);
 		} else {
 			chip->lpd_check_num = chip->lpd_check_num_bak;
 			if (chip->port.ConnState == Unattached) {
@@ -419,6 +427,7 @@ static void aw35615_lpd_check_work(struct work_struct *work)
 		if (chip->port.ConnState == Unattached) {
 			AW_LOG("lpd recovery\n");
 			chip->lpd_wait_recovery = AW_FALSE;
+			chip->lpd_recovery_num = 0;
 			notify_observers(LPD_NOTICE_NOWATER, chip->port.PortID);
 		} else if (chip->lpd_notice) {
 			AW_LOG("cc attached, maintain lpd\n");

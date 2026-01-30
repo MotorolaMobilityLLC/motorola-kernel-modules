@@ -1509,6 +1509,7 @@ void aw_InitializeCore(struct aw35615_chip *chip)
 	chip->lpd_check_timer = 1000; /* unit ms */
 	chip->lpd_check_num = chip->lpd_check_num_bak;
 	chip->toggle_check_num = chip->lpd_check_num_bak;
+	chip->lpd_recovery_num = 0;
 	chip->lpd_notice = AW_FALSE;
 	chip->lpd_wait_recovery = AW_FALSE;
 	AW_LOG(" Core is initialized!\n");

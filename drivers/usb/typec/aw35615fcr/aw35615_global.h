@@ -83,6 +83,7 @@ struct aw35615_chip {
 	AW_U16 lpd_check_num;
 	AW_U16 toggle_check_num;
 	AW_U32 lpd_check_timer;
+	AW_U16 lpd_recovery_num;
 	AW_BOOL lpd_check_enable;
 	AW_BOOL lpd_notice;
 	AW_BOOL lpd_wait_recovery;

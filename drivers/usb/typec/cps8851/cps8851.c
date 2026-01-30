@@ -48,9 +48,11 @@
 #define CPS8851_I2C_WDT_TOUT		CPS8851_REG_WDT_TO_2S
 #define CPS8851_I2C_WDT_KICK_TIME	1500 /* ms */
 #define CPS8851_WD_CNT_THRESHOLD	5
+#define CPS8851_WD_LONGER_THRESHOLD     6 /* the number of continuous liquid feedings */
 #define CPS8851_WD_INTERVAL			500 /* ms */
 #define CPS8851_WD_TRY_INTERVAL		200 /* ms */
-#define CPS8851_WD_OPEN_INTERVAL	20000 /* ms */
+#define CPS8851_WD_OPEN_INTERVAL	10000 /* ms */
+#define CPS8851_WD_OPEN_L_INTERVAL	30000 /* ms */
 
 #define RICHTEK_1711_VID	0x29cf
 #define RICHTEK_1711_PID	0x1711
@@ -88,6 +90,7 @@ struct cps8851_chip {
 	bool cc_open;
 	int wd_state;
 	unsigned wd_count;
+	unsigned wd_recovery_num;
 	ktime_t last_set_cc_toggle_time;
 	struct delayed_work	wd_work;
 	struct alarm wd_wakeup_timer;
@@ -998,6 +1001,7 @@ static int cps8851_tcpc_init(struct tcpc_device *tcpc, bool sw_reset)
 #if CONFIG_WATER_DETECTION
 	chip->wd_state = CPS_WD_STATE_DRY;
 	chip->wd_count = 0;
+	chip->wd_recovery_num = 0;
 	chip->is_wet = false;
 #endif
 	return 0;
@@ -2085,14 +2089,15 @@ static void cps8851_wd_work(struct work_struct *work)
 
 	down(&chip->suspend_lock);
 	tcpci_lock_typec(chip->tcpc);
-	dev_info(chip->dev, "%s wd_state = %d, cnt=%d\n", __func__, chip->wd_state,
-		chip->wd_count);
+	dev_info(chip->dev, "%s wd_state = %d, cnt=%d, wd_recovery_num=%d\n",
+		 __func__, chip->wd_state, chip->wd_count, chip->wd_recovery_num);
 	switch (chip->wd_state)
 	{
 	case CPS_WD_STATE_DRY:
 		if (chip->is_wet) {
 			tcpc_typec_handle_wd(chip->tcpc, true);
-			delay = CPS8851_WD_OPEN_INTERVAL;
+			chip->wd_recovery_num = 0;
+			delay = CPS8851_WD_TRY_INTERVAL;
 		}
 		break;
 	case CPS_WD_STATE_WET_PROTECTION:
@@ -2100,7 +2105,7 @@ static void cps8851_wd_work(struct work_struct *work)
 			/* Try to toggle the CC. */
 			chip->cc_open = false;
 			delay = CPS8851_WD_TRY_INTERVAL;
-			cps8851_set_cc(chip->tcpc, TYPEC_CC_DRP);
+			tcpc_typec_change_role(chip->tcpc, TYPEC_ROLE_TRY_SNK, true);
 			break;
 		}
 
@@ -2118,8 +2123,13 @@ static void cps8851_wd_work(struct work_struct *work)
 		} else {
 			/* Since the port remains wet, keep the CC open to prevent rusting */
 			chip->cc_open = true;
-			cps8851_set_cc(chip->tcpc, TYPEC_CC_RD);
-			delay = CPS8851_WD_OPEN_INTERVAL;
+			tcpc_typec_change_role(chip->tcpc, TYPEC_ROLE_SNK, true);
+			if (chip->wd_recovery_num < CPS8851_WD_LONGER_THRESHOLD) {
+				chip->wd_recovery_num ++;
+				delay = CPS8851_WD_OPEN_INTERVAL;
+			} else {
+				delay = CPS8851_WD_OPEN_L_INTERVAL;
+			}
 		}
 
 		break;
@@ -2130,7 +2140,6 @@ static void cps8851_wd_work(struct work_struct *work)
 	chip->wd_count = 0;
 	tcpci_unlock_typec(chip->tcpc);
 	up(&chip->suspend_lock);
-
 	if (!delay)
 		return;
 
