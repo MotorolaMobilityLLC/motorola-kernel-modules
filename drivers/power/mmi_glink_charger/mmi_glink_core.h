@@ -217,6 +217,7 @@ struct mmi_glink_chip {
 	bool			enable_factory_poweroff;
 	bool			factory_syspoweroff_wait;
 	bool			start_factory_kill_disabled;
+	bool			enable_direct_power_supply;
 	int			upper_limit_en_mv;
 	int			upper_limit_capacity;
 	int			lower_limit_capacity;

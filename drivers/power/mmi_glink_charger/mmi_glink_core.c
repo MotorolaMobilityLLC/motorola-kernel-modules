@@ -1422,6 +1422,9 @@ static int mmi_parse_dt(struct mmi_glink_chip *chip)
 	chip->start_factory_kill_disabled =
 			of_property_read_bool(node, "mmi,start-factory-kill-disabled");
 
+	chip->enable_direct_power_supply =
+			of_property_read_bool(node, "mmi,direct-power-supply");
+
 	rc = of_property_read_u32(node, "mmi,factory-kill-debounce-ms",
 				  &chip->factory_kill_debounce_ms);
 	if (rc)

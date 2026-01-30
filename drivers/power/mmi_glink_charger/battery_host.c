@@ -991,10 +991,13 @@ void battery_supply_init(struct battery_host *batt_host)
 	if (rc)
 		mmi_err(this_root_chip, "couldn't create batt_id\n");
 
-	rc = device_create_file(batt_psy->dev.parent,
-				&dev_attr_direct_power_supply);
-	if (rc)
-		mmi_err(this_root_chip, "couldn't create direct_power_supply\n");
+	if (this_root_chip->enable_direct_power_supply) {
+		mmi_info(this_root_chip, "add direct_power_supply node\n");
+		rc = device_create_file(batt_psy->dev.parent,
+					&dev_attr_direct_power_supply);
+		if (rc)
+			mmi_err(this_root_chip, "couldn't create direct_power_supply\n");
+	}
 
 	mmi_info(this_root_chip, "battery supply is initialized\n");
 
@@ -1036,8 +1039,10 @@ void battery_supply_deinit(struct battery_host *batt_host)
 					&dev_attr_cur_batt_id);
 		device_remove_file(batt_psy->dev.parent,
 					&dev_attr_cur_flip_batt_id);
-		device_remove_file(batt_psy->dev.parent,
+		if (this_root_chip->enable_direct_power_supply) {
+			device_remove_file(batt_psy->dev.parent,
 					&dev_attr_direct_power_supply);
+		}
 		power_supply_put(batt_psy);
 	}
 
