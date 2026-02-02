@@ -716,26 +716,39 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 
 	if (!IS_ERR_OR_NULL(chip->cutoff_zone)) {
 
-		if (chip->batt_cold_shutdown_volt != 0) {
-			if (!chip->is_low_temp_shutdownVolt_active &&
+		if (chip->batt_cool_shutdown_volt != 0 && chip->batt_cold_shutdown_volt != 0) {
+
+			if (chip->is_low_temp_shutdownVolt_active < ACTIVE_COLD &&
 				chip->combo_batt_temp <= chip->batt_cold_threshold &&
-				chip->uisoc <= 10 &&
 				mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
 				if (smart_batt_set_shutdown_threshold(chip, chip->batt_cold_shutdown_volt) >=0) {
 					mmi_info(chip, "battery temp lower than %d degrees, set shutdown_voltage to %dmv\n",
 						chip->batt_cold_threshold / 10, chip->batt_cold_shutdown_volt);
-					chip->is_low_temp_shutdownVolt_active = true;
+					chip->is_low_temp_shutdownVolt_active = ACTIVE_COLD;
+				}
+			} else if (chip->is_low_temp_shutdownVolt_active < ACTIVE_COOL &&
+					chip->combo_batt_temp <= chip->batt_cool_threshold &&
+					mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
+				if (smart_batt_set_shutdown_threshold(chip, chip->batt_cool_shutdown_volt) >=0) {
+					mmi_info(chip, "battery temp lower than %d degrees, set shutdown_voltage to %dmv\n",
+						chip->batt_cool_threshold / 10, chip->batt_cool_shutdown_volt);
+					chip->is_low_temp_shutdownVolt_active = ACTIVE_COOL;
 				}
 			}
 
-			if(chip->is_low_temp_shutdownVolt_active) {
-				if (chip->combo_batt_temp >= (chip->batt_cold_threshold + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
-					chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
-					shutdown_volt = chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage;
-					if (smart_batt_set_shutdown_threshold(chip, shutdown_volt) >=0) {
-						mmi_info(chip, "exit low temp environment, the power_off voltage set back to %dmv\n", shutdown_volt);
-						chip->is_low_temp_shutdownVolt_active = false;
-					}
+			if (chip->is_low_temp_shutdownVolt_active > ACTIVE_NONE &&
+					chip->combo_batt_temp >= (chip->batt_cool_threshold + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
+				chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
+				shutdown_volt = chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage;
+				if (smart_batt_set_shutdown_threshold(chip, shutdown_volt) >=0) {
+					mmi_info(chip, "exit low temp environment, the power_off voltage set back to %dmv\n", shutdown_volt);
+					chip->is_low_temp_shutdownVolt_active = ACTIVE_NONE;
+				}
+			} else if (chip->is_low_temp_shutdownVolt_active > ACTIVE_COOL &&
+				chip->combo_batt_temp >= (chip->batt_cold_threshold + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
+				if (smart_batt_set_shutdown_threshold(chip, chip->batt_cool_shutdown_volt) >=0) {
+					mmi_info(chip, "exit cold environment, the power_off voltage set back to %dmv\n", chip->batt_cool_shutdown_volt);
+					chip->is_low_temp_shutdownVolt_active = ACTIVE_COOL;
 				}
 			}
 		}
@@ -826,10 +839,10 @@ static void smart_batt_update_thread(struct work_struct *work)
 	smart_batt_get_charge_counter(chip);
 	rsoc = smart_batt_soc100_forward(chip, rsoc);
 
-	if (chip->combo_batt_temp < chip->batt_cold_threshold){
-		vbatt_empty = chip->vbatt_empty_cold_mv * 1000;
-		vbatt_low = chip->vbatt_low_cold_mv * 1000;
-		mmi_info(chip, "battery temperature is cold, so set batt empty voltage=%d\n", vbatt_empty);
+	if (chip->combo_batt_temp < chip->batt_cool_threshold){
+		vbatt_empty = chip->vbatt_empty_cool_mv * 1000;
+		vbatt_low = chip->vbatt_low_cool_mv * 1000;
+		mmi_info(chip, "battery temperature is cool, so set batt empty voltage=%d\n", vbatt_empty);
 	}
 	else {
 		vbatt_empty = chip->vbatt_empty_mv * 1000;
@@ -1044,17 +1057,17 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	else
 		chip->vbatt_empty_mv = val;
 
-	rc = of_property_read_u32(np, "mmi,vbatt-empty-cold-mv", &val);
+	rc = of_property_read_u32(np, "mmi,vbatt-empty-cool-mv", &val);
 	if (rc < 0)
-		chip->vbatt_empty_cold_mv = DEFAULT_VBATT_EMPTY_COLD_MV;
+		chip->vbatt_empty_cool_mv = DEFAULT_VBATT_EMPTY_COOL_MV;
 	else
-		chip->vbatt_empty_cold_mv = val;
+		chip->vbatt_empty_cool_mv = val;
 
-	rc = of_property_read_u32(np, "mmi,batt-cold-threshold", &val);
+	rc = of_property_read_u32(np, "mmi,batt-cool-threshold", &val);
 	if (rc < 0)
-		chip->batt_cold_threshold = DEFAULT_BATT_COLD_THRESHOLD;
+		chip->batt_cool_threshold = DEFAULT_BATT_COOL_THRESHOLD;
 	else
-		chip->batt_cold_threshold = val;
+		chip->batt_cool_threshold = val;
 
 	rc = of_property_read_u32(np, "mmi,vbatt-low-mv", &val);
 	if (rc < 0)
@@ -1062,16 +1075,24 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	else
 		chip->vbatt_low_mv = val;
 
-	rc = of_property_read_u32(np, "mmi,vbatt-low-cold-mv", &val);
+	rc = of_property_read_u32(np, "mmi,vbatt-low-cool-mv", &val);
 	if (rc < 0)
-		chip->vbatt_low_cold_mv = DEFAULT_VBATT_LOW_COLD_MV;
+		chip->vbatt_low_cool_mv = DEFAULT_VBATT_LOW_COOL_MV;
 	else
-		chip->vbatt_low_cold_mv = val;
+		chip->vbatt_low_cool_mv = val;
 
-	mmi_info(chip,"vbatt_empty_mv=%d vbatt_empty_cold_mv=%d batt_cold_threshold=%d, vbatt_low_mv=%d vbatt_low_cold_mv=%d",
-		chip->vbatt_empty_mv,chip->vbatt_empty_cold_mv, chip->batt_cold_threshold, chip->vbatt_low_mv, chip->vbatt_low_cold_mv);
+	of_property_read_u32(np, "mmi,batt-cool-shutdown-volt", &chip->batt_cool_shutdown_volt);
+
+	rc = of_property_read_u32(np, "mmi,batt-cold-threshold", &val);
+	if (rc < 0)
+		chip->batt_cold_threshold = DEFAULT_BATT_COLD_THRESHOLD;
+	else
+		chip->batt_cold_threshold = val;
 
 	of_property_read_u32(np, "mmi,batt-cold-shutdown-volt", &chip->batt_cold_shutdown_volt);
+
+	mmi_info(chip,"vbatt_empty_mv=%d vbatt_empty_cool_mv=%d batt_cool_threshold=%d, vbatt_low_mv=%d vbatt_low_cool_mv=%d batt_cold_threshold=%d\n",
+		chip->vbatt_empty_mv,chip->vbatt_empty_cool_mv, chip->batt_cool_threshold, chip->vbatt_low_mv, chip->vbatt_low_cool_mv, chip->batt_cold_threshold);
 
 	if (of_find_property(np, "cyclecount-shutdown-voltage-zones", &byte_len)) {
 		if ((byte_len / sizeof(u32)) % 3) {

@@ -117,11 +117,11 @@ struct mmi_smart_battery {
 	int				work_interval_ms;
 	int				gauge_count;
 	bool				get_gauge_done;
-	int				vbatt_empty_cold_mv;
+	int				vbatt_empty_cool_mv;
 	int				vbatt_empty_mv;
 	int				vbatt_low_mv;
-	int				vbatt_low_cold_mv;
-	int				batt_cold_threshold;
+	int				vbatt_low_cool_mv;
+	int				batt_cool_threshold;
 	int				heavyLoad_dischg_cnt;
 	int				lightLoad_dischg_cnt;
 	int				force_zero_level;
@@ -135,8 +135,16 @@ struct mmi_smart_battery {
 	struct cutoff_zone *cutoff_zone;
 	int num_cutoff;
 	int current_cutoff_index;
+	int batt_cool_shutdown_volt;
 	int batt_cold_shutdown_volt;
-	bool is_low_temp_shutdownVolt_active;
+	int				batt_cold_threshold;
+	int is_low_temp_shutdownVolt_active;
+};
+
+enum {
+	ACTIVE_NONE = 0,
+	ACTIVE_COOL,
+	ACTIVE_COLD,
 };
 
 enum {
@@ -153,10 +161,11 @@ enum {
 #define SMART_BATT_SHOW_MAX_SIZE 64
 
 #define DEFAULT_VBATT_EMPTY_MV		3000
-#define DEFAULT_VBATT_EMPTY_COLD_MV	3000
+#define DEFAULT_VBATT_EMPTY_COOL_MV	3000
 #define DEFAULT_VBATT_LOW_MV		3000
-#define DEFAULT_VBATT_LOW_COLD_MV	3000
-#define DEFAULT_BATT_COLD_THRESHOLD	0
+#define DEFAULT_VBATT_LOW_COOL_MV	3000
+#define DEFAULT_BATT_COOL_THRESHOLD	0
+#define DEFAULT_BATT_COLD_THRESHOLD	(-100)
 #define DEFAULT_SOH_GAP			4
 
 enum {
