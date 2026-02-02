@@ -94,9 +94,16 @@ struct usb_glink_dev {
 	struct notifier_block	usb_mmi_nb;
 
 	int otp_en_gpio;
-	bool therm_supported;
-	unsigned long therm_state;
-	struct thermal_cooling_device *cdev;
+	unsigned long snk_therm_state;
+	u32 *snk_thermal_levels;
+	u32 num_snk_thermal_levels;
+	struct thermal_cooling_device *snk_cdev;
+
+	u32 user_pwrsrc;
+	unsigned long src_therm_state;
+	u32 *src_thermal_levels;
+	u32 num_src_thermal_levels;
+	struct thermal_cooling_device *src_cdev;
 
 	u32 lpd_mitigate_mode;
 	struct power_supply *usb_psy;

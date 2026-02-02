@@ -81,7 +81,9 @@ static ssize_t typec_pwrsrc_store(struct device *dev,
 		const char *buf, size_t count)
 {
 	int rc;
+	u32 level = 0;
 	unsigned int current_ma = 0;
+	unsigned int src_current = 0;
 	struct usb_glink_dev *chip = this_chip;
 
 	if (!chip) {
@@ -96,10 +98,19 @@ static ssize_t typec_pwrsrc_store(struct device *dev,
 	}
 
 	mmi_info(chip->mmi_chip, "pwrsrc current = %d\n", current_ma);
-
+	src_current = current_ma;
+	level = chip->src_therm_state;
+	if (chip->num_src_thermal_levels > level &&
+	    chip->src_thermal_levels[level] < current_ma) {
+		mmi_warn(chip->mmi_chip, "Override by thermal pwrsrc current = %d\n",
+				chip->src_thermal_levels[level]);
+		src_current = chip->src_thermal_levels[level];
+	}
 	rc = qti_charger_set_property(OEM_PROP_TYPEC_PWRSRC_REQUEST,
-			&current_ma,
-			sizeof(current_ma));
+				&src_current,
+				sizeof(src_current));
+	if (!rc)
+		chip->user_pwrsrc = current_ma;
 
 	return rc ? rc : count;
 }
@@ -309,6 +320,18 @@ static void glink_usb_work(struct work_struct *work)
 	}
 	chip->usb_info = usb_info;
 
+	if (chip->num_snk_thermal_levels > chip->snk_therm_state &&
+	    chip->snk_therm_state != 0) {
+		mmi_info(chip->mmi_chip, "SNK current mitigate: %d\n",
+			chip->snk_thermal_levels[chip->snk_therm_state]);
+	}
+
+	if (chip->num_src_thermal_levels > chip->src_therm_state &&
+	    chip->src_therm_state != 0) {
+		mmi_info(chip->mmi_chip, "SRC current mitigate: %d\n",
+			chip->src_thermal_levels[chip->src_therm_state]);
+	}
+
 	if (chip->otg_boost_limit_vph_mv <= 0 ||
 	    chip->otg_boost_recover_vph_mv <= 0) {
 		return;
@@ -352,70 +375,154 @@ static void glink_usb_work(struct work_struct *work)
 	}
 }
 
-static int usb_therm_get_max_state(struct thermal_cooling_device *cdev,
-		unsigned long *state)
-{
-	*state = 1;
-	return 0;
-}
-
-static int usb_therm_get_cur_state(struct thermal_cooling_device *cdev,
+static int usb_snk_therm_get_max_state(struct thermal_cooling_device *cdev,
 		unsigned long *state)
 {
 	struct usb_glink_dev *chip = cdev->devdata;
 
-	*state = chip->therm_state;
+	if (chip->num_snk_thermal_levels > 0)
+		*state = chip->num_snk_thermal_levels - 1;
+	else
+		*state = 0;
 	return 0;
 }
 
-static int usb_therm_set_cur_state(struct thermal_cooling_device *cdev,
+static int usb_snk_therm_get_cur_state(struct thermal_cooling_device *cdev,
+		unsigned long *state)
+{
+	struct usb_glink_dev *chip = cdev->devdata;
+
+	*state = chip->snk_therm_state;
+	return 0;
+}
+
+static int usb_snk_therm_set_cur_state(struct thermal_cooling_device *cdev,
 		unsigned long state)
 {
 	int rc = 0;
-	u32 value = 0;
+	u32 snk_current = 0;
+	u32 level = state;
 	struct usb_glink_dev *chip = cdev->devdata;
 
-	if (chip->therm_state == state)
+	if (chip->snk_therm_state == state)
 		return 0;
 
-	mmi_info(chip->mmi_chip, "usb thermal state: %lu -> %lu, typec_partner=%d\n",
-			chip->therm_state, state,
-			chip->usb_info.partner_type);
-
-	if (!state && gpio_is_valid(chip->otp_en_gpio)) {
-		gpio_direction_output(chip->otp_en_gpio, 0);
-		mmi_warn(chip->mmi_chip, "usb otp is disabled\n");
-		udelay(100);
+	if (chip->num_snk_thermal_levels <= level) {
+		mmi_err(chip->mmi_chip, "Invalid snk thermal level = %d\n", level);
+		return -EINVAL;
 	}
 
-	value = !!state;
-	rc = qti_charger_set_property(OEM_PROP_CHG_DISABLE,
-			&value, sizeof(value));
-	rc += qti_charger_set_property(OEM_PROP_CHG_SUSPEND,
-			&value, sizeof(value));
-	if (!!state &&
-			gpio_is_valid(chip->otp_en_gpio) &&
-			chip->usb_info.partner_type != TYPEC_PARTNER_SNK_TYPEC_DEFAULT) {
-		udelay(100);
+	mmi_info(chip->mmi_chip, "usb snk thermal state: %lu -> %lu, typec_partner=%d\n",
+			chip->snk_therm_state, state,
+			chip->usb_info.partner_type);
+
+	snk_current = chip->snk_thermal_levels[level];
+	if ((snk_current > 0 ||
+	     chip->usb_info.partner_type == TYPEC_PARTNER_SNK_TYPEC_DEFAULT) &&
+	    chip->mmi_chip->is_softbank &&
+	    gpio_is_valid(chip->otp_en_gpio) &&
+	    gpio_get_value(chip->otp_en_gpio) > 0) {
+		gpio_direction_output(chip->otp_en_gpio, 0);
+		mmi_warn(chip->mmi_chip, "usb otp is disabled\n");
+	} else if (snk_current == 0 &&
+	    chip->mmi_chip->is_softbank &&
+	    gpio_is_valid(chip->otp_en_gpio) &&
+	    gpio_get_value(chip->otp_en_gpio) == 0 &&
+	    chip->usb_info.partner_type != TYPEC_PARTNER_SNK_TYPEC_DEFAULT) {
 		gpio_direction_output(chip->otp_en_gpio, 1);
 		mmi_warn(chip->mmi_chip, "usb otp is enabled\n");
 	}
-	chip->therm_state = state;
+
+	rc = qti_charger_set_property(OEM_PROP_USB_ICL,
+				&snk_current, sizeof(snk_current));
+	if (rc < 0) {
+		mmi_err(chip->mmi_chip, "Failed to set usb input current\n");
+	} else {
+		mmi_warn(chip->mmi_chip, "Limit usb input current: %d\n", snk_current);
+		chip->snk_therm_state = state;
+	}
 
 	return rc;
 }
 
-static const struct thermal_cooling_device_ops usb_therm_ops = {
-	.get_max_state = usb_therm_get_max_state,
-	.get_cur_state = usb_therm_get_cur_state,
-	.set_cur_state = usb_therm_set_cur_state,
+static const struct thermal_cooling_device_ops usb_snk_therm_ops = {
+	.get_max_state = usb_snk_therm_get_max_state,
+	.get_cur_state = usb_snk_therm_get_cur_state,
+	.set_cur_state = usb_snk_therm_set_cur_state,
+};
+
+static int usb_src_therm_get_max_state(struct thermal_cooling_device *cdev,
+		unsigned long *state)
+{
+	struct usb_glink_dev *chip = cdev->devdata;
+
+	if (chip->num_src_thermal_levels > 0)
+		*state = chip->num_src_thermal_levels - 1;
+	else
+		*state = 0;
+	return 0;
+}
+
+static int usb_src_therm_get_cur_state(struct thermal_cooling_device *cdev,
+		unsigned long *state)
+{
+	struct usb_glink_dev *chip = cdev->devdata;
+
+	*state = chip->src_therm_state;
+	return 0;
+}
+
+static int usb_src_therm_set_cur_state(struct thermal_cooling_device *cdev,
+		unsigned long state)
+{
+	int rc = 0;
+	u32 src_current = 0;
+	u32 level = state;
+	struct usb_glink_dev *chip = cdev->devdata;
+
+	if (chip->src_therm_state == state)
+		return 0;
+
+	if (chip->num_src_thermal_levels <= level) {
+		mmi_err(chip->mmi_chip, "Invalid src thermal level = %d\n", level);
+		return -EINVAL;
+	}
+
+	mmi_info(chip->mmi_chip, "usb src thermal state: %lu -> %lu, typec_partner=%d\n",
+			chip->src_therm_state, state,
+			chip->usb_info.partner_type);
+
+	src_current = chip->src_thermal_levels[level];
+	if (chip->user_pwrsrc < src_current) {
+		src_current = chip->user_pwrsrc;
+		mmi_warn(chip->mmi_chip, "Override by user pwrsrc current = %d\n",
+				chip->user_pwrsrc);
+	}
+
+	rc = qti_charger_set_property(OEM_PROP_TYPEC_PWRSRC_REQUEST,
+				&src_current, sizeof(src_current));
+	if (rc < 0) {
+		mmi_err(chip->mmi_chip, "Failed to set usb output current\n");
+	} else {
+		mmi_warn(chip->mmi_chip, "Limit usb output current: %d\n", src_current);
+		chip->src_therm_state = state;
+	}
+
+	return rc;
+}
+
+static const struct thermal_cooling_device_ops usb_src_therm_ops = {
+	.get_max_state = usb_src_therm_get_max_state,
+	.get_cur_state = usb_src_therm_get_cur_state,
+	.set_cur_state = usb_src_therm_set_cur_state,
 };
 
 static int glink_usb_therm_init(struct usb_glink_dev *chip)
 {
-	int rc;
-
-	struct device_node *node, *child;
+	u32 val, prev;
+	int rc, i, len;
+	struct device_node *node = NULL;
+	struct device_node *child = NULL;
 	const char *temp_string;
 
 	if (!chip || !chip->mmi_chip) {
@@ -430,49 +537,132 @@ static int glink_usb_therm_init(struct usb_glink_dev *chip)
 			mmi_err(chip->mmi_chip, "Failed to read psy-name\n");
 			return rc;
 		}
-		if (!strcmp(temp_string, "usb_info")) {
-			chip->therm_state = -EINVAL;
-			chip->therm_supported = of_property_read_bool(child,
-					"therm-supported");
-			if (!chip->therm_supported) {
-				mmi_warn(chip->mmi_chip, "usb therm is not supported in devicetree\n");
-				return 0;
-			}
+		if (!strcmp(temp_string, "usb_info"))
+			break;
+	}
+	if (!child) {
+		mmi_err(chip->mmi_chip, "Failed to find usb info node\n");
+		return -ENODEV;
+	}
 
-			if (chip->mmi_chip->factory_version || !chip->mmi_chip->is_softbank) {
-				mmi_warn(chip->mmi_chip, "usb therm is not supported in current version\n");
-				return 0;
-			}
+	if (chip->mmi_chip->factory_version) {
+		mmi_warn(chip->mmi_chip, "usb therm is not supported in factory version\n");
+		return 0;
+	}
 
+	rc = of_property_count_elems_of_size(child, "snk-thermal-mitigation", sizeof(u32));
+	if (rc > 0) {
+		len = rc;
+		prev = UINT_MAX;
+		for (i = 0; i < len; i++) {
+			rc = of_property_read_u32_index(child, "snk-thermal-mitigation",
+				i, &val);
+			if (rc < 0)
+				break;
+
+			if (val > prev) {
+				mmi_err(chip->mmi_chip, "SNK thermal levels should be in descending order\n");
+				break;
+			}
+			prev = val;
+		}
+		if (i == len) {
+			chip->snk_thermal_levels = devm_kcalloc(chip->mmi_chip->dev, len,
+					sizeof(*chip->snk_thermal_levels),
+					GFP_KERNEL);
+		}
+	}
+	if (chip->snk_thermal_levels) {
+		rc = of_property_read_u32_array(child, "snk-thermal-mitigation",
+					&chip->snk_thermal_levels[0], len);
+		if (rc < 0) {
+			mmi_err(chip->mmi_chip, "Error in reading snk-thermal-mitigation, rc=%d\n", rc);
+			devm_kfree(chip->mmi_chip->dev, chip->snk_thermal_levels);
+			chip->snk_thermal_levels = NULL;
+		} else {
 			chip->otp_en_gpio = of_get_named_gpio(child, "otp-en-gpio", 0);
 			if (!gpio_is_valid(chip->otp_en_gpio)) {
 				mmi_warn(chip->mmi_chip, "invalid usb otp en gpio=%d\n", chip->otp_en_gpio);
+				chip->otp_en_gpio = -EINVAL;
+			} else if (!chip->mmi_chip->is_softbank) {
+				mmi_warn(chip->mmi_chip, "otp is only supported for softbank\n");
 				chip->otp_en_gpio = -EINVAL;
 			} else {
 				mmi_info(chip->mmi_chip, "usb otp en gpio=%d\n", chip->otp_en_gpio);
 				rc = gpio_request(chip->otp_en_gpio, "usb-otp-en");
 				if (rc) {
 					mmi_err(chip->mmi_chip, "request usb-otp-en gpio=%d failed, rc=%d\n",
-							chip->otp_en_gpio, rc);
-					return rc;
+						chip->otp_en_gpio, rc);
+					chip->otp_en_gpio = -EINVAL;
+				} else {
+					gpio_direction_output(chip->otp_en_gpio, 0);
 				}
-				gpio_direction_output(chip->otp_en_gpio, 0);
 			}
 
-			chip->cdev = thermal_of_cooling_device_register(chip->mmi_chip->dev->of_node,
-					"usb_therm_cooler", chip, &usb_therm_ops);
-			if (IS_ERR(chip->cdev)) {
-				rc = PTR_ERR(chip->cdev);
-				chip->cdev = NULL;
+			chip->num_snk_thermal_levels = len;
+			chip->snk_cdev = thermal_of_cooling_device_register(
+					chip->mmi_chip->dev->of_node,
+					"usb_snk_therm_cooler",
+					chip, &usb_snk_therm_ops);
+			if (IS_ERR_OR_NULL(chip->snk_cdev)) {
+				chip->snk_cdev = NULL;
 				if (gpio_is_valid(chip->otp_en_gpio))
 					gpio_free(chip->otp_en_gpio);
-				mmi_err(chip->mmi_chip, "Cooling register failed for usb_therm, rc=%d\n", rc);
-				return rc;
+				devm_kfree(chip->mmi_chip->dev, chip->snk_thermal_levels);
+				chip->snk_thermal_levels = NULL;
+				mmi_err(chip->mmi_chip, "usb_snk_therm register failed, rc=%d\n", rc);
+			} else {
+				mmi_info(chip->mmi_chip, "usb_snk_therm register success\n");
 			}
-			mmi_info(chip->mmi_chip, "Cooling register success for usb_therm\n");
-			break;
 		}
 	}
+
+	rc = of_property_count_elems_of_size(child, "src-thermal-mitigation", sizeof(u32));
+	if (rc > 0) {
+		len = rc;
+		prev = UINT_MAX;
+		for (i = 0; i < len; i++) {
+			rc = of_property_read_u32_index(child, "src-thermal-mitigation",
+				i, &val);
+			if (rc < 0)
+				break;
+
+			if (val > prev) {
+				mmi_err(chip->mmi_chip, "SRC Thermal levels should be in descending order\n");
+				break;
+			}
+			prev = val;
+		}
+		if (i == len) {
+			chip->src_thermal_levels = devm_kcalloc(chip->mmi_chip->dev, len,
+					sizeof(*chip->src_thermal_levels),
+					GFP_KERNEL);
+		}
+	}
+	if (chip->src_thermal_levels) {
+		rc = of_property_read_u32_array(child, "src-thermal-mitigation",
+					&chip->src_thermal_levels[0], len);
+		if (rc < 0) {
+			mmi_err(chip->mmi_chip, "Error in reading src-thermal-mitigation, rc=%d\n", rc);
+			devm_kfree(chip->mmi_chip->dev, chip->src_thermal_levels);
+			chip->src_thermal_levels = NULL;
+		} else {
+			chip->num_src_thermal_levels = len;
+			chip->src_cdev = thermal_of_cooling_device_register(
+					chip->mmi_chip->dev->of_node,
+					"usb_src_therm_cooler",
+					chip, &usb_src_therm_ops);
+			if (IS_ERR_OR_NULL(chip->src_cdev)) {
+				chip->src_cdev = NULL;
+				devm_kfree(chip->mmi_chip->dev, chip->src_thermal_levels);
+				chip->src_thermal_levels = NULL;
+				mmi_err(chip->mmi_chip, "usb_src_therm register failed, rc=%d\n", rc);
+			} else {
+				mmi_info(chip->mmi_chip, "usb_src_therm register success\n");
+			}
+		}
+	}
+	of_node_put(child);
 
 	return 0;
 }
@@ -617,10 +807,21 @@ static int glink_usb_deinit(struct usb_glink_dev *chip)
 		return -ENODEV;
 	}
 
-	if (chip->cdev) {
-		thermal_cooling_device_unregister(chip->cdev);
+	if (chip->src_cdev) {
+		thermal_cooling_device_unregister(chip->src_cdev);
+		chip->src_cdev = NULL;
+		chip->num_src_thermal_levels = 0;
+		devm_kfree(chip->mmi_chip->dev, chip->src_thermal_levels);
+		chip->src_thermal_levels = NULL;
+	}
+	if (chip->snk_cdev) {
+		thermal_cooling_device_unregister(chip->snk_cdev);
+		chip->snk_cdev = NULL;
 		if (gpio_is_valid(chip->otp_en_gpio))
 			gpio_free(chip->otp_en_gpio);
+		chip->num_snk_thermal_levels = 0;
+		devm_kfree(chip->mmi_chip->dev, chip->snk_thermal_levels);
+		chip->snk_thermal_levels = NULL;
 	}
 
 	device_remove_file(chip->mmi_chip->dev, &dev_attr_typec_pwrsrc);
@@ -720,6 +921,7 @@ struct glink_device *usb_glink_device_register(struct mmi_glink_chip *chip, stru
 		goto exit;
 	}
 
+	usb_chip->user_pwrsrc = UINT_MAX;
 	usb_chip->usb_info.cid_st = -1;
 	usb_chip->usb_info.lpd_st = -1;
 	usb_chip->usb_info.otg_st = -1;
