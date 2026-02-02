@@ -453,7 +453,8 @@ static void st54spi_power_off(struct st54spi_data *st54spi)
 	}
 	// Set SE_PWR_REQ / SE_nRESET to low
 	if (st54spi->power_or_nreset_gpio) {
-		gpio_set_value(st54spi->power_or_nreset_gpio, 0);
+		/* do not set nreset low to avoid ese none response issue */
+		//gpio_set_value(st54spi->power_or_nreset_gpio, 0);
 		st54spi->last_nreset_falling = ktime_get();
 	}
 
