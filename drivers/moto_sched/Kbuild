@@ -3,7 +3,7 @@ ANDROID_BUILD_TOP := $(srctree)/..
 endif
 
 # add -Wall to try to catch everything we can.
-EXTRA_CFLAGS += -Wall
+EXTRA_CFLAGS += -Wall -Wno-declaration-after-statement
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
 EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
 ifneq ($strip($(LINUX_KERNEL_VERSION)),)

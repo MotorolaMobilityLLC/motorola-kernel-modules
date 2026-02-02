@@ -19,7 +19,9 @@
 #include <trace/hooks/mm.h>
 #include <linux/swap.h>
 #include <linux/mmzone.h>
+#if defined(MM_NON_LINEAR_WMARK_SUPPORTED)
 #include <linux/memory-tiers.h>
+#endif
 
 #include "mm_common.h"
 
