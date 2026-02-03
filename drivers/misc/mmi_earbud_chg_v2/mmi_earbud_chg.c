@@ -11,10 +11,10 @@
 #include <linux/delay.h>
 
 #define DRIVER_NAME          "mmi_earbud_chg"
-#define ENABLE_CHG_NAME      "enable-uart-chg-gpios"
-#define ENABLE_LCHG_NAME     "enable-lchg-gpios"
-#define ENABLE_RCHG_NAME     "enable-rchg-gpios"
-#define CHG_IRQ_NAME         "chg-irq-gpios"
+#define ENABLE_CHG_NAME      "enable-uart-chg"
+#define ENABLE_LCHG_NAME     "enable-lchg"
+#define ENABLE_RCHG_NAME     "enable-rchg"
+#define CHG_IRQ_NAME         "chg-irq"
 #define DEFAULT_HB_INTERVAL  10000 /* milliseconds */
 #define DEFAULT_I_CHG        4 /* millisamps */
 
