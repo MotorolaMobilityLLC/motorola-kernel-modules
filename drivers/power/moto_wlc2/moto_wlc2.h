@@ -267,6 +267,7 @@ struct wireless_config
 	int bootmode;
 	bool wls_cert_mode;
 	bool secure_hardware;
+	bool factory_mode;
 	int enable_bat_full_stop_epp;
 	int enable_stop_epp;
 	int enable_rx_offset_detect;
