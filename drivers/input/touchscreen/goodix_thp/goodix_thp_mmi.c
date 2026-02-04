@@ -1347,6 +1347,7 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev)
 	int ret = 0;
 	struct platform_device *pdev;
 	struct goodix_thp_core *core_data;
+	u8 val[3];
 
 	GET_GOODIX_DATA(dev);
 
@@ -1372,6 +1373,20 @@ static int goodix_ts_mmi_pre_suspend(struct device *dev)
 		*/
 		mutex_lock(&core_data->mode_lock);
 		core_data->current_stylus_rate_mode = 0;
+		core_data->get_mode.stylus_report_rate_mode = 0;
+		val[0] = NOTIFY_TYPE_SET_STYLUSTIP_REPORT_RATE;
+		val[1] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command >> 8) & 0xFF;
+		val[2] = (core_data->rate_configs[core_data->current_stylus_rate_mode].command ) & 0xFF;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.stylus_report_rate_mode = core_data->get_mode.stylus_report_rate_mode;
+		msleep(20);
+		goodix_filter_mode(core_data, core_data->current_stylus_rate_mode);
+		goodix_palm_area_mode(core_data, core_data->current_stylus_rate_mode);
+		ts_info(dev, "Success switch stylus tip report rate to mode %d %dHZ, is on stylus mode? %s",
+			core_data->current_stylus_rate_mode,
+			core_data->rate_configs[core_data->current_stylus_rate_mode].report_rate,
+			core_data->set_mode.stylus_mode? "yes" : "no");
 		mutex_unlock(&core_data->mode_lock);
 	}
 
