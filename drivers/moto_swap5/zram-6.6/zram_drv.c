@@ -34,6 +34,7 @@
 #include <linux/debugfs.h>
 #include <linux/cpuhotplug.h>
 #include <linux/part_stat.h>
+#include <linux/swap.h>
 
 #include "zram_drv.h"
 #include "zram_drv_internal.h"
@@ -79,6 +80,28 @@ static inline bool is_partial_io(struct bio_vec *bvec)
 }
 #endif
 
+static inline bool skip_zram_write(struct zram *zram, u32 index)
+{
+    /*
+     * Throttle ZRAM writes during app launch to improve performance,
+     * BUT we must allow the following critical writes:
+     *
+     * 1. kswapd: Must proceed to reclaim memory and prevent OOM.
+     * 2. index 0 (Swap Header): 'mkswap' writes the swap signature to
+     *    index 0. Blocking this leads to 'swapon' failure (Swap total = 0).
+     */
+    if (atomic_read(&am_app_launch) && !current_is_kswapd() && index != 0)
+        return true;
+
+    zram_slot_lock(zram, index);
+    if (zram_test_flag(zram, index, ZRAM_UNDER_WB)) {
+        zram_slot_unlock(zram, index);
+        pr_info("zram is under wb at index=%d\n", index);
+        return true;
+    }
+    zram_slot_unlock(zram, index);
+    return false;
+}
 
 static inline void zram_fill_page(void *ptr, unsigned long len,
 					unsigned long value)
@@ -1375,6 +1398,11 @@ static int zram_write_page(struct zram *zram, struct page *page, u32 index)
 	struct zcomp_strm *zstrm;
 	unsigned long element = 0;
 	enum zram_pageflags flags = 0;
+
+#ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
+	if (skip_zram_write(zram, index))
+		return -EBUSY;
+#endif
 
 	mem = kmap_atomic(page);
 	if (page_same_filled(mem, &element)) {
