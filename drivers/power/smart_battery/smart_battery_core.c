@@ -719,25 +719,25 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 		if (chip->batt_cool_shutdown_volt != 0 && chip->batt_cold_shutdown_volt != 0) {
 
 			if (chip->is_low_temp_shutdownVolt_active < ACTIVE_COLD &&
-				chip->combo_batt_temp <= chip->batt_cold_threshold &&
+				chip->combo_batt_temp <= chip->batt_cold_degree &&
 				mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
 				if (smart_batt_set_shutdown_threshold(chip, chip->batt_cold_shutdown_volt) >=0) {
 					mmi_info(chip, "battery temp lower than %d degrees, set shutdown_voltage to %dmv\n",
-						chip->batt_cold_threshold / 10, chip->batt_cold_shutdown_volt);
+						chip->batt_cold_degree / 10, chip->batt_cold_shutdown_volt);
 					chip->is_low_temp_shutdownVolt_active = ACTIVE_COLD;
 				}
 			} else if (chip->is_low_temp_shutdownVolt_active < ACTIVE_COOL &&
-					chip->combo_batt_temp <= chip->batt_cool_threshold &&
+					chip->combo_batt_temp <= chip->batt_cool_degree &&
 					mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
 				if (smart_batt_set_shutdown_threshold(chip, chip->batt_cool_shutdown_volt) >=0) {
 					mmi_info(chip, "battery temp lower than %d degrees, set shutdown_voltage to %dmv\n",
-						chip->batt_cool_threshold / 10, chip->batt_cool_shutdown_volt);
+						chip->batt_cool_degree / 10, chip->batt_cool_shutdown_volt);
 					chip->is_low_temp_shutdownVolt_active = ACTIVE_COOL;
 				}
 			}
 
 			if (chip->is_low_temp_shutdownVolt_active > ACTIVE_NONE &&
-					chip->combo_batt_temp >= (chip->batt_cool_threshold + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
+					chip->combo_batt_temp >= (chip->batt_cool_degree + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
 				chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
 				shutdown_volt = chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage;
 				if (smart_batt_set_shutdown_threshold(chip, shutdown_volt) >=0) {
@@ -745,7 +745,7 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 					chip->is_low_temp_shutdownVolt_active = ACTIVE_NONE;
 				}
 			} else if (chip->is_low_temp_shutdownVolt_active > ACTIVE_COOL &&
-				chip->combo_batt_temp >= (chip->batt_cold_threshold + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
+				chip->combo_batt_temp >= (chip->batt_cold_degree + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
 				if (smart_batt_set_shutdown_threshold(chip, chip->batt_cool_shutdown_volt) >=0) {
 					mmi_info(chip, "exit cold environment, the power_off voltage set back to %dmv\n", chip->batt_cool_shutdown_volt);
 					chip->is_low_temp_shutdownVolt_active = ACTIVE_COOL;
@@ -773,15 +773,15 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 
 #define DISCHG_CURRENT_1A			(-1)*1000*1000
 #define DISCHG_CURRENT_500MA		(-1)*500*1000
-#define VOLTAGE_3P2V		3200*1000
 #define TAPER_CNT			3
 #define HEAVYLOAD_VBAT_DELTA		50*1000
+#define CONTINUOUS_HEAVYLOAD_VBAT_DELTA		300*1000
 
 static bool smart_batt_raise_battempty_threshold(struct mmi_smart_battery *chip, int vbatt_empty)
 {
 	bool raise_battempty_volt = false;
 
-	if (chip->enable_raise_battempty_threshold  && chip->combo_voltage_now < VOLTAGE_3P2V &&
+	if (chip->enable_raise_battempty_threshold  && chip->combo_voltage_now < (vbatt_empty + CONTINUOUS_HEAVYLOAD_VBAT_DELTA) &&
 				mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
 		if (chip->combo_current_now < DISCHG_CURRENT_1A) {
 			chip->heavyLoad_dischg_cnt ++;
@@ -839,12 +839,15 @@ static void smart_batt_update_thread(struct work_struct *work)
 	smart_batt_get_charge_counter(chip);
 	rsoc = smart_batt_soc100_forward(chip, rsoc);
 
-	if (chip->combo_batt_temp < chip->batt_cool_threshold){
-		vbatt_empty = chip->vbatt_empty_cool_mv * 1000;
-		vbatt_low = chip->vbatt_low_cool_mv * 1000;
+	if (chip->combo_batt_temp < chip->batt_cold_degree) {
+		vbatt_empty = chip->vbatt_cold_empty_mv * 1000;
+		vbatt_low = chip->vbatt_cold_low_mv * 1000;
+		mmi_info(chip, "battery temperature is cold, so set batt empty voltage=%d\n", vbatt_empty);
+	} else if (chip->combo_batt_temp < chip->batt_cool_degree) {
+		vbatt_empty = chip->vbatt_cool_empty_mv * 1000;
+		vbatt_low = chip->vbatt_cool_low_mv * 1000;
 		mmi_info(chip, "battery temperature is cool, so set batt empty voltage=%d\n", vbatt_empty);
-	}
-	else {
+	} else {
 		vbatt_empty = chip->vbatt_empty_mv * 1000;
 		vbatt_low = chip->vbatt_low_mv * 1000;
 	}
@@ -1057,17 +1060,17 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	else
 		chip->vbatt_empty_mv = val;
 
-	rc = of_property_read_u32(np, "mmi,vbatt-empty-cool-mv", &val);
+	rc = of_property_read_u32(np, "mmi,vbatt-cool-empty-mv", &val);
 	if (rc < 0)
-		chip->vbatt_empty_cool_mv = DEFAULT_VBATT_EMPTY_COOL_MV;
+		chip->vbatt_cool_empty_mv = DEFAULT_VBATT_COOL_EMPTY_MV;
 	else
-		chip->vbatt_empty_cool_mv = val;
+		chip->vbatt_cool_empty_mv = val;
 
-	rc = of_property_read_u32(np, "mmi,batt-cool-threshold", &val);
+	rc = of_property_read_u32(np, "mmi,batt-cool-degree", &val);
 	if (rc < 0)
-		chip->batt_cool_threshold = DEFAULT_BATT_COOL_THRESHOLD;
+		chip->batt_cool_degree = DEFAULT_BATT_COOL_DEGREE;
 	else
-		chip->batt_cool_threshold = val;
+		chip->batt_cool_degree = val;
 
 	rc = of_property_read_u32(np, "mmi,vbatt-low-mv", &val);
 	if (rc < 0)
@@ -1075,24 +1078,42 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	else
 		chip->vbatt_low_mv = val;
 
-	rc = of_property_read_u32(np, "mmi,vbatt-low-cool-mv", &val);
+	rc = of_property_read_u32(np, "mmi,vbatt-cool-low-mv", &val);
 	if (rc < 0)
-		chip->vbatt_low_cool_mv = DEFAULT_VBATT_LOW_COOL_MV;
+		chip->vbatt_cool_low_mv = DEFAULT_VBATT_COOL_LOW_MV;
 	else
-		chip->vbatt_low_cool_mv = val;
+		chip->vbatt_cool_low_mv = val;
 
 	of_property_read_u32(np, "mmi,batt-cool-shutdown-volt", &chip->batt_cool_shutdown_volt);
 
-	rc = of_property_read_u32(np, "mmi,batt-cold-threshold", &val);
+	rc = of_property_read_u32(np, "mmi,batt-cold-degree", &val);
 	if (rc < 0)
-		chip->batt_cold_threshold = DEFAULT_BATT_COLD_THRESHOLD;
+		chip->batt_cold_degree = DEFAULT_BATT_COLD_DEGREE;
 	else
-		chip->batt_cold_threshold = val;
+		chip->batt_cold_degree = val;
+
+	rc = of_property_read_u32(np, "mmi,vbatt-cold-empty-mv", &val);
+	if (rc < 0)
+		chip->vbatt_cold_empty_mv = DEFAULT_VBATT_COLD_EMPTY_MV;
+	else
+		chip->vbatt_cold_empty_mv = val;
+
+	rc = of_property_read_u32(np, "mmi,vbatt-cold-low-mv", &val);
+	if (rc < 0)
+		chip->vbatt_cold_low_mv = DEFAULT_VBATT_COLD_LOW_MV;
+	else
+		chip->vbatt_cold_low_mv = val;
 
 	of_property_read_u32(np, "mmi,batt-cold-shutdown-volt", &chip->batt_cold_shutdown_volt);
 
-	mmi_info(chip,"vbatt_empty_mv=%d vbatt_empty_cool_mv=%d batt_cool_threshold=%d, vbatt_low_mv=%d vbatt_low_cool_mv=%d batt_cold_threshold=%d\n",
-		chip->vbatt_empty_mv,chip->vbatt_empty_cool_mv, chip->batt_cool_threshold, chip->vbatt_low_mv, chip->vbatt_low_cool_mv, chip->batt_cold_threshold);
+	mmi_info(chip,"normal:vbatt_low_mv=%d, vbatt_empty_mv=%d\n", chip->vbatt_low_mv, chip->vbatt_empty_mv);
+
+	mmi_info(chip,"cool:vbatt_cool_low_mv=%d, vbatt_cool_empty_mv=%d, batt_cool_shutdown_volt=%d, batt_cool_degree=%d\n",
+		chip->vbatt_cool_low_mv, chip->vbatt_cool_empty_mv, chip->batt_cool_shutdown_volt, chip->batt_cool_degree);
+
+	mmi_info(chip,"cold:vbatt_cold_low_mv=%d, vbatt_cold_empty_mv=%d, batt_cold_shutdown_volt=%d, batt_cold_degree=%d\n",
+		chip->vbatt_cold_low_mv, chip->vbatt_cold_empty_mv, chip->batt_cold_shutdown_volt, chip->batt_cold_degree);
+
 
 	if (of_find_property(np, "cyclecount-shutdown-voltage-zones", &byte_len)) {
 		if ((byte_len / sizeof(u32)) % 3) {
