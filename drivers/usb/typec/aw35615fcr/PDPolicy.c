@@ -4065,6 +4065,7 @@ void PolicyGetSourceCapExt(struct Port *port)
 		}
 		break;
 	}
+	port->ExtChunkOffset = 0;
 }
 #endif /* AW_HAVE_EXT */
 
