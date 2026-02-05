@@ -3024,8 +3024,7 @@ int fg_set_shutdown_threshold(struct gauge_device *gauge_dev, int shutd_vol)
 		if (ret < 0)
 			mmi_err("Read poweroff threshold error!!\n");
 		if (data.shutd_vol != shutd_vol) {
-			data.shutd_vol = MAX(shutd_vol, 3200);
-			data.shutd_vol = MIN(shutd_vol, 3400);
+			data.shutd_vol = MIN(MAX(shutd_vol, 2700), 3600);
 			ret = nfg1000_i2c_BLOCK_command_write_with_CHECKSUM(mmi, FG_MAC_CMD_POWEROFF_THRESHOLD, data.hex, 2);
 			if (ret <0)
 				mmi_err("Write poweroff threshold error!!\n");
