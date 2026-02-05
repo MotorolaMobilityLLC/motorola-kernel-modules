@@ -88,6 +88,27 @@ int wls_chg_get_mux_channel(int *mux_channel)
 	return 0;
 }
 
+int wls_chg_get_battery_info(struct moto_wlc *wlc, enum power_supply_property property)
+{
+	union power_supply_propval prop;
+	int ret = -1;
+
+	if (IS_ERR_OR_NULL(wlc))
+		return ret;
+
+	if (IS_ERR_OR_NULL(wlc->bat_psy)) {
+		wlc_info("%s Couldn't get wlc->bat_psy\n", __func__);
+	} else {
+		ret = power_supply_get_property(wlc->bat_psy, property, &prop);
+		wlc_info("%s prop=%d value=%d ret=%d\n",
+					__func__, property, prop.intval, ret);
+		if (ret == 0)
+			ret = prop.intval;
+	}
+
+	return ret;
+}
+
 int wls_chg_power_on(struct moto_wlc *wlc)
 {
 	int sys_mode = 0;
@@ -127,6 +148,8 @@ int wls_chg_power_off(struct moto_wlc *wlc)
 
 	wlc->ctl.rx_power_on = false;
 	wlc->ctl.rx_ldo_on = false;
+	if (wlc->config.limit_wls_power_support)
+		wlc->config.limit_wls_power_enabled = false;
 
 	if (wlc->ctl.factory_wls_en) {
 		if (gpio_is_valid(wlc->wls_control_en)) {
@@ -148,6 +171,7 @@ int wls_chg_power_off(struct moto_wlc *wlc)
 int wls_chg_current_select(struct moto_wlc *wlc, int *icl, int *vbus)
 {
 	int wls_power = 0;
+	int bat_soc = 0;
 
 	if (IS_ERR_OR_NULL(wlc))
 		return -1;
@@ -230,6 +254,18 @@ int wls_chg_current_select(struct moto_wlc *wlc, int *icl, int *vbus)
 			}
 			wlc->data.vbus_select = *vbus;
 		}
+	}
+
+	if (wlc->config.limit_wls_power_support) {
+		if (!wlc->config.limit_wls_power_enabled && wls_power >= WLS_RX_CAP_10W) {
+			bat_soc = wls_chg_get_battery_info(wlc, POWER_SUPPLY_PROP_CAPACITY);
+			if (bat_soc >= 0 && bat_soc <= wlc->config.limit_wls_power_soc) {
+				wlc->config.limit_wls_power_enabled = true;
+			}
+		}
+		if (wlc->config.limit_wls_power_enabled &&
+				*icl > wlc->config.limit_wls_power_icl_uA)
+			*icl = wlc->config.limit_wls_power_icl_uA;
 	}
 
 	if (wlc->ctl.input_current_max != 0 &&

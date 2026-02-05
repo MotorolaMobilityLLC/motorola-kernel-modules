@@ -190,6 +190,27 @@ int wls_get_sys_config(struct moto_wlc *wlc, struct device *dev)
 	of_property_read_u32(node, "chip-id", &wlc->config.chip_id);
 	pr_info("[%s] chip-id %d\n", __func__, wlc->config.chip_id);
 
+
+	wlc->config.limit_wls_power_support = of_property_read_bool(node, "limit-wls-power-support");
+
+	if (wlc->config.limit_wls_power_support) {
+		if (of_property_read_u32(node, "limit-wls-power-soc", &val) >= 0) {
+			wlc->config.limit_wls_power_soc = val;
+		} else {
+			wlc->config.limit_wls_power_soc = WLS_LIMIT_POWER_DEFAULT_SOC;
+		}
+
+		if (of_property_read_u32(node, "limit-wls-power-icl-uA", &val) >= 0) {
+			wlc->config.limit_wls_power_icl_uA = val;
+		} else {
+			wlc->config.limit_wls_power_icl_uA = WLS_LIMIT_POWER_DEFAULT_ICL_uA;
+		}
+	}
+	pr_info("[%s] limit_wls_power_support %d, limit_soc=%d limit_icl_uA=%d\n", __func__,
+			wlc->config.limit_wls_power_support,
+			wlc->config.limit_wls_power_soc,
+			wlc->config.limit_wls_power_icl_uA);
+
 	return 0;
 }
 

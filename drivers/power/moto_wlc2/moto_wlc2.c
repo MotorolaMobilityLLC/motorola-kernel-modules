@@ -819,6 +819,11 @@ static int moto_wlc_probe(struct platform_device *pdev)
 		wlc_err("%s: Error : can't find primary charger\n", __func__);
 	}
 
+	wlc->bat_psy = power_supply_get_by_name("battery");
+	if (IS_ERR_OR_NULL(wlc->bat_psy)) {
+		wlc_err("%s Error : can't get wlc->bat_psy\n", __func__);
+	}
+
 	wlc->state = WLC_HW_UNINIT;
 	wls_config_parse_dts(wlc, &pdev->dev);
 

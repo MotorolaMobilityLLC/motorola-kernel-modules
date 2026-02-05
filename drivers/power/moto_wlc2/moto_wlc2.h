@@ -39,6 +39,9 @@
 #define WLS_MC_EPP_ICL_DEFAULT 900000 /*900mA*/
 #define WLS_MC_ICL_STEP 100000 /*100mA*/
 
+#define WLS_LIMIT_POWER_DEFAULT_SOC 10 /*soc 10%*/
+#define WLS_LIMIT_POWER_DEFAULT_ICL_uA 875000 /*875mA*/
+
 #define QI_ASK_CMD_ADJUST_FOD (0x06)
 #define QI_ASK_CMD_TXID (0x3F)
 #define QI_ASK_CMD_QFOD (0x48)
@@ -287,6 +290,12 @@ struct wireless_config
 	int wls_auto_stop_undertemp;
 
 	bool mc_support;
+
+	bool limit_wls_power_support;
+	bool limit_wls_power_enabled;
+	int limit_wls_power_soc;
+	int limit_wls_power_icl_uA;
+
 };
 
 struct wireless_auth
