@@ -4056,7 +4056,7 @@ void PolicyGetSourceCapExt(struct Port *port)
 				AW_LOG("0x%x\n", port->SrcCapExt.EprPDP);
 #endif
 			} else {
-				SetPEState(port, peSinkSendSoftReset);
+				//SetPEState(port, peSinkSendSoftReset);
 			}
 		} else if (TimerExpired(&port->PolicyStateTimer)) {
 			SetPEState(port, peSinkReady);
