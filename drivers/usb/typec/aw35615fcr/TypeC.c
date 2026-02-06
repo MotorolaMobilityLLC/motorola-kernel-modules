@@ -263,6 +263,16 @@ void StateMachineUnattached(Port_t *port)
 		AW_LOG("waterproof trigger count=%d\n",port->WaterCounter);
 #endif
 
+#ifdef AW_HAVE_LPD
+		if (chip->lpd_check_enable) {
+			chip->lpd_check_enable = AW_FALSE;
+			hrtimer_start(&chip->lpd_timer, ktime_set(chip->lpd_check_timer / 1000, 0), HRTIMER_MODE_REL);
+		}
+		if (chip->toggle_check_num > 0)
+			chip->toggle_check_num--;
+		AW_LOG("toggle_check_num = %d\n", chip->toggle_check_num);
+#endif /* AW_HAVE_LPD */
+
 		//TimerDisable(&port->LoopCountTimer);
 		DeviceRead(port, regStatus1a, 1, &port->Registers.Status.byte[1]);
 		AW_LOG("regStatus1a=  0x%x\n", port->Registers.Status.TOGSS);
@@ -1116,6 +1126,7 @@ void SetStateUnattached(Port_t *port)
 		chip->lpd_check_enable = AW_FALSE;
 		chip->lpd_wait_recovery = AW_FALSE;
 		chip->lpd_check_num = chip->lpd_check_num_bak;
+		chip->toggle_check_num = chip->lpd_check_num_bak;
 		hrtimer_start(&chip->lpd_timer, ktime_set(chip->lpd_check_timer / 1000, 0), HRTIMER_MODE_REL);
 	}
 #endif /* AW_HAVE_LPD */
@@ -1172,8 +1183,8 @@ void SetStateUnattached(Port_t *port)
 	port->Registers.MaskAdv.M_CC1_OV = 1;
 	port->Registers.MaskAdv.M_CC2_OV = 1;
 #ifdef AW_HAVE_LPD
-	port->Registers.MaskAdv.M_CC1_LPD = 0;
-	port->Registers.MaskAdv.M_CC2_LPD = 0;
+	port->Registers.MaskAdv.M_CC1_LPD = 1;
+	port->Registers.MaskAdv.M_CC2_LPD = 1;
 	port->Registers.MaskAdv.M_CC1_OV = 1;
 	port->Registers.MaskAdv.M_CC2_OV = 1;
 #endif /* AW_HAVE_LPD */

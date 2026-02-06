@@ -386,12 +386,11 @@ static void aw35615_lpd_check_work(struct work_struct *work)
 		pr_err("AWINIC  %s - Chip structure is NULL!\n", __func__);
 		return;
 	}
-	AW_LOG("lpd_check_num = %d, lpd_check_enable=%d, lpd_recovery_num=%d\n",
-		chip->lpd_check_num, chip->lpd_check_enable, chip->lpd_recovery_num);
-	if (chip->lpd_check_num == 0) {
+	AW_LOG("lpd_check_num=%d, toggle_check_num=%d, lpd_recovery_num=%d\n",
+		chip->lpd_check_num, chip->toggle_check_num, chip->lpd_recovery_num);
+	if ((chip->lpd_check_num == 0) || (chip->toggle_check_num == 0)) {
 		if (!chip->lpd_check_enable) {
 			AW_LOG("notify ldp\n");
-			chip->lpd_check_enable = AW_TRUE;
 			chip->lpd_wait_recovery = AW_FALSE;
 			core_set_sink(&chip->port);
 			notify_observers(LPD_NOTICE_WATER, chip->port.PortID);
@@ -401,8 +400,11 @@ static void aw35615_lpd_check_work(struct work_struct *work)
 				aw35615_recovery_time = AW35615_LPD_RECOVERY_L_DETE;
 			}
 			hrtimer_start(&chip->lpd_timer, ktime_set(aw35615_recovery_time / 1000, 0), HRTIMER_MODE_REL);
+			platform_delay_10us(1500);
+			chip->lpd_check_enable = AW_TRUE;
 		} else {
 			chip->lpd_check_num = chip->lpd_check_num_bak;
+			chip->toggle_check_num = chip->lpd_check_num_bak;
 			if (chip->port.ConnState == Unattached) {
 				AW_LOG("cc unattached, cc recovery\n");
 				chip->lpd_check_enable = AW_FALSE;
@@ -423,6 +425,7 @@ static void aw35615_lpd_check_work(struct work_struct *work)
 		}
 	} else {
 		chip->lpd_check_num = chip->lpd_check_num_bak;
+		chip->toggle_check_num = chip->lpd_check_num_bak;
 		chip->lpd_check_enable = AW_TRUE;
 		if (chip->port.ConnState == Unattached) {
 			AW_LOG("lpd recovery\n");
