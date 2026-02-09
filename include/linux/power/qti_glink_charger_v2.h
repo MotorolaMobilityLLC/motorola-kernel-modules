@@ -25,7 +25,6 @@
 enum oem_property_type {
 	OEM_PROP_BATT_INFO,
 	OEM_PROP_CHG_INFO,
-	OEM_PROP_ANDROID_AUTO_MODE,
 	OEM_PROP_CHG_PROFILE_INFO,
 	OEM_PROP_CHG_PROFILE_DATA,
 	OEM_PROP_CHG_FV,
@@ -119,6 +118,7 @@ enum oem_property_type {
 	OEM_PROP_TCMD_CURRENT_FLIP_BATTID, // add prop to get current flip battid from soccp-fg
 	OEM_PROP_TYPEC_PWRSRC_REQUEST,
 	OEM_PROP_USB_ICL,
+	OEM_PROP_ANDROID_AUTO_MODE,
 	OEM_PROP_MAX,
 };
 
