@@ -107,6 +107,8 @@
 #define MPC8011B_write_WAIT_TIME	5
 #define MPC8011B_crc32_WAIT_TIME 	20
 
+#define FAKE_BATTERY_SOC_10_PERCENT 1000
+
 #define NAKE_DWORD_8BITS(HH,HL,LH,LL) ((u32)(HH)<<24)|((u32)(HL)<<16)|((u32)(LH)<<8)|((u32)(LL))
 enum mmi_fg_reg_idx {
 	BQ_FG_REG_CTRL = 0,
@@ -2805,7 +2807,7 @@ int fg_get_capacity(struct gauge_device *gauge_dev, int *soc)
 	if (mmi->do_upgrading)
 		*soc = mmi->batt_soc;
 	else if (mmi->fake_battery)
-		*soc = 10;
+		*soc = FAKE_BATTERY_SOC_10_PERCENT;
 	else {
 		ret = fg_read_rsoc(mmi);
 		if (ret >= 0)
