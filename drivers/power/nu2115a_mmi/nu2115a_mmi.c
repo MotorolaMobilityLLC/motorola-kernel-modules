@@ -70,6 +70,7 @@ struct nu2115_cfg {
 	unsigned int bat_ucp_alm;
 	unsigned int fsw_set;
 	unsigned int ibat_sns_res;
+	unsigned int vbus_option;
 	unsigned int ss_timeout;
 	/* watchdog */
 	bool watchdog_dis;
@@ -1837,7 +1838,7 @@ static int nu2115_hw_init(struct nu2115 *chip)
 	ret =  __nu2115_write(chip, NU2115_REG_0A, 0x80);//BUSOCP_ALM 0x80:disable
 	ret =  __nu2115_write(chip, NU2115_REG_0E, 0x06);
 	ret =  __nu2115_write(chip, NU2115_REG_2F, 0x00);
-	ret =  __nu2115_write(chip, NU2115_REG_35, 0xC0);
+	ret =  __nu2115_write(chip, NU2115_REG_35, chip->cfg.vbus_option);
 	/* clear irqs */
 	nu2115_check_status_flags(chip);
 
@@ -1870,6 +1871,9 @@ static int nu2115_parse_dt(struct nu2115 *chip)
 	ret = of_property_read_u32(np, "ibat_sns_res", &chip->cfg.ibat_sns_res);
 	if (ret)
 		chip->cfg.ibat_sns_res = 2;
+	ret = of_property_read_u32(np, "vbus_option", &chip->cfg.vbus_option);
+	if (ret)
+		chip->cfg.vbus_option = 0xC0;
 
 	chip->cfg.watchdog_dis = of_property_read_bool(np, "watchdog_dis");
 	ret = of_property_read_u32(np, "watchdog", &chip->cfg.watchdog);
