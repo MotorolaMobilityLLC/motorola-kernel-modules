@@ -9,6 +9,9 @@
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
+#include <linux/fs.h>
+#include <asm/termbits.h>
+#include <asm-generic/ioctls.h>
 
 #define DRIVER_NAME          "mmi_earbud_chg"
 #define ENABLE_CHG_NAME      "enable-uart-chg"
@@ -49,6 +52,8 @@ struct mmi_earbud_chg_data {
     int en_rchg_gpio;
     struct gpio_desc *chg_irq_gpio;
     int chg_irq;
+    const char *dev_lchan;
+    const char *dev_rchan;
 
     int termination_current;
     enum charging_state chg_state;
@@ -81,29 +86,20 @@ int mmi_register_ichg_chip(struct mmi_ichg_chip *chip) {
 EXPORT_SYMBOL(mmi_register_ichg_chip);
 
 static void mmi_enable_chg(struct mmi_earbud_chg_data *pdata, bool enable) {
-    int rc = 0;
     pdata->enable_chg = enable;
-    rc = gpio_direction_output(pdata->en_chg_gpio, pdata->enable_chg);
-    if (rc) {
-        pr_err("%s: err to set gpio: %d", __func__, rc);
-    }
+    gpio_set_value(pdata->en_chg_gpio, pdata->enable_chg);
+    pr_info("%s: Get GPIO_VLAUE %d", __func__, gpio_get_value(pdata->en_chg_gpio));
 }
 
 static void mmi_enable_lchg(struct mmi_earbud_chg_data *pdata, bool enable) {
-    int rc = 0;
     pdata->enable_lchg = enable;
-    rc = gpio_direction_output(pdata->en_lchg_gpio, pdata->enable_lchg);
-    if (rc) {
-        pr_err("%s: err to set gpio: %d", __func__, rc);
-    }
+    gpio_set_value(pdata->en_lchg_gpio, pdata->enable_lchg);
+    pr_info("%s: Get LCHG GPIO_VLAUE %d", __func__, gpio_get_value(pdata->en_lchg_gpio));
 }
 static void mmi_enable_rchg(struct mmi_earbud_chg_data *pdata, bool enable) {
-    int rc = 0;
     pdata->enable_rchg = enable;
-    rc = gpio_direction_output(pdata->en_rchg_gpio, pdata->enable_rchg);
-    if (rc) {
-        pr_err("%s: err to set gpio: %d", __func__, rc);
-    }
+    gpio_set_value(pdata->en_rchg_gpio, pdata->enable_rchg);
+    pr_info("%s: Get RCHG GPIO_VLAUE %d", __func__, gpio_get_value(pdata->en_rchg_gpio));
 }
 
 static void mmi_update_chg_state(
@@ -403,7 +399,56 @@ static ssize_t termination_current_show(
 }
 DEVICE_ATTR_RW(termination_current);
 
+static ssize_t uart_write_store(
+    struct device *dev,
+    struct device_attribute *attr,
+    const char *buf,
+    size_t count
+) {
+    struct mmi_earbud_chg_data *pdata = dev_get_drvdata(dev);
+    bool en_chg;
+    struct file *file;
+    loff_t pos = 0; // Use current file position or specific offset
+    ssize_t wsize = 0;
+    unsigned char ldata[8] = {0x24, 0x06, 0x02, 0x9E, 0x59, 0x29, 0x7F};
+    unsigned char rdata[8] = {0x25, 0x06, 0x02, 0x9E, 0x59, 0x83, 0x2E};
+    //unsigned char ldata[8] = {0x24, 0x05, 0x00, 0x69, 0x6F};
+    //unsigned char rdata[8] = {0x25, 0x05, 0x00, 0x5E, 0x5F};
+    unsigned char readdata[256] = {0};
+    int cnt = 0;
+    pr_info("%s: Entered\n", __func__);
+    if (kstrtobool(buf, &en_chg)) {
+        return -EINVAL;
+    }
+
+    if(en_chg == 0) {
+        file = filp_open(pdata->dev_lchan, O_RDWR|O_CREAT, 0644);
+        if (!IS_ERR(file)) {
+            wsize = kernel_write(file, ldata, 7, &pos);
+            pos = 0;
+	    //wsize = kernel_read(file, readdata, 20, &pos); //20
+	    filp_close(file, NULL);
+	    pr_info("%s: Left Data read %zd\n", __func__, wsize);
+	    for(cnt = 0; cnt <wsize; cnt++) pr_info("0x%X ", readdata[cnt]);
+        } else pr_info("%s: File %s open failed\n", __func__, pdata->dev_lchan);
+    } else {
+        file = filp_open(pdata->dev_rchan, O_RDWR|O_CREAT, 0644);
+        if (!IS_ERR(file)) {
+            wsize = kernel_write(file, rdata, 7, &pos);
+            pos = 0;
+            //wsize = kernel_read(file, readdata, 20, &pos); //20
+            filp_close(file, NULL);
+            pr_info("%s: Right Data read %zd\n", __func__, wsize);
+            for(cnt = 0; cnt <wsize; cnt++) pr_info("0x%X ", readdata[cnt]);
+        } else pr_info("%s: File %s open failed\n", __func__, pdata->dev_rchan);
+    }
+    pr_info("%s: Successfully transfered\n", __func__);
+    return count;
+}
+DEVICE_ATTR_WO(uart_write);
+
 static struct attribute *mmi_earbud_chg_attrs[] = {
+    &dev_attr_uart_write.attr,
     &dev_attr_enable_charging.attr,
     &dev_attr_enable_lcharging.attr,
     &dev_attr_enable_rcharging.attr,
@@ -452,7 +497,7 @@ static int mmi_earbud_chg_init_gpio(struct mmi_earbud_chg_data *pdata) {
             return rc;
         }
 
-        rc = gpio_direction_output(pdata->en_lchg_gpio, 1);
+        rc = gpio_direction_output(pdata->en_lchg_gpio, 0);
         if (rc) {
            pr_err("%s: err to set gpio: %d", __func__, rc);
         }
@@ -469,7 +514,7 @@ static int mmi_earbud_chg_init_gpio(struct mmi_earbud_chg_data *pdata) {
             pr_err("%s : failed to request en rchg gpio: %d", __func__, rc);
             return rc;
         }
-	rc = gpio_direction_output(pdata->en_rchg_gpio, 1);
+	rc = gpio_direction_output(pdata->en_rchg_gpio, 0);
         if (rc) {
            pr_err("%s: err to set gpio: %d", __func__, rc);
         }
@@ -572,6 +617,18 @@ static int mmi_earbud_chg_probe(struct platform_device *pdev) {
     else {
         pdata->termination_current = ichg;
     }
+
+    rc = of_property_read_string(dev->of_node, "mmi,uart-dev-lchannel", &pdata->dev_lchan);
+    if(rc) {
+        pr_err("%s : Failed to get L Channel device node", __func__);
+        return rc;
+    } else pr_info("%s: lchannel %s\n", __func__, pdata->dev_lchan);
+
+    rc = of_property_read_string(dev->of_node, "mmi,uart-dev-rchannel", &pdata->dev_rchan);
+    if(rc) {
+        pr_err("%s : Failed to get R Channel device node", __func__);
+        return rc;
+    } else pr_info("%s: rchannel %s\n", __func__, pdata->dev_rchan);
 
     rc = sysfs_create_group(&dev->kobj, &mmi_earbud_chg_group);
     if (rc) {
