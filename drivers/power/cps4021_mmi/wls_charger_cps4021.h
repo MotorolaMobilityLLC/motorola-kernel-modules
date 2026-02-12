@@ -176,6 +176,9 @@ enum mc_icl_state_enum {
 #define WLS_BPP_ICL_MAX_MA 1000
 #define WLS_BPP_ICL_MIN_MA 300
 
+#define WLS_LIMIT_POWER_DEFAULT_SOC 10 /*soc 10%*/
+#define WLS_LIMIT_POWER_DEFAULT_ICL_uA 1000000 /*1A*/
+
 /*****************************************************************************
  *  Log
  ****************************************************************************/
@@ -333,6 +336,10 @@ struct cps_wls_chrg_chip {
     struct delayed_work mc_modsel_work;
     bool phone_case_support;
     struct notifier_block hall_nb;
+    bool limit_wls_power_support;
+    int limit_wls_power_soc;
+    int limit_wls_power_icl_uA;
+    bool limit_wls_power_enabled;
 };
 
 typedef enum ept_reason

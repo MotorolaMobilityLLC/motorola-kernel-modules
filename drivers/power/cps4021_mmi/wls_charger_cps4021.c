@@ -1632,7 +1632,17 @@ static int cps_wls_rx_irq_handler(int int_flag)
   		    {
   			    cps_wls_set_status(WLC_CONNECTED);
   		    }
+			if(chip->limit_wls_power_support) {
+				if(chip->limit_wls_power_soc > cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY)) {
+					chip->limit_wls_power_enabled = true;
+					cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ: soc low, may need limit icl");
+				} else {
+					chip->limit_wls_power_enabled = false;
+					cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ: soc not low, reset flag soc_low");
+				}
+			}
   		    cps_bpp_icl_on();
+			cps_epp_icl_on();
   		    cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
   		    queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(2000));
 		    temp &= ~RX_INFO_FLAG_MLDO_ON;
@@ -1701,15 +1711,9 @@ static int cps_wls_rx_irq_handler(int int_flag)
 			chip->mc_status && chip->mcode != MOTO_TX_MCODE &&
 			wlc_power == WLS_RX_CAP_15W) {
 			wlc_chg_start_mc_icl_work(chip, Sys_Op_Mode_EPP);
-		}else
-			cps_epp_icl_on();
+		}
 	}
 
-	/*if (int_flag & RX_INT_PT) {
-		chip->rx_vout_set = cps_wls_get_rx_vout_set();
-		cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_PT rx_vout_set %dmV",
-			chip->rx_vout_set);
-	}*/
 #ifdef CONFIG_MOTO_CHANNEL_SWITCH
 	cps_reg = (cps_reg_s*)(&cps_rx_reg[CPS_RX_REG_NEGO_PRO]);
 	temp =  cps_wls_read_reg((int)cps_reg->reg_addr, (int)cps_reg->reg_bytes_len);
@@ -2394,6 +2398,8 @@ static irqreturn_t wls_det_irq_handler(int irq, void *dev_id)
 		chip->mc_icl_state = MC_ICL_IDLE;
 		chip->ce_det_count = 0;
 		chip->mcode = 0x00;
+		if (chip->limit_wls_power_support && chip->limit_wls_power_enabled)
+		    chip->limit_wls_power_enabled = false;
 		if (!chip->stop_epp_flag && !chip->mode_select_force && !chip->factory_wls_en && !chip->mc_status)
 			cps_wls_mode_select("wls_det_irq_handler", true);
 
@@ -3667,6 +3673,7 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
     struct device_node *node = chip->dev->of_node;
 	struct device_node *boot_node = NULL;
 	struct tags_bootmode *tag = NULL;
+	u32 val = 0;
 
 	boot_node = of_parse_phandle(node, "bootmode", 0);
 	if (!boot_node)
@@ -3743,6 +3750,23 @@ static int cps_wls_parse_dt(struct cps_wls_chrg_chip *chip)
     /*For get phone case hall senser status*/
     chip->phone_case_support = of_property_read_bool(node, "wlc-phone-case-support");
     cps_wls_log(CPS_LOG_ERR,"wlc-phone-case-supportis %d \n", chip->phone_case_support);
+
+    chip->limit_wls_power_support = of_property_read_bool(node, "limit-wls-power-support");
+
+	if (chip->limit_wls_power_support) {
+		if (of_property_read_u32(node, "limit-wls-power-soc", &val) >= 0) {
+			chip->limit_wls_power_soc = val;
+		} else {
+			chip->limit_wls_power_soc = WLS_LIMIT_POWER_DEFAULT_SOC;
+		}
+
+		if (of_property_read_u32(node, "limit-wls-power-icl-uA", &val) >= 0) {
+			chip->limit_wls_power_icl_uA = val;
+		} else {
+			chip->limit_wls_power_icl_uA = WLS_LIMIT_POWER_DEFAULT_ICL_uA;
+		}
+		chip->limit_wls_power_enabled = false;
+	}
 
     return 0;
 }
@@ -3983,22 +4007,12 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
     *cable_ready = true;
     *icl = 400000;
     *vbus = 5000;
-#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
-    int batt_soc = 0;
-    batt_soc = cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY);
-#endif
     cps_wls_log(CPS_LOG_ERR, "%s start icl=%d vbus=%d mode_type:%d,mc_status:%d,real_mode_type:%d\n",
 			__func__, *icl, *vbus, chg->mode_type,chg->mc_status, mode_type);
     if (chg->mc_support && chg->mc_status) {
 		chg->mode_type = mode_type;
 		wls_power = cps_wls_get_rx_neg_power() / 10;
 		if (chg->moto_stand || chg->mcode == MOTO_TX_MCODE) {
-#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
-            if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
-                wls_power = WLS_RX_CAP_10W;
-                cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
-            }
-#endif
 			if (wls_power == WLS_RX_CAP_15W) {
 				*icl = 1500000;
 				*vbus = 10000;
@@ -4071,12 +4085,6 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
                 wls_voltage = cps_wls_get_rx_vout();
                 cps_wls_log(CPS_LOG_DEBG, "%s cps4021 power:%dW vout:%dmV",
                                 __func__, wls_power, wls_voltage);
-#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
-                if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
-                    wls_power = WLS_RX_CAP_10W;
-                    cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
-                }
-#endif
                 if (wls_power >= WLS_RX_CAP_15W)
                 {
                     chg->MaxV = 10000;
@@ -4120,6 +4128,9 @@ static void cps_wls_current_select(int  *icl, int *vbus, bool *cable_ready)
          }
     }
 
+    if(chip->limit_wls_power_support && chip->limit_wls_power_enabled && *icl > chip->limit_wls_power_icl_uA) {
+		*icl = chip->limit_wls_power_icl_uA;
+	}
 
     if (chip->wls_input_curr_max != 0 && chip->wls_input_curr_max < chg->MaxI)
         *icl = chip->wls_input_curr_max * 1000;
@@ -4165,21 +4176,11 @@ static void cps_epp_current_select(int  *icl, int *vbus)
 
     *icl = 400000;
     *vbus = 5000;
-#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
-	int batt_soc = 0;
-    batt_soc = cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY);
-#endif
     cps_wls_log(CPS_LOG_ERR, "%s start icl=%d vbus=%d mode_type:%d,mc_status:%d\n",
 			__func__, *icl, *vbus, chg->mode_type,chg->mc_status);
     if (chg->mc_support && chg->mc_status) {
 		wls_power = cps_wls_get_rx_neg_power() / 10;
 		if (chg->moto_stand || chg->mcode == MOTO_TX_MCODE) {
-#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
-            if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
-                wls_power = WLS_RX_CAP_10W;
-                cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
-			}
-#endif
 			if (wls_power == WLS_RX_CAP_15W) {
                 *icl = 1500000;
 				*vbus = 10000;
@@ -4231,12 +4232,6 @@ static void cps_epp_current_select(int  *icl, int *vbus)
             wls_voltage = cps_wls_get_rx_vout();
             cps_wls_log(CPS_LOG_DEBG, "%s cps4021 power:%dW vout:%dmV",
                             __func__, wls_power, wls_voltage);
-#ifdef CONFIG_MOTO_WLS_POWER_THROTTLE_FOR_LOW_SOC
-            if (batt_soc <= 10 && wls_power > WLS_RX_CAP_10W) {
-                wls_power = WLS_RX_CAP_10W;
-                cps_wls_log(CPS_LOG_DEBG, "%s SOC <= 10, limit power to 10W\n", __func__);
-			}
-#endif
             if (wls_power >= WLS_RX_CAP_15W)
             {
                 chg->MaxV = 10000;
@@ -4279,6 +4274,10 @@ static void cps_epp_current_select(int  *icl, int *vbus)
             }
         }
     }
+
+    if(chip->limit_wls_power_support && chip->limit_wls_power_enabled && *icl > chip->limit_wls_power_icl_uA) {
+		*icl = chip->limit_wls_power_icl_uA;
+	}
 
     if (chip->wls_input_curr_max != 0 && chip->wls_input_curr_max < chg->MaxI)
         *icl = chip->wls_input_curr_max * 1000;
@@ -4971,6 +4970,7 @@ static int cps_wls_chrg_probe(struct i2c_client *client)
 		rc = phone_case_detection_register_client(&chip->hall_nb);
 		cps_wls_log(CPS_LOG_DEBG, "%s phone_case_detection_register_client rc=%d\n", __func__, rc);
 	}
+
     return ret;
 
 free_source:
