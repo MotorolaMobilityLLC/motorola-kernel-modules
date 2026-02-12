@@ -2915,8 +2915,8 @@ static int goodix_ts_stylus_clk_init(struct goodix_thp_core *core_data)
         }
         ts_info(ts_dev->dev, "success get stylus suspend pinctrl state");
 
-        pinctrl_select_state(core_data->pinctrl, core_data->stylus_clk_suspend);
-        ts_info(ts_dev->dev, "set stylus suspend pinctrl state");
+   //     pinctrl_select_state(core_data->pinctrl, core_data->stylus_clk_suspend);
+   //     ts_info(ts_dev->dev, "set stylus suspend pinctrl state");
 
         return 0;
 exit_pinctrl_put:
