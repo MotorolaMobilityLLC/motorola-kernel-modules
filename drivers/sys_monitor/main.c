@@ -37,7 +37,7 @@
 
 #define MAX_OTHERS_TOP 10
 
-#define STATE_MAX 60
+#define STATE_MAX 90
 
 struct uid_record {
 	unsigned int uid;
