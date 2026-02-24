@@ -20,4 +20,5 @@ source "motorola/kernel/modules/drivers/moto_sched/Kconfig"
 
 source "motorola/kernel/modules/drivers/moto_reboot_reason/Kconfig"
 
+source "motorola/kernel/modules/drivers/wonder/Kconfig"
 endmenu

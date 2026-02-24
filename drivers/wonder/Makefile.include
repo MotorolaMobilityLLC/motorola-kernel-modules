@@ -3,6 +3,6 @@
 # This file should be included by external modules that need to link to this
 # project.
 
-KCFLAGS += -I$(ROOT_DIR)/private/google-modules/wlan/wonder/include
+KCFLAGS += -I$(ROOT_DIR)/motorola/kernel/modules/drivers/wonder/include
 
-EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/private/google-modules/wlan/wonder/wonder_Module.symvers
+EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/motorola/kernel/modules/drivers/wonder/wonder_Module.symvers
