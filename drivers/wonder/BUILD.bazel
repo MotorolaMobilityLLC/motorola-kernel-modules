@@ -2,25 +2,12 @@
 
 # Google Wonder WiFi Virtual Device driver.
 
-load("//build/kernel/kleaf:kernel.bzl", "checkpatch", "ddk_headers", "ddk_module")
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+load("//build/kernel/kleaf:kernel.bzl", "ddk_headers")
 
-checkpatch(
-    name = "checkpatch",
-    checkpatch_pl = "//common:scripts/checkpatch.pl",
-)
+exports_files(["Kconfig"])
 
-filegroup(
-    name = "wonder.kconfig",
-    srcs = [
-        "Kconfig",
-    ],
-    visibility = [
-        "//private/devices/google:__subpackages__",
-        "//private/google-modules/wlan:__subpackages__",
-    ],
-)
-
-ddk_module(
+moto_ddk_module(
     name = "wonder",
     srcs = glob([
         "**/*.h",
@@ -33,7 +20,11 @@ ddk_module(
         "ssr.c",
         "wondertap.c",
     ],
-    out = "wonder.ko",
+    deps_ext = [
+        "//soc-repo:net/wireless/cfg80211",
+        "//soc-repo:net/mac80211/mac80211",
+    ],
+
     conditional_srcs = {
         "CONFIG_DEBUG_FS": {
             True: [
@@ -41,16 +32,6 @@ ddk_module(
             ],
         },
     },
-    defconfig = "defconfig",
-    kconfig = "Kconfig",
-    kernel_build = "//private/devices/google/common:kernel",
-    visibility = [
-        "//private/devices/google:__subpackages__",
-        "//private/google-modules/wlan:__subpackages__",
-    ],
-    deps = [
-        "//common:all_headers_aarch64",
-    ],
 )
 
 ddk_headers(
@@ -65,7 +46,7 @@ ddk_headers(
     ],
     visibility = [
         # keep sorted
-        "//private/devices/google:__subpackages__",
-        "//private/google-modules/wlan:__subpackages__",
+        "//visibility:public"
     ],
 )
+

@@ -27,6 +27,7 @@ filegroup(
          "//motorola/kernel/modules:Kconfig.moto",
          "//motorola/kernel/modules/drivers/moto_sched:Kconfig",
          "//motorola/kernel/modules/drivers/moto_reboot_reason:Kconfig",
+         "//motorola/kernel/modules/drivers/wonder:Kconfig",
     ],
 )
 
