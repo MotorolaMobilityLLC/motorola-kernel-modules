@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+#
+# This file should be included by external modules that need to link to this
+# project.
+
+KCFLAGS += -I$(ROOT_DIR)/private/google-modules/wlan/wonder/include
+
+EXTRA_SYMBOLS += $(COMMON_OUT_DIR)/private/google-modules/wlan/wonder/wonder_Module.symvers
