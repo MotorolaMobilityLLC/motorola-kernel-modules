@@ -221,6 +221,10 @@ struct zram {
 	struct mutex wb_pid_lock;
 	atomic_t wb_pid; // the pid of the current operation, 0 indicates no operation
 	atomic_t wb_pid_abort; // Flag to signal abortion of the current operation
+
+	/* prefetch according to pid */
+	struct mutex prefetch_pid_lock;
+	pid_t prefetch_pid; // the pid of the current operation, 0 indicates no operation
 #endif
 };
 #endif

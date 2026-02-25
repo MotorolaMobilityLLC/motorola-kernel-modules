@@ -55,5 +55,5 @@ typedef unsigned long (*zram_oem_func)(int, void *, unsigned long);
 extern zram_oem_func zram_oem_fn;
 extern unsigned long zram_oem_fn_nocfi(int cmd, void *priv, unsigned long param);
 extern int zram_perform_task_eswapout(struct zram* zram, struct task_struct *task);
-
+extern int zram_perform_task_prefetch(struct zram* zram, struct task_struct *task);
 #endif
