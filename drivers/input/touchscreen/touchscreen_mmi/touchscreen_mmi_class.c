@@ -344,7 +344,8 @@ static ssize_t gesture_store(struct device *dev,
 	struct ts_mmi_dev *touch_cdev = dev_get_drvdata(dev);
 	unsigned int value = 0;
 	int err = 0;
-#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
+#if defined(CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY) || \
+defined(CONFIG_TOUCHCLASS_MMI_FORCE_ENABLE_GESTURES)
 	int ret = 0;
 #endif
 
@@ -359,10 +360,20 @@ static ssize_t gesture_store(struct device *dev,
 		case 0x10:
 			dev_info(dev, "%s: zero tap disable\n", __func__);
 			touch_cdev->gesture_mode_type &= 0xFE;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENABLE_GESTURES
+			if (touch_cdev->pm_mode == TS_MMI_PM_GESTURE) {
+				TRY_TO_CALL(force_enable_gesture_mode, value);
+			}
+#endif
 			break;
 		case 0x11:
 			dev_info(dev, "%s: zero tap enable\n", __func__);
 			touch_cdev->gesture_mode_type |= 0x01;
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENABLE_GESTURES
+			if (touch_cdev->pm_mode == TS_MMI_PM_GESTURE) {
+				TRY_TO_CALL(force_enable_gesture_mode, value);
+			}
+#endif
 			break;
 		case 0x20:
 			dev_info(dev, "%s: single tap disable\n", __func__);

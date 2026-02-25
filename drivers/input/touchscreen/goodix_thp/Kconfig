@@ -17,3 +17,11 @@ config TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
     bool "Enable force enter standby mode"
     help
       Say Y here if support force enter standby mode
+
+config TOUCHCLASS_MMI_FORCE_ENABLE_GESTURES
+    bool "Enable force enable or disable specified gesture mode"
+    help
+      Say Y here to allow gesture modes, like zero-tap, to be enabled or disabled
+      via a special command even when the touch controller is in a suspend/gesture
+      state. This is needed to fix issues where gestures are not correctly re-enabled
+      after exiting certain power states.

@@ -110,6 +110,8 @@ static DEVICE_ATTR(stylus_report_rate, (S_IRUGO | S_IWUSR | S_IWGRP),
 #define NORMAL_SMALL_MODE 11
 #define NORMAL_BIG_MODE 12
 
+#define GESTURE_ENABLE_ZERO_TAP_BIT 13
+
 #define ADD_ATTR(name) { \
 	if (idx < MAX_ATTRS_ENTRIES)  { \
 		dev_info(dev, "%s: [%d] adding %p\n", __func__, idx, &dev_attr_##name.attr); \
@@ -1506,6 +1508,61 @@ exit_off:
 }
 #endif
 
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENABLE_GESTURES
+static unsigned int set_bit_in_pos(unsigned int val, int bit_pos)
+{
+    return val |= (1 << bit_pos);
+}
+
+static unsigned int clear_bit_in_pos(unsigned int val, int bit_pos)
+{
+    return val &= ~(1 << bit_pos);
+}
+
+static int goodix_ts_mmi_force_enable_gesture_mode(struct device *dev, u16 gesture_value)
+{
+	int ret = 0;
+	struct goodix_thp_core *core_data;
+	struct platform_device *pdev;
+	struct thp_ts_device *ts_dev;
+	u16 gesture_cmd = 0;
+
+	GET_GOODIX_DATA(dev);
+	ts_dev = core_data->ts_dev;
+
+	if (!core_data->suspended) {
+		ts_info(core_data->ts_dev->dev, "Not on suspend state, skip force enable gesture mode");
+		return ret;
+	}
+
+	mutex_lock(&core_data->mode_lock);
+	ts_info(core_data->ts_dev->dev, "default gesture type: 0x%02x", core_data->gesture_enable);
+	switch (gesture_value) {
+	case 0x10:
+		gesture_cmd = clear_bit_in_pos(core_data->gesture_enable, GESTURE_ENABLE_ZERO_TAP_BIT);
+		ts_info(core_data->ts_dev->dev, "zero tap disable");
+	break;
+
+	case 0x11:
+		gesture_cmd = set_bit_in_pos(core_data->gesture_enable, GESTURE_ENABLE_ZERO_TAP_BIT);
+		ts_info(core_data->ts_dev->dev, "zero tap enable");
+	break;
+
+	default:
+		ts_info(core_data->ts_dev->dev, "unsupport gesture mode type");
+	}
+
+	ts_info(core_data->ts_dev->dev, "Resend gesture type: 0x%02x", gesture_cmd);
+	ret = ts_dev->hw_ops->send_cmd(ts_dev, CMD_GESTURE, ~gesture_cmd);
+	if (unlikely(ret)) {
+		ts_err(ts_dev->dev, "send enter gesture cmd failed, ret %d", ret);
+	}
+
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+#endif
+
 static struct ts_mmi_methods goodix_ts_mmi_methods = {
 	.get_vendor = goodix_ts_mmi_methods_get_vendor,
 	.get_productinfo = goodix_ts_mmi_methods_get_productinfo,
@@ -1517,6 +1574,9 @@ static struct ts_mmi_methods goodix_ts_mmi_methods = {
 #ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
 	.force_enter_standby_mode = goodix_ts_mmi_force_enter_standby_mode,
 	.exit_standby_mode = goodix_ts_mmi_exit_standby_mode,
+#endif
+#ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENABLE_GESTURES
+	.force_enable_gesture_mode = goodix_ts_mmi_force_enable_gesture_mode,
 #endif
 };
 

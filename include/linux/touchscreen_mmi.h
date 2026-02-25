@@ -416,6 +416,7 @@ enum ts_mmi_work {
 	int	(*post_suspend)(struct device *dev);
 	int	(*force_enter_standby_mode)(struct device *dev);
 	int	(*exit_standby_mode)(struct device *dev, u16 gesture);
+	int	(*force_enable_gesture_mode)(struct device *dev, u16 gesture_value);
 	/*
 	 * class exported methods
 	 */
