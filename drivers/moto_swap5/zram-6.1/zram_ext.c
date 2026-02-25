@@ -37,6 +37,10 @@ struct eswapout_context {
     unsigned long found_pages;   /* Pages added to writeback list */
 };
 
+struct prefetch_context {
+    unsigned long scanned_pages; /* Pages checked */
+    unsigned long found_pages;   /* Pages added to writeback list */
+};
 /* Type definitions for the functions we need to resolve */
 typedef unsigned long (*kallsyms_lookup_name_t)(const char *name);
 
@@ -53,6 +57,118 @@ zram_oem_func zram_oem_fn = NULL;
 unsigned long __nocfi zram_oem_fn_nocfi(int cmd, void *priv, unsigned long param)
 {
 	return zram_oem_fn(cmd, priv, param);
+}
+
+static int __nocfi prefetch_pte_range(pmd_t *pmd, unsigned long start,
+        unsigned long end, struct mm_walk *walk)
+{
+    struct prefetch_context *ctx = walk->private;
+    struct mm_struct *mm = walk->mm;
+    pte_t *pte_ptr, pte_val;
+    spinlock_t *ptl;
+    swp_entry_t entry;
+    unsigned long index;
+
+    if (pmd_trans_unstable(pmd))
+        return 0;
+
+    for (index = start; index < end; index += PAGE_SIZE) {
+        ctx->scanned_pages++;
+
+        pte_ptr = pte_offset_map_lock(mm, pmd, index, &ptl);
+        pte_val = *pte_ptr;
+        pte_unmap_unlock(pte_ptr, ptl); // Release PTL lock in advance to prevent underlying IO sleep
+
+        if (!is_swap_pte(pte_val))
+            continue;
+        entry = pte_to_swp_entry(pte_val);
+        if (unlikely(non_swap_entry(entry)))
+            continue;
+
+        /* Use the function pointer for swapcount */
+        if (ref_swp_swapcount(entry) > 1)
+            continue;
+
+        if (zram_oem_fn) {
+            zram_oem_fn(ZRAM_PREFETCH_ENTRY, NULL, swp_offset(entry));
+            ctx->found_pages++;
+        }
+    }
+    return 0;
+}
+
+static int __nocfi prefetch_test_walk(unsigned long start, unsigned long end, struct mm_walk *walk)
+{
+    struct vm_area_struct *vma = walk->vma;
+    /* Basic VMA filtering */
+    if (vma->vm_flags & (VM_SPECIAL | VM_LOCKED))
+        return 1;
+
+    if (is_vm_hugetlb_page(vma) || vma_is_dax(vma))
+        return 1;
+
+    /* Check Anonymous or Shmem */
+    if (!vma_is_anonymous(vma) && !ref_vma_is_shmem(vma))
+        return 1;
+
+    return 0;
+}
+
+static const struct mm_walk_ops prefetch_walk_ops = {
+    .pmd_entry = prefetch_pte_range,
+    .test_walk = prefetch_test_walk,
+};
+
+int zram_perform_task_prefetch(struct zram* zram, struct task_struct *task)
+{
+    struct mm_struct *mm;
+    struct prefetch_context ctx;
+    unsigned long total_found = 0;
+    int err;
+
+    if (!task) {
+        pr_err("moto_swap: Error: task is NULL\n");
+        return -EINVAL;
+    }
+
+    if (!zram_oem_fn) {
+        pr_err("moto_swap: Error: zram_oem_fn is NULL\n");
+        return -EINVAL;
+    }
+
+    pr_info("moto_swap: Starting prefetch for task pid=%d comm=%s\n",
+            task->pid, task->comm);
+
+    /* Setup the context */
+    ctx.found_pages = 0;
+    ctx.scanned_pages = 0;
+
+    mm = get_task_mm(task);
+    if (!mm) {
+        pr_warn("moto_swap: Task pid=%d has no mm\n", task->pid);
+        return -ESRCH;
+    }
+
+    if (mmap_read_lock_killable(mm)) {
+        pr_warn("moto_swap: Failed to acquire mmap_lock for pid=%d\n", task->pid);
+        mmput(mm);
+        return -EINTR;
+    }
+
+    err = walk_page_range(mm, 0, TASK_SIZE, &prefetch_walk_ops, &ctx);
+
+    mmap_read_unlock(mm);
+    mmput(mm);
+
+    total_found = ctx.found_pages;
+
+    if (total_found > 0)
+        pr_info("moto_swap: Submitting %lu pages from bdev to pid=%d\n",
+                   total_found, task->pid);
+    else
+        pr_info("moto_swap: No eligible pages found for pid=%d\n", task->pid);
+
+    return err;
 }
 
 static int __nocfi eswapout_writeback_pte_range(pmd_t *pmd, unsigned long addr,
