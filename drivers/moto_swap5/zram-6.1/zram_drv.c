@@ -718,6 +718,96 @@ static ssize_t am_app_launch_store(struct device *dev,
     return len;
 }
 
+static void init_prefetch_pid(struct zram *zram)
+{
+    mutex_init(&zram->prefetch_pid_lock);
+    zram->prefetch_pid = 0;
+}
+
+/*
+ * flush_prefetch_pid – wait for any in‑flight prefetch operation to finish
+ *                       and reset the PID state.
+ *
+ * This function is called from reset_bdev() or any other place that needs to
+ * abort a running prefetch.
+ */
+static void flush_prefetch_pid(struct zram *zram)
+{
+    /*
+     * Acquire the lock – this blocks until any prefetch_pid_store()
+     * that is currently holding the mutex finishes.
+    */
+    mutex_lock(&zram->prefetch_pid_lock);
+
+    WRITE_ONCE(zram->prefetch_pid, 0);
+
+    mutex_unlock(&zram->prefetch_pid_lock);
+}
+
+/*
+ * destroy_prefetch_pid – tear down the synchronization primitive.
+ *
+ * This routine is invoked only from the very end of zram_remove().
+ */
+static void destroy_prefetch_pid(struct zram *zram)
+{
+    mutex_destroy(&zram->prefetch_pid_lock);
+}
+
+
+static ssize_t prefetch_pid_store(struct device *dev,
+                                   struct device_attribute *attr,
+                                   const char *buf, size_t len)
+{
+    struct zram *zram = dev_to_zram(dev);
+    pid_t pid;
+    int ret;
+    struct task_struct *task = NULL;
+
+    ret = kstrtoint(buf, 10, &pid);
+    if (ret < 0)
+        return ret;
+
+    if (!mutex_trylock(&zram->prefetch_pid_lock)) {
+        pr_warn("moto_swap: Prefetch already in progress for pid=%d\n",
+                READ_ONCE(zram->prefetch_pid));
+        return -EBUSY;
+    }
+
+    WRITE_ONCE(zram->prefetch_pid, pid);
+
+    rcu_read_lock();
+    task = find_task_by_vpid(pid);
+    if (task)
+        get_task_struct(task);
+    rcu_read_unlock();
+
+    if (!task) {
+        pr_warn("moto_swap: Task with pid=%d not found\n", pid);
+        ret = -ESRCH;
+        goto cleanup;
+    }
+
+    ret = zram_perform_task_prefetch(zram, task);
+
+cleanup:
+    if (task)
+        put_task_struct(task);
+
+    WRITE_ONCE(zram->prefetch_pid, 0);
+    mutex_unlock(&zram->prefetch_pid_lock);
+
+    return ret < 0 ? ret : len;
+}
+
+static ssize_t prefetch_pid_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+    struct zram *zram = dev_to_zram(dev);
+    return sysfs_emit(buf, "%d\n", READ_ONCE(zram->prefetch_pid));
+}
+
+
 static void reset_bdev(struct zram *zram)
 {
 	struct block_device *bdev;
@@ -737,6 +827,7 @@ static void reset_bdev(struct zram *zram)
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	deinit_lru_writeback(zram);
 	deinit_wb_pid(zram);
+	flush_prefetch_pid(zram);
 #endif
 }
 
@@ -3850,6 +3941,7 @@ static DEVICE_ATTR_RW(writeback_limit);
 static DEVICE_ATTR_RW(writeback_limit_enable);
 static DEVICE_ATTR_RW(writeback_pid);
 static DEVICE_ATTR_RW(am_app_launch);
+static DEVICE_ATTR_RW(prefetch_pid);
 #endif
 
 static struct attribute *zram_disk_attrs[] = {
@@ -3872,6 +3964,7 @@ static struct attribute *zram_disk_attrs[] = {
 	&dev_attr_writeback_limit_enable.attr,
 	&dev_attr_writeback_pid.attr,
 	&dev_attr_am_app_launch.attr,
+	&dev_attr_prefetch_pid.attr,
 #endif
 	&dev_attr_io_stat.attr,
 	&dev_attr_mm_stat.attr,
@@ -3971,6 +4064,8 @@ static int zram_add(void)
 
 	/* writeback according to pid */
 	init_wb_pid(zram);
+
+	init_prefetch_pid(zram);
 #endif
 
 	/* gendisk structure */
@@ -4063,6 +4158,8 @@ static int zram_remove(struct zram *zram)
 #ifdef CONFIG_VENDOR_ZRAM_WRITEBACK
 	stop_lru_writeback(zram);
 	deinit_wb_pid(zram);
+	flush_prefetch_pid(zram);
+	destroy_prefetch_pid(zram);
 #endif
 	zram_debugfs_unregister(zram);
 
