@@ -1466,7 +1466,7 @@ static int goodix_ts_mmi_exit_standby_mode(struct device *dev, u16 gesture)
 		if (gesture & TS_MMI_GESTURE_DOUBLE) {
 			gesture_type = gesture_type | 0x80;
 		}
-		if (core_data->pdev->id && core_data->gesture_enable != gesture_type && main_suspend) {
+		if (core_data->pdev->id && core_data->gesture_enable != gesture_type) {
 			core_data->gesture_enable = gesture_type;
 			ts_info(core_data->ts_dev->dev, "exit power off, gesture_enabled:%d",	core_data->gesture_enable);
 			goodix_thp_off_to_gesture(core_data);
