@@ -1309,7 +1309,7 @@ static irqreturn_t goodix_thp_threadirq_func(int irq, void *data)
                 __pm_stay_awake(core_data->ws);
         }
         /*for check bus i2c/spi is ready or not*/
-        if (unlikely(core_data->suspended && core_data->pm_suspend)) {
+        if (unlikely(core_data->pm_suspend)) {
             r = wait_for_completion_timeout(
                         &core_data->pm_completion,
                         msecs_to_jiffies(core_data->ts_dev->board_data.irq_need_dev_resume_time));
@@ -2742,7 +2742,7 @@ static void goodix_thp_esd_work(struct work_struct *work)
         if (!core_data->esd_on || esd_addr == 0)
                 return;
 
-        if (!core_data->suspended) { /* Don't perform SPI operations while suspended */
+        if ((!core_data->suspended) && (!core_data->pm_suspend)) { /* Don't perform SPI operations while suspended */
                 ts_dev->hw_ops->read(ts_dev, esd_addr, &esd_value, 1);
                 if (esd_value == GOODIX_ESD_TICK_WRITE_DATA) {
                         ts_err(ts_dev->dev, "esd check failed, 0x%x", esd_value);
