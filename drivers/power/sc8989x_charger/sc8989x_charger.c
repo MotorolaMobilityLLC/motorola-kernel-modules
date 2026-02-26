@@ -1408,7 +1408,10 @@ static int sc8989x_force_dpdm(struct sc8989x_chip *sc)
 
 	val = i2c_smbus_read_byte_data(i2c, 0x2);
 	dev_err(sc->dev, "sc8989x_force_dpdm val=0x%x\n", val);
-	val |= 0x02;
+	if (sc->is_cx25890HQ)
+		val |= 0x03;
+	else
+		val |= 0x02;
 	i2c_smbus_write_byte_data(i2c, 0x2, val);
 	sc->power_good = 0;
 
