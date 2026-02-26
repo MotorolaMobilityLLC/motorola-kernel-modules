@@ -779,6 +779,89 @@ int upm7610_get_fault_status(struct tcpc_device *tcpc, uint8_t *status)
 	return 0;
 }
 
+#if CONFIG_WATER_DETECTION
+enum TYPEC_CONNECTION_STATE_UPM {
+	typec_disabled = 0,
+	typec_errorrecovery,
+
+	typec_unattached_snk,
+	typec_unattached_src,
+
+	typec_attachwait_snk,
+	typec_attachwait_src,
+
+	typec_attached_snk,
+	typec_attached_src,
+
+#if CONFIG_TYPEC_CAP_TRY_SOURCE
+	/* Require : Assert Rp
+	 * Exit(-> Attached.SRC) : Detect Rd (tPDDebounce).
+	 * Exit(-> TryWait.SNK) : Not detect Rd after tDRPTry
+	 */
+	typec_try_src,
+
+	/* Require : Assert Rd
+	 * Exit(-> Attached.SNK) : Detect Rp (tCCDebounce) and Vbus present.
+	 * Exit(-> Unattached.SNK) : Not detect Rp (tPDDebounce)
+	 */
+
+	typec_trywait_snk,
+	typec_trywait_snk_pe,
+#endif
+
+#if CONFIG_TYPEC_CAP_TRY_SINK
+
+	/* Require : Assert Rd
+	 * Wait for tDRPTry and only then begin monitoring CC.
+	 * Exit (-> Attached.SNK) : Detect Rp (tPDDebounce) and Vbus present.
+	 * Exit (-> TryWait.SRC) : Not detect Rp for tPDDebounce.
+	 */
+	typec_try_snk,
+
+	/*
+	 * Require : Assert Rp
+	 * Exit (-> Attached.SRC) : Detect Rd (tCCDebounce)
+	 * Exit (-> Unattached.SNK) : Not detect Rd after tDRPTry
+	 */
+
+	typec_trywait_src,
+	typec_trywait_src_pe,
+#endif	/* CONFIG_TYPEC_CAP_TRY_SINK */
+
+	typec_audioaccessory,
+#if CONFIG_TYPEC_CAP_DBGACC
+	typec_debugaccessory,
+#endif	/* CONFIG_TYPEC_CAP_DBGACC */
+
+#if CONFIG_TYPEC_CAP_DBGACC_SNK
+	typec_attached_dbgacc_snk,
+#endif	/* CONFIG_TYPEC_CAP_DBGACC_SNK */
+
+#if CONFIG_TYPEC_CAP_CUSTOM_SRC
+	typec_attached_custom_src,
+#endif	/* CONFIG_TYPEC_CAP_CUSTOM_SRC */
+
+#if CONFIG_TYPEC_CAP_NORP_SRC
+	typec_attached_norp_src,
+#endif	/* CONFIG_TYPEC_CAP_NORP_SRC */
+
+#if CONFIG_TYPEC_CAP_ROLE_SWAP
+	typec_role_swap,
+#endif	/* CONFIG_TYPEC_CAP_ROLE_SWAP */
+
+#if CONFIG_WATER_DETECTION
+	typec_water_protection_wait,
+	typec_water_protection,
+#endif /* CONFIG_WATER_DETECTION */
+
+	typec_foreign_object_protection,
+
+	typec_otp,
+
+	typec_unattachwait_pe,	/* Wait Policy Engine go to Idle */
+};
+#endif
+
 static int upm7610_get_cc(struct tcpc_device *tcpc, int *cc1, int *cc2)
 {
 	int status, role_ctrl, cc_role;
@@ -792,11 +875,21 @@ static int upm7610_get_cc(struct tcpc_device *tcpc, int *cc1, int *cc2)
 	if (role_ctrl < 0)
 		return role_ctrl;
 
+#if CONFIG_WATER_DETECTION
 	if (status & TCPC_V10_REG_CC_STATUS_DRP_TOGGLING) {
-		*cc1 = TYPEC_CC_DRP_TOGGLING;
-		*cc2 = TYPEC_CC_DRP_TOGGLING;
-		return 0;
-	}
+        if (tcpc->typec_state == typec_unattached_snk ||
+            tcpc->typec_state == typec_unattached_src ||
+            tcpc->typec_state == typec_attachwait_snk ||
+            tcpc->typec_state == typec_attachwait_src ||
+            tcpc->typec_state == typec_trywait_snk ||
+            tcpc->typec_state == typec_trywait_src) {
+            *cc1 = TYPEC_CC_DRP_TOGGLING;
+            *cc2 = TYPEC_CC_DRP_TOGGLING;
+            return 0;
+        }
+
+    }
+#endif
 
 	*cc1 = TCPC_V10_REG_CC_STATUS_CC1(status);
 	*cc2 = TCPC_V10_REG_CC_STATUS_CC2(status);
@@ -1014,8 +1107,8 @@ static int upm7610_get_message(struct tcpc_device *tcpc, uint32_t *payload,
 	struct upm7610_chip *chip = tcpc_get_dev_data(tcpc);
 	int rv = 0;
 	uint8_t cnt = 0, buf[4];
-	const uint16_t alert_rx =
-		TCPC_V10_REG_ALERT_RX_STATUS|TCPC_V10_REG_RX_OVERFLOW;
+	/*const uint16_t alert_rx =
+		TCPC_V10_REG_ALERT_RX_STATUS|TCPC_V10_REG_RX_OVERFLOW;*/
 
 	rv = upm7610_block_read(chip->client, TCPC_V10_REG_RX_BYTE_CNT, 4, buf);
 	if (rv < 0)
@@ -1035,8 +1128,8 @@ static int upm7610_get_message(struct tcpc_device *tcpc, uint32_t *payload,
 	}
 
 	/* Read complete, clear RX status alert bit */
-	if (*msg_head != 0x77a3)
-		tcpci_alert_status_clear(tcpc, alert_rx);
+	/*if (*msg_head != 0x77a3)
+		tcpci_alert_status_clear(tcpc, alert_rx);*/
 	return rv;
 }
 
