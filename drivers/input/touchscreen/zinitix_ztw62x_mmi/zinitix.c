@@ -3092,20 +3092,45 @@ static void zinitix_early_suspend(struct early_suspend *h)
 static int bt541_ts_resume(struct device *dev)
 {
 	struct bt541_ts_info *info = dev_get_drvdata(dev);
+	struct bt541_ts_platform_data *pdata = info->pdata;
+	int gpio_irq_value;
 
 	zinitix_printk("system resumes from pm_suspend");
 	info->pm_suspend = false;
 	complete(&info->pm_completion);
+
+	if(pdata->touch_wakeup){
+		enable_irq(info->irq);
+		info->irq_enabled = true;
+		disable_irq_wake(info->irq);
+
+		gpio_irq_value = gpio_get_value(pdata->gpio_int);
+		if(!gpio_irq_value){
+			input_report_key(info->input_dev, KEY_POWER, 1);
+			input_sync(info->input_dev);
+			input_report_key(info->input_dev, KEY_POWER, 0);
+			input_sync(info->input_dev);
+		}
+	}
+
 	return 0;
 }
 
 static int bt541_ts_suspend(struct device *dev)
 {
 	struct bt541_ts_info *info = dev_get_drvdata(dev);
+	struct bt541_ts_platform_data *pdata = info->pdata;
 
 	zinitix_printk("system enters into pm_suspend");
 	info->pm_suspend = true;
 	reinit_completion(&info->pm_completion);
+
+	if(pdata->touch_wakeup){
+		disable_irq(info->irq);
+		info->irq_enabled = false;
+		enable_irq_wake(info->irq);
+	}
+
 	return 0;
 }
 #endif  /* TOUCHSCREEN_MMI */
@@ -6042,6 +6067,7 @@ static int bt541_ts_probe_dt(struct device_node *np,
 		pdata->orientation = (u8) temp;
 
 	pdata->large_palm_disable = of_property_read_bool(np, "zinitix,large-palm-disable");
+	pdata->touch_wakeup = of_property_read_bool(np, "zinitix,touch-wakeup");
 
 	pdata->tsp_vendor1 = of_get_named_gpio(np, "zinitix,vendor1", 0);
 	pdata->tsp_vendor2 = of_get_named_gpio(np, "zinitix,vendor2", 0);
@@ -6354,6 +6380,9 @@ static int bt541_ts_probe(struct i2c_client *client)
 	set_bit(EV_ABS, info->input_dev->evbit);
 	set_bit(BTN_TOUCH, info->input_dev->keybit);
 
+	input_set_capability(info->input_dev, EV_KEY, KEY_POWER);
+	dev_info(&client->dev,"KEY_POWER register finish\n");
+
 #ifndef CONFIG_INPUT_TOUCHSCREEN_MMI
 #if SUPPORTED_PALM_TOUCH
 	//set_bit(KEY_POWER, info->input_dev->evbit);
@@ -6483,6 +6512,15 @@ static int bt541_ts_probe(struct i2c_client *client)
 	info->early_suspend.resume = zinitix_late_resume;
 	register_early_suspend(&info->early_suspend);
 #endif
+
+	if(pdata->touch_wakeup){
+		ret = device_init_wakeup(&client->dev, 1);
+		if (ret < 0)
+			dev_err(&client->dev, "%s: Error, device_init_wakeup rc:%d\n",
+				__func__, ret);
+		else
+			dev_info(&client->dev, "%s: device_init_wakeup success \n",__func__);
+	}
 
 	dev_info(&client->dev, "zinitix touch probe.\r\n");
 
@@ -6663,6 +6701,9 @@ static void bt541_ts_remove(struct i2c_client *client)
 		}
 	}
 
+
+	if(pdata->touch_wakeup)
+		device_init_wakeup(&client->dev, 0);
 
 	input_unregister_device(info->input_dev);
 	input_free_device(info->input_dev);
