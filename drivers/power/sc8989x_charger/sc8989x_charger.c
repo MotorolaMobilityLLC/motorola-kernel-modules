@@ -342,6 +342,7 @@ struct sc8989x_chip {
 	bool wait_hiz;
 	struct delayed_work hiz_cut_dwork;
 	bool hiz_cut_flag;
+	int qc3p_offset;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -2866,17 +2867,17 @@ static int sc8989x_detected_qc3p_hvdcp(struct sc8989x_chip *sc, int *charger_typ
 
 	if (vbus_voltage > QC3P_AUTHEN_NONE_THR_MV)
 		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_NONE;
-	else if (vbus_voltage > QC3P_AUTHEN_45W_THR_MV) {
+	else if (vbus_voltage > QC3P_AUTHEN_45W_THR_MV + sc->qc3p_offset) {
 		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_45W;
 		if (charger_type == NULL)
 			return -EINVAL;
 		*charger_type = USB_TYPE_QC3P_45;
-	} else if (vbus_voltage > QC3P_AUTHEN_27W_THR_MV) {
+	} else if (vbus_voltage > QC3P_AUTHEN_27W_THR_MV + sc->qc3p_offset) {
 		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_27W;
 		if (charger_type == NULL)
 			return -EINVAL;
 		*charger_type = USB_TYPE_QC3P_27;
-	} else if (vbus_voltage > QC3P_AUTHEN_18W_THR_MV) {
+	} else if (vbus_voltage > QC3P_AUTHEN_18W_THR_MV + sc->qc3p_offset) {
 		sc->mmi_qc3p_power = MMI_POWER_SUPPLY_QC3P_18W;
 		if (charger_type == NULL)
 			return -EINVAL;
@@ -3633,6 +3634,12 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 
 	if (sc->is_upm6920A && (sc->upm6920A_votg != 0)) {
 		sc->cfg->votg = sc->upm6920A_votg;
+	}
+
+	ret = of_property_read_u32(np, "sc,qc3p_offset", &sc->qc3p_offset);
+	if (ret < 0) {
+		dev_err(sc->dev, "%s not find\n", "sc,qc3p_offset");
+		sc->qc3p_offset = 0;
 	}
 
 	return 0;
