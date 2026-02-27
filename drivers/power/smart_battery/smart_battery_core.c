@@ -519,7 +519,7 @@ static const struct power_supply_desc batt_psy_desc = {
 #define CAP(min, max, value)			\
 		((min > value) ? min : ((value > max) ? max : value))
 #define CURRENT_10_MA 10000
-
+#define UI_SOC_INCREMENT_ASSIST_THRESHOLD 90
 static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc, int *work_intervals)
 {
 	int uisoc = rsoc;
@@ -541,7 +541,8 @@ static int smart_batt_monotonic_soc(struct mmi_smart_battery *chip, int rsoc, in
 
 	if (rsoc > chip->uisoc) {
 		/* SOC increased */
-		if (chip->combo_current_now > CURRENT_10_MA) {
+		if ((chip->combo_current_now > CURRENT_10_MA)
+			|| (mmi_charger_update_batt_status() != POWER_SUPPLY_STATUS_DISCHARGING && rsoc > UI_SOC_INCREMENT_ASSIST_THRESHOLD)) {
 			uisoc = chip->uisoc + 1;
 		} else
 			uisoc = chip->uisoc;
