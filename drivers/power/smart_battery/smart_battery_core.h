@@ -138,6 +138,11 @@ struct mmi_smart_battery {
 	int	vbatt_low_mv;
 	int	vbatt_empty_mv;
 
+	int	batt_chill_degree;
+	int	vbatt_chill_low_mv;
+	int	vbatt_chill_empty_mv;
+	int	batt_chill_shutdown_volt;
+
 	int	batt_cool_degree;
 	int	vbatt_cool_low_mv;
 	int	vbatt_cool_empty_mv;
@@ -149,10 +154,13 @@ struct mmi_smart_battery {
 	int	batt_cold_shutdown_volt;
 
 	int	is_low_temp_shutdownVolt_active;
+	int	vbatt_heavyload_delta;
+	int	vbatt_continous_heavyload_delta;
 };
 
 enum {
 	ACTIVE_NONE = 0,
+	ACTIVE_CHILL,
 	ACTIVE_COOL,
 	ACTIVE_COLD,
 };
@@ -179,6 +187,8 @@ enum {
 #define DEFAULT_BATT_COOL_DEGREE	0
 #define DEFAULT_BATT_COLD_DEGREE	(-100)
 #define DEFAULT_SOH_GAP			4
+#define DEFAULT_HEAVYLOAD_VBAT_DELTA		50*1000
+#define DEFAULT_CONTINUOUS_HEAVYLOAD_VBAT_DELTA		300*1000
 
 enum {
 	NOTIFY_EVENT_TYPE_FLIP_CAPACITY = 0,
