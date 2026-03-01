@@ -719,6 +719,8 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 
 		if (chip->batt_cool_shutdown_volt != 0 && chip->batt_cold_shutdown_volt != 0) {
 
+			bool chill_configured = (chip->batt_chill_degree != 0 && chip->batt_chill_shutdown_volt != 0);
+
 			if (chip->is_low_temp_shutdownVolt_active < ACTIVE_COLD &&
 				chip->combo_batt_temp <= chip->batt_cold_degree &&
 				mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
@@ -735,15 +737,38 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 						chip->batt_cool_degree / 10, chip->batt_cool_shutdown_volt);
 					chip->is_low_temp_shutdownVolt_active = ACTIVE_COOL;
 				}
+			} else if (chill_configured && chip->is_low_temp_shutdownVolt_active < ACTIVE_CHILL &&
+					chip->combo_batt_temp <= chip->batt_chill_degree &&
+					mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
+				if (smart_batt_set_shutdown_threshold(chip, chip->batt_chill_shutdown_volt) >=0) {
+					mmi_info(chip, "battery temp lower than %d degrees, set shutdown_voltage to %dmv\n",
+						chip->batt_chill_degree / 10, chip->batt_chill_shutdown_volt);
+					chip->is_low_temp_shutdownVolt_active = ACTIVE_CHILL;
+				}
 			}
 
-			if (chip->is_low_temp_shutdownVolt_active > ACTIVE_NONE &&
-					chip->combo_batt_temp >= (chip->batt_cool_degree + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
+			if (chip->is_low_temp_shutdownVolt_active > ACTIVE_NONE && chill_configured &&
+					chip->combo_batt_temp >= (chip->batt_chill_degree + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
 				chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
 				shutdown_volt = chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage;
 				if (smart_batt_set_shutdown_threshold(chip, shutdown_volt) >=0) {
 					mmi_info(chip, "exit low temp environment, the power_off voltage set back to %dmv\n", shutdown_volt);
 					chip->is_low_temp_shutdownVolt_active = ACTIVE_NONE;
+				}
+			} else if (chip->is_low_temp_shutdownVolt_active > ACTIVE_CHILL &&
+					chip->combo_batt_temp >= (chip->batt_cool_degree + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
+				if (chill_configured) {
+					if (smart_batt_set_shutdown_threshold(chip, chip->batt_chill_shutdown_volt) >=0) {
+						mmi_info(chip, "exit low temp environment, the power_off voltage set back to %dmv\n", chip->batt_chill_shutdown_volt);
+						chip->is_low_temp_shutdownVolt_active = ACTIVE_CHILL;
+					}
+				} else {
+					chip->current_cutoff_index = get_cutoff_index(chip->cutoff_zone, chip->num_cutoff, chip->combo_cycle_count);
+					shutdown_volt = chip->cutoff_zone[chip->current_cutoff_index].shutdown_voltage;
+					if (smart_batt_set_shutdown_threshold(chip, shutdown_volt) >=0) {
+					    mmi_info(chip, "exit low temp environment, the power_off voltage set back to %dmv\n", shutdown_volt);
+					    chip->is_low_temp_shutdownVolt_active = ACTIVE_NONE;
+				    }
 				}
 			} else if (chip->is_low_temp_shutdownVolt_active > ACTIVE_COOL &&
 				chip->combo_batt_temp >= (chip->batt_cold_degree + EXIT_LOW_TEMP_HYSTERESIS_DEGC_X10)) {
@@ -775,19 +800,17 @@ static int smart_batt_shutdown_voltage(struct mmi_smart_battery *chip)
 #define DISCHG_CURRENT_1A			(-1)*1000*1000
 #define DISCHG_CURRENT_500MA		(-1)*500*1000
 #define TAPER_CNT			3
-#define HEAVYLOAD_VBAT_DELTA		50*1000
-#define CONTINUOUS_HEAVYLOAD_VBAT_DELTA		300*1000
 
 static bool smart_batt_raise_battempty_threshold(struct mmi_smart_battery *chip, int vbatt_empty)
 {
 	bool raise_battempty_volt = false;
 
-	if (chip->enable_raise_battempty_threshold  && chip->combo_voltage_now < (vbatt_empty + CONTINUOUS_HEAVYLOAD_VBAT_DELTA) &&
+	if (chip->enable_raise_battempty_threshold  && chip->combo_voltage_now < (vbatt_empty + chip->vbatt_continous_heavyload_delta) &&
 				mmi_charger_update_batt_status() == POWER_SUPPLY_STATUS_DISCHARGING) {
 		if (chip->combo_current_now < DISCHG_CURRENT_1A) {
 			chip->heavyLoad_dischg_cnt ++;
 			chip->lightLoad_dischg_cnt = 0;
-			if (chip->combo_voltage_now < (vbatt_empty + HEAVYLOAD_VBAT_DELTA) &&
+			if (chip->combo_voltage_now < (vbatt_empty + chip->vbatt_heavyload_delta) &&
 				(chip->combo_batt_temp < 0 || chip->heavyLoad_dischg_cnt < TAPER_CNT))
 				chip->force_zero_level = FORCE_ZERO_IMMEDIATELY;
 			mmi_info(chip, "heavyLoad_dischg_cnt=%d, Tbat = %d\n", chip->heavyLoad_dischg_cnt, chip->combo_batt_temp);
@@ -854,7 +877,7 @@ static void smart_batt_update_thread(struct work_struct *work)
 	}
 
 	if (smart_batt_raise_battempty_threshold(chip, vbatt_empty) == true) {
-		vbatt_empty += HEAVYLOAD_VBAT_DELTA;
+		vbatt_empty += chip->vbatt_heavyload_delta;
 		mmi_info(chip, "vbat empty voltage=%d\n", vbatt_empty);
 	}
 
@@ -1105,7 +1128,27 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	else
 		chip->vbatt_cold_low_mv = val;
 
+	rc = of_property_read_u32(np, "mmi,vbatt-heavyload-delta", &val);
+	if (rc < 0)
+		chip->vbatt_heavyload_delta = DEFAULT_HEAVYLOAD_VBAT_DELTA;
+	else
+		chip->vbatt_heavyload_delta = val;
+
+	rc = of_property_read_u32(np, "mmi,vbatt-continous-heavyload-delta", &val);
+	if (rc < 0)
+		chip->vbatt_continous_heavyload_delta = DEFAULT_CONTINUOUS_HEAVYLOAD_VBAT_DELTA;
+	else
+		chip->vbatt_continous_heavyload_delta = val;
+
 	of_property_read_u32(np, "mmi,batt-cold-shutdown-volt", &chip->batt_cold_shutdown_volt);
+
+	of_property_read_u32(np, "mmi,batt-chill-degree", &chip->batt_chill_degree);
+
+	of_property_read_u32(np, "mmi,vbatt-chill-empty-mv", &chip->vbatt_chill_empty_mv);
+
+	of_property_read_u32(np, "mmi,vbatt-chill-low-mv", &chip->vbatt_chill_low_mv);
+
+	of_property_read_u32(np, "mmi,batt-chill-shutdown-volt", &chip->batt_chill_shutdown_volt);
 
 	mmi_info(chip,"normal:vbatt_low_mv=%d, vbatt_empty_mv=%d\n", chip->vbatt_low_mv, chip->vbatt_empty_mv);
 
@@ -1115,6 +1158,13 @@ static int smart_battery_parse_dt(struct mmi_smart_battery *chip)
 	mmi_info(chip,"cold:vbatt_cold_low_mv=%d, vbatt_cold_empty_mv=%d, batt_cold_shutdown_volt=%d, batt_cold_degree=%d\n",
 		chip->vbatt_cold_low_mv, chip->vbatt_cold_empty_mv, chip->batt_cold_shutdown_volt, chip->batt_cold_degree);
 
+	mmi_info(chip,"vbatt_heavyload_delta=%d, vbatt_continous_heavyload_delta=%d\n",
+		chip->vbatt_heavyload_delta, chip->vbatt_continous_heavyload_delta);
+
+	if (chip->vbatt_chill_empty_mv >0 && chip->batt_chill_shutdown_volt>0) {
+	    mmi_info(chip,"chill:vbatt_chill_low_mv=%d, vbatt_chill_empty_mv=%d, batt_chill_shutdown_volt=%d, batt_chill_degree=%d\n",
+		    chip->vbatt_chill_low_mv, chip->vbatt_chill_empty_mv, chip->batt_chill_shutdown_volt, chip->batt_chill_degree);
+	}
 
 	if (of_find_property(np, "cyclecount-shutdown-voltage-zones", &byte_len)) {
 		if ((byte_len / sizeof(u32)) % 3) {
