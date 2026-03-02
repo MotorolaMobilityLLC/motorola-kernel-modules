@@ -1,0 +1,30 @@
+# add -Wall to try to catch everything we can.
+
+ifeq ($(ANDROID_BUILD_TOP),)
+ANDROID_BUILD_TOP := $(srctree)/..
+endif
+
+# add -Wall to try to catch everything we can.
+EXTRA_CFLAGS += -Wall
+
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/include
+
+ifneq ($strip($(LINUX_KERNEL_VERSION)),)
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/$(LINUX_KERNEL_VERSION)
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/$(LINUX_KERNEL_VERSION)/block
+endif
+
+#EXTRA_CFLAGS += -DCONFIG_JANK_DEBUG
+
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/motorola/kernel/modules/drivers/moto_mmtrack
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_platform/common
+
+ifneq ($(filter m y,$(CONFIG_MTK_SCHED_VIP_TASK)),)
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel-6.1
+EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-6.1
+endif
+
+moto_mmtrack-objs := proc-memstat.o logger.o lowmem-dbg.o sys-memstat.o sys-dmabuf.o sys-ashmem.o vsprintf-dup.o
+obj-m +=  moto_mmtrack.o
+
+KBUILD_EXTRA_SYMBOLS += $(CURDIR)/$(KBUILD_EXTMOD)/../../../moto_swap5/$(GKI_OBJ_MODULE_DIR)/Module.symvers
