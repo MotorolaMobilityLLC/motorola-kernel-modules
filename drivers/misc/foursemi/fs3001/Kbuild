@@ -2,5 +2,9 @@
 EXTRA_CFLAGS += -Wall
 EXTRA_CFLAGS += -I$(TOP)/motorola/kernel/modules/include
 
+ifneq (,$(filter sbuya%, $(TARGET_PRODUCT)))
+       EXTRA_CFLAGS += -DLONG_VIBRATION_AUTO_BRK
+endif
+
 fs3001-y += fshaptic.o fshaptic3001.o
 obj-m += fs3001.o

@@ -36,6 +36,10 @@ static unsigned char fs3001_haptic_osc_read_status(struct fs3001 *fs3001);
 static void fs3001_haptic_diagnostic_sequence(struct fs3001 *fs3001);
 static void fs3001_haptic_set_diagnostic_reg_to_default_value(struct fs3001 *fs3001);
 static int fs3001_haptic_offset_calibration(struct fs3001 *fs3001);
+
+#ifdef LONG_VIBRATION_AUTO_BRK
+static void fs3001_haptic_auto_brk_enable(struct fs3001 *fs3001, unsigned int flag);
+#endif
 //xxxx static void fs3001_haptic_duration_ram_play_config(struct fs3001 *fs3001,int duration);
 
 
@@ -1138,6 +1142,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,0,7,7);
 			// disable f0 self tuning
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,0);
+#endif
 			break;
 		case FS3001_HAPTIC_RAM_MODE:
 			sprintf(str, "%s, enter ram mode\n", __func__);
@@ -1148,7 +1155,10 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			// disable f0 detect
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,0,7,7);
 			// disable f0 self tuning
-			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
+			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,0);
+#endif
 			break;
 		case FS3001_HAPTIC_RAM_LOOP_MODE:
 			sprintf(str, "%s, enter ram loop mode\n", __func__);
@@ -1159,7 +1169,10 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			// disable f0 detect
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,0,7,7);
 			// disable f0 self tuning
-			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
+			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,1);
+#endif
 			break;
 		case FS3001_HAPTIC_RTP_MODE:
 			sprintf(str, "%s, enter rtp mode\n", __func__);
@@ -1170,7 +1183,10 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			// disable f0 detect
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,0,7,7);
 			// disable f0 self tuning
-			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
+			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,0);
+#endif
 			break;
 		case FS3001_HAPTIC_TRIG_MODE:
 			sprintf(str, "%s, enter trig mode\n", __func__);
@@ -1182,6 +1198,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,0,7,7);
 			// disable f0 self tuning
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,0);
+#endif
 			break;
 		case FS3001_HAPTIC_CONT_MODE:
 			sprintf(str, "%s, enter cont mode\n", __func__);
@@ -1192,7 +1211,10 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			// disable f0 detect
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,0,7,7);
 			// disable f0 self tuning
-			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);			
+			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,fs3001->dts_info.fs3001_auto_brake);
+#endif
 	        break;
 		case FS3001_HAPTIC_F0_DETECT_MODE:
 			sprintf(str, "%s, enter F0 detect mode\n", __func__);
@@ -1204,6 +1226,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,7,7);
 			// disable f0 self tuning
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,0);
+#endif
 			break;
 		case FS3001_HAPTIC_F0_CALI_MODE:
 			sprintf(str, "%s, enter F0 cali mode\n", __func__);
@@ -1215,6 +1240,9 @@ static int fs3001_haptic_play_mode(struct fs3001 *fs3001,unsigned char play_mode
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,1,7,7);
 			// enable f0 self tuning
 			fs3001_i2c_write_bits_1(fs3001, FS3001_FDETCTRL,0,4,4);
+#ifdef LONG_VIBRATION_AUTO_BRK
+			fs3001_haptic_auto_brk_enable(fs3001,0);
+#endif
 			break;
 		default:
 			pr_err("%s:play mode %d error", FSERROR, play_mode);
