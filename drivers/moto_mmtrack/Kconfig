@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config MOTO_MMTRACK
+    tristate "moto mmtrack"
+    default n
+    help
+      memory tracking module
+
