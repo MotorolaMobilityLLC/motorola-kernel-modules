@@ -83,6 +83,9 @@
 #define CMD_TOUCH_REPORT                                0x91
 #define CMD_ACTIVE_SCAN_RATE                            0x9D
 #define CMD_FW_MODE                                     0x1E
+#define CMD_BLE_BROADCAST                               0x1A
+#define CMD_DEVICE_ID                                   0x1F
+#define CMD_FP_INT                                      0x30
 
 /* 9897 reg definition */
 #define REG_INT_REPORT_TYPE_FLAG_9897                   0x101A0

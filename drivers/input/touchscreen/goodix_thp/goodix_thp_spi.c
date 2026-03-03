@@ -933,7 +933,7 @@ static int goodix_thp_set_fp_int_pin(struct thp_ts_device *tdev, u8 level)
 {
         int ret;
 
-        ret = goodix_thp_send_cmd(tdev, 0x30, level);
+        ret = goodix_thp_send_cmd(tdev, CMD_FP_INT, level);
         if (ret < 0) {
                 ts_err(tdev->dev, "failed to set fp pin level");
                 return ret;
@@ -946,7 +946,7 @@ static int goodix_thp_set_ble_broadcast(struct thp_ts_device *tdev, u8 enable)
 {
         int ret;
 
-        ret = goodix_thp_send_cmd(tdev, 0x1A, enable);
+        ret = goodix_thp_send_cmd(tdev, CMD_BLE_BROADCAST, enable);
         if (ret < 0) {
                 ts_err(tdev->dev, "failed to %s ble broadcast", enable ? "start" : "stop");
                 return ret;
@@ -959,7 +959,7 @@ static int goodix_thp_set_device_id(struct thp_ts_device *tdev, u8 id)
 {
         int ret;
 
-        ret = goodix_thp_send_cmd(tdev, 0x1F, id);
+        ret = goodix_thp_send_cmd(tdev, CMD_DEVICE_ID, id);
         if (ret < 0) {
                 ts_err(tdev->dev, "failed to set device id to TP FW %d", id);
                 return ret;
