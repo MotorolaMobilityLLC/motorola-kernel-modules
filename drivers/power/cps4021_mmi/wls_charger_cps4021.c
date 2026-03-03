@@ -646,6 +646,7 @@ static int cps_wls_set_tx_en_pin(char *str, bool en);
 
 int cps_wls_get_ldo_on(void);
 int cps_wls_sysfs_notify(const char *attr);
+static int cps_get_usb_vbus(int *vchr);
 static int cps_get_vbus(void);
 static void cps_wls_stop_epp(void);
 
@@ -1642,7 +1643,6 @@ static int cps_wls_rx_irq_handler(int int_flag)
 				}
 			}
   		    cps_bpp_icl_on();
-			cps_epp_icl_on();
   		    cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ:  RX_INT_LDO_ON");
   		    queue_delayed_work(chip->wls_wq, &chip->dump_info_work, msecs_to_jiffies(2000));
 		    temp &= ~RX_INFO_FLAG_MLDO_ON;
@@ -1711,6 +1711,8 @@ static int cps_wls_rx_irq_handler(int int_flag)
 			chip->mc_status && chip->mcode != MOTO_TX_MCODE &&
 			wlc_power == WLS_RX_CAP_15W) {
 			wlc_chg_start_mc_icl_work(chip, Sys_Op_Mode_EPP);
+		} else {
+			cps_epp_icl_on();
 		}
 	}
 
@@ -2678,10 +2680,22 @@ static int wireless_fw_update(bool force)
 	int addr,ret = CPS_WLS_SUCCESS;
 	bool boost_enable = false;
 	int sys_mode = 0x00;
+	int vbus = 0;
 
 	if (cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY) < 10 && !force) {
 		cps_wls_log(CPS_LOG_ERR,
 			"Wireless fw update failed. Battery SOC should be at least 10%%\n");
+		return CPS_WLS_FAIL;
+	}
+
+	ret = cps_get_usb_vbus(&vbus);
+	if (ret < 0) {
+		cps_wls_log(CPS_LOG_ERR, "Wireless fw update failed. Can't get usb vbus\n");
+		return CPS_WLS_FAIL;
+	}
+	cps_wls_log(CPS_LOG_ERR, "%s: vbus:%d mv\n", __func__,vbus);
+	if (vbus > 12000) {
+		cps_wls_log(CPS_LOG_ERR, "Wireless fw update failed. VBUS > 12V\n");
 		return CPS_WLS_FAIL;
 	}
 
@@ -4583,6 +4597,31 @@ static int get_pmic_vbus(struct mtk_charger *info, int *vchr)
 
 	chr_debug("%s vbus:%d\n", __func__,
 		prop.intval);
+	return ret;
+}
+
+static int cps_get_usb_vbus(int *vchr)
+{
+	union power_supply_propval prop;
+	struct power_supply *chg_psy;
+	int ret;
+
+	*vchr = 0;
+
+	chg_psy = power_supply_get_by_name("mtk-master-charger");
+	if (chg_psy == NULL || IS_ERR(chg_psy)) {
+		chr_err("%s Couldn't get chg_psy\n", __func__);
+		return -1;
+	}
+
+	ret = power_supply_get_property(chg_psy,
+		POWER_SUPPLY_PROP_VOLTAGE_NOW, &prop);
+
+	if (ret == 0) {
+		*vchr = prop.intval;
+	}
+
+	chr_debug("%s vbus:%d\n", __func__, *vchr);
 	return ret;
 }
 
