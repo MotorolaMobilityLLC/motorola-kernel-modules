@@ -169,6 +169,7 @@ extern void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue);
 extern bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name);
 extern bool lock_clear_inherited_ux_type(struct task_struct *waiter, char* lock_name);
 extern void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settime_jiffies, char* lock_name, void* pointer);
+extern bool resched_task(struct task_struct *p);
 extern void register_vendor_comm_hooks(void);
 
 static inline bool is_debuggable(int type) {
