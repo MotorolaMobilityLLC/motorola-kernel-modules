@@ -369,6 +369,35 @@ TRACE_EVENT(sched_percpu_rwsem_starttime,
                   __entry->ux_type,
                   __entry->mvp_prio)
 );
+
+TRACE_EVENT(binder_inherit_ux_type,
+
+	TP_PROTO(struct task_struct *task, int ux_type, bool set),
+
+	TP_ARGS(task, ux_type, set),
+
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
+		__field(int, prio)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(int, ux_type)
+		__field(bool, set)
+	),
+
+	TP_fast_assign(
+		__entry->pid = task->pid;
+		__entry->tgid = task->tgid;
+		__entry->prio = task->prio;
+		memcpy(__entry->comm, task->comm, TASK_COMM_LEN);
+		__entry->ux_type = ux_type;
+		__entry->set = set;
+	),
+
+	TP_printk("binder_ux: pid=%d tgid=%d prio=%d comm=%s ux_type=%d set=%d",
+		__entry->pid, __entry->tgid, __entry->prio,
+		__entry->comm, __entry->ux_type, __entry->set)
+);
 #endif /* _TRACE_MSCHED_H */
 
 #undef TRACE_INCLUDE_PATH
