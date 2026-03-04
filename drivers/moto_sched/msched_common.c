@@ -221,6 +221,8 @@ EXPORT_SYMBOL(task_get_mvp_limit);
 void binder_inherit_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER) && current_is_important_ux()) {
 		task_add_ux_type(task, UX_TYPE_INHERIT_BINDER);
+		resched_task(task);
+		trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
 	}
 }
 EXPORT_SYMBOL(binder_inherit_ux_type);
@@ -228,6 +230,7 @@ EXPORT_SYMBOL(binder_inherit_ux_type);
 void binder_clear_inherited_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER)) {
 		task_clr_ux_type(task, UX_TYPE_INHERIT_BINDER);
+		trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
 	}
 }
 EXPORT_SYMBOL(binder_clear_inherited_ux_type);
@@ -297,38 +300,39 @@ static void android_vh_dup_task_struct(void *unused, struct task_struct *task, s
 }
 #endif
 
-bool resched_ux_type(struct task_struct *owner) {
+bool resched_task(struct task_struct *p) {
 	struct rq *rq;
 	struct rq_flags rf;
 	bool queued = false;
 	bool running = false;
 
-	if (unlikely(!owner))
+	if (unlikely(!p))
 		return false;
 
-	if (fair_policy(owner->policy)) {
-		get_task_struct(owner);
+	if (fair_policy(p->policy)) {
+		get_task_struct(p);
 
-		rq = task_rq_lock(owner, &rf);
+		rq = task_rq_lock(p, &rf);
 		update_rq_clock(rq);
 
-		queued = task_on_rq_queued(owner);
-		running = task_current(rq, owner);
+		queued = task_on_rq_queued(p);
+		running = task_current(rq, p);
 
 		if (queued)
-			deactivate_task(rq, owner, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
+			deactivate_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
 		if (running)
-			put_prev_task(rq, owner);
+			put_prev_task(rq, p);
 
 		if (queued)
-			activate_task(rq, owner, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK);
+			activate_task(rq, p, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK);
 		if (running)
-			set_next_task(rq, owner);
+			set_next_task(rq, p);
 
+		/* Trigger rescheduling: sets TIF_NEED_RESCHED flag */
 		resched_curr(rq);
 
-		task_rq_unlock(rq, owner, &rf);
-		put_task_struct(owner);
+		task_rq_unlock(rq, p, &rf);
+		put_task_struct(p);
 	}
 
 	return true;
@@ -366,7 +370,7 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 	task_rq_unlock(rq, owner, &flags);
 
 #ifdef CONFIG_MOTO_LOCKING_2
-	ret = resched_ux_type(owner);
+	ret = resched_task(owner);
 #endif
 
 	return ret;
@@ -402,7 +406,7 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 	task_rq_unlock(rq, owner, &flags);
 
 #ifdef CONFIG_MOTO_LOCKING_2
-	ret = resched_ux_type(owner);
+	ret = resched_task(owner);
 #endif
 
 	return ret;
@@ -447,7 +451,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 		if (waiter_mts->boost_kernel_lock_depth == 0) {
 			task_add_ux_type(tsk, UX_TYPE_KERNEL);
 			waiter_mts->boost_kernel_start = jiffies_to_nsecs(jiffies);
-			resched_ux_type(tsk);
+			resched_task(tsk);
 		}
 		waiter_mts->boost_kernel_lock_depth++;
 		trace_sched_percpu_rwsem_starttime(tsk, waiter_mts->boost_kernel_lock_depth, acquire, task_get_ux_type(tsk), task_get_mvp_prio(tsk, true));
@@ -465,7 +469,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 			if (waiter_mts->boost_kernel_lock_depth == 0) {
 				task_clr_ux_type(tsk, UX_TYPE_KERNEL);
 				trace_sched_percpu_rwsem_starttime(tsk, waiter_mts->boost_kernel_lock_depth, acquire, task_get_ux_type(tsk), task_get_mvp_prio(tsk, true));
-				resched_ux_type(tsk);
+				resched_task(tsk);
 			}
 		}
 	}
