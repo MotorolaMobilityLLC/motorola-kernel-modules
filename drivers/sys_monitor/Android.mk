@@ -1,0 +1,18 @@
+DLKM_DIR := motorola/kernel/modules
+LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := sys_monitor.ko
+LOCAL_MODULE_TAGS := optional
+ifeq ($(DLKM_INSTALL_TO_VENDOR_OUT),true)
+LOCAL_MODULE_PATH := $(TARGET_OUT_VENDOR)/lib/modules/
+else
+LOCAL_MODULE_PATH := $(KERNEL_MODULES_OUT)
+endif
+KBUILD_OPTIONS_GKI += GKI_OBJ_MODULE_DIR=gki
+
+LOCAL_ADDITIONAL_DEPENDENCIES := $(PRODUCT_OUT)/$(TARGET_COPY_OUT_VENDOR_RAMDISK)/lib/modules/qrtr.ko
+
+include $(DLKM_DIR)/AndroidKernelModule.mk
+include $(call first-makefiles-under,$(LOCAL_PATH))
