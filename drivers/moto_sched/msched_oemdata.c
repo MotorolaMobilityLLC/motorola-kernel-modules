@@ -30,6 +30,8 @@
 struct kmem_cache *msched_task_struct_cachep;
 EXPORT_SYMBOL(msched_task_struct_cachep);
 
+extern void reset_rwsem_owner_list(struct moto_task_struct *mts);
+
 static void init_moto_task_struct(void *ptr)
 {
 	struct moto_task_struct *mts = ptr;
@@ -93,7 +95,7 @@ void android_vh_free_task_handler(void *unused, struct task_struct *tsk)
 	WRITE_ONCE(tsk->android_oem_data1[0], 0);
 	barrier();
 
-	list_del_init(&mts->owner_node);
+	reset_rwsem_owner_list(mts);
 	mts->task = NULL;
 
 	free_moto_task_struct(mts);
