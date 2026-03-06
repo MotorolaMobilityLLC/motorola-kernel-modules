@@ -202,6 +202,7 @@ struct mmi_glink_chip {
 	bool			force_charging_enabled;
 	bool			direct_power_supply;
 	bool			is_softbank;
+	u8			sku;
 
 	bool			charging_disable;
 	bool			charger_suspend;

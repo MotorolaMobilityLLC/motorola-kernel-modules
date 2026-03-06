@@ -46,6 +46,7 @@
 #define WARM_TEMP 45
 #define COOL_TEMP 0
 
+#define RADIO_MAX_LEN 33
 #define BATT_PAIR_ID_BITS 16
 #define BATT_PAIR_ID_MASK ((1 << BATT_PAIR_ID_BITS) - 1)
 
@@ -1188,6 +1189,45 @@ static int mmi_get_bootarg(char *key, char **value)
 #endif
 }
 
+static int mmi_get_sku_type(struct mmi_glink_chip *chip, u8 *sku_type)
+{
+	char *s = NULL;
+	char androidboot_radio_str[RADIO_MAX_LEN];
+
+	if (mmi_get_bootarg("androidboot.radio=", &s) == 0) {
+		if (s != NULL) {
+			strscpy(androidboot_radio_str, s, RADIO_MAX_LEN);
+			if (!strncmp("PRC", androidboot_radio_str, 3)) {
+				*sku_type = MMI_CHARGER_SKU_PRC;
+			} else if (!strncmp("ROW", androidboot_radio_str, 3)) {
+				*sku_type = MMI_CHARGER_SKU_ROW;
+			} else if (!strncmp("NA", androidboot_radio_str, 2)) {
+				*sku_type = MMI_CHARGER_SKU_NA;
+			} else if (!strncmp("VZW", androidboot_radio_str, 3)) {
+				*sku_type = MMI_CHARGER_SKU_VZW;
+			} else if (!strncmp("JPN", androidboot_radio_str, 3)) {
+				*sku_type = MMI_CHARGER_SKU_JPN;
+			} else if (!strncmp("ITA", androidboot_radio_str, 3)) {
+				*sku_type = MMI_CHARGER_SKU_ITA;
+			} else if (!strncmp("NAE", androidboot_radio_str, 3)) {
+				*sku_type = MMI_CHARGER_SKU_NAE;
+			} else if (!strncmp("SUPERSET", androidboot_radio_str, 8)) {
+				*sku_type = MMI_CHARGER_SKU_SUPERSET;
+			} else {
+				*sku_type = 0;
+			}
+			mmi_info(chip, "SKU type: %s, 0x%02x\n", androidboot_radio_str, *sku_type);
+			return 0;
+		} else {
+			mmi_err(chip, "Could not get SKU type\n");
+			return -1;
+		}
+	} else {
+		mmi_err(chip, "Could not get radio bootarg\n");
+		return -1;
+	}
+}
+
 static bool mmi_is_factory_mode(void)
 {
 	char *mode = NULL;
@@ -1408,6 +1448,9 @@ int mmi_glink_dev_init(struct mmi_glink_chip *chip,
 static int mmi_parse_dt(struct mmi_glink_chip *chip)
 {
 	int rc, byte_len, i, chrg_idx = 0;
+	int limit_capcity_by_sku = 0;
+	int sku_upper_limit_capacity = 0;
+	int sku_lower_limit_capacity = 0;
 	struct device_node *node = chip->dev->of_node, *child;
 
 	chip->enable_charging_limit =
@@ -1444,6 +1487,27 @@ static int mmi_parse_dt(struct mmi_glink_chip *chip)
 				  &chip->lower_limit_capacity);
 	if (rc)
 		chip->lower_limit_capacity = 0;
+
+	rc = of_property_read_u32(node, "mmi,limit-capacity-by-sku",
+			&limit_capcity_by_sku);
+	if (!rc && limit_capcity_by_sku > 0
+			&& limit_capcity_by_sku == chip->sku) {
+		rc = of_property_read_u32(node, "mmi,sku-upper-limit-capacity",
+				&sku_upper_limit_capacity);
+		if (!rc && sku_upper_limit_capacity > 0) {
+			mmi_warn(chip, "sku %d factory upper limit change to %d\n",
+					chip->sku, sku_upper_limit_capacity);
+			chip->upper_limit_capacity = sku_upper_limit_capacity;
+		}
+
+		rc = of_property_read_u32(node, "mmi,sku-lower-limit-capacity",
+				&sku_lower_limit_capacity);
+		if (!rc && sku_lower_limit_capacity > 0) {
+			mmi_warn(chip, "sku %d factory lower limit change to %d\n",
+					chip->sku, sku_lower_limit_capacity);
+			chip->lower_limit_capacity = sku_lower_limit_capacity;
+		}
+	}
 
 	rc = of_property_read_u32(node, "mmi,heartbeat-interval",
 				  &chip->heartbeat_interval);
@@ -1608,6 +1672,7 @@ static int mmi_charger_probe(struct platform_device *pdev)
 	int rc = 0;
 	struct mmi_glink_chip *chip;
 	struct battery_host *batt_host;
+	u8 sku_type = 0;
 
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip)
@@ -1637,6 +1702,13 @@ static int mmi_charger_probe(struct platform_device *pdev)
 		mmi_err(chip, "Failed to init glink class\n");
 		rc = -EINVAL;
 		goto exit;
+	}
+
+	if ((rc = mmi_get_sku_type(chip, &sku_type)) == 0) {
+		chip->sku = sku_type;
+	} else {
+		chip->sku = 0;
+		mmi_err(chip, "Fail to get sku type\n");
 	}
 
 	rc = mmi_parse_dt(chip);
