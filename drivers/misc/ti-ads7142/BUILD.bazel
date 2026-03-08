@@ -6,5 +6,6 @@ moto_ddk_module(
         "ti-ads7142.c",
     ],
     deps_ext = [
+        "//motorola/kernel/modules/drivers/misc/mmi_earbud_chg_v2:mmi_earbud_chg",
     ],
 )

@@ -188,6 +188,13 @@ static const char * const ti_ads7142_ain_names[] = {
 	"AIN1",
 };
 
+struct mmi_ichg_chip {
+    int (*read_ichg)(void *data, int chanNo, int *out_val);
+    void *data;
+};
+
+static struct mmi_ichg_chip mmi_chip;
+extern int mmi_register_ichg_chip(struct mmi_ichg_chip *chip);
 #define TI_ADS7142_BUFFM_NONE				0
 #define TI_ADS7142_BUFFM_STOP_BURST			1
 #define TI_ADS7142_BUFFM_START_BURST			2
@@ -1201,6 +1208,19 @@ static const struct iio_chan_spec_ext_info ti_ads7142_ext_info[] = {
 };
 #endif
 
+static int mmi_read_adc_data(void *pdata, int chanindex, int *out_val)
+{
+	struct iio_dev *indio_dev = (struct iio_dev *)pdata;
+	const struct iio_chan_spec *iio_channel;
+	int val2 = 0;
+	int ret = 0;
+	if (chanindex < 0 || chanindex >= indio_dev->num_channels)
+		return -EINVAL;
+	iio_channel = &indio_dev->channels[chanindex];
+	ret = ti_ads7142_read_raw(indio_dev, iio_channel, out_val, &val2, IIO_CHAN_INFO_RAW);
+	return ret;
+}
+
 static int ti_ads7142_parse_channel_config(struct device *dev,
 					   struct iio_dev *indio_dev)
 {
@@ -1374,6 +1394,12 @@ static int ti_ads7142_probe(struct i2c_client *client)
 	dev_info(&client->dev, "%s is a %s device at address 0x%X",
 		 dev_name(&indio_dev->dev), indio_dev->name,
 		 client->addr);
+
+	mmi_chip.read_ichg = mmi_read_adc_data;
+	mmi_chip.data = (void *)indio_dev;
+	if(mmi_register_ichg_chip(&mmi_chip) < 0) {
+		dev_err(&client->dev, "Failed to register ichg chip. The supporting module may not be loaded.");
+	}
 final:
 	return ret;
 }
