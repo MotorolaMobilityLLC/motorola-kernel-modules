@@ -3,7 +3,9 @@ load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
 moto_ddk_module(
     name = "mmi_earbud_chg",
     srcs = [
-        "mmi_earbud_chg.c",
+        "mmi_earbud.c",
+        "mmi_uart_comm.c",
+        "mmi_earbud.h",
     ],
     deps_ext = [
     ],
