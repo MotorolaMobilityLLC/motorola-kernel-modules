@@ -39,4 +39,8 @@ sys_monitor_attr_ro(sleep_state);
 
 int monitor_sleep_init(void);
 void monitor_sleep_exit(void);
+
+int monitor_misc_init(struct kobject *parent_kobj);
+void monitor_misc_exit(struct kobject *parent_kobj);
+
 #endif //__MONITOR_H__
