@@ -57,6 +57,7 @@ do {										\
 #define UX_ENABLE_MDPF				(1 << 9)
 #define UX_ENABLE_KWORKER			(1 << 10)
 #define UX_ENABLE_IRQWTH			(1 << 11)
+#define UX_ENABLE_PERCPU_RWSEM			(1 << 12)
 
 /* define for UX thread type, keep same as the define in java file */
 #define UX_TYPE_PERF_DAEMON			(1 << 0)

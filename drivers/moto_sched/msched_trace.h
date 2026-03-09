@@ -12,6 +12,109 @@
 #include <linux/tracepoint.h>
 #include <linux/sched.h>
 
+TRACE_EVENT(percpu_rwsem_down_read_preempt,
+	TP_PROTO(struct percpu_rw_semaphore *sem,
+		bool try, bool ret),
+
+	TP_ARGS(sem, try, ret),
+
+	TP_STRUCT__entry(
+		__field(const void *, sem_addr)
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
+		__array(char, comm, TASK_COMM_LEN)
+		__array(char, tg_comm, TASK_COMM_LEN)
+		__field(bool, try)
+		__field(bool, ret)
+		__field(int, block)
+	),
+
+	TP_fast_assign(
+		__entry->sem_addr = sem;
+		__entry->pid = current->pid;
+		__entry->tgid = current->tgid;
+		memcpy(__entry->comm, current->comm, TASK_COMM_LEN);
+		memcpy(__entry->tg_comm,
+			current->group_leader->comm,
+			TASK_COMM_LEN);
+		__entry->try = try;
+		__entry->ret = ret;
+		__entry->block = sem ? atomic_read(&sem->block) : -1;
+	),
+
+	TP_printk("sem=%p task=%d/%d (%s/%s) try=%d hook_ret=%d block=%d",
+		__entry->sem_addr,
+		__entry->pid,
+		__entry->tgid,
+		__entry->comm,
+		__entry->tg_comm,
+		__entry->try,
+		__entry->ret,
+		__entry->block
+	)
+);
+
+TRACE_EVENT(percpu_rwsem_wait_complete,
+	TP_PROTO(struct percpu_rw_semaphore *sem,
+		int state, bool complete),
+
+	TP_ARGS(sem, state, complete),
+
+	TP_STRUCT__entry(
+        	__field(const void *, sem_addr)
+        	__field(pid_t, pid)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(int, state)
+		__field(bool, complete)
+		__field(int, block)
+	),
+
+	TP_fast_assign(
+        	__entry->sem_addr = sem;
+		__entry->pid = current->pid;
+		memcpy(__entry->comm, current->comm, TASK_COMM_LEN);
+		__entry->state = state;
+		__entry->complete = complete;
+		__entry->block = sem ? atomic_read(&sem->block) : -1;
+	),
+
+	TP_printk("sem=%p task=%d(%s) state=%d complete=%d block=%d",
+		__entry->sem_addr,
+		__entry->pid,
+		__entry->comm,
+		__entry->state,
+		__entry->complete,
+		__entry->block
+	)
+);
+
+TRACE_EVENT(percpu_rwsem_up_write,
+		TP_PROTO(struct percpu_rw_semaphore *sem),
+
+		TP_ARGS(sem),
+
+		TP_STRUCT__entry(
+			__field(const void *, sem_addr)
+			__field(pid_t, pid)
+			__array(char, comm, TASK_COMM_LEN)
+			__field(int, block_value_before)
+		),
+
+		TP_fast_assign(
+			__entry->sem_addr = sem;
+			__entry->pid = current->pid;
+			memcpy(__entry->comm, current->comm, TASK_COMM_LEN);
+			__entry->block_value_before = sem ? atomic_read(&sem->block) : -1;
+		),
+
+		TP_printk("sem=%p task=%d(%s) block_before=%d",
+			__entry->sem_addr,
+			__entry->pid,
+			__entry->comm,
+			__entry->block_value_before
+		)
+);
+
 TRACE_EVENT(msched_task_get_mvp_prio,
         TP_PROTO(struct task_struct *p, int ux_type, int prio_val, unsigned long util, int scene),
 
