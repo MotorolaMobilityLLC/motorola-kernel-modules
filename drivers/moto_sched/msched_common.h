@@ -43,6 +43,7 @@ do {										\
 #define DEBUG_BASE					(1 << 0)
 #define DEBUG_LOCK					(1 << 1)
 #define DEBUG_BINDER				(1 << 2)
+#define DEBUG_MDPF				    (1 << 3)
 
 #define UX_ENABLE_BASE				(1 << 0)
 #define UX_ENABLE_INTERACTION		(1 << 1)
@@ -53,7 +54,9 @@ do {										\
 #define UX_ENABLE_KSWAPD			(1 << 6)
 #define UX_ENABLE_BOOST				(1 << 7)
 #define UX_ENABLE_KERNEL			(1 << 8)
+#define UX_ENABLE_MDPF				(1 << 9)
 #define UX_ENABLE_KWORKER			(1 << 10)
+#define UX_ENABLE_IRQWTH			(1 << 11)
 
 /* define for UX thread type, keep same as the define in java file */
 #define UX_TYPE_PERF_DAEMON			(1 << 0)
