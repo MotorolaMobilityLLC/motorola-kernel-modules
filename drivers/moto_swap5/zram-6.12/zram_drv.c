@@ -994,7 +994,8 @@ static int comp_params_store(struct zram *zram, u32 prio, s32 level,
 
 	comp_params_reset(zram, prio);
 
-	if (dict_path) {
+	// moto: don't need zstd, remove this to avoid permission denied issue
+	/*if (dict_path) {
 		sz = kernel_read_file_from_path(dict_path, 0,
 						&zram->params[prio].dict,
 						INT_MAX,
@@ -1002,7 +1003,7 @@ static int comp_params_store(struct zram *zram, u32 prio, s32 level,
 						READING_POLICY);
 		if (sz < 0)
 			return -EINVAL;
-	}
+	}*/
 
 	zram->params[prio].dict_sz = sz;
 	zram->params[prio].level = level;
