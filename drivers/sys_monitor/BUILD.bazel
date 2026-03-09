@@ -6,6 +6,7 @@ moto_ddk_module(
         "monitor.h",
         "main.c",
         "sleep.c",
+        "misc.c",
     ],
     deps_ext = [
         "//soc-repo:drivers/soc/qcom/smem",
