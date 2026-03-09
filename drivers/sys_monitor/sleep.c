@@ -208,7 +208,7 @@ static void record_sleep_stats(ktime_t sleep_time)
 		prev_duration[i] = accumulated;
 		if (j < MAX_SUBSYS_COUNT) {
 			suspend_state[cur_idx].subsys_state[j].sleep_time = delta_duration;
-			memcpy(suspend_state[cur_idx].subsys_state[j].name, subsystem->name, SUBSYS_NAME_LEN);
+			strscpy(suspend_state[cur_idx].subsys_state[j].name, subsystem->name, SUBSYS_NAME_LEN);
 			suspend_state[cur_idx].subsys_state[j].name[SUBSYS_NAME_LEN - 1] = '\0';
 			suspend_state[cur_idx].subsys_count = ++j;
 		}

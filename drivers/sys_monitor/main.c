@@ -82,7 +82,7 @@ static int compare_total_power(const void *a, const void *b) {
 }
 
 void select_top_records(struct uid_record *records,
-                          struct uid_record *top, int count, int size) {
+				struct uid_record *top, int count, int size) {
 	int i;
 	int heap_size = size;
 
@@ -396,11 +396,13 @@ static int __init sys_monitor_init(void)
 	}
 
 	monitor_sleep_init();
+	monitor_misc_init(sys_monitor_obj);
 
 	return 0;
 
 error_sysfs_create:
 	kobject_del(sys_monitor_obj);
+	kobject_put(sys_monitor_obj);
 	sys_monitor_obj= NULL;
 error_kobj_register:
 	unregister_trace_android_vh_cpufreq_acct_update_power(record_task_cpufreq_times, NULL);
@@ -412,8 +414,11 @@ void __exit sys_monitor_exit(void)
 {
 	unregister_trace_android_vh_cpufreq_acct_update_power(record_task_cpufreq_times, NULL);
 	sysfs_remove_group(sys_monitor_obj, &sys_monitor_attr_group);
-	kobject_del(sys_monitor_obj);
+	monitor_misc_exit(sys_monitor_obj);
 	monitor_sleep_exit();
+
+	kobject_del(sys_monitor_obj);
+	kobject_put(sys_monitor_obj);
 	sys_monitor_obj= NULL;
 }
 
