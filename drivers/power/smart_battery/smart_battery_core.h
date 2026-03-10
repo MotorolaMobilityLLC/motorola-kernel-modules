@@ -46,6 +46,12 @@
 	} while (0)
 #define MAX_STR_LEN 64
 
+struct cutoff_zone {
+	int	cycle_l;
+	int	cycle_h;
+	int	shutdown_voltage;
+};
+
 struct mmi_battery_pack {
 	int	status;
 	int	voltage_now;
@@ -106,25 +112,63 @@ struct mmi_smart_battery {
 	int				vbat0_flag;
 	int				fake_soc;
 	int				fake_temp;
+	int				fake_cycle_count;
 	int				fake_soh;
 	int				work_interval_ms;
 	int				gauge_count;
 	bool				get_gauge_done;
-	int				vbatt_empty_cold_mv;
-	int				vbatt_empty_mv;
-	int				vbatt_low_mv;
-	int				vbatt_low_cold_mv;
-	int				batt_cold_threshold;
+
+	int				heavyLoad_dischg_cnt;
+	int				lightLoad_dischg_cnt;
+	int				force_zero_level;
+	bool				enable_raise_battempty_threshold;
+
 	const char		**gauge_name_arry;
 	char			battName[MAX_STR_LEN];
 	struct mmi_battery_pack *battery;
-#ifdef CONFIG_MOTO_1200_CYCLE
-	int				bat_cycle_count;
-	bool			is_reset_battery_cycle;
-#endif
+
 #ifdef CONFIG_MOTO_1800_CYCLE
 	struct ifc_ops  ifc_chg_ops;
 #endif
+
+	struct cutoff_zone *cutoff_zone;
+	int num_cutoff;
+	int current_cutoff_index;
+
+	int	vbatt_low_mv;
+	int	vbatt_empty_mv;
+
+	int	batt_chill_degree;
+	int	vbatt_chill_low_mv;
+	int	vbatt_chill_empty_mv;
+	int	batt_chill_shutdown_volt;
+
+	int	batt_cool_degree;
+	int	vbatt_cool_low_mv;
+	int	vbatt_cool_empty_mv;
+	int	batt_cool_shutdown_volt;
+
+	int	batt_cold_degree;
+	int	vbatt_cold_low_mv;
+	int	vbatt_cold_empty_mv;
+	int	batt_cold_shutdown_volt;
+
+	int	is_low_temp_shutdownVolt_active;
+	int	vbatt_heavyload_delta;
+	int	vbatt_continous_heavyload_delta;
+};
+
+enum {
+	ACTIVE_NONE = 0,
+	ACTIVE_CHILL,
+	ACTIVE_COOL,
+	ACTIVE_COLD,
+};
+
+enum {
+	FORCE_ZERO_NONE = 0,
+	FORCE_ZERO_QUICKLY,
+	FORCE_ZERO_IMMEDIATELY,
 };
 
 #define SOC_JUMPS_DELAYED_WORK_TIME  60000
@@ -135,11 +179,16 @@ struct mmi_smart_battery {
 #define SMART_BATT_SHOW_MAX_SIZE 64
 
 #define DEFAULT_VBATT_EMPTY_MV		3000
-#define DEFAULT_VBATT_EMPTY_COLD_MV	3000
+#define DEFAULT_VBATT_COOL_EMPTY_MV	3000
+#define DEFAULT_VBATT_COLD_EMPTY_MV	3000
 #define DEFAULT_VBATT_LOW_MV		3000
-#define DEFAULT_VBATT_LOW_COLD_MV	3000
-#define DEFAULT_BATT_COLD_THRESHOLD	0
+#define DEFAULT_VBATT_COOL_LOW_MV	3000
+#define DEFAULT_VBATT_COLD_LOW_MV	3000
+#define DEFAULT_BATT_COOL_DEGREE	0
+#define DEFAULT_BATT_COLD_DEGREE	(-100)
 #define DEFAULT_SOH_GAP			4
+#define DEFAULT_HEAVYLOAD_VBAT_DELTA		50*1000
+#define DEFAULT_CONTINUOUS_HEAVYLOAD_VBAT_DELTA		300*1000
 
 enum {
 	NOTIFY_EVENT_TYPE_FLIP_CAPACITY = 0,
