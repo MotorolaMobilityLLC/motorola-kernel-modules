@@ -568,6 +568,13 @@ static int goodix_thp_spi_read(struct thp_ts_device *dev, unsigned int addr,
         struct spi_transfer xfers;
         struct spi_message spi_msg;
         int ret = 0;
+        struct platform_device *pdev = spi_get_drvdata(spi);
+        struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
+
+        if (unlikely(core_data->pm_suspend)) {
+            ts_err(&spi->dev, "spi master suspend");
+            return -EINVAL;
+        }
 
         mutex_lock(&dev->spi_mutex);
         spi_message_init(&spi_msg);
@@ -641,7 +648,7 @@ static int goodix_thp_spi_write(struct thp_ts_device *dev, unsigned int addr,
         struct platform_device *pdev = spi_get_drvdata(spi);
         struct goodix_thp_core *core_data = platform_get_drvdata(pdev);
 
-        if (core_data->pm_suspend) {
+        if (unlikely(core_data->pm_suspend)) {
             ts_err(&spi->dev, "system spi suspend");
             return -EINVAL;
         }
