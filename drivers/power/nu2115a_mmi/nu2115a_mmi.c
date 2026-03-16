@@ -630,11 +630,8 @@ static int __nu2115_get_adc(struct nu2115 *chip, int channel, int *data)
 	if (channel < NU2115_ADC_IBUS || channel > NU2115_ADC_TDIE)
 		return -EINVAL;
 	mutex_lock(&chip->adc_lock);
-	__nu2115_enable_adc(chip,true);
-	msleep(30);
 	ret = nu2115_get_adc_data(chip, channel, data);
 	dev_info(chip->dev,"%s ret=%d ", __func__,ret);
-	__nu2115_enable_adc(chip,false);
 	mutex_unlock(&chip->adc_lock);
 	return 0;
 }
@@ -929,7 +926,6 @@ static int nu2115_is_charger_enabled(struct nu2115 *chip, bool *en)
 
 	return 0;
 }
-#if 0
 
 static int mtk_nu2115_enable_adc(struct charger_device *chg_dev, bool enable)
 {
@@ -942,6 +938,7 @@ static int mtk_nu2115_enable_adc(struct charger_device *chg_dev, bool enable)
 		dev_err(chip->dev, "%s fail\n", __func__);
 	return ret;
 }
+#if 0
 
 static int nu2115_set_chg_mode(struct charger_device *chg_dev, int mode)
 {
@@ -1424,7 +1421,7 @@ static int nu2115_config_mux(struct charger_device *chg_dev,
 static const struct charger_ops nu2115_chg_ops = {
 	.enable = nu2115_enable_chg,
 	.is_enabled = nu2115_is_chg_enabled,
-	//.enable_adc = mtk_nu2115_enable_adc,
+	.enable_adc = mtk_nu2115_enable_adc,
 	.get_adc = nu2115_get_adc,
 	.set_vbusovp = nu2115_set_vbusovp,
 	.set_ibusocp = nu2115_set_ibusocp,
