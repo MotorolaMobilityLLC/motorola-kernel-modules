@@ -4259,6 +4259,37 @@ static void __exit zram_exit(void)
 	destroy_devices();
 }
 
+/**
+ * zram_get_total_used_pages - Return compressed memory in use across
+ *                             all active zram devices.
+ *
+ * Iterates all registered zram instances and sums the pages currently
+ * held in their zsmalloc pools (i.e. actual compressed memory footprint).
+ *
+ * Context: May sleep (acquires zram_index_mutex and each device's init_lock
+ *          as a read semaphore via down_read_trylock).
+ * Return:  Total pages in use, or 0 if no devices are initialized.
+ */
+u64 zram_get_total_used_pages(void)
+{
+	struct zram *zram;
+	u64 total = 0;
+	int id;
+
+	mutex_lock(&zram_index_mutex);
+	idr_for_each_entry(&zram_index_idr, zram, id) {
+		if (!down_read_trylock(&zram->init_lock))
+			continue;
+		if (init_done(zram) && zram->mem_pool)
+			total += (u64)zs_get_total_pages(zram->mem_pool);
+		up_read(&zram->init_lock);
+	}
+	mutex_unlock(&zram_index_mutex);
+
+	return total;
+}
+EXPORT_SYMBOL_GPL(zram_get_total_used_pages);
+
 module_init(zram_init);
 module_exit(zram_exit);
 
