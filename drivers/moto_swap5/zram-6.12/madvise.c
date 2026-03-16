@@ -286,8 +286,14 @@ static void zram_process_madvise(void *data, int pidfd,
 				arg == MADV_WRITEBACK ? &list : NULL,
 				(unsigned long)iter_iov_addr(&iter),
 				iter_iov_len(&iter));
-		if (err < 0)
-			break;
+		/* Ignore errors for PREFETCH to ensure all VMA ranges are processed */
+		if (err < 0) {
+			if (arg == MADV_PREFETCH) {
+				err = 0;
+			} else {
+				break;
+			}
+		}
 		iov_iter_advance(&iter, iter_iov_len(&iter));
 	}
 
