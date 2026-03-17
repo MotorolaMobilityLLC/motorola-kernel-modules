@@ -238,6 +238,8 @@ typedef enum {
         NOTIFY_TYPE_DESK_MODE,
         NOTIFY_TYPE_FILTER,
         NOTIFY_TYPE_PALM_AREA,
+        NOTIFY_TYPE_SET_TAP_SENSITIVITY,
+        NOTIFY_TYPE_SET_SWIPE_RESPONSIVENESS,
 } NOTIFY_TYPE_T;
 
 enum pen_action_state {
@@ -351,6 +353,8 @@ struct goodix_mode_info {
         int fp_int_state;
         int charger_mode;
         int stylus_report_rate_mode;
+        int tap_sensitivity_level;
+        int swipe_responsiveness_level;
 };
 
 struct goodix_thp_board_data {
@@ -385,6 +389,8 @@ struct goodix_thp_board_data {
         bool pocket_mode_ctrl;
         bool edge_ctrl;
         bool stylus_mode_ctrl;
+        bool tap_sensitivity_ctrl;
+        bool swipe_responsiveness_ctrl;
         bool gpio_expander;
         int irq_need_dev_resume_time; /*control setting of wait resume time*/
         u32 sched_priority;

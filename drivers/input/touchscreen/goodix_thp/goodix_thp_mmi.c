@@ -68,6 +68,14 @@ static ssize_t goodix_ts_stylus_report_rate_show(struct device *dev,
 		struct device_attribute *attr, char *buf);
 static ssize_t goodix_ts_stylus_report_rate_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_tap_sensitivity_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_tap_sensitivity_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
+static ssize_t goodix_ts_swipe_responsiveness_show(struct device *dev,
+		struct device_attribute *attr, char *buf);
+static ssize_t goodix_ts_swipe_responsiveness_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size);
 
 static DEVICE_ATTR(edge, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_edge_show, goodix_ts_edge_store);
@@ -95,6 +103,10 @@ static DEVICE_ATTR(fw_mode, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_fw_mode_show, goodix_ts_fw_mode_store);
 static DEVICE_ATTR(stylus_report_rate, (S_IRUGO | S_IWUSR | S_IWGRP),
 	goodix_ts_stylus_report_rate_show, goodix_ts_stylus_report_rate_store);
+static DEVICE_ATTR(tap_sensitivity, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_tap_sensitivity_show, goodix_ts_tap_sensitivity_store);
+static DEVICE_ATTR(swipe_responsiveness, (S_IRUGO | S_IWUSR | S_IWGRP),
+	goodix_ts_swipe_responsiveness_show, goodix_ts_swipe_responsiveness_store);
 
 /* hal settings */
 #define ROTATE_0   0
@@ -104,7 +116,7 @@ static DEVICE_ATTR(stylus_report_rate, (S_IRUGO | S_IWUSR | S_IWGRP),
 #define BIG_MODE   1
 #define SMALL_MODE    2
 #define DEFAULT_MODE   0
-#define MAX_ATTRS_ENTRIES 15
+#define MAX_ATTRS_ENTRIES 20
 
 #define NORMAL_DEFAULT_MODE 10
 #define NORMAL_SMALL_MODE 11
@@ -181,6 +193,12 @@ static int goodix_ts_mmi_extend_attribute_group(struct device *dev, struct attri
 
 	if (core_data->ts_dev->board_data.stylus_interpolation_ctrl)
 		ADD_ATTR(stylus_report_rate);
+
+	if (core_data->ts_dev->board_data.tap_sensitivity_ctrl)
+		ADD_ATTR(tap_sensitivity);
+
+	if (core_data->ts_dev->board_data.swipe_responsiveness_ctrl)
+		ADD_ATTR(swipe_responsiveness);
 
 	if (idx) {
 		ext_attributes[idx] = NULL;
@@ -1161,10 +1179,154 @@ exit:
 	return ret;
 }
 
+static ssize_t goodix_ts_tap_sensitivity_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info(core_data->ts_dev->dev,
+		"tap sensitivity level = %d.", core_data->set_mode.tap_sensitivity_level);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", core_data->set_mode.tap_sensitivity_level);
+}
+
+static ssize_t goodix_ts_tap_sensitivity_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long value = 0;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+	struct thp_ts_device *tdev;
+	u8 val[3];
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		ts_err(tdev->dev, "Failed to convert value");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+
+	if (value > TAP_SENSITIVITY_LEVEL_3) {
+		ts_err(tdev->dev, "Invalid tap sensitivity level: %d!", value);
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+
+	core_data->get_mode.tap_sensitivity_level = value;
+	if (core_data->set_mode.tap_sensitivity_level == value) {
+		ts_info(tdev->dev, "The value = %lu is same,so not write.", value);
+		ret = size;
+		goto exit;
+	}
+
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
+		ts_info(tdev->dev, "The touch is in power off sleep state, restore the value when resume");
+		ret = size;
+		goto exit;
+	}
+
+	val[0] = NOTIFY_TYPE_SET_TAP_SENSITIVITY;
+	val[1] = SET_TAP_SENSITIVITY_CMD;
+	val[2] = value;
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+	core_data->set_mode.tap_sensitivity_level = core_data->get_mode.tap_sensitivity_level;
+	ts_info(tdev->dev, "Success set tap sensitivity level to %d",
+		core_data->set_mode.tap_sensitivity_level);
+	ret = size;
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
+static ssize_t goodix_ts_swipe_responsiveness_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+
+	ts_info(core_data->ts_dev->dev,
+		"swipe responsiveness level = %d.", core_data->set_mode.swipe_responsiveness_level);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", core_data->set_mode.swipe_responsiveness_level);
+}
+
+static ssize_t goodix_ts_swipe_responsiveness_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	int ret = 0;
+	unsigned long value = 0;
+	struct platform_device *pdev;
+	struct goodix_thp_core *core_data;
+	struct thp_ts_device *tdev;
+	u8 val[3];
+
+	dev = MMI_DEV_TO_TS_DEV(dev);
+	GET_GOODIX_DATA(dev);
+	tdev = core_data->ts_dev;
+
+	mutex_lock(&core_data->mode_lock);
+	ret = kstrtoul(buf, 0, &value);
+	if (ret < 0) {
+		ts_err(tdev->dev, "Failed to convert value");
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+
+	if (value > SWIPE_RESPONSIVENESS_LEVEL_5) {
+		ts_err(tdev->dev, "Invalid swipe responsiveness level: %d!", value);
+		mutex_unlock(&core_data->mode_lock);
+		return -EINVAL;
+	}
+
+	core_data->get_mode.swipe_responsiveness_level = value;
+	if (core_data->set_mode.swipe_responsiveness_level == value) {
+		ts_info(tdev->dev, "The value = %lu is same,so not write.", value);
+		ret = size;
+		goto exit;
+	}
+
+	if ((core_data->power_on == 0) || (core_data->suspended == 1)) {
+		ts_info(tdev->dev, "The touch is in power off sleep state, restore the value when resume");
+		ret = size;
+		goto exit;
+	}
+
+	val[0] = NOTIFY_TYPE_SET_SWIPE_RESPONSIVENESS;
+	val[1] = SET_SWIPE_RESPONSIVENESS_CMD;
+	if (value == SWIPE_RESPONSIVENESS_LEVEL_0) {
+		val[2] = SWIPE_RESPONSIVENESS_LEVEL_3 - 1;
+	} else if (value >=SWIPE_RESPONSIVENESS_LEVEL_1 && value <= SWIPE_RESPONSIVENESS_LEVEL_5) {
+		val[2] = value -1;
+	}
+	put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+	core_data->set_mode.swipe_responsiveness_level = core_data->get_mode.swipe_responsiveness_level;
+	ts_info(tdev->dev, "Success set swipe responsiveness level to %d",
+		core_data->set_mode.swipe_responsiveness_level);
+	ret = size;
+
+exit:
+	mutex_unlock(&core_data->mode_lock);
+	return ret;
+}
+
 void goodix_ts_mmi_post_resume(struct work_struct *work) {
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct goodix_thp_core *core_data =
-        container_of(dwork, struct goodix_thp_core, post_resume_work);
+	container_of(dwork, struct goodix_thp_core, post_resume_work);
 	struct device *dev = core_data->ts_dev->dev;
 	u8 val[3];
 	int ret = 0;
@@ -1270,6 +1432,29 @@ void goodix_ts_mmi_post_resume(struct work_struct *work) {
 		core_data->set_mode.charger_mode = core_data->get_mode.charger_mode;
 		ts_info(core_data->ts_dev->dev, "Success to %s charger mode",
 			core_data->get_mode.charger_mode ? "enable" : "disable");
+	}
+
+	if (core_data->ts_dev->board_data.tap_sensitivity_ctrl && core_data->get_mode.tap_sensitivity_level) {
+		val[0] = NOTIFY_TYPE_SET_TAP_SENSITIVITY;
+		val[1] = SET_TAP_SENSITIVITY_CMD;
+		val[2] = core_data->get_mode.tap_sensitivity_level;
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.tap_sensitivity_level = core_data->get_mode.tap_sensitivity_level;
+		ts_info(dev, "Success set tap sensitivity level to %d", core_data->set_mode.tap_sensitivity_level);
+	}
+
+	if (core_data->ts_dev->board_data.swipe_responsiveness_ctrl && core_data->get_mode.swipe_responsiveness_level) {
+		val[0] = NOTIFY_TYPE_SET_SWIPE_RESPONSIVENESS;
+		val[1] = SET_SWIPE_RESPONSIVENESS_CMD;
+		if (core_data->get_mode.swipe_responsiveness_level >=SWIPE_RESPONSIVENESS_LEVEL_1 &&
+			core_data->get_mode.swipe_responsiveness_level <= SWIPE_RESPONSIVENESS_LEVEL_5) {
+			val[2] = core_data->get_mode.swipe_responsiveness_level - 1;
+		}
+		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
+
+		core_data->set_mode.swipe_responsiveness_level = core_data->get_mode.swipe_responsiveness_level;
+		ts_info(dev, "Success set swipe responsiveness level to %d", core_data->set_mode.swipe_responsiveness_level);
 	}
 
 	mutex_unlock(&core_data->mode_lock);

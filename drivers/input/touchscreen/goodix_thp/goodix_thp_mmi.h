@@ -30,6 +30,24 @@ static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device
 }
 #endif
 
+enum tap_sensitivity_level {
+	TAP_SENSITIVITY_LEVEL_0,
+	TAP_SENSITIVITY_LEVEL_1,
+	TAP_SENSITIVITY_LEVEL_2,
+	TAP_SENSITIVITY_LEVEL_3,
+	TAP_SENSITIVITY_LEVEL_MAX
+};
+
+enum swipe_responsiveness_level {
+	SWIPE_RESPONSIVENESS_LEVEL_0,
+	SWIPE_RESPONSIVENESS_LEVEL_1,
+	SWIPE_RESPONSIVENESS_LEVEL_2,
+	SWIPE_RESPONSIVENESS_LEVEL_3,
+	SWIPE_RESPONSIVENESS_LEVEL_4,
+	SWIPE_RESPONSIVENESS_LEVEL_5,
+	SWIPE_RESPONSIVENESS_LEVEL_MAX
+};
+
 #define EDGE_SWITCH_CMD            0x17
 #define ROTATE_DEFAULT_0           0x00
 #define ROTATE_LEFT_90             0X40
@@ -45,4 +63,6 @@ static int inline goodix_ts_mmi_dev_unregister(struct platform_device *ts_device
 #define EXIT_HIGH_REPORT_RATE_CMD 0xC100
 #define SAMPLE_SWITCH_CMD   0xC2
 #define ENTER_STOWED_MODE_CMD   0x97
+#define SET_TAP_SENSITIVITY_CMD 0xD3
+#define SET_SWIPE_RESPONSIVENESS_CMD 0xD4
 #endif

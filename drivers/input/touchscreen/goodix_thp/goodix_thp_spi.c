@@ -513,6 +513,16 @@ static int goodix_thp_parse_dt(struct device_node *node,
         if (board_data->stylus_mode_ctrl)
             ts_info(dev, "support goodix stylus mode");
 
+        board_data->tap_sensitivity_ctrl = of_property_read_bool(node,
+                "goodix,tap-sensitivity-ctrl");
+        if (board_data->tap_sensitivity_ctrl)
+            ts_info(dev, "Support goodix touch tap sensitivity control");
+
+        board_data->swipe_responsiveness_ctrl = of_property_read_bool(node,
+                "goodix,swipe-responsiveness-ctrl");
+        if (board_data->swipe_responsiveness_ctrl)
+            ts_info(dev, "Support goodix touch swipe responsiveness control");
+
         board_data->gpio_expander = of_property_read_bool(node,
                 "goodix,gpio-expander");
         if (board_data->gpio_expander)
