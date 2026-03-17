@@ -45,7 +45,7 @@
 
 #define FTS_CMD_REPORT_RATE_ADDR          0x8E
 #define FTS_CMD_SAMPLE_SWITCH             0x8A
-#define FTS_CMD_SENSITIVITY_ADDR          0xC0
+#define FTS_CMD_SENSITIVITY_ADDR          0xBF
 #define FTS_ACTIVE_LAST_TIME              10
 #ifdef CONFIG_INPUT_TOUCHSCREEN_MMI
 //extern int ts_mmi_dev_register(struct device *parent, struct ts_mmi_methods *mdata);
