@@ -751,7 +751,7 @@ static int pehv_stop(struct pehv_algo_info *info, struct pehv_stop_info *sinfo)
 	if (do_reset) {
 		if (sinfo->reset_ta) {
 			pehv_hal_reset_ta(info->alg);
-			pehv_set_ta_vbus(info, PEHV_VTA_INIT,
+			pehv_set_ta_vbus(info, data->ta_init_vol,
 				      PEHV_ITA_INIT);
 		}
 	}
@@ -2568,6 +2568,14 @@ static int pehv_parse_dt(struct pehv_algo_info *info)
 		pr_notice("ibus_ocp_ratio using default:%d\n",
 			PEHV_IBUSOCP_RATIO);
 		data->ibus_ocp_ratio = PEHV_IBUSOCP_RATIO;
+	}
+
+	if (of_property_read_u32(np, "ta-init-vol", &val) >= 0)
+		data->ta_init_vol = val;
+	else {
+		pr_notice("reset_ta_vol using default:%d\n",
+			PEHV_VTA_INIT);
+		data->ta_init_vol = PEHV_VTA_INIT;
 	}
 
 	return 0;
