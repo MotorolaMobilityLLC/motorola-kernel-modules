@@ -32,7 +32,7 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 	struct wireless_glink_dev *wls_chip =
 			container_of(nb, struct wireless_glink_dev, wls_nb);
 
-	mmi_dbg(this_root_chip, "wireless: notify-dev %ld", event);
+	mmi_dbg(this_root_chip, "wireless: notify-dev %ld size: %lu", event, sizeof(struct wls_dump));
 	if (event == DEV_WLS || event == DEV_ALL) {
 
 		if (!wls_chip->wls_dev_psy) {
@@ -97,7 +97,7 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 
 		mmi_info(this_root_chip, "Wireless dump info -3: rx_ept: %d, rx_ce: %d, "
 			"rx_rp: %d, rx_dietemp: %d, USB_OTG: %d, WLS_BOOST: %d, WLS_ICL_MA: %dmA, WLS_ICL_THERM_MA: %dmA, "
-			"mc_st: %d, vdd5v_st: %d",
+			"mc_st: %d, vdd5v_st: %d mpp_support: %d mpp_cali_stage: %d",
 			wls_info.rx_ept,
 			wls_info.rx_ce,
 			wls_info.rx_rp,
@@ -107,8 +107,9 @@ static void wireless_psy_init(struct wireless_glink_dev *chip);
 			wls_info.wls_icl_ma,
 			wls_info.wls_icl_therm_ma,
 			wls_info.wls_mc_st,
-			wls_info.vdd5v_st);
-
+			wls_info.vdd5v_st,
+			wls_info.mpp_support,
+			wls_info.mpp_cali_stage);
 
 		mmi_info(this_root_chip, "Wireless dump info -4: WLC Stand: tx_type %d, tx_power: %d, "
 			"fan: %d, light: %d, status: %d",
@@ -732,6 +733,54 @@ static DEVICE_ATTR(wireless_fw_ver, S_IRUGO,
 		wireless_fw_ver_show,
 		NULL);
 
+static ssize_t wlc_mpp_support_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct wireless_glink_dev *chg = this_chip;
+	struct wls_dump wls_info;
+	u32 mpp_support = 0;
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	qti_charger_get_property(OEM_PROP_WLS_DUMP_INFO,
+				&wls_info,
+				sizeof(struct wls_dump));
+
+	mpp_support = wls_info.mpp_support;
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", mpp_support);
+}
+
+static DEVICE_ATTR(wlc_mpp_support, S_IRUGO,
+		wlc_mpp_support_show,
+		NULL);
+
+static ssize_t wlc_mpp_cali_stage_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct wireless_glink_dev *chg = this_chip;
+	struct wls_dump wls_info;
+	u32 mpp_cali_stage= 0;
+	if (!chg) {
+		pr_err("QTI: chip not valid\n");
+		return -ENODEV;
+	}
+
+	qti_charger_get_property(OEM_PROP_WLS_DUMP_INFO,
+				&wls_info,
+				sizeof(struct wls_dump));
+
+	mpp_cali_stage = wls_info.mpp_cali_stage;
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", mpp_cali_stage);
+}
+
+static DEVICE_ATTR(wlc_mpp_cali_stage, S_IRUGO,
+		wlc_mpp_cali_stage_show,
+		NULL);
+
 static int wireless_charger_notify_callback(struct notifier_block *nb,
 		unsigned long event, void *data)
 {
@@ -950,6 +999,16 @@ static int phone_case_detection_notifier_call(struct notifier_block *nb,
         if (rc)
 		pr_err("couldn't create wireless wlc status changed error\n");
 
+	rc = device_create_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_wlc_mpp_support);
+        if (rc)
+		pr_err("couldn't create wireless wlc status changed error\n");
+
+	rc = device_create_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_wlc_mpp_cali_stage);
+        if (rc)
+		pr_err("couldn't create wireless wlc status changed error\n");
+
 	chip->wls_glink_nb.notifier_call = wireless_charger_notify_callback;
 	rc = qti_charger_register_notifier(&chip->wls_glink_nb);
 	if (rc)
@@ -1026,6 +1085,12 @@ static void wireless_psy_deinit(struct wireless_glink_dev *chip)
 
 	device_remove_file(chip->wls_dev_psy->dev.parent,
 				&dev_attr_wlc_st_changed);
+
+	device_remove_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_wlc_mpp_support);
+
+	device_remove_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_wlc_mpp_cali_stage);
 
 	qti_charger_unregister_notifier(&chip->wls_glink_nb);
 

@@ -53,6 +53,8 @@ struct wls_dump
     u16  wls_icl_therm_ma;
     u16  wls_mc_st;
     u16  vdd5v_st;
+    u8  mpp_support;
+    u8  mpp_cali_stage;
 };
 
 struct wireless_glink_dev {
