@@ -982,8 +982,11 @@ static int fs3001_haptic_get_vbat(struct fs3001 *fs3001)
 	
 	sprintf(str, "%s,enter\n", __func__);
 	fs3001_debug_message(fs3001, str);
-
+#ifdef VOL_COMPENSATION
+	//fs3001_haptic_stop(fs3001);
+#else
 	fs3001_haptic_stop(fs3001);
+#endif
 
 	fs3001_i2c_read(fs3001, FS3001_BATS_L, &reg_val);
 	fs3001_i2c_read(fs3001, FS3001_BATS_L, &reg_val);
@@ -1056,7 +1059,12 @@ static int fs3001_haptic_set_gain(struct fs3001 *fs3001, unsigned char gain)
 			break;
 		//manu vbat
 		case FS3001_HAPTIC_VBAT_COMP_PLAY_REG_BRK_DISABLE:
-		case FS3001_HAPTIC_VBAT_COMP_PLAY_REG_BRK_ENABLE:
+#ifdef VOL_COMPENSATION
+			fs3001_i2c_write(fs3001, FS3001_GAINCFG, gain);
+			sprintf(str, "%s, vbat mode = %d, vbat=%d, VBD=%d\n", __func__, fs3001->dts_info.fs3001_vbat_mode,fs3001->vbat, uc_VBD);
+			fs3001_debug_message(fs3001, str);
+			break;
+#else
 			fs3001_i2c_write(fs3001, FS3001_GAINCFG, gain);
 			
 			fs3001_haptic_get_vbat(fs3001);
@@ -1068,6 +1076,7 @@ static int fs3001_haptic_set_gain(struct fs3001 *fs3001, unsigned char gain)
 				fs3001_i2c_write_bits_1(fs3001, FS3001_VCOMPCFG,uc_VBD,5,0);
 			}
 			break;
+#endif
 		default:
 			pr_info("unsupported vbat mode (0x%x)\n", fs3001->dts_info.fs3001_vbat_mode);
 			fs3001_i2c_write(fs3001, FS3001_GAINCFG, gain);
