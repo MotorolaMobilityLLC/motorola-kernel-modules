@@ -202,6 +202,13 @@ void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 	} else {
 		uclamp_i[UCLAMP_MIN] = uclamp_none(UCLAMP_MIN);
 		uclamp_i[UCLAMP_MAX] = uclamp_none(UCLAMP_MAX);
+		if (trace_msched_uclamp_inheritance_result_enabled()) {
+			trace_msched_uclamp_inheritance_result(
+				p->pid, -1,
+				p_util, p_uclamp_min, p_uclamp_max,
+				-1, -1, -1,
+				uclamp_i[UCLAMP_MIN], uclamp_i[UCLAMP_MAX], type);
+		}
 	}
 	if(type == VENDOR_INHERITANCE_RTMUTEX)
 		__task_rq_unlock(rq, &rf);
@@ -233,13 +240,15 @@ void msched_uclamp_vh_dup_task_struct(void *unused, struct task_struct *task, st
 }
 
 void msched_uclamp_binder_set_priority_hook(struct task_struct *task) {
-	if (current == task)
-		return;
-
 	if (is_enabled(UX_ENABLE_MDPF)) {
 		struct moto_task_struct *mts = get_moto_task_struct(task);
 		if (IS_ERR_OR_NULL(mts))
 			return;
+
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_MDPF)),
+				"binder_set_priority: task(tgid-%d pid-%d util-%lu, sched_reset_on_fork-%d), parent(pid-%d)!\n",
+				task->tgid, task->pid, moto_task_util(task), task->sched_reset_on_fork, (task->real_parent)?task->real_parent->pid:-1);
+
 		if(!mts->uclamp_active) {
 			mts->uclamp_active = true;
 			/* inherit uclamp */
@@ -249,13 +258,15 @@ void msched_uclamp_binder_set_priority_hook(struct task_struct *task) {
 }
 
 void msched_uclamp_binder_restore_priority_hook(struct task_struct *task) {
-	if (current == task)
-		return;
-
 	if (is_enabled(UX_ENABLE_MDPF)) {
 		struct moto_task_struct *mts = get_moto_task_struct(task);
 		if (IS_ERR_OR_NULL(mts))
 			return;
+
+		cond_trace_printk(unlikely(is_debuggable(DEBUG_MDPF)),
+				"binder_restore_priority: task(tgid-%d pid-%d util-%lu, sched_reset_on_fork-%d), parent(pid-%d)!\n",
+				task->tgid, task->pid, moto_task_util(task), task->sched_reset_on_fork, (task->real_parent)?task->real_parent->pid:-1);
+
 		if (mts->uclamp_active) {
 			set_uclamp_inheritance(task, NULL, mts->uclamp, VENDOR_INHERITANCE_BINDER);
 			mts->uclamp_active = false;
