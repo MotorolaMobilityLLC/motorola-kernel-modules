@@ -20,6 +20,7 @@
 #define DEFAULT_I_CHG        4 /* millisamps */
 
 #define MMI_CHG_STATE_HB_DELAY_MS 5000
+#define EBUD_PRESENCE_ADC_THRESHOLD 30
 
 static struct mmi_earbud_chg_data *g_earbud_chg_pdata = NULL;
 
@@ -118,7 +119,7 @@ static void mmi_earbud_chg_hb_work(struct work_struct *work) {
     int should_work;
     enum charging_state new_state = pdata->chg_state;
     int lval = 0, lret = 0, rret = 0;
-    int rval = 0, irqval = 0;
+    int rval = 0, irqval = 0, lbud_avail = 0, rbud_avail = 0;
 
     if(pdata->user_opt) {
          schedule_delayed_work(&pdata->heartbeat_work,
@@ -128,14 +129,33 @@ static void mmi_earbud_chg_hb_work(struct work_struct *work) {
 
     mutex_lock(&pdata->lock);
     mmi_earbud_get_irq_gpio_state(pdata, &irqval);
+
+    lret = mmi_adc_average(pdata, LEFT, &lval);
+    rret = mmi_adc_average(pdata, RIGHT, &rval);
+    if(lret < 0 || rret < 0) {
+        dev_err(pdata->dev, "%s: adc data read raw lval %d  rval %d lret %d rret %d", __func__, lval, rval, lret, rret);
+    }
+    if(lval > EBUD_PRESENCE_ADC_THRESHOLD) lbud_avail = 1;
+    if(rval > EBUD_PRESENCE_ADC_THRESHOLD) rbud_avail = 1;
+
     if(irqval == EBUD_CASE_CLOSED) {
+        if(!lbud_avail && !rbud_avail) {
+            // Case closed and no earbud don't schedule the queue..
+            goto end;
+        }
         // Issue Bud closed command to both Left/Right Bud
-        lret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_CLOSE, LEFT);
-        rret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_CLOSE, RIGHT);
+        if(pdata->c_state != CLOSED) {
+            if(lbud_avail)lret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_CLOSE, LEFT);
+            if(rbud_avail)rret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_CLOSE, RIGHT);
+            pdata->c_state = CLOSED;
+        }
     } else if(irqval == EBUD_CASE_OPENED) {
         // Issue Bud Open Command to both Left/Right Bud
-        lret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_OPEN, LEFT);
-        rret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_OPEN, RIGHT);
+        if(pdata->c_state != OPEN) {
+            if(lbud_avail)lret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_OPEN, LEFT);
+            if(rbud_avail)rret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_OPEN, RIGHT);
+            pdata->c_state = OPEN;
+        }
     }
 
     switch (pdata->chg_state) {
@@ -144,25 +164,18 @@ static void mmi_earbud_chg_hb_work(struct work_struct *work) {
             break;
         case L_CHG:
             should_work = 1;
-            lret = mmi_adc_average(pdata, LEFT, &lval);
-            dev_dbg(pdata->dev, "%s: adc data read raw lval %d ret %d", __func__, lval, lret);
             if (lval < pdata->termination_current) {
                 new_state = NO_CHG;
             }
             break;
         case R_CHG:
             should_work = 1;
-            rret = mmi_adc_average(pdata, RIGHT, &rval);
-            dev_dbg(pdata->dev, "%s: adc data read raw rval %d rret %d", __func__, rval, rret);
             if (rval < pdata->termination_current) {
                 new_state = NO_CHG;
             }
             break;
         case LR_CHG:
             should_work = 1;
-            lret = mmi_adc_average(pdata, LEFT, &lval);
-            rret = mmi_adc_average(pdata, RIGHT, &rval);
-            dev_dbg(pdata->dev, "%s: adc data read raw lval %d  rval %d lret %d rret %d", __func__, lval, rval, lret, rret);
             if (lval < pdata->termination_current &&
                 rval > pdata->termination_current) {
                 new_state = R_CHG;
@@ -188,6 +201,7 @@ static void mmi_earbud_chg_hb_work(struct work_struct *work) {
         schedule_delayed_work(&pdata->heartbeat_work,
             msecs_to_jiffies(pdata->hb_interval));
     }
+end:
     mutex_unlock(&pdata->lock);
 }
 
@@ -633,7 +647,6 @@ static int mmi_earbud_chg_probe(struct platform_device *pdev) {
     }
     mutex_init(&pdata->lock);
     INIT_DELAYED_WORK(&pdata->heartbeat_work, mmi_earbud_chg_hb_work);
-
     open_state = gpiod_get_value(pdata->chg_irq_gpio);
     mmi_set_chg_state(pdata, open_state? LR_CHG : NO_CHG);
 

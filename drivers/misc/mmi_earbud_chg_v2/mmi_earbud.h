@@ -24,6 +24,11 @@ enum charging_state {
     LR_CHG,
 };
 
+enum case_state {
+    CLOSED,
+    OPEN,
+};
+
 enum chip_idx {
     LEFT,
     RIGHT,
@@ -54,6 +59,7 @@ struct mmi_earbud_chg_data {
 
     int termination_current;
     enum charging_state chg_state;
+    enum case_state c_state;
     int hb_interval; /* in milliseconds */
     int user_opt;
     struct mutex lock;
