@@ -425,13 +425,15 @@ bool resched_task(struct task_struct *p) {
 bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name) {
 	struct rq *rq = NULL;
 	struct rq_flags flags;
-	bool ret = true;
 
 	if (!owner || !waiter) {
 		/* UPDATED: Replaced cond_trace_printk with the new generic trace event */
 		trace_locking_debug_trace(NULL, __func__, "empty_owner_or_waiter", 0, 0);
 		return false;
 	}
+
+	if (rt_policy(owner->policy))
+		return false;
 
 	if (task_get_ux_depth(waiter) >= UX_DEPTH_MAX) {
 		/* UPDATED: Replaced cond_trace_printk */
@@ -453,22 +455,21 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 	//	waiter_wts->ux_type, owner_wts->ux_type);
 	task_rq_unlock(rq, owner, &flags);
 
-#if IS_ENABLED(CONFIG_MOTO_LOCKING_2)
-	ret = resched_task(owner);
-#endif
-
-	return ret;
+	return resched_task(owner);
 }
 
 bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 	struct moto_task_struct *owner_mts;
 	struct rq *rq = NULL;
 	struct rq_flags flags;
-	bool ret = true;
 
 	if (!owner) {
 		return false;
 	}
+
+	if (rt_policy(owner->policy))
+		return false;
+
 	owner_mts = get_moto_task_struct(owner);
 	if (IS_ERR_OR_NULL(owner_mts))
 		return false;
@@ -489,11 +490,7 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 
 	task_rq_unlock(rq, owner, &flags);
 
-#if IS_ENABLED(CONFIG_MOTO_LOCKING_2)
-	ret = resched_task(owner);
-#endif
-
-	return ret;
+	return resched_task(owner);
 }
 
 void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settime_jiffies, char* lock_name, void *pointer) {
