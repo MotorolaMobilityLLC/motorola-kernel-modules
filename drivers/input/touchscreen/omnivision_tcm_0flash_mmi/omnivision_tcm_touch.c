@@ -1410,15 +1410,21 @@ exit:
 
 int ovt_tap_sensor_remove(struct ovt_tcm_hcd *data)
 {
+    struct ovt_tap_sensor_platform_data *pdata;
+    struct input_dev *idev;
+
     if (!data || !data->sensor_pdata) {
 	    OVT_INFO("data null return");
 	    return 0;
     }
 
-    sensors_classdev_unregister(&data->sensor_pdata->ps_cdev);
-    input_unregister_device(data->sensor_pdata->input_sensor_dev);
-    devm_kfree(&data->sensor_pdata->input_sensor_dev->dev,
-               data->sensor_pdata);
+    pdata = data->sensor_pdata;
+    idev = pdata->input_sensor_dev;
+
+    sensors_classdev_unregister(&pdata->ps_cdev);
+    if (idev) {
+        input_unregister_device(idev);
+    }
     data->sensor_pdata = NULL;
     //data->wakeable = false;
     data->wakeup_gesture_enabled = false;
