@@ -161,6 +161,7 @@ struct pehv_algo_data {
 	int mmi_max_ibat;
 	int startup_convert_ratio;
 	int ibus_ocp_ratio;
+	int err_stop_cnt;
 };
 
 /* Setting from dtsi */

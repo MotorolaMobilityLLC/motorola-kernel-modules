@@ -1749,8 +1749,11 @@ static bool pehv_algo_safety_check(struct pehv_algo_info *info)
 	for (i = 0; i < ARRAY_SIZE(fn_descs); i++) {
 		if (!algo_running && fn_descs[i].check_during_running)
 			continue;
-		if (!fn_descs[i].fn(info, &sinfo))
+		if (!fn_descs[i].fn(info, &sinfo)) {
+			if (algo_running && fn_descs[i].check_during_running)
+				data->err_stop_cnt++;
 			goto err;
+		}
 	}
 	return true;
 err:
@@ -2231,6 +2234,12 @@ static int pehv_is_algo_ready(struct chg_alg_device *alg)
 		goto out;
 	}
 
+	if (data->err_stop_cnt >= 10) {
+		pr_err("pehv_is_algo_ready: err_stop_cnt(%d) exceed 10 times\n ", data->err_stop_cnt);
+		ret = ALG_NOT_READY;
+		goto out;
+	}
+
 	if (!data->ta_ready) {
 		ret = pehv_hal_is_hv_adapter_ready(alg);
 		if (ret == ALG_READY)
@@ -2280,6 +2289,7 @@ static int pehv_plugout_reset(struct chg_alg_device *alg)
 	};
 
 	mutex_lock(&data->lock);
+	data->err_stop_cnt = 0;
 	PEHV_DBG("++\n");
 	if (!data->inited)
 		goto out;
@@ -2604,6 +2614,7 @@ static int pehv_probe(struct platform_device *pdev)
 	atomic_set(&data->wakeup_thread, 0);
 	atomic_set(&data->stop_thread, 0);
 	data->state = PEHV_ALGO_STOP;
+	data->err_stop_cnt = 0;
 	alarm_init(&data->timer, ALARM_REALTIME, pehv_algo_timer_cb);
 	data->task = kthread_run(pehv_algo_threadfn, info, "pehv_algo_task");
 	if (IS_ERR(data->task)) {
