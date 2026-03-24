@@ -1,0 +1,23 @@
+#
+# AWINIC_SAR
+#
+
+config AWINIC_SAR
+	tristate "Awinic AWINIC_SAR driver"
+	depends on I2C
+	help
+	  Say Y here if you have Awinic AWINIC_SAR controller
+	  chip in your system.
+	  If unsure, say N.
+	  To compile this driver as a module, choose M here: the
+	  module will be called  AWINIC_SAR key.
+
+config USE_POWER_SUPPLY_ONLINE
+    bool "Enable aw965xx power supply online"
+    help
+      Say Y here if aw965xx power supply online
+      
+config CAPSENSE_HALL_CAL
+    bool "Enable capsensor cal to detect hall"
+    help
+      Say Y here if capsensor calbration
