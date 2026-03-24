@@ -50,6 +50,7 @@
 #define R_VBUS_CHARGER_2   39
 #define SPECIAL_TYPE_MAX_RETRY 1
 #define MAX_TRY  100
+#define I2C_ACESS_MAX_RETRY 2
 
 static struct proc_dir_entry *entry;
 static bool dump_reg_enable;
@@ -311,6 +312,7 @@ struct sc8989x_chip {
 	atomic_t reset_vindpm;
 	struct adapter_device *pd_adapter;
 	struct mutex dpdm_lock;
+	struct mutex i2c_access_lock;
 	/*for external qc protocol ic such as wt6670f*/
 	struct delayed_work detect_qc_dwork;
 	int pulse_cnt;
@@ -343,6 +345,7 @@ struct sc8989x_chip {
 	struct delayed_work hiz_cut_dwork;
 	bool hiz_cut_flag;
 	int qc3p_offset;
+	bool enable_i2c_retry;
 };
 
 static const u32 sc8989x_iboost[] = {
@@ -645,8 +648,20 @@ static int sc8989x_field_read(struct sc8989x_chip *sc,
 	enum sc8989x_fields field_id, int *val)
 {
 	int ret;
+	int retry = 0;
 
-	ret = regmap_field_read(sc->rmap_fields[field_id], val);
+	if (sc->enable_i2c_retry && field_id < CX_OPT_HICCUP) {
+		mutex_lock(&sc->i2c_access_lock);
+		do {
+			ret = regmap_field_read(sc->rmap_fields[field_id], val);
+			retry++;
+			if (ret < 0)
+				udelay(10);
+		} while (ret < 0 && retry < I2C_ACESS_MAX_RETRY);
+		mutex_unlock(&sc->i2c_access_lock);
+	} else
+		ret = regmap_field_read(sc->rmap_fields[field_id], val);
+
 	if (ret < 0) {
 		dev_err(sc->dev, "sc8989x read field %d fail: %d\n", field_id, ret);
 	}
@@ -658,6 +673,7 @@ static int sc8989x_field_write(struct sc8989x_chip *sc,
 	enum sc8989x_fields field_id, int val)
 {
 	int ret;
+	int retry = 0;
 
 	if (field_id == DM_DRIVE || field_id == DP_DRIVE ||
 		field_id == CX_DM_DRIVE || field_id == CX_DP_DRIVE) {
@@ -665,7 +681,18 @@ static int sc8989x_field_write(struct sc8989x_chip *sc,
 			return -1;
 	}
 
-	ret = regmap_field_write(sc->rmap_fields[field_id], val);
+	if (sc->enable_i2c_retry && field_id < CX_OPT_HICCUP) {
+		mutex_lock(&sc->i2c_access_lock);
+		do {
+			ret = regmap_field_write(sc->rmap_fields[field_id], val);
+			retry++;
+			if (ret < 0)
+				udelay(10);
+		} while (ret < 0 && retry < I2C_ACESS_MAX_RETRY);
+		mutex_unlock(&sc->i2c_access_lock);
+	} else
+		ret = regmap_field_write(sc->rmap_fields[field_id], val);
+
 	if (ret < 0) {
 		dev_err(sc->dev, "sc8989x read field %d fail: %d\n", field_id, ret);
 	}
@@ -3612,6 +3639,7 @@ static int sc8989x_parse_dt(struct sc8989x_chip *sc)
 
 	sc->mmi_hvdcp_support = of_property_read_bool(np, "mmi,hvdcp-support");
 	sc->only_buck_qc_support = of_property_read_bool(np, "mmi,only_buck_qc_support");
+	sc->enable_i2c_retry = of_property_read_bool(np, "mmi,enable_i2c_retry");
 
 	sc->irq_gpio = of_get_named_gpio(np, "sc,intr-gpio", 0);
 	if (sc->irq_gpio < 0)
@@ -4255,6 +4283,7 @@ static int sc8989x_charger_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, sc);
 	sc8989x_create_device_node(&(client->dev));
 	mutex_init(&sc->dpdm_lock);
+	mutex_init(&sc->i2c_access_lock);
 
 	sc->qc_dev = get_adapter_by_name("qc_protocol_ic");
 	if (sc->qc_dev) {
@@ -4372,6 +4401,7 @@ static int sc8989x_charger_remove(struct i2c_client *client)
 		cancel_delayed_work_sync(&sc->mmi_hvdcp_detect_dwork);
 		kthread_stop(sc->mmi_hvdcp_authen_task);
 		mutex_destroy(&sc->dpdm_lock);
+		mutex_destroy(&sc->i2c_access_lock);
 		sc8989x_destory_device_node(sc->dev);
 		charger_device_unregister(sc->chg_dev);
 		power_supply_put(sc->psy);
