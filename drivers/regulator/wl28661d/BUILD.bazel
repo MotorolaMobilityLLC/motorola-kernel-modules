@@ -1,0 +1,9 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+moto_ddk_module(
+    name = "wl28661d",
+    srcs = [
+        "wl28661d-regulator.c",
+        "wl28661d-regulator.h",
+    ],
+)
