@@ -1634,7 +1634,7 @@ static int cps_wls_rx_irq_handler(int int_flag)
   			    cps_wls_set_status(WLC_CONNECTED);
   		    }
 			if(chip->limit_wls_power_support) {
-				if(chip->limit_wls_power_soc > cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY)) {
+				if(chip->limit_wls_power_soc >= cps_get_bat_info(POWER_SUPPLY_PROP_CAPACITY)) {
 					chip->limit_wls_power_enabled = true;
 					cps_wls_log(CPS_LOG_DEBG, " CPS_WLS IRQ: soc low, may need limit icl");
 				} else {
