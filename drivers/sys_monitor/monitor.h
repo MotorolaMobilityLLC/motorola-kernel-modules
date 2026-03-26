@@ -45,4 +45,7 @@ void monitor_misc_exit(struct kobject *parent_kobj);
 
 int wakelock_profile_init(struct kobject *parent_kobj);
 void wakelock_profile_exit(struct kobject *parent_kobj);
+
+int monitor_net_stats_init(struct kobject *parent_kobj);
+void monitor_net_stats_exit(struct kobject *parent_kobj);
 #endif //__MONITOR_H__

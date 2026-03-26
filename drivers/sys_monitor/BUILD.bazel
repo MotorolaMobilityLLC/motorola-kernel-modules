@@ -8,6 +8,7 @@ moto_ddk_module(
         "sleep.c",
         "misc.c",
         "wakelock_profiler.c",
+        "uid_net_iface_stats.c",
     ],
     deps_ext = [
         "//soc-repo:drivers/soc/qcom/smem",

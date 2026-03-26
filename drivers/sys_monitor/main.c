@@ -30,7 +30,6 @@
 #include "monitor.h"
 
 #define MAX_TOP_RECORD 20
-
 #define MAX_SYS_RECORD 100
 #define MAX_APP_RECORD 100
 #define MAX_OTHERS_RECORD 100
@@ -398,6 +397,7 @@ static int __init sys_monitor_init(void)
 	monitor_sleep_init();
 	monitor_misc_init(sys_monitor_obj);
 	wakelock_profile_init(sys_monitor_obj);
+	monitor_net_stats_init(sys_monitor_obj);
 
 	return 0;
 
@@ -417,6 +417,7 @@ void __exit sys_monitor_exit(void)
 	sysfs_remove_group(sys_monitor_obj, &sys_monitor_attr_group);
 	monitor_misc_exit(sys_monitor_obj);
 	wakelock_profile_exit(sys_monitor_obj);
+	monitor_net_stats_exit(sys_monitor_obj);
 	monitor_sleep_exit();
 
 	kobject_del(sys_monitor_obj);
