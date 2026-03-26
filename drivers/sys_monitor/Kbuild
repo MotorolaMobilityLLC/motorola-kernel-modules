@@ -18,5 +18,5 @@ EXTRA_CFLAGS += -I$(ANDROID_BUILD_TOP)/kernel_device_modules-$(VERSION).$(PATCHL
 
 obj-m += sys_monitor.o
 
-sys_monitor-y := main.o sleep.o misc.o wakelock_profiler.o
+sys_monitor-y := main.o sleep.o misc.o wakelock_profiler.o uid_net_iface_stats.o
 
