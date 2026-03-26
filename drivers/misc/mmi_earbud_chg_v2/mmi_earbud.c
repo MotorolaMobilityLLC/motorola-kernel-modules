@@ -19,7 +19,7 @@
 #define DEFAULT_HB_INTERVAL  10000 /* milliseconds */
 #define DEFAULT_I_CHG        4 /* millisamps */
 
-#define MMI_CHG_STATE_HB_DELAY_MS 5000
+#define MMI_CHG_STATE_HB_DELAY_MS 0
 #define EBUD_PRESENCE_ADC_THRESHOLD 30
 
 static struct mmi_earbud_chg_data *g_earbud_chg_pdata = NULL;
@@ -120,7 +120,6 @@ static void mmi_earbud_chg_hb_work(struct work_struct *work) {
     enum charging_state new_state = pdata->chg_state;
     int lval = 0, lret = 0, rret = 0;
     int rval = 0, irqval = 0, lbud_avail = 0, rbud_avail = 0;
-
     if(pdata->user_opt) {
          schedule_delayed_work(&pdata->heartbeat_work,
             msecs_to_jiffies(pdata->hb_interval));
@@ -141,21 +140,23 @@ static void mmi_earbud_chg_hb_work(struct work_struct *work) {
     if(irqval == EBUD_CASE_CLOSED) {
         if(!lbud_avail && !rbud_avail) {
             // Case closed and no earbud don't schedule the queue..
+            pr_info("%s: No Earbud present\n", __func__);
+            pdata->c_state = CLOSED;
             goto end;
         }
         // Issue Bud closed command to both Left/Right Bud
         if(pdata->c_state != CLOSED) {
             if(lbud_avail)lret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_CLOSE, LEFT);
             if(rbud_avail)rret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_CLOSE, RIGHT);
-            pdata->c_state = CLOSED;
-        }
+        } else  pr_info("%s: Already in closed state\n", __func__);
+        pdata->c_state = CLOSED;
     } else if(irqval == EBUD_CASE_OPENED) {
         // Issue Bud Open Command to both Left/Right Bud
         if(pdata->c_state != OPEN) {
             if(lbud_avail)lret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_OPEN, LEFT);
             if(rbud_avail)rret = mmi_uart_tx(pdata, EBUD_CMD_INQUIRY_LID_OPEN, RIGHT);
-            pdata->c_state = OPEN;
-        }
+        } else pr_info("%s: Already in opened state\n", __func__);
+        pdata->c_state = OPEN;
     }
 
     switch (pdata->chg_state) {
@@ -534,10 +535,10 @@ static int mmi_earbud_chg_init_gpio(struct mmi_earbud_chg_data *pdata) {
 
 static irqreturn_t mmi_earbud_chg_irq_handler(int irq, void *data) {
     struct mmi_earbud_chg_data *pdata = data;
-    int enable;
+    int lid_state;
 
-    enable = gpiod_get_value(pdata->chg_irq_gpio);
-    mmi_set_chg_state(pdata, enable? LR_CHG : NO_CHG);
+    lid_state = gpiod_get_value(pdata->chg_irq_gpio);
+    mmi_set_chg_state(pdata, (lid_state==EBUD_CASE_CLOSED)? LR_CHG : NO_CHG);
 
     return IRQ_HANDLED;
 }
@@ -583,7 +584,7 @@ static int mmi_earbud_chg_init_irq(struct mmi_earbud_chg_data *pdata) {
 static int mmi_earbud_chg_probe(struct platform_device *pdev) {
     int rc;
     int hb_interval = 0;
-    int ichg = 0, open_state = 0;
+    int ichg = 0, lid_state = 0;
     struct device *dev = &pdev->dev;
     struct mmi_earbud_chg_data *pdata;
 
@@ -647,8 +648,8 @@ static int mmi_earbud_chg_probe(struct platform_device *pdev) {
     }
     mutex_init(&pdata->lock);
     INIT_DELAYED_WORK(&pdata->heartbeat_work, mmi_earbud_chg_hb_work);
-    open_state = gpiod_get_value(pdata->chg_irq_gpio);
-    mmi_set_chg_state(pdata, open_state? LR_CHG : NO_CHG);
+    lid_state = gpiod_get_value(pdata->chg_irq_gpio);
+    mmi_set_chg_state(pdata, (lid_state==EBUD_CASE_CLOSED)? LR_CHG : NO_CHG);
 
     pr_info("%s : finished", __func__);
 
@@ -663,6 +664,20 @@ static void mmi_earbud_chg_remove(struct platform_device *pdev) {
     g_earbud_chg_pdata = NULL;
 }
 
+int mmi_earbud_suspend(struct platform_device *pdev, pm_message_t state) {
+    struct mmi_earbud_chg_data *pdata = platform_get_drvdata(pdev);
+    pr_info("%s device suspend\n", __func__);
+    enable_irq_wake(pdata->chg_irq);
+    return 0;
+}
+
+int mmi_earbud_resume(struct platform_device *pdev) {
+    struct mmi_earbud_chg_data *pdata = platform_get_drvdata(pdev);
+    pr_info("%s device resume\n", __func__);
+    disable_irq_wake(pdata->chg_irq);
+    return 0;
+}
+
 static const struct of_device_id of_mmi_earbud_chg_match[] = {
     { .compatible = "mmi,earbud_chg", },
     { },
@@ -672,6 +687,8 @@ MODULE_DEVICE_TABLE(of, of_mmi_earbud_chg_match);
 static struct platform_driver mmi_earbud_chg_driver = {
     .probe = mmi_earbud_chg_probe,
     .remove = mmi_earbud_chg_remove,
+    .suspend = mmi_earbud_suspend,
+    .resume = mmi_earbud_resume,
     .driver = {
         .name = DRIVER_NAME,
         .of_match_table = of_mmi_earbud_chg_match,
