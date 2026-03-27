@@ -370,6 +370,26 @@ TRACE_EVENT(sched_percpu_rwsem_starttime,
                   __entry->mvp_prio)
 );
 
+
+TRACE_EVENT(msched_binder_trans,
+	TP_PROTO(struct task_struct *p),
+
+	TP_ARGS(p),
+
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__array(char, comm, TASK_COMM_LEN)
+	),
+
+	TP_fast_assign(
+		__entry->pid = p->pid;
+		memcpy(__entry->comm, p->comm, TASK_COMM_LEN);
+	),
+
+	TP_printk("pid=%d comm=%s",
+		__entry->pid, __entry->comm)
+);
+
 TRACE_EVENT(binder_inherit_ux_type,
 
 	TP_PROTO(struct task_struct *task, int ux_type, bool set),
