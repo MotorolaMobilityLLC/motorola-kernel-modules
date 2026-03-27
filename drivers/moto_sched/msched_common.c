@@ -40,6 +40,8 @@
 #endif
 #include <linux/percpu-defs.h>
 #include <linux/preempt.h>
+#include <uapi/linux/android/binder.h>
+#include "drivers/android/binder_internal.h"
 
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
@@ -303,7 +305,9 @@ unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
 EXPORT_SYMBOL(task_get_mvp_limit);
 
 void binder_inherit_ux_type(struct task_struct *task) {
-	if (is_enabled(UX_ENABLE_BINDER) && current_is_important_ux()) {
+	if (is_enabled(UX_ENABLE_BINDER)
+			&& !task_has_ux_type(task, UX_TYPE_INHERIT_BINDER)
+			&& current_is_important_ux()) {
 		task_add_ux_type(task, UX_TYPE_INHERIT_BINDER);
 		resched_task(task);
 		trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
@@ -315,7 +319,8 @@ void binder_inherit_ux_type(struct task_struct *task) {
 EXPORT_SYMBOL(binder_inherit_ux_type);
 
 void binder_clear_inherited_ux_type(struct task_struct *task) {
-	if (is_enabled(UX_ENABLE_BINDER)) {
+	if (is_enabled(UX_ENABLE_BINDER)
+			&& task_has_ux_type(task, UX_TYPE_INHERIT_BINDER)) {
 		task_clr_ux_type(task, UX_TYPE_INHERIT_BINDER);
 		trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
 	}
@@ -675,6 +680,19 @@ static void android_vh_percpu_rwsem_up_write_handler(
 	trace_percpu_rwsem_up_write(sem);
 }
 
+static void android_vh_binder_trans(void *unused, struct binder_proc *target_proc,
+		struct binder_proc *proc, struct binder_thread *thread,
+		struct binder_transaction_data *tr)
+{
+	struct task_struct *receiver = (target_proc != NULL) ? target_proc->tsk : NULL;
+
+	if (receiver) {
+		if (trace_msched_binder_trans_enabled()) {
+			trace_msched_binder_trans(receiver);
+		}
+		binder_inherit_ux_type(receiver);
+	}
+}
 
 void register_vendor_comm_hooks(void)
 {
@@ -695,7 +713,8 @@ void register_vendor_comm_hooks(void)
 		android_rvh_percpu_rwsem_wait_complete_handler, NULL);
 	register_trace_android_vh_percpu_rwsem_up_write(
 		android_vh_percpu_rwsem_up_write_handler, NULL);
-
+	register_trace_android_vh_binder_trans(
+		android_vh_binder_trans, NULL);
 #ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_register_vendor_comm_hooks();
 #endif
