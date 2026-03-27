@@ -46,7 +46,6 @@
 
 #define SC8989X_DRV_VERSION		"1.0.0_G"
 #define SC8989X_CHIP_ID 			1
-#define CX25890HQ_CHIP_ID           3
 #define R_VBUS_CHARGER_1   330
 #define R_VBUS_CHARGER_2   39
 #define SPECIAL_TYPE_MAX_RETRY 1
@@ -2125,8 +2124,6 @@ static int sc8989x_get_chip_id(struct charger_device *chg_dev, int *id)
 	struct sc8989x_chip *sc = dev_get_drvdata(&chg_dev->dev);
 
 	*id = SC8989X_CHIP_ID;
-	if (sc->is_cx25890HQ)
-		*id = CX25890HQ_CHIP_ID;
 	dev_info(sc->dev, "%s id = %d \n", __func__, *id);
 	return ret;
 }
