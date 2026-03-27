@@ -1,0 +1,21 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+load("//soc-repo:moto_product.bzl", "build_target", "build_variant")
+
+moto_ddk_module(
+    name = "moto_uimem",
+    srcs = ([
+        "uimem.c",
+        "uimem.h",
+        "uimem_trace.h",
+        "uimem_trace.c",
+        "//motorola/kernel/modules/drivers/moto_sched:msched_common.h",
+    ]),
+
+    includes = [
+                ".",
+            ],
+
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/moto_sched:moto_sched",
+    ],
+)

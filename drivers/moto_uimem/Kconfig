@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0
+config MOTO_UIMEM
+	tristate "UI memory page pool"
+	help
+	  Creates page pool for UI thread of apps.
