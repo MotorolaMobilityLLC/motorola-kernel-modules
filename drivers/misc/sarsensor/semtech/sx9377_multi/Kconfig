@@ -1,0 +1,23 @@
+#
+# semtech sar driver configuration
+#
+
+config CAPSENSE_USB_CAL
+    bool "Enable sar sensor recalibration when the USB connection state changes"
+    help
+      Say Y here if sx9377 usb cali enable
+
+config USE_POWER_SUPPLY_ONLINE
+    bool "Enable sx9377 power supply online"
+    help
+      Say Y here if sx9377 power supply online
+
+config CAPSENSE_HALL_CAL
+    bool "Enable capsensor cal to detect hall"
+    help
+      Say Y here if capsensor calbration
+
+config CAPSENSE_FLIP_CAL
+    bool "Enable capsensor cal on flip change"
+    help
+      Say Y here if sx9377 flip cali enable

@@ -1,0 +1,14 @@
+load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+
+exports_files(["Kconfig"])
+
+moto_ddk_module(
+    name = "sx9377_multi",
+    srcs = [
+        "sx9377_multi.c",
+    ],
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/sensors:sensors_class",
+        "//motorola/kernel/modules/drivers/misc/hall:hall_phone_case",
+    ],
+)
