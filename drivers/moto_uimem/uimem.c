@@ -159,8 +159,8 @@ static int uimem_page_pool_add(int index, unsigned mt, struct page * page)
 
     spin_lock_irqsave(&pool->lock, flags);
     list_add_tail(&page->lru, &pool->page_list[mt]);
-    //mod_node_page_state(page_pgdat(page), NR_KERNEL_MISC_RECLAIMABLE,
-    //        1 << pool->order);
+    mod_node_page_state(page_pgdat(page), NR_KERNEL_MISC_RECLAIMABLE,
+            1 << pool->order);
     pool->buoy[mt]++;
     sysctl_uimem_stats[index * POOL_NR_MIGRATE_TYPES +  mt] = pool->buoy[mt];
     trace_pools_status("%s: index %d, mt %d, pages %d",
@@ -185,8 +185,8 @@ static struct page *uimem_page_pool_remove(int index, unsigned mt)
 
     if (page) {
         list_del(&page->lru);
-        //mod_node_page_state(page_pgdat(page), NR_KERNEL_MISC_RECLAIMABLE,
-        //    -(1 << pool->order));
+        mod_node_page_state(page_pgdat(page), NR_KERNEL_MISC_RECLAIMABLE,
+            -(1 << pool->order));
         pool->buoy[mt]--;
         sysctl_uimem_stats[index * POOL_NR_MIGRATE_TYPES + mt] = pool->buoy[mt];
     }
@@ -208,6 +208,7 @@ static int uimem_fill_pools(void)
 
     //FIXME: Should be check system water mark, wakeup kswapd.
     // Update wm_high by wm
+retry:
     check_system_watermark();
 
     for (i = 0; i < pools_size; i++) {
@@ -221,7 +222,7 @@ static int uimem_fill_pools(void)
                     trace_pools_status("%s: index %d, mt %d",
                         __func__, i, j);
                     usleep_range(1000, 2000);
-                    continue;
+                    goto retry;
                 }
                 uimem_page_pool_add(i, j, page);
                 count++;
@@ -504,7 +505,7 @@ static void si_meminfo_adjust_hook(void* data, unsigned long *total, unsigned lo
         }
         spin_unlock_irqrestore(&pool->lock, flags);
     }
-    *free += size;
+    //*free += size;
 }
 
 static int uimem_register_vendor_hook(void)
