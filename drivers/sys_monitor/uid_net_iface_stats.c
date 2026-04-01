@@ -96,13 +96,14 @@ static void clear_stats_table(void)
 {
 	struct uid_iface_val *entry;
 	struct hlist_node *tmp;
+	unsigned long flags;
 	int bkt;
-	spin_lock(&stats_lock);
+	spin_lock_irqsave(&stats_lock, flags);
 	hash_for_each_safe(stats_table, bkt, tmp, entry, hnode) {
 		hash_del(&entry->hnode);
 		kfree(entry);
 	}
-	spin_unlock(&stats_lock);
+	spin_unlock_irqrestore(&stats_lock, flags);
 }
 
 static unsigned int hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
@@ -168,18 +169,35 @@ ssize_t uid_iface_stats_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 ssize_t uid_iface_stats_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	struct uid_iface_val *entry;
+	struct uid_iface_val *snapshot, *entry;
+	unsigned long flags;
+	int count = 0;
 	int bkt, len = 0;
-	spin_lock(&stats_lock);
-	len += scnprintf(buf + len, PAGE_SIZE - len, "uid ifname rx_bytes rx_packets tx_bytes tx_packets\n");
+	int max_entries = 512;
+
+	snapshot = kmalloc_array(max_entries, sizeof(struct uid_iface_val), GFP_KERNEL);
+	if (!snapshot) return -ENOMEM;
+
+	spin_lock_irqsave(&stats_lock, flags);
+
 	hash_for_each(stats_table, bkt, entry, hnode) {
+		if (count >= max_entries) break;
+		snapshot[count] = *entry;
+		count++;
+	}
+
+	spin_unlock_irqrestore(&stats_lock, flags);
+
+	len += scnprintf(buf + len, PAGE_SIZE - len, "uid ifname rx_bytes rx_packets tx_bytes tx_packets\n");
+	for(int i = 0; i < count; i++) {
 		len += scnprintf(buf + len, PAGE_SIZE - len, "%u %s %llu %llu %llu %llu\n",
-			from_kuid(&init_user_ns, entry->uid), entry->ifname,
-			entry->rx_bytes, entry->rx_packets, entry->tx_bytes, entry->tx_packets);
+			from_kuid(&init_user_ns, snapshot[i].uid), snapshot[i].ifname,
+			snapshot[i].rx_bytes, snapshot[i].rx_packets, snapshot[i].tx_bytes, snapshot[i].tx_packets);
 		if (PAGE_SIZE - len < 128)
 			break;
 	}
-	spin_unlock(&stats_lock);
+
+	kfree(snapshot);
 	return len;
 }
 
