@@ -209,15 +209,19 @@ struct ovt_tcm_board_data {
 		} \
 	} while (0)
 
+#ifndef MAX
 #define MAX(a, b) \
 	({__typeof__(a) _a = (a); \
 	__typeof__(b) _b = (b); \
 	_a > _b ? _a : _b; })
+#endif
 
+#ifndef MIN
 #define MIN(a, b) \
 	({__typeof__(a) _a = (a); \
 	__typeof__(b) _b = (b); \
 	_a < _b ? _a : _b; })
+#endif
 
 #define STR(x) #x
 

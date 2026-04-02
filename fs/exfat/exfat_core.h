@@ -123,8 +123,12 @@
 #define FALSE			0
 #define TRUE			1
 
+#ifndef MIN
 #define MIN(a, b)		(((a) < (b)) ? (a) : (b))
+#endif
+#ifndef MAX
 #define MAX(a, b)		(((a) > (b)) ? (a) : (b))
+#endif
 
 #define START_SECTOR(x) \
 	((((sector_t)((x) - 2)) << p_fs->sectors_per_clu_bits) + p_fs->data_start_sector)
