@@ -1211,7 +1211,7 @@ DEVICE_ATTR_SHOW(raw_data)
         offset = (u16)(uData & 0x3FFF);
         dcap = off_to_dcap(offset);
 
-        count += snprintf(buf+count, PAGE_SIZE,
+        count += snprintf(buf+count, PAGE_SIZE - count,
         "PH= %d Useful= %d Average= %d DIFF= %d Offset= %d DCAP= %d\n",
             phid, useful, average, diff, offset, dcap);
     }
@@ -1317,7 +1317,7 @@ DEVICE_ATTR_STORE(reg_read)
 //=================================================================================================
 // calibrate
 //=================================================================================================
-DEVICE_ATTR_SHOW(calibrate)
+DEVICE_ATTR_SHOW(fac_comp)
 {
     int i, count=0, ph, shift;
     u32 dcap, reg_val = 0;
@@ -1355,7 +1355,7 @@ DEVICE_ATTR_SHOW(calibrate)
     return count;
 }
 //=================================================================================================
-DEVICE_ATTR_STORE(calibrate)
+DEVICE_ATTR_STORE(fac_cal)
 {
     Self self = dev_get_drvdata(dev);
     LOG_INF("Manual calibrating");
@@ -1514,7 +1514,7 @@ DEVICE_ATTR_SHOW(registers)
 //=================================================================================================
 // int_state
 //=================================================================================================
-DEVICE_ATTR_SHOW(int_state)
+DEVICE_ATTR_SHOW(fac_irq_state)
 {
     Self self = dev_get_drvdata(dev);
     LOG_DBG("Reading INT line state\n");
@@ -1790,23 +1790,146 @@ DEVICE_ATTR_STORE(manual_calibrate)
 }
 
 //=================================================================================================
-// id
+// fac_raw
 //=================================================================================================
-DEVICE_ATTR_SHOW(id)
+DEVICE_ATTR_SHOW(fac_raw)
+{
+    u16 reg_addr;
+    u32 uData;
+    int phid=0, count=0, ret=0;
+    s32 diff;
+    Self self = dev_get_drvdata(dev);
+    reg_addr = REG_DIF_PH0;
+    u8 data[NUM_PHASES*4] = {0};
+
+    for(phid =0; phid<8; phid++)
+    {
+        ret = smtc_i2c_read(self, reg_addr+phid*4, &uData);
+        if (ret < 0){
+            LOG_ERR("Failed to read reg=0x%X, ret=%d", reg_addr+phid*4, ret);
+            return -EIO;
+        }
+        LOG_INF("sx9377 phid=%d, reg_addr:0x%x", phid, reg_addr+phid*4);
+        diff = (s32)uData>>10;
+        data[4 * phid] = (u8)(diff >> 24);
+        data[1 + 4 * phid] = (u8)(diff >> 16);
+        data[2 + 4 * phid] = (u8)(diff >> 8);
+        data[3 + 4 * phid] = (u8)(diff);
+        LOG_INF("sx9377 diff=%x, data[%d]=%x, data[%d]=%x, data[%d]=%x, data[%d]=%x",
+                diff,
+                (4*phid), data[4 * phid],
+                (1+4*phid), data[1 + 4 * phid],
+                (2+4*phid), data[2 + 4 * phid],
+                (3+4*phid), data[3 + 4 * phid]);
+        count += snprintf(buf+count, PAGE_SIZE - count, "DIFF= %d\n", diff);
+    }
+
+    return count;
+}
+
+//=================================================================================================
+// fac_enable
+//=================================================================================================
+DEVICE_ATTR_SHOW(fac_enable)
 {
     Self self = dev_get_drvdata(dev);
-    return sprintf(buf, "%d\n", self->id);
+    int ret = 0;
+    u32 phen;
+    bool is_enabled = false;
+
+    ret = smtc_i2c_read(self, REG_PHEN, &phen);
+    if (ret < 0){
+        LOG_ERR("Failed to read phase enable reg=0x%X, ret=%d", REG_PHEN, ret);
+        return -EIO;
+    }
+    is_enabled = (phen & 0xFF) ? true : false;
+    return snprintf(buf, PAGE_SIZE, "%d\n", is_enabled);
+
+}
+
+//=================================================================================================
+// fac_enable
+//=================================================================================================
+DEVICE_ATTR_STORE(fac_enable)
+{
+    Self self = dev_get_drvdata(dev);
+    int ret = 0;
+    int phid = 0;
+    u32 phen;
+
+    ret = smtc_i2c_read(self, REG_PHEN, &phen);
+    if (ret < 0){
+        LOG_ERR("Failed to read phase enable reg=0x%X, ret=%d", REG_PHEN, ret);
+        return -EIO;
+    }
+
+    if ( !strncmp(buf, "1", 1)) {
+        LOG_INF("enable cap sensor\n");
+        phen |= self->main_phases;
+        smtc_enable_phases(self, phen);
+    } else if ( !strncmp(buf, "0", 1)) {
+        LOG_INF("disnable cap sensor\n");
+        phen &= ~(self->main_phases);
+        smtc_enable_phases(self, phen);
+        for(phid = 0; phid < NUM_PHASES; phid++) {
+            phase_p phase = &self->phases[phid];
+            if (phase->usage == MAIN && phase->input != NULL) {
+                input_report_abs(phase->input, ABS_DISTANCE, -1);
+                input_sync(phase->input);
+            }
+        }
+    } else {
+        LOG_ERR("Invalid command=%s", buf);
+        return -EINVAL;
+    }
+    return count;
+}
+
+//=================================================================================================
+// fac_detect
+//=================================================================================================
+DEVICE_ATTR_SHOW(fac_detect)
+{
+    Self self = dev_get_drvdata(dev);
+    u32 chip_id = 0;
+    int ret;
+    ret = smtc_i2c_read(self, REG_WHOAMI, &chip_id);
+    if(ret < 0){
+        LOG_ERR("Failed to read chip id. ret= %d.", ret);
+        return ret;
+    }
+    LOG_INF("Reading device id chip_id=%X", chip_id);
+    if (((chip_id >> 12) & 0xFFF) == 0x937) {
+        LOG_INF("Detect ic sx937x\n");
+        return snprintf(buf, PAGE_SIZE, "%d\n", 1);
+    }else{
+        LOG_INF("Not found ic sx937x\n");
+        return snprintf(buf, PAGE_SIZE, "%d\n", 0);
+    }
+}
+
+//=================================================================================================
+// chip_id
+//=================================================================================================
+DEVICE_ATTR_SHOW(chip_id)
+{
+    Self self = dev_get_drvdata(dev);
+    return snprintf(buf, PAGE_SIZE, "%X\n", self->chip_id);
 }
 
 //=================================================================================================
 static DEVICE_ATTR_RO(raw_data);
+static DEVICE_ATTR_RO(fac_raw);
 static DEVICE_ATTR_RO(registers);
-static DEVICE_ATTR_RO(int_state);
-static DEVICE_ATTR_RO(id);
+static DEVICE_ATTR_RO(fac_irq_state);
+static DEVICE_ATTR_RW(fac_enable);
+static DEVICE_ATTR_RO(fac_detect);
+static DEVICE_ATTR_RO(fac_comp);
+static DEVICE_ATTR_RO(chip_id);
 static DEVICE_ATTR_RW(reg_read);
 static DEVICE_ATTR_RW(reg_write);
 static DEVICE_ATTR_RW(tcmd_reg);
-static DEVICE_ATTR_RW(calibrate);
+static DEVICE_ATTR_WO(fac_cal);
 static DEVICE_ATTR_RW(debug);
 static DEVICE_ATTR_WO(reinitialize);
 
@@ -1823,13 +1946,17 @@ static DEVICE_ATTR_RW(manual_calibrate);
 
 static struct attribute *capsense_dev_attrs[] = {
     &dev_attr_raw_data.attr,
+    &dev_attr_fac_irq_state.attr,
+    &dev_attr_fac_comp.attr,
+    &dev_attr_fac_detect.attr,
+    &dev_attr_chip_id.attr,
+    &dev_attr_fac_enable.attr,
+    &dev_attr_fac_raw.attr,
     &dev_attr_registers.attr,
-    &dev_attr_int_state.attr,
-    &dev_attr_id.attr,
     &dev_attr_reg_read.attr,
     &dev_attr_reg_write.attr,
     &dev_attr_tcmd_reg.attr,
-    &dev_attr_calibrate.attr,
+    &dev_attr_fac_cal.attr,
     &dev_attr_debug.attr,
     &dev_attr_reinitialize.attr,
 #ifdef CONFIG_CAPSENSE_HEADSET_STATE
@@ -2082,8 +2209,12 @@ static int main_map_ref_dts(Self self, struct device_node *of_node)
     }
 
     num_phases = of_property_count_u32_elems(of_node, "phase-map");
+    if (num_phases <= 0){
+        LOG_ERR("Invalid dts item num: %d", num_phases);
+        return -EINVAL;
+    }
     if (num_phases % 2 != 0){
-        LOG_ERR("Invalid dts item: phase-map");
+        LOG_ERR("Invalid dts item num: phase-map");
         return -EINVAL;
     }
     LOG_DBG("num_phases=%d", num_phases);
@@ -3154,6 +3285,7 @@ static int __init sx9377_I2C_init(void)
     ret = i2c_add_driver(&sx9377_driver);
     if (ret < 0) {
         class_unregister(&capsense_class);
+        pr_err("sx9377: Failed to add i2c driver\n");
     }
     return ret;
 }
