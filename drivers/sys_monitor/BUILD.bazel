@@ -1,14 +1,19 @@
-load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
+load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
 
-moto_ddk_module(
-    name = "sys_monitor",
-    srcs = [
-        "monitor.h",
-        "main.c",
-        "sleep.c",
+package(
+    default_visibility = [
+        "//visibility:public",
     ],
-    deps_ext = [
-        "//soc-repo:drivers/soc/qcom/smem",
-        "//soc-repo:net/qrtr/qrtr"
+)
+
+define_mgk_ko(
+    name = "sys_monitor",
+    srcs = glob([
+        "*.c",
+        "*.h",
+        "Kbuild",
+        "Makefile",
+    ]) + [
+        "//motorola/kernel/modules:public_headers",
     ],
 )
