@@ -1977,6 +1977,8 @@ ATTRIBUTE_GROUPS(capsense_dev);
 struct class capsense_class = {
     .name= "capsense",
 };
+static struct class *g_capsense_class_ptr = NULL;
+static int g_capsense_refcount = 0;
 
 static void process_touch_status(Self self)
 {
@@ -2897,12 +2899,26 @@ static int create_sys_nodes(Self self)
     int ret = 0, phid;
     struct input_dev *input = NULL;
 
-    self->class_dev = device_create_with_groups(&capsense_class, NULL,
+    if (!g_capsense_class_ptr) {
+        ret = class_register(&capsense_class);
+        if (ret < 0) {
+            LOG_ERR("Failed to register capsense class");
+            return ret;
+        }
+        g_capsense_class_ptr = &capsense_class;
+    }
+
+    self->class_dev = device_create_with_groups(g_capsense_class_ptr, NULL,
             MKDEV(0, 0), self, capsense_dev_groups, "capsense%d", self->id);
     if (IS_ERR(self->class_dev)) {
         LOG_ERR("Failed to create sys class device");
+        if (g_capsense_refcount <= 0) {
+            class_unregister(g_capsense_class_ptr);
+            g_capsense_class_ptr = NULL;
+        }
         return PTR_ERR(self->class_dev);
     }
+    g_capsense_refcount++;
 
     for (phid = 0; phid < NUM_PHASES; phid++)
     {
@@ -2968,6 +2984,11 @@ FREE_INPUTS:
         }
     }
     device_unregister(self->class_dev);
+    g_capsense_refcount--;
+    if (g_capsense_class_ptr && g_capsense_refcount <= 0) {
+        class_unregister(g_capsense_class_ptr);
+        g_capsense_class_ptr = NULL;
+    }
 
     return ret;
 }
@@ -3195,6 +3216,11 @@ static int sx9377_remove(struct i2c_client *client)
     }
 
     device_unregister(self->class_dev);
+    g_capsense_refcount--;
+    if (g_capsense_class_ptr && g_capsense_refcount <= 0) {
+        class_unregister(g_capsense_class_ptr);
+        g_capsense_class_ptr = NULL;
+    }
 
     if (power_supply->cap_vdd_en) {
         regulator_disable(power_supply->cap_vdd);
@@ -3277,22 +3303,11 @@ static struct i2c_driver sx9377_driver =
 };
 static int __init sx9377_I2C_init(void)
 {
-    int ret = class_register(&capsense_class);
-    if (ret < 0) {
-        pr_err("sx9377: Failed to register capsense class\n");
-        return ret;
-    }
-    ret = i2c_add_driver(&sx9377_driver);
-    if (ret < 0) {
-        class_unregister(&capsense_class);
-        pr_err("sx9377: Failed to add i2c driver\n");
-    }
-    return ret;
+    return i2c_add_driver(&sx9377_driver);
 }
 static void __exit sx9377_I2C_exit(void)
 {
     i2c_del_driver(&sx9377_driver);
-    class_unregister(&capsense_class);
 }
 
 module_init(sx9377_I2C_init);
