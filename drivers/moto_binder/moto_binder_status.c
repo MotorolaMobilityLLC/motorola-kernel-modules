@@ -79,7 +79,7 @@ static long copy_from_user_compatible(void *dst, const void __user *src, size_t 
 #endif
 }
 
-void binder_trans_handler(void *data, struct binder_proc *target_proc,
+static void binder_trans_handler(void *data, struct binder_proc *target_proc,
 				struct binder_proc *proc,
 				struct binder_thread *thread,
 				struct binder_transaction_data *tr)
@@ -130,7 +130,7 @@ void binder_trans_handler(void *data, struct binder_proc *target_proc,
 	}
 }
 
-void binder_reply_handler(void *data, struct binder_proc *target_proc,
+static void binder_reply_handler(void *data, struct binder_proc *target_proc,
 				struct binder_proc *proc,
 				struct binder_thread *thread,
 				struct binder_transaction_data *tr)
@@ -147,7 +147,7 @@ void binder_reply_handler(void *data, struct binder_proc *target_proc,
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
-void binder_alloc_handler(void *data, size_t size, size_t *free_async_space, int is_async, bool *should_fail)
+static void binder_alloc_handler(void *data, size_t size, size_t *free_async_space, int is_async, bool *should_fail)
 {
 	struct task_struct *p = NULL;
 	struct binder_alloc *alloc = NULL;
@@ -218,8 +218,8 @@ void binder_alloc_handler(void *data, size_t size, struct binder_alloc *alloc, i
 }
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
-void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock, struct binder_proc *proc)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0))
+static void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock, struct binder_proc *proc)
 {
 	if (binder_procs == NULL)
 		binder_procs = hhead;
@@ -228,7 +228,7 @@ void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *l
 		binder_procs_lock = lock;
 }
 #else
-void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock)
+static void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock)
 {
 	if (binder_procs == NULL)
 		binder_procs = hhead;
@@ -375,7 +375,7 @@ static bool binder_worklist_empty_ilocked(struct list_head *list)
 	return list_empty(list);
 }
 
-void proc_binder_check_status_print(struct seq_file *m, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2)
+static void proc_binder_check_status_print(struct seq_file *m, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2)
 {
 	seq_printf(m,
 		"from %d:%d to %d:%d %d %d\n",
@@ -383,7 +383,7 @@ void proc_binder_check_status_print(struct seq_file *m, int caller_uid, int call
 		arg1, arg2);
 }
 
-void proc_binder_check_status_show_detail(struct seq_file *m, struct binder_proc *proc, int to_uid)
+static void proc_binder_check_status_show_detail(struct seq_file *m, struct binder_proc *proc, int to_uid)
 {
 	struct rb_node *n = NULL;
 	struct binder_thread *thread = NULL;
@@ -502,7 +502,7 @@ int proc_binder_check_status_show(struct seq_file *m, void *unused)
 	return 0;
 }
 
-int register_moto_binder_hooks(void)
+static int register_moto_binder_hooks(void)
 {
 	int rc = 0;
 
@@ -532,7 +532,7 @@ int register_moto_binder_hooks(void)
 	return rc;
 }
 
-void unregister_moto_binder_hooks(void)
+static void unregister_moto_binder_hooks(void)
 {
 	unregister_trace_android_vh_binder_preset(binder_preset_handler, NULL);
 	unregister_trace_android_vh_binder_trans(binder_trans_handler, NULL);
