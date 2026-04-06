@@ -76,7 +76,7 @@ static void alloc_pages_slowpath_end_hook(void *data, gfp_t gfp_mask, unsigned i
 #endif
 #endif // defined(MM_INFO_SUPPORTED)
 
-int register_mm_info_hooks(void)
+static int register_mm_info_hooks(void)
 {
 #if defined(MM_INFO_SUPPORTED)
 	int rc;
@@ -108,7 +108,7 @@ ERROR_OUT(alloc_pages_slowpath_end):
 #endif // defined(MM_INFO_SUPPORTED)
 }
 
-void unregister_mm_info_hooks(void)
+static void unregister_mm_info_hooks(void)
 {
 #if defined(MM_INFO_SUPPORTED)
 
