@@ -1,4 +1,5 @@
-load("//build/bazel_mgk_rules:mgk_ko.bzl", "define_mgk_ko")
+load("//motorola/kernel/modules:kernel_helpers.bzl", "define_mgk_ko_moto")
+load("@mgk_info//:kernel_version.bzl", "kernel_version",)
 
 package(
     default_visibility = [
@@ -6,14 +7,9 @@ package(
     ],
 )
 
-define_mgk_ko(
+define_mgk_ko_moto(
     name = "moto_binder",
-    srcs = glob([
-        "*.c",
-        "*.h",
-        "Kbuild",
-        "Makefile",
-    ]) + [
-        "//motorola/kernel/modules:public_headers",
+    header_deps = [
+        "//motorola/kernel/modules:moto_modules_headers",
     ],
 )
