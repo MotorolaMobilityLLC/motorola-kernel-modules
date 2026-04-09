@@ -459,8 +459,32 @@ static ssize_t reset_store(struct device *dev, struct device_attribute *attr, co
 	if (p_sar == NULL)
 		return 0;
 
+	if (!strncmp(buf, "cal", 3) ) {
+		AWLOGI(p_sar->dev, "capsense_reset_store msg: cal");
+		aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL0, ~0xff00, 0xff00);
+	}
+
+	if (!strncmp(buf, "flip_near", 9)) {
+		AWLOGI(p_sar->dev, "capsense_reset_store msg:sar%d flip_near", p_sar->dts_info.sar_num);
+		if(p_sar->dts_info.sar_num == 0) {
+			aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL0, ~0xff00, 0xBf00);
+		} else {
+			aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL0, ~0xff00, 0xff00);
+		}
+	}
+
+	if (!strncmp(buf, "flip_far", 8)) {
+		AWLOGI(p_sar->dev, "capsense_reset_store msg: sar%d flip_far", p_sar->dts_info.sar_num);
+		if(p_sar->dts_info.sar_num == 0) {
+			aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL0, ~0xff00, 0xBf00);
+		} else {
+			aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL0, ~0xff00, 0xff00);
+		}
+	}
+
 	aw_sar_i2c_read(p_sar->i2c, REG_PST, &temp);
 	if (!strncmp(buf, "reset", 5) || !strncmp(buf, "1", 1)) {
+		AWLOGI(p_sar->dev, "capsense_reset_store msg: reset");
 		if (((temp >> 24) & 0x00000003) == 1) {
 			AWLOGE(p_sar->dev, "temp:0X%x", temp);
 			aw_sar_i2c_write_bits(p_sar->i2c, REG_SCANCTRL0, ~0xff, 0xff);
