@@ -88,6 +88,9 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		return true;
 	}
 
+	if (ux_type & UX_TYPE_SYSUI)
+		return true;
+
 	if (is_heavy_scene()) {
 		// audio client app
 		if (is_enabled(UX_ENABLE_AUDIO) && is_scene(UX_SCENE_AUDIO)
