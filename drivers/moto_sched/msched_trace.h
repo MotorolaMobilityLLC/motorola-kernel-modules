@@ -12,6 +12,35 @@
 #include <linux/tracepoint.h>
 #include <linux/sched.h>
 
+#include <linux/mm_types.h>
+
+TRACE_EVENT(msched_pr_set_vma_name_bypass,
+	TP_PROTO(struct task_struct *task, unsigned long addr, unsigned long size, struct anon_vma_name *anon_name),
+
+	TP_ARGS(task, addr, size, anon_name),
+
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(unsigned long, addr)
+		__field(unsigned long, size)
+		__string(name, anon_name ? anon_name->name : "")
+	),
+
+	TP_fast_assign(
+		__entry->pid = task->pid;
+		__entry->tgid = task->tgid;
+		memcpy(__entry->comm, task->comm, TASK_COMM_LEN);
+		__entry->addr = addr;
+		__entry->size = size;
+		__assign_str(name, anon_name ? anon_name->name : "");
+	),
+
+	TP_printk("msched_pr_set_vma_name_bypass: task=%s pid=%d tgid=%d addr=0x%lx size=%lu name=%s",
+		__entry->comm, __entry->pid, __entry->tgid, __entry->addr, __entry->size, __get_str(name))
+);
+
 TRACE_EVENT(percpu_rwsem_down_read_preempt,
 	TP_PROTO(struct percpu_rw_semaphore *sem,
 		bool try, bool ret),
