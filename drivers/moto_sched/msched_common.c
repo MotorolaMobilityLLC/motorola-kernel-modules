@@ -33,12 +33,17 @@
 #include "msched_common.h"
 #include "locking/locking_main.h"
 #include "locking/locking_trace.h"
+#include <trace/hooks/sys.h>
 #if IS_ENABLED(CONFIG_MOTO_ENABLE_MDPF)
 #include "msched_uclamp.h"
 #endif
 #include "msched_trace.h"
 #include <linux/percpu-defs.h>
 #include <linux/preempt.h>
+#include <linux/mmap_lock.h>
+#include <linux/slab.h>
+#include <linux/kref.h>
+#include <linux/mm.h>
 
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
@@ -669,6 +674,48 @@ static void android_vh_percpu_rwsem_up_write_handler(
 }
 
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static void anon_vma_name_free(struct kref *kref)
+{
+	struct anon_vma_name *anon_name =
+			container_of(kref, struct anon_vma_name, kref);
+	kfree(anon_name);
+}
+
+static inline void anon_vma_name_put(struct anon_vma_name *anon_name)
+{
+	if (anon_name)
+		kref_put(&anon_name->kref, anon_vma_name_free);
+}
+
+static void android_rvh_pr_set_vma_name_bypass(void *unused, struct mm_struct *mm,
+		unsigned long addr, unsigned long size,
+		struct anon_vma_name *anon_name, int *error, bool *bypass)
+{
+	struct task_struct *p = current;
+	int trylock_res;
+
+	if (unlikely(!mm || !error || !bypass))
+		return;
+
+	if (task_get_mvp_prio(p, true) == UX_PRIO_TOPAPP ||
+			p->tgid == global_sysui_tgid ||
+			p->tgid == global_sf_tgid) {
+		// very low overhead (atomic cmpxchg).
+		// If fails, thread likely enters D state.
+		trylock_res = down_write_trylock(&mm->mmap_lock);
+		if (trylock_res) {
+			mmap_write_unlock(mm);
+		} else {
+			*bypass = true;
+			*error = 0;
+			trace_msched_pr_set_vma_name_bypass(p, addr, size, anon_name);
+			anon_vma_name_put(anon_name);
+		}
+	}
+}
+#endif
+
 void register_vendor_comm_hooks(void)
 {
 #if !IS_ENABLED(CONFIG_MOTO_LOCKING_2)
@@ -688,4 +735,8 @@ void register_vendor_comm_hooks(void)
 		android_rvh_percpu_rwsem_wait_complete_handler, NULL);
 	register_trace_android_vh_percpu_rwsem_up_write(
 		android_vh_percpu_rwsem_up_write_handler, NULL);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+	register_trace_android_rvh_pr_set_vma_name_bypass(
+		android_rvh_pr_set_vma_name_bypass, NULL);
+#endif
 }
