@@ -119,6 +119,14 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 	return false;
 }
 
+static inline int task_get_inherit_mvp_prio(struct task_struct *task)
+{
+	if (task_has_rt_policy(task))
+		return UX_PRIO_HIGHEST;
+
+	return task_get_mvp_prio(task, true);
+}
+
 static DEFINE_MUTEX(ux_mutex);
 void task_ux_type_set(int pid, int ux_type) {
 	struct task_struct *ux_task = NULL;
@@ -246,8 +254,13 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if ((ux_type & (UX_TYPE_SYSTEM_LOCK|UX_TYPE_SERVICEMANAGER)) || (p->tgid == global_systemserver_tgid && p->prio == 105) )
 		prio = UX_PRIO_SYSTEM;
 	// inherit lock & binder
-	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER|UX_TYPE_INHERIT_LOCK)))
-		prio = UX_PRIO_OTHER;
+	else if (with_inherit && (ux_type & (UX_TYPE_INHERIT_BINDER|UX_TYPE_INHERIT_LOCK))) {
+		struct moto_task_struct *mts = get_moto_task_struct(p);
+		if (!IS_ERR_OR_NULL(mts) && mts->inherit_prio >= UX_PRIO_OTHER)
+			prio = mts->inherit_prio;
+		else
+			prio = UX_PRIO_OTHER;
+	}
 	else if (is_enabled(UX_ENABLE_KERNEL) && (ux_type & UX_TYPE_KERNEL))
 		prio = UX_PRIO_OTHER;
 	// others high & others low but small tasks.
@@ -311,10 +324,25 @@ unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio) {
 EXPORT_SYMBOL(task_get_mvp_limit);
 
 void binder_inherit_ux_type(struct task_struct *task) {
-	if (is_enabled(UX_ENABLE_BINDER) && current_is_important_ux()) {
-		task_add_ux_type(task, UX_TYPE_INHERIT_BINDER);
-		resched_task(task, true);
-		trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
+	if (is_enabled(UX_ENABLE_BINDER)
+			&& current_is_important_ux()) {
+		struct moto_task_struct *mts = get_moto_task_struct(task);
+		int current_prio = task_get_inherit_mvp_prio(current);
+		bool need_resched = false;
+
+		if (!IS_ERR_OR_NULL(mts) && mts->inherit_prio < current_prio) {
+			mts->inherit_prio = current_prio;
+			need_resched = true;
+		}
+
+		if (!task_has_ux_type(task, UX_TYPE_INHERIT_BINDER)) {
+			task_set_binder_inherit_prio(task, current_prio);
+			need_resched = true;
+			trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
+		}
+
+		if (need_resched)
+			resched_task(task, true);
 	}
 	msched_uclamp_binder_set_priority_hook(task);
 }
@@ -324,7 +352,7 @@ void binder_inherit_ux_type_from_client(struct task_struct *server_task, struct 
 	if (is_enabled(UX_ENABLE_BINDER)
 			&& !task_has_ux_type(server_task, UX_TYPE_INHERIT_BINDER)
 			&& task_is_important_ux(client_task)) {
-		task_add_ux_type(server_task, UX_TYPE_INHERIT_BINDER);
+		task_set_binder_inherit_prio(server_task, task_get_inherit_mvp_prio(client_task));
 		resched_task(server_task, true);
 		trace_binder_inherit_ux_type(server_task, task_get_ux_type(server_task), true);
 	}
@@ -371,8 +399,10 @@ EXPORT_SYMBOL(binder_inherit_boost);
 #endif
 
 void binder_clear_inherited_ux_type(struct task_struct *task) {
-	if (is_enabled(UX_ENABLE_BINDER)) {
-		task_clr_ux_type(task, UX_TYPE_INHERIT_BINDER);
+	if (is_enabled(UX_ENABLE_BINDER)
+			&& task_has_ux_type(task, UX_TYPE_INHERIT_BINDER)) {
+		task_clr_inherit_info(task, UX_TYPE_INHERIT_BINDER);
+
 		trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
 	}
 	msched_uclamp_binder_restore_priority_hook(task);
@@ -392,7 +422,7 @@ void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue) {
 				cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 						"lock_clear_inherited_ux_type %s  %d  ux_type %d  cost=%llu\n", "dequeue task",
 						task->pid, mts->ux_type, (jiffies_to_nsecs(jiffies) - mts->inherit_start) / 1000000U);
-				task_clr_inherit_type(task);
+				task_clr_inherit_info(task, UX_TYPE_INHERIT_LOCK);
 			}
 		}
 		if (task_has_ux_type(task, UX_TYPE_KERNEL)) {
@@ -535,7 +565,8 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 
 	rq = task_rq_lock(owner, &flags);
 
-	task_set_ux_inherit_prio(owner, task_get_ux_depth(waiter) + 1);
+	task_set_lock_inherit_prio(owner, task_get_ux_depth(waiter) + 1,
+				   task_get_inherit_mvp_prio(waiter));
 	/*
 	 * UPDATED: Replaced the main debug printk with the trace event.
 	 * We log the waiter's and owner's original ux_type for context.
@@ -575,7 +606,7 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 			"lock_clear_inherited_ux_type %s  %d  ux_type %d cost=%llu\n", lock_name,
 			owner->pid, owner_mts->ux_type,
 			(jiffies_to_nsecs(jiffies) - owner_mts->inherit_start) / 1000000U);
-	task_clr_inherit_type(owner);
+	task_clr_inherit_info(owner, UX_TYPE_INHERIT_LOCK);
 
 	task_rq_unlock(rq, owner, &flags);
 
