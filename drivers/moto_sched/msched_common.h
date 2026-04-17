@@ -134,7 +134,8 @@ struct moto_task_struct {
 
 	u8				inherit_depth;
 	u8				boost_kernel_lock_depth;
-	char			cgr_type;
+	char				cgr_type;
+	u8				inherit_prio;
 	int				ux_type;
 
 	u64				inherit_start;
@@ -282,7 +283,7 @@ static inline bool is_pid_important_rt(int pid)
 	return pid == global_sf_tgid;
 }
 
-static inline void task_set_ux_inherit_prio(struct task_struct *p, int depth)
+static inline void task_set_lock_inherit_prio(struct task_struct *p, int depth, int prio)
 {
 	struct moto_task_struct *mts = get_moto_task_struct(p);
 	if (IS_ERR_OR_NULL(mts))
@@ -290,6 +291,18 @@ static inline void task_set_ux_inherit_prio(struct task_struct *p, int depth)
 	mts->ux_type |= UX_TYPE_INHERIT_LOCK;
 	mts->inherit_start = jiffies_to_nsecs(jiffies);
 	mts->inherit_depth = depth;
+	if (mts->inherit_prio < prio)
+		mts->inherit_prio = prio;
+}
+
+static inline void task_set_binder_inherit_prio(struct task_struct *p, int prio)
+{
+	struct moto_task_struct *mts = get_moto_task_struct(p);
+	if (IS_ERR_OR_NULL(mts))
+		return;
+	mts->ux_type |= UX_TYPE_INHERIT_BINDER;
+	if (mts->inherit_prio < prio)
+		mts->inherit_prio = prio;
 }
 
 static inline int task_get_ux_depth(struct task_struct *t)
@@ -301,14 +314,18 @@ static inline int task_get_ux_depth(struct task_struct *t)
 	return mts->inherit_depth;
 }
 
-static inline void task_clr_inherit_type(struct task_struct *p)
+static inline void task_clr_inherit_info(struct task_struct *p, int type)
 {
 	struct moto_task_struct *mts = get_moto_task_struct(p);
 	if (IS_ERR_OR_NULL(mts))
 		return;
-	mts->inherit_depth = 0;
-	mts->inherit_start = 0;
-	mts->ux_type &= ~UX_TYPE_INHERIT_LOCK;
+	mts->ux_type &= ~type;
+	if ((type & UX_TYPE_INHERIT_LOCK) && !(mts->ux_type & UX_TYPE_INHERIT_LOCK)) {
+		mts->inherit_depth = 0;
+		mts->inherit_start = 0;
+	}
+	if (!(mts->ux_type & (UX_TYPE_INHERIT_LOCK | UX_TYPE_INHERIT_BINDER)))
+		mts->inherit_prio = 0;
 }
 
 #endif /* _MOTO_SCHED_COMMON_H_ */
