@@ -694,7 +694,7 @@ static int sc8989x_field_write(struct sc8989x_chip *sc,
 		ret = regmap_field_write(sc->rmap_fields[field_id], val);
 
 	if (ret < 0) {
-		dev_err(sc->dev, "sc8989x read field %d fail: %d\n", field_id, ret);
+		dev_err(sc->dev, "sc8989x write field %d fail: %d\n", field_id, ret);
 	}
 
 	return ret;
@@ -1047,7 +1047,7 @@ static int sc8989x_normal_set_hiz(struct sc8989x_chip *sc, bool enable)
 			}
 		}
 		ret = sc8989x_field_write(sc, EN_HIZ, reg_val);
-	} if (sc->is_cx25890HQ) {
+	} else if (sc->is_cx25890HQ) {
 		if (reg_val) {
 			ret = sc8989x_field_read(sc, VBUS_GD, &vbus_good);
 			if (!vbus_good) {
