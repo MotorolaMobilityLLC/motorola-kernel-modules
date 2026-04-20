@@ -256,6 +256,18 @@ enum pen_message_type {
     PEN_MESSAGE_PEN_QPID
 };
 
+enum mmi_sku_type
+{
+    MMI_SKU_PRC = 0x01,
+    MMI_SKU_ROW,
+    MMI_SKU_NA,
+    MMI_SKU_VZW,
+    MMI_SKU_JPN,
+    MMI_SKU_ITA,
+    MMI_SKU_NAE,
+    MMI_SKU_SUPERSET,
+};
+
 #pragma pack(push, 1)
 struct driver_response_app_pkg {
         uint32_t id;
@@ -402,6 +414,7 @@ struct goodix_thp_board_data {
 #endif
         int resolution_boost;
         bool stylus_interpolation_ctrl;
+        u8 sku_type;
 };
 
 #define MMAP_BUFFER_SIZE (GOODIX_THP_MAX_FRAME_LEN * GOODIX_THP_MAX_FRAME_BUF_COUNT)

@@ -462,6 +462,13 @@ static ssize_t goodix_ts_interpolation_store(struct device *dev,
 	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
+#ifdef CONFIG_HIGH_REPORT_RATE_FOLLOWS_SWIPE_RESPONSIVENESS
+	if (core_data->ts_dev->board_data.sku_type == MMI_SKU_PRC) {
+		ts_info(core_data->ts_dev->dev, "skip this path to switch touch report rate");
+		return size;
+	}
+#endif
+
 	ret = kstrtoul(buf, 0, &mode);
 	if (ret < 0) {
 		ts_info(core_data->ts_dev->dev, "Failed to convert value.");
@@ -1316,6 +1323,20 @@ static ssize_t goodix_ts_swipe_responsiveness_store(struct device *dev,
 	core_data->set_mode.swipe_responsiveness_level = core_data->get_mode.swipe_responsiveness_level;
 	ts_info(tdev->dev, "Success set swipe responsiveness level to %d",
 		core_data->set_mode.swipe_responsiveness_level);
+
+#ifdef CONFIG_HIGH_REPORT_RATE_FOLLOWS_SWIPE_RESPONSIVENESS
+	//legion game assistant: if config enable and only on PRC SKU this feature works
+	if (core_data->ts_dev->board_data.sku_type == MMI_SKU_PRC) {
+		if (core_data->get_mode.swipe_responsiveness_level >= SWIPE_RESPONSIVENESS_LEVEL_4 &&
+				core_data->get_mode.swipe_responsiveness_level <= SWIPE_RESPONSIVENESS_LEVEL_5) {
+			core_data->get_mode.interpolation = 0x01;
+		} else {
+			core_data->get_mode.interpolation = 0x0;
+		}
+		goodix_thp_mmi_set_report_rate(core_data);
+	}
+#endif
+
 	ret = size;
 
 exit:

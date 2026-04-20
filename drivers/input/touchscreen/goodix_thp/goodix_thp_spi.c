@@ -76,6 +76,7 @@
 #define HOLD_CPU_REG_W					0x0002
 #define HOLD_CPU_REG_R					0x2000
 #define GOODIX_READ_WRITE_BYTE_OFFSET_GT9916            8
+#define RADIO_MAX_LEN 33
 
 #pragma pack(push, 1)
 struct thp_goodix_cmd {
@@ -120,6 +121,9 @@ struct goodix_version_info {
 	u16 checksum;
 };
 #pragma pack(pop)
+
+static char *bootargs_str = NULL;
+static size_t bootargs_str_len = 0;
 
 void _ts_info(struct device *dev, const char *func, int line, const char *fmt, ...)
 {
@@ -233,6 +237,102 @@ u32 checksum16_u32(const u8 *data, int size)
                 (data[i + 2] << 8) +
                 (data[i + 3]);
     return checksum;
+}
+
+static int mmi_get_bootarg_dt(struct spi_device *spi, char *key, char **value, char *prop, char *spl_flag)
+{
+        const char *bootargs_tmp = NULL;
+        char *idx = NULL;
+        char *kvpair = NULL;
+        int err = 1;
+        struct device_node *n = of_find_node_by_path("/chosen");
+        size_t bootargs_tmp_len = 0;
+
+        if (n == NULL)
+                goto err;
+
+        if (of_property_read_string(n, prop, &bootargs_tmp) != 0)
+                goto putnode;
+
+        bootargs_tmp_len = strlen(bootargs_tmp);
+        if (bootargs_tmp_len >= bootargs_str_len) {
+                if (bootargs_str)
+                        kfree(bootargs_str);
+                bootargs_str = devm_kzalloc(&spi->dev, bootargs_tmp_len + 1, GFP_KERNEL);
+                if (!bootargs_str) {
+                        err = -ENOMEM;
+                        goto putnode;
+                }
+                bootargs_str_len = bootargs_tmp_len + 1;
+        } else {
+                memset(bootargs_str, '\0', bootargs_str_len);
+        }
+
+        strscpy(bootargs_str, bootargs_tmp, bootargs_tmp_len + 1);
+
+        idx = strnstr(bootargs_str, key, strlen(bootargs_str));
+        if (idx) {
+                kvpair = strsep(&idx, " ");
+                if (kvpair)
+                        if (strsep(&kvpair, "=")) {
+                                *value = strsep(&kvpair, spl_flag);
+                                if (*value)
+                                        err = 0;
+                        }
+        }
+
+putnode:
+        of_node_put(n);
+err:
+        return err;
+}
+
+static int mmi_get_bootarg(struct spi_device *spi, char *key, char **value)
+{
+#ifdef CONFIG_BOOT_CONFIG
+        return mmi_get_bootarg_dt(spi, key, value, "mmi,bootconfig", "\n");
+#else
+        return mmi_get_bootarg_dt(spi, key, value, "bootargs", " ");
+#endif
+}
+
+static int mmi_get_sku_type(struct spi_device *spi, u8 *sku_type)
+{
+        char *s = NULL;
+        char androidboot_radio_str[RADIO_MAX_LEN];
+
+        if (mmi_get_bootarg(spi, "androidboot.radio=", &s) == 0) {
+                if (s != NULL) {
+                        strscpy(androidboot_radio_str, s, RADIO_MAX_LEN);
+                        if (!strncmp("PRC", androidboot_radio_str, 3)) {
+                                *sku_type = MMI_SKU_PRC;
+                        } else if (!strncmp("ROW", androidboot_radio_str, 3)) {
+                                *sku_type = MMI_SKU_ROW;
+                        } else if (!strncmp("NA", androidboot_radio_str, 2)) {
+                                *sku_type = MMI_SKU_NA;
+                        } else if (!strncmp("VZW", androidboot_radio_str, 3)) {
+                                *sku_type = MMI_SKU_VZW;
+                        } else if (!strncmp("JPN", androidboot_radio_str, 3)) {
+                                *sku_type = MMI_SKU_JPN;
+                        } else if (!strncmp("ITA", androidboot_radio_str, 3)) {
+                                *sku_type = MMI_SKU_ITA;
+                        } else if (!strncmp("NAE", androidboot_radio_str, 3)) {
+                                *sku_type = MMI_SKU_NAE;
+                        } else if (!strncmp("SUPERSET", androidboot_radio_str, 8)) {
+                                *sku_type = MMI_SKU_SUPERSET;
+                        } else {
+                                *sku_type = 0;
+                        }
+                        ts_info(&spi->dev, "SKU type: %s, 0x%02x", androidboot_radio_str, *sku_type);
+                        return 0;
+                } else {
+                        ts_err(&spi->dev, "Could not get SKU type");
+                        return -1;
+                }
+        } else {
+                ts_err(&spi->dev, "Could not get radio bootarg");
+                return -1;
+        }
 }
 
 #ifdef CONFIG_OF
@@ -1142,6 +1242,10 @@ static int goodix_spi_probe(struct spi_device *spi)
         pdev->dev.platform_data = ts_dev;
         pdev->dev.release = goodix_pdev_release;
         spi_set_drvdata(spi, pdev);
+
+        r= mmi_get_sku_type(spi, &ts_dev->board_data.sku_type);
+        if (r)
+                ts_err(&spi->dev, "Fail to get sku type");
 
         /* register platform device, then the goodix_thp_core
          * module will probe the touch deivce.

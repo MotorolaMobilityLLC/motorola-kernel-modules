@@ -25,3 +25,8 @@ config TOUCHCLASS_MMI_FORCE_ENABLE_GESTURES
       via a special command even when the touch controller is in a suspend/gesture
       state. This is needed to fix issues where gestures are not correctly re-enabled
       after exiting certain power states.
+
+config HIGH_REPORT_RATE_FOLLOWS_SWIPE_RESPONSIVENESS
+    bool "Enable switch touch report rate followed by swipe responsiveness"
+    help
+      Say Y here to enable switch touch report rate followed by swipe responsiveness
