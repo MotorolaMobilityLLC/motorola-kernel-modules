@@ -244,7 +244,7 @@ static long goodix_thp_ioctl_get_frame(struct goodix_thp_core *core_data, unsign
                                         ts_err(ts_dev->dev, "Interrupted by a signal");
                                         goto out;
                                 } else if (r == 0) {
-                                        ts_err(ts_dev->dev, "get frame timeout");
+                                        ts_info(ts_dev->dev, "timely query");
                                         r = -ETIMEDOUT;
                                         goto out;
                                 }
