@@ -511,6 +511,54 @@ static void android_vh_record_pcpu_rwsem_time_early(void *unused, unsigned long 
 }
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+static inline bool is_rwsem_steal_allowed(struct task_struct *task, int mvp_prio)
+{
+	if (unlikely(!task))
+		return false;
+
+	if (rt_policy(task->policy))
+		return true;
+
+	if (mvp_prio == UX_PRIO_TOPAPP && !strcmp(task->comm, "RenderThread"))
+		return true;
+
+	return false;
+}
+
+static void android_vh_rwsem_read_trylock_failed_handler(void *unused, struct rw_semaphore *sem, long *cntp, int *ret)
+{
+	bool is_read_locked;
+	bool handoff;
+	long count;
+	int mvp_prio;
+
+	if (unlikely(!locking_opt_enable()) || !sem || !ret)
+		return;
+
+	if (!is_rwsem_reader_owned(sem))
+		return;
+
+	mvp_prio = task_get_mvp_prio(current, true);
+
+	if (!is_rwsem_steal_allowed(current, mvp_prio))
+		return;
+
+	count = atomic_long_read(&sem->count);
+	handoff = (count & RWSEM_FLAG_HANDOFF) != 0;
+	is_read_locked = (count >> 8) > 0;
+
+	if (!handoff && is_read_locked) {
+		*ret = 1;
+
+		/* Manually increment reader count if caller doesn't provide cntp */
+		if (cntp == NULL)
+			atomic_long_add((1UL << 8), &sem->count);
+
+		trace_rwsem_read_trylock_steal(current, sem, mvp_prio);
+	}
+}
+#endif
 
 void register_rwsem_vendor_hooks(void)
 {
@@ -545,6 +593,10 @@ void register_rwsem_vendor_hooks(void)
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
     register_trace_android_vh_record_pcpu_rwsem_time_early(android_vh_record_pcpu_rwsem_time_early, NULL);
 #endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	register_trace_android_vh_rwsem_read_trylock_failed(android_vh_rwsem_read_trylock_failed_handler, NULL);
+#endif
 }
 
 void unregister_rwsem_vendor_hooks(void)
@@ -576,5 +628,8 @@ void unregister_rwsem_vendor_hooks(void)
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
     unregister_trace_android_vh_record_pcpu_rwsem_time_early(android_vh_record_pcpu_rwsem_time_early, NULL);
 #endif
-}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	unregister_trace_android_vh_rwsem_read_trylock_failed(android_vh_rwsem_read_trylock_failed_handler, NULL);
+#endif
+}
