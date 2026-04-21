@@ -675,17 +675,17 @@ static void android_vh_percpu_rwsem_up_write_handler(
 
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
-static void anon_vma_name_free(struct kref *kref)
+static void msched_anon_vma_name_free(struct kref *kref)
 {
 	struct anon_vma_name *anon_name =
 			container_of(kref, struct anon_vma_name, kref);
 	kfree(anon_name);
 }
 
-static inline void anon_vma_name_put(struct anon_vma_name *anon_name)
+static inline void msched_anon_vma_name_put(struct anon_vma_name *anon_name)
 {
 	if (anon_name)
-		kref_put(&anon_name->kref, anon_vma_name_free);
+		kref_put(&anon_name->kref, msched_anon_vma_name_free);
 }
 
 static void android_rvh_pr_set_vma_name_bypass(void *unused, struct mm_struct *mm,
@@ -709,8 +709,8 @@ static void android_rvh_pr_set_vma_name_bypass(void *unused, struct mm_struct *m
 		} else {
 			*bypass = true;
 			*error = 0;
-			trace_msched_pr_set_vma_name_bypass(p, addr, size, anon_name);
-			anon_vma_name_put(anon_name);
+			trace_msched_pr_set_vma_name_bypass(p, addr, size);
+			msched_anon_vma_name_put(anon_name);
 		}
 	}
 }
