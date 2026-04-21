@@ -192,6 +192,29 @@ TRACE_EVENT(locking_debug_trace,
     )
 );
 
+TRACE_EVENT(rwsem_read_trylock_steal,
+        TP_PROTO(struct task_struct *task, struct rw_semaphore *sem, int mvp_prio),
+
+        TP_ARGS(task, sem, mvp_prio),
+
+        TP_STRUCT__entry(
+                __array(char, comm, TASK_COMM_LEN)
+                __field(pid_t, pid)
+                __field(void *, sem)
+                __field(int, mvp_prio)
+        ),
+
+        TP_fast_assign(
+                memcpy(__entry->comm, task->comm, TASK_COMM_LEN);
+                __entry->pid = task->pid;
+                __entry->sem = sem;
+                __entry->mvp_prio = mvp_prio;
+        ),
+
+        TP_printk("task=%s pid=%d sem=%p mvp_prio=%d",
+                __entry->comm, __entry->pid, __entry->sem, __entry->mvp_prio)
+);
+
 #endif /* _LOCKING_TRACE_H */
 
 #undef TRACE_INCLUDE_PATH
