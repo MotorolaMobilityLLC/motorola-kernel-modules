@@ -60,7 +60,7 @@ static inline bool task_in_top_app_group(struct task_struct *p)
 static inline bool need_boost_kernel_irq_thread(struct task_struct *p)
 {
 
-	return p && !p->mm && in_interrupt();
+	return p && !p->mm && in_interrupt() && p->prio <= 120; /* Increase the priority of kworker threads woken up by IRQs (prio <= 120) to prevent stuttering. */
 }
 
 static inline bool is_ux_boost_kworker_candidate(struct task_struct *p)
@@ -73,13 +73,6 @@ static inline bool is_ux_boost_kworker_candidate(struct task_struct *p)
 static inline bool task_in_ux_related_group(struct task_struct *p)
 {
 	int ux_type = task_get_ux_type(p);
-
-	//interrupt thread
-	if (is_enabled(UX_ENABLE_IRQWTH) && need_boost_kernel_irq_thread(p)) {
-		if(trace_sched_wake_by_irq_kth_enabled())
-			trace_sched_wake_by_irq_kth(p);
-		return true;
-	}
 
 	if (is_enabled(UX_ENABLE_AUDIO) && is_scene(UX_SCENE_AUDIO)) {
 		if (ux_type & UX_TYPE_AUDIOSERVICE && p->prio <= 120)
@@ -202,6 +195,13 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 
 	if (p->prio < 100)
 		return UX_PRIO_OTHER;			/* Allow RT threads to be treated as important UX tasks to enable binder priority inheritance*/
+
+	/* Based on the assumption that these kworkers awakened by IRQs have short lifecycles, boost to TOPAPP. Long-running tasks may lead to insufficient UI thread resources. */
+	if (is_enabled(UX_ENABLE_IRQWTH) && need_boost_kernel_irq_thread(p)) {
+		if(trace_sched_wake_by_irq_kth_enabled())
+			trace_sched_wake_by_irq_kth(p);
+		return UX_PRIO_TOPAPP;
+	}
 
 	if (is_enabled(UX_ENABLE_KWORKER) && is_ux_boost_kworker_candidate(p)) {
 		int waker_prio = current->prio;
