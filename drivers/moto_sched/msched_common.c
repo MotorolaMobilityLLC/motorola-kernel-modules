@@ -54,6 +54,13 @@ static inline bool need_boost_kernel_irq_thread(struct task_struct *p)
 	return p && !p->mm && in_interrupt();
 }
 
+static inline bool is_ux_boost_kworker_candidate(struct task_struct *p)
+{
+	return p && !p->mm && p->prio == 100
+		&& strncmp(p->comm, "kworker/", 8) == 0
+		&& strncmp(p->comm, "kworker/u", 9) != 0;
+}
+
 static inline bool task_in_ux_related_group(struct task_struct *p)
 {
 	int ux_type = task_get_ux_type(p);
@@ -76,22 +83,6 @@ static inline bool task_in_ux_related_group(struct task_struct *p)
 		&& p->prio < 120) {
 		return true;
 	}
-
-	if (is_enabled(UX_ENABLE_KWORKER)) {
-            if (p && !p->mm && p->prio == 100
-                            && strncmp(p->comm, "kworker/", 8) == 0
-                            && strncmp(p->comm, "kworker/u", 9) != 0) {
-
-                int waker_prio = current->prio;
-                bool launcher_wake = current->pid == global_launcher_tgid;
-                bool top_task = task_in_top_app_group(current);
-
-                if ((top_task && waker_prio <= 110) || launcher_wake || task_has_rt_policy(current)) {
-                        trace_sched_boost_ux_kworker(p, waker_prio, launcher_wake, top_task, ux_type);
-                        return true;
-                }
-             }
-        }
 
 	if (ux_type & UX_TYPE_SYSUI)
 		return true;
@@ -204,6 +195,26 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	if (p->prio < 100)
 		return UX_PRIO_OTHER;			/* Allow RT threads to be treated as important UX tasks to enable binder priority inheritance*/
 
+	if (is_enabled(UX_ENABLE_KWORKER) && is_ux_boost_kworker_candidate(p)) {
+		int waker_prio = current->prio;
+		bool launcher_wake = current->pid == global_launcher_tgid;
+		bool top_task = task_in_top_app_group(current);
+
+		if (task_has_rt_policy(current))
+#ifdef CONFIG_MOTO_BOOST_RT_KWORKER_HIGHEST
+			prio = UX_PRIO_HIGHEST;
+#else
+			prio = UX_PRIO_TOPAPP;
+#endif
+		else if ((top_task && waker_prio <= 110) || launcher_wake)
+			prio = UX_PRIO_TOPAPP;
+
+		if (prio != UX_PRIO_INVALID) {
+			trace_sched_boost_ux_kworker(p, waker_prio, launcher_wake, top_task, ux_type);
+			goto out;
+		}
+	}
+
 	// perf daemon
 	if (ux_type & UX_TYPE_PERF_DAEMON)
 		prio = UX_PRIO_HIGHEST;
@@ -234,6 +245,7 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if (task_in_ux_related_group(p) && (p->prio <= moto_boost_prio || moto_task_util(p) < moto_boost_task_util))
 		prio = UX_PRIO_OTHER;
 
+out:
 	cond_trace_printk(unlikely(is_debuggable(DEBUG_BASE)),
 		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d task_util=%lu mvp_prio=%d\n",
 		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, moto_task_util(p), prio);
