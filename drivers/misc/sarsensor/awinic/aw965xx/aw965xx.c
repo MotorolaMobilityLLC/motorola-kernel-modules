@@ -443,6 +443,32 @@ static ssize_t name_show(struct device *dev,
 static DEVICE_ATTR_RO(name);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+static ssize_t chip_id_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+#else
+static ssize_t chip_id_show(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+#endif
+{
+	struct aw965xx *aw965xx = dev_get_drvdata(dev);
+	struct aw_sar *p_sar = NULL;
+
+	if (aw965xx == NULL)
+		return 0;
+
+	p_sar = aw965xx->p_aw_sar;
+	if (p_sar == NULL)
+		return 0;
+
+	AWLOGE(p_sar->dev, "name = %s", p_sar->chip_name);
+	return snprintf(buf, PAGE_SIZE, "%s\n", p_sar->chip_name);
+}
+
+static DEVICE_ATTR_RO(chip_id);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
 static ssize_t reset_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 #else
 static ssize_t reset_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -796,11 +822,11 @@ static ssize_t fac_cal_store(struct device *dev, struct device_attribute *attr, 
 }
 static DEVICE_ATTR_WO(fac_cal);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
-static ssize_t fac_comp_show(struct device *dev,
+static ssize_t fac_compensation_show(struct device *dev,
 		struct device_attribute *attr,
 		char *buf)
 #else
-static ssize_t fac_comp_show(struct device *dev,,
+static ssize_t fac_compensation_show(struct device *dev,,
 		struct device_attribute *attr,
 		char *buf)
 #endif
@@ -817,7 +843,7 @@ static ssize_t fac_comp_show(struct device *dev,,
 	if (p_sar == NULL)
 		return 0;
 
-	AWLOGE(p_sar->dev, "%d aw_sar_fac_comp_show\n", p_sar->dts_info.sar_num);
+	AWLOGE(p_sar->dev, "%d aw_sar_fac_compensation_show\n", p_sar->dts_info.sar_num);
 
 	aw965xx_get_cap_offset_send_to_tcmd(p_sar, reg_data);
 
@@ -826,7 +852,7 @@ static ssize_t fac_comp_show(struct device *dev,,
 	}
 	return sizeof(reg_data);
 }
-static DEVICE_ATTR_RO(fac_comp);
+static DEVICE_ATTR_RO(fac_compensation);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
 static ssize_t fac_raw_show(struct device *dev,
 		struct device_attribute *attr,
@@ -976,6 +1002,7 @@ static int g_capsense_refcount = 0;
 
 static struct attribute *capsense_attrs[] = {
 	&dev_attr_name.attr,
+	&dev_attr_chip_id.attr,
 	&dev_attr_reset.attr,
 	&dev_attr_raw_data.attr,
 	&dev_attr_register_write.attr,
@@ -984,7 +1011,7 @@ static struct attribute *capsense_attrs[] = {
 	&dev_attr_fac_detect.attr,
 	&dev_attr_fac_enable.attr,
 	&dev_attr_fac_cal.attr,
-	&dev_attr_fac_comp.attr,
+	&dev_attr_fac_compensation.attr,
 	&dev_attr_fac_raw.attr,
 	&dev_attr_reinitialize.attr,
 	NULL,

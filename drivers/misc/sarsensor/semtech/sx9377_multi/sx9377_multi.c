@@ -1317,7 +1317,7 @@ DEVICE_ATTR_STORE(reg_read)
 //=================================================================================================
 // calibrate
 //=================================================================================================
-DEVICE_ATTR_SHOW(fac_comp)
+DEVICE_ATTR_SHOW(fac_compensation)
 {
     int i, count=0, ph, shift;
     u32 dcap, reg_val = 0;
@@ -1924,7 +1924,7 @@ static DEVICE_ATTR_RO(registers);
 static DEVICE_ATTR_RO(fac_irq_state);
 static DEVICE_ATTR_RW(fac_enable);
 static DEVICE_ATTR_RO(fac_detect);
-static DEVICE_ATTR_RO(fac_comp);
+static DEVICE_ATTR_RO(fac_compensation);
 static DEVICE_ATTR_RO(chip_id);
 static DEVICE_ATTR_RW(reg_read);
 static DEVICE_ATTR_RW(reg_write);
@@ -1947,7 +1947,7 @@ static DEVICE_ATTR_RW(manual_calibrate);
 static struct attribute *capsense_dev_attrs[] = {
     &dev_attr_raw_data.attr,
     &dev_attr_fac_irq_state.attr,
-    &dev_attr_fac_comp.attr,
+    &dev_attr_fac_compensation.attr,
     &dev_attr_fac_detect.attr,
     &dev_attr_chip_id.attr,
     &dev_attr_fac_enable.attr,
