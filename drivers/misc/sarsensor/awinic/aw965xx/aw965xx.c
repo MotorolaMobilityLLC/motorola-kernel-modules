@@ -1223,7 +1223,8 @@ static void aw_sar_custom_flie_node_free(void *data)
 			(p_sar->channels_arr[i].input == NULL)) {
 			continue;
 		}
-		sensors_classdev_unregister(&aw965xx->sensors_capsensor_chs[i]);
+		if (!IS_ERR_OR_NULL(aw965xx->sensors_capsensor_chs[i].dev))
+			sensors_classdev_unregister(&aw965xx->sensors_capsensor_chs[i]);
 	}
 #endif
 

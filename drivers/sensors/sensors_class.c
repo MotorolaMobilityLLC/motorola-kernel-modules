@@ -537,6 +537,10 @@ EXPORT_SYMBOL(sensors_classdev_register);
 void sensors_classdev_unregister(struct sensors_classdev *sensors_cdev)
 {
 	printk("%s\n",__func__);
+
+	if (!sensors_cdev || IS_ERR_OR_NULL(sensors_cdev->dev))
+		return;
+
 	device_unregister(sensors_cdev->dev);
 	down_write(&sensors_list_lock);
 	list_del(&sensors_cdev->node);

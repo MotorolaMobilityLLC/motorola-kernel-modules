@@ -3157,7 +3157,8 @@ FREE_SYS_NODES:
             phase = &self->phases[phid];
         if (phase->usage == MAIN){
             LOG_DBG("%s", phase->name);
-            sensors_classdev_unregister(&phase->sensor_class);
+            if (!IS_ERR_OR_NULL(phase->sensor_class.dev))
+                sensors_classdev_unregister(&phase->sensor_class);
             input_unregister_device(phase->input);
         }
     }
@@ -3210,7 +3211,8 @@ static int sx9377_remove(struct i2c_client *client)
     {
         phase = &self->phases[phid];
         if (phase->input){
-            sensors_classdev_unregister(&phase->sensor_class);
+            if (!IS_ERR_OR_NULL(phase->sensor_class.dev))
+                sensors_classdev_unregister(&phase->sensor_class);
             input_unregister_device(phase->input);
         }
     }
