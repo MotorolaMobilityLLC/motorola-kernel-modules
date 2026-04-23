@@ -43,7 +43,8 @@
 
 struct prev_read_entry {
 	struct list_head node;
-	const char *name;
+	struct wakeup_source *ws;
+	char name[NAME_SIZE];
 	ktime_t last_total_time;
 };
 
@@ -74,7 +75,7 @@ static int get_list_count(struct list_head *head)
  * Note: If a lock disappears and reappears, it is treated as NEW (Delta=0 for that interval).
  * This ensures we never report huge historical spikes, only recent activity.
  */
-static ktime_t calculate_delta_and_update(const char *name, ktime_t current_total)
+static ktime_t calculate_delta_and_update(struct wakeup_source *ws, ktime_t current_total)
 {
 	struct prev_read_entry *pr_entry;
 	ktime_t baseline = 0;
@@ -84,7 +85,7 @@ static ktime_t calculate_delta_and_update(const char *name, ktime_t current_tota
 
 	// 1. Search in Cache
 	list_for_each_entry(pr_entry, &prev_read_list, node) {
-		if (strcmp(pr_entry->name, name) == 0) {
+		if (pr_entry->ws == ws && strcmp(pr_entry->name, ws->name) == 0) {
 			baseline = pr_entry->last_total_time;
 			found = true;
 
@@ -101,11 +102,12 @@ static ktime_t calculate_delta_and_update(const char *name, ktime_t current_tota
 			// Baseline = Current, so Delta = 0.
 			baseline = current_total;
 			pr_info_once("wakelock_profiler: Tracking limit (%d) reached. Ignoring new lock: %s\n",
-					     MAX_TRACKING_LIMIT, name);
+					     MAX_TRACKING_LIMIT, ws->name);
 		} else {
 			pr_entry = kmalloc(sizeof(*pr_entry), GFP_ATOMIC);
 			if (pr_entry) {
-				pr_entry->name = name;
+				pr_entry->ws = ws;
+				strscpy(pr_entry->name, ws->name, NAME_SIZE);
 				pr_entry->last_total_time = current_total;
 				list_add(&pr_entry->node, &prev_read_list);
 
@@ -168,7 +170,8 @@ static void initial_capture(void)
 		// Add to list with current value as baseline
 		struct prev_read_entry *pr = kmalloc(sizeof(*pr), GFP_ATOMIC);
 		if (pr) {
-			pr->name = ws->name;
+			pr->ws = ws;
+			strscpy(pr->name, ws->name, NAME_SIZE);
 			pr->last_total_time = total;
 			list_add(&pr->node, &prev_read_list);
 			count++;
@@ -190,6 +193,11 @@ struct wakelock_desc {
 	char name[NAME_SIZE];
 };
 
+struct wakelock_name_delta {
+	char name[NAME_SIZE];
+	ktime_t delta_time;
+};
+
 static struct wakelock_desc max_wakelock_list[STATICS_NUMBER];
 static DEFINE_MUTEX(list_lock);
 
@@ -199,20 +207,27 @@ static DEFINE_MUTEX(list_lock);
  */
 static ssize_t active_wakelock_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	int srcuidx, i, j;
+	int srcuidx, i, j, k;
 	int buf_offset = 0;
 	unsigned long flags;
 	struct wakeup_source *ws;
-	ktime_t wall_delta;
+	struct wakelock_name_delta *agg_list;
+	int agg_count = 0;
 
 	mutex_lock(&list_lock);
 	memset(max_wakelock_list, 0, sizeof(max_wakelock_list));
+	agg_list = kcalloc(MAX_TRACKING_LIMIT, sizeof(*agg_list), GFP_KERNEL);
+	if (!agg_list) {
+		mutex_unlock(&list_lock);
+		return -ENOMEM;
+	}
 
 	srcuidx = wakeup_sources_read_lock();
 
 	for (ws = wakeup_sources_walk_start(); ws; ws = wakeup_sources_walk_next(ws)) {
 		ktime_t current_total = ws->total_time;
 		ktime_t delta;
+		int found_idx = -1;
 
 		// Include currently active time
 		spin_lock_irqsave(&ws->lock, flags);
@@ -223,38 +238,66 @@ static ssize_t active_wakelock_show(struct kobject *kobj, struct kobj_attribute 
 		spin_unlock_irqrestore(&ws->lock, flags);
 
 		// Calculate Delta (Pure Mode)
-		delta = calculate_delta_and_update(ws->name, current_total);
+		delta = calculate_delta_and_update(ws, current_total);
+		if (delta <= 0)
+			continue;
 
-		// Sort into Top N List (Descending order of Delta)
-		for (i = 0; i < STATICS_NUMBER; i++) {
-			if (delta > 0 && (max_wakelock_list[i].name[0] == 0 ||
-			    ktime_compare(delta, max_wakelock_list[i].delta_time) > 0)) {
-				for (j = STATICS_NUMBER - 1; j >= i + 1; j--) {
-					max_wakelock_list[j].ws = max_wakelock_list[j-1].ws;
-					max_wakelock_list[j].delta_time = max_wakelock_list[j-1].delta_time;
-					strscpy(max_wakelock_list[j].name, max_wakelock_list[j-1].name, NAME_SIZE);
-				}
-				max_wakelock_list[i].ws = ws;
-				max_wakelock_list[i].delta_time = delta;
-				strscpy(max_wakelock_list[i].name, ws->name, NAME_SIZE);
+		for (i = 0; i < agg_count; i++) {
+			if (strcmp(agg_list[i].name, ws->name) == 0) {
+				found_idx = i;
 				break;
 			}
+		}
+
+		if (found_idx >= 0) {
+			agg_list[found_idx].delta_time =
+				ktime_add(agg_list[found_idx].delta_time, delta);
+		} else if (agg_count < MAX_TRACKING_LIMIT) {
+			strscpy(agg_list[agg_count].name, ws->name, NAME_SIZE);
+			agg_list[agg_count].delta_time = delta;
+			agg_count++;
 		}
 	}
 	wakeup_sources_read_unlock(srcuidx);
 
-	// Generate Output
-	wall_delta = ktime_sub(ktime_get(), module_load_time);
-	if (wall_delta <= 0) wall_delta = ktime_set(0, 1);
+	for (i = 0; i < agg_count; i++) {
+		for (j = 0; j < STATICS_NUMBER; j++) {
+			if (max_wakelock_list[j].name[0] == 0 ||
+			    ktime_compare(agg_list[i].delta_time, max_wakelock_list[j].delta_time) > 0) {
+				for (k = STATICS_NUMBER - 1; k >= j + 1; k--) {
+					max_wakelock_list[k].ws = max_wakelock_list[k-1].ws;
+					max_wakelock_list[k].delta_time = max_wakelock_list[k-1].delta_time;
+					strscpy(max_wakelock_list[k].name, max_wakelock_list[k-1].name, NAME_SIZE);
+				}
+				max_wakelock_list[j].ws = NULL;
+				max_wakelock_list[j].delta_time = agg_list[i].delta_time;
+				strscpy(max_wakelock_list[j].name, agg_list[i].name, NAME_SIZE);
+				break;
+			}
+		}
+	}
 
-	for (i = STATICS_NUMBER - 1; i >= 0; i--) {
+	for (i = 0; i < STATICS_NUMBER; i++) {
 		if (max_wakelock_list[i].name[0] != 0 && max_wakelock_list[i].delta_time > 0) {
-			buf_offset += scnprintf(buf + buf_offset, PAGE_SIZE - buf_offset,
+			size_t remaining;
+			int written;
+
+			if (buf_offset >= PAGE_SIZE)
+				break;
+
+			remaining = PAGE_SIZE - buf_offset;
+			written = scnprintf(buf + buf_offset, remaining,
 				"%s %lld\n",
 				max_wakelock_list[i].name,
 				ktime_to_ms(max_wakelock_list[i].delta_time));
+			if (written <= 0)
+				break;
+
+			buf_offset += written;
 		}
 	}
+
+	kfree(agg_list);
 
 	mutex_unlock(&list_lock);
 	return buf_offset;
