@@ -128,10 +128,10 @@ static ssize_t proc_enabled_write(struct file *file, const char __user *buf,
 static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 		size_t count, loff_t *ppos)
 {
-	char buffer[128];
+	char buffer[256];
 	size_t len = 0;
 
-	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d kernel=%d mdpf=%d kworker=%d irqwth=%d percpu_rwsem=%d\n",
+	len = snprintf(buffer, sizeof(buffer), "0x%x base=%d interaction=%d lock=%d binder=%d audio=%d camera=%d kswapd=%d boost=%d kernel=%d mdpf=%d kworker=%d irqwth=%d percpu_rwsem=%d bset_binder=%d\n",
 			moto_sched_enabled,
 			is_enabled(UX_ENABLE_BASE),
 			is_enabled(UX_ENABLE_INTERACTION),
@@ -145,7 +145,9 @@ static ssize_t proc_enabled_read(struct file *file, char __user *buf,
 			is_enabled(UX_ENABLE_MDPF),
 			is_enabled(UX_ENABLE_KWORKER),
 			is_enabled(UX_ENABLE_IRQWTH),
-			is_enabled(UX_ENABLE_PERCPU_RWSEM));
+			is_enabled(UX_ENABLE_PERCPU_RWSEM),
+			is_enabled(UX_ENABLE_BEST_BTHD)
+		);
 
 	return simple_read_from_buffer(buf, count, ppos, buffer, len);
 }
