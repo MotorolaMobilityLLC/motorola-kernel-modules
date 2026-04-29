@@ -79,10 +79,17 @@ static long copy_from_user_compatible(void *dst, const void __user *src, size_t 
 #endif
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 static void binder_trans_handler(void *data, struct binder_proc *target_proc,
 				struct binder_proc *proc,
 				struct binder_thread *thread,
 				struct binder_transaction_data *tr)
+#else
+void binder_trans_handler(void *data, struct binder_proc *target_proc,
+				struct binder_proc *proc,
+				struct binder_thread *thread,
+				struct binder_transaction_data *tr)
+#endif
 {
 	char buf_data[INTERFACETOKEN_BUFF_SIZE];
 	size_t buf_data_size;
@@ -130,10 +137,17 @@ static void binder_trans_handler(void *data, struct binder_proc *target_proc,
 	}
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 static void binder_reply_handler(void *data, struct binder_proc *target_proc,
 				struct binder_proc *proc,
 				struct binder_thread *thread,
 				struct binder_transaction_data *tr)
+#else
+void binder_reply_handler(void *data, struct binder_proc *target_proc,
+				struct binder_proc *proc,
+				struct binder_thread *thread,
+				struct binder_transaction_data *tr)
+#endif
 {
 	/*only sync binder call has BC_REPLY*/
 	if (target_proc
@@ -147,7 +161,11 @@ static void binder_reply_handler(void *data, struct binder_proc *target_proc,
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 static void binder_alloc_handler(void *data, size_t size, size_t *free_async_space, int is_async, bool *should_fail)
+#else
+void binder_alloc_handler(void *data, size_t size, size_t *free_async_space, int is_async, bool *should_fail)
+#endif
 {
 	struct task_struct *p = NULL;
 	struct binder_alloc *alloc = NULL;
@@ -218,8 +236,17 @@ void binder_alloc_handler(void *data, size_t size, struct binder_alloc *alloc, i
 }
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)) && (LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0))
-static void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock, struct binder_proc *proc)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
+static void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock)
+{
+	if (binder_procs == NULL)
+		binder_procs = hhead;
+
+	if (binder_procs_lock == NULL)
+		binder_procs_lock = lock;
+}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock, struct binder_proc *proc)
 {
 	if (binder_procs == NULL)
 		binder_procs = hhead;
@@ -228,7 +255,7 @@ static void binder_preset_handler(void *data, struct hlist_head *hhead, struct m
 		binder_procs_lock = lock;
 }
 #else
-static void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock)
+void binder_preset_handler(void *data, struct hlist_head *hhead, struct mutex *lock)
 {
 	if (binder_procs == NULL)
 		binder_procs = hhead;
@@ -375,7 +402,11 @@ static bool binder_worklist_empty_ilocked(struct list_head *list)
 	return list_empty(list);
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 static void proc_binder_check_status_print(struct seq_file *m, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2)
+#else
+void proc_binder_check_status_print(struct seq_file *m, int caller_uid, int caller_pid, int target_uid, int target_pid, int arg1, int arg2)
+#endif
 {
 	seq_printf(m,
 		"from %d:%d to %d:%d %d %d\n",
@@ -383,7 +414,11 @@ static void proc_binder_check_status_print(struct seq_file *m, int caller_uid, i
 		arg1, arg2);
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 static void proc_binder_check_status_show_detail(struct seq_file *m, struct binder_proc *proc, int to_uid)
+#else
+void proc_binder_check_status_show_detail(struct seq_file *m, struct binder_proc *proc, int to_uid)
+#endif
 {
 	struct rb_node *n = NULL;
 	struct binder_thread *thread = NULL;
@@ -502,7 +537,11 @@ int proc_binder_check_status_show(struct seq_file *m, void *unused)
 	return 0;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 static int register_moto_binder_hooks(void)
+#else
+int register_moto_binder_hooks(void)
+#endif
 {
 	int rc = 0;
 
@@ -532,7 +571,11 @@ static int register_moto_binder_hooks(void)
 	return rc;
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 static void unregister_moto_binder_hooks(void)
+#else
+void unregister_moto_binder_hooks(void)
+#endif
 {
 	unregister_trace_android_vh_binder_preset(binder_preset_handler, NULL);
 	unregister_trace_android_vh_binder_trans(binder_trans_handler, NULL);
