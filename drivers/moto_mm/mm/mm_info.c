@@ -76,7 +76,11 @@ static void alloc_pages_slowpath_end_hook(void *data, gfp_t gfp_mask, unsigned i
 #endif
 #endif // defined(MM_INFO_SUPPORTED)
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 static int register_mm_info_hooks(void)
+#else
+int register_mm_info_hooks(void)
+#endif
 {
 #if defined(MM_INFO_SUPPORTED)
 	int rc;
@@ -108,7 +112,11 @@ ERROR_OUT(alloc_pages_slowpath_end):
 #endif // defined(MM_INFO_SUPPORTED)
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
 static void unregister_mm_info_hooks(void)
+#else
+void unregister_mm_info_hooks(void)
+#endif
 {
 #if defined(MM_INFO_SUPPORTED)
 
