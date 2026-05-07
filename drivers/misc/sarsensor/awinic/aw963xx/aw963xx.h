@@ -88,6 +88,8 @@ struct aw963xx {
 
 };
 
+#define AW963XX_CHIP_DEFALUT_ADDR           (0x12)
+#define AW963XX_CHIP_ADDR_NUM_MAX           (4)	
 #define REG_CPU_MODE_SET								(0xf800)
 #define AW963XX_RESET_CPU_SET_BOOT_SATRT				(0x00010100)
 #define AW963XX_EXIT_RESET_CPU_SET_BOOT_SATRT			(0x00000100)
