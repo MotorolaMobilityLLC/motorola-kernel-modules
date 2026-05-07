@@ -220,7 +220,43 @@ static int read_regStat(psx93XX_t this)
 	}
 	return 0;
 }
-
+static int reprobe_i2c_addr(psx93XX_t this, u32 *idCode)
+{
+	int ret;
+	u32 chip_id;
+    u8  idx;
+    struct i2c_client *i2c_client = this->bus;
+    u8 all_addrs[3] = {0x20, 0x28, 0x2C};
+    for (idx=0; idx<3; idx++)
+    {
+        i2c_client->addr = all_addrs[idx];
+		LOG_INFO(" reprobe_i2c_addr}");
+		ret = sx937x_i2c_read_16bit(this, SX937X_DEVICE_INFO, &chip_id);
+		if (ret < 0){
+			LOG_ERR("Failed to probe on i2c addr= 0x%X\n", all_addrs[idx]);
+			continue;
+		}
+		if (chip_id >> 12 != SX937X_WHOAMI_VALUE >> 4){
+			LOG_ERR("Read chip id= 0x%X is not the same as expected=0x%X on i2c addr=0x%X\n",
+				chip_id, SX937X_WHOAMI_VALUE, all_addrs[idx]);
+			continue;
+		}
+		LOG_INFO("Probed chip on i2c addr=0x%X", all_addrs[idx]);
+		ret = sx937x_i2c_write_16bit(this, SX937X_DEVICE_RESET, 0xDE);
+		if (ret<0){
+			LOG_ERR("Failed to reset the chip on i2c addr= 0x%X\n", all_addrs[idx]);
+			continue;
+		}
+		msleep(100);
+		LOG_INFO("Passed to reprobe smtc sx937x on i2c addr= 0x%X", all_addrs[idx]);
+		if (idCode != NULL){
+			*idCode = chip_id;
+		}
+		return 0;
+    }
+	LOG_ERR("Failed to reprobe smtc sx937x on all addr={0x20, 0x28, 0x2C}");
+	return -EIO;
+}
 static int sx937x_Hardware_Check(psx93XX_t this)
 {
 	int ret;
@@ -244,10 +280,14 @@ static int sx937x_Hardware_Check(psx93XX_t this)
 	ret = sx937x_i2c_read_16bit(this, SX937X_DEVICE_INFO, &idCode);
 	if (ret < 0)
 	{
+	LOG_INFO("sx937x_Hardware_Check()\n");
+		ret = reprobe_i2c_addr(this, &idCode);
+		if (ret < 0){
 		this->failStatusCode = SX937x_I2C_ERROR;
 		LOG_ERR("Failed to read device info:failcode = 0x%x\n",this->failStatusCode);
 
 		return ret;
+		}
 	}
 
 	if (idCode >> 12 != SX937X_WHOAMI_VALUE >> 4)
@@ -2231,13 +2271,25 @@ static void sx937x_i2c_watchdog_work(struct work_struct *work)
 				err_cnt++;
 				LOG_ERR("sx937x_i2c_watchdog_work err_cnt: %d\n", err_cnt);
 				delay = SX937X_I2C_WATCHDOG_TIME_ERR;
-				if (err_cnt >= 3) {
-					err_cnt = 0;
+				if (err_cnt >= 3)
+				{
+					if(pdata->eldo_vdd_en) {
 					vdd_power_off_on(this, 0);
 					msleep(100);
 					vdd_power_off_on(this, 1);
+						msleep(100);
 					sx937x_reinitialize(this);
 					delay = SX937X_I2C_WATCHDOG_TIME;
+						err_cnt = 0;
+					}
+					else{
+						LOG_INFO("sx937x_i2c_watchdog_work reprobe_i2c_addr");
+						ret = reprobe_i2c_addr(this, NULL);
+						if (ret == 0){
+							sx937x_reinitialize(this);
+							delay = SX937X_I2C_WATCHDOG_TIME;
+						}
+					}
 				}
 			} else {
 				err_cnt = 0;

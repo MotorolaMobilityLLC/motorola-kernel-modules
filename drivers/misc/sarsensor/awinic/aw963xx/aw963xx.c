@@ -1,8 +1,7 @@
 #include "aw963xx.h"
 #include "aw_sar.h"
-
 #define AW963XX_I2C_NAME "aw963xx_sar"
-#define AW963XX_DRIVER_VERSION "v0.1.1.14"
+#define AW963XX_DRIVER_VERSION "v0.1.1.16"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
     uint8_t aw963xx_buf_1[AW963XX_SRAM_UPDATE_ONE_PACK_SIZE + 2] = { 0 };
@@ -660,6 +659,46 @@ static void aw963xx_set_cs_as_irq(struct aw_sar *p_sar, int flag)
 	}
 }
 
+int32_t aw963xx_scan_i2cdevice_probe_chipid(void *data, uint32_t *chipid)
+{
+	int32_t ret = -AW_ERR;
+	uint32_t reg_val = 0;
+	struct aw_sar *p_sar = (struct aw_sar *)data;
+    int32_t checkid_retrycount = 1;
+	int32_t i2c_addr_index = 0;
+	if (p_sar == NULL) {
+		return -AW_BIN_PARA_INVALID;
+	}
+
+	while(checkid_retrycount--) {
+		ret = aw_sar_i2c_read(p_sar->i2c, REG_CHIP_ID0, &reg_val);
+		if (ret < 0) {
+			AWLOGE(p_sar->dev, "probe CHIP ID failed: %d,checkid_retrycount = %d", ret, checkid_retrycount);
+			for (i2c_addr_index = 0; i2c_addr_index < AW963XX_CHIP_ADDR_NUM_MAX; i2c_addr_index++) {
+				p_sar->i2c->addr = AW963XX_CHIP_DEFALUT_ADDR + i2c_addr_index;
+				ret = aw_sar_i2c_read(p_sar->i2c, REG_CHIP_ID0, &reg_val);
+				if(ret == AW_OK) {
+					AWLOGI(p_sar->dev, "Reset is possible after successfully use i2c_addr_index=%d,changed(ADDR = 0x%x) the probe chipid",  i2c_addr_index, p_sar->i2c->addr);
+					ret = aw_sar_i2c_write(p_sar->i2c, REG_SA_RSTNALL, AW963XX_SOFT_RST_EN);
+					if (ret < 0) {
+						AWLOGE(p_sar->dev, "soft_reset error: %d", ret);
+					} else {
+						msleep(30);
+						p_sar->i2c->addr = AW963XX_CHIP_DEFALUT_ADDR;
+						AWLOGI(p_sar->dev, "Reset successfully,exit i2c scan(recovery ADDR = 0x%x)", p_sar->i2c->addr);
+						*chipid = reg_val;
+					    return AW_OK;
+					}
+				}
+				else{
+					AWLOGE(p_sar->dev, "change chip addr=0x%x fail, i2c_addr_index = %d", p_sar->i2c->addr, i2c_addr_index);
+				}
+			}
+		}
+    }
+	AWLOGE(p_sar->dev, "probe CHIP ID failed exit: %d", ret);
+	return ret;
+}
 int32_t aw963xx_check_chipid(void *data)
 {
 	int32_t ret = -AW_ERR;
@@ -673,7 +712,13 @@ int32_t aw963xx_check_chipid(void *data)
 	ret = aw_sar_i2c_read(p_sar->i2c, REG_CHIP_ID0, &reg_val);
 	if (ret < 0) {
 		AWLOGE(p_sar->dev, "read CHIP ID failed: %d", ret);
+		ret = aw963xx_scan_i2cdevice_probe_chipid(p_sar, &reg_val);
+		if (ret < 0) {
+			AWLOGE(p_sar->dev, "w963xx_scan_i2cdevice_probe_chipid failed: %d", ret);
 		return ret;
+		} else {
+			AWLOGI(p_sar->dev, "w963xx_scan_i2cdevice_probe_chipid success: %d", ret);
+		}
 	}
 
 	switch (reg_val) {

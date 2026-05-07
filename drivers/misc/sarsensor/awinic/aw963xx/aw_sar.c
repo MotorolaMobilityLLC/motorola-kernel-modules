@@ -4,7 +4,7 @@
 #include <linux/phone_case_detection_notify.h>
 #endif
 #define AW_SAR_I2C_NAME		"awinic_sar"
-#define AW_SAR_DRIVER_VERSION	"v0.1.5.14"
+#define AW_SAR_DRIVER_VERSION	"v0.1.5.16"
 #define USB_POWER_SUPPLY_NAME   "usb"
 
 
@@ -1955,8 +1955,14 @@ static void aw96xxx_monitor_work_func(struct work_struct *aw96xxx_work)
 	ret = aw_sar_i2c_read(p_sar->i2c, 0x0000, &data);
 	if (ret != AW_OK) {
 		AWLOGE(p_sar->dev, "read 0x0000 err: %d", ret);
-		mutex_unlock(&aw_sar_lock);
-		return;
+		ret = aw963xx_scan_i2cdevice_probe_chipid(p_sar, &data);
+		if (ret < 0) {
+			AWLOGE(p_sar->dev, "aw963xx_scan_i2cdevice_probe_chipid failed: %d", ret);
+		//mutex_unlock(&aw_sar_lock);
+		//return;
+		} else {
+			AWLOGI(p_sar->dev, "aw963xx_scan_i2cdevice_probe_chipid success: %d", ret);
+		}
 	}
 	if(data == 0 && p_sar->load_bin_flag == true)
 	{
@@ -1966,14 +1972,14 @@ static void aw96xxx_monitor_work_func(struct work_struct *aw96xxx_work)
 		ret = aw_sar_soft_reset(p_sar);
 		if (ret != AW_OK) {
 			AWLOGE(p_sar->dev, "soft_reset error!");
-			mutex_unlock(&aw_sar_lock);
-			return;
+			//mutex_unlock(&aw_sar_lock);
+			//return;
 		}
 		ret = aw_sar_check_init_over_irq(p_sar);
 		if (ret != AW_OK) {
 			AWLOGE(p_sar->dev, "check_init_over_irqt error!");
-			mutex_unlock(&aw_sar_lock);
-			return;
+			//mutex_unlock(&aw_sar_lock);
+			//return;
 		}
 		ret = aw_sar_load_def_reg_bin(p_sar);
 		if (ret != AW_OK) {
@@ -2164,7 +2170,7 @@ if (p_sar->dts_info.use_regulator_flag == true) {
 }
 
 err_malloc:
-	return ret;
+	return -EPROBE_DEFER;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
