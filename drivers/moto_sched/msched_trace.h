@@ -425,6 +425,69 @@ TRACE_EVENT(binder_inherit_ux_type,
 		__entry->pid, __entry->tgid, __entry->prio,
 		__entry->comm, __entry->ux_type, __entry->set)
 );
+
+TRACE_EVENT(binder_pick_best_thread,
+	TP_PROTO(int proc_pid, struct task_struct *best_task, int mvp_prio,
+				int found_idle, int best_score),
+	TP_ARGS(proc_pid, best_task, mvp_prio, found_idle, best_score),
+	TP_STRUCT__entry(
+		__field(int, proc_pid)
+		__field(int, best_pid)
+		__field(int, best_prio)
+		__field(int, best_mvpprio)
+		__array(char, best_comm, TASK_COMM_LEN)
+		__field(int, found_idle)
+		__field(int, best_score)
+	),
+	TP_fast_assign(
+		__entry->proc_pid = proc_pid;
+		if (best_task){
+			__entry->best_pid = best_task->pid;
+			memcpy(__entry->best_comm, best_task->comm, TASK_COMM_LEN);
+			__entry->best_prio = best_task->prio;
+		} else {
+			__entry->best_pid = -1;
+			strlcpy(__entry->best_comm, "(null)", TASK_COMM_LEN);
+			__entry->best_prio = -1;
+		}
+		__entry->best_mvpprio = mvp_prio;
+		__entry->found_idle = found_idle;
+		__entry->best_score = best_score;
+	),
+	TP_printk("proc=%d best_pid=%d best_comm=%s prio=%d mvpprio=%d idle=%d score=%d",
+				__entry->proc_pid,  __entry->best_pid, __entry->best_comm,
+				__entry->best_prio, __entry->best_mvpprio,
+				__entry->found_idle, __entry->best_score)
+);
+
+TRACE_EVENT(binder_nothread_be_select,
+
+	TP_PROTO(struct task_struct *task, int proc, bool epoll),
+
+	TP_ARGS(task, proc, epoll),
+
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
+		__field(int, prio)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(int, proc)
+		__field(bool, epoll)
+	),
+
+	TP_fast_assign(
+		__entry->pid = task->pid;
+		__entry->tgid = task->tgid;
+		__entry->prio = task->prio;
+		memcpy(__entry->comm, task->comm, TASK_COMM_LEN);
+		__entry->proc = proc;
+		__entry->epoll = epoll;
+	),
+
+	TP_printk("pid=%d tgid=%d prio=%d comm=%s proc=%d epoll=%d",
+		__entry->pid, __entry->tgid, __entry->prio,
+		__entry->comm, __entry->proc, __entry->epoll)
+);
 #endif /* _TRACE_MSCHED_H */
 
 #undef TRACE_INCLUDE_PATH
