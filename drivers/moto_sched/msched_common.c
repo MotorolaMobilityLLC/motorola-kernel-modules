@@ -39,6 +39,8 @@
 #include "msched_uclamp.h"
 #include <linux/percpu-defs.h>
 #include <linux/preempt.h>
+#include <uapi/linux/android/binder.h>
+#include "drivers/android/binder_internal.h"
 #include <linux/mmap_lock.h>
 #include <linux/slab.h>
 #include <linux/kref.h>
@@ -580,15 +582,124 @@ static void probe_android_vh_binder_priority_skip(void *ignore, struct task_stru
 }
 #endif
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+static bool binder_is_transaction_complete(struct binder_work *w)
+{
+	if (!w)
+		return false;
+
+	return w->type == BINDER_WORK_TRANSACTION_COMPLETE ||
+			w->type == BINDER_WORK_TRANSACTION_ONEWAY_SPAM_SUSPECT;
+}
+
+static int binder_count_effective_works(struct list_head *todo)
+{
+	struct binder_work *w;
+	int count = 0;
+	list_for_each_entry(w, todo, entry) {
+		if (!binder_is_transaction_complete(w))
+			count++;
+	}
+	return count;
+}
+
+static bool binderthread_is_almost_idle(struct binder_thread *thread)
+{
+	if (thread->transaction_stack != NULL)
+		return false;
+
+	if (list_empty(&thread->todo))
+		return true;
+
+	if (list_is_singular(&thread->todo)) {
+		struct binder_work *w = list_first_entry(&thread->todo, struct binder_work, entry);
+		if (binder_is_transaction_complete(w))
+			return true;
+	}
+
+	return false;
+}
+
+static struct binder_thread *pick_best_binderthread(struct binder_proc *proc)
+{
+	struct binder_thread *best = NULL;
+	struct rb_node *n;
+	int best_score = INT_MAX;
+	bool found_idle = false;
+	int mvp_prio = UX_PRIO_INVALID;
+
+	if(!proc)
+		return NULL;
+
+	for (n = rb_first(&proc->threads); n; n = rb_next(n)) {
+		struct binder_thread *thread = rb_entry(n, struct binder_thread, rb_node);
+		int score = 0;
+
+		if (!thread || thread->is_dead || !thread->task || !(thread->looper & 0x01)) /*BINDER_LOOPER_STATE_REGISTERED*/
+			continue;
+
+		mvp_prio = task_get_mvp_prio(thread->task, true);
+		if(thread->task->prio < MAX_RT_PRIO || mvp_prio > UX_PRIO_INVALID)
+			continue;
+
+		if (binderthread_is_almost_idle(thread)) {
+			best = thread;
+			found_idle = true;
+			break;
+		}
+
+		if (thread->transaction_stack == NULL) {
+			score += 0;
+		} else {
+			int depth = 0;
+			struct binder_transaction *t = thread->transaction_stack;
+			while (t) {
+				depth++;
+				t = t->from_parent;
+			}
+			score += depth * 100;
+		}
+
+		score += binder_count_effective_works(&thread->todo) * 10;
+
+		if (score < best_score) {
+			best_score = score;
+			best = thread;
+		}
+	}
+
+	trace_binder_pick_best_thread(proc->pid, best ? best->task : NULL, mvp_prio, found_idle, best_score);
+
+	return best;
+}
+
+static bool proc_has_epoll_threads(struct binder_proc *proc) {
+	struct rb_node *n;
+	for (n = rb_first(&proc->threads); n; n = rb_next(n)) {
+		struct binder_thread *thread = rb_entry(n, struct binder_thread, rb_node);
+		if (thread->looper & 0x20) /* BINDER_LOOPER_STATE_POLL */
+			return true;
+	}
+	return false;
+}
+
 static void android_vh_binder_proc_transaction_finish(void *unused, struct binder_proc *proc,
 		struct binder_transaction *t, struct task_struct *task, bool pending_async, bool sync)
 {
-	if (current == task)
+	if (current == task || !proc)
 		return;
 
 	if (!pending_async && task) {
 		binder_ux_type_set(task);
+	} else if (sync && !task && current_is_important_ux() && is_enabled(UX_ENABLE_BEST_BTHD)) {
+		if(trace_binder_nothread_be_select_enabled())
+			trace_binder_nothread_be_select(current, proc->pid, proc_has_epoll_threads(proc));
+
+		struct binder_thread *best = pick_best_binderthread(proc);
+
+		if (best && best->task) {
+			binder_inherit_ux_type(best->task);
+		}
 	}
 }
 #endif
@@ -676,7 +787,6 @@ static void android_vh_percpu_rwsem_up_write_handler(
 	trace_percpu_rwsem_up_write(sem);
 }
 
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
 static void msched_anon_vma_name_free(struct kref *kref)
 {
@@ -728,7 +838,7 @@ void register_vendor_comm_hooks(void)
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(5, 10, 0))
 	register_trace_android_vh_binder_priority_skip(probe_android_vh_binder_priority_skip, NULL);
 #endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
 	register_trace_android_vh_binder_proc_transaction_finish(
 		android_vh_binder_proc_transaction_finish, NULL);
 #endif
