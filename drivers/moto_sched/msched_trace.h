@@ -467,7 +467,7 @@ TRACE_EVENT(binder_pick_best_thread,
 			__entry->best_prio = best_task->prio;
 		} else {
 			__entry->best_pid = -1;
-			strlcpy(__entry->best_comm, "(null)", TASK_COMM_LEN);
+			strscpy(__entry->best_comm, "(null)", TASK_COMM_LEN);
 			__entry->best_prio = -1;
 		}
 		__entry->best_mvpprio = mvp_prio;
