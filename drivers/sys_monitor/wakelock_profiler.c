@@ -79,6 +79,7 @@ static ktime_t calculate_delta_and_update(const char *name, ktime_t current_tota
 	struct prev_read_entry *pr_entry;
 	ktime_t baseline = 0;
 	bool found = false;
+	ktime_t delta;
 
 	mutex_lock(&stats_lock);
 
@@ -118,7 +119,7 @@ static ktime_t calculate_delta_and_update(const char *name, ktime_t current_tota
 
 	mutex_unlock(&stats_lock);
 
-	ktime_t delta = ktime_sub(current_total, baseline);
+	delta = ktime_sub(current_total, baseline);
 	return (delta < 0) ? 0 : delta;
 }
 
@@ -145,6 +146,8 @@ static void initial_capture(void)
 	unsigned long flags;
 	struct wakeup_source *ws;
 	int count = 0;
+	ktime_t total;
+	struct prev_read_entry *pr;
 
 	module_load_time = ktime_get();
 
@@ -158,7 +161,7 @@ static void initial_capture(void)
 		}
 
 		spin_lock_irqsave(&ws->lock, flags);
-		ktime_t total = ws->total_time;
+		total = ws->total_time;
 		if (ws->active) {
 			ktime_t active_time = ktime_sub(ktime_get(), ws->last_time);
 			total = ktime_add(total, active_time);
@@ -166,7 +169,7 @@ static void initial_capture(void)
 		spin_unlock_irqrestore(&ws->lock, flags);
 
 		// Add to list with current value as baseline
-		struct prev_read_entry *pr = kmalloc(sizeof(*pr), GFP_ATOMIC);
+		pr = kmalloc(sizeof(*pr), GFP_ATOMIC);
 		if (pr) {
 			pr->name = ws->name;
 			pr->last_total_time = total;
