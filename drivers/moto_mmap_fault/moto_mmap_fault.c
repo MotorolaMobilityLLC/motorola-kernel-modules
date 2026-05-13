@@ -20,9 +20,41 @@
 #include <trace/hooks/iommu.h>
 #include <trace/hooks/vmscan.h>
 
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+#include <linux/sched/walt.h>
+#endif
+
+static int ramsize_GB;
 static int max_ra_pages = -1;
 module_param(max_ra_pages, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(max_ra_pages, "Max read ahead pages");
+
+static inline bool task_in_top_app_group(struct task_struct *p)
+{
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	return (rcu_access_pointer(wts->grp) != NULL);
+#else
+	return get_task_cgroup_id(p) == CGROUP_TOP_APP;
+#endif
+}
+
+#define CREATE_TRACE_POINTS
+#include "moto_mmap_fault_trace.h"
+
+#if defined(TUNE_DISABLE_BG_READAROUND)
+static void __nocfi moto_vh_should_fault_around(void *unused, struct vm_fault *vmf, bool *should_around)
+{
+	if (ramsize_GB > 6 || task_in_top_app_group(current) || current->prio <= 120) {
+		return;
+	}
+
+	*should_around = false;
+	if (trace_moto_disable_fault_around_enabled()) {
+		trace_moto_disable_fault_around(vmf->address, current->prio);
+	}
+}
+#endif
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(5, 15, 104) || (LINUX_VERSION_CODE > KERNEL_VERSION(5, 10, 177) && LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 #ifndef TUNE_MMAP_READAROUND
@@ -143,7 +175,7 @@ static void throttle_direct_reclaim_bypass(void *ignore, bool *bypass)
 static int __nocfi __init moto_mmap_fault_init(void)
 {
 	int ret = 0;
-	int ramsize_GB = (totalram_pages() >> (30 - PAGE_SHIFT)) + 1;
+	ramsize_GB = (totalram_pages() >> (30 - PAGE_SHIFT)) + 1;
 
 	if (max_ra_pages == -1) {
 		/* Set 8 pages for < 8G RAM and set 16 pages for >= 8G RAM */
@@ -165,6 +197,9 @@ static int __nocfi __init moto_mmap_fault_init(void)
 	ret = register_trace_android_vh_filemap_fault_get_page(filemap_fault_get_page, NULL) ?:
 		register_trace_android_vh_filemap_fault_cache_page(filemap_fault_cache_page, NULL);
 #endif
+#if defined(TUNE_DISABLE_BG_READAROUND)
+	ret = ret ?: register_trace_android_vh_should_fault_around(moto_vh_should_fault_around, NULL);
+#endif
 	if (ret != 0)
 		return -ENXIO;
 	else
@@ -181,6 +216,9 @@ static void __nocfi __exit moto_mmap_fault_exit(void)
 #else
 	unregister_trace_android_vh_filemap_fault_get_page(filemap_fault_get_page, NULL);
 	unregister_trace_android_vh_filemap_fault_cache_page(filemap_fault_cache_page, NULL);
+#endif
+#if defined(TUNE_DISABLE_BG_READAROUND)
+	unregister_trace_android_vh_should_fault_around(moto_vh_should_fault_around, NULL);
 #endif
 }
 
