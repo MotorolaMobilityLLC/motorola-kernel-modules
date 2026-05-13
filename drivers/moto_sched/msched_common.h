@@ -24,6 +24,7 @@
 #if IS_ENABLED(CONFIG_SCHED_WALT)
 #include <linux/sched/walt.h>
 #endif
+#include <drivers/android/binder_internal.h>
 
 #define VERION 251105
 
@@ -163,7 +164,11 @@ extern void task_ux_type_clear(int pid, int ux_type);
 extern int task_get_origin_mvp_prio(struct task_struct *p, bool with_inherit);
 extern int task_get_mvp_prio(struct task_struct *p, bool with_inherit);
 extern unsigned int task_get_mvp_limit(struct task_struct *p, int mvp_prio);
+#if IS_ENABLED(CONFIG_SCHED_MOTO_BINDERTRANS)
+extern void binder_inherit_boost(void *bndrtrans, struct task_struct *task);
+#else
 extern void binder_inherit_ux_type(struct task_struct *task);
+#endif
 extern void binder_clear_inherited_ux_type(struct task_struct *task);
 extern void binder_ux_type_set(struct task_struct *task);
 extern void queue_ux_task(struct rq *rq, struct task_struct *task, int enqueue);
@@ -270,6 +275,11 @@ static inline bool task_is_important_ux(struct task_struct *p)
 static inline bool current_is_important_ux(void)
 {
 	return task_get_mvp_prio(current, true) >= UX_PRIO_OTHER;
+}
+
+static inline bool is_pid_important_rt(int pid)
+{
+	return pid == global_sf_tgid;
 }
 
 static inline void task_set_ux_inherit_prio(struct task_struct *p, int depth)
