@@ -33,6 +33,30 @@ TRACE_EVENT(mmap_fault_throttle_bypass,
 	TP_printk("pid=%d comm=%s bypass=%d", __entry->pid, __entry->comm, __entry->bypass)
 );
 
+TRACE_EVENT(mmap_disable_fault_around,
+
+        TP_PROTO(unsigned long address, int prio),
+
+        TP_ARGS(address, prio),
+
+        TP_STRUCT__entry(
+                __array(char, comm, TASK_COMM_LEN)
+                __field(pid_t, pid)
+                __field(int, prio)
+                __field(unsigned long, address)
+        ),
+
+        TP_fast_assign(
+                memcpy(__entry->comm, current->comm, TASK_COMM_LEN);
+                __entry->pid = current->pid;
+                __entry->prio = prio;
+                __entry->address = address;
+        ),
+
+        TP_printk("disable_fault_around comm=%s pid=%d prio=%d address=%#lx",
+                __entry->comm, __entry->pid, __entry->prio, __entry->address)
+);
+
 #endif /* _TRACE_MMAP_FAULT_H */
 
 #undef TRACE_INCLUDE_PATH
