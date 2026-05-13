@@ -78,7 +78,11 @@ enum {
 static struct msched_ops sched_ops = {
 	.task_get_mvp_prio	= task_get_mvp_prio,
 	.task_get_mvp_limit	= task_get_mvp_limit,
+	#if IS_ENABLED(CONFIG_SCHED_MOTO_BINDERTRANS)
+	.binder_inherit_ux_type = binder_inherit_boost,
+	#else
 	.binder_inherit_ux_type = binder_inherit_ux_type,
+	#endif
 	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type,
 	.binder_ux_type_set = binder_ux_type_set,
 	.queue_ux_task = queue_ux_task
@@ -87,7 +91,11 @@ static struct msched_ops sched_ops = {
 static struct msched_ops sched_ops = {
 	.task_get_mvp_prio	= task_get_mvp_prio,
 	.task_get_mvp_limit	= task_get_mvp_limit,
+	#if IS_ENABLED(CONFIG_SCHED_MOTO_BINDERTRANS)
+	.binder_inherit_ux_type = binder_inherit_boost,
+	#else
 	.binder_inherit_ux_type = binder_inherit_ux_type,
+	#endif
 	.binder_clear_inherited_ux_type = binder_clear_inherited_ux_type,
 	.binder_ux_type_set = binder_ux_type_set,
 	.queue_ux_task = queue_ux_task
