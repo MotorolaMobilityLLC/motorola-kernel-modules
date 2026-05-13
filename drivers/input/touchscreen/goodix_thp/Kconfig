@@ -30,3 +30,8 @@ config HIGH_REPORT_RATE_FOLLOWS_SWIPE_RESPONSIVENESS
     bool "Enable switch touch report rate followed by swipe responsiveness"
     help
       Say Y here to enable switch touch report rate followed by swipe responsiveness
+
+config TPIC_CHIP_TYPE_9926
+    bool "Enable it to select GT9926 touch IC"
+    help
+      Say Y here to select GT9926 touch IC

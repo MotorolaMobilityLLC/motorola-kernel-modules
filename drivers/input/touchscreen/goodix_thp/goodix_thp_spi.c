@@ -996,9 +996,67 @@ static int goodix_thp_get_custom_info(struct thp_ts_device *tdev, char *buf,
         return 0;
 }
 
+#ifdef CONFIG_TPIC_CHIP_TYPE_9926
+static int goodix_thp_get_frame(struct thp_ts_device *tdev, char *buf)
+{
+        u32 addr;
+        u16 frame_len;
+        u16 cal_checksum = 0;
+        u16 checksum;
+        int ret;
+        int i;
+        int head_len;
+        int offset;
+
+        if (!tdev)
+                return -EINVAL;
+
+        if (!buf) {
+                ts_err(tdev->dev, "frame buffer null");
+                return -EINVAL;
+        }
+
+        addr = tdev->board_data.frame_addr;
+        if (addr == 0) {
+                ts_err(tdev->dev, "frame addr has not been assigned");
+                return -EINVAL;
+        }
+
+        head_len = 16;
+        offset = 3;
+
+        ret = goodix_thp_spi_read(tdev, addr, buf, head_len);
+        if (ret < 0) {
+                ts_err(tdev->dev, "read frame head failed");
+                return ret;
+        }
+
+        for (i = 0; i < head_len - 2; i++)
+                cal_checksum += buf[i];
+        checksum = le16_to_cpup((__le16 *)&buf[head_len - 2]);
+        if (checksum != cal_checksum) {
+                ts_err(tdev->dev, "frame head checksum error, %*ph", head_len, buf);
+                return -EINVAL;
+        }
+
+        frame_len = le16_to_cpup((__le16 *)&buf[offset]);
+        if (frame_len < head_len || frame_len > GOODIX_THP_MAX_FRAME_LEN) {
+                ts_err(tdev->dev, "invalid frame_len:%d", frame_len);
+                return -EINVAL;
+        }
+        ret = goodix_thp_spi_read(tdev, addr + head_len,
+                buf + head_len, frame_len - head_len);
+        if (ret < 0) {
+                ts_err(tdev->dev, "read frame payload failed");
+                return ret;
+        }
+
+        return frame_len;
+}
+#else
 #define FRAME_HEAD_LEN 14
 static int goodix_thp_get_frame(struct thp_ts_device *tdev, char *buf)
-{        
+{
         u32 addr = tdev->board_data.frame_addr;
         u16 frame_len;
         u16 cal_checksum = 0;
@@ -1039,6 +1097,7 @@ static int goodix_thp_get_frame(struct thp_ts_device *tdev, char *buf)
 
         return frame_len;
 }
+#endif
 
 static int goodix_thp_get_version(struct thp_ts_device *tdev, u64 *version)
 {
