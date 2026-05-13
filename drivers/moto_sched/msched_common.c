@@ -15,6 +15,7 @@
 
 #include <linux/atomic.h>
 #include <linux/sched.h>
+#include <uapi/linux/sched/types.h>
 #include <linux/sched/task.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
@@ -40,7 +41,6 @@
 #include <linux/percpu-defs.h>
 #include <linux/preempt.h>
 #include <uapi/linux/android/binder.h>
-#include "drivers/android/binder_internal.h"
 #include <linux/mmap_lock.h>
 #include <linux/slab.h>
 #include <linux/kref.h>
@@ -319,6 +319,42 @@ void binder_inherit_ux_type(struct task_struct *task) {
 	msched_uclamp_binder_set_priority_hook(task);
 }
 EXPORT_SYMBOL(binder_inherit_ux_type);
+
+#if IS_ENABLED(CONFIG_SCHED_MOTO_BINDERTRANS)
+bool binder_inherit_rt_prio(struct binder_transaction *t, struct task_struct *task) {
+	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+		if (is_enabled(UX_ENABLE_BINDER) && t->from && is_pid_important_rt(t->from_tid)) {
+	#else
+		if (is_enabled(UX_ENABLE_BINDER) && t->from && is_pid_important_rt(t->from->pid)) {
+	#endif
+			trace_binder_inherit_rt_check(task, t->priority.sched_policy, t->priority.prio, t->from->pid,\
+											t->from->task ? t->from->task->comm : "NULL", (unsigned long)t->to_thread);
+			if(!rt_policy(task->policy) && task->prio > t->priority.prio) {
+				struct sched_param params;
+				memset(&params, 0, sizeof(params));
+				params.sched_priority = MAX_RT_PRIO - 1 - t->priority.prio;
+				sched_setscheduler_nocheck(task,
+					   t->priority.sched_policy | SCHED_RESET_ON_FORK,
+					   &params);
+				if(trace_binder_inherit_rt_prio_enabled() && t->from->task)
+					trace_binder_inherit_rt_prio(task, t->from->task);
+
+				#ifdef CONFIG_MOTO_ENABLE_MDPF
+				msched_uclamp_binder_set_priority_hook(task);
+				#endif
+
+				return true;
+			}
+		}
+		return false;
+}
+void binder_inherit_boost(void *bndrtrans, struct task_struct *task) {
+	if (bndrtrans && !binder_inherit_rt_prio((struct binder_transaction *)bndrtrans, task)) {
+		binder_inherit_ux_type(task);
+	}
+}
+EXPORT_SYMBOL(binder_inherit_boost);
+#endif
 
 void binder_clear_inherited_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER)) {

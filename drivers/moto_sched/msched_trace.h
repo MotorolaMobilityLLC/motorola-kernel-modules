@@ -488,6 +488,77 @@ TRACE_EVENT(binder_nothread_be_select,
 		__entry->pid, __entry->tgid, __entry->prio,
 		__entry->comm, __entry->proc, __entry->epoll)
 );
+
+TRACE_EVENT(binder_inherit_rt_prio,
+
+	TP_PROTO(struct task_struct *task, struct task_struct *call_task),
+
+	TP_ARGS(task, call_task),
+
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
+		__field(int, prio)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(pid_t, call_pid)
+		__field(pid_t, call_tgid)
+		__field(int, call_prio)
+		__array(char, call_comm, TASK_COMM_LEN)
+	),
+
+	TP_fast_assign(
+		__entry->pid = task->pid;
+		__entry->tgid = task->tgid;
+		__entry->prio = task->prio;
+		memcpy(__entry->comm, task->comm, TASK_COMM_LEN);
+		__entry->call_pid = call_task->pid;
+		__entry->call_tgid = call_task->tgid;
+		__entry->call_prio = call_task->prio;
+		memcpy(__entry->call_comm, call_task->comm, TASK_COMM_LEN);
+	),
+
+	TP_printk("pid=%d tgid=%d prio=%d comm=%s call_pid=%d call_tgid=%d call_prio=%d call_comm=%s",
+		__entry->pid, __entry->tgid, __entry->prio, __entry->comm,
+		__entry->call_pid, __entry->call_tgid, __entry->call_prio, __entry->call_comm)
+);
+
+TRACE_EVENT(binder_inherit_rt_check,
+
+	TP_PROTO(struct task_struct *task, unsigned int policy, int prio, pid_t pid, const char * comm, unsigned long to_thread),
+
+	TP_ARGS(task, policy, prio, pid, comm, to_thread),
+
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(pid_t, tgid)
+		__field(unsigned int, policy)
+		__field(int, prio)
+		__array(char, comm, TASK_COMM_LEN)
+		__field(pid_t, call_pid)
+		__field(unsigned int, call_policy)
+		__field(int, call_prio)
+		__array(char, call_comm, TASK_COMM_LEN)
+		__field(unsigned long, to_thread)
+	),
+
+	TP_fast_assign(
+		__entry->pid = task->pid;
+		__entry->tgid = task->tgid;
+		__entry->policy = task->policy;
+		__entry->prio = task->prio;
+		memcpy(__entry->comm, task->comm, TASK_COMM_LEN);
+		__entry->call_pid = pid;
+		__entry->call_policy = policy;
+		__entry->call_prio = prio;
+		memcpy(__entry->call_comm, comm, TASK_COMM_LEN);
+		__entry->to_thread = to_thread;
+	),
+
+	TP_printk("pid=%d tgid=%d policy=%d prio=%d comm=%s call_pid=%d call_policy=%d call_prio=%d call_comm=%s to_thread=%lu",
+		__entry->pid, __entry->tgid, __entry->policy, __entry->prio, __entry->comm,
+		__entry->call_pid, __entry->call_policy, __entry->call_prio, __entry->call_comm,
+		__entry->to_thread)
+);
 #endif /* _TRACE_MSCHED_H */
 
 #undef TRACE_INCLUDE_PATH
