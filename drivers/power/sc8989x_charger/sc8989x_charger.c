@@ -3545,8 +3545,8 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		dev_info(sc->dev, "%s: adapter/usb inserted\n", __func__);
 		ret = sc8989x_set_vindpm(sc, 12000);
 		schedule_delayed_work(&sc->ibus_enable_dwork, msecs_to_jiffies(1500));
-		/*sc->force_detect_count = 0;
-		type = sc8989x_get_vbus_stat(sc);
+		sc->force_detect_count = 0;
+		/* type = sc8989x_get_vbus_stat(sc);
 		Charger_Detect_Init(sc);
 		sc->retry_count = 0;
 		dev_info(sc->dev, "%s: adapter/usb inserted\n", __func__);
@@ -3576,6 +3576,7 @@ static irqreturn_t sc8989x_irq_handler(int irq, void *data)
 		Charger_Detect_Release(sc);
 		cancel_delayed_work(&sc->ibus_enable_dwork);
 		sc->ibus_dis = 0;
+		sc->force_detect_count = 0;
 		atomic_set(&sc->reset_vindpm, 0);
 		if (sc->is_upm6920A || sc->is_sc89890h || sc->is_cx25890HQ) {
 			if (sc->psy_usb_type == POWER_SUPPLY_USB_TYPE_DCP &&
