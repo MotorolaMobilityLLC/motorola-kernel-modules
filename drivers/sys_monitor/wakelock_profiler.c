@@ -43,7 +43,7 @@
 
 struct prev_read_entry {
 	struct list_head node;
-	const char *name;
+	char *name;
 	ktime_t last_total_time;
 };
 
@@ -85,7 +85,7 @@ static ktime_t calculate_delta_and_update(const char *name, ktime_t current_tota
 
 	// 1. Search in Cache
 	list_for_each_entry(pr_entry, &prev_read_list, node) {
-		if (strcmp(pr_entry->name, name) == 0) {
+		if (pr_entry->name && strcmp(pr_entry->name, name) == 0) {
 			baseline = pr_entry->last_total_time;
 			found = true;
 
@@ -106,11 +106,15 @@ static ktime_t calculate_delta_and_update(const char *name, ktime_t current_tota
 		} else {
 			pr_entry = kmalloc(sizeof(*pr_entry), GFP_ATOMIC);
 			if (pr_entry) {
-				pr_entry->name = name;
-				pr_entry->last_total_time = current_total;
-				list_add(&pr_entry->node, &prev_read_list);
-
-				baseline = current_total;
+				pr_entry->name = kstrdup(name, GFP_ATOMIC);
+				if (pr_entry->name) {
+					pr_entry->last_total_time = current_total;
+					list_add(&pr_entry->node, &prev_read_list);
+					baseline = current_total;
+				} else {
+					kfree(pr_entry);
+					baseline = current_total;
+				}
 			} else {
 				baseline = current_total;
 			}
@@ -131,6 +135,7 @@ static void clear_all_stats(void)
 	mutex_lock(&stats_lock);
 	list_for_each_entry_safe(pr, pr_tmp, &prev_read_list, node) {
 		list_del(&pr->node);
+		kfree(pr->name);
 		kfree(pr);
 	}
 	mutex_unlock(&stats_lock);
@@ -171,10 +176,14 @@ static void initial_capture(void)
 		// Add to list with current value as baseline
 		pr = kmalloc(sizeof(*pr), GFP_ATOMIC);
 		if (pr) {
-			pr->name = ws->name;
-			pr->last_total_time = total;
-			list_add(&pr->node, &prev_read_list);
-			count++;
+			pr->name = kstrdup(ws->name, GFP_ATOMIC);
+			if (pr->name) {
+				pr->last_total_time = total;
+				list_add(&pr->node, &prev_read_list);
+				count++;
+			} else {
+				kfree(pr);
+			}
 		}
 	}
 	wakeup_sources_read_unlock(srcuidx);
