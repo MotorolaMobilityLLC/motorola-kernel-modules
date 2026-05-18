@@ -1478,6 +1478,12 @@ void goodix_ts_mmi_post_resume(struct work_struct *work) {
 		ts_info(dev, "Success set swipe responsiveness level to %d", core_data->set_mode.swipe_responsiveness_level);
 	}
 
+	/* Reset the FOD down event counter to prevent it from blocking future events. */
+	if(core_data->zerotap_data[0]) {
+		ts_info(dev, "Clear FOD down event counter");
+		core_data->zerotap_data[0] = 0;
+	}
+
 	mutex_unlock(&core_data->mode_lock);
 	ts_info(core_data->ts_dev->dev, "post_resume exit");
 }
