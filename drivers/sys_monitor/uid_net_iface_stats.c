@@ -61,11 +61,12 @@ static inline void update_stats(kuid_t uid, const char *ifname, unsigned int len
 	struct uid_iface_val *entry;
 	u32 key_hash;
 	unsigned long flags;
+	u32 uid_val;
 
 	if (uid_eq(uid, INVALID_UID) || from_kuid(&init_user_ns, uid) == 0)
 		return;
 
-	u32 uid_val = from_kuid(&init_user_ns, uid);
+	uid_val = from_kuid(&init_user_ns, uid);
 	key_hash = jhash(ifname, strnlen(ifname, IFNAMSIZ), uid_val);
 	spin_lock_irqsave(&stats_lock, flags);
 	hash_for_each_possible(stats_table, entry, hnode, key_hash) {
