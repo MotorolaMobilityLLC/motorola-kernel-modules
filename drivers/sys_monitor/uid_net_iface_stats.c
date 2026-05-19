@@ -175,6 +175,7 @@ ssize_t uid_iface_stats_show(struct kobject *kobj, struct kobj_attribute *attr, 
 	int count = 0;
 	int bkt, len = 0;
 	int max_entries = 512;
+	int i;
 
 	snapshot = kmalloc_array(max_entries, sizeof(struct uid_iface_val), GFP_KERNEL);
 	if (!snapshot) return -ENOMEM;
@@ -190,7 +191,7 @@ ssize_t uid_iface_stats_show(struct kobject *kobj, struct kobj_attribute *attr, 
 	spin_unlock_irqrestore(&stats_lock, flags);
 
 	len += scnprintf(buf + len, PAGE_SIZE - len, "uid ifname rx_bytes rx_packets tx_bytes tx_packets\n");
-	for(int i = 0; i < count; i++) {
+	for(i = 0; i < count; i++) {
 		len += scnprintf(buf + len, PAGE_SIZE - len, "%u %s %llu %llu %llu %llu\n",
 			from_kuid(&init_user_ns, snapshot[i].uid), snapshot[i].ifname,
 			snapshot[i].rx_bytes, snapshot[i].rx_packets, snapshot[i].tx_bytes, snapshot[i].tx_packets);
