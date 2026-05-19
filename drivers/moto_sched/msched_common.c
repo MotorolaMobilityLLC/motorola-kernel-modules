@@ -317,8 +317,8 @@ void binder_inherit_ux_type(struct task_struct *task) {
 			&& !task_has_ux_type(task, UX_TYPE_INHERIT_BINDER)
 			&& current_is_important_ux()) {
 		task_add_ux_type(task, UX_TYPE_INHERIT_BINDER);
-		resched_task(task);
-		trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
+		//resched_task(task);
+		//trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
 	}
 #ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_binder_set_priority_hook(task);
@@ -366,7 +366,7 @@ void binder_clear_inherited_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER)
 			&& task_has_ux_type(task, UX_TYPE_INHERIT_BINDER)) {
 		task_clr_ux_type(task, UX_TYPE_INHERIT_BINDER);
-		trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
+		//trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
 	}
 #ifdef CONFIG_MOTO_ENABLE_MDPF
 	msched_uclamp_binder_restore_priority_hook(task);
