@@ -156,8 +156,6 @@ extern uint32_t ipio_chip_list[2];
 /* Macros */
 #define CHECK_EQUAL(X, Y)	((X == Y) ? 0 : -1)
 #define ERR_ALLOC_MEM(X)	((IS_ERR(X) || X == NULL) ? 1 : 0)
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #define USEC	1
 #define MSEC	(USEC * 1000)
 

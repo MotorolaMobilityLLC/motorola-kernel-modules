@@ -110,8 +110,6 @@
 
 
 #define ABS(val)			((val < 0)? -(val) : val)
-#define MAX(a, b)			((a > b)? a : b)
-
 static bool module_initialized;
 
 /* berlin A drv-sen map */
