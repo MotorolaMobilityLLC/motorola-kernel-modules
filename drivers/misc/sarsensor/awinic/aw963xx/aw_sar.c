@@ -4,7 +4,7 @@
 #include <linux/phone_case_detection_notify.h>
 #endif
 #define AW_SAR_I2C_NAME		"awinic_sar"
-#define AW_SAR_DRIVER_VERSION	"v0.1.5.16"
+#define AW_SAR_DRIVER_VERSION	"v0.1.5.18"
 #define USB_POWER_SUPPLY_NAME   "usb"
 
 
@@ -496,9 +496,11 @@ static void aw_sar_input_free_comm(struct aw_sar *p_sar)
 	uint8_t i = 0;
 
 	for (i = 0; i < p_sar->p_sar_para->ch_num_max; i++) {
+		if (p_sar->channels_arr[i].used) {
 		if (p_sar->channels_arr[i].input != NULL) {
 			input_unregister_device(p_sar->channels_arr[i].input);
-			input_free_device(p_sar->channels_arr[i].input);
+				//input_free_device(p_sar->channels_arr[i].input); 
+			}
 		}
 	}
 	AWLOGE(p_sar->dev, "aw_sar_input_free ok");
@@ -1912,11 +1914,6 @@ static int32_t aw_sar_platform_rsc_init(struct aw_sar *p_sar)
 	}
 
 	//step 3.Initialization interrupt
-	ret = aw_sar_irq_init(p_sar);
-	if (ret != AW_OK) {
-		AWLOGE(p_sar->dev, "interrupt initialization error!");
-		goto free_irq;
-	}
 
 	//step 4.Initialization input Subsystem
 	ret = aw_sar_input_init(p_sar);
@@ -1925,12 +1922,17 @@ static int32_t aw_sar_platform_rsc_init(struct aw_sar *p_sar)
 		goto free_input;
 	}
 
+	ret = aw_sar_irq_init(p_sar);
+	if (ret != AW_OK) {
+		AWLOGE(p_sar->dev, "interrupt initialization error!");
+		goto free_irq;
+	}
 	return AW_OK;
 
-free_input:
-	aw_sar_input_free(p_sar);
 free_irq:
 	aw_sar_irq_free(p_sar);
+free_input:
+	aw_sar_input_free(p_sar);
 free_sysfs_nodes:
 	aw_sar_node_free(p_sar);
 err_pinctrl:
@@ -2062,6 +2064,9 @@ static int32_t aw_sar_init(struct aw_sar *p_sar)
 		aw_sar_input_free(p_sar);
 		aw_sar_irq_free(p_sar);
 		aw_sar_node_free(p_sar);
+        if (p_sar->dts_info.use_plug_cail_flag == true) {
+          	power_supply_unreg_notifier(&p_sar->ps_notif);
+	    }
 		if (p_sar->dts_info.use_inter_pull_up == true) {
 			aw_sar_pinctrl_deinit(p_sar);
 		}
@@ -2153,6 +2158,7 @@ static int32_t aw_sar_i2c_probe(struct i2c_client *i2c, const struct i2c_device_
 		p_sar->monitor_wq = create_singlethread_workqueue("aw96xxx_sar_workqueue");
 		if (!p_sar->monitor_wq) {
 			AWLOGE(&i2c->dev, "aw96xxx_sar_workqueue error\n");
+			ret = -AW_ERR;
 			goto err_chip_init;
 		}
 		INIT_DELAYED_WORK(&p_sar->monitor_work, aw96xxx_monitor_work_func);
@@ -2170,7 +2176,7 @@ if (p_sar->dts_info.use_regulator_flag == true) {
 }
 
 err_malloc:
-	return -EPROBE_DEFER;
+	return ret;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6,1,0)
