@@ -83,6 +83,9 @@ struct wireless_glink_dev {
 	u32				rx_dev_type;
 	u32				rx_dev_id;
 	u32				mc_status;
+#ifdef CONFIG_WLC_OVERHEAT_PROTECT
+  u32       force_dis_wls;
+#endif
 	struct dentry		*debug_root;
 };
 

@@ -387,6 +387,51 @@ static ssize_t wlc_fan_speed_show(struct device *dev,
 }
 static DEVICE_ATTR(wlc_fan_speed, S_IRUGO|S_IWUSR, wlc_fan_speed_show, wlc_fan_speed_store);
 
+#ifdef CONFIG_WLC_OVERHEAT_PROTECT
+static ssize_t force_dis_wls_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct wireless_glink_dev *chg = this_chip;
+	unsigned long r;
+	unsigned long force_dis_wls = 0;
+	if (!chg) {
+		pr_err("chg not valid\n");
+		return -ENODEV;
+	}
+
+	r = kstrtoul(buf, 0, &force_dis_wls);
+	if (r) {
+		pr_err("Invalid force_dis_wls = %lu\n", force_dis_wls);
+		return -EINVAL;
+	}
+
+	chg->force_dis_wls = force_dis_wls;
+	pr_info("Now force_dis_wls changed to %d \n",
+		chg->force_dis_wls);
+
+	r = qti_charger_set_property(OEM_PROP_FORCE_DIS_WLS,
+						&chg->force_dis_wls,
+						sizeof(chg->force_dis_wls));
+
+	return r ? r : count;
+}
+
+static ssize_t force_dis_wls_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct wireless_glink_dev *chg = this_chip;
+	if (!chg) {
+		pr_err("chg not valid\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", chg->force_dis_wls);
+}
+static DEVICE_ATTR(force_dis_wls, S_IRUGO|S_IWUSR, force_dis_wls_show, force_dis_wls_store);
+#endif
+
 static ssize_t wlc_tx_type_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
@@ -969,6 +1014,13 @@ static int phone_case_detection_notifier_call(struct notifier_block *nb,
         if (rc)
 		pr_err("couldn't create wireless wlc fan speed error\n");
 
+#ifdef CONFIG_WLC_OVERHEAT_PROTECT
+	rc = device_create_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_force_dis_wls);
+	if (rc)
+		pr_err("couldn't create force_dis_wls\n");
+#endif
+
 	rc = device_create_file(chip->wls_dev_psy->dev.parent,
 				&dev_attr_wlc_tx_type);
         if (rc)
@@ -1064,6 +1116,11 @@ static void wireless_psy_deinit(struct wireless_glink_dev *chip)
 
 	device_remove_file(chip->wls_dev_psy->dev.parent,
 				&dev_attr_wlc_light_ctl);
+
+#ifdef CONFIG_WLC_OVERHEAT_PROTECT
+	device_remove_file(chip->wls_dev_psy->dev.parent,
+				&dev_attr_force_dis_wls);
+#endif
 
 	device_remove_file(chip->wls_dev_psy->dev.parent,
 				&dev_attr_wlc_fan_speed);
