@@ -11,3 +11,8 @@ config MSC_BQ_PIN_SHORT_PANIC
     bool "Triager kernel panic when BQ PIN_SHORT occur"
     help
       Say Y here if triager panic by BQ_PIN_SHORT
+
+config WLC_OVERHEAT_PROTECT
+    bool "Enable wlc overheating protection"
+    help
+      Say Y here if enable wlc overheating protection
