@@ -314,8 +314,8 @@ EXPORT_SYMBOL(task_get_mvp_limit);
 void binder_inherit_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER) && current_is_important_ux()) {
 		task_add_ux_type(task, UX_TYPE_INHERIT_BINDER);
-		//resched_task(task);
-		//trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
+		resched_task(task, true);
+		trace_binder_inherit_ux_type(task, task_get_ux_type(task), true);
 	}
 	msched_uclamp_binder_set_priority_hook(task);
 }
@@ -360,7 +360,7 @@ EXPORT_SYMBOL(binder_inherit_boost);
 void binder_clear_inherited_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER)) {
 		task_clr_ux_type(task, UX_TYPE_INHERIT_BINDER);
-		//trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
+		trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
 	}
 	msched_uclamp_binder_restore_priority_hook(task);
 }
@@ -432,7 +432,36 @@ static void android_vh_dup_task_struct(void *unused, struct task_struct *task, s
 }
 #endif
 
-bool resched_task(struct task_struct *p) {
+static void
+ux_changed_fair(struct rq *rq, struct task_struct *p, bool is_added_uxtype)
+{
+	if (!task_on_rq_queued(p))
+		return;
+
+	if (rq->cfs.nr_running == 1)
+		return;
+
+	if (task_current(rq, p)) {
+		if (!is_added_uxtype)
+			resched_curr(rq);
+	} else
+		#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+		wakeup_preempt(rq, p, 0);
+		#else
+		check_preempt_curr(rq, p, 0);
+		#endif
+}
+
+/**
+ * resched_task - Re-schedule a task after UX type change
+ * @p: The task to reschedule
+ * @is_added_uxtype: true if UX type is being added (boosted), false if being removed
+ *
+ * Usage:
+ *   - Call with is_added_uxtype=true when adding UX type (e.g., task_add_ux_type)
+ *   - Call with is_added_uxtype=false when clearing UX type (e.g., task_clr_ux_type)
+ */
+bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 	struct rq *rq;
 	struct rq_flags rf;
 	bool queued = false;
@@ -460,8 +489,7 @@ bool resched_task(struct task_struct *p) {
 		if (running)
 			set_next_task(rq, p);
 
-		/* Trigger rescheduling: sets TIF_NEED_RESCHED flag */
-		resched_curr(rq);
+		ux_changed_fair(rq, p, is_added_uxtype);
 
 		task_rq_unlock(rq, p, &rf);
 		put_task_struct(p);
@@ -503,7 +531,7 @@ bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter,
 	//	waiter_wts->ux_type, owner_wts->ux_type);
 	task_rq_unlock(rq, owner, &flags);
 
-	return resched_task(owner);
+	return resched_task(owner, true);
 }
 
 bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
@@ -538,7 +566,7 @@ bool lock_clear_inherited_ux_type(struct task_struct *owner, char* lock_name) {
 
 	task_rq_unlock(rq, owner, &flags);
 
-	return resched_task(owner);
+	return resched_task(owner, false);
 }
 
 void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settime_jiffies, char* lock_name, void *pointer) {
@@ -580,7 +608,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 		if (waiter_mts->boost_kernel_lock_depth == 0) {
 			task_add_ux_type(tsk, UX_TYPE_KERNEL);
 			waiter_mts->boost_kernel_start = jiffies_to_nsecs(jiffies);
-			resched_task(tsk);
+			resched_task(tsk, true);
 		}
 		waiter_mts->boost_kernel_lock_depth++;
 		trace_sched_percpu_rwsem_starttime(tsk, waiter_mts->boost_kernel_lock_depth, acquire, task_get_ux_type(tsk), task_get_mvp_prio(tsk, true));
@@ -598,7 +626,7 @@ void lock_protect_update_starttime(struct task_struct *tsk, unsigned long settim
 			if (waiter_mts->boost_kernel_lock_depth == 0) {
 				task_clr_ux_type(tsk, UX_TYPE_KERNEL);
 				trace_sched_percpu_rwsem_starttime(tsk, waiter_mts->boost_kernel_lock_depth, acquire, task_get_ux_type(tsk), task_get_mvp_prio(tsk, true));
-				resched_task(tsk);
+				resched_task(tsk, false);
 			}
 		}
 	}
