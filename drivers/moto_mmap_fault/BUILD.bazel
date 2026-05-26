@@ -4,5 +4,13 @@ moto_ddk_module(
     name = "moto_mmap_fault",
     srcs = [
         "moto_mmap_fault.c",
+        "mmap_fault_trace.h",
+        "//motorola/kernel/modules/drivers/moto_sched:msched_common.h",
+    ],
+    includes = [
+        ".",
+    ],
+    deps_ext = [
+        "//motorola/kernel/modules/drivers/moto_sched:moto_sched",
     ],
 )

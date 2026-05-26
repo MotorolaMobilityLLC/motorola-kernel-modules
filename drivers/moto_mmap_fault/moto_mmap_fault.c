@@ -19,6 +19,13 @@
 #include <linux/gfp.h>
 #include <trace/hooks/iommu.h>
 #include <trace/hooks/vmscan.h>
+#include "../moto_sched/msched_common.h"
+
+extern int __attribute__((weak)) task_get_mvp_prio(struct task_struct *p, bool with_inherit);
+static int (* volatile safe_get_mvp_prio)(struct task_struct *, bool) = &task_get_mvp_prio;
+
+#define CREATE_TRACE_POINTS
+#include "mmap_fault_trace.h"
 
 static int max_ra_pages = -1;
 module_param(max_ra_pages, int, S_IRUGO | S_IWUSR);
@@ -134,8 +141,15 @@ static void adjust_alloc_flags(void *ignore,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0))
 static void throttle_direct_reclaim_bypass(void *ignore, bool *bypass)
 {
-	if (rt_task(current)) {
+	int prio = 0;
+
+	if (safe_get_mvp_prio) {
+		prio = safe_get_mvp_prio(current, true);
+	}
+
+	if (rt_task(current) || prio >= UX_PRIO_TOPAPP) {
 		*bypass = true;
+		trace_mmap_fault_throttle_bypass(current, *bypass);
 	}
 }
 #endif
@@ -188,3 +202,4 @@ module_init(moto_mmap_fault_init);
 module_exit(moto_mmap_fault_exit);
 MODULE_DESCRIPTION("Motorola vendor mmap fault driver");
 MODULE_LICENSE("GPL v2");
+MODULE_SOFTDEP("pre: moto_sched");
