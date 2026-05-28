@@ -323,7 +323,9 @@ static void android_vh_rwsem_clear_rwsem_owned(void *unused, struct rw_semaphore
 		list_del_init(&vp->owner_node);
 		vp->owner = 0;
 		trace_locking_debug_trace(sem, __func__, "clear owned", 0, 0);
-		lock_clear_inherited_ux_type(current, "clear_rwsem_own");
+		// Delay clearing the inherited UX type to allow the thread
+		// to complete the wake up process with boosted priority.
+		// lock_clear_inherited_ux_type(current, "clear_rwsem_own");
 	}
 
 	spin_unlock_irqrestore(&RWSEM_SPIN_LOCK, flags);
@@ -422,6 +424,14 @@ static void android_vh_rwsem_wake(void *unused, struct rw_semaphore *sem)
         return;
     }
 	rwsem_wait_start(sem);
+}
+
+static void android_vh_rwsem_wake_finish_handler(void *unused, struct rw_semaphore *sem)
+{
+	if (unlikely(!locking_opt_enable())) {
+		return;
+	}
+	lock_clear_inherited_ux_type(current, "rwsem_wake_finish");
 }
 
 static void android_vh_rwsem_wait_finish(void *unused, struct rw_semaphore *sem)
@@ -574,6 +584,7 @@ void register_rwsem_vendor_hooks(void)
 	register_trace_android_vh_clear_rwsem_writer_owned(android_vh_rwsem_clear_rwsem_owned, NULL);
 
 	register_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
+	register_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 	register_trace_android_vh_record_rwsem_writer_owned(android_vh_rwsem_record_rwsem_writer_owned, NULL);
 #else
@@ -608,6 +619,7 @@ void unregister_rwsem_vendor_hooks(void)
 #ifdef CONFIG_MOTO_LOCKING_2
 	unregister_trace_android_vh_rwsem_init(android_vh_rwsem_init, NULL);
 	unregister_trace_android_vh_rwsem_wake(android_vh_rwsem_wake, NULL);
+	unregister_trace_android_vh_rwsem_wake_finish(android_vh_rwsem_wake_finish_handler, NULL);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
 	unregister_trace_android_vh_record_rwsem_writer_owned(android_vh_rwsem_record_rwsem_writer_owned, NULL);
 #else
