@@ -321,6 +321,19 @@ void binder_inherit_ux_type(struct task_struct *task) {
 }
 EXPORT_SYMBOL(binder_inherit_ux_type);
 
+void binder_inherit_ux_type_from_client(struct task_struct *server_task, struct task_struct *client_task) {
+	if (is_enabled(UX_ENABLE_BINDER)
+			&& !task_has_ux_type(server_task, UX_TYPE_INHERIT_BINDER)
+			&& task_is_important_ux(client_task)) {
+		task_add_ux_type(server_task, UX_TYPE_INHERIT_BINDER);
+		resched_task(server_task, true);
+		trace_binder_inherit_ux_type(server_task, task_get_ux_type(server_task), true);
+	}
+#ifdef CONFIG_MOTO_ENABLE_MDPF
+	msched_uclamp_binder_set_priority_hook(server_task);
+#endif
+}
+
 #if IS_ENABLED(CONFIG_SCHED_MOTO_BINDERTRANS)
 bool binder_inherit_rt_prio(struct binder_transaction *t, struct task_struct *task) {
 	#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
@@ -351,7 +364,8 @@ bool binder_inherit_rt_prio(struct binder_transaction *t, struct task_struct *ta
 }
 void binder_inherit_boost(void *bndrtrans, struct task_struct *task) {
 	if (bndrtrans && !binder_inherit_rt_prio((struct binder_transaction *)bndrtrans, task)) {
-		binder_inherit_ux_type(task);
+		if(likely(((struct binder_transaction *)bndrtrans)->from && ((struct binder_transaction *)bndrtrans)->from->task))
+			binder_inherit_ux_type_from_client(task, ((struct binder_transaction *)bndrtrans)->from->task);
 	}
 }
 EXPORT_SYMBOL(binder_inherit_boost);
@@ -750,12 +764,14 @@ static bool proc_has_epoll_threads(struct binder_proc *proc) {
 static void android_vh_binder_proc_transaction_finish(void *unused, struct binder_proc *proc,
 		struct binder_transaction *t, struct task_struct *task, bool pending_async, bool sync)
 {
+	struct task_struct *cli_task = t->from ? t->from->task : NULL;
+
 	if (current == task || !proc)
 		return;
 
 	if (!pending_async && task) {
 		binder_ux_type_set(task);
-	} else if (sync && !task && current_is_important_ux() && is_enabled(UX_ENABLE_BEST_BTHD)) {
+	} else if (sync && !task && cli_task && task_is_important_ux(cli_task) && is_enabled(UX_ENABLE_BEST_BTHD)) {
 		if(trace_binder_nothread_be_select_enabled())
 			trace_binder_nothread_be_select(current, proc->pid, proc_has_epoll_threads(proc));
 
