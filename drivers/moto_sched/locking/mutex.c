@@ -60,7 +60,7 @@ static bool mutex_list_add(struct task_struct *task, struct list_head *entry, st
 {
 	bool is_ux = task_is_important_ux(task);
 
-	if (!entry || !head || !lock)
+	if (!entry || !head || !lock || !head->next || !head->prev)
 		return false;
 
 	if (is_ux) {
