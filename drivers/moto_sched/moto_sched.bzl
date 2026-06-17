@@ -35,6 +35,7 @@ def define_modules():
             "msched_sysfs.h",
             "msched_oemdata.c",
             "msched_oemdata.h",
+	    "msched_boost.c",
             "locking/locking_main.c",
             "locking/locking_main.h",
             "locking/locking_trace.c",
