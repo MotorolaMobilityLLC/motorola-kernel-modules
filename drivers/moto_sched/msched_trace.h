@@ -11,6 +11,7 @@
 
 #include <linux/tracepoint.h>
 #include <linux/sched.h>
+#include <linux/version.h>
 
 #include <linux/mm_types.h>
 
@@ -143,15 +144,17 @@ TRACE_EVENT(percpu_rwsem_up_write,
 );
 
 TRACE_EVENT(msched_task_get_mvp_prio,
-        TP_PROTO(struct task_struct *p, int ux_type, int prio_val, unsigned long util, int scene),
+        TP_PROTO(struct task_struct *p, int ux_type, int current_pid, int current_ux_type, int prio_val, unsigned long util, int scene),
 
-        TP_ARGS(p, ux_type, prio_val, util, scene),
+        TP_ARGS(p, ux_type, current_pid, current_ux_type, prio_val, util, scene),
 
         TP_STRUCT__entry(
                 __field(pid_t, pid)
                 __field(pid_t, tgid)
                 __field(int, prio)
                 __field(int, ux_type)
+                __field(int, current_pid)
+                __field(int, current_ux_type)
                 __field(unsigned long, util)
                 __field(int, mvp_prio)
                 __field(int, scene)
@@ -162,14 +165,16 @@ TRACE_EVENT(msched_task_get_mvp_prio,
                 __entry->tgid = p->tgid;
                 __entry->prio = p->prio;
                 __entry->ux_type = ux_type;
+                __entry->current_pid = current_pid;
+                __entry->current_ux_type = current_ux_type;
                 __entry->util = util;
                 __entry->mvp_prio = prio_val;
                 __entry->scene = scene;
         ),
 
-        TP_printk("pid=%d tgid=%d prio=%d scene=%d ux_type=%d task_util=%lu mvp_prio=%d",
+        TP_printk("pid=%d tgid=%d prio=%d scene=%d ux_type=%d current_pid=%d current_ux_type=%d task_util=%lu mvp_prio=%d",
                 __entry->pid, __entry->tgid, __entry->prio, __entry->scene,
-                __entry->ux_type, __entry->util, __entry->mvp_prio)
+                __entry->ux_type, __entry->current_pid, __entry->current_ux_type, __entry->util, __entry->mvp_prio)
 );
 
 TRACE_EVENT(msched_uclamp_restriction_result,
@@ -254,11 +259,9 @@ TRACE_EVENT(sched_boost_ux_kworker,
 
         TP_PROTO(struct task_struct *p,
                  int waker_prio,
-                 bool is_launcher_wake,
-                 bool is_top_task,
-                 int ux_type),
+                 const char *trigger_reason),
 
-        TP_ARGS(p, waker_prio, is_launcher_wake, is_top_task, ux_type),
+        TP_ARGS(p, waker_prio, trigger_reason),
 
         TP_STRUCT__entry(
                 __field(pid_t, pid)
@@ -268,10 +271,7 @@ TRACE_EVENT(sched_boost_ux_kworker,
 
                 __array(char,  waker_comm,  TASK_COMM_LEN)
                 __field(int,   waker_prio)
-
-                __field(bool,  is_launcher_wake)
-                __field(bool,  is_top_task)
-                __field(int,   ux_type)
+                __string(trigger_reason, trigger_reason)
         ),
 
         TP_fast_assign(
@@ -282,23 +282,23 @@ TRACE_EVENT(sched_boost_ux_kworker,
                 memcpy(__entry->comm,       p->comm,       TASK_COMM_LEN);
                 memcpy(__entry->waker_comm, current->comm, TASK_COMM_LEN);
 
-                __entry->waker_prio       = waker_prio;
-                __entry->is_launcher_wake = is_launcher_wake;
-                __entry->is_top_task      = is_top_task;
-                __entry->ux_type          = ux_type;
+                __entry->waker_prio = waker_prio;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+                __assign_str(trigger_reason);
+#else
+                __assign_str(trigger_reason, trigger_reason);
+#endif
         ),
 
         TP_printk("pid=%d tgid=%d prio=%d comm=%s "
-                  "waker=%s waker_prio=%d launcher=%d top=%d ux_type=%d",
+                  "waker=%s waker_prio=%d trigger_reason=%s",
                   __entry->pid,
                   __entry->tgid,
                   __entry->prio,
                   __entry->comm,
                   __entry->waker_comm,
                   __entry->waker_prio,
-                  __entry->is_launcher_wake,
-                  __entry->is_top_task,
-                  __entry->ux_type)
+                  __get_str(trigger_reason))
 );
 
 TRACE_EVENT(sched_wake_by_irq_kth,
