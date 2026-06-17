@@ -36,6 +36,7 @@
 #endif
 
 extern int locking_opt_init(void);
+extern void locking_opt_exit(void);
 
 static int __init moto_sched_init(void)
 {
@@ -65,6 +66,8 @@ static int __init moto_sched_init(void)
 
 	register_vendor_comm_hooks();
 	locking_opt_init();
+
+	moto_boost_init();
 
 	pr_info("moto_sched_init succeed!\n");
 	return 0;

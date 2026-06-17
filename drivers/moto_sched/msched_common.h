@@ -299,4 +299,15 @@ static inline void task_clr_inherit_type(struct task_struct *p)
 	mts->ux_type &= ~UX_TYPE_INHERIT_LOCK;
 }
 
+/* msched_boost functions */
+extern int moto_boost_init(void);
+extern void moto_boost_exit(void);
+struct file;
+extern ssize_t moto_boost_proc_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos);
+extern ssize_t moto_boost_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos);
+extern ssize_t moto_boost_time_proc_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos);
+extern ssize_t moto_boost_time_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos);
+extern ssize_t moto_deboost_proc_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos);
+extern ssize_t moto_deboost_proc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos);
+
 #endif /* _MOTO_SCHED_COMMON_H_ */
