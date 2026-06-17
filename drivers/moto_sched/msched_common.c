@@ -49,6 +49,12 @@
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
 
+static const char * const kworker_trigger_reason_none = "none";
+static const char * const kworker_trigger_reason_rt_waker = "rt_waker_boost";
+static const char * const kworker_trigger_reason_ux_waker = "ux_waker_boost";
+static const char * const kworker_trigger_reason_launcher_waker = "launcher_waker_boost";
+static const char * const kworker_trigger_reason_top_waker = "top_waker_boost";
+
 static inline bool task_in_top_app_group(struct task_struct *p)
 {
 #if IS_ENABLED(CONFIG_SCHED_WALT)
@@ -198,6 +204,40 @@ void task_ux_type_clear(int pid, int ux_type) {
 	mutex_unlock(&ux_mutex);
 }
 
+static inline int calc_kworker_boost_prio(struct task_struct *p)
+{
+	int waker_prio = current->prio;
+	int prio = UX_PRIO_INVALID;
+	const char *trigger_reason = kworker_trigger_reason_none;
+	bool launcher_waker = current->pid == global_launcher_tgid;
+	bool ux_waker = task_get_ux_type(current) & UX_TYPE_ANIMATOR;
+	bool top_waker = task_in_top_app_group(current) && waker_prio <= 110;
+
+	if (task_has_rt_policy(current)) {
+#ifdef CONFIG_MOTO_BOOST_RT_KWORKER_HIGHEST
+		prio = UX_PRIO_HIGHEST;
+#else
+		prio = UX_PRIO_TOPAPP;
+#endif
+		trigger_reason = kworker_trigger_reason_rt_waker;
+	} else if (ux_waker) {
+		prio = UX_PRIO_ANIMATOR;
+		trigger_reason = kworker_trigger_reason_ux_waker;
+	} else if (launcher_waker) {
+		prio = UX_PRIO_TOPAPP;
+		trigger_reason = kworker_trigger_reason_launcher_waker;
+	} else if (top_waker) {
+		prio = UX_PRIO_TOPAPP;
+		trigger_reason = kworker_trigger_reason_top_waker;
+	}
+
+	if (prio != UX_PRIO_INVALID) {
+		trace_sched_boost_ux_kworker(p, waker_prio, trigger_reason);
+	}
+
+	return prio;
+}
+
 int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 {
 	int ux_type = task_get_ux_type(p);
@@ -214,23 +254,9 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	}
 
 	if (is_enabled(UX_ENABLE_KWORKER) && is_ux_boost_kworker_candidate(p)) {
-		int waker_prio = current->prio;
-		bool launcher_wake = current->pid == global_launcher_tgid;
-		bool top_task = task_in_top_app_group(current);
-
-		if (task_has_rt_policy(current))
-#ifdef CONFIG_MOTO_BOOST_RT_KWORKER_HIGHEST
-			prio = UX_PRIO_HIGHEST;
-#else
-			prio = UX_PRIO_TOPAPP;
-#endif
-		else if ((top_task && waker_prio <= 110) || launcher_wake)
-			prio = UX_PRIO_TOPAPP;
-
-		if (prio != UX_PRIO_INVALID) {
-			trace_sched_boost_ux_kworker(p, waker_prio, launcher_wake, top_task, ux_type);
+		prio = calc_kworker_boost_prio(p);
+		if (prio != UX_PRIO_INVALID)
 			goto out;
-		}
 	}
 
 	// perf daemon
@@ -273,8 +299,10 @@ out:
 		"pid=%d tgid=%d prio=%d scene=%d ux_type=%d task_util=%lu mvp_prio=%d\n",
 		p->pid, p->tgid, p->prio, moto_sched_scene, ux_type, moto_task_util(p), prio);
 
-        if (trace_msched_task_get_mvp_prio_enabled()) {
-	    trace_msched_task_get_mvp_prio(p, ux_type, prio, moto_task_util(p), moto_sched_scene);
+	if (trace_msched_task_get_mvp_prio_enabled()) {
+		trace_msched_task_get_mvp_prio(p, ux_type, current->pid,
+			task_get_ux_type(current), prio, moto_task_util(p),
+			moto_sched_scene);
 	}
 	return prio;
 }
