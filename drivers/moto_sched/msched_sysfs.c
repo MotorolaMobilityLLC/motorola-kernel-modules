@@ -526,6 +526,21 @@ static const struct proc_ops proc_version_fops = {
 	.proc_read		= proc_version_read,
 };
 
+static const struct proc_ops proc_moto_boost_fops = {
+	.proc_write		= moto_boost_proc_write,
+	.proc_read		= moto_boost_proc_read,
+};
+
+static const struct proc_ops proc_moto_boost_time_fops = {
+	.proc_write		= moto_boost_time_proc_write,
+	.proc_read		= moto_boost_time_proc_read,
+};
+
+static const struct proc_ops proc_moto_deboost_fops = {
+	.proc_write		= moto_deboost_proc_write,
+	.proc_read		= moto_deboost_proc_read,
+};
+
 int moto_sched_proc_init(void)
 {
 	struct proc_dir_entry *proc_node;
@@ -590,7 +605,34 @@ int moto_sched_proc_init(void)
 		goto err_create_all_ux_tasks;
 	}
 
+	proc_node = proc_create("moto_boost", 0666, d_moto_sched, &proc_moto_boost_fops);
+	if (!proc_node) {
+		sched_err("failed to create proc node moto_boost\n");
+		goto err_create_moto_boost;
+	}
+
+	proc_node = proc_create("boost_time", 0666, d_moto_sched, &proc_moto_boost_time_fops);
+	if (!proc_node) {
+		sched_err("failed to create proc node boost_time\n");
+		goto err_create_boost_time;
+	}
+
+	proc_node = proc_create("deboost", 0666, d_moto_sched, &proc_moto_deboost_fops);
+	if (!proc_node) {
+		sched_err("failed to create proc node deboost\n");
+		goto err_create_deboost;
+	}
+
 	return 0;
+
+err_create_deboost:
+	remove_proc_entry("boost_time", d_moto_sched);
+
+err_create_boost_time:
+	remove_proc_entry("moto_boost", d_moto_sched);
+
+err_create_moto_boost:
+	remove_proc_entry("all_ux_tasks", d_moto_sched);
 
 err_create_all_ux_tasks:
 	remove_proc_entry("boost_pid", d_moto_sched);
@@ -625,6 +667,9 @@ err_creat_d_moto_sched:
 
 void moto_sched_proc_deinit(void)
 {
+	remove_proc_entry("deboost", d_moto_sched);
+	remove_proc_entry("boost_time", d_moto_sched);
+	remove_proc_entry("moto_boost", d_moto_sched);
 	remove_proc_entry("all_ux_tasks", d_moto_sched);
 	remove_proc_entry("boost_pid", d_moto_sched);
 	remove_proc_entry("debug", d_moto_sched);
@@ -639,4 +684,3 @@ void moto_sched_proc_deinit(void)
 	unregister_moto_sched_ops();
 #endif
 }
-
