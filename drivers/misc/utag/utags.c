@@ -479,22 +479,35 @@ static int open_utags(struct blkdev *cb)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
 	bdev_file = bdev_file_open_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb, NULL);
+	if (IS_ERR(bdev_file)) {
+		pr_err("(%s) failed to open block device file: %ld\n", cb->name, PTR_ERR(bdev_file));
+		return PTR_ERR(bdev_file);
+	}
 	bdev = file_bdev(bdev_file);
+	if (!bdev) {
+		pr_err("(%s) failed get block device\n", cb->name);
+		bdev_fput(bdev_file);
+		return -ENODEV;
+	}
 	cb->filep = bdev_file;
 	cb->size = i_size_read(file_inode(bdev_file));
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 6, 0)
 	bdev = blkdev_get_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb, NULL);
+	if (IS_ERR(bdev)) {
+		pr_err("(%s) failed get block device\n", cb->name);
+		return PTR_ERR(bdev);
+	}
 	cb->size = i_size_read(bdev->bd_inode);
 	cb->filep = NULL;
 #else
 	bdev = blkdev_get_by_path(cb->name, FMODE_READ | FMODE_WRITE, cb);
+	if (IS_ERR(bdev)) {
+		pr_err("(%s) failed get block device\n", cb->name);
+		return PTR_ERR(bdev);
+	}
 	cb->size = i_size_read(bdev->bd_inode);
 	cb->filep = NULL;
 #endif
-	if (IS_ERR(bdev)) {
-		pr_err("(%s) failed get block device\n", cb->name);
-		return -EIO;
-	}
 
 	cb->bdev = bdev;
 
