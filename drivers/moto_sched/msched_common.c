@@ -59,10 +59,20 @@ static inline bool task_in_top_app_group(struct task_struct *p)
 	return get_task_cgroup_id(p) == CGROUP_TOP_APP;
 #endif
 }
-static inline bool need_boost_kernel_irq_thread(struct task_struct *p)
+static inline int get_irq_kworker_prio(struct task_struct *p)
 {
+	if (!p || p->mm || strncmp(p->comm, "kworker/", 8) != 0)
+		return UX_PRIO_INVALID;
 
-	return p && !p->mm && in_interrupt() && p->prio <= 120; /* Increase the priority of kworker threads woken up by IRQs (prio <= 120) to prevent stuttering. */
+	bool is_unbound = (p->comm[8] == 'u');
+
+	if (p->prio == 100) {
+		return is_unbound ? UX_PRIO_OTHER : UX_PRIO_TOPAPP;
+	} else if (p->prio <= 120) {
+		return is_unbound ? UX_PRIO_INVALID : UX_PRIO_OTHER;
+	}
+
+	return UX_PRIO_INVALID;
 }
 
 static inline bool is_ux_boost_kworker_candidate(struct task_struct *p)
@@ -207,29 +217,35 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 		return UX_PRIO_OTHER;			/* Allow RT threads to be treated as important UX tasks to enable binder priority inheritance*/
 
 	/* Based on the assumption that these kworkers awakened by IRQs have short lifecycles, boost to TOPAPP. Long-running tasks may lead to insufficient UI thread resources. */
-	if (is_enabled(UX_ENABLE_IRQWTH) && need_boost_kernel_irq_thread(p)) {
-		if(trace_sched_wake_by_irq_kth_enabled())
-			trace_sched_wake_by_irq_kth(p);
-		return UX_PRIO_TOPAPP;
-	}
+	if (in_interrupt()) {
+		if (is_enabled(UX_ENABLE_IRQWTH)) {
+			int irq_prio = get_irq_kworker_prio(p);
+			if (irq_prio != UX_PRIO_INVALID) {
+				prio = irq_prio;
+				if(trace_sched_wake_by_irq_kth_enabled())
+					trace_sched_wake_by_irq_kth(p, prio);
+				goto out;
+			}
+		}
+	} else {
+		if (is_enabled(UX_ENABLE_KWORKER) && is_ux_boost_kworker_candidate(p)) {
+			int waker_prio = current->prio;
+			bool launcher_wake = current->pid == global_launcher_tgid;
+			bool top_task = task_in_top_app_group(current);
 
-	if (is_enabled(UX_ENABLE_KWORKER) && is_ux_boost_kworker_candidate(p)) {
-		int waker_prio = current->prio;
-		bool launcher_wake = current->pid == global_launcher_tgid;
-		bool top_task = task_in_top_app_group(current);
-
-		if (task_has_rt_policy(current))
+			if (task_has_rt_policy(current))
 #ifdef CONFIG_MOTO_BOOST_RT_KWORKER_HIGHEST
-			prio = UX_PRIO_HIGHEST;
+				prio = UX_PRIO_HIGHEST;
 #else
-			prio = UX_PRIO_TOPAPP;
+				prio = UX_PRIO_TOPAPP;
 #endif
-		else if ((top_task && waker_prio <= 110) || launcher_wake)
-			prio = UX_PRIO_TOPAPP;
+			else if ((top_task && waker_prio <= 110) || launcher_wake)
+				prio = UX_PRIO_TOPAPP;
 
-		if (prio != UX_PRIO_INVALID) {
-			trace_sched_boost_ux_kworker(p, waker_prio, launcher_wake, top_task, ux_type);
-			goto out;
+			if (prio != UX_PRIO_INVALID) {
+				trace_sched_boost_ux_kworker(p, waker_prio, launcher_wake, top_task, ux_type);
+				goto out;
+			}
 		}
 	}
 

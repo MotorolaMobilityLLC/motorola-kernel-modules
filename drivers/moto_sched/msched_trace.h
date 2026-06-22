@@ -252,30 +252,32 @@ TRACE_EVENT(msched_task_get_mvp_prio,
 
 TRACE_EVENT(sched_wake_by_irq_kth,
 
-        TP_PROTO(struct task_struct *p),
+        TP_PROTO(struct task_struct *p, int ux_prio),
 
-        TP_ARGS(p),
+        TP_ARGS(p, ux_prio),
 
         TP_STRUCT__entry(
                 __field(pid_t, pid)
                 __field(pid_t, tgid)
                 __field(int,   prio)
                 __array(char,  comm,        TASK_COMM_LEN)
+                __field(int,   ux_prio)
         ),
 
         TP_fast_assign(
                 __entry->pid  = p->pid;
                 __entry->tgid = p->tgid;
                 __entry->prio = p->prio;
-
+                __entry->ux_prio = ux_prio;
                 memcpy(__entry->comm,       p->comm,       TASK_COMM_LEN);
         ),
 
-        TP_printk("pid=%d tgid=%d prio=%d comm=%s",
+        TP_printk("pid=%d tgid=%d prio=%d comm=%s ux_prio=%d",
                   __entry->pid,
                   __entry->tgid,
                   __entry->prio,
-                  __entry->comm)
+                  __entry->comm,
+                  __entry->ux_prio)
 );
 
 TRACE_EVENT(sched_boost_ux_kworker,
