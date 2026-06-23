@@ -11,10 +11,10 @@
 int mdpf_proc_init(void);
 void mdpf_proc_deinit(void);
 #else
-int mdpf_proc_init(void){
+static inline int mdpf_proc_init(void){
 	return 0;
 }
-void mdpf_proc_deinit(void){
+static inline void mdpf_proc_deinit(void){
 }
 #endif
 

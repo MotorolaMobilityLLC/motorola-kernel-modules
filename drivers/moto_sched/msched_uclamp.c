@@ -65,7 +65,7 @@ uclamp_tg_restrict_moto(struct task_struct *p, enum uclamp_id clamp_id) {
 	return uc_req;
 }
 
-void rvh_uclamp_eff_get(void *data, struct task_struct *p, enum uclamp_id clamp_id,
+static void rvh_uclamp_eff_get(void *data, struct task_struct *p, enum uclamp_id clamp_id,
 				  struct uclamp_se *uclamp_max, struct uclamp_se *uclamp_eff,
 				  int *ret) {
 	struct uclamp_se uc_req;
@@ -148,7 +148,7 @@ uclamp_eff_value_moto(struct task_struct *p, enum uclamp_id clamp_id) {
 	return (unsigned int)uc_eff.value;
 }
 
-void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
+static void set_uclamp_inheritance(struct task_struct *p, struct task_struct *pi_task,
 	u16 *uclamp_i, unsigned int type) {
 	struct rq_flags rf;
 	struct rq *rq;

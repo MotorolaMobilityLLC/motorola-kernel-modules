@@ -35,6 +35,8 @@ def define_modules():
             "msched_sysfs.h",
             "msched_oemdata.c",
             "msched_oemdata.h",
+            "msched_trace.h",
+            "msched_trace.c",
 	    "msched_boost.c",
             "locking/locking_main.c",
             "locking/locking_main.h",
@@ -56,8 +58,6 @@ def define_modules():
             },
             "CONFIG_MOTO_ENABLE_MDPF": {
                 True: [
-                    "msched_trace.h",
-                    "msched_trace.c",
                     "msched_uclamp.c",
                     "msched_uclamp.h",
                     "mdpf/mdpf_sysfs.c",
@@ -72,7 +72,6 @@ def define_modules():
         includes = [
                     ".",
                 ],
-
         # You will need to add the external dependencies for your module here.
         # These are often found in your Android.mk or Kconfig files.
         # The paths should point to other Bazel targets.

@@ -370,7 +370,7 @@ void binder_inherit_ux_type(struct task_struct *task) {
 }
 EXPORT_SYMBOL(binder_inherit_ux_type);
 
-void binder_inherit_ux_type_from_client(struct task_struct *server_task, struct task_struct *client_task) {
+static void __maybe_unused binder_inherit_ux_type_from_client(struct task_struct *server_task, struct task_struct *client_task) {
 	if (is_enabled(UX_ENABLE_BINDER)
 			&& !task_has_ux_type(server_task, UX_TYPE_INHERIT_BINDER)
 			&& task_is_important_ux(client_task)) {
@@ -878,6 +878,7 @@ static void android_vh_binder_proc_transaction_finish(void *unused, struct binde
 }
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0))
 #define per_cpu_sum(var)                                                \
 ({                                                                      \
 	typeof(var) __sum = 0;                                          \
@@ -892,6 +893,7 @@ static bool percpu_is_writer_waiting_locked(struct percpu_rw_semaphore *sem)
 {
 	return per_cpu_sum(*sem->read_count) != 0 && atomic_read(&sem->block);
 }
+
 
 static void lock_protect_percpu_rwsem_pre_boost(struct percpu_rw_semaphore *sem, bool try)
 {
@@ -978,6 +980,7 @@ static void android_vh_percpu_rwsem_up_write_handler(
 {
 	trace_percpu_rwsem_up_write(sem);
 }
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
 static void msched_anon_vma_name_free(struct kref *kref)
@@ -1045,12 +1048,14 @@ void register_vendor_comm_hooks(void)
 	register_trace_android_vh_binder_proc_transaction_finish(
 		android_vh_binder_proc_transaction_finish, NULL);
 #endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0))
 	register_trace_android_vh_percpu_rwsem_down_read(
 		android_vh_percpu_rwsem_down_read_preempt_handler, NULL);
 	register_trace_android_rvh_percpu_rwsem_wait_complete(
 		android_rvh_percpu_rwsem_wait_complete_handler, NULL);
 	register_trace_android_vh_percpu_rwsem_up_write(
 		android_vh_percpu_rwsem_up_write_handler, NULL);
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
 	register_trace_android_rvh_pr_set_vma_name_bypass(
 		android_rvh_pr_set_vma_name_bypass, NULL);

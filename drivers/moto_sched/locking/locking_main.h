@@ -74,4 +74,7 @@ void register_mutex_vendor_hooks(void);
 void unregister_mutex_vendor_hooks(void);
 #endif
 
+int locking_opt_init(void);
+void locking_opt_exit(void);
+
 #endif /* _MOTO_LOCKING_MAIN_H_ */

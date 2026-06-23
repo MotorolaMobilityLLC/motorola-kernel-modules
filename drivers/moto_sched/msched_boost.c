@@ -7,6 +7,7 @@
 #include <linux/uaccess.h>
 #include <linux/plist.h>
 #include <trace/hooks/power.h>
+#include "msched_common.h"
 
 #ifndef S32_MAX
 #define S32_MAX ((s32)0x7fffffff)
@@ -14,6 +15,9 @@
 #define BOOST_FREQ_MAX S32_MAX // full power
 
 #define MAX_TRACKED_REQS 32
+#ifdef MAX_CLUSTERS
+#undef MAX_CLUSTERS
+#endif
 #define MAX_CLUSTERS 3
 
 static atomic_t is_boosting = ATOMIC_INIT(0);
