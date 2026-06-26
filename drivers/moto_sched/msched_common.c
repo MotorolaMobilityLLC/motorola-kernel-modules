@@ -62,10 +62,12 @@ static inline bool task_in_top_app_group(struct task_struct *p)
 }
 static inline int get_irq_kworker_prio(struct task_struct *p)
 {
+	bool is_unbound = false;
+
 	if (!p || p->mm || strncmp(p->comm, "kworker/", 8) != 0)
 		return UX_PRIO_INVALID;
 
-	bool is_unbound = (p->comm[8] == 'u');
+	is_unbound = (p->comm[8] == 'u');
 
 	if (p->prio == 100) {
 		return is_unbound ? UX_PRIO_OTHER : UX_PRIO_TOPAPP;
