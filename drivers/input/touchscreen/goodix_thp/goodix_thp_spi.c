@@ -583,8 +583,19 @@ static int goodix_thp_parse_dt(struct device_node *node,
 
         board_data->edge_ctrl = of_property_read_bool(node,
                 "goodix,edge-ctrl");
-        if (board_data->edge_ctrl)
+        if (board_data->edge_ctrl) {
             ts_info(dev, "support goodix edge mode");
+#ifdef CONFIG_SPECIFY_CORNER_SUPPRESSION_TYPE
+            if (of_property_read_u32(node, "goodix,edge-ctrl-type", &board_data->edge_ctrl_type)) {
+                board_data->edge_ctrl_type = 0;
+            }
+#else
+            board_data->edge_ctrl_type = 0;
+#endif
+            ts_info(dev, "goodix edge-ctrl-type = %u", board_data->edge_ctrl_type);
+        } else {
+            board_data->edge_ctrl_type = 0;
+        }
 
         r = of_property_read_u32(node, "touchpanel,irq_need_dev_resume_time", &board_data->irq_need_dev_resume_time);
         if (r) {

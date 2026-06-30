@@ -55,6 +55,7 @@ enum swipe_responsiveness_level {
 #define DEFAULT_EDGE               0x00
 #define SMALL_EDGE                 0x40
 #define BIG_EDGE                   0x80
+#define MEDIUM_EDGE                0xC0
 
 #define NORMAL_DEFAULT_EDGE               0x08
 #define NORMAL_SMALL_EDGE                 0x48

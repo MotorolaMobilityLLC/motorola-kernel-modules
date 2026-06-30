@@ -35,3 +35,10 @@ config TPIC_CHIP_TYPE_9926
     bool "Enable it to select GT9926 touch IC"
     help
       Say Y here to select GT9926 touch IC
+
+config SPECIFY_CORNER_SUPPRESSION_TYPE
+        bool "Enable Specified Corner Suppression Type from device tree"
+        default n
+        help
+          Say Y here if the product supports custom corner suppression types
+          read from the device tree 'goodix,edge-ctrl-type' property.

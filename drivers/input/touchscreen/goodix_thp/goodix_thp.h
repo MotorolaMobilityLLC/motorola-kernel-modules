@@ -400,6 +400,7 @@ struct goodix_thp_board_data {
         bool stowed_mode_ctrl;
         bool pocket_mode_ctrl;
         bool edge_ctrl;
+        u32 edge_ctrl_type;
         bool stylus_mode_ctrl;
         bool tap_sensitivity_ctrl;
         bool swipe_responsiveness_ctrl;

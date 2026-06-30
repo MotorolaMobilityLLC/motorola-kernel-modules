@@ -114,6 +114,7 @@ static DEVICE_ATTR(swipe_responsiveness, (S_IRUGO | S_IWUSR | S_IWGRP),
 #define ROTATE_180   2
 #define ROTATE_270  3
 #define BIG_MODE   1
+#define MEDIUM_MODE   3
 #define SMALL_MODE    2
 #define DEFAULT_MODE   0
 #define MAX_ATTRS_ENTRIES 20
@@ -240,6 +241,9 @@ static ssize_t goodix_ts_edge_store(struct device *dev,
 	case SMALL_MODE:
 		edge_cmd[1] = SMALL_EDGE;
 		break;
+	case MEDIUM_MODE:
+		edge_cmd[1] = MEDIUM_EDGE;
+		break;
 	case BIG_MODE:
 		edge_cmd[1] = BIG_EDGE;
 		break;
@@ -325,10 +329,12 @@ static ssize_t goodix_ts_edge_show(struct device *dev,
 	dev = MMI_DEV_TO_TS_DEV(dev);
 	GET_GOODIX_DATA(dev);
 
-	ts_info(core_data->ts_dev->dev, "edge area = %02x, rotation = %02x",
-		core_data->set_mode.edge_mode[1], core_data->set_mode.edge_mode[0]);
-	return scnprintf(buf, PAGE_SIZE, "0x%02x 0x%02x",
-		core_data->set_mode.edge_mode[1], core_data->set_mode.edge_mode[0]);
+	ts_info(core_data->ts_dev->dev, "edge area = %02x, rotation = %02x, type = %u",
+		core_data->set_mode.edge_mode[1], core_data->set_mode.edge_mode[0],
+		core_data->ts_dev->board_data.edge_ctrl_type);
+	return scnprintf(buf, PAGE_SIZE, "0x%02x 0x%02x %u",
+		core_data->set_mode.edge_mode[1], core_data->set_mode.edge_mode[0],
+		core_data->ts_dev->board_data.edge_ctrl_type);
 }
 
 static int goodix_ts_mmi_charger_mode(struct device *dev, int mode)
