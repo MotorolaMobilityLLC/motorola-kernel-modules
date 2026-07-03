@@ -505,10 +505,18 @@ ux_changed_fair(struct rq *rq, struct task_struct *p, bool is_added_uxtype)
 	if (!task_on_rq_queued(p))
 		return;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
+	if (rq->cfs.nr_queued == 1)
+#else
 	if (rq->cfs.nr_running == 1)
+#endif
 		return;
 
+#ifdef CONFIG_SCHED_PROXY_EXEC
+	if (task_current_donor(rq, p)) {
+#else
 	if (task_current(rq, p)) {
+#endif
 		if (!is_added_uxtype)
 			resched_curr(rq);
 	} else
@@ -542,7 +550,11 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 		update_rq_clock(rq);
 
 		queued = task_on_rq_queued(p);
+#ifdef CONFIG_SCHED_PROXY_EXEC
+		running = task_current_donor(rq, p);
+#else
 		running = task_current(rq, p);
+#endif
 
 		if (queued)
 			deactivate_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
