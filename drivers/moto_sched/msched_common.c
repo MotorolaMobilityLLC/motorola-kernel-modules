@@ -837,6 +837,23 @@ static bool percpu_is_writer_waiting_locked(struct percpu_rw_semaphore *sem)
 	return per_cpu_sum(*sem->read_count) != 0 && atomic_read(&sem->block);
 }
 
+static void lock_protect_percpu_rwsem_pre_boost(struct percpu_rw_semaphore *sem, bool try)
+{
+	if (unlikely(!locking_opt_enable()))
+		return;
+	if (!atomic_read(&sem->block)) {
+		return;
+	}
+	if (sem == &cgroup_threadgroup_rwsem && !try) {
+		struct moto_task_struct *waiter_mts = get_moto_task_struct(current);
+		if (!IS_ERR_OR_NULL(waiter_mts)) {
+			waiter_mts->boost_kernel_start = jiffies_to_nsecs(jiffies);
+			task_add_ux_type(current, UX_TYPE_KERNEL);
+			trace_sched_percpu_rwsem_starttime(current, 0, true, task_get_ux_type(current), task_get_mvp_prio(current, true));
+		}
+	}
+}
+
 static void android_vh_percpu_rwsem_down_read_preempt_handler(
 		void *unused,
 		struct percpu_rw_semaphore *sem,
@@ -846,6 +863,7 @@ static void android_vh_percpu_rwsem_down_read_preempt_handler(
 	if (unlikely(!sem || !ret))
 		return;
 
+	lock_protect_percpu_rwsem_pre_boost(sem, try);
 	if (!is_enabled(UX_ENABLE_PERCPU_RWSEM)) {
 		trace_percpu_rwsem_down_read_preempt(sem, try, *ret);
 		return;
