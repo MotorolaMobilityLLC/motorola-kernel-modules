@@ -25,6 +25,7 @@ enum wondertap_rate_preamble {
 	WONDERTAP_RATE_PREAMBLE_VHT = 2, /* 802.11ac Very High Throughput */
 	WONDERTAP_RATE_PREAMBLE_HE  = 3, /* 802.11ax High Efficiency */
 	WONDERTAP_RATE_PREAMBLE_EHT = 4, /* 802.11be Extremely High Throughput */
+	WONDERTAP_RATE_PREAMBLE_MAX,
 };
 
 /**
@@ -65,6 +66,122 @@ enum wondertap_rate_bw {
 	WONDERTAP_RATE_BW_80 = 2,
 	WONDERTAP_RATE_BW_160 = 3,
 	WONDERTAP_RATE_BW_320 = 4,
+	WONDERTAP_RATE_BW_NONE = 0xff,
+};
+
+/** @brief Defines the role in the channel hopping list. */
+enum wondertap_role {
+	WONDERTAP_ROLE_NOP,
+	WONDERTAP_ROLE_STA,
+	WONDERTAP_ROLE_MAX,
+};
+
+/** @brief Represents a single entry of parameters in the channel hopping schedule. */
+struct wondertap_channel_list_params {
+	u32 freq;
+	enum wondertap_rate_bw bandwidth;
+	enum wondertap_role role;
+};
+
+/**
+ * @brief Parameters for scheduling channel switches.
+ */
+struct channel_schedule_request {
+	/**
+	 * @brief Length of channel in the list.
+	 */
+	u8 channel_list_len;
+	u8 reserved1[3];
+
+	/**
+	 * @brief Index of the next channel in the list to visit.
+	 */
+	u32 next_channel_index;
+
+	/**
+	 * @brief Time to stay on each channel in Time Units (TU).
+	 */
+	u32 dwell_time_tu;
+
+	/**
+	 * @brief Target switch time in TSF.
+	 */
+	u32 target_switch_time_tsf;
+
+	/**
+	 * @brief List of channel parameters to visit.
+	 */
+	struct wondertap_channel_list_params *channel_list;
+};
+
+/**
+ * @brief Represents the status and statistics of a visited channel.
+ */
+struct wondertap_channel_status {
+	/**
+	 * @brief Target switch time TSF of this channel switch.
+	 */
+	u32 channel_switch_tsf;
+
+	/**
+	 * @brief Channel frequency in MHz.
+	 */
+	u32 freq;
+
+	/**
+	 * @brief TSF timestamp when the channel was actually switched to and started operating.
+	 */
+	u32 channel_start_tsf;
+
+	/**
+	 * @brief TSF timestamp when the channel operation ended.
+	 */
+	u32 channel_end_tsf;
+
+	/**
+	 * @brief Number of TX frames transmitted on this channel.
+	 */
+	u32 tx_frames;
+
+	/**
+	 * @brief Number of TX bytes transmitted on this channel.
+	 */
+	u64 tx_bytes;
+
+	/**
+	 * @brief Number of RX frames received on this channel.
+	 */
+	u32 rx_frames;
+
+	/**
+	 * @brief Number of RX bytes received on this channel.
+	 */
+	u64 rx_bytes;
+};
+
+/**
+ * @brief Parameters for channel status report.
+ */
+struct wondertap_channel_status_report {
+	/**
+	 * @brief TSF timestamp of the current channel hopping request.
+	 */
+	u32 current_channel_hopping_request_tsf;
+
+	/**
+	 * @brief Index of the current channel in the channel hopping list.
+	 */
+	u32 current_channel_index;
+
+	/**
+	 * @brief Number of elements in the status array.
+	 */
+	u32 channel_status_len;
+
+	/**
+	 * @brief Variable-length array of channel status entries.
+	 */
+	struct wondertap_channel_status status[];
 };
 
 /** @brief Defines the Guard Interval (GI). */
@@ -223,179 +340,168 @@ static_assert(sizeof(struct wonder_txd) <= 48);
  */
 struct wondertap_tx_rate_mask_params {
 	/**
-	 * @brief A bitmask from `enum wondertap_tx_rate_mask_enable` that
-	 * specifies which of the rate masks in this structure are valid and
-	 * should be applied by the driver.
+	 * @brief The maximum preamble/PHY type for this rate.
 	 */
-	u32 enable_mask;
+	enum wondertap_rate_preamble max_preamble;
 
 	/**
-	 * @brief A bitmap of permitted legacy (802.11a/g) rates.
-	 * The bits correspond to the driver's internal legacy rate indices.
-	 * This field is only valid if WONDERTAP_RATEMASK_EN_LEGACY is set.
+	 * @brief The maximum channel bandwidth for this rate.
 	 */
-	u32 legacy_rates;
+	enum wondertap_rate_bw max_bw;
 
 	/**
-	 * @brief A bitmap of permitted HT (802.11n) MCS values for each
-	 * number of spatial streams (NSS).
-	 *
-	 * The array is indexed by (NSS - 1). For example, `ht_mcs[0]` is the
-	 * MCS mask for 1 spatial stream (NSS=1).
-	 * A bit `(1 << X)` being set in `ht_mcs[Y]` means that MCS index X
-	 * is permitted for (Y+1) spatial streams.
-	 *
-	 * This field is only valid if WONDERTAP_RATEMASK_EN_HT is set.
+	 * @brief The number of spatial streams (NSS).
+	 * Typically 1-4 for client devices. 0 is invalid.
 	 */
-	u16 ht_mcs[WONDERTAP_HT_NSS_MAX];
+	u8 max_nss;
 
 	/**
-	 * @brief A bitmap of permitted VHT (802.11ac) MCS values for each NSS.
-	 *
-	 * The array is indexed by (NSS - 1). For example, `vht_mcs[0]` is the
-	 * MCS mask for 1 spatial stream.
-	 * A bit `(1 << X)` being set in `vht_mcs[Y]` means that MCS index X
-	 * (0-9) is permitted for (Y+1) spatial streams.
-	 *
-	 * This field is only valid if WONDERTAP_RATEMASK_EN_VHT is set.
+	 * @brief The Maximum Modulation and Coding Scheme (MCS) index.
+	 * - For HT (802.11n): 0-7 (up to 31 for 4 streams).
+	 * - For VHT (802.11ac): 0-9.
+	 * - For HE (802.11ax): 0-11.
+	 * - For Legacy: This field is interpreted as the legacy rate index
+	 * (e.g., index for 54 Mbps, 48 Mbps, etc.). Ignored by some drivers.
 	 */
-	u16 vht_mcs[WONDERTAP_VHT_NSS_MAX];
+	u8 max_mcs;
 
-	/**
-	 * @brief A bitmap of permitted HE (802.11ax) MCS values for each NSS.
-	 *
-	 * The array is indexed by (NSS - 1). For example, `he_mcs[0]` is the
-	 * MCS mask for 1 spatial stream.
-	 * A bit `(1 << X)` being set in `he_mcs[Y]` means that MCS index X
-	 * (0-11) is permitted for (Y+1) spatial streams.
-	 *
-	 * This field is only valid if WONDERTAP_RATEMASK_EN_HE is set.
-	 */
-	u16 he_mcs[WONDERTAP_HE_NSS_MAX];
-
-	/**
-	 * @brief A bitmap of permitted EHT (802.11be) MCS values for each NSS.
-	 *
-	 * The array is indexed by (NSS - 1). For example, `eht_mcs[0]` is the
-	 * MCS mask for 1 spatial stream.
-	 * A bit `(1 << X)` being set in `eht_mcs[Y]` means that MCS index X
-	 * (0-13) is permitted for (Y+1) spatial streams.
-	 *
-	 * This field is only valid if WONDERTAP_RATEMASK_EN_EHT is set.
-	 */
-	u16 eht_mcs[WONDERTAP_EHT_NSS_MAX];
+	/** @brief Reserved for future use. */
+	u8 reserved[2];
 };
 
 
 /** @brief Supported hardware/software features. Used for get_capabilities. */
 /** @brief Supported hardware/software features. */
 struct wondertap_capability {
-    /** @brief Capability structure version.
-      * @note For the initial implementation, this must be set to 0.
-      */
-    u32 version;
-    union {
-        /* @brief All capability flags as a single 32-bit word. */
-        u32 raw_bits;
-        /* @brief Access to individual capability bits. */
-        struct {
-            /* @brief Dynamic rate adaptation is supported. */
-            u32 rate_adaptation: 1;
-            /* @brief STA (Station) coexistence is supported. */
-            u32 sta_coexist: 1;
-            /* @brief SAP (Soft AP) coexistence is supported. */
-            u32 sap_coexist: 1;
-            /* @brief P2P (Wi-Fi Direct) coexistence is supported. */
-            u32 p2p_coexist: 1;
-            /* @brief NAN (Neighbor Awareness Networking) coexistence is supported. */
-            u32 nan_coexist: 1;
-            /* @brief Ranging coexistence is supported. */
-            u32 ranging_coexist: 1;
-            /* @brief A-MSDU aggregation is supported. */
-            u32 amsdu_aggregation: 1;
-            /* @brief A-MPDU aggregation is supported. */
-            u32 ampdu_aggregation: 1;
-            /* @brief Dynamic frequency/channel changes are supported. */
-            u32 dynamic_freq: 1;
-            /* @brief Dynamic setting a fixed TX rate is supported. */
-            u32 dynamic_fixed_tx_rate: 1;
-            /* @brief Setting custom management frame retry limits is supported. */
-            u32 custom_mgmt_retry_limit: 1;
-            /* @brief Setting custom data frame retry limits is supported. */
-            u32 custom_data_retry_limit: 1;
-            /* @brief Frame type filtering is supported. */
-            u32 frame_type_filter: 1;
-            /* @brief Reserved for future use. Must be 0. */
-            u32 reserved: 19;
-        } bits;
-    };
+	/** @brief Capability structure version.
+	 * @note For the initial implementation, this must be set to 0.
+	 */
+	u32 version;
+	union {
+		/* @brief All capability flags as a single 32-bit word. */
+		u32 raw_bits;
+		/* @brief Access to individual capability bits. */
+		struct {
+			/* @brief Dynamic rate adaptation is supported. */
+			u32 rate_adaptation: 1;
+			/* @brief STA (Station) coexistence is supported. */
+			u32 sta_coexist: 1;
+			/* @brief SAP (Soft AP) coexistence is supported. */
+			u32 sap_coexist: 1;
+			/* @brief P2P (Wi-Fi Direct) coexistence is supported. */
+			u32 p2p_coexist: 1;
+			/* @brief NAN (Neighbor Awareness Networking) coexistence is supported. */
+			u32 nan_coexist: 1;
+			/* @brief Ranging coexistence is supported. */
+			u32 ranging_coexist: 1;
+			/* @brief A-MSDU aggregation is supported. */
+			u32 amsdu_aggregation: 1;
+			/* @brief A-MPDU aggregation is supported. */
+			u32 ampdu_aggregation: 1;
+			/* @brief Dynamic frequency/channel changes are supported. */
+			u32 dynamic_freq: 1;
+			/* @brief Dynamic setting a fixed TX rate is supported. */
+			u32 dynamic_fixed_tx_rate: 1;
+			/* @brief Setting custom management frame retry limits is supported. */
+			u32 custom_mgmt_retry_limit: 1;
+			/* @brief Setting custom data frame retry limits is supported. */
+			u32 custom_data_retry_limit: 1;
+			/* @brief Frame type filtering is supported. */
+			u32 frame_type_filter: 1;
+			/* @brief Channel hopping is supported. */
+			u32 channel_hopping: 1;
+			/* @brief Reserved for future use. Must be 0. */
+			u32 reserved: 18;
+		} bits;
+	};
+
+	/**
+	 * @brief Maximum Channel Switch Time in micro second required by the vendor for
+	 *	      jumping to the new channel lists.
+	 */
+	u32 maximum_channel_switch_time_us;
 };
 
 /** @brief Initialization parameters passed from the core to the vendor driver. */
 struct wondertap_init_params {
-    /**
-     * @brief The initial channel and frequency for the interface.
-     */
-    struct wondertap_set_freq_params channel;
-
-    /**
-     * @brief The default fixed transmission rate.
-     */
-    struct wondertap_fixed_tx_rate_params tx_rate;
-
-    /**
-     * @brief The MAC address for this interface.
-     */
-    u8 mac_addr[ETH_ALEN];
-
-    /**
-     * @brief The BSSID to filter.
-     */
-    u8 bssid[ETH_ALEN];
-
-    /**
-     * @brief Max retransmission attempts for management frames.
-     *
-     * This value controls the retry behavior for the packet at the hardware
-     * level. The interpretation is as follows:
-     * - 0: The frame will be transmitted once with no retries.
-     * - 1-254: The frame will be re-transmitted up to this many times if no
-     *   acknowledgment is received.
-     * - 255: The hardware will use an unlimited number of retries.
+	/**
+	 * @brief The initial channel and frequency for the interface.
 	 */
-    u8 mgmt_retry_limit;
+	struct wondertap_set_freq_params channel;
 
-    /**
-     * @brief Max retransmission attempts for data frames.
-     *
-     * This value controls the retry behavior for the packet at the hardware
-     * level. The interpretation is as follows:
-     * - 0: The frame will be transmitted once with no retries.
-     * - 1-254: The frame will be re-transmitted up to this many times if no
-     *   acknowledgment is received.
-     * - 255: The hardware will use an unlimited number of retries.
-     */
-    u8 data_retry_limit;
+	/**
+	 * @brief The default fixed transmission rate.
+	 */
+	struct wondertap_fixed_tx_rate_params tx_rate;
 
-    /**
-     * @brief Aggregation feature control
-     */
-    u8 amsdu_enable: 1;
-    u8 ampdu_enable: 1;
+	/**
+	 * @brief The MAC address for this interface.
+	 */
+	u8 mac_addr[ETH_ALEN];
 
-    /**
-     * @brief Reserved for future use and alignment.
-     */
-    u8 reserved1: 6;
-    u8 reserved2;
+	/**
+	 * @brief The BSSID to filter.
+	 */
+	u8 bssid[ETH_ALEN];
 
-    /**
-     * @brief The two-letter ISO 3166 country code (e.g., "US", "TW").
-     *
-     * @note Includes the null terminator (\0), hence the size of 3.
-     */
-    char country_code[3];
-    u8 reserved3;
+	/**
+	 * @brief Max retransmission attempts for management frames.
+	 *
+	 * This value controls the retry behavior for the packet at the hardware
+	 * level. The interpretation is as follows:
+	 * - 0: The frame will be transmitted once with no retries.
+	 * - 1-254: The frame will be re-transmitted up to this many times if no
+	 *   acknowledgment is received.
+	 * - 255: The hardware will use an unlimited number of retries.
+	 */
+	u8 mgmt_retry_limit;
+
+	/**
+	 * @brief Max retransmission attempts for data frames.
+	 *
+	 * This value controls the retry behavior for the packet at the hardware
+	 * level. The interpretation is as follows:
+	 * - 0: The frame will be transmitted once with no retries.
+	 * - 1-254: The frame will be re-transmitted up to this many times if no
+	 *   acknowledgment is received.
+	 * - 255: The hardware will use an unlimited number of retries.
+	 */
+	u8 data_retry_limit;
+
+	/**
+	 * @brief Aggregation feature control
+	 */
+	u8 amsdu_enable: 1;
+	u8 ampdu_enable: 1;
+
+	/**
+	 * @brief Rate Adaptation feature control
+	 */
+	u8 rate_adaptation_enable: 1;
+
+	/**
+	 * @brief Channel hopping feature control
+	 */
+	u8 channel_hopping_enable: 1;
+
+	/**
+	 * @brief Reserved for future use and alignment.
+	 */
+	u8 reserved1: 4;
+	u8 reserved2;
+
+	/**
+	 * @brief The two-letter ISO 3166 country code (e.g., "US", "TW").
+	 *
+	 * @note Includes the null terminator (\0), hence the size of 3.
+	 */
+	char country_code[3];
+	u8 reserved3;
+
+	/**
+	 * @brief The initial transmission rate mask.
+	 */
+	struct wondertap_tx_rate_mask_params tx_rate_mask;
 };
 
 /**
@@ -491,6 +597,32 @@ struct wondertap_ops {
 	 * @return 0 on success, negative error code.
 	 */
 	int (*get_capabilities)(void *handle, struct wondertap_capability *features);
+
+	/**
+	 * @brief Schedules a channel switch request.
+	 * @param handle The driver instance handle.
+	 * @param request A pointer to the channel schedule request parameters.
+	 * @return 0 on success, negative error code.
+	 */
+	int (*channel_schedule_request)(void *handle,
+					const struct channel_schedule_request *request);
+
+	/**
+	 * @brief Get Current MAC TSF from the vendor
+	 * @param handle The opaque driver instance handle.
+	 * @param tsf MAC TSF will be utilized for the channel list request.
+	 * Return: 0 on success, negative error code.
+	 */
+	int (*get_mac_tsf)(void *handle, u32 *mac_tsf);
+
+	/**
+	 * @brief Schedules a channel switch request.
+	 * @param handle The driver instance handle.
+	 * @param get A pointer to the channel status report.
+	 * @return 0 on success, negative error code.
+	 */
+	int (*get_channel_status_report)(void *handle,
+		struct wondertap_channel_status_report *report);
 };
 
 /**
@@ -506,6 +638,10 @@ enum wondertap_ver {
 	WONDER_VERSION_1_4,
 	WONDER_VERSION_1_4_1,
 	WONDER_VERSION_1_5,
+	WONDER_VERSION_1_5_1,
+	WONDER_VERSION_1_6_1,
+	WONDER_VERSION_1_6_2 = WONDER_VERSION_1_6_1,
+	WONDER_VERSION_1_6_3 = WONDER_VERSION_1_6_1,
 	WONDER_VERSION_MAX,
 };
 

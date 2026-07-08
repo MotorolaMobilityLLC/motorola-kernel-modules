@@ -182,7 +182,8 @@ struct ieee80211_supported_band wonder_band_5ghz = {
 
 	/* VHT Capabilities */
 	.vht_cap.vht_supported = true,
-	.vht_cap.cap = IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454 |
+	.vht_cap.cap = //IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454 |
+					IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991 |
 					IEEE80211_VHT_CAP_SHORT_GI_80 |
 					IEEE80211_VHT_CAP_RXSTBC_1 |
 					IEEE80211_VHT_CAP_SU_BEAMFORMER_CAPABLE,

@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+load("//build/kernel/kleaf:kernel.bzl", "kernel_module")
+
+filegroup(
+    name = "wonder.kconfig",
+    srcs = glob([
+        "Kconfig",
+    ]),
+    visibility = [
+        "//private/devices/google:__subpackages__",
+        "//private/google-modules/soc/gs:__pkg__",
+    ],
+)
+
+filegroup(
+    name = "wonder_headers",
+    srcs = glob([
+        "include/**/*.h",
+    ]) + [
+        "Makefile.include",
+    ],
+    visibility = [
+        "//private/devices/google:__subpackages__",
+        "//private/google-modules/soc/gs:__pkg__",
+        "//private/google-modules/wlan/bcm4398:__pkg__",
+    ],
+)
+
+kernel_module(
+    name = "wonder",
+    srcs = glob([
+        "**/*.c",
+        "**/*.h",
+    ]) + [
+        "//private/google-modules/soc/gs:gs_soc_headers",
+    ],
+    outs = [
+        "wonder.ko",
+    ],
+    kernel_build = "//private/google-modules/soc/gs:gs_kernel_build",
+    visibility = [
+        "//private/devices/google:__subpackages__",
+        "//private/google-modules/soc/gs:__pkg__",
+    ],
+    deps = [
+        "//private/google-modules/soc/gs:gs_soc_module",
+    ],
+)
