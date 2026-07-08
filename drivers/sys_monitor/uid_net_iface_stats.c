@@ -175,7 +175,7 @@ ssize_t uid_iface_stats_show(struct kobject *kobj, struct kobj_attribute *attr, 
 	int bkt, len = 0;
 	int max_entries = 512;
 
-	snapshot = kmalloc_array(max_entries, sizeof(struct uid_iface_val), GFP_KERNEL);
+	snapshot = kvmalloc_array(max_entries, sizeof(struct uid_iface_val), GFP_KERNEL);
 	if (!snapshot) return -ENOMEM;
 
 	spin_lock_irqsave(&stats_lock, flags);
@@ -197,7 +197,7 @@ ssize_t uid_iface_stats_show(struct kobject *kobj, struct kobj_attribute *attr, 
 			break;
 	}
 
-	kfree(snapshot);
+	kvfree(snapshot);
 	return len;
 }
 
