@@ -18,6 +18,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
+#include <linux/atomic.h>
 #include "goodix_ts_core.h"
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38)
@@ -754,6 +755,40 @@ static DEVICE_ATTR(irq_info, 0664, goodix_ts_irq_info_show, goodix_ts_irq_info_s
 static DEVICE_ATTR(esd_info, 0664, goodix_ts_esd_info_show, goodix_ts_esd_info_store);
 static DEVICE_ATTR(debug_log, 0664, goodix_ts_debug_log_show, goodix_ts_debug_log_store);
 
+static ssize_t total_spi_timeouts_show(struct device *dev,
+				       struct device_attribute *attr,
+				       char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "write: %d, read: %d (v2_async)\n",
+			atomic_read(&total_spi_write_timeouts),
+			atomic_read(&total_spi_read_timeouts));
+}
+
+static ssize_t total_spi_timeouts_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	unsigned long val;
+	int ret;
+
+	if (!buf || count <= 0)
+		return -EINVAL;
+
+	ret = kstrtoul(buf, 10, &val);
+	if (ret)
+		return ret;
+
+	if (val == 0) {
+		ts_info("Resetting total SPI timeouts...");
+		atomic_set(&total_spi_write_timeouts, 0);
+		atomic_set(&total_spi_read_timeouts, 0);
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR(total_spi_timeouts, 0664, total_spi_timeouts_show, total_spi_timeouts_store);
+
 static struct attribute *sysfs_attrs[] = {
 	&dev_attr_driver_info.attr,
 	&dev_attr_chip_info.attr,
@@ -764,6 +799,7 @@ static struct attribute *sysfs_attrs[] = {
 	&dev_attr_irq_info.attr,
 	&dev_attr_esd_info.attr,
 	&dev_attr_debug_log.attr,
+	&dev_attr_total_spi_timeouts.attr,
 	NULL,
 };
 

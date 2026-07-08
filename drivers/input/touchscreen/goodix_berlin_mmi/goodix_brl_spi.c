@@ -17,6 +17,12 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/spi/spi.h>
+#include <linux/bug.h>
+#include <linux/atomic.h>
+#include <linux/reboot.h>
+#include <linux/writeback.h>
+#include <linux/delay.h>
+#include <linux/workqueue.h>
 
 #include "goodix_ts_core.h"
 #include <linux/mmi_device.h>
@@ -34,6 +40,49 @@
 
 static struct platform_device *goodix_pdev;
 struct goodix_bus_interface goodix_spi_bus;
+
+atomic_t total_spi_write_timeouts = ATOMIC_INIT(0);
+atomic_t total_spi_read_timeouts = ATOMIC_INIT(0);
+atomic_t consecutive_write_timeouts = ATOMIC_INIT(0);
+atomic_t consecutive_read_timeouts = ATOMIC_INIT(0);
+
+void log_spi_timeout(int ret, bool is_write)
+{
+	if (ret == -ETIMEDOUT) {
+		if (is_write) {
+			int total = atomic_inc_return(&total_spi_write_timeouts);
+			ts_err("SPI WRITE transfer timeout occurred! Total write timeouts since boot: %d", total);
+		} else {
+			int total = atomic_inc_return(&total_spi_read_timeouts);
+			ts_err("SPI READ transfer timeout occurred! Total read timeouts since boot: %d", total);
+		}
+	}
+}
+
+static void restart_work_func(struct work_struct *work);
+static DECLARE_WORK(restart_work, restart_work_func);
+
+static void restart_work_func(struct work_struct *work)
+{
+	ts_err("Executing asynchronous kernel_restart...");
+	kernel_restart(NULL);
+}
+
+void check_spi_timeout(int ret, bool is_write)
+{
+	atomic_t *consecutive_counter = is_write ? &consecutive_write_timeouts : &consecutive_read_timeouts;
+	const char *op_type = is_write ? "WRITE" : "READ";
+
+	if (ret == -ETIMEDOUT) {
+		if (atomic_inc_return(consecutive_counter) >= 5) {
+			ts_err("SPI %s transfer timeout occurred consecutively 5 times! Scheduling asynchronous kernel_restart...", op_type);
+			schedule_work(&restart_work);
+		}
+	} else if (ret >= 0) {
+		if (atomic_read(consecutive_counter) > 0)
+			atomic_set(consecutive_counter, 0);
+	}
+}
 
 /**
  * goodix_spi_read_bra- read device register through spi bus
@@ -81,6 +130,8 @@ static int goodix_spi_read_bra(struct device *dev, unsigned int addr,
 	xfers.cs_change = 0;
 	spi_message_add_tail(&xfers, &spi_msg);
 	ret = spi_sync(spi, &spi_msg);
+	log_spi_timeout(ret, false);
+	check_spi_timeout(ret, false);
 	if (ret < 0) {
 		ts_err("spi transfer error:%d",ret);
 		goto exit;
@@ -130,6 +181,8 @@ static int goodix_spi_read(struct device *dev, unsigned int addr,
 	xfers.cs_change = 0;
 	spi_message_add_tail(&xfers, &spi_msg);
 	ret = spi_sync(spi, &spi_msg);
+	log_spi_timeout(ret, false);
+	check_spi_timeout(ret, false);
 	if (ret < 0) {
 		ts_err("spi transfer error:%d",ret);
 		goto exit;
@@ -180,6 +233,8 @@ static int goodix_spi_write(struct device *dev, unsigned int addr,
 	xfers.cs_change = 0;
 	spi_message_add_tail(&xfers, &spi_msg);
 	ret = spi_sync(spi, &spi_msg);
+	log_spi_timeout(ret, true);
+	check_spi_timeout(ret, true);
 	if (ret < 0)
 		ts_err("spi transfer error:%d",ret);
 

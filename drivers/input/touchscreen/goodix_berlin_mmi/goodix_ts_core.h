@@ -814,4 +814,13 @@ int goodix_log_capture_register_misc(struct goodix_ts_core *cd);
 int goodix_log_capture_unregister_misc(struct goodix_ts_core *cd);
 #endif
 
+#include <linux/atomic.h>
+#include <linux/device.h>
+
+extern atomic_t total_spi_write_timeouts;
+extern atomic_t total_spi_read_timeouts;
+extern atomic_t consecutive_write_timeouts;
+extern atomic_t consecutive_read_timeouts;
+extern void check_spi_timeout(int ret, bool is_write);
+
 #endif
