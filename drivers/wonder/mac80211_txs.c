@@ -10,6 +10,7 @@
 
 #include "mac80211_txs.h"
 #include <linux/vmalloc.h>
+#include <linux/version.h>
 
 /**
  * g_txs_queue - Global instance of the TX status queue.
@@ -216,8 +217,10 @@ int wonder_txs_enqueue(struct ieee80211_sta *sta, struct sk_buff *skb)
 	info->status.ack_signal = -30;
 	info->status.ampdu_len = 1;
 	info->status.ampdu_ack_len = 1;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
 	info->status.flags |=
 			IEEE80211_TX_STATUS_ACK_SIGNAL_VALID;
+#endif
 	info->status.rates[0].count = 1;
 	info->status.rates[0].idx = rate->idx;
 	info->status.rates[0].flags = rate->flags;
@@ -274,8 +277,10 @@ void wonder_txs_direct_report(struct ieee80211_hw *hw, struct ieee80211_sta *sta
 	info->status.ack_signal = -30;
 	info->status.ampdu_len = 1;
 	info->status.ampdu_ack_len = 1;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
 	info->status.flags |=
 			IEEE80211_TX_STATUS_ACK_SIGNAL_VALID;
+#endif
 	info->status.rates[0].count = 1;
 	info->status.rates[0].idx = rate->idx;
 	info->status.rates[0].flags = rate->flags;
