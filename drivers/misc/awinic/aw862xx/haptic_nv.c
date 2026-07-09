@@ -1554,7 +1554,10 @@ static ssize_t duration_store(struct device *dev, struct device_attribute *attr,
 	if (val <= 0)
 		return count;
 
+	mutex_lock(&aw_haptic->lock);
 	aw_haptic->duration = val;
+	ram_config(aw_haptic, aw_haptic->duration);
+	mutex_unlock(&aw_haptic->lock);
 	aw_info("duration=%d", aw_haptic->duration);
 
 	return count;
@@ -1593,7 +1596,6 @@ static ssize_t activate_store(struct device *dev, struct device_attribute *attr,
 	mutex_lock(&aw_haptic->lock);
 	hrtimer_cancel(&aw_haptic->timer);
 	aw_haptic->state = val;
-	aw_haptic->activate_mode = aw_haptic->info.mode;
 	if (0 == val)
 		aw_haptic->gain = AW_DEFAULT_GAIN;
 	mutex_unlock(&aw_haptic->lock);
@@ -1812,6 +1814,11 @@ static ssize_t seq_store(struct device *dev, struct device_attribute *attr, cons
 		aw_haptic->seq[0] = 1;
 	}
 	aw_haptic->func->set_wav_seq(aw_haptic, 0, aw_haptic->seq[0]);
+	aw_haptic->func->set_wav_loop(aw_haptic, 0, 0);
+	aw_haptic->func->set_wav_seq(aw_haptic, 1, 0);
+	aw_haptic->func->set_wav_loop(aw_haptic, 1, 0);
+	aw_haptic->activate_mode = AW_RAM_MODE;
+
 	mutex_unlock(&aw_haptic->lock);
 
 	return count;
@@ -3232,12 +3239,6 @@ static void vibrator_work_routine(struct work_struct *work)
 	/* Enter standby mode */
 	aw_haptic->func->play_stop(aw_haptic);
 	if (aw_haptic->state) {
-#ifdef AW_DURATION_DECIDE_WAVEFORM
-		if (ram_config(aw_haptic, aw_haptic->duration) < 0) {
-			mutex_unlock(&aw_haptic->lock);
-			return;
-		}
-#endif
 		upload_lra(aw_haptic, AW_F0_CALI_LRA);
 		if (aw_haptic->activate_mode == AW_RAM_MODE) {
 			ram_vbat_comp(aw_haptic, false);
