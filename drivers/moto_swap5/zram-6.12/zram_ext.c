@@ -679,6 +679,7 @@ static int zram_writeback_fill_page(struct zram *zram,
 	int size, sizes[2];
 	int header_sz = sizeof(struct zram_wb_header);
 	void *src, *dst;
+	void *kaddr1 = NULL, *kaddr2 = NULL;
 
 	zram_slot_lock(zram, index);
 	if (!zram_allocated(zram, index) ||
@@ -711,8 +712,8 @@ static int zram_writeback_fill_page(struct zram *zram,
 		return -ENOENT;
 	}
 	src = zs_map_object(zram->mem_pool, handle, ZS_MM_RO);
-	dst = kmap_atomic(buf->page[idx]);
-	zhdr = (struct zram_wb_header *)(dst + offset);
+	kaddr1 = kmap_atomic(buf->page[idx]);
+	zhdr = (struct zram_wb_header *)(kaddr1 + offset);
 	zhdr->index = index;
 	zhdr->size = size;
 	dst = (u8 *)(zhdr + 1);
@@ -721,14 +722,18 @@ static int zram_writeback_fill_page(struct zram *zram,
 		sizes[0] = PAGE_SIZE - (offset + header_sz);
 		sizes[1] = size - sizes[0];
 		memcpy(dst, src, sizes[0]);
-		kunmap_atomic(dst);
-		dst = kmap_atomic(buf->page[idx + 1]);
-		memcpy(dst, src + sizes[0], sizes[1]);
+		kunmap_atomic(kaddr1);
+		kaddr1 = NULL;
+		kaddr2 = kmap_atomic(buf->page[idx + 1]);
+		memcpy(kaddr2, src + sizes[0], sizes[1]);
 		buf->off[idx + 1] = sizes[1];
 	} else {
 		memcpy(dst, src, size);
 	}
-	kunmap_atomic(dst);
+	if (kaddr1)
+		kunmap_atomic(kaddr1);
+	if (kaddr2)
+		kunmap_atomic(kaddr2);
 	zs_unmap_object(zram->mem_pool, handle);
 	zram_slot_unlock(zram, index);
 
