@@ -87,6 +87,7 @@ do {										\
 #define UX_TYPE_IO_PRIO_1			(1 << 22)
 #define UX_TYPE_IO_PRIO_2			(1 << 23)
 #define UX_TYPE_MDPF				(1 << 24)
+#define UX_TYPE_FG_UI				(1 << 25)
 
 /* define for UX scene type, keep same as the define in java file */
 #define UX_SCENE_LAUNCH				(1 << 0)
