@@ -262,7 +262,9 @@ int task_get_mvp_prio(struct task_struct *p, bool with_inherit)
 	else if (ux_type & (UX_TYPE_INPUT|UX_TYPE_ANIMATOR|UX_TYPE_LOW_LATENCY_BINDER|UX_TYPE_GESTURE_MONITOR))
 		prio = UX_PRIO_ANIMATOR;
 	// main & render thread of top app, launcher and top UI.
-	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI) || p->pid == atomic_read(&global_boost_pid))
+	else if (ux_type & (UX_TYPE_TOPAPP|UX_TYPE_LAUNCHER|UX_TYPE_TOPUI) ||
+			((ux_type & UX_TYPE_FG_UI) && task_in_top_app_group(p)) ||
+			p->pid == atomic_read(&global_boost_pid))
 		prio = UX_PRIO_TOPAPP;
 	else if (is_enabled(UX_ENABLE_KSWAPD) && (ux_type & UX_TYPE_KSWAPD))
 		prio = UX_PRIO_KSWAPD;
@@ -574,6 +576,47 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 
 	return true;
 }
+
+static const char *const fg_ui_target_threads[] = {
+	"UnityMain",
+};
+
+static inline bool is_fg_ui_target_thread(const char *comm)
+{
+	int i;
+
+	if (!comm) {
+		return false;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(fg_ui_target_threads); i++) {
+		if (fg_ui_target_threads[i] && strcmp(comm, fg_ui_target_threads[i]) == 0)
+			return true;
+	}
+	return false;
+}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
+/* Kernel 6.1.x: Use unrestricted vendor hook (vh) with 1 parameter */
+static void android_vh_set_task_comm(void *unused, struct task_struct *p)
+{
+	if (p && is_fg_ui_target_thread(p->comm)) {
+		task_add_ux_type(p, UX_TYPE_FG_UI);
+	}
+}
+#else
+/* Kernels 5.15, 6.6, 6.12, 6.18+: Use restricted vendor hook (rvh) with 2 parameters */
+static void android_rvh_set_task_comm(void *unused, struct task_struct *p, bool exec)
+{
+	if (p && is_fg_ui_target_thread(p->comm)) {
+		task_add_ux_type(p, UX_TYPE_FG_UI);
+	}
+}
+#endif
+
+#endif
 
 bool lock_inherit_ux_type(struct task_struct *owner, struct task_struct *waiter, char* lock_name) {
 	struct rq *rq = NULL;
@@ -987,6 +1030,17 @@ void register_vendor_comm_hooks(void)
 #if IS_ENABLED(CONFIG_MOTO_ENABLE_MDPF)
 	msched_uclamp_register_vendor_comm_hooks();
 #endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+  #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0) && LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
+	/* Register unrestricted vendor hook for Kernel 6.1.x */
+	register_trace_android_vh_set_task_comm(android_vh_set_task_comm, NULL);
+  #else
+	/* Register restricted vendor hook for Kernels 5.15, 6.6, 6.12, 6.18+ */
+	register_trace_android_rvh_set_task_comm(android_rvh_set_task_comm, NULL);
+  #endif
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
 	register_trace_android_vh_binder_proc_transaction_finish(
 		android_vh_binder_proc_transaction_finish, NULL);
