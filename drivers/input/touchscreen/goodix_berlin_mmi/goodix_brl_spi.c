@@ -65,7 +65,7 @@ static DECLARE_WORK(restart_work, restart_work_func);
 static void restart_work_func(struct work_struct *work)
 {
 	ts_err("Executing asynchronous kernel_restart...");
-	kernel_restart(NULL);
+	kernel_restart("mmi_reboot_exception");
 }
 
 void check_spi_timeout(int ret, bool is_write)
