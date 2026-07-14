@@ -1066,7 +1066,7 @@ static int ram_select_waveform(struct aw_haptic *aw_haptic)
 	uint8_t wavseq = 0;
 	uint8_t wavloop = 0;
 
-	if (aw_haptic->duration < 0) {
+	if (aw_haptic->duration <= 0) {
 		aw_err("duration time %d error", aw_haptic->duration);
 		return -ERANGE;
 	}
@@ -1083,11 +1083,6 @@ static int ram_select_waveform(struct aw_haptic *aw_haptic)
 		wavseq = 4;
 		wavloop = 15;
 		aw_haptic->activate_mode = AW_RAM_LOOP_MODE;
-	} else if ((aw_haptic->duration == 0) && (0 < aw_haptic->seq[0])) {
-		wavseq = aw_haptic->seq[0];
-	} else {
-		aw_err("duration time error, duration= %d", aw_haptic->duration);
-		return -ERANGE;
 	} 
 	aw_info("duration %d, select index %d", aw_haptic->duration, wavseq);
 	aw_haptic->func->set_wav_seq(aw_haptic, 0, wavseq);
