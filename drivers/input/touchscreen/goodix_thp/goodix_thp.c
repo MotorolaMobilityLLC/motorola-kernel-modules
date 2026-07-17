@@ -143,6 +143,8 @@ static void goodix_thp_reset_frame_list(struct goodix_thp_core *core_data)
         mutex_unlock(&core_data->frame_mutex);
 }
 
+static DEFINE_RATELIMIT_STATE(thp_buf_full_ratelimit, 5 * HZ, 1);
+
 void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int len)
 {
         struct driver_request_pkg *req_pkg;
@@ -153,7 +155,8 @@ void put_frame_list(struct goodix_thp_core *core_data, int type, u8 *data, int l
         mutex_lock(&core_data->frame_mutex);
         /* check for max limit */
         if (unlikely((list->tail + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT == list->head)) {
-                ts_err(ts_dev->dev, "touch_health - frame mmap buffer is full, overwriting oldest data");
+                if (__ratelimit(&thp_buf_full_ratelimit))
+                        ts_err(ts_dev->dev, "touch_health - frame mmap buffer is full, overwriting oldest data (ratelimited)");
                 list->head = (list->head + 1) % GOODIX_THP_MAX_FRAME_BUF_COUNT; // Overwrite the oldest data
         }
 
