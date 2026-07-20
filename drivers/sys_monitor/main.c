@@ -399,6 +399,7 @@ static int __init sys_monitor_init(void)
 	wakelock_profile_init(sys_monitor_obj);
 	monitor_net_stats_init(sys_monitor_obj);
 
+	suspend_marker_init();
 	return 0;
 
 error_sysfs_create:
@@ -413,6 +414,7 @@ error_kobj_register:
 
 void __exit sys_monitor_exit(void)
 {
+	suspend_marker_exit();
 	unregister_trace_android_vh_cpufreq_acct_update_power(record_task_cpufreq_times, NULL);
 	sysfs_remove_group(sys_monitor_obj, &sys_monitor_attr_group);
 	monitor_misc_exit(sys_monitor_obj);

@@ -48,4 +48,8 @@ void wakelock_profile_exit(struct kobject *parent_kobj);
 
 int monitor_net_stats_init(struct kobject *parent_kobj);
 void monitor_net_stats_exit(struct kobject *parent_kobj);
+
+int suspend_marker_init(void);
+void suspend_marker_exit(void);
+
 #endif //__MONITOR_H__
