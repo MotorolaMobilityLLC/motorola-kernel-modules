@@ -62,8 +62,31 @@ void log_spi_timeout(int ret, bool is_write)
 static void restart_work_func(struct work_struct *work);
 static DECLARE_WORK(restart_work, restart_work_func);
 
+static void emergency_restart_work_func(struct work_struct *work);
+static DECLARE_DELAYED_WORK(emergency_restart_delayed_work, emergency_restart_work_func);
+
+static atomic_t restart_triggered = ATOMIC_INIT(0);
+
+static void emergency_restart_work_func(struct work_struct *work)
+{
+	ts_err("MMI: fallback emergency_restart watchdog triggered! kernel_restart hang detected. Triggering emergency_restart now...");
+	emergency_restart();
+}
+
 static void restart_work_func(struct work_struct *work)
 {
+	if (atomic_xchg(&restart_triggered, 1) != 0) {
+		ts_err("MMI: kernel_restart or emergency_restart already initiated, skipping duplicate request");
+		return;
+	}
+
+	/* Abort suspend to wake system up before reboot */
+	if (goodix_pdev)
+		pm_wakeup_event(&goodix_pdev->dev, 10000);
+
+	ts_err("MMI: Scheduling fallback emergency_restart watchdog (10 seconds)...");
+	schedule_delayed_work(&emergency_restart_delayed_work, msecs_to_jiffies(10000));
+
 	ts_err("Executing asynchronous kernel_restart...");
 	kernel_restart("mmi_reboot_exception");
 }
