@@ -1435,6 +1435,7 @@ static int zram_writeback_fill_page(struct zram *zram, u32 index,
 	int offset = zwbs[idx]->off;
 	unsigned long handle;
 	void *src, *dst;
+	void *map_addr;
 	int size, sizes[2];
 	int header_sz = 0;
 
@@ -1473,9 +1474,10 @@ static int zram_writeback_fill_page(struct zram *zram, u32 index,
 		return -ENOENT;
 	}
 	src = zs_map_object(zram->mem_pool, handle, ZS_MM_RO);
-	dst = kmap_atomic(page);
+	map_addr = kmap_atomic(page);
+	dst = map_addr;
 	if (header_sz) {
-		zhdr = (struct zram_wb_header *)(dst + offset);
+		zhdr = (struct zram_wb_header *)(map_addr + offset);
 		zhdr->index = index;
 		zhdr->size = size;
 		dst = (u8 *)(zhdr + 1);
@@ -1484,14 +1486,14 @@ static int zram_writeback_fill_page(struct zram *zram, u32 index,
 		sizes[0] = PAGE_SIZE - (offset + header_sz);
 		sizes[1] = size - sizes[0];
 		memcpy(dst, src, sizes[0]);
-		kunmap_atomic(dst);
-		dst = kmap_atomic(zwbs[idx + 1]->page);
-		memcpy(dst, src + sizes[0], sizes[1]);
+		kunmap_atomic(map_addr);
+		map_addr = kmap_atomic(zwbs[idx + 1]->page);
+		memcpy(map_addr, src + sizes[0], sizes[1]);
 		zwbs[idx + 1]->off = sizes[1];
 	} else {
 		memcpy(dst, src, size);
 	}
-	kunmap_atomic(dst);
+	kunmap_atomic(map_addr);
 	check_marker(src, size, NULL);
 	zs_unmap_object(zram->mem_pool, handle);
 	zram_slot_unlock(zram, index);
@@ -1504,11 +1506,10 @@ static void zram_writeback_clear_flag(struct zram *zram, u32 index)
 	unsigned long flags;
 
 	zram_slot_lock(zram, index);
+	zram_clear_flag(zram, index, ZRAM_UNDER_WB);
+	zram_clear_flag(zram, index, ZRAM_IDLE);
 	if (zram_allocated(zram, index)) {
-		zram_clear_flag(zram, index, ZRAM_UNDER_WB);
-		zram_clear_flag(zram, index, ZRAM_IDLE);
 		zram_clear_flag(zram, index, ZRAM_UNDER_PPR);
-
 		/* putback halted entry to zram lru list */
 		spin_lock_irqsave(&zram->list_lock, flags);
 		if (!list_empty(&zram->table[index].lru_list))
