@@ -82,10 +82,10 @@ static void restart_work_func(struct work_struct *work)
 
 	/* Abort suspend to wake system up before reboot */
 	if (goodix_pdev)
-		pm_wakeup_event(&goodix_pdev->dev, 10000);
+		pm_wakeup_event(&goodix_pdev->dev, 6000);
 
-	ts_err("MMI: Scheduling fallback emergency_restart watchdog (10 seconds)...");
-	schedule_delayed_work(&emergency_restart_delayed_work, msecs_to_jiffies(10000));
+	ts_err("MMI: Scheduling fallback emergency_restart watchdog (6 seconds)...");
+	schedule_delayed_work(&emergency_restart_delayed_work, msecs_to_jiffies(6000));
 
 	ts_err("Executing asynchronous kernel_restart...");
 	kernel_restart("mmi_reboot_exception");
@@ -97,8 +97,8 @@ void check_spi_timeout(int ret, bool is_write)
 	const char *op_type = is_write ? "WRITE" : "READ";
 
 	if (ret == -ETIMEDOUT) {
-		if (atomic_inc_return(consecutive_counter) >= 5) {
-			ts_err("SPI %s transfer timeout occurred consecutively 5 times! Scheduling asynchronous kernel_restart...", op_type);
+		if (atomic_inc_return(consecutive_counter) >= 3) {
+			ts_err("SPI %s transfer timeout occurred consecutively 3 times! Scheduling asynchronous kernel_restart...", op_type);
 			schedule_work(&restart_work);
 		}
 	} else if (ret >= 0) {
