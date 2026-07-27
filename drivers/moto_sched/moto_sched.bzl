@@ -38,6 +38,8 @@ def define_modules():
             "msched_trace.h",
             "msched_trace.c",
 	    "msched_boost.c",
+	    "msched_specific_task_boost.c",
+	    "msched_specific_task_boost.h",
             "locking/locking_main.c",
             "locking/locking_main.h",
             "locking/locking_trace.c",

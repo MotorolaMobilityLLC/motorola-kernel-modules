@@ -25,6 +25,7 @@
 
 #include "msched_sysfs.h"
 #include "msched_common.h"
+#include "msched_specific_task_boost.h"
 #include "mdpf/mdpf_sysfs.h"
 
 #if IS_ENABLED(CONFIG_MOTO_LOCKING_2)
@@ -62,6 +63,7 @@ static int __init moto_sched_init(void)
 	}
 
 	register_vendor_comm_hooks();
+	msched_specific_task_boost_init();
 	locking_opt_init();
 
 	moto_boost_init();
