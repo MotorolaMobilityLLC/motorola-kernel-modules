@@ -127,7 +127,7 @@ static void android_vh_set_task_comm(void *unused, struct task_struct *p)
 			ARRAY_SIZE(renamed_task_fg_ui_boost_names),
 			UX_TYPE_FG_UI);
 }
-#else
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0))
 /*
  * Boost tasks after an explicit comm change. This catches final names
  * assigned by exec, prctl, or pthread naming APIs.
@@ -168,7 +168,7 @@ void msched_specific_task_boost_init(void)
 	LINUX_VERSION_CODE < KERNEL_VERSION(6, 2, 0))
 	ret = register_trace_android_vh_set_task_comm(
 			android_vh_set_task_comm, NULL);
-#else
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(6, 18, 0))
 	ret = register_trace_android_rvh_set_task_comm(
 			android_rvh_set_task_comm, NULL);
 #endif
