@@ -597,6 +597,45 @@ TRACE_EVENT(binder_inherit_rt_check,
 		__entry->call_pid, __entry->call_policy, __entry->call_prio, __entry->call_comm,
 		__entry->to_thread)
 );
+TRACE_EVENT(msched_resched_task,
+
+	TP_PROTO(struct task_struct *target, bool is_added_uxtype, bool queued, bool running),
+
+	TP_ARGS(target, is_added_uxtype, queued, running),
+
+	TP_STRUCT__entry(
+		__field(pid_t, target_pid)
+		__field(pid_t, target_tgid)
+		__array(char,  target_comm, TASK_COMM_LEN)
+
+		__field(pid_t, caller_pid)
+		__array(char,  caller_comm, TASK_COMM_LEN)
+
+		__field(bool,  is_added_uxtype)
+		__field(bool,  queued)
+		__field(bool,  running)
+	),
+
+	TP_fast_assign(
+		__entry->target_pid  = target->pid;
+		__entry->target_tgid = target->tgid;
+		memcpy(__entry->target_comm, target->comm, TASK_COMM_LEN);
+
+		__entry->caller_pid  = current->pid;
+		memcpy(__entry->caller_comm, current->comm, TASK_COMM_LEN);
+
+		__entry->is_added_uxtype = is_added_uxtype;
+		__entry->queued          = queued;
+		__entry->running         = running;
+	),
+
+	TP_printk("target=%d/%d(%s) caller=%d(%s) add_ux=%d queued=%d running=%d",
+		  __entry->target_pid, __entry->target_tgid, __entry->target_comm,
+		  __entry->caller_pid, __entry->caller_comm,
+		  __entry->is_added_uxtype, __entry->queued, __entry->running
+	)
+);
+
 #endif /* _TRACE_MSCHED_H */
 
 #undef TRACE_INCLUDE_PATH

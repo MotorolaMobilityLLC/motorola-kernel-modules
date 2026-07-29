@@ -51,6 +51,17 @@
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+#if IS_ENABLED(CONFIG_SCHED_WALT)
+extern void walt_cfs_enqueue_task(struct rq *rq, struct task_struct *p);
+extern void walt_cfs_dequeue_task(struct rq *rq, struct task_struct *p);
+#endif
+#if IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
+extern void vip_enqueue_task(struct rq *rq, struct task_struct *p);
+extern void vip_dequeue_task(struct rq *rq, struct task_struct *p);
+#endif
+#endif
+
 static inline bool task_in_top_app_group(struct task_struct *p)
 {
 #if IS_ENABLED(CONFIG_SCHED_WALT)
@@ -503,6 +514,13 @@ static void android_vh_dup_task_struct(void *unused, struct task_struct *task, s
 }
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+static inline bool task_is_delayed(struct task_struct *p)
+{
+	return p->se.sched_delayed;
+}
+#endif
+
 static void
 ux_changed_fair(struct rq *rq, struct task_struct *p, bool is_added_uxtype)
 {
@@ -542,7 +560,9 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 	struct rq *rq;
 	struct rq_flags rf;
 	bool queued = false;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
 	bool running = false;
+#endif
 
 	if (unlikely(!p))
 		return false;
@@ -554,11 +574,21 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 		update_rq_clock(rq);
 
 		queued = task_on_rq_queued(p);
-#ifdef CONFIG_SCHED_PROXY_EXEC
-		running = task_current_donor(rq, p);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+		if (queued && !task_is_delayed(p)) {
+			trace_msched_resched_task(p, is_added_uxtype, queued, 0);
+			#if IS_ENABLED(CONFIG_SCHED_WALT)
+			walt_cfs_dequeue_task(rq, p);
+			walt_cfs_enqueue_task(rq, p);
+			#endif
+			#if IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
+			vip_dequeue_task(rq, p);
+			vip_enqueue_task(rq, p);
+			#endif
+		}
 #else
 		running = task_current(rq, p);
-#endif
+		trace_msched_resched_task(p, is_added_uxtype, queued, running);
 
 		if (queued)
 			deactivate_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
@@ -569,6 +599,7 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 			activate_task(rq, p, ENQUEUE_RESTORE | ENQUEUE_NOCLOCK);
 		if (running)
 			set_next_task(rq, p);
+#endif
 
 		ux_changed_fair(rq, p, is_added_uxtype);
 
