@@ -38,7 +38,7 @@ static const char *const renamed_task_fg_ui_boost_names[] = {
 };
 #endif
 
-static void boost_specific_task(struct task_struct *p,
+static void __maybe_unused boost_specific_task(struct task_struct *p,
 		const char *const *task_names, size_t nr_task_names,
 		int ux_type)
 {
@@ -155,7 +155,7 @@ static void android_rvh_set_task_comm(void *unused, struct task_struct *p,
 
 void msched_specific_task_boost_init(void)
 {
-	int ret;
+	int ret = 0;
 #ifdef CONFIG_MOTO_BOOST_SPECIFIC_TASK_ON_CREATE
 	ret = register_trace_android_rvh_wake_up_new_task(
 			android_rvh_wake_up_new_task, NULL);
