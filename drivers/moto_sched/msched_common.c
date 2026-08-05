@@ -437,8 +437,8 @@ EXPORT_SYMBOL(binder_inherit_boost);
 
 void binder_clear_inherited_ux_type(struct task_struct *task) {
 	if (is_enabled(UX_ENABLE_BINDER)
-			&& task_has_ux_type(task, UX_TYPE_INHERIT_BINDER)) {
-		task_clr_inherit_info(task, UX_TYPE_INHERIT_BINDER);
+			&& task_has_ux_type(task, UX_TYPE_INHERIT_BINDER | UX_TYPE_LOW_LATENCY_BINDER)) {
+		task_clr_inherit_info(task, UX_TYPE_INHERIT_BINDER | UX_TYPE_LOW_LATENCY_BINDER);
 
 		trace_binder_inherit_ux_type(task, task_get_ux_type(task), false);
 	}
