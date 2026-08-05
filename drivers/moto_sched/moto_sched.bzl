@@ -2,9 +2,27 @@
 load("//soc-repo:kleaf-scripts/moto/moto_modules_define.bzl", "moto_ddk_module")
 load("//soc-repo:moto_product.bzl", "build_target", "build_variant")
 
+# Mapping of SoC/build targets to their respective kernel versions.
+# Art platform (e.g., SM8975) uses 6.18; Canoe platform (e.g., SM8850) uses 6.12.
+_TARGET_KERNEL_VERSION_MAP = {
+    "art": "6.18",
+    "canoe": "6.12",
+}
+
 # Define the kernel module target.
 # The 'name' is inferred from your source files (e.g., msched_main.c).
 def define_modules():
+    # Determine the kernel version based on build_target
+    kernel_version = _TARGET_KERNEL_VERSION_MAP.get(build_target, "6.12")
+
+    # Parse kernel version major and minor safely, stripping potential suffixes
+    _parts = kernel_version.split(".")
+    _major = int(_parts[0])
+    _minor_str = _parts[1].split("-")[0].split("+")[0] if len(_parts) > 1 else "0"
+    _minor = int(_minor_str) if _minor_str.isdigit() else 0
+
+    is_6_18_or_above = (_major > 6) or (_major == 6 and _minor >= 18)
+
     moto_ddk_module(
         name = "moto_sched",
 
@@ -47,6 +65,8 @@ def define_modules():
                 ],
             }
         },
+
+        local_defines = [] if is_6_18_or_above else ["ENABLE_INHERITE=1"],
 
         includes = [
                     ".",

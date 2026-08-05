@@ -25,7 +25,6 @@
 #include "locking_trace.h"
 
 #define ENABLE_REORDER_LIST 1
-#define ENABLE_INHERITE 1
 
 #define RWSEM_READER_OWNED	(1UL << 0)
 #define RWSEM_RD_NONSPINNABLE	(1UL << 1)
