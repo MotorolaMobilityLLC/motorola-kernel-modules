@@ -52,6 +52,7 @@
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+#if IS_ENABLED(CONFIG_SCHED_MOTO_UNFAIR)
 #if IS_ENABLED(CONFIG_SCHED_WALT)
 extern void walt_cfs_enqueue_task(struct rq *rq, struct task_struct *p);
 extern void walt_cfs_dequeue_task(struct rq *rq, struct task_struct *p);
@@ -59,6 +60,7 @@ extern void walt_cfs_dequeue_task(struct rq *rq, struct task_struct *p);
 #if IS_ENABLED(CONFIG_MTK_SCHED_VIP_TASK)
 extern void vip_enqueue_task(struct rq *rq, struct task_struct *p);
 extern void vip_dequeue_task(struct rq *rq, struct task_struct *p);
+#endif
 #endif
 #endif
 
@@ -560,9 +562,7 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 	struct rq *rq;
 	struct rq_flags rf;
 	bool queued = false;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(6, 12, 0))
 	bool running = false;
-#endif
 
 	if (unlikely(!p))
 		return false;
@@ -574,9 +574,15 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 		update_rq_clock(rq);
 
 		queued = task_on_rq_queued(p);
+		#ifdef CONFIG_SCHED_PROXY_EXEC
+		running = task_current_donor(rq, p);
+		#else
+		running = task_current(rq, p);
+		#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
 		if (queued && !task_is_delayed(p)) {
-			trace_msched_resched_task(p, is_added_uxtype, queued, 0);
+			#if IS_ENABLED(CONFIG_SCHED_MOTO_UNFAIR)
+			trace_msched_resched_task(p, is_added_uxtype, queued, running);
 			#if IS_ENABLED(CONFIG_SCHED_WALT)
 			walt_cfs_dequeue_task(rq, p);
 			walt_cfs_enqueue_task(rq, p);
@@ -585,9 +591,9 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 			vip_dequeue_task(rq, p);
 			vip_enqueue_task(rq, p);
 			#endif
+			#endif
 		}
 #else
-		running = task_current(rq, p);
 		trace_msched_resched_task(p, is_added_uxtype, queued, running);
 
 		if (queued)
