@@ -46,6 +46,7 @@
 #include <linux/slab.h>
 #include <linux/kref.h>
 #include <linux/mm.h>
+#include <linux/sched/prio.h>
 
 #define MS_TO_NS (1000000)
 #define MAX_INHERIT_GRAN ((u64)(64 * MS_TO_NS))
@@ -534,7 +535,7 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 	if (unlikely(!p))
 		return false;
 
-	if (fair_policy(p->policy)) {
+	if (fair_policy(p->policy) && p->prio >= MAX_RT_PRIO) {
 		get_task_struct(p);
 
 		rq = task_rq_lock(p, &rf);
