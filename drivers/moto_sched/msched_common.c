@@ -579,7 +579,7 @@ bool resched_task(struct task_struct *p, bool is_added_uxtype) {
 		#else
 		running = task_current(rq, p);
 		#endif
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0))
 		if (queued && !task_is_delayed(p)) {
 			#if IS_ENABLED(CONFIG_SCHED_MOTO_UNFAIR)
 			trace_msched_resched_task(p, is_added_uxtype, queued, running);
