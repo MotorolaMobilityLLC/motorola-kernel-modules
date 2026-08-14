@@ -69,7 +69,7 @@ def define_modules():
             }
         },
 
-        local_defines = [] if is_6_18_or_above else ["ENABLE_INHERITE=1"],
+        local_defines = ["MOTO_SCHED_USE_VENDOR_REQUEUE=1"] if is_6_18_or_above else ["ENABLE_INHERITE=1"],
 
         includes = [
                     ".",
