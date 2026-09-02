@@ -201,7 +201,7 @@ static inline bool is_heavy_scene(void) {
 static inline unsigned long moto_task_util(struct task_struct *p)
 {
 #if IS_ENABLED(CONFIG_SCHED_WALT)
-	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	struct walt_task_struct *wts = (struct walt_task_struct *)android_task_vendor_data(p);
 	return wts->demand_scaled;
 #else
 	return READ_ONCE(p->se.avg.util_avg);

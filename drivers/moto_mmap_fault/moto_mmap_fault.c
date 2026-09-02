@@ -39,7 +39,7 @@ MODULE_PARM_DESC(max_ra_pages, "Max read ahead pages");
 static inline bool task_in_top_app_group(struct task_struct *p)
 {
 #if IS_ENABLED(CONFIG_SCHED_WALT)
-	struct walt_task_struct *wts = (struct walt_task_struct *) p->android_vendor_data1;
+	struct walt_task_struct *wts = (struct walt_task_struct *)android_task_vendor_data(p);
 	return (rcu_access_pointer(wts->grp) != NULL);
 #else
 	return get_task_cgroup_id(p) == CGROUP_TOP_APP;
