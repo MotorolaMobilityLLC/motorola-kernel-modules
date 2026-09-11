@@ -679,6 +679,12 @@ static ssize_t goodix_ts_stowed_store(struct device *dev,
 	}
 
 	if (core_data->power_on == 1) {
+		if (!core_data->suspended || core_data->is_resuming) {
+			ts_info(tdev->dev, "Touch is still awake or resuming, defer stow mode command to suspend");
+			core_data->set_mode.stowed = mode;
+			ret = size;
+			goto exit;
+		}
 		val[0] = NOTIFY_TYPE_STOW_MODE;
 		val[1] = mode ? 1 : 0;
 		put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val, sizeof(val));
@@ -1828,11 +1834,9 @@ int goodix_ts_mmi_dev_register(struct platform_device *pdev) {
 		}
 	}
 
-	mutex_init(&core_data->mode_lock);
 	ret = ts_mmi_dev_register(ts_dev->dev, &goodix_ts_mmi_methods);
 	if (ret) {
 		ts_err(ts_dev->dev, "Failed to register ts mmi");
-		mutex_destroy(&core_data->mode_lock);
 		return ret;
 	}
 
@@ -1847,7 +1851,6 @@ void goodix_ts_mmi_dev_unregister(struct platform_device *pdev) {
 	if (!core_data)
 		ts_info(NULL, "Failed to get driver data");
 	else {
-		mutex_destroy(&core_data->mode_lock);
 		ts_mmi_dev_unregister(core_data->ts_dev->dev);
 	}
 }

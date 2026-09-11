@@ -1555,6 +1555,24 @@ static void goodix_thp_force_release_all(struct goodix_thp_core *core_data)
 
         //reinitialize pen action state
         core_data->pen_state = PEN_STATE_NONE;
+
+        int need_stow = 0;
+
+        mutex_lock(&core_data->mode_lock);
+        if (core_data->suspended && core_data->gesture_enable && core_data->set_mode.stowed == 1) {
+                need_stow = 1;
+        }
+        mutex_unlock(&core_data->mode_lock);
+
+        if (need_stow) {
+                u8 val_stow[2];
+                struct thp_ts_device *ts_dev = core_data->ts_dev;
+                ts_info(ts_dev->dev, "Sending deferred stow mode command in force_release_all after 20ms delay");
+                msleep(20);
+                val_stow[0] = NOTIFY_TYPE_STOW_MODE;
+                val_stow[1] = 1;
+                put_frame_list(core_data, REQUEST_TYPE_NOTIFY, val_stow, sizeof(val_stow));
+        }
 }
 
 /* Scale down pressure, ensure the result is > 0, and clamp to 255.*/
@@ -2593,6 +2611,9 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
         }
 
         goodix_thp_set_irq_enable(core_data, IRQ_DISABLE_FLAG);
+        mutex_lock(&core_data->mode_lock);
+        core_data->is_resuming = true;
+        mutex_unlock(&core_data->mode_lock);
 
         if (core_data->gesture_enable == 0) {
                 /* power on */
@@ -2604,6 +2625,10 @@ static int goodix_thp_resume(struct goodix_thp_core *core_data)
         }
 
         core_data->suspended = 0;
+        mutex_lock(&core_data->mode_lock);
+        core_data->is_resuming = false;
+        core_data->set_mode.stowed = 0;
+        mutex_unlock(&core_data->mode_lock);
 #ifdef CONFIG_TOUCHCLASS_MMI_FORCE_ENTER_STANDBY
         if (core_data->pdev->id == 0)
             main_suspend = false;
@@ -3144,6 +3169,7 @@ static int goodix_thp_probe(struct platform_device *pdev)
         mutex_init(&core_data->frame_mutex);
         mutex_init(&core_data->irq_mutex);
         mutex_init(&core_data->irq_wake_mutex);
+        mutex_init(&core_data->mode_lock);
         init_waitqueue_head(&(core_data->frame_wq));
         init_completion(&core_data->pm_completion);
         core_data->pm_suspend = false;
@@ -3382,6 +3408,8 @@ static void goodix_thp_remove(struct platform_device *pdev)
 #ifdef CONFIG_ENABLE_TOUCH_CPU_BOOST
         goodix_cleanup_cpu_boost(core_data);
 #endif
+
+        mutex_destroy(&core_data->mode_lock);
 
         return;
 }

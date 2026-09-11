@@ -533,6 +533,7 @@ struct goodix_thp_core {
         bool logtofile_on;
         bool irq_state;
         bool irq_wake_state;
+        bool is_resuming;
         u32 suspended;
         u16 gesture_enable;
         u32 state_change_flag;
