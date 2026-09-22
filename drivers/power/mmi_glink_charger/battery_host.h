@@ -57,6 +57,7 @@ struct battery_host {
 	u32 *thermal_secondary_levels;
 	u32 thermal_secondary_fcc_ua;
 	int android_auto_mode;
+	int high_freq_gps;
 	int curr_thermal_secondary_level;
 	int num_thermal_secondary_levels;
 	struct thermal_cooling_device *secondary_tcd;

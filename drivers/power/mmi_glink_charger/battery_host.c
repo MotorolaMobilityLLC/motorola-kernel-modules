@@ -657,6 +657,53 @@ static ssize_t android_auto_mode_show(struct device *dev,
 }
 static DEVICE_ATTR(android_auto_mode, 0644, android_auto_mode_show, android_auto_mode_store);
 
+static ssize_t high_freq_gps_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct battery_host *batt_host = this_batt_host;
+	unsigned long r;
+	unsigned long high_freq_gps = 0;
+	pr_debug("Start high_freq_gps store\n");
+	if (!batt_host) {
+		pr_err("batt_host not valid\n");
+		return -ENODEV;
+	}
+
+	pr_debug("Current high_freq_gps = %d\n", batt_host->high_freq_gps);
+
+	r = kstrtoul(buf, 0, &high_freq_gps);
+	if (r) {
+		pr_err("Invalid high_freq_gps = %lu\n", high_freq_gps);
+		return -EINVAL;
+	}
+
+	batt_host->high_freq_gps = high_freq_gps;
+	pr_info("Now high_freq_gps changed to %d\n",
+		batt_host->high_freq_gps);
+	r = qti_charger_set_property(OEM_PROP_HIGH_FREQ_GPS,
+						&batt_host->high_freq_gps,
+						sizeof(batt_host->high_freq_gps));
+
+	return r ? r : count;
+}
+
+static ssize_t high_freq_gps_show(struct device *dev,
+								struct device_attribute *attr,
+								char *buf)
+{
+	struct battery_host *batt_host = this_batt_host;
+
+	pr_debug("Start high_freq_gps show\n");
+	if (!batt_host) {
+		pr_err("batt_host not valid\n");
+		return -ENODEV;
+	}
+
+	return scnprintf(buf, CHG_SHOW_MAX_SIZE, "%d\n", batt_host->high_freq_gps);
+}
+static DEVICE_ATTR(high_freq_gps, 0644, high_freq_gps_show, high_freq_gps_store);
+
 static inline int primary_get_max_charge_cntl_limit(struct thermal_cooling_device *tcd,
                     unsigned long *state)
 {
@@ -880,12 +927,19 @@ void battery_supply_init(struct battery_host *batt_host)
 				&dev_attr_charge_real_type);
 	if (rc)
 		mmi_err(this_root_chip, "couldn't create charge_real_type\n");
-	
+
 	rc = device_create_file(&batt_psy->dev,
 				&dev_attr_android_auto_mode);
 	if (rc)
 		mmi_err(this_root_chip, "couldn't create android_auto_mode\n");
 		
+		mmi_info(this_root_chip, "battery supply is initialized\n");
+
+	rc = device_create_file(&batt_psy->dev,
+				&dev_attr_high_freq_gps);
+	if (rc)
+		mmi_err(this_root_chip, "couldn't create high_freq_gps\n");
+
 		mmi_info(this_root_chip, "battery supply is initialized\n");
 
 	thermal_charge_control_init(batt_host);
@@ -919,7 +973,9 @@ void battery_supply_deinit(struct battery_host *batt_host)
 		device_remove_file(&batt_psy->dev,
 					&dev_attr_charge_real_type);
 		device_remove_file(&batt_psy->dev,
-					&dev_attr_android_auto_mode);		
+					&dev_attr_android_auto_mode);
+		device_remove_file(&batt_psy->dev,
+					&dev_attr_high_freq_gps);	
 		sysfs_remove_group(&batt_psy->dev.kobj,
 					&power_supply_mmi_attr_group);
 		power_supply_put(batt_psy);
